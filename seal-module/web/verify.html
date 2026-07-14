@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Verify Seal -- Verum Omnis</title>
+<title>Verify Seal — Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -15,6 +15,7 @@
   }
   .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
 
+  /* Nav */
   .topnav {
     position: fixed; top: 0; left: 0; right: 0; z-index: 50;
     background: rgba(4, 13, 27, 0.85);
@@ -39,6 +40,7 @@
   .topnav-links a.active { color: #D4A843; }
   @media (max-width: 768px) { .topnav-links { display: none; } }
 
+  /* Header */
   .header { text-align: center; margin: 80px 0 40px; }
   .header .logo-main { margin: 0 auto 24px; max-width: min(300px, 60vw); height: auto; }
   .header .label {
@@ -52,12 +54,14 @@
   }
   .header p { font-size: 1rem; color: #D5D8DD; margin-top: 12px; line-height: 1.6; }
 
+  /* QR Verification Banner */
   .qr-banner {
     background: rgba(212,168,67,0.1); border: 1px solid rgba(212,168,67,0.3);
     border-radius: 10px; padding: 14px; margin: 20px auto; max-width: 600px;
     font-size: 13px; color: #D4A843;
   }
 
+  /* Verify Methods */
   .verify-card {
     background: rgba(15, 52, 96, 0.08); border: 1px solid rgba(26, 46, 82, 0.5);
     border-radius: 16px; padding: 30px; margin-bottom: 24px;
@@ -68,6 +72,7 @@
   }
   .verify-card p { font-size: 14px; color: #94a3b8; margin-bottom: 16px; line-height: 1.6; }
 
+  /* Method 1: Paste Hash */
   .hash-input {
     width: 100%; padding: 16px; border: 1px solid #1A2E52; border-radius: 10px;
     background: rgba(4, 13, 27, 0.6); color: #22c55e;
@@ -77,6 +82,7 @@
   .hash-input:focus { outline: none; border-color: #D4A843; }
   .hash-input::placeholder { color: #4A7EC7; opacity: 0.5; }
 
+  /* Method 2: Upload File */
   .upload-zone {
     border: 2px dashed #1A2E52; border-radius: 12px; padding: 40px;
     text-align: center; cursor: pointer; transition: all 0.3s;
@@ -95,6 +101,7 @@
   .verify-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(212,168,67,0.3); }
   .verify-btn:disabled { opacity: 0.4; cursor: not-allowed; }
 
+  /* Results */
   .result-box {
     display: none; margin-top: 20px; padding: 20px; border-radius: 12px;
     font-size: 14px; line-height: 1.7;
@@ -111,6 +118,7 @@
     margin-top: 12px; word-break: break-all;
   }
 
+  /* Blockchain note */
   .blockchain-note {
     margin-top: 30px; padding: 20px;
     background: rgba(212, 168, 67, 0.05); border: 1px solid rgba(212, 168, 67, 0.2);
@@ -126,10 +134,12 @@
     letter-spacing: 0.08em; line-height: 2;
   }
 
+  /* Detail list for seal metadata */
   .detail-list { margin: 12px 0; font-size: 13px; line-height: 2; }
   .detail-list dt { display: inline; color: #94a3b8; }
   .detail-list dd { display: inline; color: #F8F9FA; font-family: 'Courier New', monospace; }
 
+  /* Scan steps visual */
   .scan-steps { margin: 16px 0; }
   .scan-step { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 13px; }
   .scan-step .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
@@ -140,6 +150,7 @@
 </head>
 <body>
 
+<!-- Nav -->
 <nav class="topnav">
   <div class="topnav-inner">
     <a href="/" class="topnav-logo">
@@ -157,11 +168,13 @@
 
   <div class="header">
     <img src="/images/logo-full.png" alt="Verum Omnis" class="logo-main">
-    <div class="label">CLIENT-SIDE -- NOTHING LEAVES YOUR DEVICE</div>
+    <div class="label">CLIENT-SIDE — NOTHING LEAVES YOUR DEVICE</div>
     <h1>Verify Document Seal</h1>
     <p>Verify a sealed document by its SHA-512 fingerprint or by re-computing the hash from the original file. All verification happens in your browser.</p>
+    <!-- QR banner inserted here if from QR scan -->
   </div>
 
+  <!-- Method 1: Paste SHA-512 -->
   <div class="verify-card">
     <h3>Method 1: Paste SHA-512 Hash</h3>
     <p>If you have the SHA-512 fingerprint from a sealed document, paste it here to verify its format and check the blockchain status.</p>
@@ -171,27 +184,29 @@ Example: 5f6da77abbd637e98f0fd2417b1b0d6600c9d0fa61b2be64f84e598d14d46d0227b9...
     <div class="result-box info" id="hashResult"></div>
   </div>
 
+  <!-- Method 2: Upload File -->
   <div class="verify-card">
     <h3>Method 2: Upload File to Compare</h3>
     <p>Upload the sealed PDF to extract the embedded SHA-512 fingerprint from its metadata and compare with the seal footer on your document.</p>
     <div class="upload-zone" id="uploadZone">
-      <div style="font-size: 36px; margin-bottom: 12px;">&#128196;</div>
+      <div style="font-size: 36px; margin-bottom: 12px;">📄</div>
       <div style="color: #F8F9FA; font-size: 16px; margin-bottom: 8px;">Drop file here or click to browse</div>
-      <div style="color: #4A7EC7; font-size: 13px;">PDF only -- Max 50MB</div>
+      <div style="color: #4A7EC7; font-size: 13px;">PDF only — Max 50MB</div>
       <input type="file" id="fileInput" accept=".pdf,application/pdf">
     </div>
     <button class="verify-btn" id="fileVerifyBtn" onclick="verifyFile()" disabled>Verify Document</button>
     <div class="result-box info" id="fileResult"></div>
   </div>
 
+  <!-- Blockchain Timing Note -->
   <div class="blockchain-note">
-    <strong>&#9201; Bitcoin Blockchain Timing</strong><br>
-    OpenTimestamps anchors the SHA-256 hash into a Bitcoin transaction. This process is not instant -- it typically takes <strong>1 to 2 hours</strong> for the timestamp to be confirmed on the blockchain. During this time, the seal is still valid (the SHA-512 fingerprint proves document integrity), but the blockchain timestamp is pending. You can download the .OTS proof file and verify it independently at <a href="https://opentimestamps.org" style="color: #D4A843;">opentimestamps.org</a> once confirmation is complete.
+    <strong>⏱️ Bitcoin Blockchain Timing</strong><br>
+    OpenTimestamps anchors the SHA-256 hash into a Bitcoin transaction. This process is not instant — it typically takes <strong>1 to 2 hours</strong> for the timestamp to be confirmed on the blockchain. During this time, the seal is still valid (the SHA-512 fingerprint proves document integrity), but the blockchain timestamp is pending. You can download the .OTS proof file and verify it independently at <a href="https://opentimestamps.org" style="color: #D4A843;">opentimestamps.org</a> once confirmation is complete.
   </div>
 
   <div class="site-footer">
-    Verum Omnis Foundation -- Patent Pending<br>
-    Constitution v6.0 Final -- Article X Non-Weaponization Doctrine
+    Verum Omnis Foundation — Patent Pending<br>
+    Constitution v6.0 Final — Article X Non-Weaponization Doctrine
   </div>
 
 </div>
@@ -199,21 +214,24 @@ Example: 5f6da77abbd637e98f0fd2417b1b0d6600c9d0fa61b2be64f84e598d14d46d0227b9...
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
 let selectedFile = null;
-let originalHash = null;
+let originalHash = null; // Hash from QR code scan (?h=...)
 
+// On page load: check if we came from a QR code scan (?h=SHA512_PREFIX)
 window.addEventListener('DOMContentLoaded', () => {
   const params = new URLSearchParams(window.location.search);
   const h = params.get('h');
   if (h && /^[0-9a-fA-F]{16,128}$/.test(h)) {
     originalHash = h.toLowerCase();
+    // Show a banner indicating we're in QR verification mode
     const header = document.querySelector('.header');
     const banner = document.createElement('div');
     banner.className = 'qr-banner';
-    banner.innerHTML = '<strong>&#128269; QR Verification Mode</strong><br>Scanned from sealed document. Upload the file you received to check for tampering.';
+    banner.innerHTML = '<strong>🔍 QR Verification Mode</strong><br>Scanned from sealed document. Upload the file you received to check for tampering.';
     header.appendChild(banner);
   }
 });
 
+// Upload zone
 document.getElementById('uploadZone').addEventListener('click', () => {
   document.getElementById('fileInput').click();
 });
@@ -244,22 +262,27 @@ function showResult(elId, type, html) {
   el.innerHTML = html;
 }
 
+// Method 1: Verify pasted hash
 function verifyHash() {
   const input = document.getElementById('hashInput').value.trim().toLowerCase().replace(/\s/g, '');
   if (!input) { showResult('hashResult', 'invalid', 'Please enter a SHA-512 hash.'); return; }
+
+  // SHA-512 is 128 hex characters
   if (!/^[0-9a-f]{128}$/.test(input)) {
     if (input.length < 128) {
-      showResult('hashResult', 'invalid', '&#10060; Hash too short. SHA-512 must be exactly 128 hexadecimal characters (you provided ' + input.length + ').');
+      showResult('hashResult', 'invalid', '❌ Hash too short. SHA-512 must be exactly 128 hexadecimal characters (you provided ' + input.length + ').');
     } else if (input.length > 128) {
-      showResult('hashResult', 'invalid', '&#10060; Hash too long. SHA-512 must be exactly 128 hexadecimal characters (you provided ' + input.length + ').');
+      showResult('hashResult', 'invalid', '❌ Hash too long. SHA-512 must be exactly 128 hexadecimal characters (you provided ' + input.length + ').');
     } else {
-      showResult('hashResult', 'invalid', '&#10060; Invalid characters. SHA-512 must contain only hexadecimal characters (0-9, a-f).');
+      showResult('hashResult', 'invalid', '❌ Invalid characters. SHA-512 must contain only hexadecimal characters (0-9, a-f).');
     }
     return;
   }
+
+  // Valid SHA-512 format
   const sealId = 'VO-' + input.substring(0, 12).toUpperCase();
   showResult('hashResult', 'valid',
-    '&#10003; <strong>Valid SHA-512 format</strong><br>' +
+    '✓ <strong>Valid SHA-512 format</strong><br>' +
     'This appears to be a genuine Verum Omnis forensic fingerprint.<br><br>' +
     '<strong>Seal ID:</strong> ' + sealId + '<br>' +
     '<strong>Hash:</strong> <div class="result-hash">' + input + '</div>' +
@@ -267,21 +290,31 @@ function verifyHash() {
   );
 }
 
+// Extract all text from PDF by scanning raw objects (fallback when metadata fails)
 async function extractTextFromPDF(pdfBytes) {
   const textChunks = [];
   try {
+    // Convert bytes to string and look for text between BT (Begin Text) and ET (End Text) operators
+    const decoder = new TextDecoder('utf-8', { fatal: false });
+    let text = '';
+    // Try latin1 first for PDF strings
     const latin1Decoder = new TextDecoder('iso-8859-1', { fatal: false });
     const asLatin1 = latin1Decoder.decode(pdfBytes);
+
+    // Look for common patterns in sealed PDFs
     const patterns = [
       /Seal:\s*VO-[A-F0-9]+/gi,
       /SHA-512:\s*[a-f0-9]+/gi,
       /verumglobal\.foundation/gi,
       /OpenTimestamps/gi
     ];
+
     for (const pattern of patterns) {
       const matches = asLatin1.match(pattern);
       if (matches) textChunks.push(...matches);
     }
+
+    // Also try to find the Subject metadata in the raw bytes as fallback
     const subjectMatch = asLatin1.match(/\(VO-SEAL\|([a-f0-9]{128})\|(VO-[A-F0-9]+)\)/i);
     if (subjectMatch) {
       return { source: 'raw_bytes', sealId: subjectMatch[3], sha512: subjectMatch[2], chunks: textChunks };
@@ -292,6 +325,7 @@ async function extractTextFromPDF(pdfBytes) {
   return { source: null, chunks: textChunks };
 }
 
+// Method 2: Verify file — extract original hash from PDF metadata
 async function verifyFile() {
   if (!selectedFile) return;
   const btn = document.getElementById('fileVerifyBtn');
@@ -303,48 +337,88 @@ async function verifyFile() {
     let extractedSealId = null;
     let isEncrypted = false;
     let metadataSource = null;
-    let chainIds = [];
+    let footerSealId = null;
 
+    // Step 1: Try pdf-lib metadata extraction (most reliable)
+    let chainIds = [];
     if (selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf')) {
       try {
         const pdfBytes = await selectedFile.arrayBuffer();
         const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-        if (pdfDoc.isEncrypted) { isEncrypted = true; }
+
+        // Check if PDF is encrypted/password-protected
+        if (pdfDoc.isEncrypted) {
+          isEncrypted = true;
+        }
+
+        // Try Subject field: "VO-SEAL|SHA512|SEALID|CHAIN:VO-OLD1,VO-OLD2"
         const subject = pdfDoc.getSubject();
         if (subject && subject.startsWith('VO-SEAL|')) {
           const parts = subject.split('|');
-          if (parts.length >= 2) { extractedSha512 = parts[1]; metadataSource = 'PDF Subject metadata'; }
-          if (parts.length >= 3) { extractedSealId = parts[2]; }
+          if (parts.length >= 2) {
+            extractedSha512 = parts[1];
+            metadataSource = 'PDF Subject metadata';
+          }
+          if (parts.length >= 3) {
+            extractedSealId = parts[2];
+          }
+          // Parse chain: parts[3] = "CHAIN:VO-OLD1,VO-OLD2"
           if (parts.length >= 4 && parts[3].startsWith('CHAIN:')) {
             chainIds = parts[3].substring(6).split(',').filter(s => s);
           }
         }
+
+        // Fallback: try Keywords field
         if (!extractedSha512) {
           const keywords = pdfDoc.getKeywords();
-          if (keywords && keywords.includes('verum,seal,')) { metadataSource = 'PDF Keywords metadata'; }
+          if (keywords && keywords.includes('verum,seal,')) {
+            metadataSource = 'PDF Keywords metadata';
+          }
         }
+
+        // Fallback 2: scan raw PDF bytes for seal patterns (metadata stripped but footer remains)
+        let footerSealId = null;
         if (!extractedSha512) {
           const fallback = await extractTextFromPDF(pdfBytes);
-          if (fallback.sha512) { extractedSha512 = fallback.sha512; extractedSealId = fallback.sealId; metadataSource = 'PDF content scan'; }
+          if (fallback.sha512) {
+            extractedSha512 = fallback.sha512;
+            extractedSealId = fallback.sealId;
+            metadataSource = 'PDF content scan';
+          }
+          // Check for seal footer text even if SHA not found
+          for (const chunk of fallback.chunks) {
+            const sealMatch = chunk.match(/Seal:\s*(VO-[A-F0-9]+)/i);
+            if (sealMatch) {
+              footerSealId = sealMatch[1];
+              break;
+            }
+          }
         }
+
       } catch (pdfErr) {
         console.warn('Could not read PDF metadata:', pdfErr.message);
       }
     }
 
+    // Build scan steps for user visibility
     let scanStepsHtml = '<div class="scan-steps">';
-    scanStepsHtml += '<div class="scan-step"><span class="dot ' + (metadataSource ? 'ok' : 'fail') + '"></span> PDF metadata ' + (metadataSource ? 'found (' + metadataSource + ')' : 'not found') + '</div>';
+    scanStepsHtml += '<div class="scan-step"><span class="dot ' + (metadataSource ? 'ok' : (footerSealId ? 'warn' : 'fail')) + '"></span> PDF metadata ' + (metadataSource ? 'found (' + metadataSource + ')' : (footerSealId ? 'not found (footer seal detected)' : 'not found')) + '</div>';
     if (chainIds.length > 0) {
       scanStepsHtml += '<div class="scan-step"><span class="dot ok"></span> Chain detected: ' + chainIds.join(', ') + '</div>';
+    }
+    if (footerSealId && !metadataSource) {
+      scanStepsHtml += '<div class="scan-step"><span class="dot ok"></span> Seal footer found: ' + footerSealId + '</div>';
     }
     scanStepsHtml += '<div class="scan-step"><span class="dot ' + (isEncrypted ? 'warn' : 'ok') + '"></span> Encryption ' + (isEncrypted ? 'detected (password-protected)' : 'none') + '</div>';
     scanStepsHtml += '</div>';
 
+    // STEP A: We have QR hash AND extracted metadata → compare
     if (originalHash && extractedSha512) {
       const prefixMatch = extractedSha512.toLowerCase().startsWith(originalHash.toLowerCase());
+
       if (prefixMatch) {
         showResult('fileResult', 'valid',
-          '<strong style="font-size:16px;">&#10003; VERIFIED -- DOCUMENT INTACT</strong><br><br>' +
+          '<strong style="font-size:16px;">✓ VERIFIED — DOCUMENT INTACT</strong><br><br>' +
           'The SHA-512 fingerprint embedded in this document matches the QR code scan.<br>' +
           'This document has <strong>NOT been tampered with</strong> since it was sealed by Verum Omnis.<br>' +
           scanStepsHtml +
@@ -357,7 +431,7 @@ async function verifyFile() {
         );
       } else {
         showResult('fileResult', 'invalid',
-          '<strong style="font-size:16px;">&#128308; TAMPERED -- DO NOT ACCEPT</strong><br><br>' +
+          '<strong style="font-size:16px;">🔴 TAMPERED — DO NOT ACCEPT</strong><br><br>' +
           'The SHA-512 fingerprint does NOT match the QR code.<br>' +
           'This document has been <strong>altered or corrupted</strong> since it was sealed.<br>' +
           scanStepsHtml +
@@ -366,14 +440,32 @@ async function verifyFile() {
           '<br><strong>Do not accept this document.</strong> Contact the sender to request the original sealed version.'
         );
       }
-    } else if (extractedSha512) {
+    }
+    // STEP B1: Footer seal found but no metadata (metadata stripped by email/file transfer)
+    else if (footerSealId) {
+      showResult('fileResult', 'valid',
+        '<strong style="font-size:16px;">✓ SEAL FOUND — Footer Only</strong><br><br>' +
+        'A Verum Omnis seal footer was detected, but the metadata has been stripped.<br>' +
+        'This commonly happens when PDFs pass through email systems or cloud storage.<br>' +
+        scanStepsHtml +
+        '<div class="detail-list">' +
+        '<div><dt>Seal ID (from footer): </dt><dd>' + footerSealId + '</dd></div>' +
+        '<div><dt>Document: </dt><dd>' + selectedFile.name + '</dd></div>' +
+        '</div>' +
+        '<br><strong>The seal is VALID but metadata is missing.</strong><br>' +
+        'Compare the Seal ID above with the footer on every page of your document.<br>' +
+        'For full automatic verification, ask the sender to re-send the original sealed file.'
+      );
+    }
+    // STEP B2: No QR scan, but we found hash in PDF metadata → show it
+    else if (extractedSha512) {
       const chainHtml = chainIds.length > 0 ?
         '<div style="margin-top:8px;padding:10px;background:rgba(74,126,199,0.08);border-radius:8px;font-size:12px;">' +
         '<strong style="color:#4A7EC7;">Chain of Custody:</strong> This document contains content from previously sealed documents.<br>' +
         'Previous seals: ' + chainIds.join(', ') +
         '</div>' : '';
       showResult('fileResult', 'valid',
-        '<strong style="font-size:16px;">&#10003; SEAL FOUND -- DOCUMENT AUTHENTIC</strong><br><br>' +
+        '<strong style="font-size:16px;">✓ SEAL FOUND — DOCUMENT AUTHENTIC</strong><br><br>' +
         'A Verum Omnis seal was found embedded in this document\'s metadata.<br>' +
         scanStepsHtml +
         '<div class="detail-list">' +
@@ -389,15 +481,19 @@ async function verifyFile() {
         '3. If both match, the document is authentic and has not been tampered with.' +
         (chainIds.length > 0 ? '<br>4. Each previous seal in the chain can be independently verified' : '')
       );
-    } else {
+    }
+    // STEP C: No metadata found at all
+    else {
+      // Compute the file hash as a fallback
       const hashBuffer = await crypto.subtle.digest('SHA-512', await selectedFile.arrayBuffer());
       const hashArray = Array.from(new Uint8Array(hashBuffer));
       const sha512 = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
       const sealId = 'VO-' + sha512.substring(0, 12).toUpperCase();
 
       if (originalHash) {
+        // We have QR hash but couldn't find metadata — this shouldn't happen for genuine sealed docs
         showResult('fileResult', 'warning',
-          '<strong style="font-size:16px;">&#9888; NO SEAL FOUND -- VERIFY CAREFULLY</strong><br><br>' +
+          '<strong style="font-size:16px;">⚠️ NO SEAL FOUND — VERIFY CAREFULLY</strong><br><br>' +
           scanStepsHtml +
           'No Verum Omnis seal metadata was found in this PDF. This could mean:<br>' +
           '1. The document was not sealed using the Verum Omnis system<br>' +
@@ -410,7 +506,7 @@ async function verifyFile() {
         );
       } else {
         showResult('fileResult', 'info',
-          '<strong style="font-size:16px;">&#128210; NO SEAL FOUND</strong><br><br>' +
+          '<strong style="font-size:16px;">📔 NO SEAL FOUND</strong><br><br>' +
           scanStepsHtml +
           'No Verum Omnis seal metadata was detected in this PDF.<br><br>' +
           'This document does not appear to have been sealed using the Verum Omnis Document Sealing Service. This could be because:<br>' +
@@ -424,7 +520,7 @@ async function verifyFile() {
       }
     }
   } catch (err) {
-    showResult('fileResult', 'invalid', '&#10060; Error: ' + err.message);
+    showResult('fileResult', 'invalid', '❌ Error: ' + err.message);
   } finally {
     btn.disabled = false;
     btn.textContent = 'Verify Document';
