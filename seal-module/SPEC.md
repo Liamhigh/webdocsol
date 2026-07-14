@@ -1,6 +1,6 @@
-# VO-DSS-1.0 Technical Specification
+# VO-DSS-1.2 Technical Specification
 
-## Document Sealing Standard v1.0
+## Document Sealing Standard v1.2
 
 ---
 
@@ -19,7 +19,7 @@
 
 ## 2. SHA-512 as Final Verification
 
-SHA-512 is computed early (step 2, needed for footer/QR) but **displayed as step 8** — the last thing the user sees. This emphasises the Verum fingerprint as the seal of trust.
+SHA-512 is computed early (step 2, needed for footer/QR) but **displayed as step 8** -- the last thing the user sees. This emphasises the Verum fingerprint as the seal of trust.
 
 ## 3. Watermark Application
 
@@ -40,19 +40,25 @@ SHA-512 is computed early (step 2, needed for footer/QR) but **displayed as step
 ## 5. Password Protection Flow
 
 ```
-Sender checks "Password protect" → enters password (min 8 chars) → confirms
-                                    ↓
+Sender checks "Password protect" -> enters password (min 8 chars) -> confirms
+                                    |
+                                    v
 PDF encrypted with AES-256 + cover page inserted as page 1
-                                    ↓
-Recipient opens PDF → sees lock screen with sender contact
-                                    ↓
+                                    |
+                                    v
+Recipient opens PDF -> sees lock screen with sender contact
+                                    |
+                                    v
 Recipient emails sender asking for password
-                                    ↓
+                                    |
+                                    v
 Sender receives email = DELIVERY RECEIPT
-                                    ↓
+                                    |
+                                    v
 Sender replies with password
-                                    ↓
-Recipient enters password → document opens
+                                    |
+                                    v
+Recipient enters password -> document opens
 ```
 
 ## 6. File Size Note
@@ -77,9 +83,47 @@ All identity fields are optional. User clicks "+ Add Sender Identity" to expand.
 | Address | Affidavit address block |
 | Email | Password delivery contact |
 
-Identity data is encoded in QR metadata only — never stored server-side.
+Identity data is encoded in QR metadata only -- never stored server-side.
 
-## 8. Interoperability Requirements
+## 8. Seal Chain of Custody (v1.2)
+
+When a previously sealed PDF is re-sealed (e.g., after merging with other documents), the system **preserves the chain of custody**:
+
+### Chain Detection
+- Before sealing, the system reads the uploaded PDF's Subject metadata
+- If a `VO-SEAL|...` entry is found, the previous Seal ID(s) are extracted
+
+### Chain Storage Format
+```
+Subject: VO-SEAL|SHA512|NEW_SEAL_ID|CHAIN:VO-OLD1,VO-OLD2
+```
+
+| Field | Description |
+|-------|-------------|
+| `VO-SEAL` | Magic prefix -- identifies this as a Verum Omnis seal |
+| `SHA512` | Full 128-character SHA-512 of the original document |
+| `NEW_SEAL_ID` | Seal ID of the current (new) seal |
+| `CHAIN:VO-OLD1,VO-OLD2` | Comma-separated list of previous seal IDs |
+
+### Footer Display
+If previous seals exist, the footer shows:
+```
+PRIVATE SEAL -- FREE TIER | Chain: 2 prev
+Seal: VO-NEW | SHA-512: a1c825e8... | 2026-07-14 06:05:01 UTC | 1/15
+```
+
+### Investigation Timeline
+Each re-seal creates a **new independent Bitcoin timestamp** via OpenTimestamps. This produces an immutable audit trail:
+
+| Day | Action | Bitcoin Block |
+|-----|--------|---------------|
+| Day 1 | Seal initial report | Block 890,001 |
+| Day 5 | Merge + add evidence | Block 890,042 |
+| Day 12 | Add witness statements | Block 890,115 |
+
+The verify page displays the full chain: "Previous seals: VO-OLD1, VO-OLD2" -- each independently clickable and verifiable.
+
+## 9. Interoperability Requirements
 
 Any implementation (web, Android, Firewall) must produce PDFs that:
 1. Contain a SHA-512 hash in the seal footer
@@ -87,3 +131,4 @@ Any implementation (web, Android, Firewall) must produce PDFs that:
 3. Include the watermark at 20% opacity (or platform-equivalent)
 4. Use the same metadata JSON schema in QR codes
 5. Produce compatible .OTS proof files
+6. Detect and preserve seal chains when re-sealing (v1.2+)

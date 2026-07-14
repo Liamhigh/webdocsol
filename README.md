@@ -1,10 +1,16 @@
-# WebDocSol — Verum Omnis Document Sealing & Verification Standard
+# WebDocSol -- Verum Omnis Document Sealing & Verification Standard
 
 **Repository:** `Liamhigh/webdocsol`  
-**Version:** VO-DSS-1.0 (Verum Omnis Document Sealing Standard v1.0)  
+**Version:** VO-DSS-1.2 (Verum Omnis Document Sealing Standard v1.2)  
 **Constitution:** v6.0 Final  
 **Date:** 2026-07-14  
 **Classification:** Constitutional / Immutable / Open Source  
+
+**What's New in v1.2:**
+- **Seal Chain of Custody** -- detects previous seals when re-sealing merged documents
+- **Per-page error recovery** -- individual pages that fail to embed get error notices instead of crashing the whole seal
+- **Proper error messages** -- clear explanations and recovery steps when sealing fails
+- **Verify page rewrite** -- uses pdf-lib metadata extraction (no more "No Seal Found" false negatives)
 
 ---
 
@@ -18,7 +24,7 @@ This repository standardises the Verum Omnis document sealing and verification s
 | **Android App** | `/seal-module/android/` | Reference spec |
 | **Guardian Fraud Firewall** | `/seal-module/firewall/` | Reference spec |
 
-All implementations must produce **interoperable** sealed documents — a document sealed on the website must verify on the Android app and the Firewall, and vice versa.
+All implementations must produce **interoperable** sealed documents -- a document sealed on the website must verify on the Android app and the Firewall, and vice versa.
 
 ---
 
@@ -36,6 +42,7 @@ User uploads PDF
        +---> Optional: [Identity Pipeline] Name, ID, Address, Email
        +---> Optional: [Password Protection] Delivery receipt mode
        +---> Auto: [GPS + Device Fingerprint]
+       +---> Auto: [Seal Chain Detection] Detect previous seals
        |
        v
 [Hash] SHA-256 (for OpenTimestamps)
@@ -49,7 +56,7 @@ User uploads PDF
        - A4 watermark background at 20% opacity
        - Original content scaled to 88%
        - Clean QR code top-right (no border)
-       - Seal footer on every page (SHA-512 + timestamp)
+       - Seal footer on every page (SHA-512 + timestamp + chain)
        - Optional: Password-protected cover page
        |
        v
@@ -110,8 +117,8 @@ When enabled, the sealed PDF:
 
 1. Has AES-256 encryption with user-provided password
 2. Shows a **cover page** (page 1) with lock icon and sender contact
-3. Recipient must email sender for password → **that email IS the read receipt**
-4. No server involvement — works through any email system
+3. Recipient must email sender for password -> **that email IS the read receipt**
+4. No server involvement -- works through any email system
 
 ### Cover Page Text
 
@@ -130,23 +137,39 @@ Sender contact: [sender email from identity pipeline]
 
 ---
 
+## Seal Chain of Custody
+
+When investigations evolve and documents are merged, the seal chain preserves the full audit trail:
+
+```
+Day 1:  Seal original report        -> VO-A -> Bitcoin Block 890,001
+Day 5:  Merge + add evidence         -> VO-B (CHAIN:VO-A) -> Block 890,042
+Day 12: Add witness statements       -> VO-C (CHAIN:VO-A,VO-B) -> Block 890,115
+```
+
+Each re-seal creates an **independent Bitcoin timestamp**. The verify page shows the complete chain -- every previous seal is independently clickable and verifiable. In court, this proves the document's evolution is tamper-evident and cannot be backdated.
+
+See `seal-module/SPEC.md` Section 8 for full chain format specification.
+
+---
+
 ## File Structure
 
 ```
 webdocsol/
-├── README.md                          # This file
-├── seal-module/
-│   ├── SPEC.md                        # Full technical specification
-│   ├── web/                           # Website implementation
-│   │   ├── seal-document.html         # Document sealing page
-│   │   ├── verify.html               # Document verification page
-│   │   └── watermark-spec.md         # Watermark brand spec
-│   ├── android/                       # Android/Kotlin reference
-│   │   └── README.md
-│   └── firewall/                      # Python/Firewall reference
-│       └── README.md
-└── website/                           # Website notes
-    └── README.md
+|-- README.md                          # This file
+|-- seal-module/
+|   |-- SPEC.md                        # Full technical specification
+|   |-- web/                           # Website implementation
+|   |   |-- seal-document.html         # Document sealing page
+|   |   |-- verify.html               # Document verification page
+|   |   |-- watermark-spec.md         # Watermark brand spec
+|   |-- android/                       # Android/Kotlin reference
+|   |   |-- README.md
+|   |-- firewall/                      # Python/Firewall reference
+|       |-- README.md
+|-- website/                           # Website notes
+    |-- README.md
 ```
 
 ---
@@ -167,12 +190,12 @@ webdocsol/
 ## Constitution Compliance
 
 All implementations must adhere to:
-- **Article III:** Truth over Probability — never fabricate extraction results
-- **Article IV:** Evidence before Narrative — extraction report before analysis
-- **Article X:** Non-Weaponization — no brute-force, no unauthorized access
+- **Article III:** Truth over Probability -- never fabricate extraction results
+- **Article IV:** Evidence before Narrative -- extraction report before analysis
+- **Article X:** Non-Weaponization -- no brute-force, no unauthorized access
 
 ---
 
 ## Patent Pending
 
-Verum Omnis — Patent Pending — Article X Non-Weaponization Doctrine
+Verum Omnis -- Patent Pending -- Article X Non-Weaponization Doctrine
