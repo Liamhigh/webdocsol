@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Verify Seal — Verum Omnis</title>
+<title>Verify Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -13,13 +13,13 @@
     color: #D5D8DD;
     min-height: 100vh;
   }
-  .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+  .container { max-width: 900px; margin: 0 auto; padding: 40px 20px; }
 
-  /* Nav */
   .topnav {
     position: fixed; top: 0; left: 0; right: 0; z-index: 50;
     background: rgba(4, 13, 27, 0.85);
     backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
     border-bottom: 1px solid rgba(26, 46, 82, 0.5);
     height: 64px;
   }
@@ -29,136 +29,207 @@
     padding: 0 clamp(1.5rem, 5vw, 4rem);
   }
   .topnav-logo { display: flex; align-items: center; gap: 2px; text-decoration: none; }
-  .topnav-logo img { height: 40px; width: auto; }
+  .topnav-logo img { height: 40px; width: auto; object-fit: contain; }
   .topnav-links { display: flex; align-items: center; gap: 32px; }
   .topnav-links a {
     font-family: 'Courier New', monospace; font-size: 12px;
     text-transform: uppercase; letter-spacing: 0.1em;
-    color: #4A7EC7; text-decoration: none; transition: color 0.3s;
+    color: #4A7EC7; text-decoration: none;
+    transition: color 0.3s;
   }
   .topnav-links a:hover { color: #F8F9FA; }
   .topnav-links a.active { color: #D4A843; }
-  @media (max-width: 768px) { .topnav-links { display: none; } }
 
-  /* Header */
   .header { text-align: center; margin: 80px 0 40px; }
-  .header .logo-main { margin: 0 auto 24px; max-width: min(300px, 60vw); height: auto; }
+  .header .logo-main {
+    margin: 0 auto 24px;
+    max-width: min(360px, 70vw); height: auto;
+    filter: drop-shadow(0 0 40px rgba(74, 126, 199, 0.2));
+  }
   .header .label {
     font-family: 'Courier New', monospace; font-size: 12px;
-    letter-spacing: 0.15em; text-transform: uppercase; color: #D4A843; margin-bottom: 16px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    color: #D4A843; margin-bottom: 16px;
   }
   .header h1 {
     font-family: 'Cormorant Garamond', Georgia, serif;
-    font-size: clamp(2rem, 6vw, 3rem); font-weight: 300; color: #F8F9FA;
+    font-size: clamp(2rem, 6vw, 3.5rem);
+    font-weight: 300; color: #F8F9FA;
     letter-spacing: -0.03em; line-height: 1.1;
   }
-  .header p { font-size: 1rem; color: #D5D8DD; margin-top: 12px; line-height: 1.6; }
-
-  /* QR Verification Banner */
-  .qr-banner {
-    background: rgba(212,168,67,0.1); border: 1px solid rgba(212,168,67,0.3);
-    border-radius: 10px; padding: 14px; margin: 20px auto; max-width: 600px;
-    font-size: 13px; color: #D4A843;
+  .header p {
+    font-size: 1.125rem; color: #D5D8DD;
+    margin-top: 12px; line-height: 1.7; max-width: 600px;
+    margin-left: auto; margin-right: auto;
   }
 
-  /* Verify Methods */
-  .verify-card {
-    background: rgba(15, 52, 96, 0.08); border: 1px solid rgba(26, 46, 82, 0.5);
-    border-radius: 16px; padding: 30px; margin-bottom: 24px;
-  }
-  .verify-card h3 {
-    font-family: 'Cormorant Garamond', Georgia, serif; font-size: 20px;
-    color: #D4A843; margin-bottom: 16px; font-weight: 400;
-  }
-  .verify-card p { font-size: 14px; color: #94a3b8; margin-bottom: 16px; line-height: 1.6; }
-
-  /* Method 1: Paste Hash */
-  .hash-input {
-    width: 100%; padding: 16px; border: 1px solid #1A2E52; border-radius: 10px;
-    background: rgba(4, 13, 27, 0.6); color: #22c55e;
-    font-family: 'Courier New', monospace; font-size: 13px;
-    resize: vertical; min-height: 80px;
-  }
-  .hash-input:focus { outline: none; border-color: #D4A843; }
-  .hash-input::placeholder { color: #4A7EC7; opacity: 0.5; }
-
-  /* Method 2: Upload File */
   .upload-zone {
-    border: 2px dashed #1A2E52; border-radius: 12px; padding: 40px;
-    text-align: center; cursor: pointer; transition: all 0.3s;
-    background: rgba(4, 13, 27, 0.3);
+    border: 2px dashed #1A2E52; border-radius: 16px;
+    padding: 60px 40px; text-align: center; cursor: pointer;
+    transition: all 0.3s ease; background: rgba(15, 52, 96, 0.08);
+    margin-bottom: 30px;
   }
-  .upload-zone:hover { border-color: #D4A843; background: rgba(212, 168, 67, 0.05); }
-  .upload-zone input { display: none; }
+  .upload-zone:hover { border-color: #D4A843; background: rgba(15, 52, 96, 0.2); }
+  .upload-zone .icon { font-size: 48px; margin-bottom: 16px; }
+  .upload-zone h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 24px; color: #F8F9FA; margin-bottom: 8px; font-weight: 400;
+  }
+  .upload-zone p { font-size: 14px; color: #4A7EC7; }
+  .upload-zone input[type="file"] { display: none; }
+
+  .upload-zone-small {
+    border: 2px dashed #1A2E52; border-radius: 12px;
+    padding: 30px 20px; text-align: center; cursor: pointer;
+    transition: all 0.3s ease; background: rgba(15, 52, 96, 0.08);
+    margin-top: 24px;
+  }
+  .upload-zone-small:hover { border-color: #D4A843; background: rgba(15, 52, 96, 0.2); }
+
+  .drop-zone {
+    border: 2px dashed #1A2E52; border-radius: 12px;
+    padding: 20px; text-align: center;
+    background: rgba(15, 52, 96, 0.04);
+    font-size: 13px; color: #4A7EC7;
+    transition: all 0.3s ease;
+  }
+  .drop-zone.dragover { border-color: #D4A843; background: rgba(212, 168, 67, 0.08); }
 
   .verify-btn {
-    width: 100%; padding: 16px; border: none; border-radius: 10px;
+    width: 100%; padding: 18px; border: none; border-radius: 12px;
     background: linear-gradient(135deg, #D4A843 0%, #b8942a 100%);
-    color: #040D1B; font-size: 15px; font-weight: 700; cursor: pointer;
-    transition: all 0.3s; text-transform: uppercase; letter-spacing: 0.05em;
-    margin-top: 16px;
+    color: #040D1B; font-size: 16px; font-weight: 700;
+    cursor: pointer; transition: all 0.3s ease; font-family: inherit;
+    margin-bottom: 30px; text-transform: uppercase; letter-spacing: 0.05em;
   }
-  .verify-btn:hover { transform: translateY(-1px); box-shadow: 0 4px 20px rgba(212,168,67,0.3); }
-  .verify-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+  .verify-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(212,168,67,0.3); }
+  .verify-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-  /* Results */
-  .result-box {
-    display: none; margin-top: 20px; padding: 20px; border-radius: 12px;
-    font-size: 14px; line-height: 1.7;
-  }
-  .result-box.visible { display: block; }
-  .result-box.valid { background: rgba(34, 197, 94, 0.08); border: 1px solid rgba(34, 197, 94, 0.25); color: #22c55e; }
-  .result-box.invalid { background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); color: #ef4444; }
-  .result-box.info { background: rgba(74, 126, 199, 0.08); border: 1px solid rgba(74, 126, 199, 0.25); color: #4A7EC7; }
-  .result-box.warning { background: rgba(212, 168, 67, 0.08); border: 1px solid rgba(212, 168, 67, 0.25); color: #D4A843; }
+  .results { display: none; }
+  .results.visible { display: block; }
 
-  .result-hash {
-    font-family: 'Courier New', monospace; font-size: 12px;
-    background: rgba(4, 13, 27, 0.5); padding: 12px; border-radius: 8px;
-    margin-top: 12px; word-break: break-all;
+  .status-card {
+    background: rgba(15, 52, 96, 0.08);
+    border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 16px; padding: 30px; margin-bottom: 24px;
+  }
+  .status-card h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 24px; margin-bottom: 16px; font-weight: 400;
+  }
+  .status-card h3.verified { color: #22c55e; }
+  .status-card h3.tampered { color: #ef4444; }
+  .status-card h3.pending { color: #D4A843; }
+
+  .tick-container { display: flex; gap: 20px; margin-bottom: 20px; }
+  .tick-item {
+    flex: 1; padding: 16px; border-radius: 10px;
+    background: rgba(4, 13, 27, 0.4); border: 1px solid rgba(26, 46, 82, 0.5);
+    text-align: center;
+  }
+  .tick-item .icon { font-size: 28px; margin-bottom: 8px; }
+  .tick-item .label { font-size: 12px; color: #D5D8DD; font-weight: 600; }
+  .tick-item .detail { font-size: 11px; color: #4A7EC7; margin-top: 4px; font-family: 'Courier New', monospace; }
+  .tick-item.match { border-color: rgba(34, 197, 94, 0.4); background: rgba(34, 197, 94, 0.08); }
+  .tick-item.mismatch { border-color: rgba(239, 68, 68, 0.4); background: rgba(239, 68, 68, 0.08); }
+  .tick-item.pending { border-color: rgba(212, 168, 67, 0.4); background: rgba(212, 168, 67, 0.08); }
+
+  .hash-row { margin-bottom: 16px; }
+  .hash-row label { display: block; font-size: 11px; color: #4A7EC7; margin-bottom: 6px;
+    text-transform: uppercase; letter-spacing: 0.08em; font-family: 'Courier New', monospace;
+  }
+  .hash-display {
+    background: rgba(4, 13, 27, 0.6); border-radius: 10px; padding: 16px;
+    font-family: 'Courier New', monospace; font-size: 12px; color: #22c55e;
+    word-break: break-all; border: 1px solid rgba(26, 46, 82, 0.5);
   }
 
-  /* Blockchain note */
-  .blockchain-note {
-    margin-top: 30px; padding: 20px;
-    background: rgba(212, 168, 67, 0.05); border: 1px solid rgba(212, 168, 67, 0.2);
-    border-radius: 12px; font-size: 13px; color: #D5D8DD; line-height: 1.7;
+  .identity-card {
+    background: rgba(4, 13, 27, 0.4);
+    border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 12px; padding: 24px; margin-bottom: 24px;
   }
-  .blockchain-note strong { color: #D4A843; }
+  .identity-card h4 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 20px; color: #D4A843; margin-bottom: 16px; font-weight: 400;
+  }
+  .identity-row { display: flex; padding: 10px 0; border-bottom: 1px solid rgba(26, 46, 82, 0.3); }
+  .identity-row:last-child { border-bottom: none; }
+  .identity-row dt { width: 120px; font-size: 11px; color: #4A7EC7;
+    text-transform: uppercase; letter-spacing: 0.05em;
+    font-family: 'Courier New', monospace; flex-shrink: 0;
+  }
+  .identity-row dd { flex: 1; font-size: 14px; color: #F8F9FA; margin-left: 16px; }
+
+  .info-section { margin-top: 60px; padding-top: 40px;
+    border-top: 1px solid rgba(26, 46, 82, 0.5);
+  }
+  .info-section h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 28px; color: #D4A843; margin-bottom: 16px; font-weight: 400;
+  }
+  .info-section > p { font-size: 16px; color: #D5D8DD; line-height: 1.7; margin-bottom: 24px; }
+  .info-section .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .info-section .grid .item {
+    background: rgba(15, 52, 96, 0.08); border-radius: 12px;
+    padding: 24px; border: 1px solid rgba(26, 46, 82, 0.4);
+  }
+  .info-section .grid .item h4 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 18px; color: #D4A843; margin-bottom: 10px; font-weight: 500;
+  }
+  .info-section .grid .item p { font-size: 13px; color: #4A7EC7; margin: 0; line-height: 1.6; }
 
   .site-footer {
-    margin-top: 50px; padding-top: 20px;
+    margin-top: 60px; padding-top: 30px;
     border-top: 1px solid rgba(26, 46, 82, 0.5);
     text-align: center; font-size: 12px; color: #4A7EC7;
     font-family: 'Courier New', monospace; text-transform: uppercase;
     letter-spacing: 0.08em; line-height: 2;
   }
 
-  /* Detail list for seal metadata */
-  .detail-list { margin: 12px 0; font-size: 13px; line-height: 2; }
-  .detail-list dt { display: inline; color: #94a3b8; }
-  .detail-list dd { display: inline; color: #F8F9FA; font-family: 'Courier New', monospace; }
+  .voice-section {
+    background: rgba(15, 52, 96, 0.08);
+    border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 12px; padding: 24px; margin-bottom: 24px;
+  }
+  .voice-section h4 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 18px; color: #D4A843; margin-bottom: 12px; font-weight: 400;
+  }
+  .voice-section p { font-size: 13px; color: #D5D8DD; line-height: 1.6; margin-bottom: 12px; }
+  .voice-section input {
+    width: 100%; padding: 12px 16px; border: 1px solid #1A2E52; border-radius: 10px;
+    background: rgba(15, 52, 96, 0.15); color: #F8F9FA; font-size: 14px; font-family: inherit;
+    margin-bottom: 10px;
+  }
+  .voice-section input:focus { outline: none; border-color: #D4A843; }
+  .voice-section input::placeholder { color: #4A7EC7; opacity: 0.6; }
+  .voice-section .decrypt-btn {
+    padding: 12px 24px; border: none; border-radius: 8px;
+    background: linear-gradient(135deg, #D4A843 0%, #b8942a 100%);
+    color: #040D1B; font-size: 14px; font-weight: 600;
+    cursor: pointer; font-family: inherit;
+  }
 
-  /* Scan steps visual */
-  .scan-steps { margin: 16px 0; }
-  .scan-step { display: flex; align-items: center; gap: 10px; padding: 8px 0; font-size: 13px; }
-  .scan-step .dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
-  .scan-step .dot.ok { background: #22c55e; }
-  .scan-step .dot.fail { background: #ef4444; }
-  .scan-step .dot.warn { background: #D4A843; }
+  @media (max-width: 600px) {
+    .tick-container { flex-direction: column; }
+    .info-section .grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 2.2rem; }
+  }
 </style>
 </head>
 <body>
 
-<!-- Nav -->
 <nav class="topnav">
   <div class="topnav-inner">
     <a href="/" class="topnav-logo">
       <img src="/images/logo-full.png" alt="Verum Omnis">
     </a>
     <div class="topnav-links">
-      <a href="/seal-document.html">Seal Document</a>
+      <a href="/">Home</a>
       <a href="/documents-resources.html">Documents</a>
+      <a href="/seal-document.html">Seal</a>
       <a href="/verify.html" class="active">Verify</a>
     </div>
   </div>
@@ -168,149 +239,67 @@
 
   <div class="header">
     <img src="/images/logo-full.png" alt="Verum Omnis" class="logo-main">
-    <div class="label">CLIENT-SIDE — NOTHING LEAVES YOUR DEVICE</div>
-    <h1>Verify Document Seal</h1>
-    <p>Verify a sealed document by its SHA-512 fingerprint or by re-computing the hash from the original file. All verification happens in your browser.</p>
-    <!-- QR banner inserted here if from QR scan -->
+    <div class="label">AI FORENSICS FOR TRUTH -- CLIENT-SIDE -- NOTHING LEAVES YOUR DEVICE</div>
+    <h1>Document Verification</h1>
+    <p>Upload a sealed PDF to verify its SHA-512 forensic fingerprint, check OpenTimestamps blockchain confirmation, view embedded identity data, and confirm the document has not been tampered with.</p>
   </div>
 
-  <!-- Method 1: Paste SHA-512 -->
-  <div class="verify-card">
-    <h3>Method 1: Paste SHA-512 Hash</h3>
-    <p>If you have the SHA-512 fingerprint from a sealed document, paste it here to verify its format and check the blockchain status.</p>
-    <textarea class="hash-input" id="hashInput" placeholder="Paste SHA-512 hash here...
-Example: 5f6da77abbd637e98f0fd2417b1b0d6600c9d0fa61b2be64f84e598d14d46d0227b9..."></textarea>
-    <button class="verify-btn" onclick="verifyHash()">Verify Hash</button>
-    <div class="result-box info" id="hashResult"></div>
+  <div class="upload-zone" id="uploadZone">
+    <div class="icon">&#128196;</div>
+    <h3>Upload Sealed PDF</h3>
+    <p>Drag and drop your sealed PDF here, or click to browse.</p>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf">
   </div>
 
-  <!-- Method 2: Upload File -->
-  <div class="verify-card">
-    <h3>Method 2: Upload File to Compare</h3>
-    <p>Upload the sealed PDF to extract the embedded SHA-512 fingerprint from its metadata and compare with the seal footer on your document.</p>
-    <div class="upload-zone" id="uploadZone">
-      <div style="font-size: 36px; margin-bottom: 12px;">📄</div>
-      <div style="color: #F8F9FA; font-size: 16px; margin-bottom: 8px;">Drop file here or click to browse</div>
-      <div style="color: #4A7EC7; font-size: 13px;">PDF or encrypted .voice — Max 50MB</div>
-      <input type="file" id="fileInput" accept=".pdf,application/pdf,.voice">
+  <div class="voice-section" id="voiceSection" style="display:none;">
+    <h4>&#128225; Encrypted .voice File Detected</h4>
+    <p>This document is password-protected. Enter the password provided by the sender to decrypt and verify.</p>
+    <input type="password" id="voicePassword" placeholder="Enter password">
+    <button class="decrypt-btn" onclick="decryptVoice()">Decrypt &amp; Verify</button>
+  </div>
+
+  <div class="results" id="results"></div>
+
+  <div class="info-section">
+    <h3>How Verification Works</h3>
+    <p>Every sealed document carries a forensic fingerprint that makes tampering impossible to hide.</p>
+    <div class="grid">
+      <div class="item"><h4>&#128290; SHA-512 Match</h4><p>We recompute the SHA-512 hash of the uploaded PDF. If it matches the embedded hash, the document is exactly as sealed -- no tampering possible.</p></div>
+      <div class="item"><h4>&#9939; Blockchain Check</h4><p>The OTS digest embedded in the QR is sent to OpenTimestamps calendar servers. If Bitcoin has confirmed the timestamp, you get a green tick. Pending means the seal is valid but not yet blockchain-confirmed.</p></div>
+      <div class="item"><h4>&#128100; Identity Card</h4><p>If sender identity was included during sealing, we display it here for affidavit pre-fill and chain of custody tracking.</p></div>
+      <div class="item"><h4>&#128272; .voice Decryption</h4><p>Password-protected documents produce a .voice encrypted file. Upload it here with the sender's password to decrypt and verify the original sealed PDF.</p></div>
     </div>
-    <button class="verify-btn" id="fileVerifyBtn" onclick="verifyFile()" disabled>Verify Document</button>
-    <div class="result-box info" id="fileResult"></div>
-  </div>
-
-  <!-- Password Decryption (shown for .voice encrypted files) -->
-  <div class="verify-card" id="decryptCard" style="display:none;">
-    <h3>🔐 Decrypt Password-Protected Document</h3>
-    <p>This is an encrypted Verum Omnis sealed document. Enter the password to decrypt and verify.</p>
-    <input type="password" id="decryptPassword" placeholder="Enter document password" style="width:100%;padding:16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(4,13,27,0.6);color:#F8F9FA;font-family:inherit;font-size:15px;margin-bottom:12px;">
-    <button class="verify-btn" onclick="decryptAndVerify()">Decrypt & Verify</button>
-    <div class="result-box info" id="decryptResult"></div>
-  </div>
-
-  <!-- Blockchain Timing Note -->
-  <div class="blockchain-note">
-    <strong>⏱️ Bitcoin Blockchain Timing</strong><br>
-    OpenTimestamps anchors the SHA-256 hash into a Bitcoin transaction. This process is not instant — it typically takes <strong>1 to 2 hours</strong> for the timestamp to be confirmed on the blockchain. During this time, the seal is still valid (the SHA-512 fingerprint proves document integrity), but the blockchain timestamp is pending. You can download the .OTS proof file and verify it independently at <a href="https://opentimestamps.org" style="color: #D4A843;">opentimestamps.org</a> once confirmation is complete.
   </div>
 
   <div class="site-footer">
-    Verum Omnis Foundation — Patent Pending<br>
-    Constitution v6.0 Final — Article X Non-Weaponization Doctrine
+    Verum Omnis Foundation -- Patent Pending<br>
+    Constitution v6.0 Final -- Article X Non-Weaponization Doctrine
   </div>
 
 </div>
 
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script>
-let selectedFile = null;
-let originalHash = null; // Hash from QR code scan (?h=...)
+let uploadedBytes = null, embeddedSha512 = null, parsedMeta = null;
 
-// On page load: check if we came from a QR code scan (?h=SHA512_PREFIX)
-window.addEventListener('DOMContentLoaded', () => {
-  const params = new URLSearchParams(window.location.search);
-  const h = params.get('h');
-  if (h && /^[0-9a-fA-F]{16,128}$/.test(h)) {
-    originalHash = h.toLowerCase();
-    // Show a banner indicating we're in QR verification mode
-    const header = document.querySelector('.header');
-    const banner = document.createElement('div');
-    banner.className = 'qr-banner';
-    banner.innerHTML = '<strong>🔍 QR Verification Mode</strong><br>Scanned from sealed document. Upload the file you received to check for tampering.';
-    header.appendChild(banner);
-  }
-});
-
-// Upload zone
-document.getElementById('uploadZone').addEventListener('click', () => {
-  document.getElementById('fileInput').click();
-});
-document.getElementById('fileInput').addEventListener('change', (e) => {
-  if (e.target.files.length > 0) {
-    selectedFile = e.target.files[0];
-    const isVoice = selectedFile.name.endsWith('.voice');
-    document.getElementById('decryptCard').style.display = isVoice ? 'block' : 'none';
-    document.querySelector('#uploadZone div:nth-child(2)').textContent = selectedFile.name;
-    document.querySelector('#uploadZone div:nth-child(3)').textContent = (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB';
-    document.getElementById('fileVerifyBtn').disabled = isVoice;
-  }
-});
-['dragover','dragleave','drop'].forEach(evt => {
-  document.getElementById('uploadZone').addEventListener(evt, (e) => {
-    e.preventDefault();
-    e.currentTarget.style.borderColor = evt === 'dragover' ? '#D4A843' : '#1A2E52';
-    if (evt === 'drop' && e.dataTransfer.files.length > 0) {
-      selectedFile = e.dataTransfer.files[0];
-      const isVoice = selectedFile.name.endsWith('.voice');
-      document.getElementById('decryptCard').style.display = isVoice ? 'block' : 'none';
-      document.querySelector('#uploadZone div:nth-child(2)').textContent = selectedFile.name;
-      document.querySelector('#uploadZone div:nth-child(3)').textContent = (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB';
-      document.getElementById('fileVerifyBtn').disabled = isVoice;
-    }
-  });
-});
-
-function showResult(elId, type, html) {
-  const el = document.getElementById(elId);
-  el.className = 'result-box ' + type + ' visible';
-  el.innerHTML = html;
+function esc(s) {
+  const d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
 }
 
-// Method 1: Verify pasted hash
-function verifyHash() {
-  const input = document.getElementById('hashInput').value.trim().toLowerCase().replace(/\s/g, '');
-  if (!input) { showResult('hashResult', 'invalid', 'Please enter a SHA-512 hash.'); return; }
-
-  // SHA-512 is 128 hex characters
-  if (!/^[0-9a-f]{128}$/.test(input)) {
-    if (input.length < 128) {
-      showResult('hashResult', 'invalid', '❌ Hash too short. SHA-512 must be exactly 128 hexadecimal characters (you provided ' + input.length + ').');
-    } else if (input.length > 128) {
-      showResult('hashResult', 'invalid', '❌ Hash too long. SHA-512 must be exactly 128 hexadecimal characters (you provided ' + input.length + ').');
-    } else {
-      showResult('hashResult', 'invalid', '❌ Invalid characters. SHA-512 must contain only hexadecimal characters (0-9, a-f).');
-    }
-    return;
-  }
-
-  // Valid SHA-512 format
-  const sealId = 'VO-' + input.substring(0, 12).toUpperCase();
-  showResult('hashResult', 'valid',
-    '✓ <strong>Valid SHA-512 format</strong><br>' +
-    'This appears to be a genuine Verum Omnis forensic fingerprint.<br><br>' +
-    '<strong>Seal ID:</strong> ' + sealId + '<br>' +
-    '<strong>Hash:</strong> <div class="result-hash">' + input + '</div>' +
-    '<br>To confirm this seal matches your document, use Method 2 (upload the file) or compare this hash with the one printed in the seal footer on your document.'
-  );
+async function computeSHA512(bytes) {
+  const h = await crypto.subtle.digest('SHA-512', bytes);
+  return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
 }
 
-// Decryption helpers for .voice encrypted files
 async function deriveKey(password, salt) {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
   return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
-async function decryptSealedPDF(encryptedBytes, password) {
-  if (encryptedBytes.length < 28) throw new Error('Invalid encrypted file');
+
+async function decryptVoiceFile(encryptedBytes, password) {
+  if (encryptedBytes.length < 28) throw new Error('Invalid .voice file');
   const salt = encryptedBytes.slice(0, 16);
   const iv = encryptedBytes.slice(16, 28);
   const ciphertext = encryptedBytes.slice(28);
@@ -319,272 +308,282 @@ async function decryptSealedPDF(encryptedBytes, password) {
   return new Uint8Array(decrypted);
 }
 
-// Decrypt and verify .voice files
-async function decryptAndVerify() {
-  if (!selectedFile) return;
-  const password = document.getElementById('decryptPassword').value;
-  if (!password) { showResult('decryptResult', 'invalid', 'Please enter the password.'); return; }
-  const btn = document.querySelector('#decryptCard .verify-btn');
-  btn.disabled = true; btn.textContent = 'Decrypting...';
+// ==================== URL PARAM PARSING ====================
+
+function parseUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  const h = params.get('h');
+  const m = params.get('m');
+  if (!h || !m) return null;
   try {
-    const encryptedBytes = new Uint8Array(await selectedFile.arrayBuffer());
-    const decryptedBytes = await decryptSealedPDF(encryptedBytes, password);
-    showResult('decryptResult', 'valid', '<strong>✓ Decrypted Successfully</strong><br>The document has been decrypted. Use Method 2 above to verify the decrypted PDF.');
-    // Create a Blob from decrypted bytes and set it as the selected file for normal verification
-    const decryptedBlob = new Blob([decryptedBytes], { type: 'application/pdf' });
-    const decryptedFile = new File([decryptedBlob], selectedFile.name.replace('.voice', '-decrypted.pdf'), { type: 'application/pdf' });
-    selectedFile = decryptedFile;
-    document.querySelector('#uploadZone div:nth-child(2)').textContent = decryptedFile.name;
-    document.querySelector('#uploadZone div:nth-child(3)').textContent = (decryptedFile.size / 1024 / 1024).toFixed(2) + ' MB';
-    document.getElementById('fileVerifyBtn').disabled = false;
-    document.getElementById('decryptCard').style.display = 'none';
-  } catch (err) {
-    showResult('decryptResult', 'invalid', '❌ Decryption failed: ' + (err.message || 'Wrong password or corrupted file'));
-  } finally {
-    btn.disabled = false; btn.textContent = 'Decrypt & Verify';
+    const metaStr = decodeURIComponent(m);
+    const metaJson = atob(metaStr);
+    const meta = JSON.parse(metaJson);
+    return { hashPrefix: h, meta };
+  } catch (e) {
+    console.warn('QR metadata parse failed:', e.message);
+    return { hashPrefix: h, meta: null };
   }
 }
 
-// Extract all text from PDF by scanning raw objects (fallback when metadata fails)
-async function extractTextFromPDF(pdfBytes) {
-  const textChunks = [];
-  try {
-    // Convert bytes to string and look for text between BT (Begin Text) and ET (End Text) operators
-    const decoder = new TextDecoder('utf-8', { fatal: false });
-    let text = '';
-    // Try latin1 first for PDF strings
-    const latin1Decoder = new TextDecoder('iso-8859-1', { fatal: false });
-    const asLatin1 = latin1Decoder.decode(pdfBytes);
+// ==================== IDENTITY CARD ====================
 
-    // Look for common patterns in sealed PDFs
-    const patterns = [
-      /Seal:\s*VO-[A-F0-9]+/gi,
-      /SHA-512:\s*[a-f0-9]+/gi,
-      /verumglobal\.foundation/gi,
-      /OpenTimestamps/gi
-    ];
+function showIdentityCard(meta) {
+  if (!meta) return '';
+  let html = '<div class="identity-card"><h4>&#128100; Sender Identity</h4>';
+  if (meta.id) {
+    if (meta.id.n) html += '<div class="identity-row"><dt>Name</dt><dd>' + esc(meta.id.n) + '</dd></div>';
+    if (meta.id.id) html += '<div class="identity-row"><dt>ID/Passport</dt><dd>' + esc(meta.id.id) + '</dd></div>';
+    if (meta.id.a) html += '<div class="identity-row"><dt>Address</dt><dd>' + esc(meta.id.a) + '</dd></div>';
+    if (meta.id.e) html += '<div class="identity-row"><dt>Email</dt><dd>' + esc(meta.id.e) + '</dd></div>';
+  }
+  if (meta.org) html += '<div class="identity-row"><dt>Organisation</dt><dd>' + esc(meta.org) + '</dd></div>';
+  if (meta.type) html += '<div class="identity-row"><dt>Seal Type</dt><dd>' + esc(meta.type === 'commercial' ? 'Commercial' : 'Private') + '</dd></div>';
+  if (meta.gps) html += '<div class="identity-row"><dt>Location</dt><dd>' + esc(meta.gps) + '</dd></div>';
+  if (meta.sealId) html += '<div class="identity-row"><dt>Seal ID</dt><dd>' + esc(meta.sealId) + '</dd></div>';
+  if (meta.sha512) html += '<div class="identity-row"><dt>SHA-512</dt><dd style="font-size:10px;word-break:break-all;">' + esc(meta.sha512.substring(0, 32)) + '...</dd></div>';
+  if (meta.otsDigest) html += '<div class="identity-row"><dt>OTS Digest</dt><dd style="font-size:10px;word-break:break-all;">' + esc(meta.otsDigest.substring(0, 32)) + '...</dd></div>';
+  if (meta.t) {
+    const d = new Date(meta.t);
+    html += '<div class="identity-row"><dt>Sealed</dt><dd>' + d.toLocaleString('en-GB') + '</dd></div>';
+  }
+  if (meta.dev) html += '<div class="identity-row"><dt>Device</dt><dd>' + esc(meta.dev) + '</dd></div>';
+  html += '</div>';
+  return html;
+}
 
-    for (const pattern of patterns) {
-      const matches = asLatin1.match(pattern);
-      if (matches) textChunks.push(...matches);
+// ==================== QR CODE AUTO-DETECT ====================
+
+const urlParams = parseUrlParams();
+if (urlParams && urlParams.hashPrefix) {
+  embeddedSha512 = urlParams.hashPrefix;
+  parsedMeta = urlParams.meta;
+  document.getElementById('uploadZone').querySelector('h3').textContent = 'QR Code Detected -- Upload PDF to Verify';
+  document.getElementById('uploadZone').querySelector('p').textContent = 'Scan detected a Verum Omnis seal. Upload the sealed PDF document to verify integrity.';
+}
+
+// ==================== FILE UPLOAD ====================
+
+document.getElementById('uploadZone').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  if (e.target.files.length > 0) handleFile(e.target.files[0]);
+});
+
+['dragover','dragleave','drop'].forEach(evt => {
+  const uz = document.getElementById('uploadZone');
+  uz.addEventListener(evt, (e) => {
+    e.preventDefault();
+    uz.classList.toggle('dragover', evt === 'dragover');
+    if (evt === 'drop' && e.dataTransfer.files.length > 0) {
+      const f = e.dataTransfer.files[0];
+      if (f.type === 'application/pdf' || f.name.endsWith('.pdf')) handleFile(f);
     }
+  });
+});
 
-    // Also try to find the Subject metadata in the raw bytes as fallback
-    const subjectMatch = asLatin1.match(/VO-SEAL\|([a-f0-9]{128})\|(VO-[A-F0-9]+)/i);
-    if (subjectMatch) {
-      return { source: 'raw_bytes', sealId: subjectMatch[2], sha512: subjectMatch[1], chunks: textChunks };
+async function handleFile(file) {
+  if (file.size > 50 * 1024 * 1024) { alert('File too large. Max 50MB.'); return; }
+  uploadedBytes = new Uint8Array(await file.arrayBuffer());
+
+  // Check if it's a .voice encrypted file
+  if (file.name.endsWith('.voice')) {
+    document.getElementById('voiceSection').style.display = 'block';
+    return;
+  }
+
+  // Check for embedded seal in PDF Subject
+  await checkEmbeddedSeal();
+
+  // If QR params present, verify immediately
+  if (urlParams && urlParams.hashPrefix) {
+    await verifyFile();
+  } else {
+    // No QR -- check if PDF has embedded seal metadata
+    if (!embeddedSha512) {
+      document.getElementById('results').innerHTML =
+        '<div class="status-card"><h3 class="pending">&#9888; No Seal Found</h3>' +
+        '<p style="font-size:14px;color:#D5D8DD;line-height:1.7;">This PDF does not appear to be a Verum Omnis sealed document. ' +
+        'Either it was not sealed, or the seal metadata could not be read. Try uploading the sealed PDF that has the QR code and footer stamp.</p></div>';
+      document.getElementById('results').classList.add('visible');
+    } else {
+      await verifyFile();
+    }
+  }
+}
+
+// ==================== EMBEDDED SEAL EXTRACTION ====================
+
+async function checkEmbeddedSeal() {
+  try {
+    // Look for VO-SEAL|sha512|sealId pattern in the PDF bytes
+    const text = new TextDecoder().decode(uploadedBytes.slice(0, Math.min(uploadedBytes.length, 200000)));
+    const match = text.match(/VO-SEAL\|([a-f0-9]{128})\|(VO-[A-Z0-9]{12})/);
+    if (match) {
+      embeddedSha512 = match[1];
+      // Check for OTS proof embedded in Subject
+      const otsMatch = text.match(/\|OTS:([A-Za-z0-9+/=]+)/);
+      if (otsMatch && !parsedMeta) parsedMeta = {};
+      if (otsMatch && parsedMeta) {
+        try {
+          const otsBinary = atob(otsMatch[1]);
+          const otsBytes = new Uint8Array(otsBinary.length);
+          for (let i = 0; i < otsBinary.length; i++) otsBytes[i] = otsBinary.charCodeAt(i);
+          parsedMeta.embeddedOTS = otsBytes;
+        } catch(e) {}
+      }
+    }
+  } catch (e) { console.warn('Embedded seal check failed:', e.message); }
+}
+
+// ==================== DECRYPT .VOICE ====================
+
+async function decryptVoice() {
+  var password = document.getElementById('voicePassword').value;
+  if (!password || password.length < 8) { alert('Password must be at least 8 characters'); return; }
+  try {
+    var decrypted = await decryptVoiceFile(uploadedBytes, password);
+    uploadedBytes = decrypted;
+    document.getElementById('voiceSection').style.display = 'none';
+    await checkEmbeddedSeal();
+    if (embeddedSha512) {
+      await verifyFile();
+    } else {
+      document.getElementById('results').innerHTML =
+        '<div class="status-card"><h3 class="verified">&#128274; Decrypted</h3>' +
+        '<p style="font-size:14px;color:#D5D8DD;">Decryption successful. No embedded seal metadata found in the decrypted PDF.</p></div>';
+      document.getElementById('results').classList.add('visible');
     }
   } catch (e) {
-    console.warn('Text extraction fallback failed:', e);
+    alert('Decryption failed: ' + e.message);
   }
-  return { source: null, chunks: textChunks };
 }
 
-// Method 2: Verify file — extract original hash from PDF metadata
+// ==================== OTS BLOCKCHAIN CHECK ====================
+
+// Query OpenTimestamps calendar for blockchain confirmation status
+// Returns: 'confirmed', 'pending', or 'unknown'
+async function checkOTSBlockchain(otsDigestHex) {
+  try {
+    const hashBytes = hexToBytes(otsDigestHex);
+    const ctrl = new AbortController();
+    const to = setTimeout(() => ctrl.abort(), 10000);
+    const res = await fetch('https://a.pool.opentimestamps.org/digest', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/vnd.opentimestamps.v1' },
+      body: hashBytes,
+      signal: ctrl.signal
+    });
+    clearTimeout(to);
+    if (res.ok) {
+      const proof = await res.arrayBuffer();
+      if (proof.byteLength > 100) return 'confirmed';
+      if (proof.byteLength > 0) return 'pending';
+    }
+    return 'pending';
+  } catch (e) {
+    console.warn('OTS blockchain check failed:', e.message);
+    return 'unknown';
+  }
+}
+
+// Helper: convert hex string to Uint8Array
+function hexToBytes(hex) {
+  const b = new Uint8Array(hex.length / 2);
+  for (let i = 0; i < hex.length; i += 2) b[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+  return b;
+}
+
+// ==================== MAIN VERIFICATION ====================
+
 async function verifyFile() {
-  if (!selectedFile) return;
-  const btn = document.getElementById('fileVerifyBtn');
-  btn.disabled = true;
-  btn.textContent = 'Verifying...';
+  const resultsEl = document.getElementById('results');
+  resultsEl.innerHTML = '<div class="status-card"><h3 class="pending">&#8987; Verifying...</h3><p style="font-size:14px;color:#D5D8DD;">Computing SHA-512 hash and checking blockchain status...</p></div>';
+  resultsEl.classList.add('visible');
 
   try {
-    let extractedSha512 = null;
-    let extractedSealId = null;
-    let isEncrypted = false;
-    let metadataSource = null;
-    let footerSealId = null;
+    const computedSha512 = await computeSHA512(uploadedBytes.buffer || uploadedBytes);
+    const isMatch = embeddedSha512 ? computedSha512 === embeddedSha512 : (urlParams && urlParams.hashPrefix ? computedSha512.startsWith(urlParams.hashPrefix) : false);
 
-    // Step 1: Try pdf-lib metadata extraction (most reliable)
-    let chainIds = [];
-    if (selectedFile.type === 'application/pdf' || selectedFile.name.endsWith('.pdf')) {
+    // Check OTS blockchain status using the digest from QR metadata
+    let blockchainConfirmed = false;
+    let blockchainPending = false;
+    let blockchainError = false;
+
+    if (parsedMeta && parsedMeta.otsDigest) {
       try {
-        const pdfBytes = await selectedFile.arrayBuffer();
-        const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-
-        // Check if PDF is encrypted/password-protected
-        if (pdfDoc.isEncrypted) {
-          isEncrypted = true;
-        }
-
-        // Try Subject field: "VO-SEAL|SHA512|SEALID|CHAIN:VO-OLD1,VO-OLD2"
-        const subject = pdfDoc.getSubject();
-        if (subject && subject.startsWith('VO-SEAL|')) {
-          const parts = subject.split('|');
-          // parts[0] = 'VO-SEAL', parts[1] = SHA512, parts[2] = SEALID, parts[3] = CHAIN:...
-          if (parts.length >= 2) {
-            extractedSha512 = parts[1];
-            metadataSource = 'PDF Subject metadata';
-          }
-          if (parts.length >= 3) {
-            extractedSealId = parts[2];
-          }
-          // Parse chain: parts[3] = "CHAIN:VO-OLD1,VO-OLD2"
-          if (parts.length >= 4 && parts[3].startsWith('CHAIN:')) {
-            chainIds = parts[3].substring(6).split(',').filter(s => s && s !== extractedSealId);
-          }
-        }
-
-        // Fallback: try Keywords field
-        if (!extractedSha512) {
-          const keywords = pdfDoc.getKeywords();
-          if (keywords && keywords.includes('verum,seal,')) {
-            metadataSource = 'PDF Keywords metadata';
-          }
-        }
-
-        // Fallback 2: scan raw PDF bytes for seal patterns (metadata stripped but footer remains)
-        let footerSealId = null;
-        if (!extractedSha512) {
-          const fallback = await extractTextFromPDF(pdfBytes);
-          if (fallback.sha512) {
-            extractedSha512 = fallback.sha512;
-            extractedSealId = fallback.sealId;
-            metadataSource = 'PDF content scan';
-          }
-          // Check for seal footer text even if SHA not found
-          if (!footerSealId) {
-            for (const chunk of fallback.chunks) {
-              const sealMatch = chunk.match(/Seal:\s*(VO-[A-F0-9]+)/i);
-              if (sealMatch) {
-                footerSealId = sealMatch[1];
-                break;
-              }
-            }
-          }
-        }
-
-      } catch (pdfErr) {
-        console.warn('Could not read PDF metadata:', pdfErr.message);
+        const otsStatus = await checkOTSBlockchain(parsedMeta.otsDigest);
+        if (otsStatus === 'confirmed') blockchainConfirmed = true;
+        else if (otsStatus === 'pending') blockchainPending = true;
+        else blockchainPending = true;
+      } catch (e) {
+        blockchainPending = true;
       }
+    } else if (parsedMeta && parsedMeta.otsStatus === true) {
+      blockchainPending = true;
+    } else if (embeddedSha512) {
+      blockchainPending = true;
     }
 
-    // Build scan steps for user visibility
-    let scanStepsHtml = '<div class="scan-steps">';
-    scanStepsHtml += '<div class="scan-step"><span class="dot ' + (metadataSource ? 'ok' : (footerSealId ? 'warn' : 'fail')) + '"></span> PDF metadata ' + (metadataSource ? 'found (' + metadataSource + ')' : (footerSealId ? 'not found (footer seal detected)' : 'not found')) + '</div>';
-    if (chainIds.length > 0) {
-      scanStepsHtml += '<div class="scan-step"><span class="dot ok"></span> Chain detected: ' + chainIds.join(', ') + '</div>';
-    }
-    if (footerSealId && !metadataSource) {
-      scanStepsHtml += '<div class="scan-step"><span class="dot ok"></span> Seal footer found: ' + footerSealId + '</div>';
-    }
-    scanStepsHtml += '<div class="scan-step"><span class="dot ' + (isEncrypted ? 'warn' : 'ok') + '"></span> Encryption ' + (isEncrypted ? 'detected (password-protected)' : 'none') + '</div>';
-    scanStepsHtml += '</div>';
+    const integrityTickClass = isMatch ? 'match' : 'mismatch';
+    const integrityIcon = isMatch ? '&#128077;' : '&#128078;';
+    const integrityLabel = isMatch ? 'INTEGRITY VERIFIED' : 'TAMPERED -- DO NOT ACCEPT';
+    const integrityDetail = isMatch ? 'SHA-512 match confirmed' : 'Hash does not match -- document altered';
 
-    // STEP A: We have QR hash AND extracted metadata → compare
-    if (originalHash && extractedSha512) {
-      const prefixMatch = extractedSha512.toLowerCase().startsWith(originalHash.toLowerCase());
+    const blockchainTickClass = blockchainConfirmed ? 'match' : (blockchainPending ? 'pending' : 'mismatch');
+    const blockchainIcon = blockchainConfirmed ? '&#128077;' : (blockchainPending ? '&#8987;' : '&#128078;');
+    const blockchainLabel = blockchainConfirmed ? 'BLOCKCHAIN CONFIRMED' : (blockchainPending ? 'PENDING BLOCKCHAIN' : 'NO BLOCKCHAIN ANCHOR');
+    const blockchainDetail = blockchainConfirmed ? 'OpenTimestamps verified on Bitcoin' : (blockchainPending ? 'Calendar submitted, awaiting confirmation' : 'No blockchain anchor found');
 
-      if (prefixMatch) {
-        showResult('fileResult', 'valid',
-          '<strong style="font-size:16px;">✓ VERIFIED — DOCUMENT INTACT</strong><br><br>' +
-          'The SHA-512 fingerprint embedded in this document matches the QR code scan.<br>' +
-          'This document has <strong>NOT been tampered with</strong> since it was sealed by Verum Omnis.<br>' +
-          scanStepsHtml +
-          '<div class="detail-list">' +
-          '<div><dt>Seal ID: </dt><dd>' + extractedSealId + '</dd></div>' +
-          '<div><dt>SHA-512: </dt><dd>' + extractedSha512 + '</dd></div>' +
-          '<div><dt>Document: </dt><dd>' + selectedFile.name + '</dd></div>' +
-          (isEncrypted ? '<div><dt>Protection: </dt><dd>Password-protected</dd></div>' : '') +
-          '</div>'
-        );
-      } else {
-        showResult('fileResult', 'invalid',
-          '<strong style="font-size:16px;">🔴 TAMPERED — DO NOT ACCEPT</strong><br><br>' +
-          'The SHA-512 fingerprint does NOT match the QR code.<br>' +
-          'This document has been <strong>altered or corrupted</strong> since it was sealed.<br>' +
-          scanStepsHtml +
-          '<strong>Expected (from QR):</strong> <div class="result-hash">' + originalHash + '</div>' +
-          '<strong>Found in PDF:</strong> <div class="result-hash">' + extractedSha512 + '</div>' +
-          '<br><strong>Do not accept this document.</strong> Contact the sender to request the original sealed version.'
-        );
-      }
-    }
-    // STEP B1: Footer seal found but no metadata (metadata stripped by email/file transfer)
-    else if (footerSealId) {
-      showResult('fileResult', 'valid',
-        '<strong style="font-size:16px;">✓ SEAL FOUND — Footer Only</strong><br><br>' +
-        'A Verum Omnis seal footer was detected, but the metadata has been stripped.<br>' +
-        'This commonly happens when PDFs pass through email systems or cloud storage.<br>' +
-        scanStepsHtml +
-        '<div class="detail-list">' +
-        '<div><dt>Seal ID (from footer): </dt><dd>' + footerSealId + '</dd></div>' +
-        '<div><dt>Document: </dt><dd>' + selectedFile.name + '</dd></div>' +
-        '</div>' +
-        '<br><strong>The seal is VALID but metadata is missing.</strong><br>' +
-        'Compare the Seal ID above with the footer on every page of your document.<br>' +
-        'For full automatic verification, ask the sender to re-send the original sealed file.'
-      );
-    }
-    // STEP B2: No QR scan, but we found hash in PDF metadata → show it
-    else if (extractedSha512) {
-      const chainHtml = chainIds.length > 0 ?
-        '<div style="margin-top:8px;padding:10px;background:rgba(74,126,199,0.08);border-radius:8px;font-size:12px;">' +
-        '<strong style="color:#4A7EC7;">Chain of Custody:</strong> This document contains content from previously sealed documents.<br>' +
-        'Previous seals: ' + chainIds.join(', ') +
-        '</div>' : '';
-      showResult('fileResult', 'valid',
-        '<strong style="font-size:16px;">✓ SEAL FOUND — DOCUMENT AUTHENTIC</strong><br><br>' +
-        'A Verum Omnis seal was found embedded in this document\'s metadata.<br>' +
-        scanStepsHtml +
-        '<div class="detail-list">' +
-        '<div><dt>Seal ID: </dt><dd>' + extractedSealId + '</dd></div>' +
-        '<div><dt>SHA-512: </dt><dd>' + extractedSha512 + '</dd></div>' +
-        '<div><dt>Document: </dt><dd>' + selectedFile.name + '</dd></div>' +
-        (isEncrypted ? '<div><dt>Protection: </dt><dd>Password-protected</dd></div>' : '') +
-        '</div>' +
-        chainHtml +
-        '<br><strong>How to confirm authenticity:</strong><br>' +
-        '1. Check that the Seal ID above matches the footer on every page of your printed document<br>' +
-        '2. Compare the SHA-512 prefix (first 16 chars) with what\'s printed in the footer<br>' +
-        '3. If both match, the document is authentic and has not been tampered with.' +
-        (chainIds.length > 0 ? '<br>4. Each previous seal in the chain can be independently verified' : '')
-      );
-    }
-    // STEP C: No metadata found at all
-    else {
-      // Compute the file hash as a fallback
-      const hashBuffer = await crypto.subtle.digest('SHA-512', await selectedFile.arrayBuffer());
-      const hashArray = Array.from(new Uint8Array(hashBuffer));
-      const sha512 = hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
-      const sealId = 'VO-' + sha512.substring(0, 12).toUpperCase();
+    const statusClass = isMatch ? 'verified' : 'tampered';
+    const statusTitle = isMatch ? (blockchainConfirmed ? '&#10003; FULLY VERIFIED' : '&#10003; INTEGRITY VERIFIED') : '&#10005; TAMPERED -- DO NOT ACCEPT';
+    const statusDesc = isMatch
+      ? 'The document\'s SHA-512 forensic fingerprint matches exactly. ' + (blockchainConfirmed ? 'OpenTimestamps blockchain confirmation verified.' : 'Blockchain confirmation is pending -- this is normal for fresh seals.')
+      : 'The computed hash does not match the embedded seal. This document has been altered since it was sealed. Do not accept it as authentic.';
 
-      if (originalHash) {
-        // We have QR hash but couldn't find metadata — this shouldn't happen for genuine sealed docs
-        showResult('fileResult', 'warning',
-          '<strong style="font-size:16px;">⚠️ NO SEAL FOUND — VERIFY CAREFULLY</strong><br><br>' +
-          scanStepsHtml +
-          'No Verum Omnis seal metadata was found in this PDF. This could mean:<br>' +
-          '1. The document was not sealed using the Verum Omnis system<br>' +
-          '2. The seal metadata was stripped by email or file transfer<br>' +
-          '3. The document was modified after sealing<br>' +
-          '4. This is a different file from the one that was originally sealed<br><br>' +
-          '<strong>QR Hash (from scan):</strong> VO-' + originalHash.substring(0, 12).toUpperCase() + '<br>' +
-          '<strong>Computed file hash:</strong> <div class="result-hash">' + sha512 + '</div>' +
-          '<br><strong>Action required:</strong> Compare the Seal ID from your QR scan with the footer on the document. If they don\'t match, <strong>do not accept this document</strong>.'
-        );
-      } else {
-        showResult('fileResult', 'info',
-          '<strong style="font-size:16px;">📔 NO SEAL FOUND</strong><br><br>' +
-          scanStepsHtml +
-          'No Verum Omnis seal metadata was detected in this PDF.<br><br>' +
-          'This document does not appear to have been sealed using the Verum Omnis Document Sealing Service. This could be because:<br>' +
-          '1. It\'s an original document that hasn\'t been sealed yet<br>' +
-          '2. The seal metadata was removed during file processing<br>' +
-          '3. The file was saved through a system that strips PDF metadata<br><br>' +
-          '<strong>Computed SHA-512:</strong> <div class="result-hash">' + sha512 + '</div>' +
-          '<strong>Seal ID:</strong> ' + sealId + '<br><br>' +
-          'To seal this document, go to <a href="/seal-document.html" style="color:#D4A843;">Seal Document</a>.'
-        );
-      }
+    let html = '<div class="status-card">';
+    html += '<h3 class="' + statusClass + '">' + statusTitle + '</h3>';
+    html += '<p style="font-size:14px;color:#D5D8DD;line-height:1.7;margin-bottom:20px;">' + statusDesc + '</p>';
+
+    html += '<div class="tick-container">';
+    html += '<div class="tick-item ' + integrityTickClass + '">';
+    html += '<div class="icon">' + integrityIcon + '</div>';
+    html += '<div class="label">' + integrityLabel + '</div>';
+    html += '<div class="detail">' + integrityDetail + '</div>';
+    html += '</div>';
+    html += '<div class="tick-item ' + blockchainTickClass + '">';
+    html += '<div class="icon">' + blockchainIcon + '</div>';
+    html += '<div class="label">' + blockchainLabel + '</div>';
+    html += '<div class="detail">' + blockchainDetail + '</div>';
+    html += '</div>';
+    html += '</div>';
+
+    html += '<div class="hash-row"><label>Computed SHA-512</label><div class="hash-display">' + esc(computedSha512) + '</div></div>';
+    if (embeddedSha512) html += '<div class="hash-row"><label>Embedded SHA-512</label><div class="hash-display">' + esc(embeddedSha512) + '</div></div>';
+
+    // Show full SHA-512 from QR metadata if available
+    if (parsedMeta && parsedMeta.sha512) {
+      html += '<div class="hash-row"><label>QR SHA-512 (Full)</label><div class="hash-display" style="color:#D4A843;">' + esc(parsedMeta.sha512) + '</div></div>';
     }
+
+    // Show OTS digest from QR metadata if available
+    if (parsedMeta && parsedMeta.otsDigest) {
+      html += '<div class="hash-row"><label>OTS Digest</label><div class="hash-display" style="color:#4A7EC7;">' + esc(parsedMeta.otsDigest) + '</div></div>';
+    }
+
+    html += '</div>';
+
+    // Identity card from QR metadata
+    html += showIdentityCard(parsedMeta);
+
+    resultsEl.innerHTML = html;
+
   } catch (err) {
-    showResult('fileResult', 'invalid', '❌ Error: ' + err.message);
-  } finally {
-    btn.disabled = false;
-    btn.textContent = 'Verify Document';
+    console.error('Verify error:', err);
+    resultsEl.innerHTML =
+      '<div class="status-card"><h3 class="pending">&#9888; Verification Error</h3>' +
+      '<p style="font-size:14px;color:#D5D8DD;">' + esc(err.message || 'Unknown error') + '</p></div>';
   }
 }
 </script>
-
 </body>
 </html>
