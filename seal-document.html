@@ -336,7 +336,7 @@
       🔒 Password protect this document (delivery receipt mode)
     </label>
     <div id="passwordField" style="display:none;margin-top:12px;">
-      <p style="font-size:12px;color:#94a3b8;margin-bottom:10px;line-height:1.5;">The recipient must contact you to request this password before they can open the document. You will know they received it and opened it. This is your delivery receipt.</p>
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:10px;line-height:1.5;">The recipient must contact you to request the password before they can open the document. You will know they received it and opened it. This is your delivery receipt.</p>
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Document Password</label>
       <input type="password" id="docPassword" placeholder="Min 8 characters" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:8px;font-family:inherit;">
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Confirm Password</label>
@@ -369,29 +369,12 @@
   </div>
 
   <!-- Results -->
-  <!-- Payment Gate -->
-  <div class="results" id="paymentGate" style="display:none; background: rgba(212,168,67,0.05); border-color: rgba(212,168,67,0.3);">
-    <h3 style="color:#D4A843;">🏢 Commercial Document Detected</h3>
-    <p style="font-size:14px; color:#D5D8DD; line-height:1.7; margin-bottom:16px;">
-      This document contains commercial language. Verum Omnis provides free sealing for private individuals and law enforcement. Commercial use requires a seal fee.
-    </p>
-    <div id="commercialKeywords" style="font-size:12px; color:#94a3b8; margin-bottom:16px; font-family:'Courier New',monospace;"></div>
-    <div id="priceDisplay" style="background: rgba(4,13,27,0.6); border: 1px solid #D4A843; border-radius: 10px; padding: 16px; text-align: center; margin-bottom: 16px; font-size: 24px; color: #D4A843; font-family: 'Cormorant Garamond', Georgia, serif;"></div>
-    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
-      <button class="seal-btn" onclick="proceedAsPrivate()" style="background: transparent; border: 1px solid #4A7EC7; color: #4A7EC7; font-size: 13px;">Seal as Private (Free)</button>
-      <button class="seal-btn" id="stripePayBtn" onclick="initiateStripePayment()" style="font-size: 13px;">Pay &amp; Seal Commercial</button>
-    </div>
-    <p style="font-size: 11px; color: #4A7EC7; margin-top: 12px; text-align: center;">
-      Law enforcement? Enter your official email above for free commercial sealing.
-    </p>
-  </div>
-
   <div class="results" id="results">
     <h3>Document Sealed</h3>
     <div class="ots-status pending" id="otsStatus">⏳ OpenTimestamps proof pending Bitcoin blockchain confirmation (typically 1-2 hours)</div>
     <div class="preview-section">
       <h4>What Your Sealed Document Looks Like</h4>
-      <p>Every page has the <strong>A4 watermark</strong> as a background layer at 20% opacity. Your document content stays at <strong>full size</strong>. A <strong>clean QR code</strong> with a subtle gray panel sits in the top-right corner. The <strong>seal footer</strong> with your SHA-512 fingerprint appears at the bottom of every page.</p>
+      <p>Every page has the <strong>A4 watermark</strong> as a background layer at 20% opacity. Your document content is scaled to <strong>88%</strong> to create a clean margin where the QR code sits without covering any text. The <strong>seal footer</strong> with your SHA-512 fingerprint appears at the bottom of every page.</p>
     </div>
     <div class="qr-section">
       <canvas id="qrPreview" width="220" height="220" style="background:white; padding:16px; border-radius:12px;"></canvas>
@@ -404,6 +387,7 @@
     <a href="/verify.html" class="verify-link" id="verifyLink">🔍 Verify on verumglobal.foundation</a>
     <div class="download-grid" id="downloadGrid">
       <a href="#" class="download-btn primary" id="downloadSealedPdf" download>⬇️ Download Sealed PDF</a>
+      <a href="#" class="download-btn" id="downloadOts" download>⬇️ Download .OTS Proof</a>
     </div>
   </div>
 
@@ -412,8 +396,8 @@
     <h3>How Document Sealing Works</h3>
     <p>Every document sealed by Verum Omnis receives a forensic-grade cryptographic seal that makes it tamper-evident and court-admissible.</p>
     <div class="grid">
-      <div class="item"><h4>📄 A4 Watermark Background</h4><p>The full-page Verum Omnis watermark is applied at 20% opacity behind your content. Your document stays at full original size for maximum readability when printed.</p></div>
-      <div class="item"><h4>📱 Clean QR Code</h4><p>QR code modules only — no border, no box, no interfering elements. Positioned top-right with natural white quiet zone and subtle gray panel. Scans instantly with any phone.</p></div>
+      <div class="item"><h4>📄 A4 Watermark Background</h4><p>The full-page Verum Omnis watermark is applied at 20% opacity behind your content. Document is scaled to 88% to create a margin for the QR code — all text remains fully readable.</p></div>
+      <div class="item"><h4>📱 Clean QR Code</h4><p>Document content scaled to 88% creating a margin area. QR sits in the top-right margin with white background panel — never covers document text. Scans instantly with any phone.</p></div>
       <div class="item"><h4>🔒 Dual Hash</h4><p>SHA-256 for OpenTimestamps blockchain anchoring. SHA-512 as the Verum forensic fingerprint. Two independent hashes, zero trust required.</p></div>
       <div class="item"><h4>⛓️ Bitcoin Blockchain</h4><p>OpenTimestamps anchors the SHA-256 hash into Bitcoin. Once confirmed (~1-2 hours), the timestamp is permanently and independently verifiable.</p></div>
       <div class="item"><h4>👤 Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) encoded into the QR code for affidavit pre-fill and chain of custody.</p></div>
@@ -433,245 +417,10 @@
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const { PDFDocument, rgb, StandardFonts } = PDFLib;
+const { PDFDocument, rgb, StandardFonts, PDFContentStream, PDFOperator, PDFNumber, PDFArray, PDFName } = PDFLib;
 
 let selectedFile = null, sealType = 'private', otsProof = null, watermarkBytes = null;
 let gpsCoords = null, deviceInfo = null;
-let paymentConfirmed = false;
-
-// Commercial detection keywords + pricing
-const COMMERCIAL_KEYWORDS = [
-  'pty ltd','proprietary limited','ltd','limited','inc','incorporated',
-  'corp','corporation','llc','cc','close corporation',
-  'invoice','purchase order','po number','quotation','quote','tax invoice',
-  'tender','rfq','request for quotation','bid','procurement','rfx',
-  'vat','vat number','tax number','tin','registration number',
-  'contract','agreement','memorandum of understanding','mou','nda',
-  'bbbee','bee certificate','bee level','black economic empowerment',
-  'bank account','account number','swift','iban','routing number',
-  'director','managing director','ceo','cfo','coo','board of directors',
-  'shareholder','annual report','financial statement','balance sheet',
-  'profit and loss','income statement','audit','audited','sars',
-  'company registration','ck number','enterprise number'
-];
-const LAW_ENFORCEMENT_DOMAINS = ['.gov.za','.gov','.police','.hawks','.npa','.justice','.saps'];
-
-function getPricing() {
-  let price = { amount: 50, currency: 'USD', symbol: '$', label: 'International' };
-  if (gpsCoords) {
-    const lat = parseFloat(gpsCoords.lat), lng = parseFloat(gpsCoords.lng);
-    if (lat >= -35 && lat <= -22 && lng >= 16 && lng <= 33) {
-      price = { amount: 750, currency: 'ZAR', symbol: 'R', label: 'South Africa' };
-    } else if (lat >= -35 && lat <= -10 && lng >= 10 && lng <= 41) {
-      price = { amount: 500, currency: 'ZAR', symbol: 'R', label: 'SADC Region' };
-    }
-  }
-  const email = (document.getElementById('senderEmail')?.value || '').toLowerCase().trim();
-  const isLE = LAW_ENFORCEMENT_DOMAINS.some(d => email.endsWith(d));
-  if (isLE) price = { ...price, amount: 0, label: price.label + ' — LAW ENFORCEMENT (FREE)' };
-  return price;
-}
-
-async function extractPdfText(pdfBytes) {
-  // Exclude known PDF structural strings that cause false positives
-  const PDF_STRUCTURE = /^(obj|endobj|stream|endstream|xref|trailer|startxref|Type1|Type0|Type3|WinAnsiEncoding|MacRomanEncoding|Identity-H|Identity-V|CIDFontType|BaseFont|FontDescriptor|Subtype|Length|Filter|FlateDecode|ASCIIHexDecode|LZWDecode|DCTDecode|DeviceRGB|DeviceGray|DeviceCMYK|ExtGState|ColorSpace|Pattern|XObject|Image|Form|Group|Transparency|Shading|Font|ToUnicode|CMapName|Registry|Ordering|WMode|FontFile|FontFile2|FontFile3|CharSet|Flags|ItalicAngle|Ascent|Descent|CapHeight|StemV|StemH|AvgWidth|MaxWidth|MissingWidth|Leading|XHeight|FontBBox|FontMatrix|Encoding|CharProcs|FirstChar|LastChar|Width|Widths|CIDToGIDMap|CIDSystemInfo|DW|W|DW2|W2|Registry|Ordering|Supplement|RTLn|LTR)$/;
-
-  // Method 1: Scan raw bytes for ASCII-readable strings (catches uncompressed text + metadata)
-  const textChunks = [];
-  let current = '';
-  for (let i = 0; i < pdfBytes.length; i++) {
-    const b = pdfBytes[i];
-    if ((b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13) {
-      current += String.fromCharCode(b);
-    } else {
-      if (current.length >= 4 && !PDF_STRUCTURE.test(current.trim())) textChunks.push(current.trim());
-      current = '';
-    }
-  }
-  if (current.length >= 4 && !PDF_STRUCTURE.test(current.trim())) textChunks.push(current.trim());
-  
-  // Method 2: Scan for parenthesized strings (PDF Tj operator)
-  try {
-    const latin1 = new TextDecoder('iso-8859-1', { fatal: false }).decode(pdfBytes);
-    const re = /\(([^)]{3,500})\)/g;
-    let m;
-    while ((m = re.exec(latin1)) !== null) {
-      const candidate = m[1];
-      if (/[a-zA-Z]{2,}/.test(candidate) && !PDF_STRUCTURE.test(candidate)) textChunks.push(candidate);
-    }
-  } catch(e) {}
-  
-  // Method 3: Try to decompress FlateDecode content streams
-  try {
-    const streamRe = /stream\r?\n([\s\S]*?)\r?\nendstream/g;
-    const latin1 = new TextDecoder('iso-8859-1', { fatal: false }).decode(pdfBytes);
-    let sm;
-    while ((sm = streamRe.exec(latin1)) !== null) {
-      const raw = sm[1];
-      // Try raw inflate (skip 2-byte zlib header if present)
-      const toTry = [raw, raw.substring(2)];
-      for (const candidate of toTry) {
-        try {
-          const bytes = new Uint8Array(candidate.length);
-          for (let i = 0; i < candidate.length; i++) bytes[i] = candidate.charCodeAt(i) & 0xFF;
-          const decompressed = await inflateRaw(bytes);
-          const str = new TextDecoder('iso-8859-1', { fatal: false }).decode(decompressed);
-          // Extract text from TJ arrays and Tj operators
-          const tjMatches = str.match(/\(([^)]{2,500})\)/g);
-          if (tjMatches) {
-            for (const tm of tjMatches) {
-              const inner = tm.slice(1, -1);
-              // Filter: must contain letters to be real text, exclude PDF structure and metadata
-              if (/[a-zA-Z]{2,}/.test(inner) && !inner.startsWith('D:20') && !inner.startsWith('http') && !PDF_STRUCTURE.test(inner)) {
-                textChunks.push(inner);
-              }
-            }
-          }
-          break; // Success, stop trying
-        } catch(e) {}
-      }
-    }
-  } catch(e) {}
-  
-  return textChunks.join(' ');
-}
-
-// Client-side raw inflate (RFC 1951) — no zlib wrapper
-async function inflateRaw(bytes) {
-  const bs = new BitStream(bytes);
-  const output = [];
-  while (true) {
-    const bfinal = bs.readBits(1);
-    const btype = bs.readBits(2);
-    if (btype === 0) {
-      // Stored block
-      bs.byteAlign();
-      const len = bs.readByte() | (bs.readByte() << 8);
-      const nlen = bs.readByte() | (bs.readByte() << 8);
-      if ((len ^ nlen) !== 0xFFFF) throw new Error('Invalid stored block');
-      for (let i = 0; i < len; i++) output.push(bs.readByte());
-    } else if (btype === 1 || btype === 2) {
-      // Fixed or dynamic Huffman
-      const {litTree, distTree} = btype === 1 ? fixedTrees() : decodeTrees(bs);
-      while (true) {
-        const code = decodeSymbol(bs, litTree);
-        if (code < 256) { output.push(code); }
-        else if (code === 256) { break; }
-        else {
-          const len = readLength(bs, code);
-          const distCode = decodeSymbol(bs, distTree);
-          const dist = readDist(bs, distCode);
-          const start = output.length - dist;
-          for (let i = 0; i < len; i++) output.push(output[start + i]);
-        }
-      }
-    } else { throw new Error('Invalid block type'); }
-    if (bfinal) break;
-  }
-  return new Uint8Array(output);
-}
-
-class BitStream {
-  constructor(data) { this.data = data; this.pos = 0; this.bit = 0; }
-  readBits(n) {
-    let val = 0;
-    for (let i = 0; i < n; i++) {
-      if (this.pos >= this.data.length) return val;
-      val |= ((this.data[this.pos] >> this.bit) & 1) << i;
-      this.bit++;
-      if (this.bit === 8) { this.bit = 0; this.pos++; }
-    }
-    return val;
-  }
-  readByte() { return this.pos < this.data.length ? this.data[this.pos++] : 0; }
-  byteAlign() { if (this.bit > 0) { this.bit = 0; this.pos++; } }
-}
-
-function fixedTrees() {
-  const lit = []; for (let i = 0; i <= 143; i++) lit.push({sym: i + 0, len: 8, code: 0x030 + i});
-  for (let i = 0; i <= 87; i++) lit.push({sym: i + 144, len: 8, code: 0x190 + i});
-  for (let i = 0; i <= 23; i++) lit.push({sym: i + 80, len: 9, code: 0x000 + i});
-  for (let i = 0; i <= 7; i++) lit.push({sym: i + 280, len: 8, code: 0x0C0 + i});
-  for (let i = 0; i <= 23; i++) lit.push({sym: i + 144, len: 9, code: 0x080 + i});
-  const dist = []; for (let i = 0; i <= 31; i++) dist.push({sym: i, len: 5, code: i});
-  return {litTree: buildHuffmanTree(lit), distTree: buildHuffmanTree(dist)};
-}
-
-function decodeTrees(bs) {
-  const hlit = bs.readBits(5) + 257;
-  const hdist = bs.readBits(5) + 1;
-  const hclen = bs.readBits(4) + 4;
-  const codeLenOrder = [16,17,18,0,8,7,9,6,10,5,11,4,12,3,13,2,14,1,15];
-  const codeLens = new Array(19).fill(0);
-  for (let i = 0; i < hclen; i++) codeLens[codeLenOrder[i]] = bs.readBits(3);
-  const codeTree = buildHuffmanTree(codeLens.map((len, sym) => ({sym, len, code: 0})));
-  const litLens = decodeCodeLengths(bs, codeTree, hlit + hdist);
-  const litCodes = litLens.slice(0, hlit).map((len, sym) => ({sym, len, code: 0}));
-  const distCodes = litLens.slice(hlit).map((len, sym) => ({sym, len, code: 0}));
-  return {litTree: buildHuffmanTree(litCodes), distTree: buildHuffmanTree(distCodes)};
-}
-
-function decodeCodeLengths(bs, tree, count) {
-  const lengths = [];
-  while (lengths.length < count) {
-    const sym = decodeSymbol(bs, tree);
-    if (sym < 16) { lengths.push(sym); }
-    else if (sym === 16) { const rep = 3 + bs.readBits(2); const last = lengths[lengths.length - 1]; for (let i = 0; i < rep; i++) lengths.push(last); }
-    else if (sym === 17) { const rep = 3 + bs.readBits(3); for (let i = 0; i < rep; i++) lengths.push(0); }
-    else { const rep = 11 + bs.readBits(7); for (let i = 0; i < rep; i++) lengths.push(0); }
-  }
-  return lengths;
-}
-
-function buildHuffmanTree(codes) {
-  const maxLen = Math.max(...codes.map(c => c.len));
-  const bl_count = new Array(maxLen + 1).fill(0);
-  for (const c of codes) if (c.len > 0) bl_count[c.len]++;
-  let code = 0;
-  const next_code = new Array(maxLen + 1).fill(0);
-  for (let bits = 1; bits <= maxLen; bits++) {
-    code = (code + bl_count[bits - 1]) << 1;
-    next_code[bits] = code;
-  }
-  for (const c of codes) { if (c.len > 0) c.code = next_code[c.len]++; }
-  codes.sort((a, b) => a.code - b.code);
-  return codes;
-}
-
-function decodeSymbol(bs, tree) {
-  let code = 0, first = 0, index = 0;
-  for (let len = 1; len <= 15; len++) {
-    code |= bs.readBits(1);
-    const count = tree.filter(c => c.len === len).length;
-    if (code < first + count) {
-      const matches = tree.filter(c => c.len === len);
-      return matches[code - first]?.sym ?? 0;
-    }
-    index += count; first += count; first <<= 1; code <<= 1;
-  }
-  return 0;
-}
-
-const LEN_EXTRA = [0,0,0,0,0,0,0,0,1,1,1,1,2,2,2,2,3,3,3,3,4,4,4,4,5,5,5,5,0];
-const LEN_BASE = [3,4,5,6,7,8,9,10,11,13,15,17,19,23,27,31,35,43,51,59,67,83,99,115,131,163,195,227,258];
-function readLength(bs, code) {
-  if (code >= 257 && code <= 264) return code - 254;
-  if (code <= 284) { const i = code - 265; return LEN_BASE[i] + bs.readBits(LEN_EXTRA[i]); }
-  return 258;
-}
-const DIST_EXTRA = [0,0,0,0,1,1,2,2,3,3,4,4,5,5,6,6,7,7,8,8,9,9,10,10,11,11,12,12,13,13];
-const DIST_BASE = [1,2,3,4,5,7,9,13,17,25,33,49,65,97,129,193,257,385,513,769,1025,1537,2049,3073,4097,6145,8193,12289,16385,24577];
-function readDist(bs, code) { return DIST_BASE[code] + bs.readBits(DIST_EXTRA[code]); }
-
-async function detectCommercial(pdfBytes) {
-  const text = (await extractPdfText(pdfBytes)).toLowerCase();
-  const found = [];
-  for (const kw of COMMERCIAL_KEYWORDS) {
-    if (text.includes(kw)) found.push(kw);
-  }
-  // Threshold: 2+ commercial keywords = likely commercial
-  return { isCommercial: found.length >= 2, keywords: found, textSample: text.substring(0, 200) };
-}
 
 function toggleSection(id) {
   const el = document.getElementById(id);
@@ -875,7 +624,7 @@ async function detectExistingSeal(pdfBytes) {
   return chain;
 }
 
-async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain, otsProofBytes) {
+async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain) {
   // CRITICAL FIX: Work directly on the ORIGINAL PDF — draw overlays on existing pages.
   // This avoids embedPage() / copyPages() which hang on scanned/image-based PDFs.
   const pdf = await PDFDocument.load(origBytes);
@@ -901,26 +650,87 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
 
   const pages = pdf.getPages();
 
-  // Process each existing page: draw watermark, QR, footer directly ON the page
+  // Process each page: scale content to 88%, draw overlays in margins
   for (let i = 0; i < pages.length; i++) {
     const pg = pages[i];
     const { width: pageW, height: pageH } = pg.getSize();
 
-    // 1. Watermark background at 20% (drawn behind existing content)
+    // === SCALE EXISTING CONTENT TO 88% (centered) ===
+    // Leaves ~6% margin on each side — QR sits in margin, never covers text
+    try {
+      const scale = 0.88;
+      const tx = pageW * (1 - scale) / 2;
+      const ty = pageH * (1 - scale) / 2;
+
+      const existingContents = pg.node.get(PDFName.of('Contents'));
+
+      // Create save+scale stream: q [scale 0 0 scale tx ty] cm
+      const preStream = PDFContentStream.of(
+        pdf.context.obj({}),
+        [
+          PDFOperator.of('q'),
+          PDFNumber.of(scale),
+          PDFNumber.of(0),
+          PDFNumber.of(0),
+          PDFNumber.of(scale),
+          PDFNumber.of(tx),
+          PDFNumber.of(ty),
+          PDFOperator.of('cm'),
+        ]
+      );
+
+      // Create restore stream: Q
+      const postStream = PDFContentStream.of(
+        pdf.context.obj({}),
+        [PDFOperator.of('Q')]
+      );
+
+      // Build new contents array: [saveScale, existing..., restore]
+      const newContents = PDFArray.withContext(pdf.context);
+      newContents.push(pdf.context.register(preStream));
+
+      if (existingContents instanceof PDFArray) {
+        for (let idx = 0; idx < existingContents.size(); idx++) {
+          newContents.push(existingContents.get(idx));
+        }
+      } else if (existingContents) {
+        newContents.push(existingContents);
+      }
+
+      newContents.push(pdf.context.register(postStream));
+      pg.node.set(PDFName.of('Contents'), newContents);
+    } catch (e) {
+      console.warn('Content scaling failed for page', i+1, '- continuing without scaling');
+    }
+
+    // 1. Watermark background at 20% opacity (full page)
     if (wmImg) {
       const s = Math.max(pageW / wmImg.width, pageH / wmImg.height);
       const w = wmImg.width * s, h = wmImg.height * s;
       pg.drawImage(wmImg, { x: (pageW-w)/2, y: (pageH-h)/2, width: w, height: h, opacity: 0.20 });
     }
 
-    // 2. Clean QR top-right — modules only, no border, no background box (Fix 3)
-    const qs = Math.min(pageW, pageH) * 0.12, m = Math.min(pageW, pageH) * 0.022;
-    const qx = pageW - m - qs, qy = pageH - m - qs;
-    // Draw QR code image — if embedding failed, show seal ID as text fallback
-    if (qrImg) {
-      pg.drawImage(qrImg, { x: qx, y: qy, width: qs, height: qs });
-    } else {
-      pg.drawText(sealId, { x: qx + 5, y: qy + qs/2, size: 8, font: helv, color: rgb(0.3, 0.3, 0.3) });
+    // 2. Clean QR in top-right margin with white panel
+    // Content scaled to 88% centered → 6% margin each side
+    const marginW = pageW * 0.06;
+    const marginH = pageH * 0.06;
+    const panelSize = Math.min(marginW, marginH) * 0.85;
+
+    if (panelSize > 8) {
+      const contentRight = pageW - marginW;
+      const contentTop = pageH - marginH;
+      const panelX = contentRight + (marginW - panelSize) / 2;
+      const panelY = contentTop + (marginH - panelSize) / 2;
+      const qrSize = panelSize - 4;
+
+      // White background panel for QR visibility
+      pg.drawRectangle({ x: panelX, y: panelY, width: panelSize, height: panelSize, color: rgb(1, 1, 1), opacity: 0.95 });
+
+      if (qrImg) {
+        pg.drawImage(qrImg, { x: panelX + 2, y: panelY + 2, width: qrSize, height: qrSize });
+      } else {
+        pg.drawText(sealId.substring(0, 8), { x: panelX + 2, y: panelY + panelSize/2, size: 5, font: helv, color: rgb(0.3, 0.3, 0.3) });
+      }
     }
 
     // 3. Footer bar
@@ -934,19 +744,6 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     pg.drawText('verumglobal.foundation  |  OpenTimestamps  |  Patent Pending', { x: pageW*0.55, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.36,0.42,0.48) });
 
     updateStep(6, 'processing', 'Page ' + (i+1) + ' of ' + pages.length);
-  }
-
-  // If QR image embedding failed, draw text fallback on all pages
-  if (!qrImg) {
-    for (let i = 0; i < pages.length; i++) {
-      const pg = pages[i];
-      const { width: pageW, height: pageH } = pg.getSize();
-      const qs = Math.min(pageW, pageH) * 0.12, m = Math.min(pageW, pageH) * 0.022;
-      const qx = pageW - m - qs, qy = pageH - m - qs;
-      pg.drawRectangle({ x: qx, y: qy, width: qs, height: qs, color: rgb(0.9, 0.9, 0.9) });
-      pg.drawText('QR UNAVAILABLE', { x: qx+5, y: qy+qs-15, size: 7, font: helvBold, color: rgb(0.5, 0.2, 0.2) });
-      pg.drawText(sealId, { x: qx+5, y: qy+qs/2, size: 6, font: helv, font: helv, color: rgb(0.3, 0.3, 0.3) });
-    }
   }
 
   // If password protected, add cover page at the beginning
@@ -981,129 +778,71 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
   const chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
   const chainStr = chainIds.length > 0 ? '|CHAIN:' + chainIds.join(',') : '';
 
-  // Embed OTS proof as base64 in Subject — recipient can extract and verify
-  let otsStr = '';
-  if (otsProofBytes && otsProofBytes.length > 0) {
-    try {
-      let binary = '';
-      otsProofBytes.forEach(b => binary += String.fromCharCode(b));
-      otsStr = '|OTS:' + btoa(binary);
-    } catch(e) { console.warn('OTS embed failed:', e.message); }
-  }
-
   try { pdf.setTitle(selectedFile ? selectedFile.name : 'Sealed Document'); } catch(e) {}
   try { pdf.setAuthor('Verum Omnis'); } catch(e) {}
-  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + chainStr + otsStr); } catch(e) {}
+  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + chainStr); } catch(e) {}
   try { pdf.setKeywords(['verum', 'seal', sha512.substring(0,16), sealType]); } catch(e) { console.warn('Keywords set failed:', e.message); }
   try { pdf.setProducer('Verum Omnis Document Sealing Service v1.2'); } catch(e) {}
   try { pdf.setCreationDate(new Date()); } catch(e) {}
 
+  // Fix 7: pdf-lib does not support encryption — save unencrypted, encrypt client-side after
   return await pdf.save();
-}
-
-let pendingFileBytes = null;
-
-function proceedAsPrivate() {
-  sealType = 'private';
-  document.getElementById('paymentGate').style.display = 'none';
-  document.getElementById('pipeline').classList.add('visible');
-  if (pendingFileBytes) runSealingPipeline(pendingFileBytes);
-}
-
-function initiateStripePayment() {
-  const price = getPricing();
-  if (price.amount === 0) { proceedAsPrivate(); return; }
-  // Configure your Stripe Payment Links at dashboard.stripe.com
-  const stripeLinks = {
-    'ZAR-750': 'https://buy.stripe.com/YOUR_ZAR_SA_LINK',
-    'ZAR-500': 'https://buy.stripe.com/YOUR_ZAR_SADC_LINK',
-    'USD-50':  'https://buy.stripe.com/YOUR_USD_INTL_LINK'
-  };
-  const key = price.currency + '-' + price.amount;
-  const link = stripeLinks[key] || stripeLinks['USD-50'];
-  const returnUrl = encodeURIComponent(window.location.origin + window.location.pathname + '?payment=success');
-  const email = encodeURIComponent(document.getElementById('senderEmail')?.value || '');
-  window.location.href = link + '?prefilled_email=' + email + '&success_url=' + returnUrl;
 }
 
 async function startSealing() {
   if (!selectedFile) return;
   document.getElementById('sealBtn').disabled = true;
-  document.getElementById('paymentGate').style.display = 'none';
   document.getElementById('pipeline').classList.add('visible');
   document.getElementById('results').classList.remove('visible');
   for (let i = 1; i <= 8; i++) updateStep(i, 'pending', '');
   otsProof = null; gpsCoords = null; deviceInfo = null;
-
-  // Read file ONCE
-  const fileBytes = await selectedFile.arrayBuffer();
-
-  // Capture GPS + Device
-  const gpsPromise = captureGPS();
-  deviceInfo = captureDevice();
-  gpsCoords = await gpsPromise;
-
-  // Commercial detection
-  const commCheck = await detectCommercial(fileBytes);
-  const price = getPricing();
-  const email = (document.getElementById('senderEmail')?.value || '').toLowerCase().trim();
-  const isLawEnforcement = LAW_ENFORCEMENT_DOMAINS.some(d => email.endsWith(d));
-
-  // Show payment gate if commercial detected and not law enforcement
-  if (sealType === 'commercial' || (commCheck.isCommercial && !isLawEnforcement && price.amount > 0)) {
-    document.getElementById('commercialKeywords').textContent =
-      'Detected: ' + commCheck.keywords.slice(0, 8).join(', ');
-    document.getElementById('priceDisplay').innerHTML =
-      price.symbol + price.amount + ' <small style="font-size:14px;color:#94a3b8;">' + price.currency + ' — ' + price.label + '</small>';
-    document.getElementById('paymentGate').classList.add('visible');
-    document.getElementById('paymentGate').style.display = 'block';
-    document.getElementById('pipeline').classList.remove('visible');
-    document.getElementById('sealBtn').disabled = false;
-    // Store for later
-    pendingFileBytes = fileBytes;
-    return;
-  }
-
-  // Private or law enforcement — run pipeline directly
-  await runSealingPipeline(fileBytes);
-}
-
-async function runSealingPipeline(fileBytes) {
   let sha256, sha512, sealId, otsResult, qrDataURL, otsDigestHex;
+
   try {
-    // Step 1: GPS + Device
+    // Read file ONCE — reuse bytes for all operations (prevents hang on mobile)
     updateStep(1, 'processing');
+    const fileBytes = await selectedFile.arrayBuffer();
+
+    // Step 1: Capture GPS + Device (parallel with file read)
+    const gpsPromise = captureGPS();
+    deviceInfo = captureDevice();
+    gpsCoords = await gpsPromise;
     const gpsStr = gpsCoords ? gpsCoords.lat + ',' + gpsCoords.lng : 'not available';
     updateStep(1, 'complete', gpsCoords ? gpsStr : 'GPS declined');
 
-    // Step 2: SHA-256 for OpenTimestamps
+    // Step 2: SHA-256 (uses pre-read bytes) — displayed for forensic reference
     updateStep(2, 'processing');
     sha256 = await computeSHA256(fileBytes);
     updateStep(2, 'complete', sha256.substring(0,16)+'...');
 
-    // Compute SHA-512 (for footer/QR) and Seal ID
+    // Compute SHA-512 NOW (needed for footer/QR) but display LAST (step 8)
     sha512 = await computeSHA512(fileBytes);
     sealId = 'VO-'+sha512.substring(0,12).toUpperCase();
 
-    // Fix 1: OTS digest aligned with Android — SHA-256(SHA-512-hex bytes)
+    // Fix 1: Compute OTS digest as SHA-256(SHA-512-hex-string bytes) for Android interoperability
     otsDigestHex = await computeSHA256(new TextEncoder().encode(sha512));
 
-    // Detect chain of custody
+    // Detect existing Verum Omnis seals (chain of custody) — uses pre-read bytes
     updateStep(4, 'processing', 'Checking for previous seals...');
     const chain = await detectExistingSeal(fileBytes);
-    updateStep(4, 'complete', chain.length > 0 ? 'Found: ' + chain.map(c=>c.sealId).join(', ') : 'No previous seals');
+    if (chain.length > 0) {
+      const chainIds = chain.map(c => c.sealId).join(', ');
+      updateStep(4, 'processing', 'Found: ' + chainIds);
+    } else {
+      updateStep(4, 'processing', 'No previous seals');
+    }
 
     const meta = collectSealMetadata();
 
-    // Step 3: OpenTimestamps
+    // Step 3: OpenTimestamps — use otsDigestHex for cross-platform proof verification
     updateStep(3, 'processing', 'Contacting a.pool.opentimestamps.org...');
     otsResult = await submitToOTS(otsDigestHex);
     updateStep(3, otsResult.success ? 'complete' : 'error', otsResult.success ? 'Submitted' : otsResult.error);
-    meta.ots = otsResult.success || false;
 
     // Step 4 + 5: Watermark + QR
     updateStep(4, 'complete');
     updateStep(5, 'processing');
+    // Fix 4: Use utf8ToBase64 for Unicode-safe encoding
     const metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(meta)));
     const qrContent = 'https://verumglobal.foundation/verify.html?h=' + sha512.substring(0,32) + '&m=' + metaStr;
     qrDataURL = await generateQRDataURL(qrContent, 400);
@@ -1114,7 +853,7 @@ async function runSealingPipeline(fileBytes) {
     if (qrDataURL) { const qI = new Image(); qI.onload = () => { pX.drawImage(qI, 10, 10, 200, 200); }; qI.onerror = () => { pX.fillStyle = '#ff0000'; pX.fillText('QR Error', 80, 110); }; qI.src = qrDataURL; }
     updateStep(5, 'complete');
 
-    // Step 6: Build sealed PDF
+    // Step 6: Seal Footer (buildSealedPDF draws on each page)
     updateStep(6, 'processing', 'Compositing '+selectedFile.name+'...');
     let password = null;
     if (document.getElementById('passwordToggle')?.checked) {
@@ -1123,36 +862,54 @@ async function runSealingPipeline(fileBytes) {
       if (p1 && p1 === p2 && p1.length >= 8) password = p1;
     }
     const senderEmail = document.getElementById('senderEmail')?.value?.trim() || '';
-    const sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain, otsResult.proof);
+    const sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain);
+
+    // Fix 7: Encrypt sealed PDF client-side when password is provided
+    let finalPdfBytes = sealedBytes;
     let encryptedBytes = null;
-    if (password) encryptedBytes = await encryptSealedPDF(sealedBytes, password);
+    if (password) {
+      encryptedBytes = await encryptSealedPDF(sealedBytes, password);
+      // finalPdfBytes is already the lock-screen version from buildSealedPDF
+    }
     updateStep(6, 'complete');
 
     // Step 7: Finalize
     updateStep(7, 'processing'); await sleep(200); updateStep(7, 'complete');
 
-    // Step 8: SHA-512 fingerprint
+    // Step 8: SHA-512 (displayed LAST)
     updateStep(8, 'processing'); await sleep(300); updateStep(8, 'complete', sha512.substring(0,16)+'...');
 
     showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes);
 
   } catch (err) {
     console.error('SEALING ERROR:', err);
+    // Mark ALL incomplete steps (pending OR processing) as error
     for (let i = 1; i <= 8; i++) {
       const b = document.getElementById('step'+i).querySelector('.status');
       if (b.classList.contains('pending') || b.classList.contains('processing')) updateStep(i, 'error', '');
     }
-    let errorMsg = err && err.message ? err.message : (typeof err === 'string' ? err : JSON.stringify(err));
+    // Show detailed error message
+    let errorMsg = 'Unknown error';
+    if (err && err.message) errorMsg = err.message;
+    else if (err && typeof err === 'string') errorMsg = err;
+    else if (err) errorMsg = JSON.stringify(err);
+
     const resultsEl = document.getElementById('results');
     resultsEl.classList.add('visible');
     resultsEl.innerHTML =
       '<h3 style="color:#ef4444;">⚠️ Sealing Failed</h3>' +
       '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:20px;margin:16px 0;font-size:14px;line-height:1.7;color:#D5D8DD;">' +
       '<strong style="color:#ef4444;">Error:</strong> ' + errorMsg + '<br><br>' +
+      '<strong>What went wrong:</strong><br>' +
+      'The PDF could not be fully processed. This usually happens when:<br>' +
+      '1. The PDF contains scanned images instead of text (try printing to PDF first)<br>' +
+      '2. The PDF is corrupted or password-protected<br>' +
+      '3. The file is too large for your device\'s memory<br><br>' +
       '<strong>Try these solutions:</strong><br>' +
       '• Print the PDF to a new PDF file (this flattens complex elements)<br>' +
       '• Use a PDF optimizer to reduce file size<br>' +
-      '• Try on a desktop computer with more memory' +
+      '• Try on a desktop computer with more memory<br>' +
+      '• If the PDF is scanned, try converting it with OCR first' +
       '</div>' +
       '<button class="seal-btn" onclick="resetSealing()" style="margin-top:20px;">Try Again</button>';
     resultsEl.scrollIntoView({behavior:'smooth'});
@@ -1208,6 +965,11 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     banner.innerHTML = '<strong style="color:#D4A843;font-size:16px;">🔐 Password Delivery Receipt Active</strong><br><br>This document is password-protected. The recipient receives the lock-screen PDF first, then uploads the .voice file to verify.html and enters the password to decrypt.<br><br><strong>How delivery confirmation works:</strong><br>1. You send BOTH files to the recipient (PDF + .voice)<br>2. They see the lock screen with your contact info<br>3. They email you asking for the password<br><strong>4. That email IS your delivery receipt</strong> — you know they received it<br>5. You reply with the password<br>6. They upload the .voice file to verumglobal.foundation/verify.html and enter the password to view<br><br><strong>Your password:</strong> <span style="color:#D4A843;font-family:monospace;">' + password + '</span><br><strong style="color:#ef4444;">Keep this password safe. Do not include it in the same email as the document files.</strong>';
     el.parentNode.insertBefore(banner, el.nextSibling);
   }
+
+  if (otsResult && otsResult.success && otsResult.proof) {
+    const oU = URL.createObjectURL(new Blob([otsResult.proof], {type: 'application/vnd.opentimestamps.v1'}));
+    const oL = document.getElementById('downloadOts'); oL.href = oU; oL.download = base + '.ots'; oL.style.display = 'block';
+  } else { document.getElementById('downloadOts').style.display = 'none'; }
 
   document.getElementById('results').classList.add('visible');
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
