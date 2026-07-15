@@ -191,11 +191,20 @@ Example: 5f6da77abbd637e98f0fd2417b1b0d6600c9d0fa61b2be64f84e598d14d46d0227b9...
     <div class="upload-zone" id="uploadZone">
       <div style="font-size: 36px; margin-bottom: 12px;">📄</div>
       <div style="color: #F8F9FA; font-size: 16px; margin-bottom: 8px;">Drop file here or click to browse</div>
-      <div style="color: #4A7EC7; font-size: 13px;">PDF only — Max 50MB</div>
-      <input type="file" id="fileInput" accept=".pdf,application/pdf">
+      <div style="color: #4A7EC7; font-size: 13px;">PDF or encrypted .voice — Max 50MB</div>
+      <input type="file" id="fileInput" accept=".pdf,application/pdf,.voice">
     </div>
     <button class="verify-btn" id="fileVerifyBtn" onclick="verifyFile()" disabled>Verify Document</button>
     <div class="result-box info" id="fileResult"></div>
+  </div>
+
+  <!-- Password Decryption (shown for .voice encrypted files) -->
+  <div class="verify-card" id="decryptCard" style="display:none;">
+    <h3>🔐 Decrypt Password-Protected Document</h3>
+    <p>This is an encrypted Verum Omnis sealed document. Enter the password to decrypt and verify.</p>
+    <input type="password" id="decryptPassword" placeholder="Enter document password" style="width:100%;padding:16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(4,13,27,0.6);color:#F8F9FA;font-family:inherit;font-size:15px;margin-bottom:12px;">
+    <button class="verify-btn" onclick="decryptAndVerify()">Decrypt & Verify</button>
+    <div class="result-box info" id="decryptResult"></div>
   </div>
 
   <!-- Blockchain Timing Note -->
@@ -238,9 +247,11 @@ document.getElementById('uploadZone').addEventListener('click', () => {
 document.getElementById('fileInput').addEventListener('change', (e) => {
   if (e.target.files.length > 0) {
     selectedFile = e.target.files[0];
+    const isVoice = selectedFile.name.endsWith('.voice');
+    document.getElementById('decryptCard').style.display = isVoice ? 'block' : 'none';
     document.querySelector('#uploadZone div:nth-child(2)').textContent = selectedFile.name;
     document.querySelector('#uploadZone div:nth-child(3)').textContent = (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB';
-    document.getElementById('fileVerifyBtn').disabled = false;
+    document.getElementById('fileVerifyBtn').disabled = isVoice;
   }
 });
 ['dragover','dragleave','drop'].forEach(evt => {
@@ -249,9 +260,11 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
     e.currentTarget.style.borderColor = evt === 'dragover' ? '#D4A843' : '#1A2E52';
     if (evt === 'drop' && e.dataTransfer.files.length > 0) {
       selectedFile = e.dataTransfer.files[0];
+      const isVoice = selectedFile.name.endsWith('.voice');
+      document.getElementById('decryptCard').style.display = isVoice ? 'block' : 'none';
       document.querySelector('#uploadZone div:nth-child(2)').textContent = selectedFile.name;
       document.querySelector('#uploadZone div:nth-child(3)').textContent = (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB';
-      document.getElementById('fileVerifyBtn').disabled = false;
+      document.getElementById('fileVerifyBtn').disabled = isVoice;
     }
   });
 });
@@ -290,6 +303,48 @@ function verifyHash() {
   );
 }
 
+// Decryption helpers for .voice encrypted files
+async function deriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function decryptSealedPDF(encryptedBytes, password) {
+  if (encryptedBytes.length < 28) throw new Error('Invalid encrypted file');
+  const salt = encryptedBytes.slice(0, 16);
+  const iv = encryptedBytes.slice(16, 28);
+  const ciphertext = encryptedBytes.slice(28);
+  const key = await deriveKey(password, salt);
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  return new Uint8Array(decrypted);
+}
+
+// Decrypt and verify .voice files
+async function decryptAndVerify() {
+  if (!selectedFile) return;
+  const password = document.getElementById('decryptPassword').value;
+  if (!password) { showResult('decryptResult', 'invalid', 'Please enter the password.'); return; }
+  const btn = document.querySelector('#decryptCard .verify-btn');
+  btn.disabled = true; btn.textContent = 'Decrypting...';
+  try {
+    const encryptedBytes = new Uint8Array(await selectedFile.arrayBuffer());
+    const decryptedBytes = await decryptSealedPDF(encryptedBytes, password);
+    showResult('decryptResult', 'valid', '<strong>✓ Decrypted Successfully</strong><br>The document has been decrypted. Use Method 2 above to verify the decrypted PDF.');
+    // Create a Blob from decrypted bytes and set it as the selected file for normal verification
+    const decryptedBlob = new Blob([decryptedBytes], { type: 'application/pdf' });
+    const decryptedFile = new File([decryptedBlob], selectedFile.name.replace('.voice', '-decrypted.pdf'), { type: 'application/pdf' });
+    selectedFile = decryptedFile;
+    document.querySelector('#uploadZone div:nth-child(2)').textContent = decryptedFile.name;
+    document.querySelector('#uploadZone div:nth-child(3)').textContent = (decryptedFile.size / 1024 / 1024).toFixed(2) + ' MB';
+    document.getElementById('fileVerifyBtn').disabled = false;
+    document.getElementById('decryptCard').style.display = 'none';
+  } catch (err) {
+    showResult('decryptResult', 'invalid', '❌ Decryption failed: ' + (err.message || 'Wrong password or corrupted file'));
+  } finally {
+    btn.disabled = false; btn.textContent = 'Decrypt & Verify';
+  }
+}
+
 // Extract all text from PDF by scanning raw objects (fallback when metadata fails)
 async function extractTextFromPDF(pdfBytes) {
   const textChunks = [];
@@ -315,7 +370,7 @@ async function extractTextFromPDF(pdfBytes) {
     }
 
     // Also try to find the Subject metadata in the raw bytes as fallback
-    const subjectMatch = asLatin1.match(/\(VO-SEAL\|([a-f0-9]{128})\|(VO-[A-F0-9]+)\)/i);
+    const subjectMatch = asLatin1.match(/VO-SEAL\|([a-f0-9]{128})\|(VO-[A-F0-9]+)/i);
     if (subjectMatch) {
       return { source: 'raw_bytes', sealId: subjectMatch[2], sha512: subjectMatch[1], chunks: textChunks };
     }
@@ -355,6 +410,7 @@ async function verifyFile() {
         const subject = pdfDoc.getSubject();
         if (subject && subject.startsWith('VO-SEAL|')) {
           const parts = subject.split('|');
+          // parts[0] = 'VO-SEAL', parts[1] = SHA512, parts[2] = SEALID, parts[3] = CHAIN:...
           if (parts.length >= 2) {
             extractedSha512 = parts[1];
             metadataSource = 'PDF Subject metadata';
