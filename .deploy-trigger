@@ -1,0 +1,4 @@
+# Deployment trigger
+# This file triggers a Cloudflare Pages deployment on push.
+# Source: webdocsol/main
+# Target: verumglobal.foundation
