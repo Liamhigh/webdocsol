@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Documents & Resources — Verum Omnis</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #040D1B;
+    color: #D5D8DD;
+    min-height: 100vh;
+    padding: 40px 20px;
+  }
+  .container { max-width: 900px; margin: 0 auto; }
+  .topnav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    background: rgba(4, 13, 27, 0.85);
+    backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(26, 46, 82, 0.5);
+    height: 64px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 0 clamp(1.5rem, 5vw, 4rem);
+  }
+  .topnav a { font-family: 'JetBrains Mono', 'Courier New', monospace; font-size: 12px; text-transform: uppercase; letter-spacing: 0.1em; color: #4A7EC7; text-decoration: none; }
+  .topnav a:hover { color: #F8F9FA; }
+  .topnav a.active { color: #D4A843; }
+  h1 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 300;
+    color: #F8F9FA;
+    margin: 100px 0 32px;
+  }
+  .doc-list { list-style: none; }
+  .doc-list li {
+    background: rgba(15, 52, 96, 0.08);
+    border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 12px;
+    padding: 24px;
+    margin-bottom: 16px;
+    transition: all 0.3s;
+  }
+  .doc-list li:hover { border-color: #D4A843; }
+  .doc-list h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 20px;
+    color: #D4A843;
+    margin-bottom: 8px;
+    font-weight: 400;
+  }
+  .doc-list p { font-size: 14px; color: #94a3b8; line-height: 1.6; }
+  .doc-list a { color: #4A7EC7; text-decoration: none; }
+  .doc-list a:hover { color: #F8F9FA; }
+  .footer {
+    margin-top: 60px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(26, 46, 82, 0.5);
+    text-align: center;
+    font-family: 'JetBrains Mono', 'Courier New', monospace;
+    font-size: 11px;
+    color: #4A7EC7;
+    text-transform: uppercase;
+    letter-spacing: 0.08em;
+  }
+</style>
+</head>
+<body>
+  <nav class="topnav">
+    <a href="/">Verum Omnis</a>
+    <div>
+      <a href="/seal-document.html">Seal</a>
+      <a href="/verify.html">Verify</a>
+      <a href="/documents-resources.html" class="active">Documents</a>
+    </div>
+  </nav>
+  <div class="container">
+    <h1>Documents & Resources</h1>
+    <ul class="doc-list">
+      <li>
+        <h3>Constitution v6.0 Final</h3>
+        <p>The foundational document governing all Verum Omnis systems. Establishes the AI Non-Weaponization Doctrine and the evidentiary standards for forensic AI.</p>
+      </li>
+      <li>
+        <h3>Document Sealing Standard (VO-DSS-1.2)</h3>
+        <p>Technical specification for the cryptographic sealing system. Covers SHA-512 fingerprints, OpenTimestamps Bitcoin anchoring, QR code encoding, and chain of custody.</p>
+      </li>
+      <li>
+        <h3><a href="/seal-document.html">Document Sealing Service</a></h3>
+        <p>Apply a forensic-grade cryptographic seal to any PDF. Client-side processing — nothing leaves your device.</p>
+      </li>
+      <li>
+        <h3><a href="/verify.html">Seal Verification Service</a></h3>
+        <p>Verify a sealed document by its SHA-512 fingerprint or by re-computing the hash from the original file.</p>
+      </li>
+    </ul>
+    <div class="footer">
+      Verum Omnis Foundation — Patent Pending<br>
+      Constitution v6.0 Final — Article X Non-Weaponization Doctrine
+    </div>
+  </div>
+</body>
+</html>
