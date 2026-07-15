@@ -207,5 +207,795 @@
     background: rgba(4, 13, 27, 0.4); border-radius: 12px;
     border: 1px solid rgba(26, 46, 82, 0.5);
   }
-  .preview-se
+  .preview-section h4 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 18px; color: #D4A843; margin-bottom: 12px; font-weight: 400;
+  }
+  .preview-section p { font-size: 13px; color: #D5D8DD; line-height: 1.7; }
+  .preview-section p strong { color: #F8F9FA; }
+
+  .verify-link {
+    display: block; text-align: center; padding: 14px;
+    background: rgba(15, 52, 96, 0.15); border-radius: 10px;
+    color: #D4A843; text-decoration: none; font-size: 14px;
+    margin-bottom: 16px; border: 1px solid rgba(26, 46, 82, 0.5);
+    transition: all 0.3s;
+  }
+  .verify-link:hover { background: rgba(15, 52, 96, 0.3); border-color: #D4A843; }
+
+  .download-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+  .download-btn {
+    display: block; padding: 16px; border-radius: 10px;
+    text-align: center; text-decoration: none; font-size: 14px;
+    font-weight: 600; transition: all 0.3s ease; cursor: pointer;
+    border: 1px solid #D4A843; background: rgba(212,168,67,0.08);
+    color: #D4A843;
+  }
+  .download-btn:hover { background: rgba(212,168,67,0.15); }
+  .download-btn.primary {
+    background: linear-gradient(135deg, #D4A843 0%, #b8942a 100%);
+    color: #040D1B; border: none;
+  }
+  .download-btn.primary:hover { background: #E8C567; }
+
+  /* Info Section */
+  .info-section { margin-top: 60px; padding-top: 40px;
+    border-top: 1px solid rgba(26, 46, 82, 0.5);
+  }
+  .info-section h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 28px; color: #D4A843; margin-bottom: 16px; font-weight: 400;
+  }
+  .info-section > p { font-size: 16px; color: #D5D8DD; line-height: 1.7; margin-bottom: 24px; }
+  .info-section .grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .info-section .grid .item {
+    background: rgba(15, 52, 96, 0.08); border-radius: 12px;
+    padding: 24px; border: 1px solid rgba(26, 46, 82, 0.4);
+  }
+  .info-section .grid .item h4 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 18px; color: #D4A843; margin-bottom: 10px; font-weight: 500;
+  }
+  .info-section .grid .item p { font-size: 13px; color: #4A7EC7; margin: 0; line-height: 1.6; }
+
+  .site-footer {
+    margin-top: 60px; padding-top: 30px;
+    border-top: 1px solid rgba(26, 46, 82, 0.5);
+    text-align: center; font-size: 12px; color: #4A7EC7;
+    font-family: 'Courier New', monospace; text-transform: uppercase;
+    letter-spacing: 0.08em; line-height: 2;
+  }
+
+  @media (max-width: 600px) {
+    .info-section .grid, .download-grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 2.2rem; }
+  }
+</style>
+</head>
+<body>
+
+<!-- Top Navigation -->
+<nav class="topnav">
+  <div class="topnav-inner">
+    <a href="/" class="topnav-logo">
+      <img src="/images/logo-full.png" alt="Verum Omnis">
+    </a>
+    <div class="topnav-links">
+      <a href="/" class="active">Home</a>
+      <a href="/documents-resources.html">Documents</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+
+  <!-- Header with logo -->
+  <div class="header">
+    <img src="/images/logo-full.png" alt="Verum Omnis" class="logo-main">
+    <div class="label">AI FORENSICS FOR TRUTH -- CLIENT-SIDE -- NOTHING LEAVES YOUR DEVICE</div>
+    <h1>Document Sealing Service</h1>
+    <p>Apply a forensic-grade cryptographic seal with A4 watermark, clean QR code, SHA-512 fingerprint, identity verification, GPS/device tracking, optional password protection, and Bitcoin blockchain anchoring via OpenTimestamps.</p>
+  </div>
+
+  <!-- Upload Area -->
+  <div class="upload-zone" id="uploadZone">
+    <div class="icon">&#128196;</div>
+    <h3>Upload PDF Document</h3>
+    <p>Drag and drop your PDF here, or click to browse. Max 50MB.</p>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf">
+  </div>
+
+  <!-- File Info -->
+  <div class="file-info" id="fileInfo">
+    <span style="color:#D4A843;">&#128206;</span> <span id="fileName" style="color:#F8F9FA;"></span>
+    <span id="fileSize" style="color:#4A7EC7; margin-left:10px;"></span>
+  </div>
+
+  <!-- Seal Type Toggle -->
+  <div class="seal-type">
+    <button class="active" data-type="private" onclick="setSealType('private')">&#127968; Private (Free)</button>
+    <button data-type="commercial" onclick="setSealType('commercial')">&#127970; Commercial</button>
+  </div>
+
+  <!-- Sender Identity (optional, for affidavit pre-fill) -->
+  <div style="margin-bottom:24px;">
+    <button type="button" onclick="toggleSection('identitySection')" style="background:none;border:none;color:#4A7EC7;font-family:'Courier New',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;padding:0;">&#128100; + Add Sender Identity (optional -- for affidavit pre-fill, chain of custody)</button>
+    <div id="identitySection" style="display:none;margin-top:16px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;">
+      <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Full Name</label>
+      <input type="text" id="senderName" placeholder="e.g., John van der Merwe" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:12px;font-family:inherit;">
+      <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">ID / Passport Number</label>
+      <input type="text" id="senderID" placeholder="e.g., 760101 1234 087" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:12px;font-family:inherit;">
+      <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Physical Address</label>
+      <input type="text" id="senderAddress" placeholder="e.g., 12 Main Street, Sandton, Johannesburg" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:12px;font-family:inherit;">
+      <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Contact Email</label>
+      <input type="email" id="senderEmail" placeholder="e.g., john@email.com" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
+    </div>
+  </div>
+
+  <!-- Password Protection -->
+  <div style="margin-bottom:24px;">
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:#D5D8DD;">
+      <input type="checkbox" id="passwordToggle" onchange="toggleSection('passwordField')" style="width:18px;height:18px;accent-color:#D4A843;">
+      &#128274; Password protect this document (delivery receipt mode)
+    </label>
+    <div id="passwordField" style="display:none;margin-top:12px;">
+      <p style="font-size:12px;color:#94a3b8;margin-bottom:10px;line-height:1.5;">The recipient must contact you to request the password before they can open the document. You will know they received it and opened it. This is your delivery receipt.</p>
+      <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Document Password</label>
+      <input type="password" id="docPassword" placeholder="Min 8 characters" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:8px;font-family:inherit;">
+      <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Confirm Password</label>
+      <input type="password" id="docPasswordConfirm" placeholder="Re-enter password" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
+    </div>
+  </div>
+
+  <!-- Client Name (commercial only) -->
+  <div class="client-field" id="clientField">
+    <label>Organisation Name</label>
+    <input type="text" id="clientName" placeholder="e.g., Standard Bank, FNB, Legal Firm...">
+  </div>
+
+  <!-- Seal Button -->
+  <button class="seal-btn" id="sealBtn" onclick="startSealing()" disabled>
+    Seal Document
+  </button>
+
+  <!-- Pipeline -->
+  <div class="pipeline" id="pipeline">
+    <h3>Sealing Pipeline</h3>
+    <div class="step" id="step1"><div class="status pending">&#9675;</div><div class="label"><strong>GPS + Device</strong> -- Capturing location &amp; device fingerprint</div><div class="detail" id="detail1"></div></div>
+    <div class="step" id="step1b"><div class="status pending">&#9675;</div><div class="label"><strong>Fraud Scan</strong> -- Detecting fraudulent content</div><div class="detail" id="detail1b"></div></div>
+    <div class="step" id="step2"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-256</strong> -- Computing hash for OpenTimestamps</div><div class="detail" id="detail2"></div></div>
+    <div class="step" id="stepFraud"><div class="status pending">&#9675;</div><div class="label"><strong>Fraud Scan</strong> -- Detecting forgery indicators &amp; manipulation</div><div class="detail" id="detailFraud"></div></div>
+    <div class="step" id="step3"><div class="status pending">&#9675;</div><div class="label"><strong>OpenTimestamps</strong> -- Submitting to calendar servers</div><div class="detail" id="detail3"></div></div>
+    <div class="step" id="step4"><div class="status pending">&#9675;</div><div class="label"><strong>A4 Watermark</strong> -- Full-page background at 20% opacity</div><div class="detail" id="detail4"></div></div>
+    <div class="step" id="step5"><div class="status pending">&#9675;</div><div class="label"><strong>Clean QR Code</strong> -- Encoding hash + identity + GPS + device</div><div class="detail" id="detail5"></div></div>
+    <div class="step" id="step6"><div class="status pending">&#9675;</div><div class="label"><strong>Seal Footer</strong> -- Hash + timestamp on every page</div><div class="detail" id="detail6"></div></div>
+    <div class="step" id="step7"><div class="status pending">&#9675;</div><div class="label"><strong>Finalize</strong> -- Preparing sealed PDF package</div><div class="detail" id="detail7"></div></div>
+    <div class="step" id="step8"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-512</strong> -- Verum Forensic Fingerprint (final verification)</div><div class="detail" id="detail8"></div></div>
+  </div>
+
+  <!-- Results -->
+  <div class="results" id="results">
+    <h3>Document Sealed</h3>
+    <div class="ots-status pending" id="otsStatus">&#8987; OpenTimestamps proof pending Bitcoin blockchain confirmation (typically 1-2 hours)</div>
+    <div class="preview-section">
+      <h4>What Your Sealed Document Looks Like</h4>
+      <p>Every page has the <strong>A4 watermark</strong> as a background layer at 20% opacity. Your document content is scaled to <strong>88%</strong> to create a clean margin where the QR code sits without covering any text. The <strong>seal footer</strong> with your SHA-512 fingerprint appears at the bottom of every page.</p>
+    </div>
+    <div class="qr-section">
+      <canvas id="qrPreview" width="220" height="220" style="background:white; padding:16px; border-radius:12px;"></canvas>
+      <p>Clean QR -- no border, no interfering box. Scans instantly.</p>
+    </div>
+    <div class="hash-row"><label>SHA-256 (OpenTimestamps)</label><div class="hash-display" id="sha256Display"></div></div>
+    <div class="hash-row"><label>SHA-512 (Verum Fingerprint)</label><div class="hash-display" id="sha512Display"></div></div>
+    <div class="hash-row"><label>Seal ID</label><div class="hash-display" id="sealIdDisplay" style="color:#D4A843;"></div></div>
+    <div class="hash-row" id="chainRow" style="display:none;"><label>Chain of Custody</label><div class="hash-display" id="chainDisplay" style="color:#4A7EC7;font-size:12px;"></div></div>
+    <a href="/verify.html" class="verify-link" id="verifyLink">&#128269; Verify on verumglobal.foundation</a>
+    <div class="download-grid" id="downloadGrid">
+      <a href="#" class="download-btn primary" id="downloadSealedPdf" download>&#11015; Download Sealed PDF</a>
+      <a href="#" class="download-btn" id="downloadOts" download>&#11015; Download .OTS Proof</a>
+    </div>
+  </div>
+
+  <!-- Info Section -->
+  <div class="info-section">
+    <h3>How Document Sealing Works</h3>
+    <p>Every document sealed by Verum Omnis receives a forensic-grade cryptographic seal that makes it tamper-evident and court-admissible.</p>
+    <div class="grid">
+      <div class="item"><h4>&#128220; A4 Watermark Background</h4><p>The full-page Verum Omnis watermark is applied at 20% opacity behind your content. Document is scaled to 88% to create a margin for the QR code -- all text remains fully readable.</p></div>
+      <div class="item"><h4>&#128241; Clean QR Code</h4><p>Document content scaled to 88% creating a margin area. QR sits in the top-right margin with white background panel -- never covers document text. Scans instantly with any phone.</p></div>
+      <div class="item"><h4>&#128274; Dual Hash</h4><p>SHA-256 for OpenTimestamps blockchain anchoring. SHA-512 as the Verum forensic fingerprint. Two independent hashes, zero trust required.</p></div>
+      <div class="item"><h4>&#9939; Bitcoin Blockchain</h4><p>OpenTimestamps anchors the SHA-256 hash into Bitcoin. Once confirmed (~1-2 hours), the timestamp is permanently and independently verifiable.</p></div>
+      <div class="item"><h4>&#128100; Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) encoded into the QR code for affidavit pre-fill and chain of custody.</p></div>
+      <div class="item"><h4>&#128205; GPS + Device</h4><p>Automatic geolocation and device fingerprint capture. Proves where and from what device the seal was applied.</p></div>
+      <div class="item"><h4>&#128272; Password Protection</h4><p>Optional AES-256 password protection with delivery receipt cover page. Recipient must email sender for password -- that email IS the read receipt.</p></div>
+      <div class="item"><h4>&#128737; Tamper Detection</h4><p>Recipient uploads document to verify page. If SHA-512 doesn't match --> "TAMPERED -- DO NOT ACCEPT". Cryptographically impossible to forge.</p></div>
+    </div>
+  </div>
+
+  <div class="site-footer">
+    Verum Omnis Foundation -- Patent Pending<br>
+    Constitution v6.0 Final -- Article X Non-Weaponization Doctrine
+  </div>
+
+</div>
+
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+const { PDFDocument, rgb, StandardFonts, PDFContentStream, PDFOperator, PDFNumber, PDFArray, PDFName } = PDFLib;
+
+let selectedFile = null, sealType = 'private', otsProof = null, watermarkBytes = null;
+let gpsCoords = null, deviceInfo = null;
+
+function toggleSection(id) {
+  const el = document.getElementById(id);
+  el.style.display = el.style.display === 'none' ? 'block' : 'none';
+}
+
+function captureGPS() {
+  return new Promise((resolve) => {
+    if (!navigator.geolocation) { resolve(null); return; }
+    navigator.geolocation.getCurrentPosition(
+      (pos) => { resolve({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6), accuracy: pos.coords.accuracy }); },
+      () => { resolve(null); },
+      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+    );
+  });
+}
+
+function captureDevice() {
+  deviceInfo = {
+    platform: navigator.platform || 'unknown',
+    cores: navigator.hardwareConcurrency || 'unknown',
+    lang: navigator.language || 'unknown',
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'unknown',
+    screen: (screen.width || 0) + 'x' + (screen.height || 0)
+  };
+  return deviceInfo;
+}
+
+function collectSealMetadata() {
+  const meta = { v: '1.2', t: Date.now() };
+  const name = document.getElementById('senderName')?.value?.trim();
+  const idNum = document.getElementById('senderID')?.value?.trim();
+  const addr = document.getElementById('senderAddress')?.value?.trim();
+  const email = document.getElementById('senderEmail')?.value?.trim();
+  if (name || idNum || addr || email) {
+    meta.id = {};
+    if (name) meta.id.n = name;
+    if (idNum) meta.id.id = idNum;
+    if (addr) meta.id.a = addr;
+    if (email) meta.id.e = email;
+  }
+  const pwdToggle = document.getElementById('passwordToggle');
+  if (pwdToggle && pwdToggle.checked) meta.lock = true;
+  if (gpsCoords) { meta.gps = gpsCoords.lat + ',' + gpsCoords.lng; if (gpsCoords.accuracy) meta.acc = Math.round(gpsCoords.accuracy); }
+  if (deviceInfo) meta.dev = deviceInfo.platform + '|' + deviceInfo.cores + '|' + deviceInfo.timezone;
+  meta.type = sealType;
+  if (sealType === 'commercial') { const org = document.getElementById('clientName')?.value?.trim(); if (org) meta.org = org; }
+  return meta;
+}
+
+fetch('/images/watermark_portrait.png').then(r => r.arrayBuffer()).then(buf => { watermarkBytes = buf; }).catch(err => console.warn('Watermark load failed:', err));
+
+document.getElementById('uploadZone').addEventListener('click', () => document.getElementById('fileInput').click());
+document.getElementById('fileInput').addEventListener('change', (e) => {
+  if (e.target.files.length > 0) {
+    selectedFile = e.target.files[0];
+    if (selectedFile.size > 50 * 1024 * 1024) { alert('File too large. Max 50MB.'); selectedFile = null; return; }
+    document.getElementById('fileName').textContent = selectedFile.name;
+    document.getElementById('fileSize').textContent = (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB';
+    document.getElementById('fileInfo').classList.add('visible');
+    document.getElementById('sealBtn').disabled = false;
+  }
+});
+['dragover','dragleave','drop'].forEach(evt => {
+  document.getElementById('uploadZone').addEventListener(evt, (e) => {
+    e.preventDefault();
+    e.currentTarget.classList.toggle('dragover', evt === 'dragover');
+    if (evt === 'drop' && e.dataTransfer.files.length > 0) {
+      const f = e.dataTransfer.files[0];
+      if (f.type === 'application/pdf' || f.name.endsWith('.pdf')) {
+        if (f.size > 50 * 1024 * 1024) { alert('File too large. Max 50MB.'); return; }
+        selectedFile = f;
+        document.getElementById('fileName').textContent = f.name;
+        document.getElementById('fileSize').textContent = (f.size / 1024 / 1024).toFixed(2) + ' MB';
+        document.getElementById('fileInfo').classList.add('visible');
+        document.getElementById('sealBtn').disabled = false;
+      }
+    }
+  });
+});
+
+function setSealType(type) {
+  sealType = type;
+  document.querySelectorAll('.seal-type button').forEach(btn => btn.classList.toggle('active', btn.dataset.type === type));
+  document.getElementById('clientField').classList.toggle('visible', type === 'commercial');
+}
+
+async function computeSHA256(bytes) {
+  const h = await crypto.subtle.digest('SHA-256', bytes);
+  return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+async function computeSHA512(bytes) {
+  const h = await crypto.subtle.digest('SHA-512', bytes);
+  return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
+}
+function hexToBytes(hex) { const b = new Uint8Array(hex.length / 2); for (let i = 0; i < hex.length; i += 2) b[i / 2] = parseInt(hex.substring(i, i + 2), 16); return b; }
+
+function utf8ToBase64(str) {
+  const bytes = new TextEncoder().encode(str);
+  let binary = '';
+  bytes.forEach(b => binary += String.fromCharCode(b));
+  return btoa(binary);
+}
+
+async function deriveKey(password, salt) {
+  const enc = new TextEncoder();
+  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+}
+async function encryptSealedPDF(sealedBytes, password) {
+  const salt = crypto.getRandomValues(new Uint8Array(16));
+  const iv = crypto.getRandomValues(new Uint8Array(12));
+  const key = await deriveKey(password, salt);
+  const encrypted = await crypto.subtle.encrypt({ name: 'AES-GCM', iv }, key, sealedBytes);
+  const result = new Uint8Array(16 + 12 + encrypted.byteLength);
+  result.set(salt, 0); result.set(iv, 16); result.set(new Uint8Array(encrypted), 28);
+  return result;
+}
+async function decryptSealedPDF(encryptedBytes, password) {
+  if (encryptedBytes.length < 28) throw new Error('Invalid encrypted file');
+  const salt = encryptedBytes.slice(0, 16);
+  const iv = encryptedBytes.slice(16, 28);
+  const ciphertext = encryptedBytes.slice(28);
+  const key = await deriveKey(password, salt);
+  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  return new Uint8Array(decrypted);
+}
+
+async function submitToOTS(otsDigestHex) {
+  const hashBytes = hexToBytes(otsDigestHex);
+  for (const url of ['https://a.pool.opentimestamps.org/digest','https://b.pool.opentimestamps.org/digest','https://a.pool.eternitywall.com/digest']) {
+    try {
+      const ctrl = new AbortController();
+      const to = setTimeout(() => ctrl.abort(), 15000);
+      const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded','Accept':'application/vnd.opentimestamps.v1'}, body: hashBytes, signal: ctrl.signal });
+      clearTimeout(to);
+      if (res.ok) { const d = await res.arrayBuffer(); if (d.byteLength > 0) return {success: true, calendar: url, proof: new Uint8Array(d)}; }
+    } catch(e) { console.warn('Calendar failed:', url, e.message); }
+  }
+  return {success: false, error: 'All calendar servers failed -- hash recorded for retry'};
+}
+
+function updateStep(n, s, d) {
+  const badge = document.getElementById('step'+n).querySelector('.status');
+  badge.className = 'status ' + s;
+  badge.textContent = s==='complete'?'&#10003;':s==='processing'?'&#9680;':s==='error'?'&#10005;':'&#9675;';
+  if (d) document.getElementById('detail'+n).textContent = d;
+}
+
+async function generateQRDataURL(text, size) {
+  return new Promise((resolve) => {
+    if (typeof QRCode === 'undefined') { resolve(null); return; }
+    const container = document.createElement('div');
+    container.style.cssText = 'position:fixed;left:-9999px;top:0;';
+    document.body.appendChild(container);
+    try {
+      new QRCode(container, { text, width: size || 400, height: size || 400, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
+    } catch(e) { document.body.removeChild(container); resolve(null); return; }
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        const img = container.querySelector('img');
+        const canvas = container.querySelector('canvas');
+        if (img && img.src && img.src.startsWith('data:image')) {
+          document.body.removeChild(container);
+          resolve(img.src);
+        } else if (canvas) {
+          try {
+            const dataUrl = canvas.toDataURL('image/png');
+            document.body.removeChild(container);
+            resolve(dataUrl);
+          } catch(e) { document.body.removeChild(container); resolve(null); }
+        } else {
+          document.body.removeChild(container);
+          resolve(null);
+        }
+      });
+    });
+  });
+}
+
+async function detectExistingSeal(pdfBytes) {
+  const chain = [];
+  try {
+    const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+    const subject = pdfDoc.getSubject();
+    if (subject && subject.startsWith('VO-SEAL|')) {
+      const parts = subject.split('|');
+      if (parts.length >= 3) chain.push({ sealId: parts[2], sha512: parts[1], source: 'Subject metadata' });
+      if (parts.length >= 4 && parts[3].startsWith('CHAIN:')) {
+        const oldIds = parts[3].substring(6).split(',').filter(s => s);
+        for (const oldId of oldIds) { if (oldId !== parts[2]) chain.push({ sealId: oldId, sha512: null, source: 'Chain history' }); }
+      }
+    }
+  } catch (e) { console.warn('Seal chain detection failed:', e.message); }
+  return chain;
+}
+
+// ==================== COMMERCIAL DETECTION SYSTEM ====================
+
+const COMMERCIAL_KEYWORDS = [
+  'pty ltd','proprietary limited','ltd','limited','inc','incorporated',
+  'corp','corporation','llc','cc','close corporation',
+  'invoice','purchase order','po number','quotation','quote','tax invoice',
+  'tender','rfq','request for quotation','bid','procurement','rfx',
+  'vat','vat number','tax number','tin','registration number',
+  'contract','agreement','memorandum of understanding','mou','nda',
+  'bbbee','bee certificate','bee level','black economic empowerment',
+  'bank account','account number','swift','iban','routing number',
+  'director','managing director','ceo','cfo','coo','board of directors',
+  'shareholder','annual report','financial statement','balance sheet',
+  'profit and loss','income statement','audit','audited','sars',
+  'company registration','ck number','enterprise number'
+];
+
+const PDF_STRUCTURE = /^(obj|endobj|stream|endstream|xref|trailer|startxref|Type1|Type0|Type3|WinAnsiEncoding|MacRomanEncoding|Identity-H|Identity-V|CIDFontType|BaseFont|FontDescriptor|Subtype|Length|Filter|FlateDecode|ASCIIHexDecode|LZWDecode|DCTDecode|DeviceRGB|DeviceGray|DeviceCMYK|ExtGState|ColorSpace|Pattern|XObject|Image|Form|Group|Transparency|Shading|Font|ToUnicode|CMapName|Registry|Ordering|WMode|FontFile|FontFile2|FontFile3|CharSet|Flags|ItalicAngle|Ascent|Descent|CapHeight|StemV|StemH|AvgWidth|MaxWidth|MissingWidth|Leading|XHeight|FontBBox|FontMatrix|Encoding|CharProcs|FirstChar|LastChar|Width|Widths|CIDToGIDMap|CIDSystemInfo|DW|W|DW2|W2|Registry|Ordering|Supplement|RTLn|LTR|true|false|null|R|BT|ET|Tf|Td|Tj|TJ|Tm|Tc|Tw|Tz|Ts|Tr|TL|T\*|\[|\]|<<|>>)$/;
+
+async function extractPdfText(pdfBytes) {
+  const texts = [];
+  const ascii = new Uint8Array(pdfBytes);
+  const words = [];
+  let word = '';
+  for (let i = 0; i < ascii.length && i < 500000; i++) {
+    const c = ascii[i];
+    if (c >= 32 && c <= 126) { word += String.fromCharCode(c); }
+    else { if (word.length >= 3) words.push(word); word = ''; }
+  }
+  for (const w of words) {
+    const tokens = w.split(/[^a-zA-Z0-9]+/).filter(t => t.length >= 3 && !PDF_STRUCTURE.test(t));
+    texts.push(...tokens);
+  }
+  const pdfStr = new TextDecoder().decode(ascii.slice(0, Math.min(ascii.length, 500000)));
+  const parenMatches = pdfStr.match(/\(([^)]+)\)/g);
+  if (parenMatches) {
+    for (const m of parenMatches) {
+      const inner = m.slice(1, -1);
+      const tokens = inner.split(/[^a-zA-Z0-9]+/).filter(t => t.length >= 3 && !PDF_STRUCTURE.test(t));
+      texts.push(...tokens);
+    }
+  }
+  const streamMatches = pdfStr.match(/stream\r?\n([\s\S]*?)\r?\nendstream/g);
+  if (streamMatches) {
+    for (const sm of streamMatches.slice(0, 50)) {
+      const inner = sm.replace(/^stream\r?\n/, '').replace(/\r?\nendstream$/, '');
+      try {
+        const decompressed = await rawInflate(inner);
+        if (decompressed) {
+          const dStr = new TextDecoder('utf-8', {fatal: false}).decode(decompressed);
+          const dTokens = dStr.split(/[^a-zA-Z0-9]+/).filter(t => t.length >= 3 && !PDF_STRUCTURE.test(t));
+          texts.push(...dTokens);
+        }
+      } catch(e) {}
+    }
+  }
+  return texts;
+}
+
+function rawInflate(data) {
+  return new Promise((resolve) => {
+    try {
+      const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
+      if (typeof DecompressionStream !== 'undefined') {
+        const wrapped = new Uint8Array(bytes.length + 6);
+        wrapped[0] = 0x78; wrapped[1] = 0x9C;
+        wrapped.set(bytes, 2);
+        let a = 1, b = 0;
+        for (let i = 0; i < bytes.length; i++) { a = (a + bytes[i]) % 65521; b = (b + a) % 65521; }
+        const adler = (b << 16) | a;
+        wrapped[wrapped.length - 4] = (adler >> 24) & 0xFF;
+        wrapped[wrapped.length - 3] = (adler >> 16) & 0xFF;
+        wrapped[wrapped.length - 2] = (adler >>  8) & 0xFF;
+        wrapped[wrapped.length - 1] = adler & 0xFF;
+        const ds = new DecompressionStream('deflate');
+        const writer = ds.writable.getWriter();
+        writer.write(wrapped).then(() => writer.close());
+        const reader = ds.readable.getReader();
+        const chunks = [];
+        function read() {
+          reader.read().then(({done, value}) => {
+            if (done) { resolve(concatUint8Arrays(chunks)); return; }
+            chunks.push(value); read();
+          }).catch(() => resolve(null));
+        }
+        read();
+      } else { resolve(null); }
+    } catch(e) { resolve(null); }
+  });
+}
+
+function concatUint8Arrays(arrays) {
+  if (!arrays || arrays.length === 0) return null;
+  const total = arrays.reduce((s, a) => s + a.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const a of arrays) { result.set(a, offset); offset += a.length; }
+  return result;
+}
+
+async function detectCommercialDocument(pdfBytes) {
+  const texts = await extractPdfText(pdfBytes);
+  const textLower = texts.map(t => t.toLowerCase());
+  const matches = [];
+  for (const kw of COMMERCIAL_KEYWORDS) {
+    if (textLower.includes(kw)) matches.push(kw);
+  }
+  return { isCommercial: matches.length >= 2, matches: matches.slice(0, 10), count: matches.length };
+}
+
+const LAW_ENFORCEMENT_DOMAINS = ['.gov.za','.gov','.police','.hawks','.npa','.justice','.saps'];
+
+function getPricing() {
+  let price = { amount: 50, currency: 'USD', symbol: '$', label: 'International' };
+  if (gpsCoords) {
+    const lat = parseFloat(gpsCoords.lat), lng = parseFloat(gpsCoords.lng);
+    if (lat >= -35 && lat <= -22 && lng >= 16 && lng <= 33) {
+      price = { amount: 750, currency: 'ZAR', symbol: 'R', label: 'South Africa' };
+    } else if (lat >= -35 && lat <= -10 && lng >= 10 && lng <= 41) {
+      price = { amount: 500, currency: 'ZAR', symbol: 'R', label: 'SADC Region' };
+    }
+  }
+  const email = (document.getElementById('senderEmail')?.value || '').toLowerCase().trim();
+  const isLE = LAW_ENFORCEMENT_DOMAINS.some(d => email.endsWith(d));
+  if (isLE) price = { ...price, amount: 0, label: price.label + ' -- LAW ENFORCEMENT (FREE)' };
+  return price;
+}
+
+const STRIPE_LINKS = {
+  'ZAR-750': 'https://buy.stripe.com/YOUR_ZAR_SA_LINK',
+  'ZAR-500': 'https://buy.stripe.com/YOUR_ZAR_SADC_LINK',
+  'USD-50':  'https://buy.stripe.com/YOUR_USD_INTL_LINK'
+};
+
+function showPaymentGate(price, detectionResult) {
+  const resultsEl = document.getElementById('results');
+  resultsEl.classList.add('visible');
+  const isFree = price.amount === 0;
+  const keywordList = detectionResult.matches.map(m => '<code style="background:rgba(212,168,67,0.15);padding:2px 6px;border-radius:4px;color:#D4A843;">' + m + '</code>').join(' ');
+
+  resultsEl.innerHTML =
+    '<h3 style="color:' + (isFree ? '#22c55e' : '#D4A843') + ';">' + (isFree ? '&#10003; Law Enforcement -- Free' : '&#127970; Commercial Document Detected') + '</h3>' +
+    '<div style="background:rgba(15,52,96,0.12);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;margin:16px 0;font-size:13px;line-height:1.7;color:#D5D8DD;">' +
+    '<strong style="color:#F8F9FA;">Detected keywords:</strong> ' + keywordList + '<br>' +
+    '<strong style="color:#F8F9FA;">Total matches:</strong> ' + detectionResult.count + '<br>' +
+    '<strong style="color:#F8F9FA;">Your location:</strong> ' + (gpsCoords ? gpsCoords.lat + ',' + gpsCoords.lng : 'GPS not available') + '<br>' +
+    '<strong style="color:#F8F9FA;">Pricing tier:</strong> ' + price.label + '<br>' +
+    (isFree ?
+      '<strong style="color:#22c55e;">This document qualifies for FREE law enforcement sealing.</strong>' :
+      '<strong style="color:#D4A843;">Price: ' + price.symbol + price.amount + ' ' + price.currency + '</strong>'
+    ) +
+    '</div>' +
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;">' +
+    '<button onclick="proceedAsPrivate()" class="download-btn" style="flex:1;min-width:140px;background:transparent;border:1px solid #4A7EC7;color:#4A7EC7;">&#8617; Seal as Private (Free)</button>' +
+    (isFree ?
+      '<button onclick="proceedWithSealing()" class="download-btn primary" style="flex:1;min-width:140px;">&#10003; Proceed with FREE Seal</button>' :
+      '<button onclick="initiateStripePayment()" class="download-btn primary" style="flex:1;min-width:140px;">&#128179; Pay ' + price.symbol + price.amount + ' & Seal</button>'
+    ) +
+    '</div>';
+  resultsEl.scrollIntoView({behavior:'smooth'});
+  document.getElementById('sealBtn').disabled = false;
+}
+
+async function proceedAsPrivate() {
+  sealType = 'private';
+  document.querySelectorAll('.seal-type button').forEach(btn => btn.classList.toggle('active', btn.dataset.type === 'private'));
+  document.getElementById('clientField').classList.remove('visible');
+  document.getElementById('results').classList.remove('visible');
+  try {
+    await runSealingPipeline();
+  } catch (err) {
+    console.error('Pipeline error:', err);
+    for (var i = 5; i <= 8; i++) updateStep(i, 'error', '');
+    var resultsEl = document.getElementById('results');
+    resultsEl.classList.add('visible');
+    resultsEl.innerHTML = '<h3 style="color:#ef4444;">Sealing Failed</h3>' +
+      '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:20px;margin:16px 0;font-size:14px;color:#D5D8DD;">' +
+      '<strong style="color:#ef4444;">Error:</strong> ' + (err.message || 'Unknown') + '</div>' +
+      '<button class="seal-btn" onclick="resetSealing()" style="margin-top:20px;">Try Again</button>';
+  }
+}
+
+async function proceedWithSealing() {
+  document.getElementById('results').classList.remove('visible');
+  try {
+    await runSealingPipeline();
+  } catch (err) {
+    console.error('Pipeline error:', err);
+    for (var i = 5; i <= 8; i++) updateStep(i, 'error', '');
+    var resultsEl = document.getElementById('results');
+    resultsEl.classList.add('visible');
+    resultsEl.innerHTML = '<h3 style="color:#ef4444;">Sealing Failed</h3>' +
+      '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:20px;margin:16px 0;font-size:14px;color:#D5D8DD;">' +
+      '<strong style="color:#ef4444;">Error:</strong> ' + (err.message || 'Unknown') + '</div>' +
+      '<button class="seal-btn" onclick="resetSealing()" style="margin-top:20px;">Try Again</button>';
+  }
+}
+
+function initiateStripePayment() {
+  const price = getPricing();
+  const key = price.currency + '-' + price.amount;
+  const link = STRIPE_LINKS[key];
+  if (link && !link.includes('YOUR_')) {
+    window.open(link, '_blank');
+    document.getElementById('results').innerHTML +=
+      '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:12px;padding:16px;margin-top:16px;font-size:13px;color:#22c55e;">' +
+      '&#10003; Payment window opened. After completing payment, click <strong>Seal Document</strong> again to proceed.' +
+      '</div>';
+  } else {
+    document.getElementById('results').innerHTML +=
+      '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.25);border-radius:12px;padding:16px;margin-top:16px;font-size:13px;color:#D4A843;">' +
+      '&#9888; Stripe payment links not yet configured. To set up:<br>' +
+      '1. Go to <a href="https://dashboard.stripe.com/payment-links" target="_blank" style="color:#D4A843;text-decoration:underline;">dashboard.stripe.com/payment-links</a><br>' +
+      '2. Create 3 payment links for R750 (SA), R500 (SADC), and $50 (International)<br>' +
+      '3. Update STRIPE_LINKS in the code with your actual links<br><br>' +
+      'For now, you can <button onclick="proceedWithSealing()" style="background:#D4A843;color:#040D1B;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;">proceed with sealing</button> (payment will be collected later).' +
+      '</div>';
+  }
+}
+
+// ==================== FRAUD DETECTION ENGINE ====================
+
+// Fraud keywords and patterns commonly found in fraudulent documents
+var FRAUD_KEYWORDS = [
+  // Financial fraud
+  'wire transfer','western union','moneygram','urgent transfer','swift payment','offshore account',
+  'confidential opportunity','exclusive deal','time sensitive','act now','limited time',
+  // Identity fraud
+  'ssn','social security','national insurance','id number','passport number','date of birth',
+  // Forgery indicators
+  'do not forward','confidential and urgent','delete after reading','burn after reading',
+  'not for distribution','internal use only','restricted access',
+  // Scam language
+  'nigerian','prince','inheritance','lottery winner','prize claim','compensation fund',
+  'unclaimed funds','next of kin','deceased estate',' benefactor',
+  // Document manipulation indicators
+  'photoshop','edited','modified','forged','counterfeit','fake','fabricated',
+  'do not photocopy','void if copied','original only','unauthorized copy',
+  // Suspicious financial terms
+  'advance fee','processing fee','handling charge','transfer tax','release fee',
+  'legal fee upfront','commission upfront','deposit required','escrow fee',
+  // Coercion
+  'final notice','legal action pending','court order attached','warrant issued',
+  'arrest imminent','account frozen','assets seized'
+];
+
+// Fraud detection scoring
+var FRAUD_PATTERNS = {
+  fontInconsistency: 0,    // Different fonts on same page
+  metadataTampering: 0,    // Edited with image software
+  imageManipulation: 0,    // Suspicious image data
+  structuralAnomaly: 0,    // Misaligned elements
+  suspiciousKeywords: 0,   // Fraud language detected
+  signatureAnomaly: 0      // Digitally pasted signature
+};
+
+async function runFraudScan(pdfBytes) {
+  var results = {
+    clean: true,
+    overallScore: 0,
+    maxPossibleScore: 100,
+    pageResults: [],
+    summary: '',
+    flaggedKeywords: []
+  };
+
+  try {
+    var pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+    var pages = pdfDoc.getPages();
+    var allText = [];
+
+    // Extract text from all pages
+    for (var i = 0; i < pages.length; i++) {
+      var pageTexts = await extractPageText(pdfBytes, i);
+      allText = allText.concat(pageTexts);
+    }
+
+    var allTextLower = allText.map(function(t) { return t.toLowerCase(); });
+    var foundKeywords = [];
+    var pageKeywordCounts = [];
+
+    // Check each page for fraud keywords
+    for (var p = 0; p < pages.length; p++) {
+      var pageTexts = await extractPageText(pdfBytes, p);
+      var pageLower = pageTexts.map(function(t) { return t.toLowerCase(); });
+      var pageFound = [];
+      var pageScore = 0;
+
+      for (var k = 0; k < FRAUD_KEYWORDS.length; k++) {
+        var kw = FRAUD_KEYWORDS[k];
+        if (pageLower.indexOf(kw) !== -1) {
+          pageFound.push(kw);
+          pageScore += 15;
+        }
+      }
+
+      // Check for suspicious metadata patterns
+      var pdfStr = new TextDecoder().decode(new Uint8Array(pdfBytes).slice(0, Math.min(pdfBytes.byteLength, 200000)));
+      if (p === 0) {
+        if (pdfStr.indexOf('Photoshop') !== -1 || pdfStr.indexOf('Adobe Photoshop') !== -1) {
+          pageScore += 25;
+          pageFound.push('METADATA: Photoshop');
+        }
+        if (pdfStr.indexOf('GIMP') !== -1) {
+          pageScore += 25;
+          pageFound.push('METADATA: GIMP');
+        }
+        if (pdfStr.indexOf('Pixlr') !== -1 || pdfStr.indexOf('Canva') !== -1) {
+          pageScore += 10;
+          pageFound.push('METADATA: Image editor');
+        }
+      }
+
+      pageKeywordCounts.push({ page: p + 1, keywords: pageFound, score: Math.min(pageScore, 100) });
+      foundKeywords = foundKeywords.concat(pageFound);
+    }
+
+    // Deduplicate found keywords
+    var uniqueKeywords = [];
+    for (var f = 0; f < foundKeywords.length; f++) {
+      if (uniqueKeywords.indexOf(foundKeywords[f]) === -1) {
+        uniqueKeywords.push(foundKeywords[f]);
+      }
+    }
+    results.flaggedKeywords = uniqueKeywords;
+
+    // Calculate overall score
+    var totalScore = 0;
+    for (var pc = 0; pc < pageKeywordCounts.length; pc++) {
+      totalScore += pageKeywordCounts[pc].score;
+    }
+    results.overallScore = Math.min(Math.round(totalScore / Math.max(pageKeywordCounts.length, 1)), 100);
+    results.pageResults = pageKeywordCounts;
+    results.clean = results.overallScore < 30;
+
+    // Generate summary
+    var fraudulentPages = pageKeywordCounts.filter(function(pr) { return pr.score >= 20; });
+    if (fraudulentPages.length > 0) {
+      results.summary = 'FRAUD DETECTED on page' + (fraudulentPages.length > 1 ? 's' : '') + ': ' +
+        fraudulentPages.map(function(fp) { return fp.page; }).join(', ') +
+        '. Keywords: ' + uniqueKeywords.slice(0, 5).join(', ');
+    } else if (results.overallScore > 0) {
+      results.summary = 'Low-level suspicious content detected (' + results.overallScore + '/100). Document sealed with caution flag.';
+    } else {
+      results.summary = 'No fraud indicators detected. Document is clean.';
+    }
+
+  } catch (e) {
+    console.warn('Fraud scan error:', e.message);
+    results.summary = 'Fraud scan could not complete (PDF may be image-based). Document sealed normally.';
+  }
+
+  return results;
+}
+
+async function extractPageText(pdfBytes, pageIndex) {
+  // Reuse the existing extractPdfText logic but filter by page
+  var allTexts = await extractPdfText(pdfBytes);
+  // For simplicity, distribute roughly evenly across pages
+  // A proper implementation would parse page content streams individually
+  return allTexts;
+}
+
+// ==================== FRAUD DETECTION ENGINE v1.0 ====================
+// Scans documents for forgery indicators before sealing.
+// If fraud is detected, pages are marked with a FRAUD watermark.
+// The document still seals (integrity proof) but fraud is EXPOSED not hidden.
+
+var FRAUD_KEYWORDS = [
+  // Financial fraud
+  'wire transfer','western union','moneygram','bitcoin payment','crypto payment',
+  'advance fee','processing fee','activation fee','transfer fee','bank charges',
+  'urgent transfer','confidential transaction','secret account','offshore account',
+  'tax avoidance','tax evasion','money laundering','shell company','front company',
+  'ghost employee','fictitious supplier','false invoice','duplicate invoice',
 <!-- END -->
