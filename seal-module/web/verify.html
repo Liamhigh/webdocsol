@@ -317,7 +317,7 @@ async function extractTextFromPDF(pdfBytes) {
     // Also try to find the Subject metadata in the raw bytes as fallback
     const subjectMatch = asLatin1.match(/\(VO-SEAL\|([a-f0-9]{128})\|(VO-[A-F0-9]+)\)/i);
     if (subjectMatch) {
-      return { source: 'raw_bytes', sealId: subjectMatch[3], sha512: subjectMatch[2], chunks: textChunks };
+      return { source: 'raw_bytes', sealId: subjectMatch[2], sha512: subjectMatch[1], chunks: textChunks };
     }
   } catch (e) {
     console.warn('Text extraction fallback failed:', e);
@@ -364,7 +364,7 @@ async function verifyFile() {
           }
           // Parse chain: parts[3] = "CHAIN:VO-OLD1,VO-OLD2"
           if (parts.length >= 4 && parts[3].startsWith('CHAIN:')) {
-            chainIds = parts[3].substring(6).split(',').filter(s => s);
+            chainIds = parts[3].substring(6).split(',').filter(s => s && s !== extractedSealId);
           }
         }
 
@@ -386,11 +386,13 @@ async function verifyFile() {
             metadataSource = 'PDF content scan';
           }
           // Check for seal footer text even if SHA not found
-          for (const chunk of fallback.chunks) {
-            const sealMatch = chunk.match(/Seal:\s*(VO-[A-F0-9]+)/i);
-            if (sealMatch) {
-              footerSealId = sealMatch[1];
-              break;
+          if (!footerSealId) {
+            for (const chunk of fallback.chunks) {
+              const sealMatch = chunk.match(/Seal:\s*(VO-[A-F0-9]+)/i);
+              if (sealMatch) {
+                footerSealId = sealMatch[1];
+                break;
+              }
             }
           }
         }
