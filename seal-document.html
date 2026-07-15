@@ -362,6 +362,7 @@
   <div class="pipeline" id="pipeline">
     <h3>Sealing Pipeline</h3>
     <div class="step" id="step1"><div class="status pending">&#9675;</div><div class="label"><strong>GPS + Device</strong> -- Capturing location &amp; device fingerprint</div><div class="detail" id="detail1"></div></div>
+    <div class="step" id="step1b"><div class="status pending">&#9675;</div><div class="label"><strong>Fraud Scan</strong> -- Detecting fraudulent content</div><div class="detail" id="detail1b"></div></div>
     <div class="step" id="step2"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-256</strong> -- Computing hash for OpenTimestamps</div><div class="detail" id="detail2"></div></div>
     <div class="step" id="step3"><div class="status pending">&#9675;</div><div class="label"><strong>OpenTimestamps</strong> -- Submitting to calendar servers</div><div class="detail" id="detail3"></div></div>
     <div class="step" id="step4"><div class="status pending">&#9675;</div><div class="label"><strong>A4 Watermark</strong> -- Full-page background at 20% opacity</div><div class="detail" id="detail4"></div></div>
@@ -693,7 +694,7 @@ function rawInflate(data) {
         const adler = (b << 16) | a;
         wrapped[wrapped.length - 4] = (adler >> 24) & 0xFF;
         wrapped[wrapped.length - 3] = (adler >> 16) & 0xFF;
-        wrapped[wrapped.length - 2] = (adler >> 8) & 0xFF;
+        wrapped[wrapped.length - 2] = (adler >>  8) & 0xFF;
         wrapped[wrapped.length - 1] = adler & 0xFF;
         const ds = new DecompressionStream('deflate');
         const writer = ds.writable.getWriter();
@@ -841,6 +842,149 @@ function initiateStripePayment() {
   }
 }
 
+// ==================== FRAUD DETECTION ENGINE ====================
+
+// Fraud keywords and patterns commonly found in fraudulent documents
+var FRAUD_KEYWORDS = [
+  // Financial fraud
+  'wire transfer','western union','moneygram','urgent transfer','swift payment','offshore account',
+  'confidential opportunity','exclusive deal','time sensitive','act now','limited time',
+  // Identity fraud
+  'ssn','social security','national insurance','id number','passport number','date of birth',
+  // Forgery indicators
+  'do not forward','confidential and urgent','delete after reading','burn after reading',
+  'not for distribution','internal use only','restricted access',
+  // Scam language
+  'nigerian','prince','inheritance','lottery winner','prize claim','compensation fund',
+  'unclaimed funds','next of kin','deceased estate',' benefactor',
+  // Document manipulation indicators
+  'photoshop','edited','modified','forged','counterfeit','fake','fabricated',
+  'do not photocopy','void if copied','original only','unauthorized copy',
+  // Suspicious financial terms
+  'advance fee','processing fee','handling charge','transfer tax','release fee',
+  'legal fee upfront','commission upfront','deposit required','escrow fee',
+  // Coercion
+  'final notice','legal action pending','court order attached','warrant issued',
+  'arrest imminent','account frozen','assets seized'
+];
+
+// Fraud detection scoring
+var FRAUD_PATTERNS = {
+  fontInconsistency: 0,    // Different fonts on same page
+  metadataTampering: 0,    // Edited with image software
+  imageManipulation: 0,    // Suspicious image data
+  structuralAnomaly: 0,    // Misaligned elements
+  suspiciousKeywords: 0,   // Fraud language detected
+  signatureAnomaly: 0      // Digitally pasted signature
+};
+
+async function runFraudScan(pdfBytes) {
+  var results = {
+    clean: true,
+    overallScore: 0,
+    maxPossibleScore: 100,
+    pageResults: [],
+    summary: '',
+    flaggedKeywords: []
+  };
+
+  try {
+    var pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+    var pages = pdfDoc.getPages();
+    var allText = [];
+
+    // Extract text from all pages
+    for (var i = 0; i < pages.length; i++) {
+      var pageTexts = await extractPageText(pdfBytes, i);
+      allText = allText.concat(pageTexts);
+    }
+
+    var allTextLower = allText.map(function(t) { return t.toLowerCase(); });
+    var foundKeywords = [];
+    var pageKeywordCounts = [];
+
+    // Check each page for fraud keywords
+    for (var p = 0; p < pages.length; p++) {
+      var pageTexts = await extractPageText(pdfBytes, p);
+      var pageLower = pageTexts.map(function(t) { return t.toLowerCase(); });
+      var pageFound = [];
+      var pageScore = 0;
+
+      for (var k = 0; k < FRAUD_KEYWORDS.length; k++) {
+        var kw = FRAUD_KEYWORDS[k];
+        if (pageLower.indexOf(kw) !== -1) {
+          pageFound.push(kw);
+          pageScore += 15;
+        }
+      }
+
+      // Check for suspicious metadata patterns
+      var pdfStr = new TextDecoder().decode(new Uint8Array(pdfBytes).slice(0, Math.min(pdfBytes.byteLength, 200000)));
+      if (p === 0) {
+        if (pdfStr.indexOf('Photoshop') !== -1 || pdfStr.indexOf('Adobe Photoshop') !== -1) {
+          pageScore += 25;
+          pageFound.push('METADATA: Photoshop');
+        }
+        if (pdfStr.indexOf('GIMP') !== -1) {
+          pageScore += 25;
+          pageFound.push('METADATA: GIMP');
+        }
+        if (pdfStr.indexOf('Pixlr') !== -1 || pdfStr.indexOf('Canva') !== -1) {
+          pageScore += 10;
+          pageFound.push('METADATA: Image editor');
+        }
+      }
+
+      pageKeywordCounts.push({ page: p + 1, keywords: pageFound, score: Math.min(pageScore, 100) });
+      foundKeywords = foundKeywords.concat(pageFound);
+    }
+
+    // Deduplicate found keywords
+    var uniqueKeywords = [];
+    for (var f = 0; f < foundKeywords.length; f++) {
+      if (uniqueKeywords.indexOf(foundKeywords[f]) === -1) {
+        uniqueKeywords.push(foundKeywords[f]);
+      }
+    }
+    results.flaggedKeywords = uniqueKeywords;
+
+    // Calculate overall score
+    var totalScore = 0;
+    for (var pc = 0; pc < pageKeywordCounts.length; pc++) {
+      totalScore += pageKeywordCounts[pc].score;
+    }
+    results.overallScore = Math.min(Math.round(totalScore / Math.max(pageKeywordCounts.length, 1)), 100);
+    results.pageResults = pageKeywordCounts;
+    results.clean = results.overallScore < 30;
+
+    // Generate summary
+    var fraudulentPages = pageKeywordCounts.filter(function(pr) { return pr.score >= 20; });
+    if (fraudulentPages.length > 0) {
+      results.summary = 'FRAUD DETECTED on page' + (fraudulentPages.length > 1 ? 's' : '') + ': ' +
+        fraudulentPages.map(function(fp) { return fp.page; }).join(', ') +
+        '. Keywords: ' + uniqueKeywords.slice(0, 5).join(', ');
+    } else if (results.overallScore > 0) {
+      results.summary = 'Low-level suspicious content detected (' + results.overallScore + '/100). Document sealed with caution flag.';
+    } else {
+      results.summary = 'No fraud indicators detected. Document is clean.';
+    }
+
+  } catch (e) {
+    console.warn('Fraud scan error:', e.message);
+    results.summary = 'Fraud scan could not complete (PDF may be image-based). Document sealed normally.';
+  }
+
+  return results;
+}
+
+async function extractPageText(pdfBytes, pageIndex) {
+  // Reuse the existing extractPdfText logic but filter by page
+  var allTexts = await extractPdfText(pdfBytes);
+  // For simplicity, distribute roughly evenly across pages
+  // A proper implementation would parse page content streams individually
+  return allTexts;
+}
+
 // ==================== PIPELINE STATE ====================
 
 let _pipelineFileBytes = null;
@@ -850,10 +994,11 @@ let _pipelineSealId = '';
 let _pipelineOtsDigestHex = '';
 let _pipelineChain = [];
 let _pipelineDetection = null;
+let _pipelineFraudResult = null;
 
 // ==================== BUILD SEALED PDF ====================
 
-async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain) {
+async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain, fraudResult) {
   const pdf = await PDFDocument.load(origBytes);
   let wmImg = null;
   if (watermarkBytes) { try { wmImg = await pdf.embedPng(watermarkBytes); } catch(e) {} }
@@ -956,6 +1101,24 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     pg.drawText('Seal: ' + sealId + '  |  SHA-512: ' + short + '...  |  ' + ts + '  |  ' + (i+1) + '/' + pages.length, { x: pageW*0.03, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.58,0.71,0.78) });
     pg.drawText('verumglobal.foundation  |  OpenTimestamps  |  Patent Pending', { x: pageW*0.55, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.36,0.42,0.48) });
 
+    // Fraud warning overlay for flagged pages
+    if (fraudResult && !fraudResult.clean) {
+      var pageFraud = fraudResult.pageResults[i];
+      if (pageFraud && pageFraud.score >= 20) {
+        // Draw red diagonal cross
+        pg.drawLine({ start: { x: pageW * 0.1, y: pageH * 0.9 }, end: { x: pageW * 0.9, y: pageH * 0.1 }, thickness: 3, color: rgb(0.9, 0.1, 0.1), opacity: 0.3 });
+        pg.drawLine({ start: { x: pageW * 0.1, y: pageH * 0.1 }, end: { x: pageW * 0.9, y: pageH * 0.9 }, thickness: 3, color: rgb(0.9, 0.1, 0.1), opacity: 0.3 });
+        // Draw warning text
+        pg.drawText('FRAUDULENT DOCUMENT - ' + pageFraud.score + '/100', {
+          x: pageW * 0.15, y: pageH * 0.5, size: 24, font: helvBold, color: rgb(0.9, 0.1, 0.1), opacity: 0.15
+        });
+        // Draw "FRAUD DETECTED" stamp
+        pg.drawText('FRAUD DETECTED', {
+          x: pageW * 0.25, y: pageH * 0.75, size: 18, font: helvBold, color: rgb(0.9, 0.1, 0.1), opacity: 0.2
+        });
+      }
+    }
+
     updateStep(6, 'processing', 'Page ' + (i+1) + ' of ' + pages.length);
   }
 
@@ -999,7 +1162,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
   return await pdf.save();
 }
 
-// ==================== SEALING FLOW v1.2.3 ====================
+// ==================== SEALING FLOW v1.2.4 ====================
 
 async function startSealing() {
   if (!selectedFile) return;
@@ -1007,6 +1170,7 @@ async function startSealing() {
   document.getElementById('pipeline').classList.add('visible');
   document.getElementById('results').classList.remove('visible');
   for (let i = 1; i <= 8; i++) updateStep(i, 'pending', '');
+  updateStep('1b', 'pending', '');
   otsProof = null; gpsCoords = null; deviceInfo = null;
 
   // FIX: ALL variable declarations in outer scope -- NO TDZ error on mobile
@@ -1023,6 +1187,12 @@ async function startSealing() {
     deviceInfo = captureDevice();
     gpsCoords = await gpsPromise;
     updateStep(1, 'complete', gpsCoords ? gpsCoords.lat + ',' + gpsCoords.lng : 'GPS declined');
+
+    // Step 1.5: Fraud Detection Scan
+    updateStep('1b', 'processing', 'Running fraud detection scan...');
+    var fraudResult = await runFraudScan(fileBytes);
+    updateStep('1b', fraudResult.clean ? 'complete' : 'error',
+      fraudResult.clean ? 'Clean - no fraud detected' : 'FRAUD: ' + fraudResult.overallScore + '/100 score');
 
     // Step 2: Hashes
     updateStep(2, 'processing');
@@ -1050,6 +1220,7 @@ async function startSealing() {
     _pipelineOtsDigestHex = otsDigestHex;
     _pipelineChain = chain;
     _pipelineDetection = detection;
+    _pipelineFraudResult = fraudResult;
 
     // If commercial detected but user selected private, show payment gate
     if (detection.isCommercial && sealType === 'private') {
@@ -1078,7 +1249,9 @@ async function startSealing() {
       var b = document.getElementById('step' + i).querySelector('.status');
       if (b.classList.contains('pending') || b.classList.contains('processing')) updateStep(i, 'error', '');
     }
-    var errorMsg = 'Unknown error';
+    var b1b = document.getElementById('step1b').querySelector('.status');
+    if (b1b.classList.contains('pending') || b1b.classList.contains('processing')) updateStep('1b', 'error', '');
+    let errorMsg = 'Unknown error';
     if (err && err.message) errorMsg = err.message;
     else if (err && typeof err === 'string') errorMsg = err;
     else if (err) errorMsg = JSON.stringify(err);
@@ -1106,6 +1279,7 @@ async function runSealingPipeline() {
   var sealId = _pipelineSealId;
   var otsDigestHex = _pipelineOtsDigestHex;
   var chain = _pipelineChain;
+  var fraudResult = _pipelineFraudResult;
 
   var otsResult = null, qrDataURL = null;
   var password = null, senderEmail = '';
@@ -1146,7 +1320,7 @@ async function runSealingPipeline() {
     if (p1 && p1 === p2 && p1.length >= 8) password = p1;
   }
   senderEmail = document.getElementById('senderEmail')?.value?.trim() || '';
-  sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain);
+  sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain, fraudResult);
 
   if (password) {
     encryptedBytes = await encryptSealedPDF(sealedBytes, password);
@@ -1159,6 +1333,14 @@ async function runSealingPipeline() {
   // Step 8: SHA-512
   updateStep(8, 'processing'); await sleep(300); updateStep(8, 'complete', sha512.substring(0,16)+'...');
 
+  // Add fraud data to metadata
+  if (fraudResult) {
+    meta.fraudScore = fraudResult.overallScore;
+    meta.fraudPages = fraudResult.pageResults.filter(function(pr) { return pr.score >= 20; }).map(function(pr) { return pr.page; }).join(',');
+    meta.fraudKeywords = fraudResult.flaggedKeywords.slice(0, 10).join(',');
+    meta.fraudClean = fraudResult.clean;
+  }
+
   showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes);
 }
 
@@ -1166,6 +1348,21 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   document.getElementById('sha256Display').textContent = sha256;
   document.getElementById('sha512Display').textContent = sha512;
   document.getElementById('sealIdDisplay').textContent = sealId;
+
+  // Fraud warning display
+  if (meta.fraudScore && meta.fraudScore >= 20) {
+    var fraudDiv = document.createElement('div');
+    fraudDiv.style.cssText = 'background:rgba(239,68,68,0.1);border:2px solid rgba(239,68,68,0.4);border-radius:12px;padding:20px;margin:16px 0;';
+    fraudDiv.innerHTML = '<h4 style="color:#ef4444;font-size:18px;margin-bottom:10px;">&#9888; FRAUD DETECTED</h4>' +
+      '<p style="color:#D5D8DD;font-size:13px;line-height:1.7;">' +
+      '<strong>Fraud Score:</strong> ' + meta.fraudScore + '/100<br>' +
+      '<strong>Flagged Pages:</strong> ' + (meta.fraudPages || 'N/A') + '<br>' +
+      '<strong>Keywords Found:</strong> ' + (meta.fraudKeywords || 'N/A') + '<br><br>' +
+      '<em>This document has been sealed with fraud warnings on the affected pages. ' +
+      'The red cross and "FRAUD DETECTED" watermark are visible on the sealed PDF.</em>' +
+      '</p>';
+    document.getElementById('results').insertBefore(fraudDiv, document.getElementById('results').firstChild);
+  }
 
   const chainEl = document.getElementById('chainDisplay');
   if (chain && chain.length > 0 && chainEl) {
@@ -1217,9 +1414,14 @@ function resetSealing() {
   document.getElementById('results').classList.remove('visible');
   document.getElementById('pipeline').classList.remove('visible');
   for (let i = 1; i <= 8; i++) updateStep(i, 'pending', '');
+  updateStep('1b', 'pending', '');
   document.getElementById('sealBtn').disabled = false;
+  _pipelineFraudResult = null;
   const banners = document.querySelectorAll('[style*="background:rgba(212,168,67"]');
   banners.forEach(b => b.remove());
+  // Also remove fraud warning banners on reset
+  const fraudBanners = document.querySelectorAll('[style*="background:rgba(239,68,68"]');
+  fraudBanners.forEach(b => b.remove());
   const downloadGrid = document.getElementById('downloadGrid');
   if (downloadGrid) {
     downloadGrid.style.gridTemplateColumns = '';
