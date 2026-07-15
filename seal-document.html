@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Seal Document — Verum Omnis</title>
+<title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -289,14 +289,14 @@
   <!-- Header with logo -->
   <div class="header">
     <img src="/images/logo-full.png" alt="Verum Omnis" class="logo-main">
-    <div class="label">AI FORENSICS FOR TRUTH — CLIENT-SIDE — NOTHING LEAVES YOUR DEVICE</div>
+    <div class="label">AI FORENSICS FOR TRUTH -- CLIENT-SIDE -- NOTHING LEAVES YOUR DEVICE</div>
     <h1>Document Sealing Service</h1>
     <p>Apply a forensic-grade cryptographic seal with A4 watermark, clean QR code, SHA-512 fingerprint, identity verification, GPS/device tracking, optional password protection, and Bitcoin blockchain anchoring via OpenTimestamps.</p>
   </div>
 
   <!-- Upload Area -->
   <div class="upload-zone" id="uploadZone">
-    <div class="icon">📄</div>
+    <div class="icon">&#128196;</div>
     <h3>Upload PDF Document</h3>
     <p>Drag and drop your PDF here, or click to browse. Max 50MB.</p>
     <input type="file" id="fileInput" accept=".pdf,application/pdf">
@@ -304,19 +304,19 @@
 
   <!-- File Info -->
   <div class="file-info" id="fileInfo">
-    <span style="color:#D4A843;">📎</span> <span id="fileName" style="color:#F8F9FA;"></span>
+    <span style="color:#D4A843;">&#128206;</span> <span id="fileName" style="color:#F8F9FA;"></span>
     <span id="fileSize" style="color:#4A7EC7; margin-left:10px;"></span>
   </div>
 
   <!-- Seal Type Toggle -->
   <div class="seal-type">
-    <button class="active" data-type="private" onclick="setSealType('private')">🏠 Private (Free)</button>
-    <button data-type="commercial" onclick="setSealType('commercial')">🏢 Commercial</button>
+    <button class="active" data-type="private" onclick="setSealType('private')">&#127968; Private (Free)</button>
+    <button data-type="commercial" onclick="setSealType('commercial')">&#127970; Commercial</button>
   </div>
 
   <!-- Sender Identity (optional, for affidavit pre-fill) -->
   <div style="margin-bottom:24px;">
-    <button type="button" onclick="toggleSection('identitySection')" style="background:none;border:none;color:#4A7EC7;font-family:'Courier New',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;padding:0;">👤 + Add Sender Identity (optional — for affidavit pre-fill, chain of custody)</button>
+    <button type="button" onclick="toggleSection('identitySection')" style="background:none;border:none;color:#4A7EC7;font-family:'Courier New',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;padding:0;">&#128100; + Add Sender Identity (optional -- for affidavit pre-fill, chain of custody)</button>
     <div id="identitySection" style="display:none;margin-top:16px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;">
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Full Name</label>
       <input type="text" id="senderName" placeholder="e.g., John van der Merwe" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:12px;font-family:inherit;">
@@ -333,7 +333,7 @@
   <div style="margin-bottom:24px;">
     <label style="display:flex;align-items:center;gap:10px;cursor:pointer;font-size:14px;color:#D5D8DD;">
       <input type="checkbox" id="passwordToggle" onchange="toggleSection('passwordField')" style="width:18px;height:18px;accent-color:#D4A843;">
-      🔒 Password protect this document (delivery receipt mode)
+      &#128274; Password protect this document (delivery receipt mode)
     </label>
     <div id="passwordField" style="display:none;margin-top:12px;">
       <p style="font-size:12px;color:#94a3b8;margin-bottom:10px;line-height:1.5;">The recipient must contact you to request the password before they can open the document. You will know they received it and opened it. This is your delivery receipt.</p>
@@ -358,36 +358,36 @@
   <!-- Pipeline -->
   <div class="pipeline" id="pipeline">
     <h3>Sealing Pipeline</h3>
-    <div class="step" id="step1"><div class="status pending">○</div><div class="label"><strong>GPS + Device</strong> — Capturing location &amp; device fingerprint</div><div class="detail" id="detail1"></div></div>
-    <div class="step" id="step2"><div class="status pending">○</div><div class="label"><strong>SHA-256</strong> — Computing hash for OpenTimestamps</div><div class="detail" id="detail2"></div></div>
-    <div class="step" id="step3"><div class="status pending">○</div><div class="label"><strong>OpenTimestamps</strong> — Submitting to calendar servers</div><div class="detail" id="detail3"></div></div>
-    <div class="step" id="step4"><div class="status pending">○</div><div class="label"><strong>A4 Watermark</strong> — Full-page background at 20% opacity</div><div class="detail" id="detail4"></div></div>
-    <div class="step" id="step5"><div class="status pending">○</div><div class="label"><strong>Clean QR Code</strong> — Encoding hash + identity + GPS + device</div><div class="detail" id="detail5"></div></div>
-    <div class="step" id="step6"><div class="status pending">○</div><div class="label"><strong>Seal Footer</strong> — Hash + timestamp on every page</div><div class="detail" id="detail6"></div></div>
-    <div class="step" id="step7"><div class="status pending">○</div><div class="label"><strong>Finalize</strong> — Preparing sealed PDF package</div><div class="detail" id="detail7"></div></div>
-    <div class="step" id="step8"><div class="status pending">○</div><div class="label"><strong>SHA-512</strong> — Verum Forensic Fingerprint (final verification)</div><div class="detail" id="detail8"></div></div>
+    <div class="step" id="step1"><div class="status pending">&#9675;</div><div class="label"><strong>GPS + Device</strong> -- Capturing location &amp; device fingerprint</div><div class="detail" id="detail1"></div></div>
+    <div class="step" id="step2"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-256</strong> -- Computing hash for OpenTimestamps</div><div class="detail" id="detail2"></div></div>
+    <div class="step" id="step3"><div class="status pending">&#9675;</div><div class="label"><strong>OpenTimestamps</strong> -- Submitting to calendar servers</div><div class="detail" id="detail3"></div></div>
+    <div class="step" id="step4"><div class="status pending">&#9675;</div><div class="label"><strong>A4 Watermark</strong> -- Full-page background at 20% opacity</div><div class="detail" id="detail4"></div></div>
+    <div class="step" id="step5"><div class="status pending">&#9675;</div><div class="label"><strong>Clean QR Code</strong> -- Encoding hash + identity + GPS + device</div><div class="detail" id="detail5"></div></div>
+    <div class="step" id="step6"><div class="status pending">&#9675;</div><div class="label"><strong>Seal Footer</strong> -- Hash + timestamp on every page</div><div class="detail" id="detail6"></div></div>
+    <div class="step" id="step7"><div class="status pending">&#9675;</div><div class="label"><strong>Finalize</strong> -- Preparing sealed PDF package</div><div class="detail" id="detail7"></div></div>
+    <div class="step" id="step8"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-512</strong> -- Verum Forensic Fingerprint (final verification)</div><div class="detail" id="detail8"></div></div>
   </div>
 
   <!-- Results -->
   <div class="results" id="results">
     <h3>Document Sealed</h3>
-    <div class="ots-status pending" id="otsStatus">⏳ OpenTimestamps proof pending Bitcoin blockchain confirmation (typically 1-2 hours)</div>
+    <div class="ots-status pending" id="otsStatus">&#8987; OpenTimestamps proof pending Bitcoin blockchain confirmation (typically 1-2 hours)</div>
     <div class="preview-section">
       <h4>What Your Sealed Document Looks Like</h4>
       <p>Every page has the <strong>A4 watermark</strong> as a background layer at 20% opacity. Your document content is scaled to <strong>88%</strong> to create a clean margin where the QR code sits without covering any text. The <strong>seal footer</strong> with your SHA-512 fingerprint appears at the bottom of every page.</p>
     </div>
     <div class="qr-section">
       <canvas id="qrPreview" width="220" height="220" style="background:white; padding:16px; border-radius:12px;"></canvas>
-      <p>Clean QR — no border, no interfering box. Scans instantly.</p>
+      <p>Clean QR -- no border, no interfering box. Scans instantly.</p>
     </div>
     <div class="hash-row"><label>SHA-256 (OpenTimestamps)</label><div class="hash-display" id="sha256Display"></div></div>
     <div class="hash-row"><label>SHA-512 (Verum Fingerprint)</label><div class="hash-display" id="sha512Display"></div></div>
     <div class="hash-row"><label>Seal ID</label><div class="hash-display" id="sealIdDisplay" style="color:#D4A843;"></div></div>
     <div class="hash-row" id="chainRow" style="display:none;"><label>Chain of Custody</label><div class="hash-display" id="chainDisplay" style="color:#4A7EC7;font-size:12px;"></div></div>
-    <a href="/verify.html" class="verify-link" id="verifyLink">🔍 Verify on verumglobal.foundation</a>
+    <a href="/verify.html" class="verify-link" id="verifyLink">&#128269; Verify on verumglobal.foundation</a>
     <div class="download-grid" id="downloadGrid">
-      <a href="#" class="download-btn primary" id="downloadSealedPdf" download>⬇️ Download Sealed PDF</a>
-      <a href="#" class="download-btn" id="downloadOts" download>⬇️ Download .OTS Proof</a>
+      <a href="#" class="download-btn primary" id="downloadSealedPdf" download>&#11015; Download Sealed PDF</a>
+      <a href="#" class="download-btn" id="downloadOts" download>&#11015; Download .OTS Proof</a>
     </div>
   </div>
 
@@ -396,20 +396,20 @@
     <h3>How Document Sealing Works</h3>
     <p>Every document sealed by Verum Omnis receives a forensic-grade cryptographic seal that makes it tamper-evident and court-admissible.</p>
     <div class="grid">
-      <div class="item"><h4>📄 A4 Watermark Background</h4><p>The full-page Verum Omnis watermark is applied at 20% opacity behind your content. Document is scaled to 88% to create a margin for the QR code — all text remains fully readable.</p></div>
-      <div class="item"><h4>📱 Clean QR Code</h4><p>Document content scaled to 88% creating a margin area. QR sits in the top-right margin with white background panel — never covers document text. Scans instantly with any phone.</p></div>
-      <div class="item"><h4>🔒 Dual Hash</h4><p>SHA-256 for OpenTimestamps blockchain anchoring. SHA-512 as the Verum forensic fingerprint. Two independent hashes, zero trust required.</p></div>
-      <div class="item"><h4>⛓️ Bitcoin Blockchain</h4><p>OpenTimestamps anchors the SHA-256 hash into Bitcoin. Once confirmed (~1-2 hours), the timestamp is permanently and independently verifiable.</p></div>
-      <div class="item"><h4>👤 Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) encoded into the QR code for affidavit pre-fill and chain of custody.</p></div>
-      <div class="item"><h4>📍 GPS + Device</h4><p>Automatic geolocation and device fingerprint capture. Proves where and from what device the seal was applied.</p></div>
-      <div class="item"><h4>🔐 Password Protection</h4><p>Optional AES-256 password protection with delivery receipt cover page. Recipient must email sender for password — that email IS the read receipt.</p></div>
-      <div class="item"><h4>🛡️ Tamper Detection</h4><p>Recipient uploads document to verify page. If SHA-512 doesn't match —> "TAMPERED — DO NOT ACCEPT". Cryptographically impossible to forge.</p></div>
+      <div class="item"><h4>&#128220; A4 Watermark Background</h4><p>The full-page Verum Omnis watermark is applied at 20% opacity behind your content. Document is scaled to 88% to create a margin for the QR code -- all text remains fully readable.</p></div>
+      <div class="item"><h4>&#128241; Clean QR Code</h4><p>Document content scaled to 88% creating a margin area. QR sits in the top-right margin with white background panel -- never covers document text. Scans instantly with any phone.</p></div>
+      <div class="item"><h4>&#128274; Dual Hash</h4><p>SHA-256 for OpenTimestamps blockchain anchoring. SHA-512 as the Verum forensic fingerprint. Two independent hashes, zero trust required.</p></div>
+      <div class="item"><h4>&#9939; Bitcoin Blockchain</h4><p>OpenTimestamps anchors the SHA-256 hash into Bitcoin. Once confirmed (~1-2 hours), the timestamp is permanently and independently verifiable.</p></div>
+      <div class="item"><h4>&#128100; Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) encoded into the QR code for affidavit pre-fill and chain of custody.</p></div>
+      <div class="item"><h4>&#128205; GPS + Device</h4><p>Automatic geolocation and device fingerprint capture. Proves where and from what device the seal was applied.</p></div>
+      <div class="item"><h4>&#128272; Password Protection</h4><p>Optional AES-256 password protection with delivery receipt cover page. Recipient must email sender for password -- that email IS the read receipt.</p></div>
+      <div class="item"><h4>&#128737; Tamper Detection</h4><p>Recipient uploads document to verify page. If SHA-512 doesn't match --> "TAMPERED -- DO NOT ACCEPT". Cryptographically impossible to forge.</p></div>
     </div>
   </div>
 
   <div class="site-footer">
-    Verum Omnis Foundation — Patent Pending<br>
-    Constitution v6.0 Final — Article X Non-Weaponization Doctrine
+    Verum Omnis Foundation -- Patent Pending<br>
+    Constitution v6.0 Final -- Article X Non-Weaponization Doctrine
   </div>
 
 </div>
@@ -518,7 +518,6 @@ async function computeSHA512(bytes) {
 }
 function hexToBytes(hex) { const b = new Uint8Array(hex.length / 2); for (let i = 0; i < hex.length; i += 2) b[i / 2] = parseInt(hex.substring(i, i + 2), 16); return b; }
 
-// Fix 4: Unicode-safe base64 encoding
 function utf8ToBase64(str) {
   const bytes = new TextEncoder().encode(str);
   let binary = '';
@@ -526,7 +525,6 @@ function utf8ToBase64(str) {
   return btoa(binary);
 }
 
-// Fix 7: Client-side AES-GCM encryption helpers
 async function deriveKey(password, salt) {
   const enc = new TextEncoder();
   const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
@@ -551,7 +549,6 @@ async function decryptSealedPDF(encryptedBytes, password) {
   return new Uint8Array(decrypted);
 }
 
-// Fix 1: OpenTimestamps digest parameter renamed to otsDigestHex
 async function submitToOTS(otsDigestHex) {
   const hashBytes = hexToBytes(otsDigestHex);
   for (const url of ['https://a.pool.opentimestamps.org/digest','https://b.pool.opentimestamps.org/digest','https://a.pool.eternitywall.com/digest']) {
@@ -563,27 +560,25 @@ async function submitToOTS(otsDigestHex) {
       if (res.ok) { const d = await res.arrayBuffer(); if (d.byteLength > 0) return {success: true, calendar: url, proof: new Uint8Array(d)}; }
     } catch(e) { console.warn('Calendar failed:', url, e.message); }
   }
-  return {success: false, error: 'All calendar servers failed — hash recorded for retry'};
+  return {success: false, error: 'All calendar servers failed -- hash recorded for retry'};
 }
 
 function updateStep(n, s, d) {
   const badge = document.getElementById('step'+n).querySelector('.status');
   badge.className = 'status ' + s;
-  badge.textContent = s==='complete'?'✓':s==='processing'?'◐':s==='error'?'✕':'○';
+  badge.textContent = s==='complete'?'&#10003;':s==='processing'?'&#9680;':s==='error'?'&#10005;':'&#9675;';
   if (d) document.getElementById('detail'+n).textContent = d;
 }
 
-// Fix 5: Deterministic QR code generation using requestAnimationFrame
-async function generateQRDataURL(text, size = 400) {
+async function generateQRDataURL(text, size) {
   return new Promise((resolve) => {
     if (typeof QRCode === 'undefined') { resolve(null); return; }
     const container = document.createElement('div');
     container.style.cssText = 'position:fixed;left:-9999px;top:0;';
     document.body.appendChild(container);
     try {
-      new QRCode(container, { text, width: size, height: size, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
+      new QRCode(container, { text, width: size || 400, height: size || 400, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
     } catch(e) { document.body.removeChild(container); resolve(null); return; }
-    // Use requestAnimationFrame for reliable capture after DOM paint
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         const img = container.querySelector('img');
@@ -606,7 +601,6 @@ async function generateQRDataURL(text, size = 400) {
   });
 }
 
-// Detect existing Verum Omnis seals in a PDF — returns array of previous seal info
 async function detectExistingSeal(pdfBytes) {
   const chain = [];
   try {
@@ -624,15 +618,220 @@ async function detectExistingSeal(pdfBytes) {
   return chain;
 }
 
-async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain) {
-  // CRITICAL FIX: Work directly on the ORIGINAL PDF — draw overlays on existing pages.
-  // This avoids embedPage() / copyPages() which hang on scanned/image-based PDFs.
-  const pdf = await PDFDocument.load(origBytes);
+// ==================== COMMERCIAL DETECTION SYSTEM ====================
 
-  // Embed assets into the original PDF document
+const COMMERCIAL_KEYWORDS = [
+  'pty ltd','proprietary limited','ltd','limited','inc','incorporated',
+  'corp','corporation','llc','cc','close corporation',
+  'invoice','purchase order','po number','quotation','quote','tax invoice',
+  'tender','rfq','request for quotation','bid','procurement','rfx',
+  'vat','vat number','tax number','tin','registration number',
+  'contract','agreement','memorandum of understanding','mou','nda',
+  'bbbee','bee certificate','bee level','black economic empowerment',
+  'bank account','account number','swift','iban','routing number',
+  'director','managing director','ceo','cfo','coo','board of directors',
+  'shareholder','annual report','financial statement','balance sheet',
+  'profit and loss','income statement','audit','audited','sars',
+  'company registration','ck number','enterprise number'
+];
+
+const PDF_STRUCTURE = /^(obj|endobj|stream|endstream|xref|trailer|startxref|Type1|Type0|Type3|WinAnsiEncoding|MacRomanEncoding|Identity-H|Identity-V|CIDFontType|BaseFont|FontDescriptor|Subtype|Length|Filter|FlateDecode|ASCIIHexDecode|LZWDecode|DCTDecode|DeviceRGB|DeviceGray|DeviceCMYK|ExtGState|ColorSpace|Pattern|XObject|Image|Form|Group|Transparency|Shading|Font|ToUnicode|CMapName|Registry|Ordering|WMode|FontFile|FontFile2|FontFile3|CharSet|Flags|ItalicAngle|Ascent|Descent|CapHeight|StemV|StemH|AvgWidth|MaxWidth|MissingWidth|Leading|XHeight|FontBBox|FontMatrix|Encoding|CharProcs|FirstChar|LastChar|Width|Widths|CIDToGIDMap|CIDSystemInfo|DW|W|DW2|W2|Registry|Ordering|Supplement|RTLn|LTR|true|false|null|R|BT|ET|Tf|Td|Tj|TJ|Tm|Tc|Tw|Tz|Ts|Tr|TL|T\*|\[|\]|<<|>>)$/;
+
+async function extractPdfText(pdfBytes) {
+  const texts = [];
+  const ascii = new Uint8Array(pdfBytes);
+  const words = [];
+  let word = '';
+  for (let i = 0; i < ascii.length && i < 500000; i++) {
+    const c = ascii[i];
+    if (c >= 32 && c <= 126) { word += String.fromCharCode(c); }
+    else { if (word.length >= 3) words.push(word); word = ''; }
+  }
+  for (const w of words) {
+    const tokens = w.split(/[^a-zA-Z0-9]+/).filter(t => t.length >= 3 && !PDF_STRUCTURE.test(t));
+    texts.push(...tokens);
+  }
+  const pdfStr = new TextDecoder().decode(ascii.slice(0, Math.min(ascii.length, 500000)));
+  const parenMatches = pdfStr.match(/\(([^)]+)\)/g);
+  if (parenMatches) {
+    for (const m of parenMatches) {
+      const inner = m.slice(1, -1);
+      const tokens = inner.split(/[^a-zA-Z0-9]+/).filter(t => t.length >= 3 && !PDF_STRUCTURE.test(t));
+      texts.push(...tokens);
+    }
+  }
+  const streamMatches = pdfStr.match(/stream\r?\n([\s\S]*?)\r?\nendstream/g);
+  if (streamMatches) {
+    for (const sm of streamMatches.slice(0, 50)) {
+      const inner = sm.replace(/^stream\r?\n/, '').replace(/\r?\nendstream$/, '');
+      try {
+        const decompressed = await rawInflate(inner);
+        if (decompressed) {
+          const dStr = new TextDecoder('utf-8', {fatal: false}).decode(decompressed);
+          const dTokens = dStr.split(/[^a-zA-Z0-9]+/).filter(t => t.length >= 3 && !PDF_STRUCTURE.test(t));
+          texts.push(...dTokens);
+        }
+      } catch(e) {}
+    }
+  }
+  return texts;
+}
+
+function rawInflate(data) {
+  return new Promise((resolve) => {
+    try {
+      const bytes = typeof data === 'string' ? new TextEncoder().encode(data) : new Uint8Array(data);
+      if (typeof DecompressionStream !== 'undefined') {
+        const wrapped = new Uint8Array(bytes.length + 6);
+        wrapped[0] = 0x78; wrapped[1] = 0x9C;
+        wrapped.set(bytes, 2);
+        let a = 1, b = 0;
+        for (let i = 0; i < bytes.length; i++) { a = (a + bytes[i]) % 65521; b = (b + a) % 65521; }
+        const adler = (b << 16) | a;
+        wrapped[wrapped.length - 4] = (adler >> 24) & 0xFF;
+        wrapped[wrapped.length - 3] = (adler >> 16) & 0xFF;
+        wrapped[wrapped.length - 2] = (adler >> 8) & 0xFF;
+        wrapped[wrapped.length - 1] = adler & 0xFF;
+        const ds = new DecompressionStream('deflate');
+        const writer = ds.writable.getWriter();
+        writer.write(wrapped).then(() => writer.close());
+        const reader = ds.readable.getReader();
+        const chunks = [];
+        function read() {
+          reader.read().then(({done, value}) => {
+            if (done) { resolve(concatUint8Arrays(chunks)); return; }
+            chunks.push(value); read();
+          }).catch(() => resolve(null));
+        }
+        read();
+      } else { resolve(null); }
+    } catch(e) { resolve(null); }
+  });
+}
+
+function concatUint8Arrays(arrays) {
+  if (!arrays || arrays.length === 0) return null;
+  const total = arrays.reduce((s, a) => s + a.length, 0);
+  const result = new Uint8Array(total);
+  let offset = 0;
+  for (const a of arrays) { result.set(a, offset); offset += a.length; }
+  return result;
+}
+
+async function detectCommercialDocument(pdfBytes) {
+  const texts = await extractPdfText(pdfBytes);
+  const textLower = texts.map(t => t.toLowerCase());
+  const matches = [];
+  for (const kw of COMMERCIAL_KEYWORDS) {
+    if (textLower.includes(kw)) matches.push(kw);
+  }
+  return { isCommercial: matches.length >= 2, matches: matches.slice(0, 10), count: matches.length };
+}
+
+const LAW_ENFORCEMENT_DOMAINS = ['.gov.za','.gov','.police','.hawks','.npa','.justice','.saps'];
+
+function getPricing() {
+  let price = { amount: 50, currency: 'USD', symbol: '$', label: 'International' };
+  if (gpsCoords) {
+    const lat = parseFloat(gpsCoords.lat), lng = parseFloat(gpsCoords.lng);
+    if (lat >= -35 && lat <= -22 && lng >= 16 && lng <= 33) {
+      price = { amount: 750, currency: 'ZAR', symbol: 'R', label: 'South Africa' };
+    } else if (lat >= -35 && lat <= -10 && lng >= 10 && lng <= 41) {
+      price = { amount: 500, currency: 'ZAR', symbol: 'R', label: 'SADC Region' };
+    }
+  }
+  const email = (document.getElementById('senderEmail')?.value || '').toLowerCase().trim();
+  const isLE = LAW_ENFORCEMENT_DOMAINS.some(d => email.endsWith(d));
+  if (isLE) price = { ...price, amount: 0, label: price.label + ' -- LAW ENFORCEMENT (FREE)' };
+  return price;
+}
+
+const STRIPE_LINKS = {
+  'ZAR-750': 'https://buy.stripe.com/YOUR_ZAR_SA_LINK',
+  'ZAR-500': 'https://buy.stripe.com/YOUR_ZAR_SADC_LINK',
+  'USD-50':  'https://buy.stripe.com/YOUR_USD_INTL_LINK'
+};
+
+function showPaymentGate(price, detectionResult) {
+  const resultsEl = document.getElementById('results');
+  resultsEl.classList.add('visible');
+  const isFree = price.amount === 0;
+  const keywordList = detectionResult.matches.map(m => '<code style="background:rgba(212,168,67,0.15);padding:2px 6px;border-radius:4px;color:#D4A843;">' + m + '</code>').join(' ');
+
+  resultsEl.innerHTML =
+    '<h3 style="color:' + (isFree ? '#22c55e' : '#D4A843') + ';">' + (isFree ? '&#10003; Law Enforcement -- Free' : '&#127970; Commercial Document Detected') + '</h3>' +
+    '<div style="background:rgba(15,52,96,0.12);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;margin:16px 0;font-size:13px;line-height:1.7;color:#D5D8DD;">' +
+    '<strong style="color:#F8F9FA;">Detected keywords:</strong> ' + keywordList + '<br>' +
+    '<strong style="color:#F8F9FA;">Total matches:</strong> ' + detectionResult.count + '<br>' +
+    '<strong style="color:#F8F9FA;">Your location:</strong> ' + (gpsCoords ? gpsCoords.lat + ',' + gpsCoords.lng : 'GPS not available') + '<br>' +
+    '<strong style="color:#F8F9FA;">Pricing tier:</strong> ' + price.label + '<br>' +
+    (isFree ?
+      '<strong style="color:#22c55e;">This document qualifies for FREE law enforcement sealing.</strong>' :
+      '<strong style="color:#D4A843;">Price: ' + price.symbol + price.amount + ' ' + price.currency + '</strong>'
+    ) +
+    '</div>' +
+    '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;">' +
+    '<button onclick="proceedAsPrivate()" class="download-btn" style="flex:1;min-width:140px;background:transparent;border:1px solid #4A7EC7;color:#4A7EC7;">&#8617; Seal as Private (Free)</button>' +
+    (isFree ?
+      '<button onclick="proceedWithSealing()" class="download-btn primary" style="flex:1;min-width:140px;">&#10003; Proceed with FREE Seal</button>' :
+      '<button onclick="initiateStripePayment()" class="download-btn primary" style="flex:1;min-width:140px;">&#128179; Pay ' + price.symbol + price.amount + ' & Seal</button>'
+    ) +
+    '</div>';
+  resultsEl.scrollIntoView({behavior:'smooth'});
+  document.getElementById('sealBtn').disabled = false;
+}
+
+function proceedAsPrivate() {
+  sealType = 'private';
+  document.querySelectorAll('.seal-type button').forEach(btn => btn.classList.toggle('active', btn.dataset.type === 'private'));
+  document.getElementById('clientField').classList.remove('visible');
+  document.getElementById('results').classList.remove('visible');
+  runSealingPipeline();
+}
+
+function proceedWithSealing() {
+  document.getElementById('results').classList.remove('visible');
+  runSealingPipeline();
+}
+
+function initiateStripePayment() {
+  const price = getPricing();
+  const key = price.currency + '-' + price.amount;
+  const link = STRIPE_LINKS[key];
+  if (link && !link.includes('YOUR_')) {
+    window.open(link, '_blank');
+    document.getElementById('results').innerHTML +=
+      '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:12px;padding:16px;margin-top:16px;font-size:13px;color:#22c55e;">' +
+      '&#10003; Payment window opened. After completing payment, click <strong>Seal Document</strong> again to proceed.' +
+      '</div>';
+  } else {
+    document.getElementById('results').innerHTML +=
+      '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.25);border-radius:12px;padding:16px;margin-top:16px;font-size:13px;color:#D4A843;">' +
+      '&#9888; Stripe payment links not yet configured. To set up:<br>' +
+      '1. Go to <a href="https://dashboard.stripe.com/payment-links" target="_blank" style="color:#D4A843;text-decoration:underline;">dashboard.stripe.com/payment-links</a><br>' +
+      '2. Create 3 payment links for R750 (SA), R500 (SADC), and $50 (International)<br>' +
+      '3. Update STRIPE_LINKS in the code with your actual links<br><br>' +
+      'For now, you can <button onclick="proceedWithSealing()" style="background:#D4A843;color:#040D1B;border:none;padding:8px 16px;border-radius:6px;cursor:pointer;font-weight:600;">proceed with sealing</button> (payment will be collected later).' +
+      '</div>';
+  }
+}
+
+// ==================== PIPELINE STATE ====================
+
+let _pipelineFileBytes = null;
+let _pipelineSha256 = '';
+let _pipelineSha512 = '';
+let _pipelineSealId = '';
+let _pipelineOtsDigestHex = '';
+let _pipelineChain = [];
+let _pipelineDetection = null;
+
+// ==================== BUILD SEALED PDF ====================
+
+async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain) {
+  const pdf = await PDFDocument.load(origBytes);
   let wmImg = null;
   if (watermarkBytes) { try { wmImg = await pdf.embedPng(watermarkBytes); } catch(e) {} }
-  // Decode QR data URL directly (fetch on data URL fails on mobile browsers)
   let qrImg = null;
   try {
     const base64 = qrDataURL.split(',')[1];
@@ -650,13 +849,10 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
 
   const pages = pdf.getPages();
 
-  // Process each page: scale content to 88%, draw overlays in margins
   for (let i = 0; i < pages.length; i++) {
     const pg = pages[i];
     const { width: pageW, height: pageH } = pg.getSize();
 
-    // === SCALE EXISTING CONTENT TO 88% (centered) ===
-    // Leaves ~6% margin on each side — QR sits in margin, never covers text
     try {
       const scale = 0.88;
       const tx = pageW * (1 - scale) / 2;
@@ -664,7 +860,6 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
 
       const existingContents = pg.node.get(PDFName.of('Contents'));
 
-      // Create save+scale stream: q [scale 0 0 scale tx ty] cm
       const preStream = PDFContentStream.of(
         pdf.context.obj({}),
         [
@@ -679,13 +874,11 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
         ]
       );
 
-      // Create restore stream: Q
       const postStream = PDFContentStream.of(
         pdf.context.obj({}),
         [PDFOperator.of('Q')]
       );
 
-      // Build new contents array: [saveScale, existing..., restore]
       const newContents = PDFArray.withContext(pdf.context);
       newContents.push(pdf.context.register(preStream));
 
@@ -703,15 +896,12 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
       console.warn('Content scaling failed for page', i+1, '- continuing without scaling');
     }
 
-    // 1. Watermark background at 20% opacity (full page)
     if (wmImg) {
       const s = Math.max(pageW / wmImg.width, pageH / wmImg.height);
       const w = wmImg.width * s, h = wmImg.height * s;
       pg.drawImage(wmImg, { x: (pageW-w)/2, y: (pageH-h)/2, width: w, height: h, opacity: 0.20 });
     }
 
-    // 2. Clean QR in top-right margin with white panel
-    // Content scaled to 88% centered → 6% margin each side
     const marginW = pageW * 0.06;
     const marginH = pageH * 0.06;
     const panelSize = Math.min(marginW, marginH) * 0.85;
@@ -723,7 +913,6 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
       const panelY = contentTop + (marginH - panelSize) / 2;
       const qrSize = panelSize - 4;
 
-      // White background panel for QR visibility
       pg.drawRectangle({ x: panelX, y: panelY, width: panelSize, height: panelSize, color: rgb(1, 1, 1), opacity: 0.95 });
 
       if (qrImg) {
@@ -733,20 +922,18 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
       }
     }
 
-    // 3. Footer bar
     const fy = pageH * 0.02, fs = Math.min(pageW, pageH) * 0.018;
     pg.drawRectangle({ x: 0, y: 0, width: pageW, height: fy + fs*3, color: rgb(0.02,0.05,0.08), opacity: 0.85 });
-    const stLabel = sealType==='commercial' && clientName ? `COMMERCIAL SEAL — ${clientName.toUpperCase()}` : 'PRIVATE SEAL — FREE TIER';
+    const stLabel = sealType==='commercial' && clientName ? 'COMMERCIAL SEAL -- ' + clientName.toUpperCase() : 'PRIVATE SEAL -- FREE TIER';
     const chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
-    const chainLabel = chainIds.length > 0 ? `  |  Chain: ${chainIds.length} prev` : '';
+    const chainLabel = chainIds.length > 0 ? '  |  Chain: ' + chainIds.length + ' prev' : '';
     pg.drawText(stLabel + chainLabel, { x: pageW*0.03, y: fy+fs*1.8, size: fs*0.8, font: helvBold, color: rgb(0.82,0.65,0.28) });
-    pg.drawText(`Seal: ${sealId}  |  SHA-512: ${short}...  |  ${ts}  |  ${i+1}/${pages.length}`, { x: pageW*0.03, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.58,0.71,0.78) });
+    pg.drawText('Seal: ' + sealId + '  |  SHA-512: ' + short + '...  |  ' + ts + '  |  ' + (i+1) + '/' + pages.length, { x: pageW*0.03, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.58,0.71,0.78) });
     pg.drawText('verumglobal.foundation  |  OpenTimestamps  |  Patent Pending', { x: pageW*0.55, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.36,0.42,0.48) });
 
     updateStep(6, 'processing', 'Page ' + (i+1) + ' of ' + pages.length);
   }
 
-  // If password protected, add cover page at the beginning
   if (password) {
     const cover = pdf.insertPage(0);
     const pw = pages.length > 0 ? pages[0].getWidth() : 595;
@@ -771,10 +958,9 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     ];
     for (const line of instructions) { if (line) cover.drawText(line, { x: cx-140, y: lineY, size: 11, font: helv, color: rgb(0.58, 0.71, 0.78) }); lineY -= 18; }
     if (senderEmail) { lineY -= 10; cover.drawText('Sender contact:', { x: cx-140, y: lineY, size: 11, font: helvBold, color: rgb(0.82, 0.65, 0.28) }); lineY -= 18; cover.drawText(senderEmail, { x: cx-140, y: lineY, size: 12, font: helv, color: rgb(0.95, 0.95, 0.95) }); }
-    cover.drawText(`Seal: ${sealId}  |  verumglobal.foundation`, { x: cx-100, y: ph*0.03, size: 9, font: helv, color: rgb(0.36, 0.42, 0.48) });
+    cover.drawText('Seal: ' + sealId + '  |  verumglobal.foundation', { x: cx-100, y: ph*0.03, size: 9, font: helv, color: rgb(0.36, 0.42, 0.48) });
   }
 
-  // Build chain string for metadata
   const chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
   const chainStr = chainIds.length > 0 ? '|CHAIN:' + chainIds.join(',') : '';
 
@@ -785,9 +971,10 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
   try { pdf.setProducer('Verum Omnis Document Sealing Service v1.2'); } catch(e) {}
   try { pdf.setCreationDate(new Date()); } catch(e) {}
 
-  // Fix 7: pdf-lib does not support encryption — save unencrypted, encrypt client-side after
   return await pdf.save();
 }
+
+// ==================== SEALING FLOW ====================
 
 async function startSealing() {
   if (!selectedFile) return;
@@ -796,99 +983,76 @@ async function startSealing() {
   document.getElementById('results').classList.remove('visible');
   for (let i = 1; i <= 8; i++) updateStep(i, 'pending', '');
   otsProof = null; gpsCoords = null; deviceInfo = null;
-  let sha256, sha512, sealId, otsResult, qrDataURL, otsDigestHex;
+
+  // FIX: ALL variable declarations in outer scope -- NO TDZ error on mobile
+  let sha256 = '', sha512 = '', sealId = '', otsDigestHex = '';
+  let chain = [];
+  let fileBytes = null;
+  let detection = null;
 
   try {
-    // Read file ONCE — reuse bytes for all operations (prevents hang on mobile)
+    // Step 1: Read file + GPS
     updateStep(1, 'processing');
-    const fileBytes = await selectedFile.arrayBuffer();
-
-    // Step 1: Capture GPS + Device (parallel with file read)
+    fileBytes = await selectedFile.arrayBuffer();
     const gpsPromise = captureGPS();
     deviceInfo = captureDevice();
     gpsCoords = await gpsPromise;
-    const gpsStr = gpsCoords ? gpsCoords.lat + ',' + gpsCoords.lng : 'not available';
-    updateStep(1, 'complete', gpsCoords ? gpsStr : 'GPS declined');
+    updateStep(1, 'complete', gpsCoords ? gpsCoords.lat + ',' + gpsCoords.lng : 'GPS declined');
 
-    // Step 2: SHA-256 (uses pre-read bytes) — displayed for forensic reference
+    // Step 2: Hashes
     updateStep(2, 'processing');
     sha256 = await computeSHA256(fileBytes);
-    updateStep(2, 'complete', sha256.substring(0,16)+'...');
-
-    // Compute SHA-512 NOW (needed for footer/QR) but display LAST (step 8)
     sha512 = await computeSHA512(fileBytes);
-    sealId = 'VO-'+sha512.substring(0,12).toUpperCase();
-
-    // Fix 1: Compute OTS digest as SHA-256(SHA-512-hex-string bytes) for Android interoperability
+    sealId = 'VO-' + sha512.substring(0, 12).toUpperCase();
     otsDigestHex = await computeSHA256(new TextEncoder().encode(sha512));
+    updateStep(2, 'complete', sha256.substring(0, 16) + '...');
 
-    // Detect existing Verum Omnis seals (chain of custody) — uses pre-read bytes
+    // Detect existing seals
     updateStep(4, 'processing', 'Checking for previous seals...');
-    const chain = await detectExistingSeal(fileBytes);
-    if (chain.length > 0) {
-      const chainIds = chain.map(c => c.sealId).join(', ');
-      updateStep(4, 'processing', 'Found: ' + chainIds);
-    } else {
-      updateStep(4, 'processing', 'No previous seals');
+    chain = await detectExistingSeal(fileBytes);
+    updateStep(4, 'processing', chain.length > 0 ? 'Found: ' + chain.map(c => c.sealId).join(', ') : 'No previous seals');
+
+    // === COMMERCIAL DETECTION ===
+    updateStep(3, 'processing', 'Scanning document for commercial content...');
+    detection = await detectCommercialDocument(fileBytes);
+    updateStep(3, 'complete', detection.isCommercial ? 'Commercial: ' + detection.count + ' matches' : 'Private document');
+
+    // Store pipeline state
+    _pipelineFileBytes = fileBytes;
+    _pipelineSha256 = sha256;
+    _pipelineSha512 = sha512;
+    _pipelineSealId = sealId;
+    _pipelineOtsDigestHex = otsDigestHex;
+    _pipelineChain = chain;
+    _pipelineDetection = detection;
+
+    // If commercial detected but user selected private, show payment gate
+    if (detection.isCommercial && sealType === 'private') {
+      sealType = 'commercial';
+      setSealType('commercial');
+      const price = getPricing();
+      showPaymentGate(price, detection);
+      return; // STOP -- user must interact with payment gate
     }
 
-    const meta = collectSealMetadata();
-
-    // Step 3: OpenTimestamps — use otsDigestHex for cross-platform proof verification
-    updateStep(3, 'processing', 'Contacting a.pool.opentimestamps.org...');
-    otsResult = await submitToOTS(otsDigestHex);
-    updateStep(3, otsResult.success ? 'complete' : 'error', otsResult.success ? 'Submitted' : otsResult.error);
-
-    // Step 4 + 5: Watermark + QR
-    updateStep(4, 'complete');
-    updateStep(5, 'processing');
-    // Fix 4: Use utf8ToBase64 for Unicode-safe encoding
-    const metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(meta)));
-    const qrContent = 'https://verumglobal.foundation/verify.html?h=' + sha512.substring(0,32) + '&m=' + metaStr;
-    qrDataURL = await generateQRDataURL(qrContent, 400);
-    const pC = document.getElementById('qrPreview');
-    const pX = pC.getContext('2d');
-    pC.width = 220; pC.height = 220;
-    pX.fillStyle = '#ffffff'; pX.fillRect(0, 0, 220, 220);
-    if (qrDataURL) { const qI = new Image(); qI.onload = () => { pX.drawImage(qI, 10, 10, 200, 200); }; qI.onerror = () => { pX.fillStyle = '#ff0000'; pX.fillText('QR Error', 80, 110); }; qI.src = qrDataURL; }
-    updateStep(5, 'complete');
-
-    // Step 6: Seal Footer (buildSealedPDF draws on each page)
-    updateStep(6, 'processing', 'Compositing '+selectedFile.name+'...');
-    let password = null;
-    if (document.getElementById('passwordToggle')?.checked) {
-      const p1 = document.getElementById('docPassword')?.value;
-      const p2 = document.getElementById('docPasswordConfirm')?.value;
-      if (p1 && p1 === p2 && p1.length >= 8) password = p1;
+    // If user selected commercial, show pricing
+    if (sealType === 'commercial') {
+      const price = getPricing();
+      if (price.amount > 0) {
+        showPaymentGate(price, detection);
+        return; // STOP -- wait for payment
+      }
     }
-    const senderEmail = document.getElementById('senderEmail')?.value?.trim() || '';
-    const sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain);
 
-    // Fix 7: Encrypt sealed PDF client-side when password is provided
-    let finalPdfBytes = sealedBytes;
-    let encryptedBytes = null;
-    if (password) {
-      encryptedBytes = await encryptSealedPDF(sealedBytes, password);
-      // finalPdfBytes is already the lock-screen version from buildSealedPDF
-    }
-    updateStep(6, 'complete');
-
-    // Step 7: Finalize
-    updateStep(7, 'processing'); await sleep(200); updateStep(7, 'complete');
-
-    // Step 8: SHA-512 (displayed LAST)
-    updateStep(8, 'processing'); await sleep(300); updateStep(8, 'complete', sha512.substring(0,16)+'...');
-
-    showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes);
+    // Continue with sealing pipeline
+    await runSealingPipeline();
 
   } catch (err) {
     console.error('SEALING ERROR:', err);
-    // Mark ALL incomplete steps (pending OR processing) as error
     for (let i = 1; i <= 8; i++) {
-      const b = document.getElementById('step'+i).querySelector('.status');
+      const b = document.getElementById('step' + i).querySelector('.status');
       if (b.classList.contains('pending') || b.classList.contains('processing')) updateStep(i, 'error', '');
     }
-    // Show detailed error message
     let errorMsg = 'Unknown error';
     if (err && err.message) errorMsg = err.message;
     else if (err && typeof err === 'string') errorMsg = err;
@@ -897,19 +1061,11 @@ async function startSealing() {
     const resultsEl = document.getElementById('results');
     resultsEl.classList.add('visible');
     resultsEl.innerHTML =
-      '<h3 style="color:#ef4444;">⚠️ Sealing Failed</h3>' +
+      '<h3 style="color:#ef4444;">Sealing Failed</h3>' +
       '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:20px;margin:16px 0;font-size:14px;line-height:1.7;color:#D5D8DD;">' +
       '<strong style="color:#ef4444;">Error:</strong> ' + errorMsg + '<br><br>' +
-      '<strong>What went wrong:</strong><br>' +
-      'The PDF could not be fully processed. This usually happens when:<br>' +
-      '1. The PDF contains scanned images instead of text (try printing to PDF first)<br>' +
-      '2. The PDF is corrupted or password-protected<br>' +
-      '3. The file is too large for your device\'s memory<br><br>' +
-      '<strong>Try these solutions:</strong><br>' +
-      '• Print the PDF to a new PDF file (this flattens complex elements)<br>' +
-      '• Use a PDF optimizer to reduce file size<br>' +
-      '• Try on a desktop computer with more memory<br>' +
-      '• If the PDF is scanned, try converting it with OCR first' +
+      '<strong>What went wrong:</strong><br>The PDF could not be fully processed.<br><br>' +
+      '<strong>Try:</strong><br>Print the PDF to a new PDF file<br>Use a PDF optimizer<br>Try on a desktop computer' +
       '</div>' +
       '<button class="seal-btn" onclick="resetSealing()" style="margin-top:20px;">Try Again</button>';
     resultsEl.scrollIntoView({behavior:'smooth'});
@@ -918,7 +1074,63 @@ async function startSealing() {
   }
 }
 
-// Fix 7: Added encryptedBytes parameter for password-protected downloads
+async function runSealingPipeline() {
+  const fileBytes = _pipelineFileBytes;
+  const sha256 = _pipelineSha256;
+  const sha512 = _pipelineSha512;
+  const sealId = _pipelineSealId;
+  const otsDigestHex = _pipelineOtsDigestHex;
+  const chain = _pipelineChain;
+
+  let otsResult = null, qrDataURL = null;
+  let password = null, senderEmail = '';
+  let sealedBytes = null, encryptedBytes = null, meta = null;
+
+  // Step 3: OpenTimestamps
+  updateStep(3, 'processing', 'Contacting a.pool.opentimestamps.org...');
+  otsResult = await submitToOTS(otsDigestHex);
+  updateStep(3, otsResult.success ? 'complete' : 'error', otsResult.success ? 'Submitted' : otsResult.error);
+
+  // Step 4: Watermark
+  updateStep(4, 'complete', chain.length > 0 ? 'Chain: ' + chain.length + ' prev' : 'No chain');
+
+  // Step 5: QR
+  updateStep(5, 'processing');
+  meta = collectSealMetadata();
+  const metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(meta)));
+  const qrContent = 'https://verumglobal.foundation/verify.html?h=' + sha512.substring(0,32) + '&m=' + metaStr;
+  qrDataURL = await generateQRDataURL(qrContent, 400);
+  const pC = document.getElementById('qrPreview');
+  const pX = pC.getContext('2d');
+  pC.width = 220; pC.height = 220;
+  pX.fillStyle = '#ffffff'; pX.fillRect(0, 0, 220, 220);
+  if (qrDataURL) { const qI = new Image(); qI.onload = () => { pX.drawImage(qI, 10, 10, 200, 200); }; qI.onerror = () => { pX.fillStyle = '#ff0000'; pX.fillText('QR Error', 80, 110); }; qI.src = qrDataURL; }
+  updateStep(5, 'complete');
+
+  // Step 6: Seal Footer
+  updateStep(6, 'processing', 'Compositing ' + selectedFile.name + '...');
+  if (document.getElementById('passwordToggle')?.checked) {
+    const p1 = document.getElementById('docPassword')?.value;
+    const p2 = document.getElementById('docPasswordConfirm')?.value;
+    if (p1 && p1 === p2 && p1.length >= 8) password = p1;
+  }
+  senderEmail = document.getElementById('senderEmail')?.value?.trim() || '';
+  sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain);
+
+  if (password) {
+    encryptedBytes = await encryptSealedPDF(sealedBytes, password);
+  }
+  updateStep(6, 'complete');
+
+  // Step 7: Finalize
+  updateStep(7, 'processing'); await sleep(200); updateStep(7, 'complete');
+
+  // Step 8: SHA-512
+  updateStep(8, 'processing'); await sleep(300); updateStep(8, 'complete', sha512.substring(0,16)+'...');
+
+  showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes);
+}
+
 function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes) {
   document.getElementById('sha256Display').textContent = sha256;
   document.getElementById('sha512Display').textContent = sha512;
@@ -932,37 +1144,32 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   } else if (chainEl) { document.getElementById('chainRow').style.display = 'none'; }
 
   let verifyUrl = 'https://verumglobal.foundation/verify.html?h=' + sha512.substring(0,32);
-  // Fix 4: Use utf8ToBase64 for Unicode-safe encoding
   try { const metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(meta))); verifyUrl += '&m=' + metaStr; } catch(e) {}
   document.getElementById('verifyLink').href = verifyUrl;
 
   const el = document.getElementById('otsStatus');
-  if (otsResult && otsResult.success) { el.className = 'ots-status complete'; el.innerHTML = '✓ OpenTimestamps proof received — Bitcoin confirmation pending (~1-2 hours)'; }
-  else { el.className = 'ots-status error'; el.innerHTML = '⚠️ Calendar servers temporarily unavailable — SHA-256 recorded for retry.'; }
+  if (otsResult && otsResult.success) { el.className = 'ots-status complete'; el.innerHTML = '&#10003; OpenTimestamps proof received -- Bitcoin confirmation pending (~1-2 hours)'; }
+  else { el.className = 'ots-status error'; el.innerHTML = '&#9888; Calendar servers temporarily unavailable -- SHA-256 recorded for retry.'; }
 
   const base = selectedFile.name.replace(/\.pdf$/i, '');
   const suffix = password ? '-protected' : '';
   const sU = URL.createObjectURL(new Blob([sealedBytes], {type: 'application/pdf'}));
   const sL = document.getElementById('downloadSealedPdf'); sL.href = sU; sL.download = base + suffix + '-sealed.pdf';
 
-  // Fix 7: When password is enabled, add encrypted .voice file download and update banner
   if (password && encryptedBytes) {
-    // Add encrypted .voice file download button
     const downloadGrid = document.getElementById('downloadGrid');
-    // Reset grid to single column for 3 items
     downloadGrid.style.gridTemplateColumns = '1fr';
     const encL = document.createElement('a');
     encL.href = URL.createObjectURL(new Blob([encryptedBytes], {type: 'application/octet-stream'}));
     encL.download = base + suffix + '-sealed.voice';
     encL.className = 'download-btn';
-    encL.innerHTML = '⬇️ Download .VOICE (Encrypted)';
-    // Insert after the sealed PDF button
+    encL.innerHTML = '&#11015; Download .VOICE (Encrypted)';
     if (sL.nextSibling) downloadGrid.insertBefore(encL, sL.nextSibling);
     else downloadGrid.appendChild(encL);
 
     const banner = document.createElement('div');
     banner.style.cssText = 'background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.3);border-radius:12px;padding:20px;margin:16px 0;font-size:13px;color:#D5D8DD;line-height:1.7;';
-    banner.innerHTML = '<strong style="color:#D4A843;font-size:16px;">🔐 Password Delivery Receipt Active</strong><br><br>This document is password-protected. The recipient receives the lock-screen PDF first, then uploads the .voice file to verify.html and enters the password to decrypt.<br><br><strong>How delivery confirmation works:</strong><br>1. You send BOTH files to the recipient (PDF + .voice)<br>2. They see the lock screen with your contact info<br>3. They email you asking for the password<br><strong>4. That email IS your delivery receipt</strong> — you know they received it<br>5. You reply with the password<br>6. They upload the .voice file to verumglobal.foundation/verify.html and enter the password to view<br><br><strong>Your password:</strong> <span style="color:#D4A843;font-family:monospace;">' + password + '</span><br><strong style="color:#ef4444;">Keep this password safe. Do not include it in the same email as the document files.</strong>';
+    banner.innerHTML = '<strong style="color:#D4A843;font-size:16px;">&#128272; Password Delivery Receipt Active</strong><br><br>This document is password-protected. The recipient receives the lock-screen PDF first, then uploads the .voice file to verify.html and enters the password to decrypt.<br><br><strong>How delivery confirmation works:</strong><br>1. You send BOTH files to the recipient (PDF + .voice)<br>2. They see the lock screen with your contact info<br>3. They email you asking for the password<br><strong>4. That email IS your delivery receipt</strong> -- you know they received it<br>5. You reply with the password<br>6. They upload the .voice file to verumglobal.foundation/verify.html and enter the password to view<br><br><strong>Your password:</strong> <span style="color:#D4A843;font-family:monospace;">' + password + '</span><br><strong style="color:#ef4444;">Keep this password safe. Do not include it in the same email as the document files.</strong>';
     el.parentNode.insertBefore(banner, el.nextSibling);
   }
 
@@ -980,14 +1187,11 @@ function resetSealing() {
   document.getElementById('pipeline').classList.remove('visible');
   for (let i = 1; i <= 8; i++) updateStep(i, 'pending', '');
   document.getElementById('sealBtn').disabled = false;
-  // Remove any password banners
   const banners = document.querySelectorAll('[style*="background:rgba(212,168,67"]');
   banners.forEach(b => b.remove());
-  // Reset download grid to 2 columns and remove any added encrypted download buttons
   const downloadGrid = document.getElementById('downloadGrid');
   if (downloadGrid) {
     downloadGrid.style.gridTemplateColumns = '';
-    // Remove dynamically added .voice download buttons
     const voiceBtns = downloadGrid.querySelectorAll('a[download$=".voice"]');
     voiceBtns.forEach(b => b.remove());
   }
