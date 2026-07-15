@@ -790,8 +790,8 @@ async function proceedAsPrivate() {
     await runSealingPipeline();
   } catch (err) {
     console.error('Pipeline error:', err);
-    for (let i = 5; i <= 8; i++) updateStep(i, 'error', '');
-    const resultsEl = document.getElementById('results');
+    for (var i = 5; i <= 8; i++) updateStep(i, 'error', '');
+    var resultsEl = document.getElementById('results');
     resultsEl.classList.add('visible');
     resultsEl.innerHTML = '<h3 style="color:#ef4444;">Sealing Failed</h3>' +
       '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:20px;margin:16px 0;font-size:14px;color:#D5D8DD;">' +
@@ -806,8 +806,8 @@ async function proceedWithSealing() {
     await runSealingPipeline();
   } catch (err) {
     console.error('Pipeline error:', err);
-    for (let i = 5; i <= 8; i++) updateStep(i, 'error', '');
-    const resultsEl = document.getElementById('results');
+    for (var i = 5; i <= 8; i++) updateStep(i, 'error', '');
+    var resultsEl = document.getElementById('results');
     resultsEl.classList.add('visible');
     resultsEl.innerHTML = '<h3 style="color:#ef4444;">Sealing Failed</h3>' +
       '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:20px;margin:16px 0;font-size:14px;color:#D5D8DD;">' +
@@ -996,7 +996,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
   return await pdf.save();
 }
 
-// ==================== SEALING FLOW v1.2.1 ====================
+// ==================== SEALING FLOW v1.2.2 ====================
 
 async function startSealing() {
   if (!selectedFile) return;
@@ -1007,16 +1007,16 @@ async function startSealing() {
   otsProof = null; gpsCoords = null; deviceInfo = null;
 
   // FIX: ALL variable declarations in outer scope -- NO TDZ error on mobile
-  let sha256 = '', sha512 = '', sealId = '', otsDigestHex = '';
-  let chain = [];
-  let fileBytes = null;
-  let detection = null;
+  var sha256 = '', sha512 = '', sealId = '', otsDigestHex = '';
+  var chain = [];
+  var fileBytes = null;
+  var detection = null;
 
   try {
     // Step 1: Read file + GPS
     updateStep(1, 'processing');
     fileBytes = await selectedFile.arrayBuffer();
-    const gpsPromise = captureGPS();
+    var gpsPromise = captureGPS();
     deviceInfo = captureDevice();
     gpsCoords = await gpsPromise;
     updateStep(1, 'complete', gpsCoords ? gpsCoords.lat + ',' + gpsCoords.lng : 'GPS declined');
@@ -1052,14 +1052,14 @@ async function startSealing() {
     if (detection.isCommercial && sealType === 'private') {
       sealType = 'commercial';
       setSealType('commercial');
-      const price = getPricing();
+      var price = getPricing();
       showPaymentGate(price, detection);
       return; // STOP -- user must interact with payment gate
     }
 
     // If user selected commercial, show pricing
     if (sealType === 'commercial') {
-      const price = getPricing();
+      var price = getPricing();
       if (price.amount > 0) {
         showPaymentGate(price, detection);
         return; // STOP -- wait for payment
@@ -1071,16 +1071,16 @@ async function startSealing() {
 
   } catch (err) {
     console.error('SEALING ERROR:', err);
-    for (let i = 1; i <= 8; i++) {
-      const b = document.getElementById('step' + i).querySelector('.status');
+    for (var i = 1; i <= 8; i++) {
+      var b = document.getElementById('step' + i).querySelector('.status');
       if (b.classList.contains('pending') || b.classList.contains('processing')) updateStep(i, 'error', '');
     }
-    let errorMsg = 'Unknown error';
+    var errorMsg = 'Unknown error';
     if (err && err.message) errorMsg = err.message;
     else if (err && typeof err === 'string') errorMsg = err;
     else if (err) errorMsg = JSON.stringify(err);
 
-    const resultsEl = document.getElementById('results');
+    var resultsEl = document.getElementById('results');
     resultsEl.classList.add('visible');
     resultsEl.innerHTML =
       '<h3 style="color:#ef4444;">Sealing Failed</h3>' +
@@ -1097,16 +1097,16 @@ async function startSealing() {
 }
 
 async function runSealingPipeline() {
-  const fileBytes = _pipelineFileBytes;
-  const sha256 = _pipelineSha256;
-  const sha512 = _pipelineSha512;
-  const sealId = _pipelineSealId;
-  const otsDigestHex = _pipelineOtsDigestHex;
-  const chain = _pipelineChain;
+  var fileBytes = _pipelineFileBytes;
+  var sha256 = _pipelineSha256;
+  var sha512 = _pipelineSha512;
+  var sealId = _pipelineSealId;
+  var otsDigestHex = _pipelineOtsDigestHex;
+  var chain = _pipelineChain;
 
-  let otsResult = null, qrDataURL = null;
-  let password = null, senderEmail = '';
-  let sealedBytes = null, encryptedBytes = null, meta = null;
+  var otsResult = null, qrDataURL = null;
+  var password = null, senderEmail = '';
+  var sealedBytes = null, encryptedBytes = null, meta = null;
 
   // Step 3: OpenTimestamps
   updateStep(3, 'processing', 'Contacting a.pool.opentimestamps.org...');
