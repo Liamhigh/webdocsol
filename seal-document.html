@@ -1094,9 +1094,15 @@ async function runSealingPipeline() {
   // Step 4: Watermark
   updateStep(4, 'complete', chain.length > 0 ? 'Chain: ' + chain.length + ' prev' : 'No chain');
 
-  // Step 5: QR
+  // Step 5: QR -- encode full forensic data for verify page
   updateStep(5, 'processing');
   meta = collectSealMetadata();
+  // Embed full SHA-512 + OTS digest into QR metadata
+  // This allows verify page to: display full hash, query blockchain, confirm seal
+  meta.sha512 = sha512;              // Full 128-char SHA-512 fingerprint
+  meta.otsDigest = otsDigestHex;     // 64-char OTS SHA-256 digest for blockchain lookup
+  meta.otsStatus = otsResult.success; // Whether OTS calendar accepted the digest
+  meta.sealId = sealId;              // VO-XXXXXXXXXXXX seal identifier
   const metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(meta)));
   const qrContent = 'https://verumglobal.foundation/verify.html?h=' + sha512.substring(0,32) + '&m=' + metaStr;
   qrDataURL = await generateQRDataURL(qrContent, 400);
