@@ -781,17 +781,39 @@ function showPaymentGate(price, detectionResult) {
   document.getElementById('sealBtn').disabled = false;
 }
 
-function proceedAsPrivate() {
+async function proceedAsPrivate() {
   sealType = 'private';
   document.querySelectorAll('.seal-type button').forEach(btn => btn.classList.toggle('active', btn.dataset.type === 'private'));
   document.getElementById('clientField').classList.remove('visible');
   document.getElementById('results').classList.remove('visible');
-  runSealingPipeline();
+  try {
+    await runSealingPipeline();
+  } catch (err) {
+    console.error('Pipeline error:', err);
+    for (let i = 5; i <= 8; i++) updateStep(i, 'error', '');
+    const resultsEl = document.getElementById('results');
+    resultsEl.classList.add('visible');
+    resultsEl.innerHTML = '<h3 style="color:#ef4444;">Sealing Failed</h3>' +
+      '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:20px;margin:16px 0;font-size:14px;color:#D5D8DD;">' +
+      '<strong style="color:#ef4444;">Error:</strong> ' + (err.message || 'Unknown') + '</div>' +
+      '<button class="seal-btn" onclick="resetSealing()" style="margin-top:20px;">Try Again</button>';
+  }
 }
 
-function proceedWithSealing() {
+async function proceedWithSealing() {
   document.getElementById('results').classList.remove('visible');
-  runSealingPipeline();
+  try {
+    await runSealingPipeline();
+  } catch (err) {
+    console.error('Pipeline error:', err);
+    for (let i = 5; i <= 8; i++) updateStep(i, 'error', '');
+    const resultsEl = document.getElementById('results');
+    resultsEl.classList.add('visible');
+    resultsEl.innerHTML = '<h3 style="color:#ef4444;">Sealing Failed</h3>' +
+      '<div style="background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.25);border-radius:12px;padding:20px;margin:16px 0;font-size:14px;color:#D5D8DD;">' +
+      '<strong style="color:#ef4444;">Error:</strong> ' + (err.message || 'Unknown') + '</div>' +
+      '<button class="seal-btn" onclick="resetSealing()" style="margin-top:20px;">Try Again</button>';
+  }
 }
 
 function initiateStripePayment() {
@@ -974,7 +996,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
   return await pdf.save();
 }
 
-// ==================== SEALING FLOW ====================
+// ==================== SEALING FLOW v1.2.1 ====================
 
 async function startSealing() {
   if (!selectedFile) return;
