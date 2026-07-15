@@ -184,7 +184,7 @@
     transition: all 0.3s;
   }
   .verify-link:hover { background: rgba(15, 52, 96, 0.3); border-color: #D4A843; }
-  .download-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 20px; }
+  .download-grid { display: grid; grid-template-columns: 1fr; gap: 12px; margin-top: 20px; }
   .download-btn {
     display: block; padding: 16px; border-radius: 10px;
     text-align: center; text-decoration: none; font-size: 14px;
@@ -336,7 +336,6 @@
     <a href="/verify.html" class="verify-link" id="verifyLink">🔍 Verify on verumglobal.foundation</a>
     <div class="download-grid" id="downloadGrid">
       <a href="#" class="download-btn primary" id="downloadSealedPdf" download>⬇️ Download Sealed PDF</a>
-      <a href="#" class="download-btn" id="downloadOts" download>⬇️ Download .OTS Proof</a>
     </div>
   </div>
 
@@ -570,7 +569,7 @@ async function detectExistingSeal(pdfBytes) {
   return chain;
 }
 
-async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain) {
+async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain, otsProofBytes) {
   const pdf = await PDFDocument.load(origBytes);
   let wmImg = null;
   if (watermarkBytes) { try { wmImg = await pdf.embedPng(watermarkBytes); } catch(e) {} }
@@ -651,14 +650,28 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     if (senderEmail) { lineY -= 10; cover.drawText('Sender contact:', { x: cx-140, y: lineY, size: 11, font: helvBold, color: rgb(0.82, 0.65, 0.28) }); lineY -= 18; cover.drawText(senderEmail, { x: cx-140, y: lineY, size: 12, font: helv, color: rgb(0.95, 0.95, 0.95) }); }
     cover.drawText(`Seal: ${sealId}  |  verumglobal.foundation`, { x: cx-100, y: ph*0.03, size: 9, font: helv, color: rgb(0.36, 0.42, 0.48) });
   }
+
+  // Build chain string for metadata
   const chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
   const chainStr = chainIds.length > 0 ? '|CHAIN:' + chainIds.join(',') : '';
+
+  // Embed OTS proof as base64 in Subject — recipient can extract and verify
+  let otsStr = '';
+  if (otsProofBytes && otsProofBytes.length > 0) {
+    try {
+      let binary = '';
+      otsProofBytes.forEach(b => binary += String.fromCharCode(b));
+      otsStr = '|OTS:' + btoa(binary);
+    } catch(e) { console.warn('OTS embed failed:', e.message); }
+  }
+
   try { pdf.setTitle(selectedFile ? selectedFile.name : 'Sealed Document'); } catch(e) {}
   try { pdf.setAuthor('Verum Omnis'); } catch(e) {}
-  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + chainStr); } catch(e) {}
+  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + chainStr + otsStr); } catch(e) {}
   try { pdf.setKeywords(['verum', 'seal', sha512.substring(0,16), sealType]); } catch(e) { console.warn('Keywords set failed:', e.message); }
   try { pdf.setProducer('Verum Omnis Document Sealing Service v1.2'); } catch(e) {}
   try { pdf.setCreationDate(new Date()); } catch(e) {}
+
   return await pdf.save();
 }
 
@@ -696,6 +709,7 @@ async function startSealing() {
     updateStep(3, 'processing', 'Contacting a.pool.opentimestamps.org...');
     otsResult = await submitToOTS(otsDigestHex);
     updateStep(3, otsResult.success ? 'complete' : 'error', otsResult.success ? 'Submitted' : otsResult.error);
+    meta.ots = otsResult.success || false;
     updateStep(4, 'complete');
     updateStep(5, 'processing');
     const metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(meta)));
@@ -715,7 +729,7 @@ async function startSealing() {
       if (p1 && p1 === p2 && p1.length >= 8) password = p1;
     }
     const senderEmail = document.getElementById('senderEmail')?.value?.trim() || '';
-    const sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain);
+    const sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain, otsResult.proof);
     let finalPdfBytes = sealedBytes;
     let encryptedBytes = null;
     if (password) {
@@ -794,10 +808,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     banner.innerHTML = '<strong style="color:#D4A843;font-size:16px;">🔐 Password Delivery Receipt Active</strong><br><br>This document is password-protected. The recipient receives the lock-screen PDF first, then uploads the .voice file to verify.html and enters the password to decrypt.<br><br><strong>How delivery confirmation works:</strong><br>1. You send BOTH files to the recipient (PDF + .voice)<br>2. They see the lock screen with your contact info<br>3. They email you asking for the password<br><strong>4. That email IS your delivery receipt</strong> — you know they received it<br>5. You reply with the password<br>6. They upload the .voice file to verumglobal.foundation/verify.html and enter the password to view<br><br><strong>Your password:</strong> <span style="color:#D4A843;font-family:monospace;">' + password + '</span><br><strong style="color:#ef4444;">Keep this password safe. Do not include it in the same email as the document files.</strong>';
     el.parentNode.insertBefore(banner, el.nextSibling);
   }
-  if (otsResult && otsResult.success && otsResult.proof) {
-    const oU = URL.createObjectURL(new Blob([otsResult.proof], {type: 'application/vnd.opentimestamps.v1'}));
-    const oL = document.getElementById('downloadOts'); oL.href = oU; oL.download = base + '.ots'; oL.style.display = 'block';
-  } else { document.getElementById('downloadOts').style.display = 'none'; }
+  // OTS proof is now embedded inside the sealed PDF — no separate download needed
   document.getElementById('results').classList.add('visible');
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
 }
