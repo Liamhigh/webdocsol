@@ -364,7 +364,7 @@
     <div class="step" id="step4"><div class="status pending">○</div><div class="label"><strong>A4 Watermark</strong> — Full-page background at 20% opacity</div><div class="detail" id="detail4"></div></div>
     <div class="step" id="step5"><div class="status pending">○</div><div class="label"><strong>Clean QR Code</strong> — Encoding hash + identity + GPS + device</div><div class="detail" id="detail5"></div></div>
     <div class="step" id="step6"><div class="status pending">○</div><div class="label"><strong>Seal Footer</strong> — Hash + timestamp on every page</div><div class="detail" id="detail6"></div></div>
-    <div class="step" id="step7"><div class="status pending">○</div><div class="label"><strong>Finalize</strong> — Preparing sealed PDF package</div><div class="detail" id="step7"></div></div>
+    <div class="step" id="step7"><div class="status pending">○</div><div class="label"><strong>Finalize</strong> — Preparing sealed PDF package</div><div class="detail" id="detail7"></div></div>
     <div class="step" id="step8"><div class="status pending">○</div><div class="label"><strong>SHA-512</strong> — Verum Forensic Fingerprint (final verification)</div><div class="detail" id="detail8"></div></div>
   </div>
 
@@ -473,6 +473,9 @@ function getPricing() {
 }
 
 async function extractPdfText(pdfBytes) {
+  // Exclude known PDF structural strings that cause false positives
+  const PDF_STRUCTURE = /^(obj|endobj|stream|endstream|xref|trailer|startxref|Type1|Type0|Type3|WinAnsiEncoding|MacRomanEncoding|Identity-H|Identity-V|CIDFontType|BaseFont|FontDescriptor|Subtype|Length|Filter|FlateDecode|ASCIIHexDecode|LZWDecode|DCTDecode|DeviceRGB|DeviceGray|DeviceCMYK|ExtGState|ColorSpace|Pattern|XObject|Image|Form|Group|Transparency|Shading|Font|ToUnicode|CMapName|Registry|Ordering|WMode|FontFile|FontFile2|FontFile3|CharSet|Flags|ItalicAngle|Ascent|Descent|CapHeight|StemV|StemH|AvgWidth|MaxWidth|MissingWidth|Leading|XHeight|FontBBox|FontMatrix|Encoding|CharProcs|FirstChar|LastChar|Width|Widths|CIDToGIDMap|CIDSystemInfo|DW|W|DW2|W2|Registry|Ordering|Supplement|RTLn|LTR)$/;
+
   // Method 1: Scan raw bytes for ASCII-readable strings (catches uncompressed text + metadata)
   const textChunks = [];
   let current = '';
@@ -481,11 +484,11 @@ async function extractPdfText(pdfBytes) {
     if ((b >= 32 && b <= 126) || b === 9 || b === 10 || b === 13) {
       current += String.fromCharCode(b);
     } else {
-      if (current.length >= 4) textChunks.push(current.trim());
+      if (current.length >= 4 && !PDF_STRUCTURE.test(current.trim())) textChunks.push(current.trim());
       current = '';
     }
   }
-  if (current.length >= 4) textChunks.push(current.trim());
+  if (current.length >= 4 && !PDF_STRUCTURE.test(current.trim())) textChunks.push(current.trim());
   
   // Method 2: Scan for parenthesized strings (PDF Tj operator)
   try {
@@ -493,7 +496,8 @@ async function extractPdfText(pdfBytes) {
     const re = /\(([^)]{3,500})\)/g;
     let m;
     while ((m = re.exec(latin1)) !== null) {
-      if (/[a-zA-Z]{2,}/.test(m[1])) textChunks.push(m[1]);
+      const candidate = m[1];
+      if (/[a-zA-Z]{2,}/.test(candidate) && !PDF_STRUCTURE.test(candidate)) textChunks.push(candidate);
     }
   } catch(e) {}
   
@@ -517,8 +521,8 @@ async function extractPdfText(pdfBytes) {
           if (tjMatches) {
             for (const tm of tjMatches) {
               const inner = tm.slice(1, -1);
-              // Filter: must contain letters to be real text
-              if (/[a-zA-Z]{2,}/.test(inner) && !inner.startsWith('D:20') && !inner.startsWith('http')) {
+              // Filter: must contain letters to be real text, exclude PDF structure and metadata
+              if (/[a-zA-Z]{2,}/.test(inner) && !inner.startsWith('D:20') && !inner.startsWith('http') && !PDF_STRUCTURE.test(inner)) {
                 textChunks.push(inner);
               }
             }
@@ -941,7 +945,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
       const qx = pageW - m - qs, qy = pageH - m - qs;
       pg.drawRectangle({ x: qx, y: qy, width: qs, height: qs, color: rgb(0.9, 0.9, 0.9) });
       pg.drawText('QR UNAVAILABLE', { x: qx+5, y: qy+qs-15, size: 7, font: helvBold, color: rgb(0.5, 0.2, 0.2) });
-      pg.drawText(sealId, { x: qx+5, y: qy+qs/2, size: 6, font: helv, color: rgb(0.3, 0.3, 0.3) });
+      pg.drawText(sealId, { x: qx+5, y: qy+qs/2, size: 6, font: helv, font: helv, color: rgb(0.3, 0.3, 0.3) });
     }
   }
 
