@@ -438,10 +438,10 @@ async function checkEmbeddedSeal() {
 // ==================== DECRYPT .VOICE ====================
 
 async function decryptVoice() {
-  const password = document.getElementById('voicePassword').value;
+  var password = document.getElementById('voicePassword').value;
   if (!password || password.length < 8) { alert('Password must be at least 8 characters'); return; }
   try {
-    const decrypted = await decryptVoiceFile(uploadedBytes, password);
+    var decrypted = await decryptVoiceFile(uploadedBytes, password);
     uploadedBytes = decrypted;
     document.getElementById('voiceSection').style.display = 'none';
     await checkEmbeddedSeal();
