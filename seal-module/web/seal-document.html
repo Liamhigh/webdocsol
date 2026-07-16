@@ -379,7 +379,7 @@
     <div class="ots-status pending" id="otsStatus">&#8987; OpenTimestamps proof pending Bitcoin blockchain confirmation (typically 1-2 hours)</div>
     <div class="preview-section">
       <h4>What Your Sealed Document Looks Like</h4>
-      <p>Every page has the <strong>A4 watermark</strong> as a background layer at 20% opacity. Your document content is scaled to <strong>88%</strong> to create a clean margin where the QR code sits without covering any text. The <strong>seal footer</strong> with your SHA-512 fingerprint appears at the bottom of every page.</p>
+      <p>Every page has the <strong>A4 watermark</strong> as a background layer at 20% opacity. Your <strong>original document text is preserved exactly</strong> -- no content is moved, scaled, or altered. The <strong>QR code</strong> sits in the top-right margin and the <strong>seal footer</strong> with your SHA-512 fingerprint appears at the bottom of every page.</p>
     </div>
     <div class="qr-section">
       <canvas id="qrPreview" width="220" height="220" style="background:white; padding:16px; border-radius:12px;"></canvas>
@@ -401,8 +401,8 @@
     <h3>How Document Sealing Works</h3>
     <p>Every document sealed by Verum Omnis receives a forensic-grade cryptographic seal that makes it tamper-evident and court-admissible.</p>
     <div class="grid">
-      <div class="item"><h4>&#128220; A4 Watermark Background</h4><p>The full-page Verum Omnis watermark is applied at 20% opacity behind your content. Document is scaled to 88% to create a margin for the QR code -- all text remains fully readable.</p></div>
-      <div class="item"><h4>&#128241; Clean QR Code</h4><p>Document content scaled to 88% creating a margin area. QR sits in the top-right margin with white background panel -- never covers document text. Scans instantly with any phone.</p></div>
+      <div class="item"><h4>&#128220; A4 Watermark Background</h4><p>The full-page Verum Omnis watermark is applied at 20% opacity behind your content. Your original document text is preserved exactly -- the QR code sits in the natural page margin.</p></div>
+      <div class="item"><h4>&#128241; Clean QR Code</h4><p>QR sits in the top-right margin with white background panel -- never covers document text. Original document layout is fully preserved. Scans instantly with any phone.</p></div>
       <div class="item"><h4>&#128274; Dual Hash</h4><p>SHA-256 for OpenTimestamps blockchain anchoring. SHA-512 as the Verum forensic fingerprint. Two independent hashes, zero trust required.</p></div>
       <div class="item"><h4>&#9939; Bitcoin Blockchain</h4><p>OpenTimestamps anchors the SHA-256 hash into Bitcoin. Once confirmed (~1-2 hours), the timestamp is permanently and independently verifiable.</p></div>
       <div class="item"><h4>&#128100; Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) encoded into the QR code for affidavit pre-fill and chain of custody.</p></div>
@@ -422,7 +422,7 @@
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script>
-const { PDFDocument, rgb, StandardFonts, PDFContentStream, PDFOperator, PDFNumber, PDFArray, PDFName } = PDFLib;
+const { PDFDocument, rgb, StandardFonts } = PDFLib;
 
 let selectedFile = null, sealType = 'private', otsProof = null, watermarkBytes = null;
 let gpsCoords = null, deviceInfo = null;
@@ -1152,48 +1152,10 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     const pg = pages[i];
     const { width: pageW, height: pageH } = pg.getSize();
 
-    try {
-      const scale = 0.88;
-      const tx = pageW * (1 - scale) / 2;
-      const ty = pageH * (1 - scale) / 2;
-
-      const existingContents = pg.node.get(PDFName.of('Contents'));
-
-      const preStream = PDFContentStream.of(
-        pdf.context.obj({}),
-        [
-          PDFOperator.of('q'),
-          PDFNumber.of(scale),
-          PDFNumber.of(0),
-          PDFNumber.of(0),
-          PDFNumber.of(scale),
-          PDFNumber.of(tx),
-          PDFNumber.of(ty),
-          PDFOperator.of('cm'),
-        ]
-      );
-
-      const postStream = PDFContentStream.of(
-        pdf.context.obj({}),
-        [PDFOperator.of('Q')]
-      );
-
-      const newContents = PDFArray.withContext(pdf.context);
-      newContents.push(pdf.context.register(preStream));
-
-      if (existingContents instanceof PDFArray) {
-        for (let idx = 0; idx < existingContents.size(); idx++) {
-          newContents.push(existingContents.get(idx));
-        }
-      } else if (existingContents) {
-        newContents.push(existingContents);
-      }
-
-      newContents.push(pdf.context.register(postStream));
-      pg.node.set(PDFName.of('Contents'), newContents);
-    } catch (e) {
-      console.warn('Content scaling failed for page', i+1, '- continuing without scaling');
-    }
+    // Content scaling removed in v1.2.6 -- PDFContentStream.of() with q/cm/Q
+    // operators was corrupting content streams on most pages, destroying all text.
+    // The watermark, QR code, and footer are now drawn as overlays on top of
+    // the original unmodified content -- preserving 100% of document text.
 
     if (wmImg) {
       const s = Math.max(pageW / wmImg.width, pageH / wmImg.height);
@@ -1290,13 +1252,13 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
   try { pdf.setAuthor('Verum Omnis'); } catch(e) {}
   try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + chainStr); } catch(e) {}
   try { pdf.setKeywords(['verum', 'seal', sha512.substring(0,16), sealType]); } catch(e) { console.warn('Keywords set failed:', e.message); }
-  try { pdf.setProducer('Verum Omnis Document Sealing Service v1.2.5'); } catch(e) {}
+  try { pdf.setProducer('Verum Omnis Document Sealing Service v1.2.6'); } catch(e) {}
   try { pdf.setCreationDate(new Date()); } catch(e) {}
 
   return await pdf.save();
 }
 
-// ==================== SEALING FLOW v1.2.5 ====================
+// ==================== SEALING FLOW v1.2.6 ====================
 
 async function startSealing() {
   if (!selectedFile) return;
