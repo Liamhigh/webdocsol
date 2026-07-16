@@ -352,6 +352,21 @@ function showIdentityCard(meta) {
   return html;
 }
 
+function showFraudStatus(meta) {
+  if (!meta || !meta.fraudScore || meta.fraudScore < 20) return '';
+  var confidence = meta.fraudScore >= 70 ? 'VERY HIGH' : meta.fraudScore >= 40 ? 'HIGH' : 'MODERATE';
+  var color = meta.fraudScore >= 70 ? '#ef4444' : meta.fraudScore >= 40 ? '#f97316' : '#D4A843';
+  var html = '<div class="identity-card" style="border-color:rgba(239,68,68,0.5);background:rgba(239,68,68,0.08);">';
+  html += '<h4 style="color:' + color + ';">&#9888; FRAUD DETECTED</h4>';
+  html += '<div class="identity-row"><dt>Confidence</dt><dd style="color:' + color + ';">' + confidence + '</dd></div>';
+  html += '<div class="identity-row"><dt>Fraud Score</dt><dd>' + meta.fraudScore + '/100</dd></div>';
+  if (meta.fraudPages) html += '<div class="identity-row"><dt>Flagged Pages</dt><dd>' + esc(meta.fraudPages) + '</dd></div>';
+  if (meta.fraudKeywords) html += '<div class="identity-row"><dt>Keywords Found</dt><dd style="font-size:11px;">' + esc(meta.fraudKeywords) + '</dd></div>';
+  html += '<div class="identity-row"><dt>Status</dt><dd>Document sealed with fraud watermark</dd></div>';
+  html += '</div>';
+  return html;
+}
+
 // ==================== QR CODE AUTO-DETECT ====================
 
 const urlParams = parseUrlParams();
@@ -574,6 +589,7 @@ async function verifyFile() {
 
     // Identity card from QR metadata
     html += showIdentityCard(parsedMeta);
+    html += showFraudStatus(parsedMeta);
 
     resultsEl.innerHTML = html;
 
