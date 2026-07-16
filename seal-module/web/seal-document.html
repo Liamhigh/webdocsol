@@ -907,13 +907,18 @@ async function runFraudScan(pdfBytes) {
     // Check each page for fraud keywords
     for (var p = 0; p < pages.length; p++) {
       var pageTexts = await extractPageText(pdfBytes, p);
+      // FIX v1.2.5: extractPdfText() returns individual words ["wire","transfer"]
+      // but FRAUD_KEYWORDS contains multi-word phrases like "wire transfer".
+      // Array.indexOf() only matches exact elements -- phrases never matched.
+      // Solution: join words into string for phrase matching.
       var pageLower = pageTexts.map(function(t) { return t.toLowerCase(); });
+      var pageTextStr = pageTexts.join(" ").toLowerCase();
       var pageFound = [];
       var pageScore = 0;
 
       for (var k = 0; k < FRAUD_KEYWORDS.length; k++) {
         var kw = FRAUD_KEYWORDS[k];
-        if (pageLower.indexOf(kw) !== -1) {
+        if (pageTextStr.indexOf(kw) !== -1 || pageLower.indexOf(kw) !== -1) {
           pageFound.push(kw);
           pageScore += 15;
         }
@@ -991,7 +996,7 @@ async function extractPageText(pdfBytes, pageIndex) {
 // If fraud is detected, pages are marked with a FRAUD watermark.
 // The document still seals (integrity proof) but fraud is EXPOSED not hidden.
 
-var FRAUD_KEYWORDS = [
+var FRAUD_KEYWORDS_V2 = [
   // Financial fraud
   'wire transfer','western union','moneygram','bitcoin payment','crypto payment',
   'advance fee','processing fee','activation fee','transfer fee','bank charges',
@@ -1028,7 +1033,7 @@ var FRAUD_KEYWORDS = [
   'different font','font mismatch','spacing issue','misaligned text'
 ];
 
-var FRAUD_PATTERNS = [
+var FRAUD_PATTERNS_V2 = [
   { regex: /\b(nigerian|prince|lottery|inheritance|million\s*dollars|next\s*of\s*kin)\b/gi, weight: 3, label: 'Advance-fee scam' },
   { regex: /\b(urgent|immediate|hurry|act\s*now)\b.*?\b(wire|transfer|payment|send\s*money|pay)\b/gi, weight: 2, label: 'Urgent payment pressure' },
   { regex: /\b(confidential|secret|private)\b.*?\b(opportunity|deal|offer|investment|proposal)\b/gi, weight: 2, label: 'Secret deal solicitation' },
@@ -1067,12 +1072,12 @@ async function detectFraud(pdfBytes) {
   var texts = await extractPdfText(pdfBytes);
   var fullText = texts.join(' ').toLowerCase();
   var originalText = texts.join(' ');
-  for (var i = 0; i < FRAUD_KEYWORDS.length; i++) {
-    if (fullText.indexOf(FRAUD_KEYWORDS[i]) !== -1) { result.keywordMatches.push(FRAUD_KEYWORDS[i]); result.score += 1; }
+  for (var i = 0; i < FRAUD_KEYWORDS_V2.length; i++) {
+    if (fullText.indexOf(FRAUD_KEYWORDS_V2[i]) !== -1) { result.keywordMatches.push(FRAUD_KEYWORDS_V2[i]); result.score += 1; }
   }
-  for (var j = 0; j < FRAUD_PATTERNS.length; j++) {
-    var matches = originalText.match(FRAUD_PATTERNS[j].regex);
-    if (matches && matches.length > 0) { result.patternMatches.push({ label: FRAUD_PATTERNS[j].label, count: matches.length }); result.score += FRAUD_PATTERNS[j].weight * matches.length; }
+  for (var j = 0; j < FRAUD_PATTERNS_V2.length; j++) {
+    var matches = originalText.match(FRAUD_PATTERNS_V2[j].regex);
+    if (matches && matches.length > 0) { result.patternMatches.push({ label: FRAUD_PATTERNS_V2[j].label, count: matches.length }); result.score += FRAUD_PATTERNS_V2[j].weight * matches.length; }
   }
   try {
     var pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
@@ -1285,13 +1290,13 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
   try { pdf.setAuthor('Verum Omnis'); } catch(e) {}
   try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + chainStr); } catch(e) {}
   try { pdf.setKeywords(['verum', 'seal', sha512.substring(0,16), sealType]); } catch(e) { console.warn('Keywords set failed:', e.message); }
-  try { pdf.setProducer('Verum Omnis Document Sealing Service v1.2.4'); } catch(e) {}
+  try { pdf.setProducer('Verum Omnis Document Sealing Service v1.2.5'); } catch(e) {}
   try { pdf.setCreationDate(new Date()); } catch(e) {}
 
   return await pdf.save();
 }
 
-// ==================== SEALING FLOW v1.2.4 ====================
+// ==================== SEALING FLOW v1.2.5 ====================
 
 async function startSealing() {
   if (!selectedFile) return;
@@ -1302,7 +1307,7 @@ async function startSealing() {
   updateStep('Fraud', 'pending', '');
   otsProof = null; gpsCoords = null; deviceInfo = null;
 
-  // FIX: ALL variable declarations in outer scope -- NO TDZ error on mobile
+  // ALL variable declarations in outer scope -- NO TDZ error on mobile
   var sha256 = '', sha512 = '', sealId = '', otsDigestHex = '';
   var chain = [];
   var fileBytes = null;
@@ -1380,7 +1385,8 @@ async function startSealing() {
     }
     var bFraud = document.getElementById('stepFraud')?.querySelector('.status');
     if (bFraud && (bFraud.classList.contains('pending') || bFraud.classList.contains('processing'))) updateStep('Fraud', 'error', '');
-    let errorMsg = 'Unknown error';
+    // Samsung Browser fix: use var not let in catch block
+    var errorMsg = 'Unknown error';
     if (err && err.message) errorMsg = err.message;
     else if (err && typeof err === 'string') errorMsg = err;
     else if (err) errorMsg = JSON.stringify(err);
@@ -1546,16 +1552,17 @@ function resetSealing() {
   updateStep('Fraud', 'pending', '');
   document.getElementById('sealBtn').disabled = false;
   _pipelineFraudResult = null;
-  const banners = document.querySelectorAll('[style*="background:rgba(212,168,67"]');
-  banners.forEach(b => b.remove());
+  // Samsung Browser fix: use var not const
+  var banners = document.querySelectorAll('[style*="background:rgba(212,168,67"]');
+  banners.forEach(function(b) { b.remove(); });
   // Also remove fraud warning banners on reset
-  const fraudBanners = document.querySelectorAll('[style*="background:rgba(239,68,68"]');
-  fraudBanners.forEach(b => b.remove());
-  const downloadGrid = document.getElementById('downloadGrid');
+  var fraudBanners = document.querySelectorAll('[style*="background:rgba(239,68,68"]');
+  fraudBanners.forEach(function(b) { b.remove(); });
+  var downloadGrid = document.getElementById('downloadGrid');
   if (downloadGrid) {
     downloadGrid.style.gridTemplateColumns = '';
-    const voiceBtns = downloadGrid.querySelectorAll('a[download$=".voice"]');
-    voiceBtns.forEach(b => b.remove());
+    var voiceBtns = downloadGrid.querySelectorAll('a[download$=".voice"]');
+    voiceBtns.forEach(function(b) { b.remove(); });
   }
 }
 
