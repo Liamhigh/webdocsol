@@ -3,8 +3,24 @@
 **Repository:** `Liamhigh/webdocsol`  
 **Version:** VO-DSS-1.2 (Verum Omnis Document Sealing Standard v1.2)  
 **Constitution:** v6.0 Final  
-**Date:** 2026-07-14  
+**Date:** 2026-07-16  
 **Classification:** Constitutional / Immutable / Open Source  
+
+> ## DESIGN LOCK IN EFFECT
+> 
+> The current visual design of `verumglobal.foundation` is **LOCKED** as of 2026-07-16.
+> See [`DESIGN_LOCK.md`](DESIGN_LOCK.md) for the full specification and
+> [`design-reference/screenshot-v1.2.5.png`](design-reference/screenshot-v1.2.5.png)
+> for the canonical visual reference.
+>
+> **This design may be enhanced but must NEVER regress.** Any PR touching CSS,
+> HTML structure, or visual elements must include a side-by-side comparison with
+> the reference screenshot proving no regression has occurred.
+
+**What's New in v1.2.5:**
+- **Fraud detection fix** -- multi-word keyword phrases ("wire transfer", "forged signature") now properly match against PDF text
+- **Samsung Browser compatibility** -- all `const`/`let` in async pipelines converted to `var` to avoid TDZ errors
+- **Design lock established** -- visual standard documented and locked
 
 **What's New in v1.2:**
 - **Seal Chain of Custody** -- detects previous seals when re-sealing merged documents
@@ -39,10 +55,12 @@ User uploads PDF
        v
 [SK02] Document Profiler
        |
+       +---> Auto: [Fraud Detection] Scan for fraudulent content
        +---> Optional: [Identity Pipeline] Name, ID, Address, Email
        +---> Optional: [Password Protection] Delivery receipt mode
        +---> Auto: [GPS + Device Fingerprint]
        +---> Auto: [Seal Chain Detection] Detect previous seals
+       +---> Auto: [Commercial Detection] Detect commercial documents
        |
        v
 [Hash] SHA-256 (for OpenTimestamps)
@@ -57,6 +75,7 @@ User uploads PDF
        - Original content scaled to 88%
        - Clean QR code top-right (no border)
        - Seal footer on every page (SHA-512 + timestamp + chain)
+       - Fraud watermark overlay (if fraud detected -- red X + banner)
        - Optional: Password-protected cover page
        |
        v
@@ -90,7 +109,15 @@ https://verumglobal.foundation/verify.html?h=<SHA512_PREFIX_32>&m=<BASE64_METADA
   "acc": 10,
   "dev": "Win32|8|Africa/Johannesburg",
   "type": "private",
-  "org": "Organisation Name"
+  "org": "Organisation Name",
+  "sha512": "full 128-char sha512...",
+  "otsDigest": "64-char ots sha256...",
+  "otsStatus": true,
+  "sealId": "VO-XXXXXXXXXXXX",
+  "fraudScore": 45,
+  "fraudPages": "1,3",
+  "fraudKeywords": "wire transfer,counterfeit",
+  "fraudClean": false
 }
 ```
 
@@ -108,6 +135,14 @@ https://verumglobal.foundation/verify.html?h=<SHA512_PREFIX_32>&m=<BASE64_METADA
 | `dev` | string | No | Platform\|Cores\|Timezone |
 | `type` | string | Yes | `private` or `commercial` |
 | `org` | string | No | Organisation name (commercial only) |
+| `sha512` | string | Yes | Full SHA-512 fingerprint (128 hex chars) |
+| `otsDigest` | string | Yes | OTS SHA-256 digest for blockchain lookup |
+| `otsStatus` | boolean | Yes | Whether OTS calendar accepted the digest |
+| `sealId` | string | Yes | VO-XXXXXXXXXXXX seal identifier |
+| `fraudScore` | number | No | Fraud detection score (0-100) |
+| `fraudPages` | string | No | Comma-separated list of flagged page numbers |
+| `fraudKeywords` | string | No | Comma-separated list of matched fraud keywords |
+| `fraudClean` | boolean | No | True if no fraud indicators detected |
 
 ---
 
@@ -137,6 +172,44 @@ Sender contact: [sender email from identity pipeline]
 
 ---
 
+## Fraud Detection
+
+The fraud detection engine scans uploaded documents for:
+
+- **Fraud keywords** (50+): "wire transfer", "forged signature", "counterfeit", "nigerian prince", "money laundering", etc.
+- **Fraud patterns** (8 regex): advance-fee scams, urgent payment pressure, secret deals, guaranteed returns, bypass legal review, off-record transactions, date manipulation, corporate fraud
+- **Metadata anomalies**: Photoshop, GIMP, Canva detection in PDF producer/creator fields
+- **Scoring**: 0-100 scale; >=20 flags as fraudulent
+
+If fraud is detected, the document still seals (preserving evidence integrity) but **every page** is marked with:
+- Red X cross overlay (diagonal lines)
+- "FRAUDULENT CONTENT DETECTED" banner (top of each page)
+- "FRAUD MARK -- SEALED FOR EVIDENCE" footer stamp
+- Score displayed on the results page
+
+The document seals but the fraud is **EXPOSED not hidden**.
+
+---
+
+## Commercial Detection
+
+Commercial documents are detected by keyword matching (66 commercial terms):
+
+| Match Count | Action |
+|-------------|--------|
+| 0-1 matches | Seal as private (free) |
+| 2+ matches | Flag as commercial; show payment gate |
+
+**Pricing (GPS-based):**
+| Region | Price |
+|--------|-------|
+| South Africa | R750 ZAR |
+| SADC Region | R500 ZAR |
+| International | $50 USD |
+| Law Enforcement | FREE (with .gov/.police email) |
+
+---
+
 ## Seal Chain of Custody
 
 When investigations evolve and documents are merged, the seal chain preserves the full audit trail:
@@ -158,6 +231,9 @@ See `seal-module/SPEC.md` Section 8 for full chain format specification.
 ```
 webdocsol/
 |-- README.md                          # This file
+|-- DESIGN_LOCK.md                     # Permanent visual standard (DO NOT REGRESS)
+|-- design-reference/                  # Canonical visual reference
+|   |-- screenshot-v1.2.5.png         # Locked design screenshot
 |-- seal-module/
 |   |-- SPEC.md                        # Full technical specification
 |   |-- web/                           # Website implementation
@@ -184,6 +260,10 @@ webdocsol/
 | Text | `#F8F9FA` | Headings |
 | Body | `#D5D8DD` | Body text |
 | Footer | `#4A7EC7` | Labels, monospace text |
+| Green | `#22c55e` | Verified, hash displays |
+| Red | `#ef4444` | Fraud, tamper, errors |
+
+See `DESIGN_LOCK.md` for the complete locked color palette with exact values and usage rules.
 
 ---
 
