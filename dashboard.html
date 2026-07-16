@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Forensic Dashboard -- Verum Omnis</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #040D1B;
+    color: #D5D8DD;
+    min-height: 100vh;
+  }
+  .container { max-width: 1200px; margin: 0 auto; padding: 40px 20px; }
+
+  .topnav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    background: rgba(4, 13, 27, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(26, 46, 82, 0.5);
+    height: 64px;
+  }
+  .topnav-inner {
+    max-width: 1200px; margin: 0 auto; height: 100%;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 clamp(1.5rem, 5vw, 4rem);
+  }
+  .topnav-logo { display: flex; align-items: center; gap: 2px; text-decoration: none; }
+  .topnav-logo img { height: 40px; width: auto; object-fit: contain; }
+  .topnav-links { display: flex; align-items: center; gap: 32px; }
+  .topnav-links a {
+    font-family: 'Courier New', monospace; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: #4A7EC7; text-decoration: none;
+    transition: color 0.3s;
+  }
+  .topnav-links a:hover { color: #F8F9FA; }
+  .topnav-links a.active { color: #D4A843; }
+
+  .header { text-align: center; margin: 80px 0 40px; }
+  .header .logo-main {
+    margin: 0 auto 24px;
+    max-width: min(360px, 70vw); height: auto;
+    filter: drop-shadow(0 0 40px rgba(74, 126, 199, 0.2));
+  }
+  .header .label {
+    font-family: 'Courier New', monospace; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    color: #D4A843; margin-bottom: 16px;
+  }
+  .header h1 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: clamp(2rem, 6vw, 3.5rem);
+    font-weight: 300; color: #F8F9FA;
+    letter-spacing: -0.03em; line-height: 1.1;
+  }
+
+  .stats-grid {
+    display: grid; grid-template-columns: repeat(4, 1fr);
+    gap: 16px; margin-bottom: 40px;
+  }
+  .stat-card {
+    background: rgba(15, 52, 96, 0.08);
+    border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 12px; padding: 24px; text-align: center;
+  }
+  .stat-card .value {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 36px; font-weight: 600; color: #D4A843;
+    margin-bottom: 4px;
+  }
+  .stat-card .label {
+    font-size: 11px; color: #4A7EC7;
+    font-family: 'Courier New', monospace; text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+
+  .section-card {
+    background: rgba(15, 52, 96, 0.08);
+    border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 16px; padding: 30px; margin-bottom: 24px;
+  }
+  .section-card h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 22px; color: #D4A843; margin-bottom: 20px; font-weight: 400;
+    display: flex; align-items: center; gap: 10px;
+  }
+
+  .crime-bar {
+    display: flex; align-items: center; gap: 12px;
+    margin-bottom: 12px;
+  }
+  .crime-bar .name {
+    width: 180px; font-size: 13px; color: #D5D8DD;
+    text-align: right; flex-shrink: 0;
+  }
+  .crime-bar .bar-track {
+    flex: 1; height: 28px; background: rgba(4, 13, 27, 0.6);
+    border-radius: 6px; overflow: hidden; position: relative;
+  }
+  .crime-bar .bar-fill {
+    height: 100%; border-radius: 6px;
+    transition: width 0.5s ease;
+    display: flex; align-items: center; justify-content: flex-end;
+    padding-right: 10px;
+  }
+  .crime-bar .bar-fill.fraud { background: linear-gradient(90deg, rgba(212,168,67,0.3), rgba(212,168,67,0.6)); }
+  .crime-bar .bar-fill.tamper { background: linear-gradient(90deg, rgba(239,68,68,0.3), rgba(239,68,68,0.6)); }
+  .crime-bar .bar-fill.theft { background: linear-gradient(90deg, rgba(249,115,22,0.3), rgba(249,115,22,0.6)); }
+  .crime-bar .bar-fill.coerce { background: linear-gradient(90deg, rgba(139,92,246,0.3), rgba(139,92,246,0.6)); }
+  .crime-bar .bar-fill.abuse { background: linear-gradient(90deg, rgba(236,72,153,0.3), rgba(236,72,153,0.6)); }
+  .crime-bar .count {
+    font-size: 13px; color: #F8F9FA; font-weight: 600;
+  }
+
+  .hotspot-table {
+    width: 100%; border-collapse: collapse;
+  }
+  .hotspot-table th {
+    text-align: left; padding: 12px 16px;
+    font-size: 11px; color: #4A7EC7;
+    font-family: 'Courier New', monospace; text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border-bottom: 1px solid rgba(26, 46, 82, 0.5);
+  }
+  .hotspot-table td {
+    padding: 14px 16px; font-size: 13px;
+    border-bottom: 1px solid rgba(26, 46, 82, 0.3);
+  }
+  .hotspot-table tr:hover td {
+    background: rgba(15, 52, 96, 0.1);
+  }
+  .hotspot-table .region-tag {
+    display: inline-block; padding: 4px 10px; border-radius: 4px;
+    font-size: 11px; font-family: 'Courier New', monospace;
+    background: rgba(212, 168, 67, 0.15); color: #D4A843;
+  }
+  .hotspot-table .count-badge {
+    display: inline-block; padding: 4px 12px; border-radius: 12px;
+    font-size: 12px; font-weight: 600;
+  }
+  .count-badge.high { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+  .count-badge.medium { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+  .count-badge.low { background: rgba(34, 197, 94, 0.2); color: #22c55e; }
+
+  .pattern-grid {
+    display: grid; grid-template-columns: 1fr 1fr 1fr;
+    gap: 12px;
+  }
+  .pattern-card {
+    background: rgba(4, 13, 27, 0.4);
+    border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 10px; padding: 16px;
+  }
+  .pattern-card .type {
+    font-size: 12px; color: #D4A843; font-weight: 600;
+    margin-bottom: 8px;
+  }
+  .pattern-card .count {
+    font-size: 24px; color: #F8F9FA; font-weight: 700;
+    font-family: 'Cormorant Garamond', Georgia, serif;
+  }
+  .pattern-card .trend {
+    font-size: 11px; color: #4A7EC7; margin-top: 4px;
+    font-family: 'Courier New', monospace;
+  }
+
+  .period-bar {
+    display: flex; gap: 8px; margin-bottom: 24px;
+    justify-content: center;
+  }
+  .period-btn {
+    padding: 8px 20px; border-radius: 8px;
+    font-size: 12px; font-family: 'Courier New', monospace;
+    text-transform: uppercase; letter-spacing: 0.06em;
+    cursor: pointer; transition: all 0.3s;
+    background: rgba(15, 52, 96, 0.15);
+    border: 1px solid #1A2E52; color: #4A7EC7;
+  }
+  .period-btn:hover { border-color: #D4A843; color: #D4A843; }
+  .period-btn.active {
+    background: rgba(212, 168, 67, 0.15);
+    border-color: #D4A843; color: #D4A843;
+  }
+
+  .loading {
+    text-align: center; padding: 40px; color: #4A7EC7;
+    font-family: 'Courier New', monospace; font-size: 14px;
+  }
+
+  .error-msg {
+    background: rgba(239, 68, 68, 0.1);
+    border: 1px solid rgba(239, 68, 68, 0.3);
+    border-radius: 10px; padding: 20px;
+    text-align: center; color: #ef4444; font-size: 14px;
+  }
+
+  .site-footer {
+    margin-top: 60px; padding-top: 30px;
+    border-top: 1px solid rgba(26, 46, 82, 0.5);
+    text-align: center; font-size: 12px; color: #4A7EC7;
+    font-family: 'Courier New', monospace; text-transform: uppercase;
+    letter-spacing: 0.08em; line-height: 2;
+  }
+
+  @media (max-width: 768px) {
+    .stats-grid { grid-template-columns: 1fr 1fr; }
+    .pattern-grid { grid-template-columns: 1fr; }
+    .crime-bar .name { width: 100px; font-size: 11px; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-inner">
+    <a href="/" class="topnav-logo">
+      <img src="/images/logo-full.png" alt="Verum Omnis">
+    </a>
+    <div class="topnav-links">
+      <a href="/">Home</a>
+      <a href="/seal-document.html">Seal</a>
+      <a href="/verify.html">Verify</a>
+      <a href="/verify-data.html">Report</a>
+      <a href="/dashboard.html" class="active">Dashboard</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+
+  <div class="header">
+    <img src="/images/logo-full.png" alt="Verum Omnis" class="logo-main">
+    <div class="label">LAW ENFORCEMENT -- REAL-TIME FORENSIC INTELLIGENCE</div>
+    <h1>Forensic Dashboard</h1>
+  </div>
+
+  <div class="period-bar">
+    <button class="period-btn" data-days="7" onclick="loadDashboard(7)">7 Days</button>
+    <button class="period-btn active" data-days="30" onclick="loadDashboard(30)">30 Days</button>
+    <button class="period-btn" data-days="90" onclick="loadDashboard(90)">90 Days</button>
+    <button class="period-btn" data-days="365" onclick="loadDashboard(365)">1 Year</button>
+  </div>
+
+  <div class="stats-grid" id="statsGrid">
+    <div class="stat-card">
+      <div class="value" id="statTotal">--</div>
+      <div class="label">Total Reports</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="statVerified">--</div>
+      <div class="label">Verified</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="statTampered">--</div>
+      <div class="label">Tampered</div>
+    </div>
+    <div class="stat-card">
+      <div class="value" id="statRegions">--</div>
+      <div class="label">Regions Active</div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h3>&#128269; Crime Type Distribution</h3>
+    <div id="crimeBars">
+      <div class="loading">Loading crime data...</div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h3>&#9881; Contradiction Patterns</h3>
+    <div class="period-bar" style="margin-bottom:16px;">
+      <button class="period-btn active" data-pdays="30" onclick="loadPatterns(30)">30d</button>
+      <button class="period-btn" data-pdays="90" onclick="loadPatterns(90)">90d</button>
+    </div>
+    <div class="pattern-grid" id="patternGrid">
+      <div class="loading">Loading patterns...</div>
+    </div>
+  </div>
+
+  <div class="section-card">
+    <h3>&#128205; Crime Hotspots</h3>
+    <div id="hotspotTable">
+      <div class="loading">Loading hotspot data...</div>
+    </div>
+  </div>
+
+  <div class="section-card" style="background: rgba(4, 13, 27, 0.4);">
+    <h3>&#127757; Foundation Resource Allocation</h3>
+    <p style="font-size: 14px; color: #D5D8DD; line-height: 1.7; margin-bottom: 16px;">
+      The Verum Omnis Foundation directs <strong style="color:#D4A843;">99% of all revenue</strong> toward poverty alleviation and community support in the areas with the highest document fraud and crime rates.
+    </p>
+    <p style="font-size: 13px; color: #4A7EC7; line-height: 1.6;">
+      <strong style="color:#F8F9FA;">Priority regions:</strong> <span id="priorityRegions">Loading...</span><br>
+      <strong style="color:#F8F9FA;">Top fraud type:</strong> <span id="topFraudType">Loading...</span><br>
+      <strong style="color:#F8F9FA;">Engine:</strong> Forensic Engine v1.2.6
+    </p>
+  </div>
+
+  <div class="site-footer">
+    Verum Omnis Foundation -- Patent Pending -- Law Enforcement Access<br>
+    Constitution v6.0 Final -- Article X Non-Weaponization Doctrine
+  </div>
+
+</div>
+
+<script>
+var API_URL = 'https://verum-forensic-hub.liamhigh78.workers.dev';
+var currentPeriod = 30;
+
+async function loadDashboard(days) {
+  currentPeriod = days;
+  document.querySelectorAll('.period-btn[data-days]').forEach(function(btn) {
+    btn.classList.toggle('active', parseInt(btn.dataset.days) === days);
+  });
+  
+  try {
+    var response = await fetch(API_URL + '/api/dashboard?days=' + days);
+    var data = await response.json();
+    
+    document.getElementById('statTotal').textContent = data.totalReports || 0;
+    document.getElementById('statVerified').textContent = (data.outcomes && data.outcomes.verified) || 0;
+    document.getElementById('statTampered').textContent = (data.outcomes && data.outcomes.tampered) || 0;
+    document.getElementById('statRegions').textContent = (data.topRegions && data.topRegions.length) || 0;
+    
+    renderCrimeBars(data.crimeTypes || {});
+    renderHotspots(data.topRegions || []);
+    updateFoundationNote(data);
+  } catch (e) {
+    document.getElementById('crimeBars').innerHTML = '<div class="error-msg">Unable to load data. Forensic hub initializing.</div>';
+  }
+}
+
+async function loadPatterns(days) {
+  document.querySelectorAll('.period-btn[data-pdays]').forEach(function(btn) {
+    btn.classList.toggle('active', parseInt(btn.dataset.pdays) === days);
+  });
+  try {
+    var response = await fetch(API_URL + '/api/patterns?days=' + days);
+    var data = await response.json();
+    renderPatterns(data.patterns || []);
+  } catch (e) {
+    document.getElementById('patternGrid').innerHTML = '<div class="error-msg">Pattern data unavailable</div>';
+  }
+}
+
+function renderCrimeBars(crimeTypes) {
+  var container = document.getElementById('crimeBars');
+  var entries = Object.entries(crimeTypes).sort(function(a, b) { return b[1] - a[1]; });
+  if (entries.length === 0) {
+    container.innerHTML = '<div class="loading">No data yet. Reports will appear as verifications come in.</div>';
+    return;
+  }
+  var max = entries[0][1];
+  var labels = { fraud_financial:'Financial Fraud', fraud_identity:'Identity Fraud', fraud_contract:'Contract Fraud', document_tampering:'Doc Tampering', forgery:'Forgery', coercion:'Coercion', theft:'Theft', corruption:'Corruption', domestic_abuse:'Domestic Abuse', harassment:'Harassment', other:'Other' };
+  var classes = { fraud_financial:'fraud', fraud_identity:'fraud', fraud_contract:'fraud', document_tampering:'tamper', forgery:'tamper', coercion:'coerce', theft:'theft', corruption:'theft', domestic_abuse:'abuse', harassment:'abuse', other:'coerce' };
+  var html = '';
+  entries.forEach(function(entry) {
+    var pct = Math.round((entry[1] / max) * 100);
+    html += '<div class="crime-bar"><div class="name">' + (labels[entry[0]] || entry[0]) + '</div>';
+    html += '<div class="bar-track"><div class="bar-fill ' + (classes[entry[0]] || 'fraud') + '" style="width:' + pct + '%"><span class="count">' + entry[1] + '</span></div></div></div>';
+  });
+  container.innerHTML = html;
+}
+
+function renderHotspots(regions) {
+  var container = document.getElementById('hotspotTable');
+  if (regions.length === 0) { container.innerHTML = '<div class="loading">No hotspot data yet.</div>'; return; }
+  var regionNames = { south_africa:'South Africa', sadc:'SADC Region', europe:'Europe', north_america:'North America', asia:'Asia', other:'Other' };
+  var html = '<table class="hotspot-table"><tr><th>Region</th><th>Reports</th><th>Top Crime</th><th>Lat</th><th>Lng</th></tr>';
+  regions.forEach(function(r) {
+    var topType = Object.entries(r.types || {}).sort(function(a, b) { return b[1] - a[1]; })[0];
+    var badgeClass = r.count >= 10 ? 'high' : r.count >= 5 ? 'medium' : 'low';
+    html += '<tr><td><span class="region-tag">' + (regionNames[r.region] || r.region) + '</span></td>';
+    html += '<td><span class="count-badge ' + badgeClass + '">' + r.count + '</span></td>';
+    html += '<td>' + (topType ? topType[0].replace(/_/g, ' ') : 'N/A') + '</td>';
+    html += '<td style="font-family:monospace;font-size:11px;color:#4A7EC7;">' + (r.lat || '--') + '</td>';
+    html += '<td style="font-family:monospace;font-size:11px;color:#4A7EC7;">' + (r.lng || '--') + '</td></tr>';
+  });
+  html += '</table>';
+  container.innerHTML = html;
+}
+
+function renderPatterns(patterns) {
+  var container = document.getElementById('patternGrid');
+  if (patterns.length === 0) { container.innerHTML = '<div class="loading" style="grid-column:1/-1;">No patterns recorded yet.</div>'; return; }
+  var typeLabels = { DIRECT_NEGATION:'Direct Negation', IMPLIED_CONTRADICTION:'Implied Contradiction', ACTION_VS_WORDS:'Actions vs Words', TEMPORAL_SHIFT:'Temporal Shift', ROLE_INCONSISTENCY:'Role Inconsistency', DOCUMENT_INTERNAL:'Document Internal' };
+  var html = '';
+  patterns.forEach(function(p) {
+    html += '<div class="pattern-card"><div class="type">' + (typeLabels[p.type] || p.type) + '</div>';
+    html += '<div class="count">' + p.count + '</div><div class="trend">Detections</div></div>';
+  });
+  container.innerHTML = html;
+}
+
+function updateFoundationNote(data) {
+  var topCrime = Object.entries(data.crimeTypes || {}).sort(function(a, b) { return b[1] - a[1]; })[0];
+  document.getElementById('topFraudType').textContent = topCrime ? topCrime[0].replace(/_/g, ' ') : 'None yet';
+  var regions = (data.topRegions || []).slice(0, 3).map(function(r) { return r.region; }).join(', ');
+  document.getElementById('priorityRegions').textContent = regions || 'Global';
+}
+
+loadDashboard(30);
+loadPatterns(30);
+</script>
+
+</body>
+</html>

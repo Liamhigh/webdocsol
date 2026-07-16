@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Anonymous Report -- Verum Omnis</title>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    background: #040D1B;
+    color: #D5D8DD;
+    min-height: 100vh;
+  }
+  .container { max-width: 800px; margin: 0 auto; padding: 40px 20px; }
+
+  .topnav {
+    position: fixed; top: 0; left: 0; right: 0; z-index: 50;
+    background: rgba(4, 13, 27, 0.85);
+    backdrop-filter: blur(12px);
+    -webkit-backdrop-filter: blur(12px);
+    border-bottom: 1px solid rgba(26, 46, 82, 0.5);
+    height: 64px;
+  }
+  .topnav-inner {
+    max-width: 1200px; margin: 0 auto; height: 100%;
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 0 clamp(1.5rem, 5vw, 4rem);
+  }
+  .topnav-logo { display: flex; align-items: center; gap: 2px; text-decoration: none; }
+  .topnav-logo img { height: 40px; width: auto; object-fit: contain; }
+  .topnav-links { display: flex; align-items: center; gap: 32px; }
+  .topnav-links a {
+    font-family: 'Courier New', monospace; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.1em;
+    color: #4A7EC7; text-decoration: none;
+    transition: color 0.3s;
+  }
+  .topnav-links a:hover { color: #F8F9FA; }
+  .topnav-links a.active { color: #D4A843; }
+
+  .header { text-align: center; margin: 80px 0 40px; }
+  .header .logo-main {
+    margin: 0 auto 24px;
+    max-width: min(360px, 70vw); height: auto;
+    filter: drop-shadow(0 0 40px rgba(74, 126, 199, 0.2));
+  }
+  .header .label {
+    font-family: 'Courier New', monospace; font-size: 12px;
+    text-transform: uppercase; letter-spacing: 0.15em;
+    color: #D4A843; margin-bottom: 16px;
+  }
+  .header h1 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: clamp(2rem, 6vw, 3.5rem);
+    font-weight: 300; color: #F8F9FA;
+    letter-spacing: -0.03em; line-height: 1.1;
+  }
+  .header p {
+    font-size: 1.125rem; color: #D5D8DD;
+    margin-top: 12px; line-height: 1.7; max-width: 600px;
+    margin-left: auto; margin-right: auto;
+  }
+
+  .privacy-banner {
+    background: rgba(34, 197, 94, 0.08);
+    border: 1px solid rgba(34, 197, 94, 0.25);
+    border-radius: 12px; padding: 20px; margin-bottom: 30px;
+    text-align: center;
+  }
+  .privacy-banner h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 20px; color: #22c55e; margin-bottom: 8px; font-weight: 400;
+  }
+  .privacy-banner p {
+    font-size: 13px; color: #D5D8DD; line-height: 1.6;
+  }
+  .privacy-banner .data-points {
+    display: flex; gap: 16px; justify-content: center;
+    margin-top: 12px; flex-wrap: wrap;
+  }
+  .privacy-banner .data-point {
+    font-family: 'Courier New', monospace; font-size: 11px;
+    color: #4A7EC7; background: rgba(15, 52, 96, 0.2);
+    padding: 6px 12px; border-radius: 6px;
+  }
+  .privacy-banner .data-point.collected { color: #22c55e; border: 1px solid rgba(34, 197, 94, 0.3); }
+  .privacy-banner .data-point.not-collected { color: #ef4444; text-decoration: line-through; opacity: 0.6; }
+
+  .form-card {
+    background: rgba(15, 52, 96, 0.08);
+    border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 16px; padding: 30px; margin-bottom: 24px;
+  }
+  .form-card h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 22px; color: #D4A843; margin-bottom: 8px; font-weight: 400;
+  }
+  .form-card .subtitle {
+    font-size: 12px; color: #4A7EC7;
+    font-family: 'Courier New', monospace; text-transform: uppercase;
+    letter-spacing: 0.06em; margin-bottom: 24px;
+  }
+
+  .form-group { margin-bottom: 20px; }
+  .form-group label {
+    display: block; font-size: 11px; color: #4A7EC7;
+    font-family: 'Courier New', monospace; text-transform: uppercase;
+    letter-spacing: 0.06em; margin-bottom: 8px;
+  }
+  .form-group select, .form-group input[type="text"] {
+    width: 100%; padding: 14px 18px; border: 1px solid #1A2E52;
+    border-radius: 10px; background: rgba(15, 52, 96, 0.15);
+    color: #F8F9FA; font-size: 15px; font-family: inherit;
+    cursor: pointer;
+  }
+  .form-group select:focus, .form-group input:focus {
+    outline: none; border-color: #D4A843;
+  }
+  .form-group select option {
+    background: #040D1B; color: #F8F9FA;
+  }
+
+  .contradiction-grid {
+    display: grid; grid-template-columns: 1fr 1fr;
+    gap: 10px;
+  }
+  .contradiction-item {
+    display: flex; align-items: center; gap: 10px;
+    padding: 12px; border: 1px solid #1A2E52;
+    border-radius: 8px; cursor: pointer;
+    transition: all 0.2s; background: rgba(15, 52, 96, 0.08);
+  }
+  .contradiction-item:hover { border-color: #D4A843; }
+  .contradiction-item.selected {
+    border-color: #D4A843; background: rgba(212, 168, 67, 0.1);
+  }
+  .contradiction-item input[type="checkbox"] {
+    width: 18px; height: 18px; accent-color: #D4A843;
+  }
+  .contradiction-item label {
+    font-size: 13px; color: #D5D8DD; cursor: pointer;
+    font-family: inherit; text-transform: none; letter-spacing: 0;
+  }
+  .contradiction-item .severity {
+    margin-left: auto; font-size: 10px;
+    font-family: 'Courier New', monospace;
+    padding: 2px 8px; border-radius: 4px;
+  }
+  .severity.CRITICAL { background: rgba(239, 68, 68, 0.2); color: #ef4444; }
+  .severity.HIGH { background: rgba(249, 115, 22, 0.2); color: #f97316; }
+  .severity.MEDIUM { background: rgba(212, 168, 67, 0.2); color: #D4A843; }
+  .severity.LOW { background: rgba(74, 126, 199, 0.2); color: #4A7EC7; }
+
+  .submit-btn {
+    width: 100%; padding: 18px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg, #D4A843 0%, #b8942a 100%);
+    color: #040D1B; font-size: 16px; font-weight: 700;
+    cursor: pointer; transition: all 0.3s ease; font-family: inherit;
+    text-transform: uppercase; letter-spacing: 0.05em;
+  }
+  .submit-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(212,168,67,0.3); }
+  .submit-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
+
+  .result-card {
+    display: none;
+    background: rgba(15, 52, 96, 0.12);
+    border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 16px; padding: 30px; margin-bottom: 24px;
+    text-align: center;
+  }
+  .result-card.visible { display: block; }
+  .result-card.success { border-color: rgba(34, 197, 94, 0.4); }
+  .result-card.error { border-color: rgba(239, 68, 68, 0.4); }
+  .result-card h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 24px; margin-bottom: 12px; font-weight: 400;
+  }
+  .result-card.success h3 { color: #22c55e; }
+  .result-card.error h3 { color: #ef4444; }
+  .result-card p { font-size: 14px; color: #D5D8DD; line-height: 1.7; }
+
+  .foundation-note {
+    background: rgba(4, 13, 27, 0.4);
+    border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 12px; padding: 24px; margin-top: 30px;
+  }
+  .foundation-note h4 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 18px; color: #D4A843; margin-bottom: 10px; font-weight: 400;
+  }
+  .foundation-note p {
+    font-size: 13px; color: #4A7EC7; line-height: 1.7;
+  }
+
+  .site-footer {
+    margin-top: 60px; padding-top: 30px;
+    border-top: 1px solid rgba(26, 46, 82, 0.5);
+    text-align: center; font-size: 12px; color: #4A7EC7;
+    font-family: 'Courier New', monospace; text-transform: uppercase;
+    letter-spacing: 0.08em; line-height: 2;
+  }
+
+  @media (max-width: 600px) {
+    .contradiction-grid { grid-template-columns: 1fr; }
+    .header h1 { font-size: 2.2rem; }
+  }
+</style>
+</head>
+<body>
+
+<nav class="topnav">
+  <div class="topnav-inner">
+    <a href="/" class="topnav-logo">
+      <img src="/images/logo-full.png" alt="Verum Omnis">
+    </a>
+    <div class="topnav-links">
+      <a href="/">Home</a>
+      <a href="/seal-document.html">Seal</a>
+      <a href="/verify.html">Verify</a>
+      <a href="/verify-data.html" class="active">Report</a>
+      <a href="/dashboard.html">Dashboard</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container">
+
+  <div class="header">
+    <img src="/images/logo-full.png" alt="Verum Omnis" class="logo-main">
+    <div class="label">AI FORENSICS FOR TRUTH -- ANONYMOUS DATA CONTRIBUTION</div>
+    <h1>Improve the Forensic Engine</h1>
+    <p>After verifying a sealed document, anonymously report what type of crime or fraud was detected. This data feeds the AI backend, improves contradiction detection, and helps the Foundation direct resources where they're needed most.</p>
+  </div>
+
+  <div class="privacy-banner">
+    <h3>&#128373; Zero Personal Data Collected</h3>
+    <p>We only collect anonymous patterns to improve the forensic engine and identify crime hotspots for poverty alleviation.</p>
+    <div class="data-points">
+      <span class="data-point collected">&#10003; Crime type</span>
+      <span class="data-point collected">&#10003; GPS region (1km)</span>
+      <span class="data-point collected">&#10003; Contradiction patterns</span>
+      <span class="data-point not-collected">&#10007; Name</span>
+      <span class="data-point not-collected">&#10007; Email</span>
+      <span class="data-point not-collected">&#10007; Document content</span>
+    </div>
+  </div>
+
+  <div class="form-card">
+    <h3>Anonymous Verification Report</h3>
+    <div class="subtitle">Post-Verification Data Contribution</div>
+
+    <div class="form-group">
+      <label>Seal ID (optional)</label>
+      <input type="text" id="sealIdInput" placeholder="VO-XXXXXXXXXXXX (if known)" maxlength="20">
+    </div>
+
+    <div class="form-group">
+      <label>Crime / Fraud Type</label>
+      <select id="crimeType">
+        <option value="">Select the type of issue detected...</option>
+        <option value="fraud_financial">Financial Fraud (fake invoices, wire scams)</option>
+        <option value="fraud_identity">Identity Fraud (stolen ID, forged passport)</option>
+        <option value="fraud_contract">Contract Fraud (altered terms, forged signatures)</option>
+        <option value="document_tampering">Document Tampering (modified PDF, backdated)</option>
+        <option value="forgery">Forgery (fake documents, counterfeit)</option>
+        <option value="coercion">Coercion (forced signing, threats)</option>
+        <option value="theft">Theft (stolen documents, missing pages)</option>
+        <option value="corruption">Corruption (bribery, kickbacks)</option>
+        <option value="domestic_abuse">Domestic Abuse (protection orders, evidence)</option>
+        <option value="harassment">Harassment (threatening documents)</option>
+        <option value="other">Other / Not Listed</option>
+      </select>
+    </div>
+
+    <div class="form-group">
+      <label>Contradictions Detected (select all that apply)</label>
+      <div class="contradiction-grid">
+        <div class="contradiction-item" onclick="toggleContradiction(this, 'DIRECT_NEGATION', 'HIGH')">
+          <input type="checkbox" data-type="DIRECT_NEGATION" data-severity="HIGH">
+          <label>Direct Negation</label>
+          <span class="severity HIGH">HIGH</span>
+        </div>
+        <div class="contradiction-item" onclick="toggleContradiction(this, 'IMPLIED_CONTRADICTION', 'MEDIUM')">
+          <input type="checkbox" data-type="IMPLIED_CONTRADICTION" data-severity="MEDIUM">
+          <label>Implied Contradiction</label>
+          <span class="severity MEDIUM">MED</span>
+        </div>
+        <div class="contradiction-item" onclick="toggleContradiction(this, 'ACTION_VS_WORDS', 'HIGH')">
+          <input type="checkbox" data-type="ACTION_VS_WORDS" data-severity="HIGH">
+          <label>Actions vs Words</label>
+          <span class="severity HIGH">HIGH</span>
+        </div>
+        <div class="contradiction-item" onclick="toggleContradiction(this, 'TEMPORAL_SHIFT', 'CRITICAL')">
+          <input type="checkbox" data-type="TEMPORAL_SHIFT" data-severity="CRITICAL">
+          <label>Temporal Shift</label>
+          <span class="severity CRITICAL">CRIT</span>
+        </div>
+        <div class="contradiction-item" onclick="toggleContradiction(this, 'ROLE_INCONSISTENCY', 'MEDIUM')">
+          <input type="checkbox" data-type="ROLE_INCONSISTENCY" data-severity="MEDIUM">
+          <label>Role Inconsistency</label>
+          <span class="severity MEDIUM">MED</span>
+        </div>
+        <div class="contradiction-item" onclick="toggleContradiction(this, 'DOCUMENT_INTERNAL', 'HIGH')">
+          <input type="checkbox" data-type="DOCUMENT_INTERNAL" data-severity="HIGH">
+          <label>Document Internal Error</label>
+          <span class="severity HIGH">HIGH</span>
+        </div>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label>Verification Outcome</label>
+      <select id="verificationStatus">
+        <option value="">What was the verification result?</option>
+        <option value="verified">Verified -- Document authentic</option>
+        <option value="tampered">Tampered -- Document altered</option>
+        <option value="pending">Pending -- Awaiting blockchain confirmation</option>
+      </select>
+    </div>
+
+    <button class="submit-btn" id="submitBtn" onclick="submitReport()">
+      Submit Anonymous Report
+    </button>
+  </div>
+
+  <div class="result-card" id="resultCard">
+    <h3 id="resultTitle"></h3>
+    <p id="resultMessage"></p>
+  </div>
+
+  <div class="foundation-note">
+    <h4>&#127757; How This Data Is Used</h4>
+    <p>All anonymous reports feed the Verum Omnis Foundation's AI forensic engine. The engine learns from contradiction patterns detected across the network, improving fraud detection for everyone. GPS data (anonymized to 1km) builds crime hotspot maps that direct the Foundation's 99% revenue share toward poverty alleviation in the areas that need it most. Law enforcement can view real-time dashboards at <a href="/dashboard.html" style="color:#D4A843;text-decoration:none;">/dashboard</a>. No personal data is ever collected or stored.</p>
+  </div>
+
+  <div class="site-footer">
+    Verum Omnis Foundation -- Patent Pending<br>
+    Constitution v6.0 Final -- Article X Non-Weaponization Doctrine
+  </div>
+
+</div>
+
+<script>
+var API_URL = 'https://verum-forensic-hub.liamhigh78.workers.dev';
+var selectedContradictions = [];
+
+function toggleContradiction(el, type, severity) {
+  el.classList.toggle('selected');
+  var cb = el.querySelector('input[type="checkbox"]');
+  cb.checked = el.classList.contains('selected');
+  if (cb.checked) {
+    selectedContradictions.push({ type: type, severity: severity, category: 'document_verification' });
+  } else {
+    selectedContradictions = selectedContradictions.filter(function(c) { return c.type !== type; });
+  }
+}
+
+async function submitReport() {
+  var btn = document.getElementById('submitBtn');
+  var resultCard = document.getElementById('resultCard');
+  var resultTitle = document.getElementById('resultTitle');
+  var resultMessage = document.getElementById('resultMessage');
+  var crimeType = document.getElementById('crimeType').value;
+  var verificationStatus = document.getElementById('verificationStatus').value;
+  var sealId = document.getElementById('sealIdInput').value.trim();
+  
+  if (!crimeType && selectedContradictions.length === 0) {
+    resultCard.className = 'result-card error visible';
+    resultTitle.textContent = 'Please Select a Crime Type or Contradiction';
+    resultMessage.textContent = 'We need at least one piece of information to improve the forensic engine.';
+    return;
+  }
+  
+  btn.disabled = true;
+  btn.textContent = 'Submitting...';
+  
+  try {
+    var gps = null;
+    try {
+      var pos = await new Promise(function(resolve, reject) {
+        navigator.geolocation.getCurrentPosition(resolve, reject, { enableHighAccuracy: false, timeout: 5000 });
+      });
+      gps = {
+        lat: (Math.round(pos.coords.latitude * 100) / 100).toString(),
+        lng: (Math.round(pos.coords.longitude * 100) / 100).toString()
+      };
+    } catch(e) {}
+    
+    var payload = {
+      sealId: sealId || 'anonymous-' + Date.now(),
+      timestamp: Date.now(),
+      crimeType: crimeType || 'other',
+      contradictions: selectedContradictions,
+      gps: gps,
+      deviceType: /Mobi|Android/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+      verificationStatus: verificationStatus || 'pending',
+      sealType: 'private'
+    };
+    
+    var response = await fetch(API_URL + '/api/report', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload)
+    });
+    
+    var data = await response.json();
+    
+    if (data.success) {
+      resultCard.className = 'result-card success visible';
+      resultTitle.innerHTML = '&#10003; Anonymous Report Recorded';
+      resultMessage.innerHTML = 
+        'Report ID: <code style="color:#D4A843;font-family:monospace;">' + esc(data.reportId.substring(0, 16)) + '</code><br><br>' +
+        'Your data has been added to the forensic engine. The AI backend will analyze this pattern and improve contradiction detection for all users.';
+      document.getElementById('crimeType').value = '';
+      document.getElementById('verificationStatus').value = '';
+      document.querySelectorAll('.contradiction-item.selected').forEach(function(el) {
+        el.classList.remove('selected');
+        el.querySelector('input').checked = false;
+      });
+      selectedContradictions = [];
+    } else {
+      throw new Error(data.error || 'Unknown error');
+    }
+  } catch (err) {
+    resultCard.className = 'result-card error visible';
+    resultTitle.textContent = 'Submission Failed';
+    resultMessage.textContent = (err.message || 'Please try again later.');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = 'Submit Anonymous Report';
+    resultCard.scrollIntoView({ behavior: 'smooth' });
+  }
+}
+
+function esc(s) {
+  var d = document.createElement('div');
+  d.textContent = s;
+  return d.innerHTML;
+}
+</script>
+
+</body>
+</html>
