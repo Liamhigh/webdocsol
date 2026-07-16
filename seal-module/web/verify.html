@@ -240,7 +240,7 @@
   <div class="header">
     <img src="/images/logo-full.png" alt="Verum Omnis" class="logo-main">
     <div class="label">AI FORENSICS FOR TRUTH -- CLIENT-SIDE -- NOTHING LEAVES YOUR DEVICE</div>
-    <h1>Document Verification</h1>
+    <1>Document Verification</h1>
     <p>Upload a sealed PDF to verify its SHA-512 forensic fingerprint, check OpenTimestamps blockchain confirmation, view embedded identity data, and confirm the document has not been tampered with.</p>
   </div>
 
@@ -248,7 +248,7 @@
     <div class="icon">&#128196;</div>
     <h3>Upload Sealed PDF</h3>
     <p>Drag and drop your sealed PDF here, or click to browse.</p>
-    <input type="file" id="fileInput" accept=".pdf,application/pdf">
+    <input type="file" id="fileInput" accept=".pdf,application/pdf,.voice">
   </div>
 
   <div class="voice-section" id="voiceSection" style="display:none;">
@@ -256,6 +256,7 @@
     <p>This document is password-protected. Enter the password provided by the sender to decrypt and verify.</p>
     <input type="password" id="voicePassword" placeholder="Enter password">
     <button class="decrypt-btn" onclick="decryptVoice()">Decrypt &amp; Verify</button>
+    <div id="decryptError" style="display:none;color:#ef4444;font-size:13px;margin-top:10px;"></div>
   </div>
 
   <div class="results" id="results"></div>
@@ -279,47 +280,49 @@
 </div>
 
 <script>
-let uploadedBytes = null, embeddedSha512 = null, parsedMeta = null;
+var uploadedBytes = null, embeddedSha512 = null, parsedMeta = null;
 
 function esc(s) {
-  const d = document.createElement('div');
+  var d = document.createElement('div');
   d.textContent = s;
   return d.innerHTML;
 }
 
+// ==================== ALL ASYNC FUNCTIONS USE var (Samsung Browser TDZ fix) ====================
+
 async function computeSHA512(bytes) {
-  const h = await crypto.subtle.digest('SHA-512', bytes);
-  return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
+  var h = await crypto.subtle.digest('SHA-512', bytes);
+  return Array.from(new Uint8Array(h)).map(function(b) { return b.toString(16).padStart(2,'0'); }).join('');
 }
 
 async function deriveKey(password, salt) {
-  const enc = new TextEncoder();
-  const keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
-  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
+  var enc = new TextEncoder();
+  var keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+  return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['encrypt', 'decrypt']);
 }
 
 async function decryptVoiceFile(encryptedBytes, password) {
   if (encryptedBytes.length < 28) throw new Error('Invalid .voice file');
-  const salt = encryptedBytes.slice(0, 16);
-  const iv = encryptedBytes.slice(16, 28);
-  const ciphertext = encryptedBytes.slice(28);
-  const key = await deriveKey(password, salt);
-  const decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv }, key, ciphertext);
+  var salt = encryptedBytes.slice(0, 16);
+  var iv = encryptedBytes.slice(16, 28);
+  var ciphertext = encryptedBytes.slice(28);
+  var key = await deriveKey(password, salt);
+  var decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, ciphertext);
   return new Uint8Array(decrypted);
 }
 
 // ==================== URL PARAM PARSING ====================
 
 function parseUrlParams() {
-  const params = new URLSearchParams(window.location.search);
-  const h = params.get('h');
-  const m = params.get('m');
+  var params = new URLSearchParams(window.location.search);
+  var h = params.get('h');
+  var m = params.get('m');
   if (!h || !m) return null;
   try {
-    const metaStr = decodeURIComponent(m);
-    const metaJson = atob(metaStr);
-    const meta = JSON.parse(metaJson);
-    return { hashPrefix: h, meta };
+    var metaStr = decodeURIComponent(m);
+    var metaJson = atob(metaStr);
+    var meta = JSON.parse(metaJson);
+    return { hashPrefix: h, meta: meta };
   } catch (e) {
     console.warn('QR metadata parse failed:', e.message);
     return { hashPrefix: h, meta: null };
@@ -330,7 +333,7 @@ function parseUrlParams() {
 
 function showIdentityCard(meta) {
   if (!meta) return '';
-  let html = '<div class="identity-card"><h4>&#128100; Sender Identity</h4>';
+  var html = '<div class="identity-card"><h4>&#128100; Sender Identity</h4>';
   if (meta.id) {
     if (meta.id.n) html += '<div class="identity-row"><dt>Name</dt><dd>' + esc(meta.id.n) + '</dd></div>';
     if (meta.id.id) html += '<div class="identity-row"><dt>ID/Passport</dt><dd>' + esc(meta.id.id) + '</dd></div>';
@@ -344,7 +347,7 @@ function showIdentityCard(meta) {
   if (meta.sha512) html += '<div class="identity-row"><dt>SHA-512</dt><dd style="font-size:10px;word-break:break-all;">' + esc(meta.sha512.substring(0, 32)) + '...</dd></div>';
   if (meta.otsDigest) html += '<div class="identity-row"><dt>OTS Digest</dt><dd style="font-size:10px;word-break:break-all;">' + esc(meta.otsDigest.substring(0, 32)) + '...</dd></div>';
   if (meta.t) {
-    const d = new Date(meta.t);
+    var d = new Date(meta.t);
     html += '<div class="identity-row"><dt>Sealed</dt><dd>' + d.toLocaleString('en-GB') + '</dd></div>';
   }
   if (meta.dev) html += '<div class="identity-row"><dt>Device</dt><dd>' + esc(meta.dev) + '</dd></div>';
@@ -369,7 +372,7 @@ function showFraudStatus(meta) {
 
 // ==================== QR CODE AUTO-DETECT ====================
 
-const urlParams = parseUrlParams();
+var urlParams = parseUrlParams();
 if (urlParams && urlParams.hashPrefix) {
   embeddedSha512 = urlParams.hashPrefix;
   parsedMeta = urlParams.meta;
@@ -379,19 +382,19 @@ if (urlParams && urlParams.hashPrefix) {
 
 // ==================== FILE UPLOAD ====================
 
-document.getElementById('uploadZone').addEventListener('click', () => document.getElementById('fileInput').click());
-document.getElementById('fileInput').addEventListener('change', (e) => {
+document.getElementById('uploadZone').addEventListener('click', function() { document.getElementById('fileInput').click(); });
+document.getElementById('fileInput').addEventListener('change', function(e) {
   if (e.target.files.length > 0) handleFile(e.target.files[0]);
 });
 
-['dragover','dragleave','drop'].forEach(evt => {
-  const uz = document.getElementById('uploadZone');
-  uz.addEventListener(evt, (e) => {
+['dragover','dragleave','drop'].forEach(function(evt) {
+  var uz = document.getElementById('uploadZone');
+  uz.addEventListener(evt, function(e) {
     e.preventDefault();
     uz.classList.toggle('dragover', evt === 'dragover');
     if (evt === 'drop' && e.dataTransfer.files.length > 0) {
-      const f = e.dataTransfer.files[0];
-      if (f.type === 'application/pdf' || f.name.endsWith('.pdf')) handleFile(f);
+      var f = e.dataTransfer.files[0];
+      if (f.type === 'application/pdf' || f.name.endsWith('.pdf') || f.name.endsWith('.voice')) handleFile(f);
     }
   });
 });
@@ -400,9 +403,14 @@ async function handleFile(file) {
   if (file.size > 50 * 1024 * 1024) { alert('File too large. Max 50MB.'); return; }
   uploadedBytes = new Uint8Array(await file.arrayBuffer());
 
+  // Hide any previous error
+  var errEl = document.getElementById('decryptError');
+  if (errEl) errEl.style.display = 'none';
+
   // Check if it's a .voice encrypted file
   if (file.name.endsWith('.voice')) {
     document.getElementById('voiceSection').style.display = 'block';
+    document.getElementById('results').classList.remove('visible');
     return;
   }
 
@@ -430,19 +438,17 @@ async function handleFile(file) {
 
 async function checkEmbeddedSeal() {
   try {
-    // Look for VO-SEAL|sha512|sealId pattern in the PDF bytes
-    const text = new TextDecoder().decode(uploadedBytes.slice(0, Math.min(uploadedBytes.length, 200000)));
-    const match = text.match(/VO-SEAL\|([a-f0-9]{128})\|(VO-[A-Z0-9]{12})/);
+    var text = new TextDecoder().decode(uploadedBytes.slice(0, Math.min(uploadedBytes.length, 200000)));
+    var match = text.match(/VO-SEAL\|([a-f0-9]{128})\|(VO-[A-Z0-9]{12})/);
     if (match) {
       embeddedSha512 = match[1];
-      // Check for OTS proof embedded in Subject
-      const otsMatch = text.match(/\|OTS:([A-Za-z0-9+/=]+)/);
+      var otsMatch = text.match(/\|OTS:([A-Za-z0-9+/=]+)/);
       if (otsMatch && !parsedMeta) parsedMeta = {};
       if (otsMatch && parsedMeta) {
         try {
-          const otsBinary = atob(otsMatch[1]);
-          const otsBytes = new Uint8Array(otsBinary.length);
-          for (let i = 0; i < otsBinary.length; i++) otsBytes[i] = otsBinary.charCodeAt(i);
+          var otsBinary = atob(otsMatch[1]);
+          var otsBytes = new Uint8Array(otsBinary.length);
+          for (var i = 0; i < otsBinary.length; i++) otsBytes[i] = otsBinary.charCodeAt(i);
           parsedMeta.embeddedOTS = otsBytes;
         } catch(e) {}
       }
@@ -454,8 +460,13 @@ async function checkEmbeddedSeal() {
 
 async function decryptVoice() {
   var password = document.getElementById('voicePassword').value;
-  if (!password || password.length < 8) { alert('Password must be at least 8 characters'); return; }
+  var errorEl = document.getElementById('decryptError');
+  if (!password || password.length < 8) {
+    if (errorEl) { errorEl.textContent = 'Password must be at least 8 characters'; errorEl.style.display = 'block'; }
+    return;
+  }
   try {
+    if (errorEl) errorEl.style.display = 'none';
     var decrypted = await decryptVoiceFile(uploadedBytes, password);
     uploadedBytes = decrypted;
     document.getElementById('voiceSection').style.display = 'none';
@@ -469,20 +480,28 @@ async function decryptVoice() {
       document.getElementById('results').classList.add('visible');
     }
   } catch (e) {
-    alert('Decryption failed: ' + e.message);
+    console.error('Decryption error:', e);
+    var errMsg = e && e.message ? e.message : 'Unknown error';
+    if (errMsg.indexOf('salt') !== -1 || errMsg.indexOf('initialization') !== -1 || errMsg.indexOf('before') !== -1) {
+      errMsg = 'Browser compatibility issue. Try using Chrome or Edge instead of Samsung Browser.';
+    }
+    if (errorEl) {
+      errorEl.textContent = 'Decryption failed: ' + errMsg;
+      errorEl.style.display = 'block';
+    } else {
+      alert('Decryption failed: ' + errMsg);
+    }
   }
 }
 
 // ==================== OTS BLOCKCHAIN CHECK ====================
 
-// Query OpenTimestamps calendar for blockchain confirmation status
-// Returns: 'confirmed', 'pending', or 'unknown'
 async function checkOTSBlockchain(otsDigestHex) {
   try {
-    const hashBytes = hexToBytes(otsDigestHex);
-    const ctrl = new AbortController();
-    const to = setTimeout(() => ctrl.abort(), 10000);
-    const res = await fetch('https://a.pool.opentimestamps.org/digest', {
+    var hashBytes = hexToBytes(otsDigestHex);
+    var ctrl = new AbortController();
+    var to = setTimeout(function() { ctrl.abort(); }, 10000);
+    var res = await fetch('https://a.pool.opentimestamps.org/digest', {
       method: 'POST',
       headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/vnd.opentimestamps.v1' },
       body: hashBytes,
@@ -490,7 +509,7 @@ async function checkOTSBlockchain(otsDigestHex) {
     });
     clearTimeout(to);
     if (res.ok) {
-      const proof = await res.arrayBuffer();
+      var proof = await res.arrayBuffer();
       if (proof.byteLength > 100) return 'confirmed';
       if (proof.byteLength > 0) return 'pending';
     }
@@ -503,30 +522,37 @@ async function checkOTSBlockchain(otsDigestHex) {
 
 // Helper: convert hex string to Uint8Array
 function hexToBytes(hex) {
-  const b = new Uint8Array(hex.length / 2);
-  for (let i = 0; i < hex.length; i += 2) b[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+  var b = new Uint8Array(hex.length / 2);
+  for (var i = 0; i < hex.length; i += 2) b[i / 2] = parseInt(hex.substring(i, i + 2), 16);
   return b;
 }
 
 // ==================== MAIN VERIFICATION ====================
 
 async function verifyFile() {
-  const resultsEl = document.getElementById('results');
+  var resultsEl = document.getElementById('results');
   resultsEl.innerHTML = '<div class="status-card"><h3 class="pending">&#8987; Verifying...</h3><p style="font-size:14px;color:#D5D8DD;">Computing SHA-512 hash and checking blockchain status...</p></div>';
   resultsEl.classList.add('visible');
 
   try {
-    const computedSha512 = await computeSHA512(uploadedBytes.buffer || uploadedBytes);
-    const isMatch = embeddedSha512 ? computedSha512 === embeddedSha512 : (urlParams && urlParams.hashPrefix ? computedSha512.startsWith(urlParams.hashPrefix) : false);
+    var computedSha512 = await computeSHA512(uploadedBytes.buffer || uploadedBytes);
+
+    // FIX v1.2.5-maint1: embeddedSha512 may be only 32 chars (QR URL prefix).
+    // Use parsedMeta.sha512 (full 128 chars from QR metadata) for proper comparison.
+    var compareSha512 = embeddedSha512;
+    if (parsedMeta && parsedMeta.sha512 && (!compareSha512 || compareSha512.length < 128)) {
+      compareSha512 = parsedMeta.sha512;
+    }
+    var isMatch = compareSha512 ? computedSha512 === compareSha512 : (urlParams && urlParams.hashPrefix ? computedSha512.startsWith(urlParams.hashPrefix) : false);
 
     // Check OTS blockchain status using the digest from QR metadata
-    let blockchainConfirmed = false;
-    let blockchainPending = false;
-    let blockchainError = false;
+    var blockchainConfirmed = false;
+    var blockchainPending = false;
+    var blockchainError = false;
 
     if (parsedMeta && parsedMeta.otsDigest) {
       try {
-        const otsStatus = await checkOTSBlockchain(parsedMeta.otsDigest);
+        var otsStatus = await checkOTSBlockchain(parsedMeta.otsDigest);
         if (otsStatus === 'confirmed') blockchainConfirmed = true;
         else if (otsStatus === 'pending') blockchainPending = true;
         else blockchainPending = true;
@@ -539,23 +565,23 @@ async function verifyFile() {
       blockchainPending = true;
     }
 
-    const integrityTickClass = isMatch ? 'match' : 'mismatch';
-    const integrityIcon = isMatch ? '&#128077;' : '&#128078;';
-    const integrityLabel = isMatch ? 'INTEGRITY VERIFIED' : 'TAMPERED -- DO NOT ACCEPT';
-    const integrityDetail = isMatch ? 'SHA-512 match confirmed' : 'Hash does not match -- document altered';
+    var integrityTickClass = isMatch ? 'match' : 'mismatch';
+    var integrityIcon = isMatch ? '&#128077;' : '&#128078;';
+    var integrityLabel = isMatch ? 'INTEGRITY VERIFIED' : 'TAMPERED -- DO NOT ACCEPT';
+    var integrityDetail = isMatch ? 'SHA-512 match confirmed' : 'Hash does not match -- document altered';
 
-    const blockchainTickClass = blockchainConfirmed ? 'match' : (blockchainPending ? 'pending' : 'mismatch');
-    const blockchainIcon = blockchainConfirmed ? '&#128077;' : (blockchainPending ? '&#8987;' : '&#128078;');
-    const blockchainLabel = blockchainConfirmed ? 'BLOCKCHAIN CONFIRMED' : (blockchainPending ? 'PENDING BLOCKCHAIN' : 'NO BLOCKCHAIN ANCHOR');
-    const blockchainDetail = blockchainConfirmed ? 'OpenTimestamps verified on Bitcoin' : (blockchainPending ? 'Calendar submitted, awaiting confirmation' : 'No blockchain anchor found');
+    var blockchainTickClass = blockchainConfirmed ? 'match' : (blockchainPending ? 'pending' : 'mismatch');
+    var blockchainIcon = blockchainConfirmed ? '&#128077;' : (blockchainPending ? '&#8987;' : '&#128078;');
+    var blockchainLabel = blockchainConfirmed ? 'BLOCKCHAIN CONFIRMED' : (blockchainPending ? 'PENDING BLOCKCHAIN' : 'NO BLOCKCHAIN ANCHOR');
+    var blockchainDetail = blockchainConfirmed ? 'OpenTimestamps verified on Bitcoin' : (blockchainPending ? 'Calendar submitted, awaiting confirmation' : 'No blockchain anchor found');
 
-    const statusClass = isMatch ? 'verified' : 'tampered';
-    const statusTitle = isMatch ? (blockchainConfirmed ? '&#10003; FULLY VERIFIED' : '&#10003; INTEGRITY VERIFIED') : '&#10005; TAMPERED -- DO NOT ACCEPT';
-    const statusDesc = isMatch
+    var statusClass = isMatch ? 'verified' : 'tampered';
+    var statusTitle = isMatch ? (blockchainConfirmed ? '&#10003; FULLY VERIFIED' : '&#10003; INTEGRITY VERIFIED') : '&#10005; TAMPERED -- DO NOT ACCEPT';
+    var statusDesc = isMatch
       ? 'The document\'s SHA-512 forensic fingerprint matches exactly. ' + (blockchainConfirmed ? 'OpenTimestamps blockchain confirmation verified.' : 'Blockchain confirmation is pending -- this is normal for fresh seals.')
       : 'The computed hash does not match the embedded seal. This document has been altered since it was sealed. Do not accept it as authentic.';
 
-    let html = '<div class="status-card">';
+    var html = '<div class="status-card">';
     html += '<h3 class="' + statusClass + '">' + statusTitle + '</h3>';
     html += '<p style="font-size:14px;color:#D5D8DD;line-height:1.7;margin-bottom:20px;">' + statusDesc + '</p>';
 
@@ -573,7 +599,7 @@ async function verifyFile() {
     html += '</div>';
 
     html += '<div class="hash-row"><label>Computed SHA-512</label><div class="hash-display">' + esc(computedSha512) + '</div></div>';
-    if (embeddedSha512) html += '<div class="hash-row"><label>Embedded SHA-512</label><div class="hash-display">' + esc(embeddedSha512) + '</div></div>';
+    if (compareSha512) html += '<div class="hash-row"><label>Embedded SHA-512</label><div class="hash-display">' + esc(compareSha512) + '</div></div>';
 
     // Show full SHA-512 from QR metadata if available
     if (parsedMeta && parsedMeta.sha512) {
