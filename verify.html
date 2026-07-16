@@ -105,6 +105,41 @@
   .verify-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(212,168,67,0.3); }
   .verify-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
+  /* Share button styles */
+  .share-section {
+    background: rgba(15, 52, 96, 0.12);
+    border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 12px; padding: 24px; margin-bottom: 24px;
+    text-align: center;
+  }
+  .share-section h4 {
+    font-family: 'Cormorant Garamond', Georgia, serif;
+    font-size: 18px; color: #D4A843; margin-bottom: 12px; font-weight: 400;
+  }
+  .share-section p { font-size: 13px; color: #D5D8DD; line-height: 1.6; margin-bottom: 16px; }
+  .share-grid { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+  .share-btn {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 12px 24px; border-radius: 10px;
+    font-size: 14px; font-weight: 600; cursor: pointer;
+    transition: all 0.3s ease; font-family: inherit;
+    border: 1px solid #D4A843; background: rgba(212,168,67,0.08);
+    color: #D4A843; text-decoration: none;
+  }
+  .share-btn:hover { background: rgba(212,168,67,0.15); }
+  .share-btn.primary {
+    background: linear-gradient(135deg, #D4A843 0%, #b8942a 100%);
+    color: #040D1B; border: none;
+  }
+  .share-btn.primary:hover { background: #E8C567; }
+  .share-btn .icon { font-size: 18px; }
+
+  .qr-share-display {
+    background: white; padding: 16px; border-radius: 12px;
+    display: inline-block; margin: 12px 0;
+  }
+  #shareQrCanvas { display: block; }
+
   .results { display: none; }
   .results.visible { display: block; }
 
@@ -216,6 +251,7 @@
     .tick-container { flex-direction: column; }
     .info-section .grid { grid-template-columns: 1fr; }
     .header h1 { font-size: 2.2rem; }
+    .share-grid { flex-direction: column; }
   }
 </style>
 </head>
@@ -281,6 +317,8 @@
 
 <script>
 var uploadedBytes = null, embeddedSha512 = null, parsedMeta = null;
+var currentPdfBlob = null;
+var currentVerifyUrl = '';
 
 function esc(s) {
   var d = document.createElement('div');
@@ -309,6 +347,95 @@ async function decryptVoiceFile(encryptedBytes, password) {
   var key = await deriveKey(password, salt);
   var decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, ciphertext);
   return new Uint8Array(decrypted);
+}
+
+// ==================== WEB SHARE API ====================
+// Uses Android native share sheet (Nearby Share, WhatsApp, email, etc.)
+
+function canShare() {
+  return typeof navigator !== 'undefined' && navigator.share;
+}
+
+async function shareVerificationLink() {
+  var shareData = {
+    title: 'Verum Omnis Document Verification',
+    text: 'Verify this sealed document on verumglobal.foundation',
+    url: currentVerifyUrl || window.location.href
+  };
+  try {
+    await navigator.share(shareData);
+  } catch (e) {
+    if (e.name !== 'AbortError') {
+      console.warn('Share failed:', e.message);
+      fallbackShare(shareData.url);
+    }
+  }
+}
+
+async function sharePdfFile() {
+  if (!currentPdfBlob) { fallbackShare(currentVerifyUrl); return; }
+  var fileName = (parsedMeta && parsedMeta.sealId ? parsedMeta.sealId : 'sealed-document') + '.pdf';
+  var file = new File([currentPdfBlob], fileName, { type: 'application/pdf' });
+  var shareData = {
+    title: 'Verum Omnis Sealed Document',
+    text: 'Sealed document from verumglobal.foundation -- Scan the QR code inside to verify.',
+    files: [file]
+  };
+  if (canShare() && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share(shareData);
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.warn('File share failed:', e.message);
+        fallbackShare(currentVerifyUrl);
+      }
+    }
+  } else {
+    fallbackShare(currentVerifyUrl);
+  }
+}
+
+function fallbackShare(url) {
+  if (!url) return;
+  var ta = document.createElement('textarea');
+  ta.value = url;
+  document.body.appendChild(ta);
+  ta.select();
+  document.execCommand('copy');
+  document.body.removeChild(ta);
+  alert('Verification link copied to clipboard. Paste it to share with others.');
+}
+
+function generateShareQr(url) {
+  if (typeof QRCode === 'undefined') return null;
+  var container = document.createElement('div');
+  container.style.cssText = 'position:fixed;left:-9999px;top:0;';
+  document.body.appendChild(container);
+  try {
+    new QRCode(container, { text: url, width: 200, height: 200, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
+  } catch(e) { document.body.removeChild(container); return null; }
+  var canvas = container.querySelector('canvas');
+  if (!canvas) { document.body.removeChild(container); return null; }
+  var dataUrl = canvas.toDataURL('image/png');
+  document.body.removeChild(container);
+  return dataUrl;
+}
+
+function getShareSectionHtml() {
+  if (!canShare()) return '';
+  var html = '<div class="share-section">';
+  html += '<h4>&#128225; Share This Verification</h4>';
+  html += '<p>Share this verified document with others via Android Nearby Share, WhatsApp, email, or any app on your device.</p>';
+  html += '<div class="share-grid">';
+  html += '<button class="share-btn primary" onclick="sharePdfFile()">';
+  html += '<span class="icon">&#128196;</span> Send PDF';
+  html += '</button>';
+  html += '<button class="share-btn" onclick="shareVerificationLink()">';
+  html += '<span class="icon">&#128279;</span> Share Link';
+  html += '</button>';
+  html += '</div>';
+  html += '</div>';
+  return html;
 }
 
 // ==================== URL PARAM PARSING ====================
@@ -344,8 +471,8 @@ function showIdentityCard(meta) {
   if (meta.type) html += '<div class="identity-row"><dt>Seal Type</dt><dd>' + esc(meta.type === 'commercial' ? 'Commercial' : 'Private') + '</dd></div>';
   if (meta.gps) html += '<div class="identity-row"><dt>Location</dt><dd>' + esc(meta.gps) + '</dd></div>';
   if (meta.sealId) html += '<div class="identity-row"><dt>Seal ID</dt><dd>' + esc(meta.sealId) + '</dd></div>';
-  if (meta.sha512) html += '<div class="identity-row"><dt>SHA-512</dt><dd style="font-size:10px;word-break:break-all;">' + esc(meta.sha512.substring(0, 32)) + '...</dd></div>';
-  if (meta.otsDigest) html += '<div class="identity-row"><dt>OTS Digest</dt><dd style="font-size:10px;word-break:break-all;">' + esc(meta.otsDigest.substring(0, 32)) + '...</dd></div>';
+  if (meta.sha512) html += '<div class="identity-row"><dt>SHA-512</dt><dd style="font-size:10px;word-break:break-all;">' + esc(meta.sha512) + '</dd></div>';
+  if (meta.otsDigest) html += '<div class="identity-row"><dt>OTS Digest</dt><dd style="font-size:10px;word-break:break-all;">' + esc(meta.otsDigest) + '</dd></div>';
   if (meta.t) {
     var d = new Date(meta.t);
     html += '<div class="identity-row"><dt>Sealed</dt><dd>' + d.toLocaleString('en-GB') + '</dd></div>';
@@ -402,6 +529,11 @@ document.getElementById('fileInput').addEventListener('change', function(e) {
 async function handleFile(file) {
   if (file.size > 50 * 1024 * 1024) { alert('File too large. Max 50MB.'); return; }
   uploadedBytes = new Uint8Array(await file.arrayBuffer());
+
+  // Store PDF blob for sharing
+  if (!file.name.endsWith('.voice')) {
+    currentPdfBlob = new Blob([uploadedBytes], { type: 'application/pdf' });
+  }
 
   // Hide any previous error
   var errEl = document.getElementById('decryptError');
@@ -469,6 +601,7 @@ async function decryptVoice() {
     if (errorEl) errorEl.style.display = 'none';
     var decrypted = await decryptVoiceFile(uploadedBytes, password);
     uploadedBytes = decrypted;
+    currentPdfBlob = new Blob([uploadedBytes], { type: 'application/pdf' });
     document.getElementById('voiceSection').style.display = 'none';
     await checkEmbeddedSeal();
     if (embeddedSha512) {
@@ -537,6 +670,9 @@ async function verifyFile() {
   try {
     var computedSha512 = await computeSHA512(uploadedBytes.buffer || uploadedBytes);
 
+    // Build the verification URL from QR metadata
+    currentVerifyUrl = window.location.href;
+
     // FIX v1.2.5-maint1: embeddedSha512 may be only 32 chars (QR URL prefix).
     // Use parsedMeta.sha512 (full 128 chars from QR metadata) for proper comparison.
     var compareSha512 = embeddedSha512;
@@ -548,7 +684,6 @@ async function verifyFile() {
     // Check OTS blockchain status using the digest from QR metadata
     var blockchainConfirmed = false;
     var blockchainPending = false;
-    var blockchainError = false;
 
     if (parsedMeta && parsedMeta.otsDigest) {
       try {
@@ -602,7 +737,7 @@ async function verifyFile() {
     if (compareSha512) html += '<div class="hash-row"><label>Embedded SHA-512</label><div class="hash-display">' + esc(compareSha512) + '</div></div>';
 
     // Show full SHA-512 from QR metadata if available
-    if (parsedMeta && parsedMeta.sha512) {
+    if (parsedMeta && parsedMeta.sha512 && parsedMeta.sha512 !== compareSha512) {
       html += '<div class="hash-row"><label>QR SHA-512 (Full)</label><div class="hash-display" style="color:#D4A843;">' + esc(parsedMeta.sha512) + '</div></div>';
     }
 
@@ -617,6 +752,11 @@ async function verifyFile() {
     html += showIdentityCard(parsedMeta);
     html += showFraudStatus(parsedMeta);
 
+    // Share section (Web Share API for Android Nearby Share)
+    if (isMatch && canShare()) {
+      html += getShareSectionHtml();
+    }
+
     resultsEl.innerHTML = html;
 
   } catch (err) {
@@ -627,5 +767,9 @@ async function verifyFile() {
   }
 }
 </script>
+
+<!-- QRCode.js for generating share QR codes -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+
 </body>
 </html>
