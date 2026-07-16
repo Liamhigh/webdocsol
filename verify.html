@@ -105,34 +105,74 @@
   .verify-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 30px rgba(212,168,67,0.3); }
   .verify-btn:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-  /* Share button styles */
+  /* ==================== SHARE SECTION ==================== */
   .share-section {
     background: rgba(15, 52, 96, 0.12);
     border: 1px solid rgba(26, 46, 82, 0.5);
-    border-radius: 12px; padding: 24px; margin-bottom: 24px;
+    border-radius: 16px; padding: 28px; margin-bottom: 24px;
     text-align: center;
   }
   .share-section h4 {
     font-family: 'Cormorant Garamond', Georgia, serif;
-    font-size: 18px; color: #D4A843; margin-bottom: 12px; font-weight: 400;
+    font-size: 20px; color: #D4A843; margin-bottom: 8px; font-weight: 400;
   }
-  .share-section p { font-size: 13px; color: #D5D8DD; line-height: 1.6; margin-bottom: 16px; }
+  .share-section .subtitle {
+    font-size: 12px; color: #4A7EC7; margin-bottom: 20px;
+    font-family: 'Courier New', monospace; text-transform: uppercase;
+    letter-spacing: 0.06em;
+  }
+  .share-section .custody-flow {
+    font-size: 13px; color: #D5D8DD; line-height: 1.7;
+    margin-bottom: 20px; text-align: left;
+    background: rgba(4, 13, 27, 0.4); border-radius: 10px;
+    padding: 16px; border: 1px solid rgba(26, 46, 82, 0.4);
+  }
+  .share-section .custody-flow strong { color: #F8F9FA; }
+  .share-section .custody-flow ol { margin-left: 18px; padding-left: 0; }
+  .share-section .custody-flow li { margin-bottom: 6px; }
+
   .share-grid { display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; }
+
+  /* Samsung Quick Share -- prominent primary button */
+  .share-btn-quick {
+    display: inline-flex; align-items: center; gap: 10px;
+    padding: 16px 32px; border-radius: 12px;
+    font-size: 15px; font-weight: 700; cursor: pointer;
+    transition: all 0.3s ease; font-family: inherit;
+    background: linear-gradient(135deg, #1B76FF 0%, #1259CC 100%);
+    color: #ffffff; border: none;
+    box-shadow: 0 4px 20px rgba(27, 118, 255, 0.3);
+    text-transform: uppercase; letter-spacing: 0.03em;
+  }
+  .share-btn-quick:hover {
+    background: linear-gradient(135deg, #3D8AFF 0%, #1B76FF 100%);
+    box-shadow: 0 6px 30px rgba(27, 118, 255, 0.5);
+    transform: translateY(-1px);
+  }
+  .share-btn-quick .icon { font-size: 22px; }
+
+  /* Secondary share buttons */
   .share-btn {
     display: inline-flex; align-items: center; gap: 8px;
-    padding: 12px 24px; border-radius: 10px;
-    font-size: 14px; font-weight: 600; cursor: pointer;
+    padding: 12px 22px; border-radius: 10px;
+    font-size: 13px; font-weight: 600; cursor: pointer;
     transition: all 0.3s ease; font-family: inherit;
-    border: 1px solid #D4A843; background: rgba(212,168,67,0.08);
-    color: #D4A843; text-decoration: none;
+    border: 1px solid #1A2E52; background: rgba(15, 52, 96, 0.2);
+    color: #4A7EC7;
   }
-  .share-btn:hover { background: rgba(212,168,67,0.15); }
-  .share-btn.primary {
-    background: linear-gradient(135deg, #D4A843 0%, #b8942a 100%);
-    color: #040D1B; border: none;
+  .share-btn:hover { border-color: #D4A843; color: #D4A843; background: rgba(212,168,67,0.08); }
+  .share-btn .icon { font-size: 16px; }
+
+  /* Copy link button */
+  .share-btn-copy {
+    display: inline-flex; align-items: center; gap: 8px;
+    padding: 10px 20px; border-radius: 8px;
+    font-size: 12px; font-weight: 600; cursor: pointer;
+    transition: all 0.3s ease; font-family: inherit;
+    background: none; border: 1px solid rgba(26, 46, 82, 0.5);
+    color: #4A7EC7; font-family: 'Courier New', monospace;
   }
-  .share-btn.primary:hover { background: #E8C567; }
-  .share-btn .icon { font-size: 18px; }
+  .share-btn-copy:hover { color: #D4A843; border-color: #D4A843; }
 
   .qr-share-display {
     background: white; padding: 16px; border-radius: 12px;
@@ -252,6 +292,8 @@
     .info-section .grid { grid-template-columns: 1fr; }
     .header h1 { font-size: 2.2rem; }
     .share-grid { flex-direction: column; }
+    .share-btn-quick { width: 100%; justify-content: center; }
+    .share-btn { width: 100%; justify-content: center; }
   }
 </style>
 </head>
@@ -350,10 +392,35 @@ async function decryptVoiceFile(encryptedBytes, password) {
 }
 
 // ==================== WEB SHARE API ====================
-// Uses Android native share sheet (Nearby Share, WhatsApp, email, etc.)
+// Uses Android native share sheet (Samsung Quick Share, Nearby Share, WhatsApp, email, etc.)
 
 function canShare() {
   return typeof navigator !== 'undefined' && navigator.share;
+}
+
+async function quickSharePdf() {
+  // Samsung Quick Share -- shares the PDF file via Android native share sheet
+  // On Samsung devices, Quick Share appears as the top option in the share sheet
+  if (!currentPdfBlob) { fallbackShare(currentVerifyUrl); return; }
+  var fileName = (parsedMeta && parsedMeta.sealId ? parsedMeta.sealId : 'sealed-document') + '.pdf';
+  var file = new File([currentPdfBlob], fileName, { type: 'application/pdf' });
+  var shareData = {
+    title: 'Verum Omnis Sealed Document',
+    text: 'Sealed document from verumglobal.foundation -- recipient scans QR code inside to verify authenticity. Chain of custody transfer.',
+    files: [file]
+  };
+  if (canShare() && navigator.canShare && navigator.canShare({ files: [file] })) {
+    try {
+      await navigator.share(shareData);
+    } catch (e) {
+      if (e.name !== 'AbortError') {
+        console.warn('Quick Share failed:', e.message);
+        fallbackShare(currentVerifyUrl);
+      }
+    }
+  } else {
+    fallbackShare(currentVerifyUrl);
+  }
 }
 
 async function shareVerificationLink() {
@@ -373,6 +440,7 @@ async function shareVerificationLink() {
 }
 
 async function sharePdfFile() {
+  // Generic PDF share -- same as Quick Share but labelled differently
   if (!currentPdfBlob) { fallbackShare(currentVerifyUrl); return; }
   var fileName = (parsedMeta && parsedMeta.sealId ? parsedMeta.sealId : 'sealed-document') + '.pdf';
   var file = new File([currentPdfBlob], fileName, { type: 'application/pdf' });
@@ -406,32 +474,37 @@ function fallbackShare(url) {
   alert('Verification link copied to clipboard. Paste it to share with others.');
 }
 
-function generateShareQr(url) {
-  if (typeof QRCode === 'undefined') return null;
-  var container = document.createElement('div');
-  container.style.cssText = 'position:fixed;left:-9999px;top:0;';
-  document.body.appendChild(container);
-  try {
-    new QRCode(container, { text: url, width: 200, height: 200, colorDark: '#000000', colorLight: '#ffffff', correctLevel: QRCode.CorrectLevel.H });
-  } catch(e) { document.body.removeChild(container); return null; }
-  var canvas = container.querySelector('canvas');
-  if (!canvas) { document.body.removeChild(container); return null; }
-  var dataUrl = canvas.toDataURL('image/png');
-  document.body.removeChild(container);
-  return dataUrl;
-}
-
 function getShareSectionHtml() {
   if (!canShare()) return '';
   var html = '<div class="share-section">';
-  html += '<h4>&#128225; Share This Verification</h4>';
-  html += '<p>Share this verified document with others via Android Nearby Share, WhatsApp, email, or any app on your device.</p>';
+  html += '<h4>&#9889; Transfer Document</h4>';
+  html += '<div class="subtitle">Chain of Custody -- Samsung Quick Share</div>';
+  html += '<div class="custody-flow">';
+  html += '<ol>';
+  html += '<li>Tap <strong>Quick Share</strong> below to send the sealed PDF to the next party</li>';
+  html += '<li>Recipient receives the PDF on their Samsung device</li>';
+  html += '<li>They open the PDF and scan the QR code inside</li>';
+  html += '<li>QR takes them to <strong>verumglobal.foundation/verify</strong></li>';
+  html += '<li>They upload the PDF -- green tick confirms it\'s authentic</li>';
+  html += '<li><strong>Chain of custody logged</strong> -- GPS, timestamp, device recorded</li>';
+  html += '</ol>';
+  html += '</div>';
   html += '<div class="share-grid">';
-  html += '<button class="share-btn primary" onclick="sharePdfFile()">';
+  // Primary: Samsung Quick Share button (blue, prominent)
+  html += '<button class="share-btn-quick" onclick="quickSharePdf()">';
+  html += '<span class="icon">&#9889;</span> Quick Share PDF';
+  html += '</button>';
+  html += '</div>';
+  html += '<div class="share-grid" style="margin-top:12px;">';
+  // Secondary options
+  html += '<button class="share-btn" onclick="sharePdfFile()">';
   html += '<span class="icon">&#128196;</span> Send PDF';
   html += '</button>';
   html += '<button class="share-btn" onclick="shareVerificationLink()">';
   html += '<span class="icon">&#128279;</span> Share Link';
+  html += '</button>';
+  html += '<button class="share-btn-copy" onclick="fallbackShare(currentVerifyUrl)">';
+  html += '<span class="icon">&#128203;</span> Copy Link';
   html += '</button>';
   html += '</div>';
   html += '</div>';
@@ -752,7 +825,7 @@ async function verifyFile() {
     html += showIdentityCard(parsedMeta);
     html += showFraudStatus(parsedMeta);
 
-    // Share section (Web Share API for Android Nearby Share)
+    // Share section -- Samsung Quick Share for chain of custody transfer
     if (isMatch && canShare()) {
       html += getShareSectionHtml();
     }
