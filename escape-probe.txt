@@ -1,6 +1,6 @@
-var a = '';
-var b = '\\u2713';
-var c = '✓';
-var d = '◐';
-bare \u2713 tail
-var e = 'A‚AúA√AøAàA◊AÄA';
+t1='\\';
+t2='\u005Cu2713';
+t3='\\';
+t4=' ';
+t5='\u005Cu2014';
+t6='\u005Cu25D0';
