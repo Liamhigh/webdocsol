@@ -1,4 +1,4 @@
-L1 copied:  badge.textContent = s==='complete'?'':s==='processing'?'◐':s==='error'?'✕':'○';
-L2 fresh:  badge.textContent = s==='complete'?'':s==='processing'?'◐':s==='error'?'✕':'○';
-L3 fresh:      if (!/\S/.test(t)) { texts.push(' '); return; } // word boundary sentinel
-L4 fresh:  var bannerText = 'FORENSIC INDICATORS FLAGGED — SEE SEALED REPORT';
+Poem line one has '' inside quotes here
+And '◐' and '✕' and '○' too my friend
+Plus ' ' and also ' ' and '—' at the end
+Raw bytes: \u2713 \u25D0 \u2715 \u25CB \u0000 \u2014
