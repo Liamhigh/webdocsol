@@ -425,6 +425,7 @@
 
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="/forensic-report.js"></script>
 <script>
 const { PDFDocument, rgb, StandardFonts } = PDFLib;
 
@@ -575,7 +576,7 @@ async function submitToOTS(otsDigestHex) {
 function updateStep(n, s, d) {
   const badge = document.getElementById('step'+n).querySelector('.status');
   badge.className = 'status ' + s;
-  badge.textContent = s==='complete'?'&#10003;':s==='processing'?'&#9680;':s==='error'?'&#10005;':'&#9675;';
+  badge.textContent = s==='complete'?'✓':s==='processing'?'◐':s==='error'?'✕':'○';
   if (d) document.getElementById('detail'+n).textContent = d;
 }
 
@@ -2201,6 +2202,232 @@ function detectSerialPatterns(textBlocks) {
   return findings;
 }
 
+// ===================== PER-PAGE TEXT EXTRACTION (with ToUnicode CMap) =====================
+// Restores per-page forensic page anchoring. Uses pdf-lib low-level objects.
+// Returns array of word tokens for one page (same shape as extractPdfText).
+
+function _voParseToUnicode(cmapStr) {
+  // Parse beginbfchar / beginbfrange blocks of a ToUnicode CMap.
+  var map = {};
+  var i, j;
+  var bfcharRe = /beginbfchar([\s\S]*?)endbfchar/g;
+  var m;
+  while ((m = bfcharRe.exec(cmapStr)) !== null) {
+    var pairs = m[1].match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g) || [];
+    for (i = 0; i < pairs.length; i++) {
+      var p = pairs[i].match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/);
+      if (p) map[p[1].toUpperCase()] = _voHexToUniStr(p[2]);
+    }
+  }
+  var bfrangeRe = /beginbfrange([\s\S]*?)endbfrange/g;
+  while ((m = bfrangeRe.exec(cmapStr)) !== null) {
+    var body = m[1];
+    // Array form: <start> <end> [<u1> <u2> ...]
+    var arrRe = /<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[([\s\S]*?)\]/g;
+    var am;
+    while ((am = arrRe.exec(body)) !== null) {
+      var start = parseInt(am[1], 16);
+      var codes = am[3].match(/<([0-9A-Fa-f]+)>/g) || [];
+      for (j = 0; j < codes.length; j++) {
+        var codeHex = (start + j).toString(16).toUpperCase();
+        while (codeHex.length < am[1].length) codeHex = '0' + codeHex;
+        map[codeHex] = _voHexToUniStr(codes[j].slice(1, -1));
+      }
+    }
+    // Sequential form: <start> <end> <base>
+    var seqRe = /<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g;
+    var sm;
+    var bodyNoArr = body.replace(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[[\s\S]*?\]/g, '');
+    while ((sm = seqRe.exec(bodyNoArr)) !== null) {
+      var lo = parseInt(sm[1], 16), hi = parseInt(sm[2], 16);
+      var baseHex = sm[3];
+      var base = parseInt(baseHex, 16);
+      if (hi - lo > 4096) continue; // sanity guard
+      for (j = lo; j <= hi; j++) {
+        var ch = (j).toString(16).toUpperCase();
+        while (ch.length < sm[1].length) ch = '0' + ch;
+        var uni = (base + (j - lo)).toString(16).toUpperCase();
+        while (uni.length < baseHex.length) uni = '0' + uni;
+        map[ch] = _voHexToUniStr(uni);
+      }
+    }
+  }
+  return map;
+}
+
+function _voHexToUniStr(hex) {
+  // Interpret hex as UTF-16BE code units
+  var out = '';
+  if (hex.length % 4 !== 0) hex = ('000' + hex).slice(-(Math.ceil(hex.length / 4) * 4));
+  for (var i = 0; i + 4 <= hex.length; i += 4) {
+    out += String.fromCharCode(parseInt(hex.substring(i, i + 4), 16));
+  }
+  return out;
+}
+
+function _voDecodeParenString(raw) {
+  // Decode PDF literal string escapes
+  var out = '';
+  for (var i = 0; i < raw.length; i++) {
+    var c = raw[i];
+    if (c === '\\' && i + 1 < raw.length) {
+      var n = raw[i + 1];
+      if (n === 'n') { out += '\n'; i++; }
+      else if (n === 'r') { out += '\r'; i++; }
+      else if (n === 't') { out += '\t'; i++; }
+      else if (n === 'b' || n === 'f') { i++; }
+      else if (n === '(' || n === ')' || n === '\\') { out += n; i++; }
+      else if (n >= '0' && n <= '7') {
+        var oct = n; var k = i + 2;
+        while (k < raw.length && k < i + 4 && raw[k] >= '0' && raw[k] <= '7') { oct += raw[k]; k++; }
+        out += String.fromCharCode(parseInt(oct, 8) & 0xFF);
+        i = k - 1;
+      }
+      else if (n === '\n' || n === '\r') { i++; if (n === '\r' && raw[i + 1] === '\n') i++; }
+      else { out += n; i++; }
+    } else {
+      out += c;
+    }
+  }
+  return out;
+}
+
+function _voDecodeHexString(hex, cmap) {
+  hex = hex.replace(/\s+/g, '');
+  var out = '';
+  if (cmap && Object.keys(cmap).length > 0) {
+    // Type0 Identity-H: 2-byte codes (4 hex chars)
+    for (var i = 0; i + 4 <= hex.length; i += 4) {
+      var code = hex.substring(i, i + 4).toUpperCase();
+      if (cmap[code] !== undefined) out += cmap[code];
+      else {
+        var cp = parseInt(code, 16);
+        if (cp >= 32 && cp < 0xD800) out += String.fromCharCode(cp);
+      }
+    }
+  } else {
+    // No cmap: try UTF-16BE then latin1 bytes
+    if (hex.length % 4 === 0) {
+      for (var j = 0; j + 4 <= hex.length; j += 4) {
+        var v = parseInt(hex.substring(j, j + 4), 16);
+        if (v >= 32 && v < 0xD800) out += String.fromCharCode(v);
+      }
+    }
+    if (!out) {
+      for (var k = 0; k + 2 <= hex.length; k += 2) {
+        var b = parseInt(hex.substring(k, k + 2), 16);
+        if (b >= 32 && b <= 126) out += String.fromCharCode(b);
+      }
+    }
+  }
+  return out;
+}
+
+async function extractPageText(pdfBytes, pageIndex) {
+  var texts = [];
+  try {
+    var doc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+    var page = doc.getPages()[pageIndex];
+    if (!page) return texts;
+
+    // Build per-font ToUnicode maps from page resources
+    var fontMaps = {};
+    try {
+      var res = doc.context.lookup(page.node.get(PDFLib.PDFName.of('Resources')));
+      var fontsRef = res && res.get(PDFLib.PDFName.of('Font'));
+      var fonts = fontsRef && doc.context.lookup(fontsRef);
+      if (fonts && fonts.entries) {
+        var entries = fonts.entries();
+        for (var e = 0; e < entries.length; e++) {
+          var fname = entries[e][0].asString().replace(/^\//, '');
+          var fobj = doc.context.lookup(entries[e][1]);
+          var cmap = null;
+          try {
+            var tuRef = fobj && fobj.get(PDFLib.PDFName.of('ToUnicode'));
+            var tuObj = tuRef && doc.context.lookup(tuRef);
+            if (tuObj && PDFLib.PDFRawStream && tuObj instanceof PDFLib.PDFRawStream) {
+              var cmapBytes = PDFLib.decodePDFRawStream(tuObj).decode();
+              cmap = _voParseToUnicode(new TextDecoder('utf-8', { fatal: false }).decode(cmapBytes));
+            }
+          } catch (e2) {}
+          fontMaps[fname] = cmap;
+        }
+      }
+    } catch (e) {}
+
+    // Decode page content stream(s)
+    var contents = doc.context.lookup(page.node.get(PDFLib.PDFName.of('Contents')));
+    var streams = [];
+    if (contents) {
+      if (PDFLib.PDFArray && contents instanceof PDFLib.PDFArray) {
+        for (var k = 0; k < contents.size(); k++) streams.push(doc.context.lookup(contents.get(k)));
+      } else {
+        streams.push(contents);
+      }
+    }
+
+    var curFont = null;
+    var pushText = function (t) {
+      if (!t) return;
+      if (!/\S/.test(t)) { texts.push(' '); return; } // word boundary sentinel
+      var tokens = t.split(/\s+/);
+      for (var q = 0; q < tokens.length; q++) {
+        var w = tokens[q];
+        if (w && w.replace(/[^a-zA-Z0-9]/g, '').length >= 1) texts.push(w);
+      }
+    };
+
+    for (var s = 0; s < streams.length; s++) {
+      var st = streams[s];
+      if (!(PDFLib.PDFRawStream && st instanceof PDFLib.PDFRawStream)) continue;
+      var u8;
+      try { u8 = PDFLib.decodePDFRawStream(st).decode(); } catch (e3) { continue; }
+      var str = new TextDecoder('utf-8', { fatal: false }).decode(u8);
+
+      // Walk the stream in order: font selects, literal strings, hex strings, TJ arrays
+      var re = /\/([A-Za-z0-9]+)\s+[\d.]+\s+Tf|\(((?:\\.|[^\\()])*)\)\s*(Tj|'|")|<([0-9A-Fa-f\s]+)>\s*Tj|\[([\s\S]*?)\]\s*TJ/g;
+      var m;
+      while ((m = re.exec(str)) !== null) {
+        if (m[1]) { curFont = m[1]; continue; }
+        var cmap = curFont ? fontMaps[curFont] : null;
+        if (m[2] !== undefined) { pushText(_voDecodeParenString(m[2])); continue; }
+        if (m[4] !== undefined) { pushText(_voDecodeHexString(m[4], cmap)); continue; }
+        if (m[5] !== undefined) {
+          // TJ array: mix of <hex> and (literal) chunks with kerning numbers
+          var body = m[5];
+          var chunkRe = /<([0-9A-Fa-f\s]+)>|\(((?:\\.|[^\\()])*)\)/g;
+          var cm;
+          var acc = '';
+          while ((cm = chunkRe.exec(body)) !== null) {
+            if (cm[1] !== undefined) acc += _voDecodeHexString(cm[1], cmap);
+            else acc += _voDecodeParenString(cm[2]);
+          }
+          pushText(acc);
+        }
+      }
+    }
+    // Merge letter-spaced runs ("N F O" -> "NFO") within word boundaries only
+    var merged = [];
+    var run = [];
+    for (var t = 0; t <= texts.length; t++) {
+      var tok = t < texts.length ? texts[t] : null;
+      if (tok === ' ' || tok === null) { // word boundary
+        if (run.length >= 2) merged.push(run.join(''));
+        else for (var r2 = 0; r2 < run.length; r2++) merged.push(run[r2]);
+        run = [];
+        if (tok !== null) continue; else break;
+      }
+      if (tok.length === 1 && /[a-zA-Z0-9]/.test(tok)) { run.push(tok); continue; }
+      if (run.length >= 2) merged.push(run.join(''));
+      else for (var r3 = 0; r3 < run.length; r3++) merged.push(run[r3]);
+      run = [];
+      merged.push(tok);
+    }
+    texts = merged;
+  } catch (e) {}
+  return texts;
+}
+
 // ===================== MAIN FORENSIC ENGINE =====================
 
 async function runForensicEngine(pdfBytes, pdfDoc) {
@@ -2208,14 +2435,21 @@ async function runForensicEngine(pdfBytes, pdfDoc) {
 
   // Extract text blocks (one per page)
   var textBlocks = [];
+  var extractionNote = 'Per-page PDF content-stream decoding with ToUnicode CMaps.';
   try {
     var pages = pdfDoc.getPages();
     for (var i = 0; i < pages.length; i++) {
       var texts = await extractPageText(pdfBytes, i);
       textBlocks.push(texts.join(' '));
     }
+    // If per-page extraction yielded almost nothing (image-only PDF or parse
+    // failure), disclose it and use the whole-document raw scan instead.
+    if (textBlocks.join(' ').replace(/\s+/g, '').length < 20) {
+      throw new Error('per-page extraction yielded too little text');
+    }
   } catch(e) {
     // Fallback: treat entire document as one block
+    extractionNote = 'FALLBACK: per-page text extraction failed (' + (e && e.message ? e.message : 'unknown error') + '); whole-document raw stream scan used. Page anchors may be degraded.';
     var allTexts = await extractPdfText(pdfBytes);
     textBlocks = [allTexts.join(' ')];
   }
@@ -2324,6 +2558,7 @@ async function runForensicEngine(pdfBytes, pdfDoc) {
     findingsByCategory: findingsByCategory,
     contradictionTypesUsed: Object.keys(findingsByType).length,
     serialPatternsDetected: allFindings.filter(function(f){return f.type==='SERIAL';}).length,
+    extractionNotes: extractionNote,
     summary: generateSummary(allFindings, overallScore)
   };
 }
@@ -2367,17 +2602,17 @@ async function drawFraudWatermark(page, pageW, pageH, helv, helvBold, pageIndex,
   page.drawLine({ start: { x: pageW - m, y: pageH - m }, end: { x: m, y: m }, thickness: lineW, color: rgb(0.85, 0.2, 0.15), opacity: 0.25 });
   var bannerH = pageH * 0.045;
   page.drawRectangle({ x: 0, y: pageH - bannerH, width: pageW, height: bannerH, color: rgb(0.85, 0.2, 0.15), opacity: 0.85 });
-  var bannerText = 'FRAUDULENT CONTENT DETECTED';
+  var bannerText = 'FORENSIC INDICATORS FLAGGED — SEE SEALED REPORT';
   var bannerFs = Math.min(pageW * 0.022, bannerH * 0.5);
   var bannerTextW = bannerText.length * bannerFs * 0.55;
   page.drawText(bannerText, { x: (pageW - bannerTextW) / 2, y: pageH - bannerH + (bannerH - bannerFs) / 2, size: bannerFs, font: helvBold, color: rgb(1, 1, 1) });
-  var subLabel = 'Flagged by Verum Omnis fraud detection -- seal preserves evidence integrity';
+  var subLabel = 'Flagged by Verum Omnis forensic scan -- seal preserves evidence integrity';
   var subFs = bannerFs * 0.55;
   var subW = subLabel.length * subFs * 0.5;
   page.drawText(subLabel, { x: (pageW - subW) / 2, y: pageH - bannerH - subFs * 1.3, size: subFs, font: helv, color: rgb(0.85, 0.2, 0.15), opacity: 0.7 });
   var fy = pageH * 0.02, fs = Math.min(pageW, pageH) * 0.018;
   page.drawRectangle({ x: 0, y: 0, width: pageW, height: fy + fs * 4.5, color: rgb(0.12, 0.03, 0.03), opacity: 0.9 });
-  page.drawText('FRAUD MARK -- SEALED FOR EVIDENCE', { x: pageW * 0.03, y: fy + fs * 2.8, size: fs * 0.85, font: helvBold, color: rgb(0.85, 0.2, 0.15) });
+  page.drawText('INDICATORS FLAGGED -- SEALED FOR EVIDENCE', { x: pageW * 0.03, y: fy + fs * 2.8, size: fs * 0.85, font: helvBold, color: rgb(0.85, 0.2, 0.15) });
   page.drawText('Page ' + (pageIndex + 1) + '/' + totalPages + '  |  verumglobal.foundation  |  Patent Pending', { x: pageW * 0.03, y: fy + fs * 1.2, size: fs * 0.7, font: helv, color: rgb(0.6, 0.3, 0.3) });
   page.drawText('VERIFY SEAL', { x: pageW * 0.78, y: fy + fs * 2.8, size: fs * 0.7, font: helvBold, color: rgb(0.85, 0.2, 0.15) });
 }
@@ -2392,6 +2627,7 @@ let _pipelineOtsDigestHex = '';
 let _pipelineChain = [];
 let _pipelineDetection = null;
 let _pipelineFraudResult = null;
+let _pipelinePageCount = 0;
 
 // ==================== BUILD SEALED PDF ====================
 
@@ -2474,11 +2710,11 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
         pg.drawLine({ start: { x: pageW * 0.1, y: pageH * 0.9 }, end: { x: pageW * 0.9, y: pageH * 0.1 }, thickness: 3, color: rgb(0.9, 0.1, 0.1), opacity: 0.3 });
         pg.drawLine({ start: { x: pageW * 0.1, y: pageH * 0.1 }, end: { x: pageW * 0.9, y: pageH * 0.9 }, thickness: 3, color: rgb(0.9, 0.1, 0.1), opacity: 0.3 });
         // Draw warning text
-        pg.drawText('FRAUDULENT DOCUMENT - ' + pageFraud.score + '/100', {
+        pg.drawText('FORENSIC INDICATORS FLAGGED - ' + pageScore + '/100', {
           x: pageW * 0.15, y: pageH * 0.5, size: 24, font: helvBold, color: rgb(0.9, 0.1, 0.1), opacity: 0.15
         });
-        // Draw "FRAUD DETECTED" stamp
-        pg.drawText('FRAUD DETECTED', {
+        // Draw "SEE SEALED REPORT" stamp
+        pg.drawText('SEE SEALED FORENSIC REPORT', {
           x: pageW * 0.25, y: pageH * 0.75, size: 18, font: helvBold, color: rgb(0.9, 0.1, 0.1), opacity: 0.2
         });
       }
@@ -2558,10 +2794,11 @@ async function startSealing() {
     var forensicResult = null;
     try {
       var pdfDocForForensics = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
+      _pipelinePageCount = pdfDocForForensics.getPageCount();
       forensicResult = await runForensicEngine(fileBytes, pdfDocForForensics);
     } catch(e) {
       console.warn('Forensic engine error:', e);
-      forensicResult = { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], summary: 'Forensic scan could not complete' };
+      forensicResult = { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], scanFailed: true, extractionNotes: 'Forensic engine error: ' + (e && e.message ? e.message : 'unknown') + '. The scan could not complete; absence of findings here is NOT a clean result.', summary: 'Forensic scan could not complete' };
     }
     updateStep('Fraud', forensicResult.clean ? 'complete' : 'error',
       forensicResult.clean
@@ -2718,6 +2955,56 @@ async function runSealingPipeline() {
     meta.fraudClean = fraudResult.clean;
   }
 
+  // Step 9 (optional): sealed forensic report -- NEVER breaks the seal flow
+  var reportPack = null;
+  try {
+    if (window.VerumReport && typeof window.VerumReport.build === 'function') {
+      updateStep(7, 'processing', 'Building forensic report...');
+      var reportBytes = await window.VerumReport.build({
+        findings: fraudResult,
+        documents: [{
+          name: selectedFile.name,
+          pageCount: _pipelinePageCount || null,
+          sha512: sha512,
+          sealId: sealId,
+          bytes: fileBytes ? (fileBytes.byteLength || fileBytes.length) : null
+        }],
+        identity: {
+          fullName: document.getElementById('clientName') ? (document.getElementById('clientName').value || '') : ''
+        },
+        engineVersion: '2.0',
+        extractionNotes: fraudResult && fraudResult.extractionNotes ? fraudResult.extractionNotes : null,
+        ots: { submitted: !!(otsResult && otsResult.success), calendar: otsResult && otsResult.calendar ? otsResult.calendar : null },
+        images: { watermark: watermarkBytes }
+      });
+      var rSha512 = await computeSHA512(reportBytes);
+      var rSealId = 'VO-' + rSha512.substring(0, 12).toUpperCase();
+      var rOtsDigestHex = await computeSHA256(new TextEncoder().encode(rSha512));
+      var rOts = await submitToOTS(rOtsDigestHex);
+      var rMeta = collectSealMetadata();
+      rMeta.sha512 = rSha512;
+      rMeta.otsDigest = rOtsDigestHex;
+      rMeta.otsStatus = rOts.success;
+      rMeta.sealId = rSealId;
+      rMeta.report = true;
+      var rQrContent = 'https://verumglobal.foundation/verify.html?h=' + rSha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(rMeta)));
+      var rQr = await generateQRDataURL(rQrContent, 400);
+      var rSealedBytes = await window.VerumReport.seal(reportBytes, {
+        sealId: rSealId,
+        sha512: rSha512,
+        qrDataURL: rQr,
+        sourceName: selectedFile.name
+      });
+      reportPack = { bytes: rSealedBytes, sealId: rSealId, sha512: rSha512, ots: rOts };
+      updateStep(7, 'complete');
+    }
+  } catch (repErr) {
+    console.warn('Forensic report generation failed (document seal unaffected):', repErr);
+    reportPack = null;
+    updateStep(7, 'complete');
+  }
+  window._voReportPack = reportPack;
+
   showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, fraudResult);
 }
 
@@ -2756,7 +3043,8 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       '<strong>Contradiction Types:</strong> ' + (forensicResult.contradictionTypesUsed || 0) + '/43 detected<br>' +
       findingsHtml + serialHtml +
       '<br><em>This document has been sealed with fraud warnings on the affected pages. ' +
-      'The red cross and "FRAUD DETECTED" watermark are visible on the sealed PDF.</em>' +
+      'The red cross and "FORENSIC INDICATORS FLAGGED" watermark are visible on the sealed PDF. ' +
+      'Indicators are not a fraud verdict -- see the sealed forensic report for the full finding set.</em>' +
       '</p>';
     document.getElementById('results').insertBefore(fraudDiv, document.getElementById('results').firstChild);
   }
@@ -2780,6 +3068,33 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   const suffix = password ? '-protected' : '';
   const sU = URL.createObjectURL(new Blob([sealedBytes], {type: 'application/pdf'}));
   const sL = document.getElementById('downloadSealedPdf'); sL.href = sU; sL.download = base + suffix + '-sealed.pdf';
+
+  // Sealed forensic report download -- only when generation succeeded
+  var oldReportBtn = document.getElementById('downloadForensicReport');
+  if (oldReportBtn) oldReportBtn.remove();
+  var oldReportNote = document.getElementById('reportSealNote');
+  if (oldReportNote) oldReportNote.remove();
+  if (window._voReportPack && window._voReportPack.bytes) {
+    var rp = window._voReportPack;
+    var rU = URL.createObjectURL(new Blob([rp.bytes], {type: 'application/pdf'}));
+    var rL = document.createElement('a');
+    rL.href = rU;
+    rL.download = base + '-forensic-report-sealed.pdf';
+    rL.className = 'download-btn';
+    rL.id = 'downloadForensicReport';
+    rL.innerHTML = '&#11015; Download Sealed Forensic Report';
+    var dg = document.getElementById('downloadGrid');
+    if (sL.nextSibling) dg.insertBefore(rL, sL.nextSibling); else dg.appendChild(rL);
+    var rNote = document.createElement('div');
+    rNote.id = 'reportSealNote';
+    rNote.style.cssText = 'font-size:12px;color:#8ea3b5;margin-top:10px;line-height:1.6;';
+    rNote.textContent = 'Forensic report sealed separately: ' + rp.sealId +
+      '  |  SHA-512 ' + rp.sha512.substring(0, 16) + '...' +
+      '  |  OpenTimestamps: ' + (rp.ots && rp.ots.success ? 'submitted -- Bitcoin confirmation pending' : 'offline -- hash recorded for retry');
+    dg.parentNode.insertBefore(rNote, dg.nextSibling);
+  } else {
+    console.warn('Forensic report unavailable for this seal (generation skipped or failed); document seal is unaffected.');
+  }
 
   if (password && encryptedBytes) {
     const downloadGrid = document.getElementById('downloadGrid');
@@ -2814,6 +3129,12 @@ function resetSealing() {
   updateStep('Fraud', 'pending', '');
   document.getElementById('sealBtn').disabled = false;
   _pipelineFraudResult = null;
+  _pipelinePageCount = 0;
+  window._voReportPack = null;
+  var oldReportBtn2 = document.getElementById('downloadForensicReport');
+  if (oldReportBtn2) oldReportBtn2.remove();
+  var oldReportNote2 = document.getElementById('reportSealNote');
+  if (oldReportNote2) oldReportNote2.remove();
   // Samsung Browser fix: use var not const
   var banners = document.querySelectorAll('[style*="background:rgba(212,168,67"]');
   banners.forEach(function(b) { b.remove(); });
