@@ -1,0 +1,6 @@
+var a = '';
+var b = '\\u2713';
+var c = '✓';
+var d = '◐';
+bare \u2713 tail
+var e = 'A‚AúA√AøAàA◊AÄA';
