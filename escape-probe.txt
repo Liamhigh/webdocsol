@@ -1,5 +1,4 @@
-P1  END
-P2 \\u2713 END
-P3 \u005Cu2713 END
-P4 \\ END
-P5 \u2713 END
+  badge.textContent = s==='complete'?'':s==='processing'?'◐':s==='error'?'✕':'○';
+      if (!/\S/.test(t)) { texts.push(' '); return; } // word boundary sentinel
+      if (tok === ' ' || tok === null) { // word boundary
+  var bannerText = 'FORENSIC INDICATORS FLAGGED — SEE SEALED REPORT';
