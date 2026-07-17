@@ -1,6 +1,4 @@
-t1='\\';
-t2='\u005Cu2713';
-t3='\\';
-t4=' ';
-t5='\u005Cu2014';
-t6='\u005Cu25D0';
+L1 copied:  badge.textContent = s==='complete'?'':s==='processing'?'◐':s==='error'?'✕':'○';
+L2 fresh:  badge.textContent = s==='complete'?'':s==='processing'?'◐':s==='error'?'✕':'○';
+L3 fresh:      if (!/\S/.test(t)) { texts.push(' '); return; } // word boundary sentinel
+L4 fresh:  var bannerText = 'FORENSIC INDICATORS FLAGGED — SEE SEALED REPORT';
