@@ -576,7 +576,7 @@ async function submitToOTS(otsDigestHex) {
 function updateStep(n, s, d) {
   const badge = document.getElementById('step'+n).querySelector('.status');
   badge.className = 'status ' + s;
-  badge.textContent = s==='complete'?'✓':s==='processing'?'◐':s==='error'?'✕':'○';
+  badge.textContent = s==='complete'?'':s==='processing'?'◐':s==='error'?'✕':'○';
   if (d) document.getElementById('detail'+n).textContent = d;
 }
 
@@ -2369,7 +2369,7 @@ async function extractPageText(pdfBytes, pageIndex) {
     var curFont = null;
     var pushText = function (t) {
       if (!t) return;
-      if (!/\S/.test(t)) { texts.push(' '); return; } // word boundary sentinel
+      if (!/\S/.test(t)) { texts.push(' '); return; } // word boundary sentinel
       var tokens = t.split(/\s+/);
       for (var q = 0; q < tokens.length; q++) {
         var w = tokens[q];
@@ -2411,7 +2411,7 @@ async function extractPageText(pdfBytes, pageIndex) {
     var run = [];
     for (var t = 0; t <= texts.length; t++) {
       var tok = t < texts.length ? texts[t] : null;
-      if (tok === ' ' || tok === null) { // word boundary
+      if (tok === ' ' || tok === null) { // word boundary
         if (run.length >= 2) merged.push(run.join(''));
         else for (var r2 = 0; r2 < run.length; r2++) merged.push(run[r2]);
         run = [];
