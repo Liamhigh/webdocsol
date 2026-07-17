@@ -1,4 +1,2 @@
-  badge.textContent = s==='complete'?'':s==='processing'?'◐':s==='error'?'✕':'○';
-      if (!/\S/.test(t)) { texts.push(' '); return; } // word boundary sentinel
-      if (tok === ' ' || tok === null) { // word boundary
-  var bannerText = 'FORENSIC INDICATORS FLAGGED — SEE SEALED REPORT';
+A '' B '◐' C '✕' D '○' E ' ' F ' ' G '—' H
+literal test: \u2713 end
