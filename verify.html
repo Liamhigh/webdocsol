@@ -157,6 +157,27 @@
   .chain-step .step-val { color: #D5D8DD; font-size: 0.85rem; margin-top: 2px; }
   .chain-arrow { color: #D4A843; font-size: 20px; }
 
+  .custody-anchor {
+    background: rgba(15, 52, 96, 0.12); border: 1px solid rgba(212, 168, 67, 0.35);
+    border-radius: 16px; padding: 24px; margin-top: 24px; text-align: left;
+  }
+  .custody-anchor h3 {
+    font-family: 'Cormorant Garamond', Georgia, serif; font-size: 1.4rem;
+    font-weight: 500; color: #D4A843; margin-bottom: 14px; text-align: center;
+  }
+  .custody-row { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 8px 0; border-bottom: 1px solid rgba(26, 46, 82, 0.3); }
+  .custody-row:last-of-type { border-bottom: none; }
+  .custody-label { font-family: 'Courier New', monospace; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; color: #4A7EC7; flex-shrink: 0; }
+  .custody-value { font-family: 'Courier New', monospace; font-size: 12px; color: #D5D8DD; word-break: break-all; text-align: right; }
+  .custody-badge { display: inline-block; padding: 3px 14px; border-radius: 999px; font-size: 11px; letter-spacing: 0.08em; font-weight: 600; }
+  .custody-badge.match { background: rgba(34, 139, 104, 0.15); border: 1px solid rgba(34, 139, 104, 0.4); color: #4ADE80; }
+  .custody-badge.seal_found { background: rgba(74, 126, 199, 0.15); border: 1px solid rgba(74, 126, 199, 0.4); color: #7EA8E0; }
+  .custody-badge.tampered { background: rgba(180, 60, 60, 0.15); border: 1px solid rgba(180, 60, 60, 0.4); color: #F87171; }
+  .custody-badge.no_seal { background: rgba(212, 168, 67, 0.12); border: 1px solid rgba(212, 168, 67, 0.4); color: #D4A843; }
+  .custody-ots-anchored { color: #D4A843; }
+  .custody-ots-offline { color: #F87171; }
+  .custody-caption { font-size: 0.78rem; color: #D5D8DD; opacity: 0.75; line-height: 1.5; margin-top: 14px; font-style: italic; text-align: center; }
+
   .spinner { display: none; text-align: center; padding: 40px; }
   .spinner.visible { display: block; }
   .spinner-ring { width: 48px; height: 48px; border: 3px solid rgba(212, 168, 67, 0.2); border-top-color: #D4A843; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 16px; }
@@ -222,6 +243,20 @@
     <p class="timestamp" id="timestamp"></p>
 
     <div id="metaSection"></div>
+
+    <!-- Verification Custody Anchor: anchors the verification EVENT, not the document -->
+    <div class="custody-anchor" id="custodyBox" style="display:none">
+      <h3>Verification Chain of Custody</h3>
+      <div class="custody-row"><span class="custody-label">Verdict</span><span class="custody-value"><span class="custody-badge" id="custodyVerdict"></span></span></div>
+      <div class="custody-row"><span class="custody-label">Verified (UTC)</span><span class="custody-value" id="custodyTime"></span></div>
+      <div class="custody-row"><span class="custody-label">Custody Digest (SHA-256)</span><span class="custody-value" id="custodyDigest"></span></div>
+      <div class="custody-row"><span class="custody-label">Previous Event Digest</span><span class="custody-value" id="custodyPrev"></span></div>
+      <div class="custody-row"><span class="custody-label">OpenTimestamps</span><span class="custody-value" id="custodyOts"></span></div>
+      <p class="custody-caption">This anchors the verification EVENT, not the document. The original seal timestamp remains the authoritative proof of sealing time.</p>
+      <div style="text-align:center;margin-top:14px">
+        <button class="btn btn-outline" id="custodyReceiptBtn" onclick="downloadCustodyReceipt()">Download Custody Receipt (JSON)</button>
+      </div>
+    </div>
 
     <div class="document-preview" id="previewBox">
       <div id="previewContent"></div>
@@ -299,6 +334,9 @@
   var currentPdfBlob = null;
   var currentVerifyUrl = null;
   var parsedMeta = null;
+  var custodyBox = document.getElementById('custodyBox');
+  var currentCustodyReceipt = null;
+  var currentCustodyFilename = null;
 
   dropZone.addEventListener('click', function() { fileInput.click(); });
   fileInput.addEventListener('change', function(e) { if (e.target.files[0]) handleFile(e.target.files[0]); });
@@ -324,10 +362,13 @@
     qrBox.classList.remove('visible');
     actionsBox.style.display = 'none';
     chainBox.style.display = 'none';
+    custodyBox.style.display = 'none';
     metaSection.innerHTML = '';
     currentPdfBlob = null;
     currentVerifyUrl = null;
     parsedMeta = null;
+    currentCustodyReceipt = null;
+    currentCustodyFilename = null;
   }
 
   async function handleFile(file) {
@@ -368,14 +409,17 @@
     resultBox.classList.add('visible');
     actionsBox.style.display = 'block';
 
+    var verdict = 'NO_SEAL';
     if (meta && meta.sealId) {
       // Has embedded seal metadata
       var storedHash = meta.originalHash || meta.sha512;
       var hashMatches = storedHash && (hashHex === storedHash || (originalHashHex && originalHashHex === storedHash));
 
       if (hashMatches) {
+        verdict = 'MATCH';
         showVerified(meta, hashHex, originalHashHex);
       } else {
+        verdict = 'TAMPERED';
         showTampered(meta, hashHex, storedHash, originalHashHex);
       }
     } else {
@@ -398,6 +442,16 @@
     if (meta && meta.sealId) params.set('seal', meta.sealId);
     params.set('hash', hashHex.substring(0, 32));
     currentVerifyUrl = verifyBase + '?' + params.toString();
+
+    // Verification custody anchor — fire-and-forget, fully non-fatal.
+    // Anchors the verification EVENT (never the document itself) to OpenTimestamps.
+    try {
+      anchorVerificationEvent(verdict, hashHex, meta).catch(function(ce) {
+        console.warn('Custody anchor error (verification unaffected):', ce);
+      });
+    } catch (ce) {
+      console.warn('Custody anchor failed to start (verification unaffected):', ce);
+    }
   }
 
   function showVerified(meta, hashHex, originalHashHex) {
@@ -562,6 +616,186 @@
     window.location.href = '/verify-data.html' + (sealId ? '?seal=' + encodeURIComponent(sealId) : '');
   }
   window.goToReport = goToReport;
+
+  // ===== Verification Custody Anchor =====
+  // Anchors each verification EVENT to OpenTimestamps (Bitcoin) and chains
+  // consecutive verifications of the same document via localStorage.
+  // This NEVER re-anchors the document itself: the digest submitted to the
+  // calendars is SHA-256 of the custody record below, NOT the document hash.
+  // Record format:
+  //   VO-CUSTODY|<docSha512>|<verdict>|<ISO8601 UTC timestamp>|<sealId or "NONE">|<prevCustodyDigest or "GENESIS">
+  // Fully non-fatal: any failure is logged and the custody block stays hidden.
+
+  var CUSTODY_CALENDARS = [
+    'https://a.pool.opentimestamps.org/digest',
+    'https://b.pool.opentimestamps.org/digest',
+    'https://a.pool.eternitywall.com/digest'
+  ];
+
+  function custodyHexToBytes(hex) {
+    var b = new Uint8Array(hex.length / 2);
+    for (var i = 0; i < hex.length; i += 2) b[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+    return b;
+  }
+
+  function custodyBufToHex(buf) {
+    return Array.from(new Uint8Array(buf)).map(function(x) { return x.toString(16).padStart(2, '0'); }).join('');
+  }
+
+  function custodyTruncate(hex) {
+    if (!hex) return '';
+    if (hex === 'GENESIS') return 'GENESIS';
+    if (hex.length <= 36) return hex;
+    return hex.substring(0, 24) + '...' + hex.substring(hex.length - 8);
+  }
+
+  // Same non-fatal calendar submission pattern as seal-document.html:
+  // POST raw digest bytes to each calendar pool in order, 15s AbortController
+  // timeout per attempt, stop at first acceptance, never throw.
+  async function submitCustodyToOTS(digestHex) {
+    var hashBytes = custodyHexToBytes(digestHex);
+    var accepted = [];
+    for (var i = 0; i < CUSTODY_CALENDARS.length; i++) {
+      var url = CUSTODY_CALENDARS[i];
+      try {
+        var ctrl = new AbortController();
+        var to = setTimeout(function() { ctrl.abort(); }, 15000);
+        var res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/vnd.opentimestamps.v1' }, body: hashBytes, signal: ctrl.signal });
+        clearTimeout(to);
+        if (res.ok) {
+          var d = await res.arrayBuffer();
+          if (d.byteLength > 0) { accepted.push(url); return { success: true, accepted: accepted }; }
+        }
+      } catch (e) { console.warn('Custody calendar failed:', url, e.message); }
+    }
+    return { success: false, accepted: accepted };
+  }
+
+  function custodyStorageKey(docSha512) { return 'vo-custody-' + docSha512; }
+
+  function readPrevCustodyDigest(docSha512) {
+    try {
+      var raw = localStorage.getItem(custodyStorageKey(docSha512));
+      if (!raw) return null;
+      try {
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.custodyDigest) return parsed.custodyDigest;
+        return null;
+      } catch (je) {
+        // Legacy/plain-string value: treat the raw stored value as the digest
+        return raw;
+      }
+    } catch (e) { return null; }
+  }
+
+  function writeCustodyState(docSha512, state) {
+    try {
+      localStorage.setItem(custodyStorageKey(docSha512), JSON.stringify(state));
+    } catch (e) {
+      console.warn('Custody state persist failed (chain unaffected on-chain):', e);
+    }
+  }
+
+  function custodyFileStamp(isoDate) {
+    var d = new Date(isoDate);
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) + '-' + p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds());
+  }
+
+  async function anchorVerificationEvent(verdict, docSha512, meta) {
+    try {
+      if (!docSha512) return;
+      if (!window.crypto || !crypto.subtle) throw new Error('Web Crypto unavailable (secure context required)');
+
+      var sealId = (meta && meta.sealId) ? meta.sealId : 'NONE';
+      var prevDigest = readPrevCustodyDigest(docSha512) || 'GENESIS';
+      var verifiedAtUtc = new Date().toISOString();
+
+      // 1. Build the custody record and compute its digest (this is what gets anchored)
+      var record = 'VO-CUSTODY|' + docSha512 + '|' + verdict + '|' + verifiedAtUtc + '|' + sealId + '|' + prevDigest;
+      var digestBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(record));
+      var custodyDigest = custodyBufToHex(digestBuf);
+
+      // 2. Submit ONLY the custody digest to the OTS calendars (non-fatal)
+      var ots = await submitCustodyToOTS(custodyDigest);
+      var otsStatus = ots.success ? 'PENDING' : 'OFFLINE';
+
+      // 3. Persist chain state — even when OTS failed the record still exists;
+      //    otsStatus is stored alongside so the chain remains honest.
+      writeCustodyState(docSha512, {
+        custodyDigest: custodyDigest,
+        otsStatus: otsStatus,
+        verdict: verdict,
+        verifiedAtUtc: verifiedAtUtc,
+        sealId: sealId,
+        prevCustodyDigest: prevDigest
+      });
+
+      // 4. Build the downloadable custody receipt
+      var receipt = {
+        type: 'VO-CUSTODY-1',
+        docSha512: docSha512,
+        sealId: sealId,
+        verdict: verdict,
+        verifiedAtUtc: verifiedAtUtc,
+        custodyDigest: custodyDigest,
+        prevCustodyDigest: prevDigest,
+        ots: { status: otsStatus, calendars: ots.accepted },
+        originalSeal: {
+          sha512: (meta && (meta.originalHash || meta.sha512)) ? (meta.originalHash || meta.sha512) : null,
+          otsStatus: (meta && meta.otsDigest) ? 'DIGEST_EMBEDDED (Bitcoin confirmation status not independently checked by this page)' : 'NONE_EMBEDDED'
+        }
+      };
+      currentCustodyReceipt = receipt;
+      var nameBase = sealId !== 'NONE' ? sealId : docSha512.substring(0, 12);
+      currentCustodyFilename = 'vo-custody-' + nameBase + '-' + custodyFileStamp(verifiedAtUtc) + '.json';
+
+      // 5. Render the custody block below the verdict
+      renderCustodyBlock(receipt);
+    } catch (e) {
+      console.warn('Custody anchor failed (verification unaffected):', e);
+      if (custodyBox) custodyBox.style.display = 'none';
+    }
+  }
+
+  function renderCustodyBlock(receipt) {
+    if (!custodyBox) return;
+    var badgeEl = document.getElementById('custodyVerdict');
+    badgeEl.textContent = receipt.verdict;
+    badgeEl.className = 'custody-badge ' + receipt.verdict.toLowerCase();
+    document.getElementById('custodyTime').textContent = receipt.verifiedAtUtc;
+    var digestEl = document.getElementById('custodyDigest');
+    digestEl.textContent = custodyTruncate(receipt.custodyDigest);
+    digestEl.title = receipt.custodyDigest;
+    var prevEl = document.getElementById('custodyPrev');
+    prevEl.textContent = custodyTruncate(receipt.prevCustodyDigest);
+    prevEl.title = receipt.prevCustodyDigest === 'GENESIS' ? 'First verification of this document on this device' : receipt.prevCustodyDigest;
+    var otsEl = document.getElementById('custodyOts');
+    if (receipt.ots.status === 'PENDING') {
+      otsEl.textContent = 'ANCHORED — Bitcoin confirmation pending';
+      otsEl.className = 'custody-value custody-ots-anchored';
+    } else {
+      otsEl.textContent = 'OFFLINE — not anchored';
+      otsEl.className = 'custody-value custody-ots-offline';
+    }
+    custodyBox.style.display = 'block';
+  }
+
+  function downloadCustodyReceipt() {
+    try {
+      if (!currentCustodyReceipt) return;
+      var blob = new Blob([JSON.stringify(currentCustodyReceipt, null, 2)], { type: 'application/json' });
+      var url = URL.createObjectURL(blob);
+      var a = document.createElement('a');
+      a.href = url;
+      a.download = currentCustodyFilename || 'vo-custody-receipt.json';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
+    } catch (e) { console.warn('Custody receipt download failed:', e); }
+  }
+  window.downloadCustodyReceipt = downloadCustodyReceipt;
 
   // ===== Metadata Extraction =====
   function extractMetadata(pdfText) {
