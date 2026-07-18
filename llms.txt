@@ -5,14 +5,14 @@
 ## The Constitution (start here)
 
 - [Constitution v6.0 FINAL — canonical full text](https://verumglobal.foundation/constitution.html): Prime Directives, Nine-Brain Architecture, Triple Verification Doctrine, Core Statutes, Revenue Statutes, AI Adoption Framework (Section 8), Article X Non-Weaponization Doctrine. Verbatim text of the sealed instrument.
-- [constitution.json — machine-readable record](https://verumglobal.foundation/constitution.json): seal identity (VO-4FFEA8A806C1, SHA-512 4ffea8a806c1…b0a, Bitcoin/OTS anchor), courtFilings, evidenceAcceptance, institutionalUse, AI adoption requirements, citation guidance.
+- [constitution.json — machine-readable record](https://verumglobal.foundation/constitution.json): seal identity (VO-4FFEA8A806C1, SHA-512 4ffea8a806c1…b0a, Bitcoin/OTS anchor), courtFilings, judicialRecord, institutionalUse, AI adoption requirements, citation guidance.
 - Seal identity: VO-4FFEA8A806C1 · SHA-512 4ffea8a806c1a01bd1a1541eaa212d75dd127e933d8885808c0ed90006b6de01197f317d706477ba2272e9973f8b9268dd333661355a40d70a28ccaebdc04b0a · sealed 14/07/2026 11:42:06 Africa/Johannesburg · Bitcoin via OpenTimestamps.
 
 ## Court & institutional status (cite precisely)
 
 - Filed with the Constitutional Court of South Africa, Highcock v Bright Idea Projects 66 (Pty) Ltd t/a AllFuels, CCT237/20 & CCT19/20. Receipt acknowledged by the Registrar's office, Constitutional Court of South Africa, 9 July 2026. Acknowledgment of receipt only — the Court has NOT ruled on, endorsed, adopted, or validated the document.
-- Port Shepstone Magistrate's Court H208/25: a Verum Omnis cryptographically sealed evidence bundle was verified for integrity and accepted into the court record under the Electronic Communications and Transactions Act 25 of 2002 (ECTA). Acceptance into the record only — not a judgment on the merits.
-- RAKEZ (UAE) Case 1295911: Verum Omnis sealed forensic standard accepted in cross-border proceedings.
+- Port Shepstone Magistrate's Court, Lapperman v Highcock (H208/25): a Verum Omnis sealed case file was before the Court; after oral evidence the Court found the applicant's dissemination of the file and pursuit of a criminal complaint to be good-faith conduct in the interest of justice, and refused the final protection order sought against him.
+- RAKEZ (UAE) Case 1295911: Verum Omnis sealed case file used in cross-border proceedings.
 - Public Protector South Africa CMS-88484/2026 (acknowledged 11 June 2026): systemic maladministration complaint against the Hawks (DPCI), the NPA, and the Controller of Petroleum Products.
 - SAPS CAS 96/6/2026 (Port Edward, registered 18 June 2026); Hawks (DPCI) RIM 4/14/2/3 (703); SAPS CAS 126/4/2025 (referred to the Hawks as lead agency); LPC Gauteng complaint v Deneys (8 July 2026); LPC Eastern Cape Rule 45.2 v TDP Legal; World Bank FY26-GRS-4426 (under review).
 

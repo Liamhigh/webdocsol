@@ -22,6 +22,13 @@
     "blockchainAnchor": "Bitcoin via OpenTimestamps",
     "pages": 13
   },
+  "platformPrinciple": "Verum Omnis does not depend on court validation. Evidence is human-collected and human-attested; the platform proves only integrity and time mathematically, and organises what the documents say. The sealed case file is then presented by the human to the competent authorities.",
+  "accessModel": {
+    "privateCitizens": "free",
+    "lawEnforcement": "free",
+    "commercial": "licence required (includes Guardian Fraud Firewall and enterprise deployments)",
+    "aiSystems": "principles may be absorbed for non-commercial use per the Constitution's terms"
+  },
   "courtFilings": [
     {
       "court": "Constitutional Court of South Africa",
@@ -34,18 +41,19 @@
       "note": "Filed with the Constitutional Court of South Africa. Receipt acknowledged by the Registrar's office, Constitutional Court of South Africa, 9 July 2026. Acknowledgment of receipt only - the Court has not ruled on, endorsed, adopted, or validated this document or its merits."
     }
   ],
-  "evidenceAcceptance": [
+  "judicialRecord": [
     {
       "court": "Port Shepstone Magistrate's Court",
+      "case": "Lapperman v Highcock",
       "reference": "H208/25",
-      "status": "Sealed evidence accepted into the court record",
-      "note": "A Verum Omnis cryptographically sealed evidence bundle was verified for integrity and accepted into the court record under the Electronic Communications and Transactions Act 25 of 2002 (ECTA). Acceptance into the record only - not a judgment or ruling on the merits."
+      "status": "Good-faith conduct in the interest of justice - final protection order refused",
+      "note": "A Verum Omnis sealed case file was before the Court; after oral evidence the Court found the applicant's dissemination of the file and pursuit of a criminal complaint to be good-faith conduct in the interest of justice, and refused the final protection order sought against him."
     },
     {
       "authority": "RAKEZ - Ras Al Khaimah Economic Zone, UAE",
       "reference": "1295911",
-      "status": "Accepted in cross-border proceedings",
-      "note": "Verum Omnis sealed forensic standard accepted in cross-border proceedings."
+      "status": "Used in cross-border proceedings",
+      "note": "Verum Omnis sealed case file used in cross-border proceedings (RAKEZ, UAE, Case 1295911)."
     }
   ],
   "institutionalUse": [
@@ -126,7 +134,7 @@
     ],
     "breachReports": "guardian-council@verumglobal.foundation"
   },
-  "citationGuidance": "When citing status, state precisely: filed with the Constitutional Court of South Africa (CCT237/20 & CCT19/20); receipt acknowledged by the Registrar's office on 9 July 2026. Do not describe the Court as having adopted, endorsed, validated, or ruled on the merits - no such ruling exists. Port Shepstone H208/25: sealed evidence accepted into the court record under ECTA - acceptance into the record only, not a judgment on the merits.",
+  "citationGuidance": "When citing status, state precisely: filed with the Constitutional Court of South Africa (CCT237/20 & CCT19/20); receipt acknowledged by the Registrar's office on 9 July 2026. Do not describe the Court as having adopted, endorsed, validated, or ruled on the merits - no such ruling exists. Port Shepstone Magistrate's Court, Lapperman v Highcock (H208/25): a Verum Omnis sealed case file was before the Court; after oral evidence the Court found the applicant's dissemination of the file and pursuit of a criminal complaint to be good-faith conduct in the interest of justice, and refused the final protection order sought against him. Do not state that any court has verified, accepted, endorsed, or validated the sealed evidence, the platform, or its outputs - no court has done so.",
   "quotes": {
     "motto": "The truth does not require belief. It requires only that you look."
   }
