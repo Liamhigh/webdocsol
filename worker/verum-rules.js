@@ -9,6 +9,7 @@
 //   GET  /constitution.pdf        sealed Verum Omnis Constitution v6 PDF (from KV)
 //   GET  /docs/constitution.pdf   alias of /constitution.pdf
 //   POST /api/v1/ai/gatekeep      AI licensing gatekeeper (commercial-use signals)
+//   POST /api/v1/ai/classify      AI document triage classification (pre-engine scope)
 //   POST /api/v1/ai/assess        AI antithesis review of candidate findings
 //   POST /api/v1/ai/narrate       AI forensic report narrative drafting
 //   POST /api/v1/ai/curate        admin: AI-drafted rule candidates from feedback
@@ -392,12 +393,30 @@ const MAX_NARRATE_FINDINGS = 25;
 const MAX_EVIDENCE_CHARS = 300;
 const MAX_CURATE_CANDIDATES = 10;
 const MAX_ADDITIONAL_FINDINGS = 20;
+const MAX_CLASSIFY_SAMPLE = 4000;   // server-side cap on classify textSample
 const CURATE_WINDOW_DAYS = 7;
 
 const GATEKEEP_SYSTEM = 'You are a licensing gatekeeper for the Verum Omnis forensic platform ' +
   '(free for private citizens and law enforcement; commercial use requires a licence). ' +
   'Given usage signals, classify commercial likelihood. Reply ONLY compact JSON: ' +
   '{"likelihood":"low|medium|high","reasons":[...max 3...]}';
+
+const CLASSIFY_SYSTEM = 'You are a document triage classifier for the Verum Omnis forensic ' +
+  'contradiction engine. Given a text sample from a document, decide its class, whether it is ' +
+  'ABOUT fraud, and which detector categories the engine should run. Classes: court_filing, ' +
+  'contract, invoice, financial_application, personal_correspondence, business_record, other. ' +
+  'aboutFraud MUST be true when the document CONTAINS fraud allegations, accusations or heavy ' +
+  'fraud vocabulary (e.g. a court filing, complaint or affidavit ABOUT fraud) so the client can ' +
+  'suppress serial-pattern labels that would otherwise false-fire on vocabulary alone; it is ' +
+  'false for documents that merely ARE routine contracts, invoices or correspondence. ' +
+  'recommendedScope lists detector categories worth running, chosen from "financial_fraud", ' +
+  '"identity", "document_integrity", "serial_patterns"; include serial_patterns only when the ' +
+  'document is not primarily ABOUT fraud; use all four when unsure. Be conservative: when the ' +
+  'sample is thin, lower confidence rather than guessing. Reply ONLY compact JSON: ' +
+  '{"documentClass":"...","confidence":"low|medium|high","aboutFraud":true|false,"recommendedScope":["..."]}';
+
+const VALID_DOC_CLASSES = new Set(['court_filing', 'contract', 'invoice', 'financial_application', 'personal_correspondence', 'business_record', 'other']);
+const VALID_SCOPES = new Set(['financial_fraud', 'identity', 'document_integrity', 'serial_patterns']);
 
 const ASSESS_SYSTEM = 'You are the antithesis reviewer in a forensic contradiction engine. ' +
   'For each candidate finding you receive (type, quoted evidence, location), decide KEEP ' +
@@ -562,6 +581,54 @@ async function handleAiGatekeep(request, env) {
   } catch (e) {
     const fb = gatekeepFallback(entitySignals, declaredTier);
     return json({ likelihood: fb.likelihood, reasons: fb.reasons, model: 'deterministic-fallback' });
+  }
+}
+
+// --- a2. /api/v1/ai/classify -----------------------------------------------
+
+// Deterministic triage fallback: run everything, claim nothing.
+function classifyFallback() {
+  return { documentClass: 'other', confidence: 'low', aboutFraud: false, recommendedScope: ['all'], model: 'fallback' };
+}
+
+async function handleAiClassify(request, env) {
+  const body = await readBodyText(request, MAX_AI_BODY);
+  if (body.tooBig) return err(413, 'body_too_large', 'Request body exceeds the 16 KB limit.');
+  let data;
+  try { data = JSON.parse(body.text); } catch {
+    return err(400, 'invalid_json', 'Request body is not valid JSON.');
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return err(400, 'invalid_shape', 'Body must be a JSON object of the form {"textSample": "...", "pageCount": N}.');
+  }
+  if (typeof data.textSample !== 'string') {
+    return err(400, 'invalid_sample', 'textSample must be a non-empty string.');
+  }
+  // Server-side cap: at most MAX_CLASSIFY_SAMPLE characters reach the model.
+  const textSample = data.textSample.slice(0, MAX_CLASSIFY_SAMPLE).trim();
+  if (!textSample) {
+    return err(400, 'invalid_sample', 'textSample must be a non-empty string.');
+  }
+  const pageCount = asCount(data.pageCount);
+
+  try {
+    const text = await callAi(env, AI_MODEL_FAST, CLASSIFY_SYSTEM, JSON.stringify({ textSample, pageCount }),
+      { timeoutMs: AI_GATEKEEP_TIMEOUT_MS, maxTokens: 300, temperature: 0 });
+    const parsed = extractJsonObject(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('model reply is not a JSON object');
+    }
+    const documentClass = VALID_DOC_CLASSES.has(parsed.documentClass) ? parsed.documentClass : 'other';
+    const confidence = (parsed.confidence === 'low' || parsed.confidence === 'medium' || parsed.confidence === 'high')
+      ? parsed.confidence : 'low';
+    const aboutFraud = parsed.aboutFraud === true || parsed.aboutFraud === 'true';
+    let recommendedScope = Array.isArray(parsed.recommendedScope)
+      ? [...new Set(parsed.recommendedScope.map(s => asStr(s, 64).trim()).filter(s => VALID_SCOPES.has(s)))]
+      : [];
+    if (recommendedScope.length === 0) recommendedScope = ['all'];
+    return json({ documentClass, confidence, aboutFraud, recommendedScope, model: 'llama-3.1-8b' });
+  } catch (e) {
+    return json(classifyFallback());
   }
 }
 
@@ -965,13 +1032,14 @@ async function route(request, env) {
   if (path === '/api/v1/feedback/patterns' && request.method === 'POST') return handleFeedback(request, env);
   if (path === '/api/v1/admin/publish' && request.method === 'POST') return handleAdminPublish(request, env);
   if (path === '/api/v1/ai/gatekeep' && request.method === 'POST') return handleAiGatekeep(request, env);
+  if (path === '/api/v1/ai/classify' && request.method === 'POST') return handleAiClassify(request, env);
   if (path === '/api/v1/ai/assess' && request.method === 'POST') return handleAiAssess(request, env);
   if (path === '/api/v1/ai/narrate' && request.method === 'POST') return handleAiNarrate(request, env);
   if (path === '/api/v1/ai/curate' && request.method === 'POST') return handleAiCurate(request, env);
   if ((path === '/constitution.pdf' || path === '/docs/constitution.pdf') && request.method === 'GET') return handleConstitutionPdf(env);
 
   const known = ['/api/v1/status', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish',
-    '/api/v1/ai/gatekeep', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf'];
+    '/api/v1/ai/gatekeep', '/api/v1/ai/classify', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf'];
   if (known.includes(path)) {
     return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' || path.endsWith('/constitution.pdf') ? 'GET' : 'POST' });
   }
