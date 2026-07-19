@@ -774,6 +774,29 @@ async function handleAiNarrate(request, env) {
 
 // --- d. /api/v1/ai/curate (admin only) -------------------------------------
 
+// Shared discipline for rule candidates, whether AI-drafted or supplied by a
+// client for review: only the two curatable groups, sane lengths,
+// case-insensitive dedupe, capped. Returns the accepted list and a count of
+// entries dropped as invalid, duplicate or overflow.
+function sanitizeCandidates(list, cap) {
+  const seen = new Set();
+  const candidates = [];
+  let dropped = 0;
+  for (const c of list) {
+    if (!c || typeof c !== 'object' || Array.isArray(c)) { dropped++; continue; }
+    const group = (c.group === 'fraud_keywords' || c.group === 'behavioral_markers') ? c.group : null;
+    const term = asStr(c.term, 160).trim();
+    const rationale = asStr(c.rationale, 300).trim();
+    if (!group || term.length < 2 || !rationale) { dropped++; continue; }
+    const dedupe = group + ':' + term.toLowerCase();
+    if (seen.has(dedupe)) { dropped++; continue; }
+    if (candidates.length >= cap) { dropped++; continue; }
+    seen.add(dedupe);
+    candidates.push({ group, term, rationale });
+  }
+  return { candidates, dropped };
+}
+
 // The same deterministic constitution discipline as /admin/publish, applied
 // to AI-drafted candidates: non-empty, sane size, no banned content fields.
 function curateConstitutionCheck(candidates) {
@@ -800,6 +823,36 @@ async function handleAiCurate(request, env) {
   const token = request.headers.get('x-admin-token');
   if (!token) return err(401, 'missing_admin_token', 'Provide the x-admin-token header.');
   if (token !== env.ADMIN_TOKEN) return err(403, 'invalid_admin_token', 'The admin token is incorrect.');
+
+  // Optional review mode: the caller supplies AI-proposed candidates (e.g.
+  // from assess/narrate flows) for validation + constitution check, instead
+  // of drafting new ones from the feedback window. An empty/absent body keeps
+  // the original aggregate-and-draft behaviour.
+  const body = await readBodyText(request, MAX_AI_BODY);
+  if (body.tooBig) return err(413, 'body_too_large', 'Request body exceeds the 16 KB limit.');
+  let data = null;
+  if (body.text && body.text.trim()) {
+    try { data = JSON.parse(body.text); } catch {
+      return err(400, 'invalid_json', 'Request body is not valid JSON.');
+    }
+  }
+  if (data && typeof data === 'object' && !Array.isArray(data) && Object.prototype.hasOwnProperty.call(data, 'candidates')) {
+    if (!Array.isArray(data.candidates)) {
+      return err(400, 'invalid_shape', '"candidates" must be an array of {"group","term","rationale"}.');
+    }
+    if (data.candidates.length > MAX_CURATE_CANDIDATES) {
+      return err(400, 'too_many_candidates', 'A review submission may contain at most ' + MAX_CURATE_CANDIDATES + ' candidates.');
+    }
+    const review = sanitizeCandidates(data.candidates, MAX_CURATE_CANDIDATES);
+    return json({
+      ok: true,
+      candidates: review.candidates,
+      dropped: review.dropped,
+      constitution_check: curateConstitutionCheck(review.candidates),
+      model: 'client-supplied',
+      note: 'Draft only — nothing published. Review and publish via /api/v1/admin/publish.'
+    });
+  }
 
   // Aggregate feedback buckets from the last CURATE_WINDOW_DAYS days.
   const cutoff = new Date(Date.now() - CURATE_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
@@ -879,19 +932,7 @@ async function handleAiCurate(request, env) {
     if (!parsed || !Array.isArray(parsed.candidates)) {
       throw new Error('model reply has no candidates array');
     }
-    const seen = new Set();
-    for (const c of parsed.candidates) {
-      if (!c || typeof c !== 'object') continue;
-      const group = (c.group === 'fraud_keywords' || c.group === 'behavioral_markers') ? c.group : null;
-      const term = asStr(c.term, 160).trim();
-      const rationale = asStr(c.rationale, 300).trim();
-      if (!group || term.length < 2 || !rationale) continue;
-      const dedupe = group + ':' + term.toLowerCase();
-      if (seen.has(dedupe)) continue;
-      seen.add(dedupe);
-      candidates.push({ group, term, rationale });
-      if (candidates.length >= MAX_CURATE_CANDIDATES) break;
-    }
+    candidates = sanitizeCandidates(parsed.candidates, MAX_CURATE_CANDIDATES).candidates;
   } catch (e) {
     model = 'ai-unavailable';
     candidates = [];
