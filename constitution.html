@@ -100,6 +100,17 @@
   .id-value a { color: #4A7EC7; }
   .id-value a:hover { color: #F8F9FA; }
 
+  .pdf-cta-wrap { text-align: center; margin-bottom: 40px; }
+  .pdf-cta {
+    display: inline-block; padding: 16px 40px; border-radius: 10px;
+    background: linear-gradient(135deg, #D4A843 0%, #b8942a 100%);
+    color: #040D1B; font-family: 'Courier New', monospace; font-size: 13px;
+    font-weight: 600; text-transform: uppercase; letter-spacing: 0.08em;
+    text-decoration: none; transition: all 0.3s;
+  }
+  .pdf-cta:hover { background: #E8C567; box-shadow: 0 0 20px rgba(212,168,67,0.3); }
+  .pdf-cta-fallback { margin-top: 14px; font-size: 0.9rem; color: #4A7EC7; }
+
   .honesty-note {
     border-left: 3px solid #D4A843; background: rgba(212, 168, 67, 0.06);
     border-radius: 0 12px 12px 0; padding: 16px 20px; margin-bottom: 40px;
@@ -225,6 +236,11 @@
     <div class="id-field"><span class="id-label">Blockchain Anchor</span><span class="id-value">Bitcoin via OpenTimestamps</span></div>
     <div class="id-field"><span class="id-label">Length</span><span class="id-value">13 pages &middot; Sections 0&ndash;14</span></div>
     <div class="id-field"><span class="id-label">Machine-Readable</span><span class="id-value"><a href="/constitution.json">constitution.json</a> &middot; <a href="/llms.txt">llms.txt</a></span></div>
+  </div>
+
+  <div class="pdf-cta-wrap">
+    <a href="/constitution.pdf" class="pdf-cta">View / Download the Sealed Constitution PDF</a>
+    <p class="pdf-cta-fallback">Or read the full text below.</p>
   </div>
 
   <div class="honesty-note">
