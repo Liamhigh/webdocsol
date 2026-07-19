@@ -185,8 +185,14 @@ function pageAnchor(location) {
   if (!location) return '—';
   var m = String(location).match(/Page\s+(\d+)(\s+vs\s+Page\s+(\d+))?/i);
   if (m) return m[3] ? m[1] + ' vs ' + m[3] : m[1];
-  if (/full document/i.test(String(location))) return 'Full doc';
+  if (/full document/i.test(String(location))) return 'Full document';
   return '—';
+}
+// human-readable location for prose contexts: numeric page anchors get a "p."
+// prefix ("p. 3", "p. 1 vs 2"); everything else ("Full document", "—") stands alone
+function fmtLocation(location) {
+  var a = pageAnchor(location);
+  return /^\d/.test(a) ? 'p. ' + a : a;
 }
 // all individual page numbers referenced by a location string
 function pageNumbers(location) {
@@ -568,7 +574,7 @@ function secExecSummary(ctx, data) {
     for (var t = 0; t < top.length; t++) {
       var fnd = top[t];
       var label = (fnd.type === 'SERIAL' ? (fnd.serialName || 'Serial pattern') : (fnd.type + ' ' + (CT_NAMES[fnd.type] || '')));
-      ctx.bullet(label + ' — p. ' + pageAnchor(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
+      ctx.bullet(label + ' — ' + fmtLocation(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
     }
   }
 
