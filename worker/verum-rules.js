@@ -6,6 +6,8 @@
 //   GET  /api/v1/rules/manifest   signed rule package manifest
 //   POST /api/v1/feedback/patterns  anonymized pattern feedback intake
 //   POST /api/v1/admin/publish    admin: publish a new signed rule package
+//   GET  /constitution.pdf        sealed Verum Omnis Constitution v6 PDF (from KV)
+//   GET  /docs/constitution.pdf   alias of /constitution.pdf
 //
 // Signing: RSASSA-PKCS1-v1_5 with SHA-512 over the canonical JSON of the
 // package (object keys sorted recursively, compact separators, UTF-8).
@@ -20,6 +22,11 @@ const ALGORITHM = 'RSASSA-PKCS1-v1_5-SHA512';
 const PUBLIC_KEY_ID = 'vo-master-1';
 const CURRENT_KEY = 'rules:current';
 const SERVICE = 'verum-rules';
+
+// Sealed Constitution v6 PDF stored in KV as base64 chunks
+// (pdf:constitution-v6:meta + pdf:constitution-v6:chunk:000..NNN).
+const PDF_META_KEY = 'pdf:constitution-v6:meta';
+const PDF_CHUNK_PREFIX = 'pdf:constitution-v6:chunk:';
 
 const MAX_FEEDBACK_BODY = 16 * 1024;   // 16 KB hard cap
 const MAX_PUBLISH_BODY = 1024 * 1024;  // 1 MB cap for rule packages
@@ -147,6 +154,59 @@ async function handleManifest(env) {
     signature: rec.signature,
     algorithm: ALGORITHM,
     publicKeyId: PUBLIC_KEY_ID
+  });
+}
+
+// Serve the sealed Constitution v6 PDF stored in KV as base64 chunks.
+// Decodes base64 in slices to stay clear of call-stack / arg-count limits.
+async function handleConstitutionPdf(env) {
+  const metaRaw = await env.RULES_KV.get(PDF_META_KEY);
+  if (!metaRaw) {
+    return err(404, 'not_found', 'Constitution PDF is not available.');
+  }
+  let meta;
+  try { meta = JSON.parse(metaRaw); } catch {
+    return err(404, 'not_found', 'Constitution PDF is not available.');
+  }
+  if (!meta || !Number.isInteger(meta.chunks) || meta.chunks < 1) {
+    return err(404, 'not_found', 'Constitution PDF is not available.');
+  }
+
+  const parts = [];
+  for (let i = 0; i < meta.chunks; i++) {
+    const chunk = await env.RULES_KV.get(PDF_CHUNK_PREFIX + String(i).padStart(3, '0'));
+    if (chunk === null) {
+      return err(404, 'not_found', 'Constitution PDF data is incomplete.');
+    }
+    parts.push(chunk);
+  }
+  const b64 = parts.join('');
+
+  // Decode base64 in slices aligned to 4-char boundaries; atob on the whole
+  // string at once is fine too, but slicing keeps memory use bounded.
+  const SLICE = 32768; // multiple of 4, keeps atob input aligned
+  let padding = 0;
+  if (b64.endsWith('==')) padding = 2;
+  else if (b64.endsWith('=')) padding = 1;
+  const totalLen = Math.floor(b64.length / 4) * 3 - padding;
+  const bytes = new Uint8Array(totalLen);
+  let offset = 0;
+  for (let i = 0; i < b64.length; i += SLICE) {
+    const bin = atob(b64.slice(i, i + SLICE));
+    for (let j = 0; j < bin.length; j++) bytes[offset + j] = bin.charCodeAt(j);
+    offset += bin.length;
+  }
+
+  const filename = typeof meta.filename === 'string' && meta.filename.length > 0
+    ? meta.filename
+    : 'verum-omnis-constitution-v6-final-sealed.pdf';
+  return new Response(bytes, {
+    status: 200,
+    headers: corsHeaders({
+      'Content-Type': 'application/pdf',
+      'Content-Disposition': 'inline; filename="' + filename + '"',
+      'Cache-Control': 'public, max-age=86400'
+    })
   });
 }
 
@@ -326,10 +386,11 @@ async function route(request, env) {
   if (path === '/api/v1/rules/manifest' && request.method === 'GET') return handleManifest(env);
   if (path === '/api/v1/feedback/patterns' && request.method === 'POST') return handleFeedback(request, env);
   if (path === '/api/v1/admin/publish' && request.method === 'POST') return handleAdminPublish(request, env);
+  if ((path === '/constitution.pdf' || path === '/docs/constitution.pdf') && request.method === 'GET') return handleConstitutionPdf(env);
 
-  const known = ['/api/v1/status', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish'];
+  const known = ['/api/v1/status', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish', '/constitution.pdf', '/docs/constitution.pdf'];
   if (known.includes(path)) {
-    return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' ? 'GET' : 'POST' });
+    return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' || path.endsWith('/constitution.pdf') ? 'GET' : 'POST' });
   }
   return err(404, 'not_found', 'Unknown endpoint: ' + path);
 }
