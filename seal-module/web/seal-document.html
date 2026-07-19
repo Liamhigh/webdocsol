@@ -418,6 +418,7 @@
     <div class="hash-row"><label>SHA-256 (OpenTimestamps)</label><div class="hash-display" id="sha256Display"></div></div>
     <div class="hash-row"><label>SHA-512 (Verum Fingerprint)</label><div class="hash-display" id="sha512Display"></div></div>
     <div class="hash-row"><label>Seal ID</label><div class="hash-display" id="sealIdDisplay" style="color:#D4A843;"></div></div>
+    <div class="hash-row" id="sealedHashRow" style="display:none;"><label>Sealed File SHA-512 (VO-SEAL2 self-integrity)</label><div class="hash-display" id="sealedHashDisplay" style="font-size:11px;"></div></div>
     <div class="hash-row" id="chainRow" style="display:none;"><label>Chain of Custody</label><div class="hash-display" id="chainDisplay" style="color:#4A7EC7;font-size:12px;"></div></div>
     <a href="/verify.html" class="verify-link" id="verifyLink">&#128269; Verify on verumglobal.foundation</a>
     <div class="download-grid" id="downloadGrid">
@@ -643,11 +644,12 @@ async function detectExistingSeal(pdfBytes) {
   try {
     const pdfDoc = await PDFDocument.load(pdfBytes, { ignoreEncryption: true });
     const subject = pdfDoc.getSubject();
-    if (subject && subject.startsWith('VO-SEAL|')) {
+    if (subject && (subject.startsWith('VO-SEAL|') || subject.startsWith('VO-SEAL2|'))) {
       const parts = subject.split('|');
       if (parts.length >= 3) chain.push({ sealId: parts[2], sha512: parts[1], source: 'Subject metadata' });
-      if (parts.length >= 4 && parts[3].startsWith('CHAIN:')) {
-        const oldIds = parts[3].substring(6).split(',').filter(s => s);
+      const chainPart = parts.find(p => p.startsWith('CHAIN:'));
+      if (chainPart) {
+        const oldIds = chainPart.substring(6).split(',').filter(s => s);
         for (const oldId of oldIds) { if (oldId !== parts[2]) chain.push({ sealId: oldId, sha512: null, source: 'Chain history' }); }
       }
     }
@@ -892,6 +894,65 @@ let _pipelineAiAddedFindings = [];
 
 // ==================== BUILD SEALED PDF ====================
 
+// ---- VO-SEAL2 sealed-file self-integrity scheme ----
+// The sealed-file SHA-512 must cover the FINAL bytes of this PDF (footers, QR
+// panel and metadata already stamped), which a pre-computed hash never can.
+// Because the hash cannot be known before the file exists, the Subject is first
+// written with a fixed 128-char placeholder, the finished file is saved and
+// hashed, and the placeholder is then patched in place with the real hex.
+// The patch is length-preserving, so every xref offset stays valid.
+// NOTE: pdf-lib writes Info strings as UTF-16BE hex strings (<FEFF0056...>),
+// so the patch happens in that encoding, and save({useObjectStreams:false})
+// is required so the Info dictionary is stored uncompressed.
+// The QR image and footer text are baked in BEFORE the final bytes exist and
+// (being compressed/pixel data) cannot be patched afterwards, so they keep
+// carrying the ORIGINAL content hash; only the Subject carries the
+// sealed-file hash. This is a deliberate, documented split:
+//   Subject  -> integrity of the sealed file (VO-SEAL2, self-verifiable)
+//   QR/footer-> integrity + time of the original content (OTS-anchored)
+var VO_SEAL2_PREFIX = 'VO-SEAL2|';
+var VO_HASH_PLACEHOLDER = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
+
+function voUtf16Hex(str) {
+  var out = '';
+  for (var i = 0; i < str.length; i++) {
+    var h = str.charCodeAt(i).toString(16).toUpperCase();
+    while (h.length < 4) h = '0' + h;
+    out += h;
+  }
+  return out;
+}
+
+// Locate up to 2 occurrences of needle (ASCII string) inside a Uint8Array.
+function voFindAscii(hay, needleStr, limit) {
+  var hits = [];
+  var n0 = needleStr.charCodeAt(0);
+  var max = hay.length - needleStr.length;
+  for (var i = 0; i <= max; i++) {
+    if (hay[i] !== n0) continue;
+    var ok = true;
+    for (var j = 1; j < needleStr.length; j++) { if (hay[i + j] !== needleStr.charCodeAt(j)) { ok = false; break; } }
+    if (ok) { hits.push(i); if (limit && hits.length >= limit) return hits; }
+  }
+  return hits;
+}
+
+// Patch the placeholder Subject hash inside the saved PDF bytes with the real
+// SHA-512 of those bytes. Returns the sealed-file hash hex, or null when the
+// placeholder is not present exactly once (caller then falls back to the
+// legacy VO-SEAL subject -- an honest degradation, never a silent failure).
+async function voEmbedSealedFileHash(savedBytes) {
+  var hits = voFindAscii(savedBytes, voUtf16Hex(VO_SEAL2_PREFIX + VO_HASH_PLACEHOLDER), 2);
+  if (hits.length !== 1) return null;
+  var hashBuf = await crypto.subtle.digest('SHA-512', savedBytes);
+  var hb = new Uint8Array(hashBuf), hash = '';
+  for (var i = 0; i < hb.length; i++) hash += (hb[i] < 16 ? '0' : '') + hb[i].toString(16);
+  var hashEnc = voUtf16Hex(hash); // 512 ASCII chars == placeholder's encoded length
+  var start = hits[0] + voUtf16Hex(VO_SEAL2_PREFIX).length;
+  for (var k = 0; k < hashEnc.length; k++) savedBytes[start + k] = hashEnc.charCodeAt(k);
+  return hash;
+}
+
 async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain, fraudResult) {
   const pdf = await PDFDocument.load(origBytes);
   let wmImg = null;
@@ -996,11 +1057,28 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
 
   try { pdf.setTitle(selectedFile ? selectedFile.name : 'Sealed Document'); } catch(e) {}
   try { pdf.setAuthor('Verum Omnis'); } catch(e) {}
-  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + chainStr); } catch(e) {}
-  try { pdf.setKeywords(['verum', 'seal', sha512.substring(0,16), sealType]); } catch(e) { console.warn('Keywords set failed:', e.message); }
-  try { pdf.setProducer('Verum Omnis Document Sealing Service v1.2.6'); } catch(e) {}
+  // VO-SEAL2: placeholder sealed-file hash first (patched post-save); ORIG:
+  // preserves the original content hash (the OTS-anchored pre-seal fingerprint).
+  try { pdf.setSubject(VO_SEAL2_PREFIX + VO_HASH_PLACEHOLDER + '|' + sealId + '|ORIG:' + sha512 + chainStr); } catch(e) {}
+  try { pdf.setKeywords(['verum', 'seal', 'v2', sha512.substring(0,16), sealType]); } catch(e) { console.warn('Keywords set failed:', e.message); }
+  try { pdf.setProducer('Verum Omnis Document Sealing Service v1.3.0'); } catch(e) {}
   try { pdf.setCreationDate(new Date()); } catch(e) {}
 
+  window._voSealedFileHash = null;
+  try {
+    var savedV2 = await pdf.save({ useObjectStreams: false });
+    var sealedHash = await voEmbedSealedFileHash(savedV2);
+    if (sealedHash) {
+      window._voSealedFileHash = sealedHash;
+      return savedV2;
+    }
+    console.warn('VO-SEAL2 placeholder patch infeasible; falling back to legacy VO-SEAL subject.');
+  } catch (eV2) {
+    console.warn('VO-SEAL2 save failed, falling back to legacy format:', eV2 && eV2.message ? eV2.message : eV2);
+  }
+  // Legacy fallback (pre-v1.3 format): Subject hash covers the pre-seal original.
+  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + chainStr); } catch(e) {}
+  try { pdf.setKeywords(['verum', 'seal', sha512.substring(0,16), sealType]); } catch(e) {}
   return await pdf.save();
 }
 
@@ -1456,6 +1534,14 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   document.getElementById('sha512Display').textContent = sha512;
   document.getElementById('sealIdDisplay').textContent = sealId;
 
+  // VO-SEAL2: show the sealed-file self-integrity hash when the new scheme
+  // was applied (hidden for legacy-fallback seals -- no such hash exists).
+  var sealedHashRow = document.getElementById('sealedHashRow');
+  if (window._voSealedFileHash && sealedHashRow) {
+    document.getElementById('sealedHashDisplay').textContent = window._voSealedFileHash;
+    sealedHashRow.style.display = 'block';
+  } else if (sealedHashRow) { sealedHashRow.style.display = 'none'; }
+
   // Fraud warning display
   if (forensicResult && !forensicResult.clean) {
     var fraudDiv = document.createElement('div');
@@ -1577,6 +1663,9 @@ function resetSealing() {
   _pipelinePageCount = 0;
   _pipelineAiAddedFindings = [];
   window._voReportPack = null;
+  window._voSealedFileHash = null;
+  var sealedHashRowR = document.getElementById('sealedHashRow');
+  if (sealedHashRowR) sealedHashRowR.style.display = 'none';
   var gkBanner = document.getElementById('gatekeepBanner');
   if (gkBanner) gkBanner.style.display = 'none';
   var oldReportBtn2 = document.getElementById('downloadForensicReport');
