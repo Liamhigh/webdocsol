@@ -79,6 +79,20 @@
   .upload-zone p { font-size: 1rem; color: #D5D8DD; }
   .upload-zone .hint { font-size: 0.85rem; color: #4A7EC7; margin-top: 8px; }
 
+  .share-meta {
+    background: rgba(15, 52, 96, 0.08); border: 1px solid rgba(26, 46, 82, 0.4);
+    border-radius: 12px; padding: 16px 20px; margin: -8px 0 24px; text-align: left;
+  }
+  .share-meta-label {
+    display: flex; align-items: flex-start; gap: 10px; cursor: pointer;
+    font-size: 0.9rem; color: #D5D8DD; line-height: 1.5;
+  }
+  .share-meta-label input[type="checkbox"] {
+    margin-top: 3px; width: 16px; height: 16px; flex-shrink: 0;
+    accent-color: #D4A843; cursor: pointer;
+  }
+  .share-meta-note { font-size: 0.78rem; color: #4A7EC7; margin: 8px 0 0 26px; line-height: 1.5; }
+
   .result-box {
     border-radius: 20px; padding: 40px; margin-bottom: 32px;
     text-align: center; display: none;
@@ -228,6 +242,14 @@
     <input type="file" id="fileInput" accept=".pdf,application/pdf" style="display:none">
   </div>
 
+  <div class="share-meta" id="shareMetaBox">
+    <label class="share-meta-label" for="shareMetaOptIn">
+      <input type="checkbox" id="shareMetaOptIn" checked>
+      <span>Share anonymous verification metadata to improve the forensic engine</span>
+    </label>
+    <p class="share-meta-note">Only the verification outcome and the document's page/size class are sent &mdash; never document content, hashes, or URLs.</p>
+  </div>
+
   <div class="spinner" id="spinner">
     <div class="spinner-ring"></div>
     <p style="font-family:'Courier New',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#D4A843;">Verifying seal...</p>
@@ -338,6 +360,7 @@
   var custodyBox = document.getElementById('custodyBox');
   var currentCustodyReceipt = null;
   var currentCustodyFilename = null;
+  var shareMetaOptIn = document.getElementById('shareMetaOptIn');
 
   dropZone.addEventListener('click', function() { fileInput.click(); });
   fileInput.addEventListener('change', function(e) { if (e.target.files[0]) handleFile(e.target.files[0]); });
@@ -347,6 +370,18 @@
     e.preventDefault(); dropZone.classList.remove('dragover');
     var f = e.dataTransfer.files; if (f.length) handleFile(f[0]);
   });
+
+  // Opt-in preference for anonymous engine-improvement metadata (default: on).
+  // Remembered on this device only; unchecking stops all future submissions.
+  var SHARE_META_KEY = 'vo-share-verify-meta';
+  if (shareMetaOptIn) {
+    try {
+      if (localStorage.getItem(SHARE_META_KEY) === '0') shareMetaOptIn.checked = false;
+    } catch (e) {}
+    shareMetaOptIn.addEventListener('change', function() {
+      try { localStorage.setItem(SHARE_META_KEY, shareMetaOptIn.checked ? '1' : '0'); } catch (e) {}
+    });
+  }
 
   function showError(msg) {
     errorText.textContent = msg;
@@ -374,7 +409,11 @@
 
   async function handleFile(file) {
     resetUI();
-    if (!file.name.toLowerCase().endsWith('.pdf')) { showError('Please select a PDF file.'); return; }
+    if (!file.name.toLowerCase().endsWith('.pdf')) {
+      showError('Please select a PDF file.');
+      reportVerificationOutcome('VERIFY_ERROR', 0, null);
+      return;
+    }
     spinner.classList.add('visible');
     try {
       var buf = await file.arrayBuffer();
@@ -382,12 +421,14 @@
       await verifyPdf(buf, file.name);
     } catch (e) {
       showError('Error reading file: ' + e.message);
+      reportVerificationOutcome('VERIFY_ERROR', 0, null);
     }
   }
 
   async function verifyPdf(arrayBuffer, filename) {
     var bytes = new Uint8Array(arrayBuffer);
     var text = new TextDecoder('latin1').decode(bytes);
+    var pageCount = estimatePdfPageCount(text);
 
     // Extract metadata
     var meta = extractMetadata(text);
@@ -427,6 +468,14 @@
       // No embedded metadata — show hash only
       showNoSeal(hashHex);
     }
+
+    // Anonymous, opt-in engine-improvement feedback (outcome + page class only;
+    // never content, hashes, sealId, or URLs). Fire-and-forget, non-blocking.
+    reportVerificationOutcome(
+      verdict === 'MATCH' ? 'VERIFY_GENUINE' : (verdict === 'TAMPERED' ? 'VERIFY_TAMPERED' : 'VERIFY_FORMAT_ONLY'),
+      pageCount,
+      meta && meta.version ? meta.version : null
+    );
 
     // Show PDF preview
     showPreview(currentPdfBlob);
@@ -797,6 +846,48 @@
     } catch (e) { console.warn('Custody receipt download failed:', e); }
   }
   window.downloadCustodyReceipt = downloadCustodyReceipt;
+
+  // ===== Anonymous Engine-Improvement Feedback =====
+  // Opt-in (checkbox above, default on). Sends ONLY non-sensitive metadata:
+  // the verification outcome, the page count class, and the seal format version.
+  // NEVER sent: document content, SHA-512/SHA-256 digests, sealId, QR payload,
+  // filename, custody digests, or URLs. Fire-and-forget: 8s timeout, silent on
+  // failure, and never blocks the verdict or the OTS custody flow.
+
+  var FEEDBACK_PATTERNS_URL = 'https://verumglobal.foundation/api/v1/feedback/patterns';
+
+  // Best-effort page count from the raw PDF text (counts page objects).
+  // Returns 0 when it cannot be determined; the field is then omitted.
+  function estimatePdfPageCount(pdfText) {
+    try {
+      var m = pdfText.match(/\/Type\s*\/Page\b/g);
+      return m ? m.length : 0;
+    } catch (e) { return 0; }
+  }
+
+  function reportVerificationOutcome(outcome, pageCount, sealVersion) {
+    try {
+      if (!shareMetaOptIn || !shareMetaOptIn.checked) return;
+      var severity = outcome === 'VERIFY_GENUINE' ? 1 : (outcome === 'VERIFY_TAMPERED' ? 4 : 2);
+      var pattern = { detectorId: outcome, type: 'VERIFICATION_OUTCOME', severity: severity };
+      if (typeof pageCount === 'number' && isFinite(pageCount) && pageCount > 0) {
+        pattern.pageCount = Math.floor(pageCount);
+      }
+      var patterns = [pattern];
+      if (sealVersion) {
+        var fmt = String(sealVersion).toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
+        if (fmt) patterns.push({ detectorId: 'SEAL_FORMAT_' + fmt, type: 'SEAL_FORMAT', severity: 1 });
+      }
+      var ctrl = new AbortController();
+      var to = setTimeout(function() { ctrl.abort(); }, 8000);
+      fetch(FEEDBACK_PATTERNS_URL, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ patterns: patterns }),
+        signal: ctrl.signal
+      }).then(function() { clearTimeout(to); }).catch(function() { clearTimeout(to); });
+    } catch (e) { /* silent by design: telemetry must never affect verification */ }
+  }
 
   // ===== Metadata Extraction =====
   function extractMetadata(pdfText) {
