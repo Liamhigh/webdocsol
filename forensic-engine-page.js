@@ -714,9 +714,9 @@ var DETECTORS = {
     if (pageLengths.length >= 3) {
       var avg = pageLengths.reduce(function(a,b){return a+b;},0) / pageLengths.length;
       for (var i = 0; i < pageLengths.length; i++) {
-        if (Math.abs(pageLengths[i] - avg) / avg > 0.5 && pageLengths[i] > 100) {
+        if (Math.abs(pageLengths[i] - avg) > avg * 0.5) {
           findings.push({ type: 'CT26', severity: 2,
-            evidence: 'Page ' + (i+1) + ' text length deviates ' + Math.round(Math.abs(pageLengths[i]-avg)/avg*100) + '% from average',
+            evidence: 'Page ' + (i+1) + ' text length (' + pageLengths[i] + ') deviates ' + Math.round(Math.abs(pageLengths[i]-avg)/avg*100) + '% from average',
             location: 'Page ' + (i+1) });
         }
       }
@@ -724,111 +724,96 @@ var DETECTORS = {
     return findings;
   },
 
-  D18_DETECT_LAYOUT_MANIPULATION: function(textBlocks) {
+  D18_DETECT_PAGE_MANIPULATION: function(textBlocks) {
     var findings = [];
-    // Check for inconsistent header/footer patterns
-    var headerPatterns = [];
-    for (var i = 0; i < textBlocks.length; i++) {
-      var lines = textBlocks[i].split('\n').filter(function(l){return l.trim();});
-      if (lines.length > 0) headerPatterns.push({ page: i, first: lines[0].substring(0,50), last: lines[lines.length-1].substring(0,50) });
-    }
-    var firstLines = headerPatterns.map(function(h){return h.first;});
-    var uniqueFirsts = {};
-    for (var j = 0; j < firstLines.length; j++) uniqueFirsts[firstLines[j]] = true;
-    if (Object.keys(uniqueFirsts).length >= 3 && headerPatterns.length >= 4) {
-      findings.push({ type: 'CT27', severity: 3,
-        evidence: 'Inconsistent page headers detected across ' + headerPatterns.length + ' pages',
-        location: 'Multiple pages' });
-    }
-    return findings;
-  },
-
-  D19_DETECT_PAGE_SEQUENCE_ANOMALY: function(textBlocks) {
-    var findings = [];
-    // Check for page numbering inconsistencies
-    var pageNums = [];
-    var pageNumRe = /\b(?:page|pg\.?)\s*(\d+)\s*(?:of\s*(\d+))?\b/gi;
+    // Check for page number gaps or duplicates
+    var pageNumRe = /\b(page|p\.?|pg)\s*(\d+)\s*(?:of|\/)\s*(\d+)\b/gi;
+    var seenNumbers = {};
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
       while ((match = pageNumRe.exec(textBlocks[i])) !== null) {
-        pageNums.push({ stated: parseInt(match[1]), actual: i + 1, total: match[2] ? parseInt(match[2]) : null });
-      }
-    }
-    for (var k = 0; k < pageNums.length; k++) {
-      if (pageNums[k].stated !== pageNums[k].actual) {
-        findings.push({ type: 'CT41', severity: 4,
-          evidence: 'Page number mismatch: text says "page ' + pageNums[k].stated + '" but is actually page ' + pageNums[k].actual,
-          location: 'Page ' + pageNums[k].actual });
+        var num = parseInt(match[2]);
+        if (seenNumbers[num] !== undefined && seenNumbers[num] !== i) {
+          findings.push({ type: 'CT27', severity: 4,
+            evidence: 'Page number ' + num + ' appears on multiple pages (potential duplicate or insertion)',
+            location: 'Page ' + (i+1) + ' and Page ' + (seenNumbers[num]+1) });
+        }
+        seenNumbers[num] = i;
       }
     }
     return findings;
   },
 
-  D20_DETECT_SCANNED_VS_DIGITAL: function(textBlocks, pdfDoc) {
+  D19_DETECT_EVIDENCE_TAMPERING: function(textBlocks) {
     var findings = [];
-    // If document claims to be scanned but has selectable text, or vice versa
-    var hasText = textBlocks.some(function(t){return t.trim().length > 50;});
+    var tamperingIndicators = [
+      'white out','whited out','correction fluid','tippex','tipp-ex',
+      'scanned copy','photocopied signature','pasted signature','stamped signature',
+      'inserted page','removed page','replaced page','added later'
+    ];
     var fullText = textBlocks.join(' ').toLowerCase();
-    if (fullText.indexOf('scanned') !== -1 || fullText.indexOf('scan of') !== -1) {
-      if (hasText) {
-        findings.push({ type: 'CT42', severity: 3,
-          evidence: 'Document references scanning but contains digital text (possible digital creation)',
+    for (var i = 0; i < tamperingIndicators.length; i++) {
+      if (fullText.indexOf(tamperingIndicators[i]) !== -1) {
+        findings.push({ type: 'CT41', severity: 5,
+          evidence: 'Tampering indicator found: "' + tamperingIndicators[i] + '"',
           location: 'Full document' });
       }
     }
     return findings;
   },
 
-  // D21-D25: Cross-reference detectors
-  D21_DETECT_REFERENCE_FAILURE: function(textBlocks) {
+  D20_DETECT_DIGITAL_FOOTPRINT_MISMATCH: function(pdfDoc) {
     var findings = [];
-    var refRe = /(?:see|refer to|as per|per|according to)\s+(appendix|annexure|schedule|section|clause|paragraph|exhibit)\s+([A-Z0-9]+)/gi;
-    var referenced = [];
+    try {
+      var producer = pdfDoc.getProducer() || '';
+      var creator = pdfDoc.getCreator() || '';
+      // If it claims to be scanned but metadata says word processor
+      if ((producer.indexOf('Scan') !== -1 || creator.indexOf('Scan') !== -1) &&
+          (producer.indexOf('Microsoft') !== -1 || creator.indexOf('Microsoft') !== -1)) {
+        findings.push({ type: 'CT42', severity: 4,
+          evidence: 'Claims scanned but metadata shows word processor: ' + producer + ' / ' + creator,
+          location: 'PDF metadata' });
+      }
+    } catch(e) {}
+    return findings;
+  },
+
+  // D21-D25: Cross-reference detectors
+  D21_DETECT_MISSING_APPENDIX: function(textBlocks) {
+    var findings = [];
+    var appendixRefs = [];
+    var appendixRe = /(?:see|refer to|as per|in)\s+(appendix|annex|schedule|exhibit)\s*([A-Z\d]+)/gi;
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
-      while ((match = refRe.exec(textBlocks[i])) !== null) {
-        referenced.push({ type: match[1].toLowerCase(), ref: match[2], page: i });
+      while ((match = appendixRe.exec(textBlocks[i])) !== null) {
+        appendixRefs.push({ ref: (match[1] + ' ' + match[2]).toLowerCase(), page: i });
       }
     }
-    // Check if referenced items exist
+    // Check if referenced appendices exist
     var fullText = textBlocks.join(' ').toLowerCase();
-    for (var j = 0; j < referenced.length; j++) {
-      var searchTerm = referenced[j].type + ' ' + referenced[j].ref.toLowerCase();
-      var found = false;
-      // Check if the reference target exists as a heading
-      for (var k = 0; k < textBlocks.length; k++) {
-        if (textBlocks[k].toLowerCase().indexOf(searchTerm) !== -1 && k !== referenced[j].page) {
-          found = true;
-          break;
-        }
-      }
-      if (!found) {
+    for (var j = 0; j < appendixRefs.length; j++) {
+      var appendixTitle = new RegExp('\\b' + appendixRefs[j].ref.replace(/\s+/g,'\\s+') + '\\b', 'i');
+      if (!appendixTitle.test(fullText)) {
         findings.push({ type: 'CT31', severity: 3,
-          evidence: 'Reference to "' + referenced[j].type + ' ' + referenced[j].ref + '" not found in document',
-          location: 'Page ' + (referenced[j].page + 1) });
+          evidence: 'Referenced "' + appendixRefs[j].ref + '" not found in document',
+          location: 'Page ' + (appendixRefs[j].page + 1) });
       }
     }
     return findings;
   },
 
-  D22_DETECT_LEGAL_REFERENCE_INVALID: function(textBlocks) {
+  D22_DETECT_INVALID_LEGAL_REF: function(textBlocks) {
     var findings = [];
-    var legalRefs = [
-      { pattern: /section\s+(\d+)\s+of\s+the\s+companies\s+act/gi, maxSection: 214, name: 'Companies Act' },
-      { pattern: /section\s+(\d+)\s+of\s+the\s+constitution/gi, maxSection: 243, name: 'Constitution' },
-      { pattern: /article\s+([ivxlcdm]+)/gi, maxArticle: 20, name: 'Constitution (articles)' }
-    ];
-    for (var i = 0; i < textBlocks.length; i++) {
-      for (var j = 0; j < legalRefs.length; j++) {
-        var match;
-        while ((match = legalRefs[j].pattern.exec(textBlocks[i])) !== null) {
-          var num = parseInt(match[1]) || 0;
-          if (legalRefs[j].maxSection && num > legalRefs[j].maxSection) {
-            findings.push({ type: 'CT33', severity: 4,
-              evidence: 'Reference to Section ' + num + ' of ' + legalRefs[j].name + ' (max: ' + legalRefs[j].maxSection + ')',
-              location: 'Page ' + (i + 1) });
-          }
-        }
+    var legalRe = /\b(section|regulation|act|rule)\s+(\d+[A-Z]*)\s+(?:of|in)\s+(?:the\s+)?([A-Za-z\s]+(?:Act|Regulations|Rules))/gi;
+    var fullText = textBlocks.join(' ');
+    var match;
+    while ((match = legalRe.exec(fullText)) !== null) {
+      // Flag if section number seems invalid (>500 for most acts)
+      var sectionNum = parseInt(match[2]);
+      if (sectionNum > 500) {
+        findings.push({ type: 'CT33', severity: 3,
+          evidence: 'Suspiciously high section number: Section ' + match[2] + ' of ' + match[3],
+          location: 'Full document' });
       }
     }
     return findings;
@@ -837,105 +822,104 @@ var DETECTORS = {
   D23_DETECT_PROCEDURE_BREACH: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var procedureChecks = [
-      { required: 'witness', context: 'signature', message: 'Document signed without witness requirement mentioned' },
-      { required: 'notar', context: 'affidavit', message: 'Affidavit without notarization reference' },
-      { required: 'seal', context: 'deed', message: 'Deed without seal reference' },
-      { required: 'commissioner', context: 'oath', message: 'Oath without commissioner reference' }
+    var procedureReqs = [
+      { req: 'witness', context: 'signature|signed|contract|agreement' },
+      { req: 'notar', context: 'affidavit|oath|sworn|certified' },
+      { req: 'resolution', context: 'board|director|shareholder' },
+      { req: 'stamp duty', context: 'lease|agreement|transfer' }
     ];
-    for (var i = 0; i < procedureChecks.length; i++) {
-      if (fullText.indexOf(procedureChecks[i].context) !== -1 &&
-          fullText.indexOf(procedureChecks[i].required) === -1) {
-        findings.push({ type: 'CT35', severity: 3,
-          evidence: procedureChecks[i].message,
+    for (var i = 0; i < procedureReqs.length; i++) {
+      var contextRe = new RegExp(procedureReqs[i].context, 'i');
+      var reqRe = new RegExp('\\b' + procedureReqs[i].req + '\\b', 'i');
+      if (contextRe.test(fullText) && !reqRe.test(fullText)) {
+        findings.push({ type: 'CT35', severity: 4,
+          evidence: 'Document type may require "' + procedureReqs[i].req + '" but none found',
           location: 'Full document' });
       }
     }
     return findings;
   },
 
-  D24_DETECT_ADDRESS_INCONSISTENCY: function(textBlocks) {
+  // D24-D28: Contact/location detectors
+  D24_DETECT_ADDRESS_CONFLICT: function(textBlocks) {
     var findings = [];
-    var addrRe = /\b\d+\s+[A-Za-z\s]+(?:street|st\.?|road|rd\.?|avenue|ave\.?|drive|dr\.?|lane|ln\.?|boulevard|blvd\.?|way|place|pl\.?|court|ct\.?|circle|cir\.?)\b/gi;
+    var addressRe = /\b\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Way|Boulevard|Blvd)/gi;
     var addresses = [];
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
-      while ((match = addrRe.exec(textBlocks[i])) !== null) {
-        addresses.push({ addr: match[0].toLowerCase(), page: i });
+      while ((match = addressRe.exec(textBlocks[i])) !== null) {
+        addresses.push({ value: match[0].toLowerCase().replace(/\s+/g,' '), page: i });
       }
     }
-    var uniqueAddrs = {};
-    for (var j = 0; j < addresses.length; j++) uniqueAddrs[addresses[j].addr] = true;
-    if (Object.keys(uniqueAddrs).length >= 3) {
+    // Check for different addresses
+    var unique = {};
+    for (var j = 0; j < addresses.length; j++) {
+      unique[addresses[j].value] = true;
+    }
+    var addrList = Object.keys(unique);
+    if (addrList.length >= 2) {
       findings.push({ type: 'CT36', severity: 2,
-        evidence: Object.keys(uniqueAddrs).length + ' different addresses found',
+        evidence: addrList.length + ' different addresses found',
         location: 'Multiple pages' });
     }
     return findings;
   },
 
-  D25_DETECT_CONTACT_INCONSISTENCY: function(textBlocks) {
+  D25_DETECT_CONTACT_MISMATCH: function(textBlocks) {
     var findings = [];
-    var emailRe = /\b[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g;
-    var domains = [];
+    var emailRe = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
+    var emails = [];
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
       while ((match = emailRe.exec(textBlocks[i])) !== null) {
-        domains.push({ domain: match[1].toLowerCase(), page: i });
+        emails.push({ value: match[0].toLowerCase(), page: i });
       }
     }
-    var uniqueDomains = {};
-    for (var j = 0; j < domains.length; j++) uniqueDomains[domains[j].domain] = true;
-    if (Object.keys(uniqueDomains).length >= 2) {
-      var domainList = Object.keys(uniqueDomains);
-      // Check for suspicious domain changes (e.g., company.co.za to company-gmail.com)
-      var suspicious = false;
-      for (var k = 0; k < domainList.length; k++) {
-        for (var l = k + 1; l < domainList.length; l++) {
-          var base1 = domainList[k].split('.')[0];
-          var base2 = domainList[l].split('.')[0];
-          if (base1 === base2 || domainList[k].indexOf(base2) !== -1 || domainList[l].indexOf(base1) !== -1) {
-            suspicious = true;
-          }
-        }
-      }
-      if (suspicious || domainList.length >= 3) {
-        findings.push({ type: 'CT37', severity: 2,
-          evidence: 'Multiple email domains: ' + domainList.slice(0, 3).join(', '),
-          location: 'Multiple pages' });
-      }
+    var domains = {};
+    for (var j = 0; j < emails.length; j++) {
+      var domain = emails[j].value.split('@')[1];
+      domains[domain] = true;
+    }
+    var domainList = Object.keys(domains);
+    if (domainList.length >= 2) {
+      findings.push({ type: 'CT37', severity: 2,
+        evidence: 'Multiple email domains: ' + domainList.join(', '),
+        location: 'Multiple pages' });
     }
     return findings;
   },
 
-  // D26-D30: Jurisdiction & entity detectors
-  D26_DETECT_JURISDICTION_IMPOSSIBILITY: function(textBlocks) {
+  D26_DETECT_JURISDICTIONAL_ISSUE: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var jurisdictions = ['south africa','dubai','mauritius','cayman','british virgin','panama','delaware','london','new york','singapore'];
-    var found = [];
-    for (var i = 0; i < jurisdictions.length; i++) {
-      if (fullText.indexOf(jurisdictions[i]) !== -1) found.push(jurisdictions[i]);
+    var jurisdictions = [
+      ['south africa','dubai','uae','u.k','u.s.a','australia','india'],
+      ['high court','magistrate','supreme court','federal court']
+    ];
+    var foundJurisdictions = [];
+    for (var i = 0; i < jurisdictions[0].length; i++) {
+      if (fullText.indexOf(jurisdictions[0][i]) !== -1) foundJurisdictions.push(jurisdictions[0][i]);
     }
-    if (found.length >= 3) {
+    if (foundJurisdictions.length > 1) {
       findings.push({ type: 'CT38', severity: 3,
-        evidence: 'Multiple jurisdictions referenced: ' + found.slice(0, 4).join(', '),
+        evidence: 'Multiple jurisdictions referenced: ' + foundJurisdictions.join(', '),
         location: 'Full document' });
     }
     return findings;
   },
 
-  D27_DETECT_CHAIN_OF_CUSTODY: function(textBlocks) {
+  // D27-D30: Evidence/witness detectors
+  D27_DETECT_CUSTODY_GAP: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var custodyTerms = ['chain of custody','evidence bag','sealed container','evidence number','exhibit number','collected by','received by','transferred to'];
+    var custodyTerms = ['received by','handed to','transferred to','logged by','signed for'];
     var found = [];
     for (var i = 0; i < custodyTerms.length; i++) {
       if (fullText.indexOf(custodyTerms[i]) !== -1) found.push(custodyTerms[i]);
     }
-    if (found.length >= 2 && found.length < 4) {
+    if (found.length >= 1 && found.length < 3) {
       findings.push({ type: 'CT39', severity: 3,
-        evidence: 'Partial chain of custody documentation (' + found.length + ' of ' + custodyTerms.length + ' expected elements)',
+        evidence: 'Incomplete chain of custody: only ' + found.length + ' of ' + custodyTerms.length + ' required steps found',
         location: 'Evidence handling section' });
     }
     return findings;
@@ -944,79 +928,67 @@ var DETECTORS = {
   D28_DETECT_WITNESS_CONFLICT: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var witnessIndicators = ['witness statement','sworn statement','affidavit','testimony','deposition'];
-    var conflictIndicators = ['however','but','contrary to','in contrast','on the other hand','disputes','denies','contradicts'];
-    var hasWitness = false, hasConflict = false;
-    for (var i = 0; i < witnessIndicators.length; i++) {
-      if (fullText.indexOf(witnessIndicators[i]) !== -1) { hasWitness = true; break; }
+    // Look for phrases suggesting conflicting accounts
+    var conflictMarkers = [
+      'however the witness','contrary to','in contrast','on the other hand',
+      'the witness stated','according to the witness'
+    ];
+    var count = 0;
+    for (var i = 0; i < conflictMarkers.length; i++) {
+      if (fullText.indexOf(conflictMarkers[i]) !== -1) count++;
     }
-    var conflictCount = 0;
-    for (var j = 0; j < conflictIndicators.length; j++) {
-      if (fullText.indexOf(conflictIndicators[j]) !== -1) conflictCount++;
-    }
-    if (hasWitness && conflictCount >= 3) {
-      findings.push({ type: 'CT40', severity: 4,
-        evidence: 'Witness statements with ' + conflictCount + ' conflict indicators',
+    if (count >= 3) {
+      findings.push({ type: 'CT40', severity: 3,
+        evidence: count + ' witness conflict markers found',
         location: 'Witness statements' });
     }
     return findings;
   },
 
-  D29_DETECT_SCOPE_EXPANSION: function(textBlocks) {
+  D29_DETECT_SCOPE_CREEP: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var scopeTerms = ['additional work','extra work','change order','variation','amendment','addendum','supplementary'];
-    var originalTerms = ['original quote','original scope','initial agreement','original contract'];
-    var hasExpansion = false, hasOriginal = false;
-    for (var i = 0; i < scopeTerms.length; i++) {
-      if (fullText.indexOf(scopeTerms[i]) !== -1) { hasExpansion = true; break; }
-    }
-    for (var j = 0; j < originalTerms.length; j++) {
-      if (fullText.indexOf(originalTerms[j]) !== -1) { hasOriginal = true; break; }
-    }
-    if (hasExpansion && hasOriginal) {
+    var originalScope = fullText.match(/\b(scope of work|scope of services|what is included)\b/gi);
+    var expandedTerms = fullText.match(/\b(additionally|furthermore|including but not limited to|etc|and so on)\b/gi);
+    if (originalScope && expandedTerms && expandedTerms.length > 5) {
       findings.push({ type: 'CT07', severity: 2,
-        evidence: 'Document shows scope expansion beyond original agreement',
+        evidence: 'Scope may have expanded: ' + originalScope.length + ' scope references but ' + expandedTerms.length + ' expansion phrases',
         location: 'Full document' });
     }
     return findings;
   },
 
-  D30_DETECT_TERM_CONFLICT: function(textBlocks) {
+  D30_DETECT_TERM_DEFINITION_CONFLICT: function(textBlocks) {
     var findings = [];
-    var fullText = textBlocks.join(' ').toLowerCase();
-    var termPairs = [
-      ['gross profit','net profit'],['pre-tax','post-tax'],['inclusive of vat','exclusive of vat'],
-      ['per annum','per month','per day'],['fixed rate','variable rate']
-    ];
-    for (var i = 0; i < termPairs.length; i++) {
-      var found = [];
-      for (var j = 0; j < termPairs[i].length; j++) {
-        if (fullText.indexOf(termPairs[i][j]) !== -1) found.push(termPairs[i][j]);
-      }
-      if (found.length > 1) {
-        findings.push({ type: 'CT08', severity: 3,
-          evidence: 'Conflicting terms used: ' + found.join(' vs '),
-          location: 'Full document' });
+    var definitionRe = /\b("[^"]+"|\w+)\s+(?:shall mean|means|is defined as|refers to)\b/gi;
+    var definitions = {};
+    for (var i = 0; i < textBlocks.length; i++) {
+      var match;
+      while ((match = definitionRe.exec(textBlocks[i])) !== null) {
+        var term = match[1].toLowerCase().replace(/"/g,'');
+        if (definitions[term] !== undefined && definitions[term] !== i) {
+          findings.push({ type: 'CT08', severity: 3,
+            evidence: 'Term "' + term + '" defined in multiple locations',
+            location: 'Page ' + (definitions[term]+1) + ' and Page ' + (i+1) });
+        }
+        definitions[term] = i;
       }
     }
     return findings;
   },
 
-  // D31-D35: Additional forensic detectors
-  D31_DETECT_IMPOSSIBLE_CLAIM: function(textBlocks) {
+  // D31-D37: Advanced detectors
+  D31_DETECT_CAUSAL_IMPOSSIBILITY: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var impossibleClaims = [
-      'same day delivery and shipping took 3 weeks',
-      'payment made before invoice was issued',
-      'document signed before it was drafted',
-      'approved before the application was submitted'
+    var causalPatterns = [
+      /\bbefore\b.*\breceived\b.*\bsent\b/gi,
+      /\bafter\b.*\bsent\b.*\breceived\b/gi
     ];
-    for (var i = 0; i < impossibleClaims.length; i++) {
-      if (fullText.indexOf(impossibleClaims[i]) !== -1) {
-        findings.push({ type: 'CT05', severity: 4,
-          evidence: 'Impossible claim detected: ' + impossibleClaims[i],
+    for (var i = 0; i < causalPatterns.length; i++) {
+      if (causalPatterns[i].test(fullText)) {
+        findings.push({ type: 'CT05', severity: 3,
+          evidence: 'Possible causal impossibility in event sequence',
           location: 'Full document' });
       }
     }
@@ -1026,60 +998,50 @@ var DETECTORS = {
   D32_DETECT_SIGNATURE_ANOMALY: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var sigTerms = ['signature','signed','signatory','initial'];
-    var sigPages = [];
-    for (var i = 0; i < textBlocks.length; i++) {
-      var pageText = textBlocks[i].toLowerCase();
-      for (var j = 0; j < sigTerms.length; j++) {
-        if (pageText.indexOf(sigTerms[j]) !== -1) {
-          sigPages.push(i);
-          break;
-        }
+    var sigPatterns = [
+      'electronic signature','digital signature','/s/','signed per pro',
+      'power of attorney','authorized representative','by proxy'
+    ];
+    for (var i = 0; i < sigPatterns.length; i++) {
+      if (fullText.indexOf(sigPatterns[i]) !== -1) {
+        findings.push({ type: 'CT23', severity: 3,
+          evidence: 'Non-standard signature method: "' + sigPatterns[i] + '"',
+          location: 'Signature block' });
       }
-    }
-    if (sigPages.length >= 3) {
-      findings.push({ type: 'CT23', severity: 2,
-        evidence: 'Signatures/initials referenced on ' + sigPages.length + ' pages (verify all match)',
-        location: 'Signature block' });
     }
     return findings;
   },
 
-  D33_DETECT_IMAGE_MANIPULATION: function(textBlocks, pdfDoc) {
-    var findings = [];
-    // Check for image-heavy pages that might be manipulated
-    try {
-      var pages = pdfDoc.getPages();
-      var imageCount = 0;
-      for (var i = 0; i < pages.length; i++) {
-        // This is a heuristic - if page has very little text but exists, might be image
-        if (textBlocks[i] && textBlocks[i].trim().length < 20) {
-          imageCount++;
-        }
-      }
-      if (imageCount >= 2) {
-        findings.push({ type: 'CT28', severity: 3,
-          evidence: imageCount + ' pages appear to be image-based (verify authenticity)',
-          location: 'Image sections' });
-      }
-    } catch(e) {}
-    return findings;
-  },
-
-  D34_DETECT_FINANCIAL_INCONSISTENCY: function(textBlocks) {
+  D33_DETECT_IMAGE_MANIPULATION: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var currencyRe = /\b(R|ZAR|USD|\$|EUR|€|GBP|£)\s*[\d,.]+/g;
-    var currencies = {};
-    var match;
-    while ((match = currencyRe.exec(fullText)) !== null) {
-      var c = match[1].toUpperCase();
-      currencies[c] = true;
+    var imageTerms = ['compressed','resized','cropped','filtered','edited image'];
+    for (var i = 0; i < imageTerms.length; i++) {
+      if (fullText.indexOf(imageTerms[i]) !== -1) {
+        findings.push({ type: 'CT28', severity: 3,
+          evidence: 'Image manipulation reference: "' + imageTerms[i] + '"',
+          location: 'Image sections' });
+      }
     }
-    var currencyList = Object.keys(currencies);
-    if (currencyList.length >= 2) {
+    return findings;
+  },
+
+  D34_DETECT_CURRENCY_FRAUD: function(textBlocks) {
+    var findings = [];
+    var currencies = [];
+    var currencyRe = /\b(R|ZAR|USD|\$|EUR|€|GBP|£)\s*[\d,.]+/g;
+    for (var i = 0; i < textBlocks.length; i++) {
+      var match;
+      while ((match = currencyRe.exec(textBlocks[i])) !== null) {
+        currencies.push(match[1]);
+      }
+    }
+    var unique = {};
+    for (var j = 0; j < currencies.length; j++) unique[currencies[j]] = true;
+    var currList = Object.keys(unique);
+    if (currList.length >= 2) {
       findings.push({ type: 'CT16', severity: 3,
-        evidence: 'Multiple currencies: ' + currencyList.join(', '),
+        evidence: 'Multiple currencies without conversion: ' + currList.join(', '),
         location: 'Financial sections' });
     }
     return findings;
@@ -1087,65 +1049,53 @@ var DETECTORS = {
 
   D35_DETECT_VERSION_ANOMALY: function(textBlocks) {
     var findings = [];
-    var fullText = textBlocks.join(' ').toLowerCase();
-    var versionRe = /version\s+(\d+)|v(\d+)\.(\d+)|draft\s+(\d+)|revision\s+(\d+)/gi;
+    var versionRe = /\b(version|v|rev|revision)\s*[:=.]?\s*(\d+\.?\d*)\b/gi;
     var versions = [];
-    var match;
-    while ((match = versionRe.exec(fullText)) !== null) {
-      versions.push(match[0]);
-    }
-    var uniqueVersions = {};
-    for (var i = 0; i < versions.length; i++) uniqueVersions[versions[i]] = true;
-    if (Object.keys(uniqueVersions).length >= 2) {
-      findings.push({ type: 'CT30', severity: 2,
-        evidence: 'Multiple version references: ' + Object.keys(uniqueVersions).slice(0, 3).join(', '),
-        location: 'Document header/footer' });
-    }
-    return findings;
-  },
-
-  // D36-D37: Systemic fraud detectors
-  D36_DETECT_SYSTEMATIC_PATTERN: function(textBlocks) {
-    var findings = [];
-    // Check for boilerplate fraud patterns
-    var fullText = textBlocks.join(' ').toLowerCase();
-    var fraudPhrases = [
-      'guaranteed returns','risk-free investment','act now','limited time offer',
-      'exclusive opportunity','once in a lifetime','secret method','insider information',
-      'offshore account','tax haven','shell company','nominee director',
-      'bearer shares','anonymous trust','private placement'
-    ];
-    var found = [];
-    for (var i = 0; i < fraudPhrases.length; i++) {
-      if (fullText.indexOf(fraudPhrases[i]) !== -1) found.push(fraudPhrases[i]);
-    }
-    if (found.length >= 2) {
-      findings.push({ type: 'CT43', severity: 4,
-        evidence: 'Systematic fraud indicators: ' + found.slice(0, 4).join(', '),
-        location: 'Full document' });
-    }
-    return findings;
-  },
-
-  D37_DETECT_INTERNAL_CONFLICT: function(textBlocks) {
-    var findings = [];
-    // This is the catch-all detector that looks for any remaining anomalies
-    var fullText = textBlocks.join(' ').toLowerCase();
-    var words = fullText.split(/\s+/);
-    var wordCount = {};
-    for (var i = 0; i < words.length; i++) {
-      if (words[i].length > 5) {
-        wordCount[words[i]] = (wordCount[words[i]] || 0) + 1;
+    for (var i = 0; i < textBlocks.length; i++) {
+      var match;
+      while ((match = versionRe.exec(textBlocks[i])) !== null) {
+        versions.push({ num: match[2], page: i });
       }
     }
-    // Check for unusual repetition (may indicate template fraud)
-    var repeated = [];
-    for (var word in wordCount) {
-      if (wordCount[word] > 20) repeated.push(word + '(' + wordCount[word] + ')');
+    if (versions.length >= 2) {
+      var first = parseFloat(versions[0].num);
+      var last = parseFloat(versions[versions.length-1].num);
+      if (last < first) {
+        findings.push({ type: 'CT30', severity: 3,
+          evidence: 'Version decreased from ' + versions[0].num + ' to ' + versions[versions.length-1].num,
+          location: 'Document header/footer' });
+      }
     }
-    if (repeated.length >= 3) {
-      findings.push({ type: 'CT43', severity: 2,
-        evidence: 'Unusual word repetition: ' + repeated.slice(0, 3).join(', '),
+    return findings;
+  },
+
+  D36_DETECT_SOURCE_FAILURE: function(textBlocks) {
+    var findings = [];
+    var fullText = textBlocks.join(' ');
+    var sourceRe = /\b(according to|as per|in accordance with|citing|referenced in)\s+["']?([^"'.]{5,50})["']?/gi;
+    var match;
+    while ((match = sourceRe.exec(fullText)) !== null) {
+      // If source is cited but no supporting document reference
+      if (fullText.indexOf(match[2]) === match.index) {
+        findings.push({ type: 'CT32', severity: 2,
+          evidence: 'Unverified source cited: "' + match[2] + '"',
+          location: 'References section' });
+      }
+    }
+    return findings;
+  },
+
+  D37_DETECT_INTERNAL_CONFLICT_CATCHALL: function(textBlocks, otherFindings) {
+    var findings = [];
+    // If multiple different contradiction types found, flag as systematic fraud
+    var uniqueTypes = {};
+    for (var i = 0; i < otherFindings.length; i++) {
+      uniqueTypes[otherFindings[i].type] = true;
+    }
+    var typeCount = Object.keys(uniqueTypes).length;
+    if (typeCount >= 5) {
+      findings.push({ type: 'CT43', severity: 4,
+        evidence: 'Systematic fraud pattern: ' + typeCount + ' different contradiction types detected',
         location: 'Full document' });
     }
     return findings;
@@ -1153,341 +1103,515 @@ var DETECTORS = {
 };
 
 // ===================== 17 SERIAL PATTERNS =====================
-// Multi-stage fraud patterns that require multiple findings to confirm
+// Multi-step fraud schemes that unfold across a document or document set.
+// Each pattern is a sequence of stages that, when detected together,
+// indicate a sophisticated fraud operation.
 
-var SERIAL_PATTERNS = [
-  {
-    id: 'SP01', name: 'Advance Fee Fraud',
-    stages: ['upfront payment','processing fee','transfer fee','tax clearance','customs duty'],
-    threshold: 2,
-    description: 'Requests multiple upfront payments before promised funds are released'
+var SERIAL_PATTERNS = {
+
+  SP01_ADVANCE_FEE_FRAUD: {
+    name: 'Advance Fee Fraud (419 Scam)',
+    stages: [
+      { indicator: 'Unsolicited contact', keywords: ['dear beneficiary','dear friend','confidential proposal'] },
+      { indicator: 'Large sum promised', keywords: ['million dollars','inheritance','unclaimed funds','compensation'] },
+      { indicator: 'Upfront fee requested', keywords: ['processing fee','transfer fee','legal fee','release fee'] },
+      { indicator: 'Urgency pressure', keywords: ['urgent','time sensitive','act now','expires'] },
+      { indicator: 'Secrecy demanded', keywords: ['confidential','do not disclose','keep secret','private matter'] }
+    ],
+    severity: 5, category: 'FINANCIAL_FRAUD'
   },
-  {
-    id: 'SP02', name: 'Invoice Diversion Fraud',
-    stages: ['bank detail change','new account','update banking','payment redirect','account amendment'],
-    threshold: 2,
-    description: 'Attempts to redirect payments to a different bank account'
+
+  SP02_GHOST_EMPLOYEE_SCHEME: {
+    name: 'Ghost Employee Scheme',
+    stages: [
+      { indicator: 'Fictitious staff', keywords: ['ghost employee','fictitious employee','phantom worker'] },
+      { indicator: 'Payroll manipulation', keywords: ['payroll','salary','wages','direct deposit'] },
+      { indicator: 'Identity fabrication', keywords: ['id number','bank account','fake identity'] },
+      { indicator: 'Supervisor collusion', keywords: ['approved by','authorized by','manager sign off'] }
+    ],
+    severity: 5, category: 'PAYROLL_FRAUD'
   },
-  {
-    id: 'SP03', name: 'Identity Takeover',
-    stages: ['verify identity','confirm details','update information','security check','account verification'],
-    threshold: 3,
-    description: 'Harvests personal information for identity theft'
+
+  SP03_SHELL_COMPANY_FRAUD: {
+    name: 'Shell Company Fraud',
+    stages: [
+      { indicator: 'New entity creation', keywords: ['new company','new registration','recently formed'] },
+      { indicator: 'No physical presence', keywords: ['virtual office','mailing address','no premises'] },
+      { indicator: 'Round-trip invoicing', keywords: ['invoice','payment','supplier','vendor'] },
+      { indicator: 'Beneficial owner hidden', keywords: ['nominee director','trust arrangement','beneficial owner'] }
+    ],
+    severity: 5, category: 'CORPORATE_FRAUD'
   },
-  {
-    id: 'SP04', name: 'Procurement Fraud',
-    stages: ['tender','bid','quote','preferred supplier','sole source','urgent procurement'],
-    threshold: 3,
-    description: 'Manipulates procurement process for kickbacks or inflated pricing'
+
+  SP04_INVOICE_FRAUD: {
+    name: 'Invoice Fraud',
+    stages: [
+      { indicator: 'Duplicate invoice', keywords: ['duplicate invoice','copy invoice','reissued'] },
+      { indicator: 'Altered details', keywords: ['amended','corrected','revised','updated'] },
+      { indicator: 'Bank detail change', keywords: ['new bank details','updated banking','account change'] },
+      { indicator: 'Pressure to pay', keywords: ['urgent payment','overdue','final demand','immediate'] }
+    ],
+    severity: 4, category: 'FINANCIAL_FRAUD'
   },
-  {
-    id: 'SP05', name: 'Document Forgery Ring',
-    stages: ['template','sample','specimen','draft copy','unsigned version'],
-    threshold: 2,
-    description: 'Mass-produces forged documents from templates'
+
+  SP05_VAT_CAROUSEL: {
+    name: 'VAT Carousel Fraud',
+    stages: [
+      { indicator: 'Cross-border trade', keywords: ['import','export','cross-border','eu member'] },
+      { indicator: 'Missing trader', keywords: ['missing trader','disappeared','cannot locate'] },
+      { indicator: 'Circular transactions', keywords: ['supplier','customer','broker','agent'] },
+      { indicator: 'VAT reclaim', keywords: ['vat refund','input tax','zero-rated','export vat'] }
+    ],
+    severity: 5, category: 'TAX_FRAUD'
   },
-  {
-    id: 'SP06', name: 'Payroll Fraud',
-    stages: ['ghost employee','salary','payroll','overtime','bonus','commission'],
-    threshold: 3,
-    description: 'Creates fictitious employees or inflates compensation'
+
+  SP06_DOCUMENT_FORGERY_CHAIN: {
+    name: 'Document Forgery Chain',
+    stages: [
+      { indicator: 'Template acquisition', keywords: ['template','original document','scanned copy'] },
+      { indicator: 'Content manipulation', keywords: ['edited','modified','changed','updated'] },
+      { indicator: 'Signature fabrication', keywords: ['scanned signature','pasted','copied signature'] },
+      { indicator: 'Metadata cleaning', keywords: ['properties removed','metadata cleared','anonymized'] }
+    ],
+    severity: 5, category: 'DOCUMENT_FRAUD'
   },
-  {
-    id: 'SP07', name: 'Expense Fraud',
-    stages: ['expense claim','receipt','reimbursement','petty cash','travel expense'],
-    threshold: 3,
-    description: 'Submits false or inflated expense claims'
+
+  SP07_IDENTITY_THEFT_CHAIN: {
+    name: 'Identity Theft Document Chain',
+    stages: [
+      { indicator: 'ID document theft', keywords: ['stolen id','lost passport','compromised identity'] },
+      { indicator: 'Account takeover', keywords: ['account access','password reset','unauthorized access'] },
+      { indicator: 'Fraudulent application', keywords: ['new account','credit application','loan application'] },
+      { indicator: 'Financial exploitation', keywords: ['unauthorized transaction','fraudulent withdrawal','false claim'] }
+    ],
+    severity: 5, category: 'IDENTITY_FRAUD'
   },
-  {
-    id: 'SP08', name: 'Vendor Fraud',
-    stages: ['new vendor','supplier registration','vendor approval','preferred vendor'],
-    threshold: 2,
-    description: 'Creates fictitious vendors for payment diversion'
+
+  SP08_BRIBERY_SCHEME: {
+    name: 'Bribery and Corruption Scheme',
+    stages: [
+      { indicator: 'Approach', keywords: ['gift','hospitality','facilitation payment','consulting fee'] },
+      { indicator: 'Agreement', keywords: ['arrangement','understanding','mutual benefit','quid pro quo'] },
+      { indicator: 'Payment', keywords: ['cash','offshore','shell company','third party'] },
+      { indicator: 'Action', keywords: ['favorable decision','contract award','exemption','waiver'] }
+    ],
+    severity: 5, category: 'CORRUPTION'
   },
-  {
-    id: 'SP09', name: 'Refund Fraud',
-    stages: ['refund','credit note','return','cancellation','reversal'],
-    threshold: 3,
-    description: 'Processes false refunds or credit notes'
+
+  SP09_LOAN_FRAUD: {
+    name: 'Loan Application Fraud',
+    stages: [
+      { indicator: 'Income inflation', keywords: ['salary','income','revenue','turnover'] },
+      { indicator: 'Asset overstatement', keywords: ['property value','asset','collateral','security'] },
+      { indicator: 'Liability concealment', keywords: ['existing loan','debt','obligation','commitment'] },
+      { indicator: 'Identity fabrication', keywords: ['employment letter','payslip','bank statement'] }
+    ],
+    severity: 4, category: 'FINANCIAL_FRAUD'
   },
-  {
-    id: 'SP10', name: 'Asset Misappropriation',
-    stages: ['asset register','disposal','write-off','surplus','scrap'],
-    threshold: 2,
-    description: 'Diverts organizational assets for personal use'
+
+  SP10_INSURANCE_FRAUD: {
+    name: 'Insurance Claim Fraud',
+    stages: [
+      { indicator: 'Staged event', keywords: ['accident','incident','loss','damage'] },
+      { indicator: 'Exaggerated claim', keywords: ['total loss','beyond repair','irreparable'] },
+      { indicator: 'False documentation', keywords: ['repair quote','assessment','valuation','medical report'] },
+      { indicator: 'Previous claims', keywords: ['prior claim','previous loss','another incident'] }
+    ],
+    severity: 4, category: 'INSURANCE_FRAUD'
   },
-  {
-    id: 'SP11', name: 'Financial Statement Fraud',
-    stages: ['revenue recognition','accrual','deferral','reclassification','adjustment'],
-    threshold: 3,
-    description: 'Manipulates financial statements to misstate performance'
+
+  SP11_TENDER_MANIPULATION: {
+    name: 'Tender/RFP Manipulation',
+    stages: [
+      { indicator: 'Specification rigging', keywords: ['exclusive requirement','unique specification','only supplier'] },
+      { indicator: 'Bid collusion', keywords: ['agreed price','coordinated bid','market allocation'] },
+      { indicator: 'Evaluation bias', keywords: ['preferred bidder','pre-selected','favored'] },
+      { indicator: 'Award irregularity', keywords: ['deviation','waiver','exception','urgent award'] }
+    ],
+    severity: 5, category: 'PROCUREMENT_FRAUD'
   },
-  {
-    id: 'SP12', name: 'Insurance Fraud',
-    stages: ['claim','policy','premium','coverage','excess','deductible'],
-    threshold: 3,
-    description: 'Submits false or inflated insurance claims'
+
+  SP12_MONEY_LAUNDERING: {
+    name: 'Money Laundering Documentation',
+    stages: [
+      { indicator: 'Layering', keywords: ['multiple transfers','intermediary','broker','agent'] },
+      { indicator: 'Integration', keywords: ['investment','property purchase','business acquisition'] },
+      { indicator: 'Source concealment', keywords: ['consulting fee','commission','referral','introduction'] },
+      { indicator: 'Offshore routing', keywords: ['offshore account','tax haven','shell company','trust'] }
+    ],
+    severity: 5, category: 'MONEY_LAUNDERING'
   },
-  {
-    id: 'SP13', name: 'Tax Fraud',
-    stages: ['vat return','tax invoice','input tax','output tax','tax clearance'],
-    threshold: 3,
-    description: 'Evades taxes through false documentation'
+
+  SP13_DIGITAL_SIGNATURE_FRAUD: {
+    name: 'Digital Signature Forgery',
+    stages: [
+      { indicator: 'Signature theft', keywords: ['scanned signature','signature file','image of signature'] },
+      { indicator: 'Document preparation', keywords: ['template','blank form','pre-filled'] },
+      { indicator: 'Signature application', keywords: ['pasted','inserted','placed','applied'] },
+      { indicator: 'Distribution', keywords: ['email','fax','scanned copy','pdf'] }
+    ],
+    severity: 4, category: 'DIGITAL_FRAUD'
   },
-  {
-    id: 'SP14', name: 'Money Laundering',
-    stages: ['cash deposit','transfer','offshore','shell','layering','structuring'],
-    threshold: 3,
-    description: 'Disguises origins of illegally obtained funds'
+
+  SP14_CONTRACT_FRUAD: {
+    name: 'Contract Fraud',
+    stages: [
+      { indicator: 'Bait terms', keywords: ['introductory rate','special offer','limited period'] },
+      { indicator: 'Hidden clauses', keywords: ['fine print','schedule','annex','appendix'] },
+      { indicator: 'Unilateral change', keywords: ['reserves the right','may change','at our discretion'] },
+      { indicator: 'Enforcement barrier', keywords: ['arbitration','foreign jurisdiction','governing law'] }
+    ],
+    severity: 3, category: 'CONTRACT_FRAUD'
   },
-  {
-    id: 'SP15', name: 'Bid Rigging',
-    stages: ['collusive tender','cover bid','bid rotation','market allocation'],
-    threshold: 2,
-    description: 'Coordinates bids to manipulate competitive tendering'
+
+  SP15_WITNESS_TAMPERING: {
+    name: 'Witness Statement Tampering',
+    stages: [
+      { indicator: 'Statement acquisition', keywords: ['witness statement','affidavit','deposition'] },
+      { indicator: 'Content alteration', keywords: ['amended','corrected','clarified','revised'] },
+      { indicator: 'Coercion indicators', keywords: ['persuaded','convinced','advised','suggested'] },
+      { indicator: 'Submission fraud', keywords: ['signed','certified','true copy','original'] }
+    ],
+    severity: 5, category: 'EVIDENCE_TAMPERING'
   },
-  {
-    id: 'SP16', name: 'Ponzi Scheme',
-    stages: ['investment returns','referral bonus','membership fee','pyramid','downline'],
-    threshold: 2,
-    description: 'Pays returns from new investor funds rather than profits'
+
+  SP16_PERJURY_CHAIN: {
+    name: 'Perjury Documentation Chain',
+    stages: [
+      { indicator: 'False oath', keywords: ['sworn','affirm','solemnly declare','under oath'] },
+      { indicator: 'False statement', keywords: ['i swear','i affirm','to the best of my knowledge'] },
+      { indicator: 'Material falsity', keywords: ['specifically','exactly','precisely','definitely'] },
+      { indicator: 'Corroboration failure', keywords: ['i recall','i remember','as far as i know'] }
+    ],
+    severity: 5, category: 'PERJURY'
   },
-  {
-    id: 'SP17', name: 'Legal Document Fraud',
-    stages: ['court order','summons','warrant','judgment','decree'],
-    threshold: 2,
-    description: 'Creates fake legal documents to intimidate or defraud'
+
+  SP17_SYSTEMIC_FRAUD: {
+    name: 'Systemic Institutional Fraud',
+    stages: [
+      { indicator: 'Pattern of victims', keywords: ['multiple complaints','class action','group claim'] },
+      { indicator: 'Institutional cover-up', keywords: ['internal investigation','confidential settlement','non-disclosure'] },
+      { indicator: 'Regulatory evasion', keywords: ['exemption','waiver','special permission','temporary relief'] },
+      { indicator: 'Continued operation', keywords: ['ongoing','continues to','still operating','business as usual'] }
+    ],
+    severity: 5, category: 'SYSTEMIC_FRAUD'
   }
-];
+};
 
-// ===================== TEXT EXTRACTION =====================
-// Extract text from PDF content streams per page, with ToUnicode CMap decoding
+// ===================== SERIAL PATTERN DETECTOR =====================
 
-function _voHexToUniStr(hex) {
-  var out = '';
-  for (var i = 0; i + 3 < hex.length; i += 4) {
-    var code = parseInt(hex.substr(i, 4), 16);
-    if (code === 0x000D || code === 0x000A) { out += '\n'; continue; }
-    if (code >= 0xD800 && code <= 0xDBFF && i + 7 < hex.length) {
-      var lo = parseInt(hex.substr(i + 4, 4), 16);
-      if (lo >= 0xDC00 && lo <= 0xDFFF) {
-        out += String.fromCharCode(0x10000 + ((code - 0xD800) << 10) + (lo - 0xDC00));
-        i += 4;
-        continue;
+function detectSerialPatterns(textBlocks) {
+  var findings = [];
+  var fullText = textBlocks.join(' ').toLowerCase();
+
+  for (var spKey in SERIAL_PATTERNS) {
+    var pattern = SERIAL_PATTERNS[spKey];
+    var matchedStages = 0;
+    var matchedDetails = [];
+
+    for (var s = 0; s < pattern.stages.length; s++) {
+      var stage = pattern.stages[s];
+      var stageMatched = false;
+      for (var k = 0; k < stage.keywords.length; k++) {
+        if (fullText.indexOf(stage.keywords[k]) !== -1) {
+          stageMatched = true;
+          matchedDetails.push(stage.indicator + ': "' + stage.keywords[k] + '"');
+          break;
+        }
       }
+      if (stageMatched) matchedStages++;
     }
-    out += String.fromCharCode(code);
+
+    // Flag if 3+ stages of a 4+ stage pattern are matched
+    if (matchedStages >= 3 && pattern.stages.length >= 4) {
+      findings.push({
+        type: 'SERIAL',
+        serialPattern: spKey,
+        serialName: pattern.name,
+        severity: pattern.severity,
+        category: pattern.category,
+        evidence: pattern.name + ' detected: ' + matchedStages + '/' + pattern.stages.length + ' stages matched. ' + matchedDetails.join('; '),
+        location: 'Full document'
+      });
+    }
+    // Flag if 2+ stages of a 3- stage pattern
+    else if (matchedStages >= 2 && pattern.stages.length < 4) {
+      findings.push({
+        type: 'SERIAL',
+        serialPattern: spKey,
+        serialName: pattern.name,
+        severity: pattern.severity,
+        category: pattern.category,
+        evidence: pattern.name + ' detected: ' + matchedStages + '/' + pattern.stages.length + ' stages matched',
+        location: 'Full document'
+      });
+    }
   }
-  return out;
+
+  return findings;
 }
 
-function _voParseToUnicode(cmapText) {
+// ===================== PER-PAGE TEXT EXTRACTION (with ToUnicode CMap) =====================
+// Restores per-page forensic page anchoring. Uses pdf-lib low-level objects.
+// Returns array of word tokens for one page (same shape as extractPdfText).
+
+function _voParseToUnicode(cmapStr) {
+  // Parse beginbfchar / beginbfrange blocks of a ToUnicode CMap.
   var map = {};
-  var i, j, start, end, dest, lines, parts, code;
-  var bfcharBlocks = cmapText.match(/beginbfchar[\s\S]*?endbfchar/g);
-  if (bfcharBlocks) {
-    for (i = 0; i < bfcharBlocks.length; i++) {
-      var entries = bfcharBlocks[i].match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g);
-      if (entries) {
-        for (j = 0; j < entries.length; j++) {
-          var m = entries[j].match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/);
-          if (m) map[parseInt(m[1], 16)] = _voHexToUniStr(m[2]);
-        }
-      }
+  var i, j;
+  var bfcharRe = /beginbfchar([\s\S]*?)endbfchar/g;
+  var m;
+  while ((m = bfcharRe.exec(cmapStr)) !== null) {
+    var pairs = m[1].match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g) || [];
+    for (i = 0; i < pairs.length; i++) {
+      var p = pairs[i].match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/);
+      if (p) map[p[1].toUpperCase()] = _voHexToUniStr(p[2]);
     }
   }
-  var bfrangeBlocks = cmapText.match(/beginbfrange[\s\S]*?endbfrange/g);
-  if (bfrangeBlocks) {
-    for (i = 0; i < bfrangeBlocks.length; i++) {
-      lines = bfrangeBlocks[i].split('\n');
-      for (j = 0; j < lines.length; j++) {
-        var rangeMatch = lines[j].match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/);
-        if (rangeMatch) {
-          start = parseInt(rangeMatch[1], 16);
-          end = parseInt(rangeMatch[2], 16);
-          dest = parseInt(rangeMatch[3], 16);
-          for (code = start; code <= end; code++) {
-            map[code] = String.fromCharCode(dest + (code - start));
-          }
-        }
-        var arrayMatch = lines[j].match(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[([^\]]+)\]/);
-        if (arrayMatch) {
-          start = parseInt(arrayMatch[1], 16);
-          var dests = arrayMatch[3].match(/<([0-9A-Fa-f]+)>/g);
-          if (dests) {
-            for (var k = 0; k < dests.length; k++) {
-              map[start + k] = _voHexToUniStr(dests[k].replace(/[<>]/g, ''));
-            }
-          }
-        }
+  var bfrangeRe = /beginbfrange([\s\S]*?)endbfrange/g;
+  while ((m = bfrangeRe.exec(cmapStr)) !== null) {
+    var body = m[1];
+    // Array form: <start> <end> [<u1> <u2> ...]
+    var arrRe = /<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[([\s\S]*?)\]/g;
+    var am;
+    while ((am = arrRe.exec(body)) !== null) {
+      var start = parseInt(am[1], 16);
+      var codes = am[3].match(/<([0-9A-Fa-f]+)>/g) || [];
+      for (j = 0; j < codes.length; j++) {
+        var codeHex = (start + j).toString(16).toUpperCase();
+        while (codeHex.length < am[1].length) codeHex = '0' + codeHex;
+        map[codeHex] = _voHexToUniStr(codes[j].slice(1, -1));
+      }
+    }
+    // Sequential form: <start> <end> <base>
+    var seqRe = /<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>/g;
+    var sm;
+    var bodyNoArr = body.replace(/<([0-9A-Fa-f]+)>\s*<([0-9A-Fa-f]+)>\s*\[[\s\S]*?\]/g, '');
+    while ((sm = seqRe.exec(bodyNoArr)) !== null) {
+      var lo = parseInt(sm[1], 16), hi = parseInt(sm[2], 16);
+      var baseHex = sm[3];
+      var base = parseInt(baseHex, 16);
+      if (hi - lo > 4096) continue; // sanity guard
+      for (j = lo; j <= hi; j++) {
+        var ch = (j).toString(16).toUpperCase();
+        while (ch.length < sm[1].length) ch = '0' + ch;
+        var uni = (base + (j - lo)).toString(16).toUpperCase();
+        while (uni.length < baseHex.length) uni = '0' + uni;
+        map[ch] = _voHexToUniStr(uni);
       }
     }
   }
   return map;
 }
 
-function _voDecodeHexString(hexStr, fontMaps, currentFont) {
-  var result = '';
-  var cmap = fontMaps[currentFont];
-  for (var i = 0; i + 1 < hexStr.length; i += 2) {
-    var code = parseInt(hexStr.substr(i, 2), 16);
-    if (cmap && cmap[code]) { result += cmap[code]; continue; }
-    if (code >= 32 && code <= 126) { result += String.fromCharCode(code); continue; }
-    if (code === 10 || code === 13) { result += '\n'; continue; }
-    result += ' ';
+function _voHexToUniStr(hex) {
+  // Interpret hex as UTF-16BE code units
+  var out = '';
+  if (hex.length % 4 !== 0) hex = ('000' + hex).slice(-(Math.ceil(hex.length / 4) * 4));
+  for (var i = 0; i + 4 <= hex.length; i += 4) {
+    out += String.fromCharCode(parseInt(hex.substring(i, i + 4), 16));
   }
-  return result;
+  return out;
 }
 
-function _voDecodeParenString(str, fontMaps, currentFont) {
-  var result = '';
-  var cmap = fontMaps[currentFont];
-  var i = 0;
-  while (i < str.length) {
-    var ch = str[i];
-    if (ch === '\\' && i + 1 < str.length) {
-      var next = str[i + 1];
-      if (next === 'n') { result += '\n'; i += 2; continue; }
-      if (next === 'r') { result += '\n'; i += 2; continue; }
-      if (next === 't') { result += ' '; i += 2; continue; }
-      if (next === '(' || next === ')' || next === '\\') { result += next; i += 2; continue; }
-      if (next >= '0' && next <= '7') {
-        var octal = next;
-        var j = i + 2;
-        while (j < Math.min(i + 4, str.length) && str[j] >= '0' && str[j] <= '7') {
-          octal += str[j]; j++;
-        }
-        var code = parseInt(octal, 8);
-        if (cmap && cmap[code]) { result += cmap[code]; }
-        else if (code >= 32 && code <= 126) { result += String.fromCharCode(code); }
-        else { result += ' '; }
-        i = j;
-        continue;
+function _voDecodeParenString(raw) {
+  // Decode PDF literal string escapes
+  var out = '';
+  for (var i = 0; i < raw.length; i++) {
+    var c = raw[i];
+    if (c === '\\' && i + 1 < raw.length) {
+      var n = raw[i + 1];
+      if (n === 'n') { out += '\n'; i++; }
+      else if (n === 'r') { out += '\r'; i++; }
+      else if (n === 't') { out += '\t'; i++; }
+      else if (n === 'b' || n === 'f') { i++; }
+      else if (n === '(' || n === ')' || n === '\\') { out += n; i++; }
+      else if (n >= '0' && n <= '7') {
+        var oct = n; var k = i + 2;
+        while (k < raw.length && k < i + 4 && raw[k] >= '0' && raw[k] <= '7') { oct += raw[k]; k++; }
+        out += String.fromCharCode(parseInt(oct, 8) & 0xFF);
+        i = k - 1;
       }
-      if (next === '\n' || next === '\r') { i += 2; continue; }
-      result += next;
-      i += 2;
-      continue;
+      else if (n === '\n' || n === '\r') { i++; if (n === '\r' && raw[i + 1] === '\n') i++; }
+      else { out += n; i++; }
+    } else {
+      out += c;
     }
-    var code = str.charCodeAt(i);
-    if (cmap && cmap[code]) { result += cmap[code]; }
-    else { result += ch; }
-    i++;
   }
-  return result;
+  return out;
+}
+
+function _voDecodeHexString(hex, cmap) {
+  hex = hex.replace(/\s+/g, '');
+  var out = '';
+  if (cmap && Object.keys(cmap).length > 0) {
+    // Type0 Identity-H: 2-byte codes (4 hex chars)
+    for (var i = 0; i + 4 <= hex.length; i += 4) {
+      var code = hex.substring(i, i + 4).toUpperCase();
+      if (cmap[code] !== undefined) out += cmap[code];
+      else {
+        var cp = parseInt(code, 16);
+        if (cp >= 32 && cp < 0xD800) out += String.fromCharCode(cp);
+      }
+    }
+  } else {
+    // No cmap: try UTF-16BE then latin1 bytes
+    if (hex.length % 4 === 0) {
+      for (var j = 0; j + 4 <= hex.length; j += 4) {
+        var v = parseInt(hex.substring(j, j + 4), 16);
+        if (v >= 32 && v < 0xD800) out += String.fromCharCode(v);
+      }
+    }
+    if (!out) {
+      for (var k = 0; k + 2 <= hex.length; k += 2) {
+        var b = parseInt(hex.substring(k, k + 2), 16);
+        if (b >= 32 && b <= 126) out += String.fromCharCode(b);
+      }
+    }
+  }
+  return out;
 }
 
 async function extractPageText(pdfBytes, pageIndex) {
   var texts = [];
   try {
     var doc = await PDFLib.PDFDocument.load(pdfBytes, { ignoreEncryption: true });
-    var pages = doc.getPages();
-    if (pageIndex >= pages.length) return texts;
-    var page = pages[pageIndex];
+    var page = doc.getPages()[pageIndex];
+    if (!page) return texts;
 
-    // Get font resources and their ToUnicode maps
+    // Build per-font ToUnicode maps from page resources
     var fontMaps = {};
     try {
       var res = doc.context.lookup(page.node.get(PDFLib.PDFName.of('Resources')));
       var fontsRef = res && res.get(PDFLib.PDFName.of('Font'));
-      if (fontsRef) {
-        var fonts = doc.context.lookup(fontsRef);
-        if (fonts && fonts.entries) {
-          var entries = fonts.entries();
-          for (var fi = 0; fi < entries.length; fi++) {
-            var fName = entries[fi][0].asString();
-            var fObj = doc.context.lookup(entries[fi][1]);
-            var tuRef = fObj && fObj.get(PDFLib.PDFName.of('ToUnicode'));
-            if (tuRef) {
-              var tuObj = doc.context.lookup(tuRef);
-              if (tuObj && PDFLib.PDFRawStream && tuObj instanceof PDFLib.PDFRawStream) {
-                var cmapBytes = PDFLib.decodePDFRawStream(tuObj).decode();
-                var cmapText = new TextDecoder('latin1').decode(cmapBytes);
-                fontMaps[fName] = _voParseToUnicode(cmapText);
-              }
+      var fonts = fontsRef && doc.context.lookup(fontsRef);
+      if (fonts && fonts.entries) {
+        var entries = fonts.entries();
+        for (var e = 0; e < entries.length; e++) {
+          var fname = entries[e][0].asString().replace(/^\//, '');
+          var fobj = doc.context.lookup(entries[e][1]);
+          var cmap = null;
+          try {
+            var tuRef = fobj && fobj.get(PDFLib.PDFName.of('ToUnicode'));
+            var tuObj = tuRef && doc.context.lookup(tuRef);
+            if (tuObj && PDFLib.PDFRawStream && tuObj instanceof PDFLib.PDFRawStream) {
+              var cmapBytes = PDFLib.decodePDFRawStream(tuObj).decode();
+              cmap = _voParseToUnicode(new TextDecoder('utf-8', { fatal: false }).decode(cmapBytes));
             }
-          }
+          } catch (e2) {}
+          fontMaps[fname] = cmap;
         }
       }
-    } catch (e2) {}
+    } catch (e) {}
 
-    // Get page content stream(s)
-    var contentsRef = page.node.get(PDFLib.PDFName.of('Contents'));
-    var contentBytes = [];
-    try {
-      var contents = doc.context.lookup(contentsRef);
-      if (contents) {
-        var streams = [];
-        if (PDFLib.PDFArray && contents instanceof PDFLib.PDFArray) {
-          for (var si = 0; si < contents.size(); si++) {
-            var s = doc.context.lookup(contents.get(si));
-            if (s) streams.push(s);
-          }
-        } else {
-          streams.push(contents);
-        }
-        for (var ci = 0; ci < streams.length; ci++) {
-          var st = streams[ci];
-          if (!(PDFLib.PDFRawStream && st instanceof PDFLib.PDFRawStream)) continue;
-          var u8 = null;
-          try { u8 = PDFLib.decodePDFRawStream(st).decode(); } catch (e3) { continue; }
-          contentBytes.push(u8);
-        }
-      }
-    } catch (e4) {}
-
-    // Parse text-showing operations from content stream
-    var currentFont = null;
-    var inText = false;
-    for (var cbi = 0; cbi < contentBytes.length; cbi++) {
-      var str = new TextDecoder('latin1').decode(contentBytes[cbi]);
-      // Track font selection: /F1 12 Tf
-      var fontSetRe = /\/([A-Za-z0-9]+)\s+[\d.]+\s+Tf/g;
-      var fontMatch;
-      while ((fontMatch = fontSetRe.exec(str)) !== null) {
-        currentFont = fontMatch[1];
-      }
-      // Extract hex strings <...> Tj and paren strings (...) Tj
-      var hexTjRe = /<([0-9A-Fa-f\s]+)>\s*Tj/g;
-      var hexMatch;
-      while ((hexMatch = hexTjRe.exec(str)) !== null) {
-        var decoded = _voDecodeHexString(hexMatch[1].replace(/\s/g, ''), fontMaps, currentFont);
-        if (decoded.trim()) texts.push(decoded);
-      }
-      var parenTjRe = /\(([^)]*(?:\\.[^)]*)*)\)\s*Tj/g;
-      var parenMatch;
-      while ((parenMatch = parenTjRe.exec(str)) !== null) {
-        var decoded2 = _voDecodeParenString(parenMatch[1], fontMaps, currentFont);
-        if (decoded2.trim()) texts.push(decoded2);
-      }
-      // TJ arrays: [(...) -250 <...> -250 (...)] TJ
-      var tjArrayRe = /\[([^\]]*)\]\s*TJ/g;
-      var tjMatch;
-      while ((tjMatch = tjArrayRe.exec(str)) !== null) {
-        var arrayContent = tjMatch[1];
-        var parts = arrayContent.match(/\((?:[^()\\]|\\.)*\)|<[^<>]*>/g);
-        if (parts) {
-          var joined = '';
-          for (var pi = 0; pi < parts.length; pi++) {
-            if (parts[pi][0] === '(') {
-              joined += _voDecodeParenString(parts[pi].substring(1, parts[pi].length - 1), fontMaps, currentFont);
-            } else if (parts[pi][0] === '<') {
-              joined += _voDecodeHexString(parts[pi].substring(1, parts[pi].length - 1).replace(/\s/g, ''), fontMaps, currentFont);
-            }
-          }
-          if (joined.trim()) texts.push(joined);
-        }
-      }
-      // Single/double quote operators: (...) ' and (...) "
-      var sqRe = /\(([^)]*(?:\\.[^)]*)*)\)\s*['"]/g;
-      var sqMatch;
-      while ((sqMatch = sqRe.exec(str)) !== null) {
-        var decoded3 = _voDecodeParenString(sqMatch[1], fontMaps, currentFont);
-        if (decoded3.trim()) texts.push(decoded3);
+    // Decode page content stream(s)
+    var contents = doc.context.lookup(page.node.get(PDFLib.PDFName.of('Contents')));
+    var streams = [];
+    if (contents) {
+      if (PDFLib.PDFArray && contents instanceof PDFLib.PDFArray) {
+        for (var k = 0; k < contents.size(); k++) streams.push(doc.context.lookup(contents.get(k)));
+      } else {
+        streams.push(contents);
       }
     }
-  } catch (e) {}
-  return texts;
+
+    var curFont = null;
+    var ops = [];
+    for (var s2 = 0; s2 < streams.length; s2++) {
+      var st = streams[s2];
+      if (!st) continue;
+      var u8 = null;
+      try {
+        if (PDFLib.PDFRawStream && st instanceof PDFLib.PDFRawStream) {
+          u8 = PDFLib.decodePDFRawStream(st).decode();
+        } else if (st.getContents) {
+          u8 = st.getContents();
+        }
+      } catch (e3) { continue; }
+      if (!u8) continue;
+      var src = new TextDecoder('latin1').decode(u8);
+      var i2 = 0, len = src.length;
+      while (i2 < len) {
+        var ch2 = src[i2];
+        if (ch2 === '(') {
+          var depth = 1, j2 = i2 + 1, raw = '';
+          while (j2 < len && depth > 0) {
+            var cc = src[j2];
+            if (cc === '\\') { raw += cc + (src[j2 + 1] || ''); j2 += 2; continue; }
+            if (cc === '(') depth++;
+            if (cc === ')') { depth--; if (depth === 0) break; }
+            raw += cc; j2++;
+          }
+          ops.push({ t: 'str', v: raw });
+          i2 = j2 + 1; continue;
+        }
+        if (ch2 === '<' && src[i2 + 1] !== '<') {
+          var k2 = src.indexOf('>', i2);
+          if (k2 === -1) break;
+          ops.push({ t: 'hex', v: src.substring(i2 + 1, k2) });
+          i2 = k2 + 1; continue;
+        }
+        if (ch2 === '/' ) {
+          var m2 = /^\/([A-Za-z0-9_.-]+)/.exec(src.substring(i2, i2 + 32));
+          if (m2) { ops.push({ t: 'name', v: m2[1] }); i2 += m2[0].length; continue; }
+        }
+        if (/[A-Za-z*'"]/.test(ch2)) {
+          var m3 = /^[A-Za-z*'"]{1,3}/.exec(src.substring(i2));
+          if (m3) { ops.push({ t: 'op', v: m3[0] }); i2 += m3[0].length; continue; }
+          i2++; continue;
+        }
+        i2++;
+      }
+    }
+
+    // Walk ops: track font via Tf; emit text for Tj, TJ, ', "
+    var pending = [];
+    for (var o = 0; o < ops.length; o++) {
+      var tok = ops[o];
+      if (tok.t === 'op') {
+        if (tok.v === 'Tf') {
+          for (var q = pending.length - 1; q >= 0; q--) {
+            if (pending[q].t === 'name') { curFont = pending[q].v; break; }
+          }
+        } else if (tok.v === 'Tj' || tok.v === "'" || tok.v === '"') {
+          var strTok = null;
+          for (var q2 = pending.length - 1; q2 >= 0; q2--) {
+            if (pending[q2].t === 'str' || pending[q2].t === 'hex') { strTok = pending[q2]; break; }
+          }
+          if (strTok) {
+            if (strTok.t === 'str') texts.push(_voDecodeParenString(strTok.v));
+            else texts.push(_voDecodeHexString(strTok.v, curFont ? fontMaps[curFont] : null));
+          }
+        } else if (tok.v === 'TJ') {
+          for (var q3 = 0; q3 < pending.length; q3++) {
+            var pj = pending[q3];
+            if (pj.t === 'str') texts.push(_voDecodeParenString(pj.v));
+            else if (pj.t === 'hex') texts.push(_voDecodeHexString(pj.v, curFont ? fontMaps[curFont] : null));
+          }
+        }
+        pending = [];
+      } else {
+        pending.push(tok);
+      }
+    }
+
+    // Merge tokens: join letters back into words where spacing indicates
+    var merged = [];
+    for (var t2 = 0; t2 < texts.length; t2++) {
+      var s3 = texts[t2];
+      if (!s3) continue;
+      if (merged.length && s3.length === 1 && s3 !== ' ' && /^[\w]$/.test(s3) && /[\w]$/.test(merged[merged.length - 1])) {
+        merged[merged.length - 1] += s3;
+      } else {
+        merged.push(s3);
+      }
+    }
+    var joined = merged.join(' ');
+    var tokens = joined.split(/[^a-zA-Z0-9]+/).filter(function (t) { return t.length >= 3 && !PDF_STRUCTURE.test(t); });
+    return tokens;
+  } catch (e) {
+    return texts;
+  }
 }
 
 // ===================== MAIN ENGINE =====================
@@ -1495,59 +1619,111 @@ async function extractPageText(pdfBytes, pageIndex) {
 async function runForensicEngine(pdfBytes, pdfDoc) {
   var allFindings = [];
 
-  // Extract text blocks (one per page)
+  // Extract text per page (for page-anchored findings)
   var textBlocks = [];
-  var extractionNote = 'Per-page PDF content-stream decoding with ToUnicode CMaps.';
+  var pageTexts = [];
   try {
     var pages = pdfDoc.getPages();
     for (var i = 0; i < pages.length; i++) {
-      var texts = await extractPageText(pdfBytes, i);
-      textBlocks.push(texts.join(' '));
+      var tokens = await extractPageText(pdfBytes, i);
+      var pageText = tokens.join(' ');
+      pageTexts.push(pageText);
+      textBlocks.push(pageText);
     }
   } catch(e) {
-    // Fallback: treat entire document as one block
+    console.warn('Per-page extraction failed, falling back to full-doc:', e.message);
+  }
+
+  // Fallback if per-page failed
+  if (textBlocks.length === 0) {
     var allTexts = await extractPdfText(pdfBytes);
     textBlocks = [allTexts.join(' ')];
-    extractionNote = 'Fallback: raw string extraction (page-level decoding failed).';
+    pageTexts = textBlocks;
   }
 
   // Run all 37 detectors
-  var detectorNames = Object.keys(DETECTORS);
-  for (var d = 0; d < detectorNames.length; d++) {
-    var detectorName = detectorNames[d];
+  var detectorArray = [
+    DETECTORS.D01_DETECT_DIRECT_CONTRADICTION,
+    DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY,
+    DETECTORS.D03_DETECT_DATE_INCONSISTENCY,
+    DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY,
+    DETECTORS.D05_DETECT_LOGICAL_IMPOSSIBILITY,
+    DETECTORS.D06_DETECT_IDENTITY_CONFLICT,
+    DETECTORS.D07_DETECT_ROLE_CONTRADICTION,
+    DETECTORS.D08_DETECT_AUTHORITY_EXCEEDED,
+    DETECTORS.D09_DETECT_ENTITY_STATUS_FAKE,
+    DETECTORS.D10_DETECT_VAT_INVALID,
+    DETECTORS.D11_DETECT_REGISTRATION_FAKE,
+    DETECTORS.D12_DETECT_BANK_DETAIL_MISMATCH,
+    DETECTORS.D13_DETECT_CALCULATION_ERROR,
+    DETECTORS.D14_DETECT_AMOUNT_ROUNDING_ANOMALY,
+    DETECTORS.D15_DETECT_METADATA_FRAUD,
+    DETECTORS.D16_DETECT_FONT_ANOMALY,
+    DETECTORS.D17_DETECT_FORMAT_ANOMALY,
+    DETECTORS.D18_DETECT_PAGE_MANIPULATION,
+    DETECTORS.D19_DETECT_EVIDENCE_TAMPERING,
+    DETECTORS.D20_DETECT_DIGITAL_FOOTPRINT_MISMATCH,
+    DETECTORS.D21_DETECT_MISSING_APPENDIX,
+    DETECTORS.D22_DETECT_INVALID_LEGAL_REF,
+    DETECTORS.D23_DETECT_PROCEDURE_BREACH,
+    DETECTORS.D24_DETECT_ADDRESS_CONFLICT,
+    DETECTORS.D25_DETECT_CONTACT_MISMATCH,
+    DETECTORS.D26_DETECT_JURISDICTIONAL_ISSUE,
+    DETECTORS.D27_DETECT_CUSTODY_GAP,
+    DETECTORS.D28_DETECT_WITNESS_CONFLICT,
+    DETECTORS.D29_DETECT_SCOPE_CREEP,
+    DETECTORS.D30_DETECT_TERM_DEFINITION_CONFLICT,
+    DETECTORS.D31_DETECT_CAUSAL_IMPOSSIBILITY,
+    DETECTORS.D32_DETECT_SIGNATURE_ANOMALY,
+    DETECTORS.D33_DETECT_IMAGE_MANIPULATION,
+    DETECTORS.D34_DETECT_CURRENCY_FRAUD,
+    DETECTORS.D35_DETECT_VERSION_ANOMALY,
+    DETECTORS.D36_DETECT_SOURCE_FAILURE
+  ];
+
+  for (var d = 0; d < detectorArray.length; d++) {
     try {
-      var detector = DETECTORS[detectorName];
+      var detector = detectorArray[d];
       var findings;
-      if (detectorName === 'D15_DETECT_METADATA_FRAUD' || detectorName === 'D33_DETECT_IMAGE_MANIPULATION') {
-        findings = detector(textBlocks, pdfDoc);
-      } else if (detectorName === 'D16_DETECT_FONT_ANOMALY') {
-        findings = detector(textBlocks, pdfDoc);
-      } else if (detectorName === 'D20_DETECT_SCANNED_VS_DIGITAL') {
+      if (d === 14 || d === 15 || d === 19) {  // D15, D16, D20 need pdfDoc
         findings = detector(textBlocks, pdfDoc);
       } else {
         findings = detector(textBlocks);
       }
       if (findings && findings.length > 0) {
         for (var f = 0; f < findings.length; f++) {
-          findings[f].detector = detectorName;
+          findings[f].detector = 'D' + String(d + 1).padStart(2, '0');
           allFindings.push(findings[f]);
         }
       }
     } catch(e) {
-      console.warn('Detector ' + detectorName + ' failed:', e.message);
+      console.warn('Detector D' + (d + 1) + ' failed:', e.message);
     }
   }
 
-  // Run serial pattern detection
-  var serialFindings = detectSerialPatterns(textBlocks);
-  for (var s = 0; s < serialFindings.length; s++) {
-    allFindings.push(serialFindings[s]);
-  }
+  // D37 catch-all: run after all other detectors
+  try {
+    var catchAll = DETECTORS.D37_DETECT_INTERNAL_CONFLICT_CATCHALL(textBlocks, allFindings);
+    for (var ca = 0; ca < catchAll.length; ca++) {
+      catchAll[ca].detector = 'D37';
+      allFindings.push(catchAll[ca]);
+    }
+  } catch(e) {}
 
-  // Calculate overall score
+  // Run serial pattern detection
+  try {
+    var serialFindings = detectSerialPatterns(textBlocks);
+    for (var sp = 0; sp < serialFindings.length; sp++) {
+      serialFindings[sp].detector = 'SERIAL';
+      allFindings.push(serialFindings[sp]);
+    }
+  } catch(e) {}
+
+  // Calculate overall forensic score (0-100)
   var totalSeverity = 0;
   var findingsByType = {};
   var findingsByCategory = {};
+
   for (var g = 0; g < allFindings.length; g++) {
     var finding = allFindings[g];
     totalSeverity += finding.severity || 1;
@@ -1579,42 +1755,15 @@ async function runForensicEngine(pdfBytes, pdfDoc) {
     findingsByType: findingsByType,
     findingsByCategory: findingsByCategory,
     contradictionTypesUsed: Object.keys(findingsByType).length,
-    serialPatternsDetected: serialFindings.length,
-    extractionNotes: extractionNote,
-    summary: generateSummary(allFindings, overallScore, confidence)
+    serialPatternsDetected: allFindings.filter(function(f){return f.type==='SERIAL';}).length,
+    extractionNotes: 'Per-page PDF content-stream decoding with ToUnicode CMaps.',
+    summary: generateSummary(allFindings, overallScore)
   };
 }
 
-function detectSerialPatterns(textBlocks) {
-  var findings = [];
-  var fullText = textBlocks.join(' ').toLowerCase();
-
-  for (var i = 0; i < SERIAL_PATTERNS.length; i++) {
-    var pattern = SERIAL_PATTERNS[i];
-    var matchedStages = [];
-    for (var j = 0; j < pattern.stages.length; j++) {
-      if (fullText.indexOf(pattern.stages[j]) !== -1) {
-        matchedStages.push(pattern.stages[j]);
-      }
-    }
-    if (matchedStages.length >= pattern.threshold) {
-      findings.push({
-        type: 'SERIAL',
-        serialPattern: pattern.id,
-        serialName: pattern.name,
-        severity: Math.min(5, matchedStages.length),
-        evidence: 'Serial pattern "' + pattern.name + '" detected: ' + matchedStages.length + ' of ' + pattern.stages.length + ' stages matched (' + matchedStages.slice(0, 3).join(', ') + ')',
-        location: 'Full document',
-        description: pattern.description
-      });
-    }
-  }
-  return findings;
-}
-
-function generateSummary(findings, score, confidence) {
+function generateSummary(findings, score) {
   if (findings.length === 0) {
-    return 'CLEAN: No contradictions or forensic indicators detected. Document appears internally consistent across all ' + Object.keys(DETECTORS).length + ' detectors and ' + SERIAL_PATTERNS.length + ' serial patterns.';
+    return 'CLEAN: No contradictions or forensic indicators detected. Document appears internally consistent across all ' + Object.keys(DETECTORS).length + ' detectors and ' + Object.keys(SERIAL_PATTERNS).length + ' serial patterns.';
   }
   var typeCount = {};
   for (var i = 0; i < findings.length; i++) {
