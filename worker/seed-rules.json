@@ -1,0 +1,1699 @@
+{
+  "version": "1.0.0",
+  "published_at": "2026-07-19T00:01:26.939Z",
+  "rules": {
+    "contradiction_patterns": [
+      {
+        "id": "CT01",
+        "key": "CT01_DIRECT_STATEMENT",
+        "name": "Direct Statement Contradiction",
+        "desc": "Two statements in the document directly oppose each other",
+        "severity": 5,
+        "category": "STATEMENTAL",
+        "example": "\"Payment was made on 15 March\" vs \"No payment was ever made\"",
+        "detectors": [
+          "D01"
+        ]
+      },
+      {
+        "id": "CT02",
+        "key": "CT02_NUMERICAL_DISCREPANCY",
+        "name": "Numerical Discrepancy",
+        "desc": "Numbers, amounts, or quantities do not match across the document",
+        "severity": 4,
+        "category": "STATEMENTAL",
+        "example": "Invoice total R50,000 but supporting docs show R45,000",
+        "detectors": [
+          "D02"
+        ]
+      },
+      {
+        "id": "CT03",
+        "key": "CT03_DATE_INCONSISTENCY",
+        "name": "Date Inconsistency",
+        "desc": "Dates, timestamps, or chronological references conflict",
+        "severity": 5,
+        "category": "STATEMENTAL",
+        "example": "Contract dated 2024-01-15 references an event from 2024-03-20",
+        "detectors": [
+          "D03"
+        ]
+      },
+      {
+        "id": "CT04",
+        "key": "CT04_TEMPORAL_SEQUENCE_BREAK",
+        "name": "Temporal Sequence Break",
+        "desc": "Events are described in an impossible chronological order",
+        "severity": 4,
+        "category": "STATEMENTAL",
+        "example": "Document claims discovery happened before the incident occurred",
+        "detectors": [
+          "D04"
+        ]
+      },
+      {
+        "id": "CT05",
+        "key": "CT05_CAUSAL_IMPOSSIBILITY",
+        "name": "Causal Impossibility",
+        "desc": "A claimed cause could not have produced the stated effect",
+        "severity": 3,
+        "category": "STATEMENTAL",
+        "example": "Email claims response was sent before the original was received",
+        "detectors": [
+          "D31"
+        ]
+      },
+      {
+        "id": "CT06",
+        "key": "CT06_LOGICAL_IMPOSSIBILITY",
+        "name": "Logical Impossibility",
+        "desc": "The document asserts something that is logically impossible",
+        "severity": 5,
+        "category": "STATEMENTAL",
+        "example": "Entity claims to be both registered and deregistered simultaneously",
+        "detectors": [
+          "D05"
+        ]
+      },
+      {
+        "id": "CT07",
+        "key": "CT07_SCOPE_CREEP",
+        "name": "Scope Creep Indicator",
+        "desc": "Document scope expands beyond original stated boundaries",
+        "severity": 2,
+        "category": "STATEMENTAL",
+        "example": "Quote for kitchen renovation includes pool construction",
+        "detectors": [
+          "D29"
+        ]
+      },
+      {
+        "id": "CT08",
+        "key": "CT08_TERM_DEFINITION_CONFLICT",
+        "name": "Term Definition Contradiction",
+        "desc": "Key terms are defined differently in different sections",
+        "severity": 3,
+        "category": "STATEMENTAL",
+        "example": "\"Net profit\" defined one way in section 2, another in section 8",
+        "detectors": [
+          "D30"
+        ]
+      },
+      {
+        "id": "CT09",
+        "key": "CT09_IDENTITY_CONTRADICTION",
+        "name": "Identity Contradiction",
+        "desc": "The same person/entity is described with conflicting attributes",
+        "severity": 5,
+        "category": "IDENTITY",
+        "example": "Director listed as John Smith (ID 760101) and John Smit (ID 850202)",
+        "detectors": [
+          "D06"
+        ]
+      },
+      {
+        "id": "CT10",
+        "key": "CT10_ROLE_CONTRADICTION",
+        "name": "Role Contradiction",
+        "desc": "Person acts in a capacity they do not hold",
+        "severity": 4,
+        "category": "IDENTITY",
+        "example": "Person signs as \"Managing Director\" but company records show different MD",
+        "detectors": [
+          "D07"
+        ]
+      },
+      {
+        "id": "CT11",
+        "key": "CT11_AUTHORITY_CONTRADICTION",
+        "name": "Authority Contradiction",
+        "desc": "Action taken exceeds stated authority or delegation",
+        "severity": 5,
+        "category": "IDENTITY",
+        "example": "Junior employee approves R5 million expenditure without authorization",
+        "detectors": [
+          "D08"
+        ]
+      },
+      {
+        "id": "CT12",
+        "key": "CT12_NAME_SPELLING_VARIATION",
+        "name": "Name Spelling Variation",
+        "desc": "Same entity/person spelled differently across document",
+        "severity": 2,
+        "category": "IDENTITY",
+        "example": "\"Johannes van der Merwe\" vs \"Johannes van der Merve\"",
+        "detectors": []
+      },
+      {
+        "id": "CT13",
+        "key": "CT13_TITLE_INCONSISTENCY",
+        "name": "Title Inconsistency",
+        "desc": "Professional titles, ranks, or designations do not match",
+        "severity": 2,
+        "category": "IDENTITY",
+        "example": "Signatory titled \"Dr\" in one section, \"Mr\" in another",
+        "detectors": []
+      },
+      {
+        "id": "CT14",
+        "key": "CT14_ENTITY_STATUS_CONFLICT",
+        "name": "Entity Status Contradiction",
+        "desc": "Organization claimed status does not match reality",
+        "severity": 5,
+        "category": "IDENTITY",
+        "example": "Company claims \"registered and active\" but CIPC shows deregistered",
+        "detectors": [
+          "D09"
+        ]
+      },
+      {
+        "id": "CT15",
+        "key": "CT15_AMOUNT_DISCREPANCY",
+        "name": "Amount Discrepancy",
+        "desc": "Financial amounts do not reconcile across the document",
+        "severity": 5,
+        "category": "FINANCIAL",
+        "example": "Subtotal R100,000 + VAT R15,000 = Total R120,000 (should be R115,000)",
+        "detectors": [
+          "D13",
+          "D14"
+        ]
+      },
+      {
+        "id": "CT16",
+        "key": "CT16_CURRENCY_MISMATCH",
+        "name": "Currency Mismatch",
+        "desc": "Currency conversions or references are inconsistent",
+        "severity": 4,
+        "category": "FINANCIAL",
+        "example": "Contract in USD but invoice in ZAR without conversion rate",
+        "detectors": [
+          "D34"
+        ]
+      },
+      {
+        "id": "CT17",
+        "key": "CT17_ACCOUNT_NUMBER_INVALID",
+        "name": "Account Number Invalidity",
+        "desc": "Bank account numbers fail validation or are inconsistent",
+        "severity": 5,
+        "category": "FINANCIAL",
+        "example": "Bank account number changes between pages of same document",
+        "detectors": []
+      },
+      {
+        "id": "CT18",
+        "key": "CT18_BANK_DETAIL_MISMATCH",
+        "name": "Bank Detail Mismatch",
+        "desc": "Banking details conflict with known or stated information",
+        "severity": 5,
+        "category": "FINANCIAL",
+        "example": "Payment instruction to Bank A but company normally uses Bank B",
+        "detectors": [
+          "D12"
+        ]
+      },
+      {
+        "id": "CT19",
+        "key": "CT19_VAT_NUMBER_INVALID",
+        "name": "VAT Number Invalid",
+        "desc": "VAT number fails checksum validation or is inconsistent",
+        "severity": 4,
+        "category": "FINANCIAL",
+        "example": "VAT number 4120245773 fails mod-97 check (South Africa)",
+        "detectors": [
+          "D10"
+        ]
+      },
+      {
+        "id": "CT20",
+        "key": "CT20_REGISTRATION_NUMBER_FAKE",
+        "name": "Registration Number Fake",
+        "desc": "Company or entity registration number is invalid or fabricated",
+        "severity": 5,
+        "category": "FINANCIAL",
+        "example": "CIPC registration number does not match entity name",
+        "detectors": [
+          "D11"
+        ]
+      },
+      {
+        "id": "CT21",
+        "key": "CT21_QUOTATION_MISMATCH",
+        "name": "Quotation Mismatch",
+        "desc": "Quoted terms, prices, or conditions differ from final document",
+        "severity": 3,
+        "category": "FINANCIAL",
+        "example": "Quote states 30-day payment but invoice demands immediate payment",
+        "detectors": []
+      },
+      {
+        "id": "CT22",
+        "key": "CT22_FINANCIAL_CALCULATION_ERROR",
+        "name": "Financial Calculation Error",
+        "desc": "Mathematical calculations in financial sections are incorrect",
+        "severity": 4,
+        "category": "FINANCIAL",
+        "example": "VAT calculated at 20% when standard rate is 15%",
+        "detectors": [
+          "D13"
+        ]
+      },
+      {
+        "id": "CT23",
+        "key": "CT23_SIGNATURE_MISMATCH",
+        "name": "Signature Mismatch",
+        "desc": "Signature does not match known specimen or appears forged",
+        "severity": 5,
+        "category": "INTEGRITY",
+        "example": "Signature on page 1 visibly different from signature on page 5",
+        "detectors": [
+          "D32"
+        ]
+      },
+      {
+        "id": "CT24",
+        "key": "CT24_METADATA_CONTRADICTION",
+        "name": "Metadata Contradiction",
+        "desc": "PDF metadata conflicts with document content or claims",
+        "severity": 4,
+        "category": "INTEGRITY",
+        "example": "Document claims created 2024-01-01 but metadata shows 2024-06-15",
+        "detectors": [
+          "D15"
+        ]
+      },
+      {
+        "id": "CT25",
+        "key": "CT25_FONT_INCONSISTENCY",
+        "name": "Font Inconsistency",
+        "desc": "Different fonts used where consistency is expected",
+        "severity": 3,
+        "category": "INTEGRITY",
+        "example": "Body text uses Arial on some pages, Times New Roman on others",
+        "detectors": [
+          "D16"
+        ]
+      },
+      {
+        "id": "CT26",
+        "key": "CT26_FORMAT_ANOMALY",
+        "name": "Format Anomaly",
+        "desc": "Document formatting suggests editing or manipulation",
+        "severity": 3,
+        "category": "INTEGRITY",
+        "example": "Margins, headers, or page numbering change mid-document",
+        "detectors": [
+          "D17"
+        ]
+      },
+      {
+        "id": "CT27",
+        "key": "CT27_LAYOUT_MANIPULATION",
+        "name": "Layout Manipulation",
+        "desc": "Page layout suggests content was added, removed, or rearranged",
+        "severity": 4,
+        "category": "INTEGRITY",
+        "example": "Page 3 has different header/footer suggesting inserted page",
+        "detectors": [
+          "D18"
+        ]
+      },
+      {
+        "id": "CT28",
+        "key": "CT28_IMAGE_INTEGRITY_FAILURE",
+        "name": "Image Integrity Failure",
+        "desc": "Embedded images show signs of manipulation or replacement",
+        "severity": 4,
+        "category": "INTEGRITY",
+        "example": "Logo image has different compression than surrounding content",
+        "detectors": [
+          "D33"
+        ]
+      },
+      {
+        "id": "CT29",
+        "key": "CT29_TIMESTAMP_MANIPULATION",
+        "name": "Timestamp Manipulation",
+        "desc": "Document timestamps are inconsistent or impossible",
+        "severity": 5,
+        "category": "INTEGRITY",
+        "example": "Document modification time precedes creation time",
+        "detectors": [
+          "D15"
+        ]
+      },
+      {
+        "id": "CT30",
+        "key": "CT30_VERSION_CONTROL_ANOMALY",
+        "name": "Version Control Anomaly",
+        "desc": "Document version tracking is inconsistent or absent",
+        "severity": 2,
+        "category": "INTEGRITY",
+        "example": "Page footer says \"Version 3\" but header says \"Version 1\"",
+        "detectors": [
+          "D35"
+        ]
+      },
+      {
+        "id": "CT31",
+        "key": "CT31_CROSS_REFERENCE_FAILURE",
+        "name": "Cross-Reference Failure",
+        "desc": "Referenced sections, clauses, or documents do not exist or conflict",
+        "severity": 3,
+        "category": "CROSS_REF",
+        "example": "\"See Appendix A\" but no Appendix A exists in document",
+        "detectors": [
+          "D21"
+        ]
+      },
+      {
+        "id": "CT32",
+        "key": "CT32_SOURCE_ATTRIBUTION_FAILURE",
+        "name": "Source Attribution Failure",
+        "desc": "Cited sources cannot be verified or do not support claims",
+        "severity": 4,
+        "category": "CROSS_REF",
+        "example": "Cites \"Case 123/2024\" but court records show no such case",
+        "detectors": [
+          "D36"
+        ]
+      },
+      {
+        "id": "CT33",
+        "key": "CT33_LEGAL_REFERENCE_INVALID",
+        "name": "Legal Reference Invalid",
+        "desc": "Referenced legislation, cases, or regulations are incorrect",
+        "severity": 4,
+        "category": "CROSS_REF",
+        "example": "References \"Section 42 of the Companies Act\" but Act has no Section 42",
+        "detectors": [
+          "D22"
+        ]
+      },
+      {
+        "id": "CT34",
+        "key": "CT34_PRECEDENT_VIOLATION",
+        "name": "Precedent Violation",
+        "desc": "Document contradicts established legal or procedural precedent",
+        "severity": 3,
+        "category": "CROSS_REF",
+        "example": "Court order format deviates from standard High Court requirements",
+        "detectors": []
+      },
+      {
+        "id": "CT35",
+        "key": "CT35_PROCEDURE_BREACH",
+        "name": "Procedure Breach",
+        "desc": "Required procedural steps were skipped or incorrectly followed",
+        "severity": 4,
+        "category": "CROSS_REF",
+        "example": "Contract signed without required witness signatures",
+        "detectors": [
+          "D23"
+        ]
+      },
+      {
+        "id": "CT36",
+        "key": "CT36_ADDRESS_CONTRADICTION",
+        "name": "Address Contradiction",
+        "desc": "Physical addresses are inconsistent or non-existent",
+        "severity": 3,
+        "category": "CONTACT",
+        "example": "Registered address on page 1 differs from address on page 10",
+        "detectors": [
+          "D24"
+        ]
+      },
+      {
+        "id": "CT37",
+        "key": "CT37_CONTACT_DETAIL_MISMATCH",
+        "name": "Contact Detail Mismatch",
+        "desc": "Phone numbers, emails, or other contacts are inconsistent",
+        "severity": 2,
+        "category": "CONTACT",
+        "example": "Email domain changes from @company.co.za to @company-gmail.com",
+        "detectors": [
+          "D25"
+        ]
+      },
+      {
+        "id": "CT38",
+        "key": "CT38_JURISDICTIONAL_IMPOSSIBILITY",
+        "name": "Jurisdictional Impossibility",
+        "desc": "Legal jurisdiction claims are impossible or contradictory",
+        "severity": 4,
+        "category": "CONTACT",
+        "example": "South African court order claims jurisdiction over Dubai entity",
+        "detectors": [
+          "D26"
+        ]
+      },
+      {
+        "id": "CT39",
+        "key": "CT39_CHAIN_OF_CUSTODY_BREAK",
+        "name": "Chain of Custody Break",
+        "desc": "Evidence handling chain has gaps or inconsistencies",
+        "severity": 5,
+        "category": "EVIDENCE",
+        "example": "Evidence receipt shows transfer to Person A but next record shows Person B",
+        "detectors": [
+          "D27"
+        ]
+      },
+      {
+        "id": "CT40",
+        "key": "CT40_WITNESS_STATEMENT_CONFLICT",
+        "name": "Witness Statement Conflict",
+        "desc": "Witness accounts contradict each other or physical evidence",
+        "severity": 4,
+        "category": "EVIDENCE",
+        "example": "Two witness statements describe mutually exclusive events",
+        "detectors": [
+          "D28"
+        ]
+      },
+      {
+        "id": "CT41",
+        "key": "CT41_EVIDENCE_TAMPERING_INDICATOR",
+        "name": "Evidence Tampering Indicator",
+        "desc": "Evidence shows signs of alteration, substitution, or manipulation",
+        "severity": 5,
+        "category": "EVIDENCE",
+        "example": "Page numbers are non-sequential suggesting page removal",
+        "detectors": [
+          "D19"
+        ]
+      },
+      {
+        "id": "CT42",
+        "key": "CT42_DIGITAL_FOOTPRINT_MISMATCH",
+        "name": "Digital Footprint Mismatch",
+        "desc": "Digital traces (hashes, creation tools) conflict with claims",
+        "severity": 4,
+        "category": "DIGITAL",
+        "example": "Document claims scanned original but metadata shows created in Word",
+        "detectors": [
+          "D20"
+        ]
+      },
+      {
+        "id": "CT43",
+        "key": "CT43_DOCUMENT_INTERNAL_CONFLICT",
+        "name": "Document Internal Conflict",
+        "desc": "Catch-all: any other internal contradiction not covered above",
+        "severity": 3,
+        "category": "DIGITAL",
+        "example": "Multiple anomalies detected that suggest systematic document fraud",
+        "detectors": [
+          "D37"
+        ]
+      }
+    ],
+    "fraud_keywords": [
+      {
+        "id": "FK01",
+        "group": "negation_pairs",
+        "source_detector": "D01",
+        "produces": "CT01",
+        "description": "Positive/negative statement pairs; co-occurrence indicates direct contradiction",
+        "pairs": [
+          [
+            "paid",
+            "not paid"
+          ],
+          [
+            "received",
+            "not received"
+          ],
+          [
+            "approved",
+            "rejected"
+          ],
+          [
+            "accepted",
+            "declined"
+          ],
+          [
+            "valid",
+            "invalid"
+          ],
+          [
+            "true",
+            "false"
+          ],
+          [
+            "completed",
+            "incomplete"
+          ],
+          [
+            "submitted",
+            "not submitted"
+          ],
+          [
+            "agreed",
+            "disputed"
+          ],
+          [
+            "confirmed",
+            "denied"
+          ],
+          [
+            "authorized",
+            "unauthorized"
+          ],
+          [
+            "registered",
+            "deregistered"
+          ]
+        ]
+      },
+      {
+        "id": "FK02",
+        "group": "temporal_sequence_terms",
+        "source_detector": "D04",
+        "produces": "CT04",
+        "description": "Temporal language pairs whose co-occurrence suggests a sequence conflict",
+        "pairs": [
+          [
+            "before the incident",
+            "after the incident"
+          ],
+          [
+            "prior to",
+            "subsequent to"
+          ],
+          [
+            "preceding",
+            "following"
+          ],
+          [
+            "earlier",
+            "later"
+          ]
+        ]
+      },
+      {
+        "id": "FK03",
+        "group": "logically_impossible_states",
+        "source_detector": "D05",
+        "produces": "CT06",
+        "description": "Phrases describing logically impossible simultaneous states",
+        "terms": [
+          [
+            "active and deregistered",
+            "registered and dissolved"
+          ],
+          [
+            " solvent and insolvent"
+          ],
+          [
+            "employed and terminated",
+            "appointed and removed"
+          ]
+        ]
+      },
+      {
+        "id": "FK04",
+        "group": "role_claim_requirements",
+        "source_detector": "D07",
+        "produces": "CT10",
+        "description": "Claimed roles and the supporting instrument each requires",
+        "items": [
+          {
+            "role": "managing director",
+            "check": "board resolution"
+          },
+          {
+            "role": "company secretary",
+            "check": "appointment letter"
+          },
+          {
+            "role": "authorized signatory",
+            "check": "power of attorney"
+          },
+          {
+            "role": "executor",
+            "check": "letters of executorship"
+          },
+          {
+            "role": "trustee",
+            "check": "trust deed"
+          },
+          {
+            "role": "liquidator",
+            "check": "court order"
+          }
+        ]
+      },
+      {
+        "id": "FK05",
+        "group": "entity_status_claims",
+        "source_detector": "D09",
+        "produces": "CT14",
+        "description": "Entity status term groups; >1 term from a group = conflicting status claims",
+        "groups": [
+          [
+            "registered",
+            "deregistered",
+            "dissolved",
+            "liquidated"
+          ],
+          [
+            "active",
+            "suspended",
+            "under administration"
+          ],
+          [
+            "compliant",
+            "non-compliant",
+            "delinquent"
+          ]
+        ]
+      },
+      {
+        "id": "FK06",
+        "group": "suspicious_metadata_tools",
+        "source_detector": "D15",
+        "produces": "CT24",
+        "description": "PDF producer/creator tools associated with image manipulation",
+        "terms": [
+          "photoshop",
+          "gimp",
+          "pixelmator",
+          "affinity",
+          "canva",
+          "paint",
+          "illustrator"
+        ]
+      },
+      {
+        "id": "FK07",
+        "group": "tampering_indicators",
+        "source_detector": "D19",
+        "produces": "CT41",
+        "description": "Terms indicating physical evidence/document tampering",
+        "terms": [
+          "white out",
+          "whited out",
+          "correction fluid",
+          "tippex",
+          "tipp-ex",
+          "scanned copy",
+          "photocopied signature",
+          "pasted signature",
+          "stamped signature",
+          "inserted page",
+          "removed page",
+          "replaced page",
+          "added later"
+        ]
+      },
+      {
+        "id": "FK08",
+        "group": "procedure_requirements",
+        "source_detector": "D23",
+        "produces": "CT35",
+        "description": "Required procedural elements and the document contexts that trigger them",
+        "items": [
+          {
+            "req": "witness",
+            "context": "signature|signed|contract|agreement"
+          },
+          {
+            "req": "notar",
+            "context": "affidavit|oath|sworn|certified"
+          },
+          {
+            "req": "resolution",
+            "context": "board|director|shareholder"
+          },
+          {
+            "req": "stamp duty",
+            "context": "lease|agreement|transfer"
+          }
+        ]
+      },
+      {
+        "id": "FK09",
+        "group": "chain_of_custody_terms",
+        "source_detector": "D27",
+        "produces": "CT39",
+        "description": "Custody-chain steps; incomplete chains indicate custody gaps",
+        "terms": [
+          "received by",
+          "handed to",
+          "transferred to",
+          "logged by",
+          "signed for"
+        ]
+      },
+      {
+        "id": "FK10",
+        "group": "witness_conflict_markers",
+        "source_detector": "D28",
+        "produces": "CT40",
+        "description": "Phrases marking conflicting witness accounts (>=3 = conflict)",
+        "terms": [
+          "however the witness",
+          "contrary to",
+          "in contrast",
+          "on the other hand",
+          "the witness stated",
+          "according to the witness"
+        ]
+      },
+      {
+        "id": "FK11",
+        "group": "signature_anomaly_terms",
+        "source_detector": "D32",
+        "produces": "CT23",
+        "description": "Non-standard signature methods",
+        "terms": [
+          "electronic signature",
+          "digital signature",
+          "/s/",
+          "signed per pro",
+          "power of attorney",
+          "authorized representative",
+          "by proxy"
+        ]
+      },
+      {
+        "id": "FK12",
+        "group": "image_manipulation_terms",
+        "source_detector": "D33",
+        "produces": "CT28",
+        "description": "Terms referencing image manipulation",
+        "terms": [
+          "compressed",
+          "resized",
+          "cropped",
+          "filtered",
+          "edited image"
+        ]
+      }
+    ],
+    "behavioral_markers": [
+      {
+        "id": "BM01",
+        "name": "Urgency pressure",
+        "source": "SP01 stage 4",
+        "keywords": [
+          "urgent",
+          "time sensitive",
+          "act now",
+          "expires"
+        ]
+      },
+      {
+        "id": "BM02",
+        "name": "Secrecy demanded",
+        "source": "SP01 stage 5",
+        "keywords": [
+          "confidential",
+          "do not disclose",
+          "keep secret",
+          "private matter"
+        ]
+      },
+      {
+        "id": "BM03",
+        "name": "Unsolicited approach",
+        "source": "SP01 stage 1 / SP08 stage 1",
+        "keywords": [
+          "dear beneficiary",
+          "dear friend",
+          "confidential proposal",
+          "gift",
+          "hospitality",
+          "facilitation payment",
+          "consulting fee"
+        ]
+      },
+      {
+        "id": "BM04",
+        "name": "Coercion / influence indicators",
+        "source": "SP15 stage 3",
+        "keywords": [
+          "persuaded",
+          "convinced",
+          "advised",
+          "suggested"
+        ]
+      },
+      {
+        "id": "BM05",
+        "name": "Role claimed without supporting instrument",
+        "source": "D07",
+        "items": [
+          {
+            "role": "managing director",
+            "check": "board resolution"
+          },
+          {
+            "role": "company secretary",
+            "check": "appointment letter"
+          },
+          {
+            "role": "authorized signatory",
+            "check": "power of attorney"
+          },
+          {
+            "role": "executor",
+            "check": "letters of executorship"
+          },
+          {
+            "role": "trustee",
+            "check": "trust deed"
+          },
+          {
+            "role": "liquidator",
+            "check": "court order"
+          }
+        ]
+      },
+      {
+        "id": "BM06",
+        "name": "Authority exceeded language",
+        "source": "D08",
+        "patterns": [
+          "approved\\s+by\\s+.*?(?:clerk|assistant|junior|trainee)",
+          "authorized\\s+by\\s+.*?(?:intern|temp|contractor)",
+          "signed\\s+by\\s+.*?(?:on behalf of|p.p.|per pro)"
+        ]
+      },
+      {
+        "id": "BM07",
+        "name": "Witness conflict language",
+        "source": "D28",
+        "keywords": [
+          "however the witness",
+          "contrary to",
+          "in contrast",
+          "on the other hand",
+          "the witness stated",
+          "according to the witness"
+        ]
+      },
+      {
+        "id": "BM08",
+        "name": "False-oath language",
+        "source": "SP16 stages 1-2",
+        "keywords": [
+          "sworn",
+          "affirm",
+          "solemnly declare",
+          "under oath",
+          "i swear",
+          "i affirm",
+          "to the best of my knowledge"
+        ]
+      },
+      {
+        "id": "BM09",
+        "name": "Corroboration-failure language",
+        "source": "SP16 stage 4",
+        "keywords": [
+          "i recall",
+          "i remember",
+          "as far as i know"
+        ]
+      },
+      {
+        "id": "BM10",
+        "name": "Scope expansion language",
+        "source": "D29",
+        "keywords": [
+          "additionally",
+          "furthermore",
+          "including but not limited to",
+          "etc",
+          "and so on"
+        ]
+      }
+    ],
+    "serial_patterns": [
+      {
+        "id": "SP01",
+        "key": "SP01_ADVANCE_FEE_FRAUD",
+        "name": "Advance Fee Fraud (419 Scam)",
+        "severity": 5,
+        "category": "FINANCIAL_FRAUD",
+        "stages": [
+          {
+            "indicator": "Unsolicited contact",
+            "keywords": [
+              "dear beneficiary",
+              "dear friend",
+              "confidential proposal"
+            ]
+          },
+          {
+            "indicator": "Large sum promised",
+            "keywords": [
+              "million dollars",
+              "inheritance",
+              "unclaimed funds",
+              "compensation"
+            ]
+          },
+          {
+            "indicator": "Upfront fee requested",
+            "keywords": [
+              "processing fee",
+              "transfer fee",
+              "legal fee",
+              "release fee"
+            ]
+          },
+          {
+            "indicator": "Urgency pressure",
+            "keywords": [
+              "urgent",
+              "time sensitive",
+              "act now",
+              "expires"
+            ]
+          },
+          {
+            "indicator": "Secrecy demanded",
+            "keywords": [
+              "confidential",
+              "do not disclose",
+              "keep secret",
+              "private matter"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP02",
+        "key": "SP02_GHOST_EMPLOYEE_SCHEME",
+        "name": "Ghost Employee Scheme",
+        "severity": 5,
+        "category": "PAYROLL_FRAUD",
+        "stages": [
+          {
+            "indicator": "Fictitious staff",
+            "keywords": [
+              "ghost employee",
+              "fictitious employee",
+              "phantom worker"
+            ]
+          },
+          {
+            "indicator": "Payroll manipulation",
+            "keywords": [
+              "payroll",
+              "salary",
+              "wages",
+              "direct deposit"
+            ]
+          },
+          {
+            "indicator": "Identity fabrication",
+            "keywords": [
+              "id number",
+              "bank account",
+              "fake identity"
+            ]
+          },
+          {
+            "indicator": "Supervisor collusion",
+            "keywords": [
+              "approved by",
+              "authorized by",
+              "manager sign off"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP03",
+        "key": "SP03_SHELL_COMPANY_FRAUD",
+        "name": "Shell Company Fraud",
+        "severity": 5,
+        "category": "CORPORATE_FRAUD",
+        "stages": [
+          {
+            "indicator": "New entity creation",
+            "keywords": [
+              "new company",
+              "new registration",
+              "recently formed"
+            ]
+          },
+          {
+            "indicator": "No physical presence",
+            "keywords": [
+              "virtual office",
+              "mailing address",
+              "no premises"
+            ]
+          },
+          {
+            "indicator": "Round-trip invoicing",
+            "keywords": [
+              "invoice",
+              "payment",
+              "supplier",
+              "vendor"
+            ]
+          },
+          {
+            "indicator": "Beneficial owner hidden",
+            "keywords": [
+              "nominee director",
+              "trust arrangement",
+              "beneficial owner"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP04",
+        "key": "SP04_INVOICE_FRAUD",
+        "name": "Invoice Fraud",
+        "severity": 4,
+        "category": "FINANCIAL_FRAUD",
+        "stages": [
+          {
+            "indicator": "Duplicate invoice",
+            "keywords": [
+              "duplicate invoice",
+              "copy invoice",
+              "reissued"
+            ]
+          },
+          {
+            "indicator": "Altered details",
+            "keywords": [
+              "amended",
+              "corrected",
+              "revised",
+              "updated"
+            ]
+          },
+          {
+            "indicator": "Bank detail change",
+            "keywords": [
+              "new bank details",
+              "updated banking",
+              "account change"
+            ]
+          },
+          {
+            "indicator": "Pressure to pay",
+            "keywords": [
+              "urgent payment",
+              "overdue",
+              "final demand",
+              "immediate"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP05",
+        "key": "SP05_VAT_CAROUSEL",
+        "name": "VAT Carousel Fraud",
+        "severity": 5,
+        "category": "TAX_FRAUD",
+        "stages": [
+          {
+            "indicator": "Cross-border trade",
+            "keywords": [
+              "import",
+              "export",
+              "cross-border",
+              "eu member"
+            ]
+          },
+          {
+            "indicator": "Missing trader",
+            "keywords": [
+              "missing trader",
+              "disappeared",
+              "cannot locate"
+            ]
+          },
+          {
+            "indicator": "Circular transactions",
+            "keywords": [
+              "supplier",
+              "customer",
+              "broker",
+              "agent"
+            ]
+          },
+          {
+            "indicator": "VAT reclaim",
+            "keywords": [
+              "vat refund",
+              "input tax",
+              "zero-rated",
+              "export vat"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP06",
+        "key": "SP06_DOCUMENT_FORGERY_CHAIN",
+        "name": "Document Forgery Chain",
+        "severity": 5,
+        "category": "DOCUMENT_FRAUD",
+        "stages": [
+          {
+            "indicator": "Template acquisition",
+            "keywords": [
+              "template",
+              "original document",
+              "scanned copy"
+            ]
+          },
+          {
+            "indicator": "Content manipulation",
+            "keywords": [
+              "edited",
+              "modified",
+              "changed",
+              "updated"
+            ]
+          },
+          {
+            "indicator": "Signature fabrication",
+            "keywords": [
+              "scanned signature",
+              "pasted",
+              "copied signature"
+            ]
+          },
+          {
+            "indicator": "Metadata cleaning",
+            "keywords": [
+              "properties removed",
+              "metadata cleared",
+              "anonymized"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP07",
+        "key": "SP07_IDENTITY_THEFT_CHAIN",
+        "name": "Identity Theft Document Chain",
+        "severity": 5,
+        "category": "IDENTITY_FRAUD",
+        "stages": [
+          {
+            "indicator": "ID document theft",
+            "keywords": [
+              "stolen id",
+              "lost passport",
+              "compromised identity"
+            ]
+          },
+          {
+            "indicator": "Account takeover",
+            "keywords": [
+              "account access",
+              "password reset",
+              "unauthorized access"
+            ]
+          },
+          {
+            "indicator": "Fraudulent application",
+            "keywords": [
+              "new account",
+              "credit application",
+              "loan application"
+            ]
+          },
+          {
+            "indicator": "Financial exploitation",
+            "keywords": [
+              "unauthorized transaction",
+              "fraudulent withdrawal",
+              "false claim"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP08",
+        "key": "SP08_BRIBERY_SCHEME",
+        "name": "Bribery and Corruption Scheme",
+        "severity": 5,
+        "category": "CORRUPTION",
+        "stages": [
+          {
+            "indicator": "Approach",
+            "keywords": [
+              "gift",
+              "hospitality",
+              "facilitation payment",
+              "consulting fee"
+            ]
+          },
+          {
+            "indicator": "Agreement",
+            "keywords": [
+              "arrangement",
+              "understanding",
+              "mutual benefit",
+              "quid pro quo"
+            ]
+          },
+          {
+            "indicator": "Payment",
+            "keywords": [
+              "cash",
+              "offshore",
+              "shell company",
+              "third party"
+            ]
+          },
+          {
+            "indicator": "Action",
+            "keywords": [
+              "favorable decision",
+              "contract award",
+              "exemption",
+              "waiver"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP09",
+        "key": "SP09_LOAN_FRAUD",
+        "name": "Loan Application Fraud",
+        "severity": 4,
+        "category": "FINANCIAL_FRAUD",
+        "stages": [
+          {
+            "indicator": "Income inflation",
+            "keywords": [
+              "salary",
+              "income",
+              "revenue",
+              "turnover"
+            ]
+          },
+          {
+            "indicator": "Asset overstatement",
+            "keywords": [
+              "property value",
+              "asset",
+              "collateral",
+              "security"
+            ]
+          },
+          {
+            "indicator": "Liability concealment",
+            "keywords": [
+              "existing loan",
+              "debt",
+              "obligation",
+              "commitment"
+            ]
+          },
+          {
+            "indicator": "Identity fabrication",
+            "keywords": [
+              "employment letter",
+              "payslip",
+              "bank statement"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP10",
+        "key": "SP10_INSURANCE_FRAUD",
+        "name": "Insurance Claim Fraud",
+        "severity": 4,
+        "category": "INSURANCE_FRAUD",
+        "stages": [
+          {
+            "indicator": "Staged event",
+            "keywords": [
+              "accident",
+              "incident",
+              "loss",
+              "damage"
+            ]
+          },
+          {
+            "indicator": "Exaggerated claim",
+            "keywords": [
+              "total loss",
+              "beyond repair",
+              "irreparable"
+            ]
+          },
+          {
+            "indicator": "False documentation",
+            "keywords": [
+              "repair quote",
+              "assessment",
+              "valuation",
+              "medical report"
+            ]
+          },
+          {
+            "indicator": "Previous claims",
+            "keywords": [
+              "prior claim",
+              "previous loss",
+              "another incident"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP11",
+        "key": "SP11_TENDER_MANIPULATION",
+        "name": "Tender/RFP Manipulation",
+        "severity": 5,
+        "category": "PROCUREMENT_FRAUD",
+        "stages": [
+          {
+            "indicator": "Specification rigging",
+            "keywords": [
+              "exclusive requirement",
+              "unique specification",
+              "only supplier"
+            ]
+          },
+          {
+            "indicator": "Bid collusion",
+            "keywords": [
+              "agreed price",
+              "coordinated bid",
+              "market allocation"
+            ]
+          },
+          {
+            "indicator": "Evaluation bias",
+            "keywords": [
+              "preferred bidder",
+              "pre-selected",
+              "favored"
+            ]
+          },
+          {
+            "indicator": "Award irregularity",
+            "keywords": [
+              "deviation",
+              "waiver",
+              "exception",
+              "urgent award"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP12",
+        "key": "SP12_MONEY_LAUNDERING",
+        "name": "Money Laundering Documentation",
+        "severity": 5,
+        "category": "MONEY_LAUNDERING",
+        "stages": [
+          {
+            "indicator": "Layering",
+            "keywords": [
+              "multiple transfers",
+              "intermediary",
+              "broker",
+              "agent"
+            ]
+          },
+          {
+            "indicator": "Integration",
+            "keywords": [
+              "investment",
+              "property purchase",
+              "business acquisition"
+            ]
+          },
+          {
+            "indicator": "Source concealment",
+            "keywords": [
+              "consulting fee",
+              "commission",
+              "referral",
+              "introduction"
+            ]
+          },
+          {
+            "indicator": "Offshore routing",
+            "keywords": [
+              "offshore account",
+              "tax haven",
+              "shell company",
+              "trust"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP13",
+        "key": "SP13_DIGITAL_SIGNATURE_FRAUD",
+        "name": "Digital Signature Forgery",
+        "severity": 4,
+        "category": "DIGITAL_FRAUD",
+        "stages": [
+          {
+            "indicator": "Signature theft",
+            "keywords": [
+              "scanned signature",
+              "signature file",
+              "image of signature"
+            ]
+          },
+          {
+            "indicator": "Document preparation",
+            "keywords": [
+              "template",
+              "blank form",
+              "pre-filled"
+            ]
+          },
+          {
+            "indicator": "Signature application",
+            "keywords": [
+              "pasted",
+              "inserted",
+              "placed",
+              "applied"
+            ]
+          },
+          {
+            "indicator": "Distribution",
+            "keywords": [
+              "email",
+              "fax",
+              "scanned copy",
+              "pdf"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP14",
+        "key": "SP14_CONTRACT_FRUAD",
+        "name": "Contract Fraud",
+        "severity": 3,
+        "category": "CONTRACT_FRAUD",
+        "stages": [
+          {
+            "indicator": "Bait terms",
+            "keywords": [
+              "introductory rate",
+              "special offer",
+              "limited period"
+            ]
+          },
+          {
+            "indicator": "Hidden clauses",
+            "keywords": [
+              "fine print",
+              "schedule",
+              "annex",
+              "appendix"
+            ]
+          },
+          {
+            "indicator": "Unilateral change",
+            "keywords": [
+              "reserves the right",
+              "may change",
+              "at our discretion"
+            ]
+          },
+          {
+            "indicator": "Enforcement barrier",
+            "keywords": [
+              "arbitration",
+              "foreign jurisdiction",
+              "governing law"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP15",
+        "key": "SP15_WITNESS_TAMPERING",
+        "name": "Witness Statement Tampering",
+        "severity": 5,
+        "category": "EVIDENCE_TAMPERING",
+        "stages": [
+          {
+            "indicator": "Statement acquisition",
+            "keywords": [
+              "witness statement",
+              "affidavit",
+              "deposition"
+            ]
+          },
+          {
+            "indicator": "Content alteration",
+            "keywords": [
+              "amended",
+              "corrected",
+              "clarified",
+              "revised"
+            ]
+          },
+          {
+            "indicator": "Coercion indicators",
+            "keywords": [
+              "persuaded",
+              "convinced",
+              "advised",
+              "suggested"
+            ]
+          },
+          {
+            "indicator": "Submission fraud",
+            "keywords": [
+              "signed",
+              "certified",
+              "true copy",
+              "original"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP16",
+        "key": "SP16_PERJURY_CHAIN",
+        "name": "Perjury Documentation Chain",
+        "severity": 5,
+        "category": "PERJURY",
+        "stages": [
+          {
+            "indicator": "False oath",
+            "keywords": [
+              "sworn",
+              "affirm",
+              "solemnly declare",
+              "under oath"
+            ]
+          },
+          {
+            "indicator": "False statement",
+            "keywords": [
+              "i swear",
+              "i affirm",
+              "to the best of my knowledge"
+            ]
+          },
+          {
+            "indicator": "Material falsity",
+            "keywords": [
+              "specifically",
+              "exactly",
+              "precisely",
+              "definitely"
+            ]
+          },
+          {
+            "indicator": "Corroboration failure",
+            "keywords": [
+              "i recall",
+              "i remember",
+              "as far as i know"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      },
+      {
+        "id": "SP17",
+        "key": "SP17_SYSTEMIC_FRAUD",
+        "name": "Systemic Institutional Fraud",
+        "severity": 5,
+        "category": "SYSTEMIC_FRAUD",
+        "stages": [
+          {
+            "indicator": "Pattern of victims",
+            "keywords": [
+              "multiple complaints",
+              "class action",
+              "group claim"
+            ]
+          },
+          {
+            "indicator": "Institutional cover-up",
+            "keywords": [
+              "internal investigation",
+              "confidential settlement",
+              "non-disclosure"
+            ]
+          },
+          {
+            "indicator": "Regulatory evasion",
+            "keywords": [
+              "exemption",
+              "waiver",
+              "special permission",
+              "temporary relief"
+            ]
+          },
+          {
+            "indicator": "Continued operation",
+            "keywords": [
+              "ongoing",
+              "continues to",
+              "still operating",
+              "business as usual"
+            ]
+          }
+        ],
+        "match_rule": "flag when >=3 stages matched"
+      }
+    ],
+    "case_configs": []
+  },
+  "source": "webdocsol forensic-engine.js v2.0"
+}
