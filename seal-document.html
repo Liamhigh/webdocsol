@@ -449,8 +449,10 @@
     <a href="/verify.html" class="verify-link" id="verifyLink">&#128269; Verify on verumglobal.foundation</a>
     <div class="download-grid" id="downloadGrid">
       <a href="#" class="download-btn primary" id="downloadSealedPdf" download>&#11015; Download Sealed PDF</a>
-      <a href="#" class="download-btn" id="downloadOts" download>&#11015; Download .OTS Proof</a>
+      <a href="#" class="download-btn" id="downloadOts" download>&#11015; Download blockchain receipt (.ots) — PENDING</a>
+      <a href="#" class="download-btn" id="downloadAnchorCert" download style="display:none;">&#11015; Download Anchor Certificate (PDF)</a>
     </div>
+    <div id="otsReceiptNote" style="display:none;font-size:12px;color:#8ea3b5;margin-top:10px;line-height:1.6;">Pending: the Bitcoin anchor typically confirms within 1–2 hours. Verify this document later on verumglobal.foundation/verify.html to upgrade this receipt to a confirmed proof.</div>
   </div>
 
   <!-- Info Section -->
@@ -480,6 +482,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
 <script src="/forensic-report.js"></script>
 <script src="/forensic-engine-page.js"></script>
+<script src="/ots-proof.js"></script>
 <script>
 const { PDFDocument, rgb, StandardFonts } = PDFLib;
 
@@ -1239,8 +1242,8 @@ async function buildSealCertificate(opts) {
   // Canonical statement box
   var boxTop = 240, boxH = 74;
   page.drawRectangle({ x: 70, y: boxTop - boxH, width: PW - 140, height: boxH, borderColor: GOLD, borderWidth: 1, color: rgb(1, 1, 1), opacity: 0.04 });
-  var c1 = 'This seal proves two things only \u2014 integrity and time.';
-  var c2 = 'It is not a verification of the document\u2019s contents.';
+  var c1 = 'This seal proves two things only — integrity and time.';
+  var c2 = 'It is not a verification of the document’s contents.';
   page.drawText(c1, { x: cx(c1, timesItalic, 12), y: boxTop - 30, size: 12, font: timesItalic, color: WHITE });
   page.drawText(c2, { x: cx(c2, timesItalic, 12), y: boxTop - 48, size: 12, font: timesItalic, color: WHITE });
 
@@ -1252,6 +1255,130 @@ async function buildSealCertificate(opts) {
   try { certDoc.setAuthor('Verum Omnis'); } catch (e) {}
   try { certDoc.setSubject('SEAL-CERT|' + (opts.sha512 || '') + '|' + (opts.sealId || '')); } catch (e) {}
   try { certDoc.setProducer('Verum Omnis Document Sealing Service v1.2.9'); } catch (e) {}
+  try { certDoc.setCreationDate(new Date()); } catch (e) {}
+  return await certDoc.save();
+}
+
+// ==================== ANCHOR CERTIFICATE (OTS submitted) ====================
+// One-page certificate recording the OpenTimestamps submission itself: which
+// digest went to which calendars, and when. Same house style as the Seal
+// Certificate (navy full bleed, gold rules, serif wordmark). It is issued only
+// when a calendar accepted the digest, and it is explicitly PENDING: the
+// canonical statement says exactly what the seal proves -- integrity and time.
+async function buildAnchorCertificate(opts) {
+  opts = opts || {};
+  const certDoc = await PDFDocument.create();
+  const helv = await certDoc.embedFont(StandardFonts.Helvetica);
+  const helvBold = await certDoc.embedFont(StandardFonts.HelveticaBold);
+  const times = await certDoc.embedFont(StandardFonts.TimesRoman);
+  const timesBold = await certDoc.embedFont(StandardFonts.TimesRomanBold);
+  const timesItalic = await certDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const courier = await certDoc.embedFont(StandardFonts.Courier);
+  const NAVY = rgb(0x0e/255, 0x1a/255, 0x2b/255);
+  const GOLD = rgb(0xc9/255, 0xa2/255, 0x27/255);
+  const LIGHT = rgb(0.85, 0.88, 0.92);
+  const MUTE = rgb(0.55, 0.63, 0.72);
+  const WHITE = rgb(1, 1, 1);
+  const PW = 595.28, PH = 841.89;
+  const page = certDoc.addPage([PW, PH]);
+  page.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: NAVY });
+  page.drawRectangle({ x: 0, y: PH - 6, width: PW, height: 6, color: GOLD });
+  page.drawRectangle({ x: 0, y: 0, width: PW, height: 6, color: GOLD });
+
+  // WinAnsi-safe text: fold anything the standard fonts cannot encode.
+  function safe(t) {
+    return String(t === undefined || t === null ? '' : t).replace(/[^\x20-\x7E\xA0-\xFF̓\u2014\u2018\u2019\u201C\u201D\u2022\u2026]/g, '?');
+  }
+  function cx(t, font, size) { return (PW - font.widthOfTextAtSize(safe(t), size)) / 2; }
+  function wrap(t, font, size, maxW) {
+    var words = safe(t).split(/\s+/), lines = [], cur = '';
+    for (var i = 0; i < words.length; i++) {
+      var trial = cur ? cur + ' ' + words[i] : words[i];
+      if (font.widthOfTextAtSize(trial, size) > maxW && cur) { lines.push(cur); cur = words[i]; }
+      else cur = trial;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  // Wordmark + title
+  var y = PH - 78;
+  page.drawText('VERUM OMNIS', { x: cx('VERUM OMNIS', timesBold, 28), y: y, size: 28, font: timesBold, color: WHITE });
+  y -= 18;
+  var tag = 'A I   F O R E N S I C S   F O R   T R U T H';
+  page.drawText(tag, { x: cx(tag, times, 8.5), y: y, size: 8.5, font: times, color: GOLD });
+  y -= 16;
+  page.drawLine({ start: { x: PW / 2 - 130, y: y }, end: { x: PW / 2 + 130, y: y }, thickness: 0.8, color: GOLD });
+  y -= 40;
+  page.drawText('BLOCKCHAIN ANCHOR CERTIFICATE', { x: cx('BLOCKCHAIN ANCHOR CERTIFICATE', timesBold, 23), y: y, size: 23, font: timesBold, color: GOLD });
+  y -= 20;
+  var sub = '— PENDING CONFIRMATION';
+  page.drawText(sub, { x: cx(sub, timesItalic, 11), y: y, size: 11, font: timesItalic, color: LIGHT });
+  y -= 42;
+
+  // QR panel (right column) -- same verify link as the Seal Certificate
+  var qrSize = 118;
+  var qrX = PW - 70 - qrSize, qrY = y - qrSize + 16;
+  page.drawRectangle({ x: qrX - 8, y: qrY - 8, width: qrSize + 16, height: qrSize + 16, color: WHITE, borderColor: GOLD, borderWidth: 1 });
+  var qrImg = null;
+  if (opts.qrDataURL) {
+    try {
+      const b64 = String(opts.qrDataURL).split(',')[1];
+      const bin = atob(b64);
+      const qb = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) qb[i] = bin.charCodeAt(i);
+      qrImg = await certDoc.embedPng(qb);
+    } catch (e) { qrImg = null; }
+  }
+  if (qrImg) page.drawImage(qrImg, { x: qrX, y: qrY, width: qrSize, height: qrSize });
+  else page.drawText(safe(opts.sealId || ''), { x: qrX, y: qrY + qrSize / 2, size: 8, font: courier, color: rgb(0.3, 0.3, 0.3) });
+  var scan = 'SCAN TO VERIFY';
+  page.drawText(scan, { x: qrX - 8 + (qrSize + 16 - helvBold.widthOfTextAtSize(scan, 7)) / 2, y: qrY - 22, size: 7, font: helvBold, color: GOLD });
+  var vurl = 'verumglobal.foundation/verify.html';
+  page.drawText(vurl, { x: qrX - 8 + (qrSize + 16 - helv.widthOfTextAtSize(vurl, 6.5)) / 2, y: qrY - 33, size: 6.5, font: helv, color: MUTE });
+
+  // Detail rows (left column)
+  var lx = 70, rowMaxW = qrX - 40 - lx;
+  function row(label, valueLines, valueFont, valueSize, gap) {
+    page.drawText(safe(label), { x: lx, y: y, size: 8, font: helvBold, color: GOLD });
+    y -= 14;
+    for (var i = 0; i < valueLines.length; i++) {
+      page.drawText(safe(valueLines[i]), { x: lx, y: y, size: valueSize, font: valueFont, color: LIGHT });
+      y -= (valueSize + 4.5);
+    }
+    y -= (gap === undefined ? 10 : gap);
+  }
+  row('SEAL ID', [opts.sealId || 'n/a'], courier, 11);
+  var h = String(opts.sha512 || '');
+  row('DOCUMENT SHA-512', h ? [h.substring(0, 64), h.substring(64)] : ['n/a'], courier, 7.5);
+  row('OTS DIGEST (SHA-256 SUBMITTED)', [opts.otsDigest || 'n/a'], courier, 7.5);
+  var calLines = (Array.isArray(opts.calendars) && opts.calendars.length > 0)
+    ? opts.calendars.map(function(c) { return String(c).replace(/^https?:\/\//, ''); })
+    : ['n/a'];
+  row('OPENTIMESTAMPS CALENDARS', calLines, helv, 9);
+  row('SUBMITTED (ISO-8601)', [opts.timestampISO || 'n/a'], courier, 10);
+  var pendLines = wrap('Digest accepted by the calendar(s) above. Bitcoin blockchain confirmation pending (typically 1-2 hours); until then this certificate and the .ots receipt are marked PENDING.', helv, 8.5, rowMaxW);
+  row('ANCHOR STATUS', pendLines, helv, 8.5);
+
+  // Canonical statement box
+  var boxTop = 240, boxH = 74;
+  page.drawRectangle({ x: 70, y: boxTop - boxH, width: PW - 140, height: boxH, borderColor: GOLD, borderWidth: 1, color: rgb(1, 1, 1), opacity: 0.04 });
+  var canonical = 'This certificate records submission of the document digest to the OpenTimestamps calendars. The seal proves two things only — integrity and time.';
+  var cLines = wrap(canonical, timesItalic, 11.5, PW - 140 - 32);
+  var cy = boxTop - 28;
+  for (var ci = 0; ci < cLines.length && ci < 3; ci++) {
+    page.drawText(cLines[ci], { x: cx(cLines[ci], timesItalic, 11.5), y: cy, size: 11.5, font: timesItalic, color: WHITE });
+    cy -= 17;
+  }
+
+  // Footer
+  page.drawText('VERUM OMNIS FOUNDATION  |  PATENT PENDING', { x: cx('VERUM OMNIS FOUNDATION  |  PATENT PENDING', helvBold, 7.5), y: 52, size: 7.5, font: helvBold, color: MUTE });
+  page.drawText('Confirm and upgrade at verumglobal.foundation/verify.html', { x: cx('Confirm and upgrade at verumglobal.foundation/verify.html', helv, 8), y: 38, size: 8, font: helv, color: GOLD });
+
+  try { certDoc.setTitle('Verum Omnis Anchor Certificate -- ' + (opts.sealId || '')); } catch (e) {}
+  try { certDoc.setAuthor('Verum Omnis'); } catch (e) {}
+  try { certDoc.setSubject('ANCHOR-CERT|' + (opts.otsDigest || '') + '|' + (opts.sealId || '')); } catch (e) {}
+  try { certDoc.setProducer('Verum Omnis Document Sealing Service v1.3.0'); } catch (e) {}
   try { certDoc.setCreationDate(new Date()); } catch (e) {}
   return await certDoc.save();
 }
@@ -1756,6 +1883,29 @@ async function runSealingPipeline() {
     }
   }
 
+  // Anchor Certificate (BOTH modes, only when a calendar accepted the digest):
+  // records the OpenTimestamps submission -- seal ID, document SHA-512, OTS
+  // digest, calendar list, ISO-8601 submission time. NEVER breaks the seal flow.
+  window._voAnchorCert = null;
+  if (otsResult && otsResult.success) {
+    try {
+      window._voAnchorCert = {
+        bytes: await buildAnchorCertificate({
+          fileName: selectedFile.name,
+          sha512: sha512,
+          sealId: sealId,
+          otsDigest: otsDigestHex,
+          calendars: [window.VoOts ? VoOts.normalizeCalendarUrl(otsResult.calendar) : otsResult.calendar],
+          timestampISO: new Date(meta.t || Date.now()).toISOString(),
+          qrDataURL: qrDataURL
+        })
+      };
+    } catch (anchorErr) {
+      console.warn('Anchor certificate generation failed (document seal unaffected):', anchorErr);
+      window._voAnchorCert = null;
+    }
+  }
+
   // Step 9 (optional, FORENSIC ANALYSIS MODE only): sealed forensic report -- NEVER breaks the seal flow
   var reportPack = null;
   try {
@@ -1989,10 +2139,49 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     el.parentNode.insertBefore(banner, el.nextSibling);
   }
 
-  if (otsResult && otsResult.success && otsResult.proof) {
-    const oU = URL.createObjectURL(new Blob([otsResult.proof], {type: 'application/vnd.opentimestamps.v1'}));
-    const oL = document.getElementById('downloadOts'); oL.href = oU; oL.download = base + '.ots'; oL.style.display = 'block';
-  } else { document.getElementById('downloadOts').style.display = 'none'; }
+  // Blockchain receipt (.ots) — the "little slip": a VALID OpenTimestamps
+  // pending receipt the user keeps and upgrades later on the verify page.
+  // Preferred content: the calendar-issued timestamp fragment (byte-identical
+  // to what `ots stamp` embeds) wrapped in the detached-file header; fallback:
+  // a locally built receipt with a PendingAttestation naming the calendar that
+  // accepted the digest. No button at all when the submission failed or the
+  // proof module is unavailable — never a broken or fake receipt.
+  var otsBtn = document.getElementById('downloadOts');
+  var otsNote = document.getElementById('otsReceiptNote');
+  var anchorBtn = document.getElementById('downloadAnchorCert');
+  if (otsResult && otsResult.success && window.VoOts) {
+    var receiptBytes = null;
+    try {
+      if (otsResult.proof && otsResult.proof.length > 0) {
+        var candidate = VoOts.buildFileFromFragment(meta.otsDigest, otsResult.proof);
+        var probe = VoOts.parseSummary(candidate);
+        if (probe.valid && probe.attestations.some(function(a) { return a.type === 'pending'; })) receiptBytes = candidate;
+      }
+    } catch (fragErr) { receiptBytes = null; }
+    if (!receiptBytes) {
+      try { receiptBytes = VoOts.buildPendingReceipt(meta.otsDigest, [otsResult.calendar]); }
+      catch (pendErr) { receiptBytes = null; }
+    }
+    if (receiptBytes) {
+      const oU = URL.createObjectURL(new Blob([receiptBytes], {type: 'application/vnd.opentimestamps.v1'}));
+      otsBtn.href = oU; otsBtn.download = base + '-' + sealId + '.ots'; otsBtn.style.display = 'block';
+      if (otsNote) otsNote.style.display = 'block';
+    } else {
+      otsBtn.style.display = 'none';
+      if (otsNote) otsNote.style.display = 'none';
+    }
+  } else {
+    otsBtn.style.display = 'none';
+    if (otsNote) otsNote.style.display = 'none';
+  }
+  if (anchorBtn) {
+    if (window._voAnchorCert && window._voAnchorCert.bytes) {
+      const aU = URL.createObjectURL(new Blob([window._voAnchorCert.bytes], {type: 'application/pdf'}));
+      anchorBtn.href = aU; anchorBtn.download = base + '-' + sealId + '-anchor-certificate.pdf'; anchorBtn.style.display = 'block';
+    } else {
+      anchorBtn.style.display = 'none';
+    }
+  }
 
   document.getElementById('results').classList.add('visible');
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
@@ -2013,6 +2202,11 @@ function resetSealing() {
   var sealedHashRowR = document.getElementById('sealedHashRow');
   if (sealedHashRowR) sealedHashRowR.style.display = 'none';
   window._voSealCert = null;
+  window._voAnchorCert = null;
+  var anchorBtnR = document.getElementById('downloadAnchorCert');
+  if (anchorBtnR) anchorBtnR.style.display = 'none';
+  var otsNoteR = document.getElementById('otsReceiptNote');
+  if (otsNoteR) otsNoteR.style.display = 'none';
   var gkBanner = document.getElementById('gatekeepBanner');
   if (gkBanner) gkBanner.style.display = 'none';
   var oldReportBtn2 = document.getElementById('downloadForensicReport');
