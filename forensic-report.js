@@ -807,7 +807,6 @@ function secTimeline(ctx, data) {
       { size: 8 }
     );
   }
-
   ctx.para('Full timeline reconstruction and event ordering require AI consensus review — pending.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
 }
 
@@ -949,7 +948,6 @@ async function build(opts) {
 
   // 1. cover
   drawCover(ctx, data);
-
   // 2. TOC placeholder page (drawn last with real page numbers)
   var tocPage = doc.addPage([PW, PH]);
   ctx.drawWatermark(tocPage);
