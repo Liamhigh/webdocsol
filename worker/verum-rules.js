@@ -405,6 +405,11 @@ const CLASSIFY_SYSTEM = 'You are a document triage classifier for the Verum Omni
   'contradiction engine. Given a text sample from a document, decide its class, whether it is ' +
   'ABOUT fraud, and which detector categories the engine should run. Classes: court_filing, ' +
   'contract, invoice, financial_application, personal_correspondence, business_record, other. ' +
+  'Affidavits and witness statements ARE court_filing: recognise them by sworn-language markers ' +
+  'such as "I hereby make oath and state", "the contents of this affidavit", "deponent", ' +
+  '"commissioner of oaths", numbered deposition paragraphs, and police or court references ' +
+  '(for example SAPS, Hawks, or court case numbers); classify them court_filing with medium or ' +
+  'high confidence when such markers are present instead of defaulting to "other". ' +
   'aboutFraud MUST be true when the document CONTAINS fraud allegations, accusations or heavy ' +
   'fraud vocabulary (e.g. a court filing, complaint or affidavit ABOUT fraud) so the client can ' +
   'suppress serial-pattern labels that would otherwise false-fire on vocabulary alone; it is ' +
