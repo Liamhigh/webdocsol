@@ -360,6 +360,23 @@
     </label>
   </div>
 
+  <!-- AI Review Disclosure & Consent -->
+  <div style="margin-bottom:24px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;">
+    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">On-device analysis, optional AI review.</strong> Your document is analysed entirely on this device, in your browser. An optional AI review (Cloudflare Workers AI) can assess the forensic findings and draft the report narrative. When enabled, only finding metadata — the type, severity and a short quote for each finding — leaves this device for that review. The document itself is never uploaded.</p>
+    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;margin-bottom:14px;">
+      <input type="checkbox" id="aiReviewEnabled" checked style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
+      <span>Enable AI review (recommended) — findings are assessed by AI before the report is built, and an AI narrative summary is added to the report. Advisory only: findings are forensic indicators, not determinations of fraud.</span>
+    </label>
+    <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">I am sealing as (optional)</label>
+    <select id="tierSelector" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
+      <option value="">Prefer not to say</option>
+      <option value="private">Private citizen</option>
+      <option value="law_enforcement">Law enforcement</option>
+      <option value="commercial">Commercial</option>
+    </select>
+    <div id="gatekeepBanner" style="display:none;margin-top:14px;background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:10px;padding:14px;font-size:13px;color:#D4A843;line-height:1.6;">&#9888; This platform is free for private citizens and law enforcement. Commercial use requires a licence — see <a href="/constitution.html" style="color:#D4A843;text-decoration:underline;">verumglobal.foundation/constitution.html</a>.</div>
+  </div>
+
   <!-- Client Name (commercial only) -->
   <div class="client-field" id="clientField">
     <label>Organisation Name</label>
@@ -871,6 +888,7 @@ let _pipelineChain = [];
 let _pipelineDetection = null;
 let _pipelineFraudResult = null;
 let _pipelinePageCount = 0;
+let _pipelineAiAddedFindings = [];
 
 // ==================== BUILD SEALED PDF ====================
 
@@ -990,6 +1008,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
 
 async function startSealing() {
   if (!selectedFile) return;
+  maybeRunGatekeep(); // advisory only -- NEVER blocks sealing
   document.getElementById('sealBtn').disabled = true;
   document.getElementById('pipeline').classList.add('visible');
   document.getElementById('results').classList.remove('visible');
@@ -1107,6 +1126,103 @@ async function startSealing() {
   }
 }
 
+// ==================== OPTIONAL AI REVIEW (CLOUDFLARE WORKERS AI) ====================
+// Advisory layer only -- it never blocks sealing. PRIVACY HARD LIMIT: only finding
+// metadata (type, severity, short evidence quote, location, id) is ever sent; the
+// document itself never leaves this device. Every call has a 10s AbortController
+// timeout; any failure is silent and the pipeline proceeds with the deterministic
+// engine's unpruned findings.
+function isAiReviewEnabled() {
+  var cb = document.getElementById('aiReviewEnabled');
+  return !!(cb && cb.checked);
+}
+
+async function aiApiPost(path, payload, timeoutMs) {
+  var ctrl = new AbortController();
+  var timer = setTimeout(function() { ctrl.abort(); }, timeoutMs || 10000);
+  try {
+    var res = await fetch(path, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(payload),
+      signal: ctrl.signal
+    });
+    if (!res.ok) throw new Error('AI endpoint ' + path + ' returned HTTP ' + res.status);
+    return await res.json();
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Gatekeep advisory: shows a non-blocking banner when the declared tier looks
+// likely to be unlicensed commercial use. Sealing is NEVER prevented.
+function maybeRunGatekeep() {
+  try {
+    var banner = document.getElementById('gatekeepBanner');
+    if (banner) banner.style.display = 'none';
+    var sel = document.getElementById('tierSelector');
+    var tier = sel ? sel.value : '';
+    if (!tier) return;
+    aiApiPost('/api/v1/ai/gatekeep', { declaredTier: tier }, 10000).then(function(r) {
+      if (r && r.likelihood === 'high' && banner) banner.style.display = 'block';
+    }).catch(function() { /* advisory only -- silent */ });
+  } catch (e) { /* advisory only -- silent */ }
+}
+
+// Assess: returns { ran, findings (kept), added (AI-identified, cap 20), assessed }
+// or null on any failure. Only the first 200 findings are sent for assessment;
+// findings beyond the cap are always kept. Tolerant of older workers that do not
+// return additionalFindings.
+async function aiAssessFindings(findings) {
+  var assessed = findings.slice(0, 200).map(function(f, i) {
+    var copy = Object.assign({}, f);
+    if (copy.id === undefined || copy.id === null) copy.id = i;
+    return copy;
+  });
+  var res = await aiApiPost('/api/v1/ai/assess', { findings: assessed }, 10000);
+  if (!res || !Array.isArray(res.verdicts)) return null;
+  var dropIds = {}, dropIdx = {};
+  for (var i = 0; i < res.verdicts.length; i++) {
+    var v = res.verdicts[i] || {};
+    if (v.keep !== false) continue;
+    if (v.id !== undefined && v.id !== null) dropIds[String(v.id)] = true;
+    else if (v.index !== undefined && v.index !== null) dropIdx[String(v.index)] = true;
+  }
+  var pruned = [];
+  for (var j = 0; j < assessed.length; j++) {
+    if (dropIds[String(assessed[j].id)] || dropIdx[String(j)]) continue;
+    pruned.push(assessed[j]);
+  }
+  for (var k = 200; k < findings.length; k++) pruned.push(findings[k]);
+  // AI-identified indicators the engine missed (extended worker only; cap 20).
+  // rationale is display text for the report -- it is NEVER sent to the feedback loop.
+  var added = [];
+  if (Array.isArray(res.additionalFindings)) {
+    for (var a = 0; a < res.additionalFindings.length && added.length < 20; a++) {
+      var af = res.additionalFindings[a] || {};
+      var aType = (typeof af.type === 'string' && af.type.trim()) ? af.type.trim().slice(0, 64) : 'AI_INDICATOR';
+      var aSev = parseInt(af.severity, 10);
+      if (!isFinite(aSev) || aSev < 1 || aSev > 5) aSev = 3;
+      added.push({
+        type: aType,
+        severity: aSev,
+        rationale: (typeof af.rationale === 'string' ? af.rationale : String(af.rationale === undefined || af.rationale === null ? '' : af.rationale)).slice(0, 500),
+        source: 'ai',
+        category: 'AI_IDENTIFIED'
+      });
+    }
+  }
+  return { ran: true, findings: pruned, added: added, assessed: assessed.length };
+}
+
+// Narrate: returns the AI-drafted narrative string, or null on any failure
+// (including template-fallback absence and timeouts).
+async function aiNarrateReport(findings, score, verdict) {
+  var res = await aiApiPost('/api/v1/ai/narrate', { findings: findings, score: score, verdict: verdict }, 10000);
+  if (res && typeof res.narrative === 'string' && res.narrative.trim()) return res.narrative;
+  return null;
+}
+
 // ==================== ANONYMOUS PATTERN SHARING (OPT-IN) ====================
 // Feeds the verum-rules feedback loop. PRIVACY HARD LIMIT: only detector IDs,
 // finding types, integer severities (1-5), and page counts are ever sent.
@@ -1139,6 +1255,19 @@ function shareAnonymousPatterns(fraudResult) {
         if (!isFinite(sev) || sev < 1) sev = 1; else if (sev > 5) sev = 5;
         patterns.push({ detectorId: detectorId, type: type, severity: sev, pageCount: pageCount });
       }
+    }
+    // Engine-update loop: AI-identified findings with NOVEL types (not engine
+    // CT01-CT43, not SERIAL) are fed back so recurring AI-surfaced patterns can be
+    // curated into the deterministic engine. rationale/text is NEVER sent -- only
+    // the four contract fields, per the verum-rules worker contract.
+    var aiAdded = Array.isArray(_pipelineAiAddedFindings) ? _pipelineAiAddedFindings : [];
+    for (var a = 0; a < aiAdded.length; a++) {
+      var af = aiAdded[a] || {};
+      var aType = (typeof af.type === 'string' ? af.type.trim() : '').slice(0, 64);
+      if (!aType || aType === 'SERIAL' || /^CT(0[1-9]|[1-3][0-9]|4[0-3])$/.test(aType)) continue;
+      var aSev = parseInt(af.severity, 10);
+      if (!isFinite(aSev) || aSev < 1) aSev = 1; else if (aSev > 5) aSev = 5;
+      patterns.push({ detectorId: 'AI_IDENTIFIED', type: aType, severity: aSev, pageCount: pageCount });
     }
     var ctrl = new AbortController();
     var timer = setTimeout(function() { ctrl.abort(); }, 8000);
@@ -1234,13 +1363,43 @@ async function runSealingPipeline() {
     meta.fraudClean = fraudResult.clean;
   }
 
+  // === Optional AI review (Cloudflare Workers AI) -- advisory only, NEVER breaks the seal flow ===
+  // Assess prunes findings the AI marks keep:false and merges AI-identified indicators
+  // the engine missed; narrate drafts the report's AI Narrative Summary. On ANY failure
+  // the pipeline continues silently with the deterministic engine's original findings.
+  var reportFraudResult = fraudResult;
+  var aiReviewInfo = null;
+  var aiNarrativeText = null;
+  _pipelineAiAddedFindings = [];
+  try {
+    if (isAiReviewEnabled() && fraudResult && !fraudResult.scanFailed && Array.isArray(fraudResult.findings) && fraudResult.findings.length > 0) {
+      updateStep(7, 'processing', 'AI review of findings (optional)...');
+      var originalCount = fraudResult.findings.length;
+      var assessRes = await aiAssessFindings(fraudResult.findings);
+      if (assessRes && assessRes.ran) {
+        var mergedFindings = assessRes.findings.concat(assessRes.added);
+        reportFraudResult = Object.assign({}, fraudResult, { findings: mergedFindings, totalFindings: mergedFindings.length });
+        aiReviewInfo = { applied: true, retained: assessRes.findings.length, original: originalCount, added: assessRes.added.length };
+        _pipelineAiAddedFindings = assessRes.added;
+        aiNarrativeText = await aiNarrateReport(mergedFindings, reportFraudResult.overallScore, reportFraudResult.confidence);
+        updateStep(7, 'processing', 'AI review applied -- ' + assessRes.findings.length + ' of ' + originalCount + ' retained' + (assessRes.added.length ? ', +' + assessRes.added.length + ' AI-identified' : ''));
+      }
+    }
+  } catch (aiErr) {
+    console.warn('AI review skipped (sealing unaffected):', aiErr && aiErr.message ? aiErr.message : aiErr);
+    reportFraudResult = fraudResult;
+    aiReviewInfo = null;
+    aiNarrativeText = null;
+    _pipelineAiAddedFindings = [];
+  }
+
   // Step 9 (optional): sealed forensic report -- NEVER breaks the seal flow
   var reportPack = null;
   try {
     if (window.VerumReport && typeof window.VerumReport.build === 'function') {
       updateStep(7, 'processing', 'Building forensic report...');
       var reportBytes = await window.VerumReport.build({
-        findings: fraudResult,
+        findings: reportFraudResult,
         documents: [{
           name: selectedFile.name,
           pageCount: _pipelinePageCount || null,
@@ -1253,6 +1412,8 @@ async function runSealingPipeline() {
         },
         engineVersion: '2.0',
         extractionNotes: fraudResult && fraudResult.extractionNotes ? fraudResult.extractionNotes : null,
+        aiReview: aiReviewInfo,
+        aiNarrative: aiNarrativeText,
         ots: { submitted: !!(otsResult && otsResult.success), calendar: otsResult && otsResult.calendar ? otsResult.calendar : null },
         images: { watermark: watermarkBytes }
       });
@@ -1414,7 +1575,10 @@ function resetSealing() {
   document.getElementById('sealBtn').disabled = false;
   _pipelineFraudResult = null;
   _pipelinePageCount = 0;
+  _pipelineAiAddedFindings = [];
   window._voReportPack = null;
+  var gkBanner = document.getElementById('gatekeepBanner');
+  if (gkBanner) gkBanner.style.display = 'none';
   var oldReportBtn2 = document.getElementById('downloadForensicReport');
   if (oldReportBtn2) oldReportBtn2.remove();
   var oldReportNote2 = document.getElementById('reportSealNote');
@@ -1423,7 +1587,7 @@ function resetSealing() {
   if (oldShareNote2) oldShareNote2.remove();
   // Samsung Browser fix: use var not const
   var banners = document.querySelectorAll('[style*="background:rgba(212,168,67"]');
-  banners.forEach(function(b) { b.remove(); });
+  banners.forEach(function(b) { if (b.id !== 'gatekeepBanner') b.remove(); });
   // Also remove fraud warning banners on reset
   var fraudBanners = document.querySelectorAll('[style*="background:rgba(239,68,68"]');
   fraudBanners.forEach(function(b) { b.remove(); });
