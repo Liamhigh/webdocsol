@@ -429,6 +429,11 @@
     <div class="step" id="step8"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-512</strong> -- Verum Forensic Fingerprint (final verification)</div><div class="detail" id="detail8"></div></div>
   </div>
 
+  <!-- Payment gate (commercial detection). Rendered in its OWN container so the
+       static #results skeleton below (qrPreview canvas, hash displays, download
+       grid) is never destroyed before the sealing pipeline needs it. -->
+  <div class="results" id="paymentGate"></div>
+
   <!-- Results -->
   <div class="results" id="results">
     <h3>Document Sealed</h3>
@@ -439,7 +444,7 @@
     </div>
     <div class="qr-section">
       <canvas id="qrPreview" width="220" height="220" style="background:white; padding:16px; border-radius:12px;"></canvas>
-      <p>Clean QR -- no border, no interfering box. Scans instantly.</p>
+      <p id="qrPreviewNote">Clean QR -- no border, no interfering box. Scans instantly.</p>
     </div>
     <div class="hash-row"><label>SHA-256 (OpenTimestamps)</label><div class="hash-display" id="sha256Display"></div></div>
     <div class="hash-row"><label>SHA-512 (Verum Fingerprint)</label><div class="hash-display" id="sha512Display"></div></div>
@@ -677,21 +682,23 @@ async function generateQRDataURL(text, size) {
     } catch(e) { document.body.removeChild(container); resolve(null); return; }
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const img = container.querySelector('img');
-        const canvas = container.querySelector('canvas');
-        if (img && img.src && img.src.startsWith('data:image')) {
-          document.body.removeChild(container);
-          resolve(img.src);
-        } else if (canvas) {
-          try {
-            const dataUrl = canvas.toDataURL('image/png');
+        try {
+          const img = container.querySelector('img');
+          const canvas = container.querySelector('canvas');
+          if (img && img.src && img.src.startsWith('data:image')) {
             document.body.removeChild(container);
-            resolve(dataUrl);
-          } catch(e) { document.body.removeChild(container); resolve(null); }
-        } else {
-          document.body.removeChild(container);
-          resolve(null);
-        }
+            resolve(img.src);
+          } else if (canvas) {
+            try {
+              const dataUrl = canvas.toDataURL('image/png');
+              document.body.removeChild(container);
+              resolve(dataUrl);
+            } catch(e) { document.body.removeChild(container); resolve(null); }
+          } else {
+            document.body.removeChild(container);
+            resolve(null);
+          }
+        } catch(e) { try { document.body.removeChild(container); } catch(e2) {} resolve(null); }
       });
     });
   });
@@ -850,12 +857,16 @@ const STRIPE_LINKS = {
 };
 
 function showPaymentGate(price, detectionResult) {
-  const resultsEl = document.getElementById('results');
-  resultsEl.classList.add('visible');
+  // Render into the dedicated #paymentGate container -- NEVER into #results:
+  // replacing #results would destroy the static qrPreview canvas, hash displays
+  // and download grid that runSealingPipeline()/showResults() depend on (this
+  // was the "Cannot read properties of null (reading 'getContext')" crash).
+  const gateEl = document.getElementById('paymentGate');
+  gateEl.classList.add('visible');
   const isFree = price.amount === 0;
   const keywordList = detectionResult.matches.map(m => '<code style="background:rgba(212,168,67,0.15);padding:2px 6px;border-radius:4px;color:#D4A843;">' + m + '</code>').join(' ');
 
-  resultsEl.innerHTML =
+  gateEl.innerHTML =
     '<h3 style="color:' + (isFree ? '#22c55e' : '#D4A843') + ';">' + (isFree ? '&#10003; Law Enforcement -- Free' : '&#127970; Commercial Document Detected') + '</h3>' +
     '<div style="background:rgba(15,52,96,0.12);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;margin:16px 0;font-size:13px;line-height:1.7;color:#D5D8DD;">' +
     '<strong style="color:#F8F9FA;">Detected keywords:</strong> ' + keywordList + '<br>' +
@@ -874,7 +885,7 @@ function showPaymentGate(price, detectionResult) {
       '<button onclick="initiateStripePayment()" class="download-btn primary" style="flex:1;min-width:140px;">&#128179; Pay ' + price.symbol + price.amount + ' & Seal</button>'
     ) +
     '</div>';
-  resultsEl.scrollIntoView({behavior:'smooth'});
+  gateEl.scrollIntoView({behavior:'smooth'});
   document.getElementById('sealBtn').disabled = false;
 }
 
@@ -882,7 +893,7 @@ async function proceedAsPrivate() {
   sealType = 'private';
   document.querySelectorAll('.seal-type button').forEach(btn => btn.classList.toggle('active', btn.dataset.type === 'private'));
   document.getElementById('clientField').classList.remove('visible');
-  document.getElementById('results').classList.remove('visible');
+  document.getElementById('paymentGate').classList.remove('visible');
   try {
     await runSealingPipeline();
   } catch (err) {
@@ -898,7 +909,7 @@ async function proceedAsPrivate() {
 }
 
 async function proceedWithSealing() {
-  document.getElementById('results').classList.remove('visible');
+  document.getElementById('paymentGate').classList.remove('visible');
   try {
     await runSealingPipeline();
   } catch (err) {
@@ -919,12 +930,12 @@ function initiateStripePayment() {
   const link = STRIPE_LINKS[key];
   if (link && !link.includes('YOUR_')) {
     window.open(link, '_blank');
-    document.getElementById('results').innerHTML +=
+    document.getElementById('paymentGate').innerHTML +=
       '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:12px;padding:16px;margin-top:16px;font-size:13px;color:#22c55e;">' +
       '&#10003; Payment window opened. After completing payment, click <strong>Seal Document</strong> again to proceed.' +
       '</div>';
   } else {
-    document.getElementById('results').innerHTML +=
+    document.getElementById('paymentGate').innerHTML +=
       '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.25);border-radius:12px;padding:16px;margin-top:16px;font-size:13px;color:#D4A843;">' +
       '&#9888; Stripe payment links not yet configured. To set up:<br>' +
       '1. Go to <a href="https://dashboard.stripe.com/payment-links" target="_blank" style="color:#D4A843;text-decoration:underline;">dashboard.stripe.com/payment-links</a><br>' +
@@ -1111,7 +1122,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     cover.drawText('Seal: ' + sealId + '  |  verumglobal.foundation', { x: cx-100, y: ph*0.03, size: 9, font: helv, color: rgb(0.36, 0.42, 0.48) });
   }
 
-  const chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
+  const chainIds = chain.map(c => c.sealId).filter(id => id !== sealId);
   const chainStr = chainIds.length > 0 ? '|CHAIN:' + chainIds.join(',') : '';
 
   try { pdf.setTitle(selectedFile ? selectedFile.name : 'Sealed Document'); } catch(e) {}
@@ -1167,7 +1178,18 @@ async function buildSealCertificate(opts) {
 
   // WinAnsi-safe text: fold anything the standard fonts cannot encode.
   function safe(t) {
-    return String(t === undefined || t === null ? '' : t).replace(/[^\x20-\x7E\xA0-\xFF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026]/g, '?');
+    // Whitelist as numeric code points only -- no unicode escapes and no
+    // non-ASCII literals in source (transport-safe). Allowed: printable ASCII 0x20-0x7E,
+    // Latin-1 0xA0-0xFF, en/em dash, curly quotes, bullet, ellipsis (all
+    // WinAnsi-encodable); everything else folds to '?'.
+    var s = String(t === undefined || t === null ? '' : t), out = '', i, c;
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      out += ((c >= 0x20 && c <= 0x7E) || (c >= 0xA0 && c <= 0xFF) ||
+        c === 0x2013 || c === 0x2014 || c === 0x2018 || c === 0x2019 ||
+        c === 0x201C || c === 0x201D || c === 0x2022 || c === 0x2026) ? s.charAt(i) : '?';
+    }
+    return out;
   }
   function cx(t, font, size) { return (PW - font.widthOfTextAtSize(safe(t), size)) / 2; }
   function wrap(t, font, size, maxW) {
@@ -1242,8 +1264,8 @@ async function buildSealCertificate(opts) {
   // Canonical statement box
   var boxTop = 240, boxH = 74;
   page.drawRectangle({ x: 70, y: boxTop - boxH, width: PW - 140, height: boxH, borderColor: GOLD, borderWidth: 1, color: rgb(1, 1, 1), opacity: 0.04 });
-  var c1 = 'This seal proves two things only — integrity and time.';
-  var c2 = 'It is not a verification of the document’s contents.';
+  var c1 = 'This seal proves two things only \u2014 integrity and time.';
+  var c2 = 'It is not a verification of the document\u2019s contents.';
   page.drawText(c1, { x: cx(c1, timesItalic, 12), y: boxTop - 30, size: 12, font: timesItalic, color: WHITE });
   page.drawText(c2, { x: cx(c2, timesItalic, 12), y: boxTop - 48, size: 12, font: timesItalic, color: WHITE });
 
@@ -1287,7 +1309,18 @@ async function buildAnchorCertificate(opts) {
 
   // WinAnsi-safe text: fold anything the standard fonts cannot encode.
   function safe(t) {
-    return String(t === undefined || t === null ? '' : t).replace(/[^\x20-\x7E\xA0-\xFF̓\u2014\u2018\u2019\u201C\u201D\u2022\u2026]/g, '?');
+    // Whitelist as numeric code points only -- no unicode escapes and no
+    // non-ASCII literals in source (transport-safe). Allowed: printable ASCII 0x20-0x7E,
+    // Latin-1 0xA0-0xFF, en/em dash, curly quotes, bullet, ellipsis (all
+    // WinAnsi-encodable); everything else folds to '?'.
+    var s = String(t === undefined || t === null ? '' : t), out = '', i, c;
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      out += ((c >= 0x20 && c <= 0x7E) || (c >= 0xA0 && c <= 0xFF) ||
+        c === 0x2013 || c === 0x2014 || c === 0x2018 || c === 0x2019 ||
+        c === 0x201C || c === 0x201D || c === 0x2022 || c === 0x2026) ? s.charAt(i) : '?';
+    }
+    return out;
   }
   function cx(t, font, size) { return (PW - font.widthOfTextAtSize(safe(t), size)) / 2; }
   function wrap(t, font, size, maxW) {
@@ -1745,7 +1778,17 @@ function shareAnonymousPatterns(fraudResult) {
   } catch (e) { /* silent -- feedback must never disturb sealing */ }
 }
 
+// Static #results skeleton captured at load. The "Sealing Failed" panels replace
+// #results content to show the error; without a restore, every subsequent seal in
+// the same page session found the qrPreview canvas / hash displays / download grid
+// gone and crashed at the QR step with "Cannot read properties of null (reading
+// 'getContext')". Restored defensively at the single pipeline entry point.
+var RESULTS_SKELETON_HTML = document.getElementById('results').innerHTML;
+
 async function runSealingPipeline() {
+  if (!document.getElementById('qrPreview') && RESULTS_SKELETON_HTML) {
+    document.getElementById('results').innerHTML = RESULTS_SKELETON_HTML;
+  }
   var fileBytes = _pipelineFileBytes;
   var sha256 = _pipelineSha256;
   var sha512 = _pipelineSha512;
@@ -1777,13 +1820,37 @@ async function runSealingPipeline() {
   meta.sealId = sealId;              // VO-XXXXXXXXXXXX seal identifier
   var metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(meta)));
   var qrContent = 'https://verumglobal.foundation/verify.html?h=' + sha512.substring(0,32) + '&m=' + metaStr;
-  qrDataURL = await generateQRDataURL(qrContent, 400);
-  var pC = document.getElementById('qrPreview');
-  var pX = pC.getContext('2d');
-  pC.width = 220; pC.height = 220;
-  pX.fillStyle = '#ffffff'; pX.fillRect(0, 0, 220, 220);
-  if (qrDataURL) { const qI = new Image(); qI.onload = () => { pX.drawImage(qI, 10, 10, 200, 200); }; qI.onerror = () => { pX.fillStyle = '#ff0000'; pX.fillText('QR Error', 80, 110); }; qI.src = qrDataURL; }
-  updateStep(5, 'complete');
+  // QR ROBUSTNESS: QR generation or preview rendering must NEVER abort the seal.
+  // The QR is a convenience pointer to the verify page; the SHA-512 fingerprint,
+  // the per-page seal footer text and the PDF metadata Subject remain the
+  // authoritative seal. On ANY failure the seal proceeds without the QR image
+  // and the UI states the omission honestly.
+  var qrOmitted = false;
+  try {
+    qrDataURL = await generateQRDataURL(qrContent, 400);
+  } catch (qrErr) {
+    console.warn('QR generation failed (seal continues without QR):', qrErr);
+    qrDataURL = null;
+  }
+  if (!qrDataURL) qrOmitted = true;
+  try {
+    var pC = document.getElementById('qrPreview');
+    if (pC && pC.getContext) {
+      var pX = pC.getContext('2d');
+      pC.width = 220; pC.height = 220;
+      pX.fillStyle = '#ffffff'; pX.fillRect(0, 0, 220, 220);
+      if (qrDataURL) { const qI = new Image(); qI.onload = () => { pX.drawImage(qI, 10, 10, 200, 200); }; qI.onerror = () => { pX.fillStyle = '#ff0000'; pX.fillText('QR Error', 80, 110); }; qI.src = qrDataURL; }
+    }
+  } catch (pvErr) {
+    console.warn('QR preview render failed (seal continues without QR):', pvErr);
+  }
+  if (qrOmitted) {
+    updateStep(5, 'complete', 'QR omitted (generation failed) -- hash + footer remain the authoritative seal');
+    var qrNoteEl = document.getElementById('qrPreviewNote');
+    if (qrNoteEl) qrNoteEl.textContent = 'QR code omitted for this seal (generation failed). The SHA-512 fingerprint and the seal footer on every page remain the authoritative proof of integrity and time.';
+  } else {
+    updateStep(5, 'complete');
+  }
 
   // Step 6: Seal Footer
   updateStep(6, 'processing', 'Compositing ' + selectedFile.name + '...');
