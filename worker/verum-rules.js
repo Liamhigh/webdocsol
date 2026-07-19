@@ -8,14 +8,21 @@
 //   POST /api/v1/admin/publish    admin: publish a new signed rule package
 //   GET  /constitution.pdf        sealed Verum Omnis Constitution v6 PDF (from KV)
 //   GET  /docs/constitution.pdf   alias of /constitution.pdf
+//   POST /api/v1/ai/gatekeep      AI licensing gatekeeper (commercial-use signals)
+//   POST /api/v1/ai/assess        AI antithesis review of candidate findings
+//   POST /api/v1/ai/narrate       AI forensic report narrative drafting
+//   POST /api/v1/ai/curate        admin: AI-drafted rule candidates from feedback
 //
 // Signing: RSASSA-PKCS1-v1_5 with SHA-512 over the canonical JSON of the
 // package (object keys sorted recursively, compact separators, UTF-8).
 // Android clients verify with "SHA512withRSA"; WebCrypto uses
 // RSASSA-PKCS1-v1_5 + SHA-512. See rule-format.md.
 //
+// AI: Workers AI binding "AI". Every AI endpoint has a deterministic
+// fallback so model errors/timeouts/invalid replies never break clients.
+//
 // Secrets (never commit): RULE_PRIVATE_KEY (PKCS8 DER base64), ADMIN_TOKEN.
-// Binding: RULES_KV (KV namespace "verum-rules-kv").
+// Bindings: RULES_KV (KV namespace "verum-rules-kv"), AI (Workers AI).
 // ============================================================================
 
 const ALGORITHM = 'RSASSA-PKCS1-v1_5-SHA512';
@@ -373,6 +380,502 @@ async function handleAdminPublish(request, env) {
   return json({ ok: true, version: toPublish.version, published_at: toPublish.published_at, rule_counts: counts });
 }
 
+// ------------------------- AI layer (Workers AI) --------------------------
+
+const AI_MODEL_FAST = '@cf/meta/llama-3.1-8b-instruct-fp8';
+const AI_MODEL_STRONG = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
+const MAX_AI_BODY = 16 * 1024;          // 16 KB hard cap for AI endpoints
+const AI_GATEKEEP_TIMEOUT_MS = 10000;   // 10 s for the fast model
+const AI_TIMEOUT_MS = 30000;            // 30 s for the strong model
+const MAX_ASSESS_FINDINGS = 40;
+const MAX_NARRATE_FINDINGS = 25;
+const MAX_EVIDENCE_CHARS = 300;
+const MAX_CURATE_CANDIDATES = 10;
+const CURATE_WINDOW_DAYS = 7;
+
+const GATEKEEP_SYSTEM = 'You are a licensing gatekeeper for the Verum Omnis forensic platform ' +
+  '(free for private citizens and law enforcement; commercial use requires a licence). ' +
+  'Given usage signals, classify commercial likelihood. Reply ONLY compact JSON: ' +
+  '{"likelihood":"low|medium|high","reasons":[...max 3...]}';
+
+const ASSESS_SYSTEM = 'You are the antithesis reviewer in a forensic contradiction engine. ' +
+  'For each candidate finding you receive (type, quoted evidence, location), decide KEEP ' +
+  '(genuine contradiction/indicator) or DROP (benign context, definitional text, format ' +
+  'artifact, or keyword coincidence). You may NEVER invent new findings or new quotes. ' +
+  'Reply ONLY compact JSON: {"verdicts":[{"id":...,"verdict":"keep|drop","reason":"<=12 words"}]}';
+
+const NARRATE_SYSTEM = 'You are a forensic report writer for Verum Omnis. Write (1) a 120-180 ' +
+  'word executive summary paragraph and (2) a 150-250 word critical-evidence narrative, in ' +
+  'formal forensic English, third person, measured tone. RULES: state only facts present in ' +
+  'the supplied findings; after every factual claim cite the finding id in square brackets ' +
+  '[F7]; never quantify beyond supplied data; end with one sentence: \'These findings are ' +
+  'investigative indicators, not determinations of guilt.\' Reply ONLY JSON ' +
+  '{"executiveSummary":"...","criticalEvidence":"..."}';
+
+const CURATE_SYSTEM = 'You are a conservative fraud-rules curator for the Verum Omnis forensic ' +
+  'platform. You receive aggregated, anonymized detector statistics; no document content exists ' +
+  'and none may be invented. Draft at most 10 candidate NEW rules for the rule groups ' +
+  '"fraud_keywords" and "behavioral_markers". Rules: precision over recall — draft a candidate ' +
+  'only when the statistics show a recurring pattern; never include personal data, names, ' +
+  'quotes, or document content; use only generic fraud terminology; every candidate must carry ' +
+  'a short evidence-based rationale; if the statistics are insufficient, draft fewer candidates ' +
+  'or none. Reply ONLY compact JSON: ' +
+  '{"candidates":[{"group":"fraud_keywords|behavioral_markers","term":"...","rationale":"<=20 words"}]}';
+
+const CLOSING_SENTENCE = 'These findings are investigative indicators, not determinations of guilt.';
+
+// Reject if `promise` does not settle within `ms`. The loser keeps running in
+// the background and is simply discarded by the runtime.
+function withTimeout(promise, ms, label) {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => setTimeout(() => reject(new Error(label + ' timed out after ' + ms + ' ms')), ms))
+  ]);
+}
+
+// Single entry point for Workers AI chat-style calls. Throws on any failure;
+// callers are responsible for their deterministic fallback.
+async function callAi(env, model, system, userPayload, opts) {
+  if (!env.AI || typeof env.AI.run !== 'function') {
+    throw new Error('Workers AI binding "AI" is not configured on this service.');
+  }
+  const o = opts || {};
+  const run = env.AI.run(model, {
+    messages: [
+      { role: 'system', content: system },
+      { role: 'user', content: userPayload }
+    ],
+    max_tokens: o.maxTokens || 1024,
+    temperature: (o.temperature === undefined) ? 0 : o.temperature
+  });
+  const res = await withTimeout(run, o.timeoutMs || AI_TIMEOUT_MS, 'Workers AI call');
+  if (!res) throw new Error('empty response from model');
+  // The binding returns a string for prose replies but may return an already
+  // parsed object when the model emits valid JSON — normalise both to text.
+  let text;
+  if (typeof res.response === 'string') {
+    text = res.response;
+  } else if (res.response !== null && res.response !== undefined) {
+    try { text = JSON.stringify(res.response); } catch { text = ''; }
+  } else {
+    text = '';
+  }
+  if (!text.trim()) throw new Error('model returned no text');
+  return text;
+}
+
+// Models sometimes wrap JSON in prose or code fences. Extract the outermost
+// brace-delimited object and parse it; return null when that is impossible.
+function extractJsonObject(text) {
+  try { return JSON.parse(text); } catch { /* fall through */ }
+  const start = text.indexOf('{');
+  const end = text.lastIndexOf('}');
+  if (start >= 0 && end > start) {
+    try { return JSON.parse(text.slice(start, end + 1)); } catch { /* fall through */ }
+  }
+  return null;
+}
+
+function asStr(v, max) {
+  if (v === null || v === undefined) return '';
+  return String(v).slice(0, max);
+}
+
+function asCount(v) {
+  const n = Number(v);
+  return (Number.isFinite(n) && n >= 0) ? Math.floor(n) : 0;
+}
+
+// --- a. /api/v1/ai/gatekeep ------------------------------------------------
+
+// Deterministic licensing heuristic used when the model is unavailable or
+// returns something unusable.
+function gatekeepFallback(sig, declaredTier) {
+  if (declaredTier === 'commercial') {
+    return { likelihood: 'high', reasons: ['declared commercial tier'] };
+  }
+  const reasons = [];
+  let score = 0;
+  if (sig.regNumberHits > 0) { score += 2; reasons.push('company registration numbers present'); }
+  if (sig.vatHits > 2) { score += 2; reasons.push('multiple VAT references present'); }
+  if (sig.invoiceKeywordHits > 3) { score += 1; reasons.push('invoice terminology present'); }
+  if (sig.companySuffixHits > 2) { score += 1; reasons.push('multiple company suffixes present'); }
+  if (score >= 2) return { likelihood: 'medium', reasons: reasons.slice(0, 3) };
+  return { likelihood: 'low', reasons: reasons.length ? reasons.slice(0, 3) : ['no commercial signals detected'] };
+}
+
+async function handleAiGatekeep(request, env) {
+  const body = await readBodyText(request, MAX_AI_BODY);
+  if (body.tooBig) return err(413, 'body_too_large', 'Request body exceeds the 16 KB limit.');
+  let data;
+  try { data = JSON.parse(body.text); } catch {
+    return err(400, 'invalid_json', 'Request body is not valid JSON.');
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return err(400, 'invalid_shape', 'Body must be a JSON object with declaredTier, pageCount, byteSize, findingsSummary and entitySignals.');
+  }
+  const declaredTier = data.declaredTier;
+  if (declaredTier !== 'private' && declaredTier !== 'commercial') {
+    return err(400, 'invalid_tier', 'declaredTier must be "private" or "commercial".');
+  }
+  const es = (data.entitySignals && typeof data.entitySignals === 'object' && !Array.isArray(data.entitySignals)) ? data.entitySignals : {};
+  const entitySignals = {
+    companySuffixHits: asCount(es.companySuffixHits),
+    regNumberHits: asCount(es.regNumberHits),
+    invoiceKeywordHits: asCount(es.invoiceKeywordHits),
+    vatHits: asCount(es.vatHits)
+  };
+  const fs = (data.findingsSummary && typeof data.findingsSummary === 'object' && !Array.isArray(data.findingsSummary)) ? data.findingsSummary : {};
+  const byCategory = (fs.byCategory && typeof fs.byCategory === 'object' && !Array.isArray(fs.byCategory)) ? fs.byCategory : {};
+  const signals = {
+    declaredTier,
+    pageCount: asCount(data.pageCount),
+    byteSize: asCount(data.byteSize),
+    findingsSummary: { total: asCount(fs.total), byCategory },
+    entitySignals
+  };
+
+  try {
+    const text = await callAi(env, AI_MODEL_FAST, GATEKEEP_SYSTEM, JSON.stringify(signals),
+      { timeoutMs: AI_GATEKEEP_TIMEOUT_MS, maxTokens: 256, temperature: 0 });
+    const parsed = extractJsonObject(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('model reply is not a JSON object');
+    }
+    const likelihood = parsed.likelihood;
+    if (likelihood !== 'low' && likelihood !== 'medium' && likelihood !== 'high') {
+      throw new Error('model reply has an invalid likelihood value');
+    }
+    const reasons = Array.isArray(parsed.reasons)
+      ? parsed.reasons.map(r => asStr(r, 200).trim()).filter(Boolean).slice(0, 3)
+      : [];
+    return json({ likelihood, reasons, model: 'llama-3.1-8b' });
+  } catch (e) {
+    const fb = gatekeepFallback(entitySignals, declaredTier);
+    return json({ likelihood: fb.likelihood, reasons: fb.reasons, model: 'deterministic-fallback' });
+  }
+}
+
+// --- b. /api/v1/ai/assess --------------------------------------------------
+
+// Coerce a client finding into the strict shape sent to the model. Evidence
+// is truncated server-side to MAX_EVIDENCE_CHARS. Returns null if unusable.
+function sanitizeFinding(f) {
+  if (!f || typeof f !== 'object' || Array.isArray(f)) return null;
+  if (typeof f.id !== 'string' && typeof f.id !== 'number') return null;
+  const id = String(f.id).slice(0, 64);
+  if (!id) return null;
+  const sev = Number(f.severity);
+  return {
+    id,
+    type: asStr(f.type, 64) || 'unknown',
+    severity: (Number.isInteger(sev) && sev >= 1 && sev <= 5) ? sev : 0,
+    location: asStr(f.location, 200),
+    evidence: asStr(f.evidence, MAX_EVIDENCE_CHARS)
+  };
+}
+
+function keepAllVerdicts(findings, reason) {
+  return findings.map(f => ({ id: f.id, verdict: 'keep', reason }));
+}
+
+async function handleAiAssess(request, env) {
+  const body = await readBodyText(request, MAX_AI_BODY);
+  if (body.tooBig) return err(413, 'body_too_large', 'Request body exceeds the 16 KB limit.');
+  let data;
+  try { data = JSON.parse(body.text); } catch {
+    return err(400, 'invalid_json', 'Request body is not valid JSON.');
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return err(400, 'invalid_shape', 'Body must be a JSON object of the form {"findings": [...]}.');
+  }
+  if (!Array.isArray(data.findings) || data.findings.length < 1) {
+    return err(400, 'invalid_shape', '"findings" must be a non-empty array.');
+  }
+  if (data.findings.length > MAX_ASSESS_FINDINGS) {
+    return err(400, 'too_many_findings', 'A request may contain at most ' + MAX_ASSESS_FINDINGS + ' findings.');
+  }
+  const findings = [];
+  for (let i = 0; i < data.findings.length; i++) {
+    const s = sanitizeFinding(data.findings[i]);
+    if (!s) {
+      return err(400, 'invalid_finding', 'findings[' + i + '] must be an object with a string or numeric id.');
+    }
+    findings.push(s);
+  }
+
+  try {
+    const text = await callAi(env, AI_MODEL_STRONG, ASSESS_SYSTEM, JSON.stringify({ findings }),
+      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 1500, temperature: 0 });
+    const parsed = extractJsonObject(text);
+    if (!parsed || !Array.isArray(parsed.verdicts)) {
+      throw new Error('model reply has no verdicts array');
+    }
+    // Keep only well-formed verdicts that reference submitted ids; the first
+    // verdict per id wins; verdicts for unknown ids are ignored entirely.
+    const submitted = new Set(findings.map(f => f.id));
+    const byId = new Map();
+    for (const v of parsed.verdicts) {
+      if (!v || typeof v !== 'object') continue;
+      if (typeof v.id !== 'string' && typeof v.id !== 'number') continue;
+      const vid = String(v.id);
+      if (!submitted.has(vid) || byId.has(vid)) continue;
+      if (v.verdict !== 'keep' && v.verdict !== 'drop') continue;
+      byId.set(vid, { id: vid, verdict: v.verdict, reason: asStr(v.reason, 160) || 'no reason given' });
+    }
+    // Findings the model never judged default to KEEP (conservative).
+    const verdicts = findings.map(f => byId.get(f.id) || { id: f.id, verdict: 'keep', reason: 'no verdict returned — kept by default' });
+    return json({ ok: true, reviewed: true, model: 'llama-3.3-70b', verdicts });
+  } catch (e) {
+    return json({ ok: true, reviewed: false, model: 'fallback-keep-all', verdicts: keepAllVerdicts(findings, 'ai unavailable — kept by default') });
+  }
+}
+
+// --- c. /api/v1/ai/narrate -------------------------------------------------
+
+// Deterministic narrative built purely from the structured input. Used when
+// the model fails or its output cannot be trusted (e.g. no valid citation).
+function narrateTemplate(input, kept) {
+  const top = kept.slice(0, 3);
+  let executiveSummary =
+    'The document "' + input.documentName + '" (' + input.pageCount + ' page(s)) was analysed by the ' +
+    'Verum Omnis contradiction engine on ' + input.generatedUtc + '. The automated analysis produced an ' +
+    'integrity score of ' + input.score + ' with a confidence rating of ' + input.confidence + '. Following ' +
+    'antithesis review, ' + kept.length + ' finding(s) were retained and ' + input.findingsPruned +
+    ' candidate(s) were pruned as benign. ';
+  if (top.length) {
+    executiveSummary += 'The most significant retained findings are identified as ' +
+      top.map(f => '[' + f.id + ']').join(', ') + ' and are set out in the critical-evidence narrative. ';
+  } else {
+    executiveSummary += 'No findings were retained for narrative reporting. ';
+  }
+  executiveSummary += 'This summary states only facts present in the supplied findings and quantifies ' +
+    'nothing beyond them. ' + CLOSING_SENTENCE;
+
+  let criticalEvidence;
+  if (top.length) {
+    criticalEvidence = top.map(f =>
+      'Finding ' + f.id + ' (' + f.type + ', severity ' + f.severity + '), recorded at ' +
+      (f.location || 'an unspecified location') + ', states: "' + f.evidence + '" [' + f.id + '].'
+    ).join(' ') +
+      ' The findings quoted above are the highest-severity indicators present in the supplied record. ' +
+      'No facts beyond the supplied findings are asserted. ' + CLOSING_SENTENCE;
+  } else {
+    criticalEvidence = 'No findings were supplied for narrative reporting and no factual claims can ' +
+      'therefore be made. ' + CLOSING_SENTENCE;
+  }
+  return { executiveSummary, criticalEvidence };
+}
+
+// True when the text contains at least one [id] citation matching a supplied id.
+function hasCitation(text, idSet) {
+  const re = /\[([^\[\]]+)\]/g;
+  let m;
+  while ((m = re.exec(text)) !== null) {
+    if (idSet.has(m[1].trim())) return true;
+  }
+  return false;
+}
+
+async function handleAiNarrate(request, env) {
+  const body = await readBodyText(request, MAX_AI_BODY);
+  if (body.tooBig) return err(413, 'body_too_large', 'Request body exceeds the 16 KB limit.');
+  let data;
+  try { data = JSON.parse(body.text); } catch {
+    return err(400, 'invalid_json', 'Request body is not valid JSON.');
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return err(400, 'invalid_shape', 'Body must be a JSON object with documentName, pageCount, score, confidence, findingsKept, findingsPruned and generatedUtc.');
+  }
+  if (!Array.isArray(data.findingsKept)) {
+    return err(400, 'invalid_shape', '"findingsKept" must be an array (it may be empty).');
+  }
+  // Server-side caps: at most MAX_NARRATE_FINDINGS findings, evidence truncated.
+  const kept = [];
+  for (let i = 0; i < data.findingsKept.length && kept.length < MAX_NARRATE_FINDINGS; i++) {
+    const s = sanitizeFinding(data.findingsKept[i]);
+    if (s) kept.push(s);
+  }
+  const input = {
+    documentName: asStr(data.documentName, 200) || 'unnamed document',
+    pageCount: asCount(data.pageCount),
+    score: (typeof data.score === 'number' && Number.isFinite(data.score)) ? data.score : (asStr(data.score, 32) || 'not supplied'),
+    confidence: (typeof data.confidence === 'number' && Number.isFinite(data.confidence)) ? data.confidence : (asStr(data.confidence, 32) || 'not supplied'),
+    findingsPruned: asCount(data.findingsPruned),
+    generatedUtc: asStr(data.generatedUtc, 64) || new Date().toISOString()
+  };
+
+  // With no findings there is nothing the model may cite; go straight to the
+  // deterministic template instead of burning a model call.
+  if (kept.length === 0) {
+    return json({ ok: true, ...narrateTemplate(input, kept), model: 'template-fallback' });
+  }
+
+  const idSet = new Set(kept.map(f => f.id));
+  try {
+    const text = await callAi(env, AI_MODEL_STRONG, NARRATE_SYSTEM,
+      JSON.stringify({ ...input, findingsKept: kept }),
+      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 2048, temperature: 0.2 });
+    const parsed = extractJsonObject(text);
+    if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+      throw new Error('model reply is not a JSON object');
+    }
+    let executiveSummary = asStr(parsed.executiveSummary, 4000).trim();
+    let criticalEvidence = asStr(parsed.criticalEvidence, 6000).trim();
+    if (!executiveSummary || !criticalEvidence) {
+      throw new Error('model reply is missing narrative sections');
+    }
+    if (!hasCitation(executiveSummary + '\n' + criticalEvidence, idSet)) {
+      throw new Error('model reply contains no citation of a supplied finding id');
+    }
+    // Guarantee the mandated closing sentence is present somewhere.
+    if (executiveSummary.indexOf('investigative indicators') < 0 && criticalEvidence.indexOf('investigative indicators') < 0) {
+      criticalEvidence += (criticalEvidence.endsWith(' ') ? '' : ' ') + CLOSING_SENTENCE;
+    }
+    return json({ ok: true, executiveSummary, criticalEvidence, model: 'llama-3.3-70b' });
+  } catch (e) {
+    return json({ ok: true, ...narrateTemplate(input, kept), model: 'template-fallback' });
+  }
+}
+
+// --- d. /api/v1/ai/curate (admin only) -------------------------------------
+
+// The same deterministic constitution discipline as /admin/publish, applied
+// to AI-drafted candidates: non-empty, sane size, no banned content fields.
+function curateConstitutionCheck(candidates) {
+  const problems = [];
+  if (!Array.isArray(candidates) || candidates.length === 0) {
+    problems.push('no candidates produced');
+    return { ok: false, problems };
+  }
+  if (candidates.length > MAX_CURATE_CANDIDATES) {
+    problems.push('candidate count ' + candidates.length + ' exceeds the ' + MAX_CURATE_CANDIDATES + ' candidate bound');
+  }
+  const banned = [];
+  findBannedFields(candidates, '', banned);
+  if (banned.length) {
+    problems.push('banned content fields present: ' + banned.slice(0, 10).join(', '));
+  }
+  return { ok: problems.length === 0, problems };
+}
+
+async function handleAiCurate(request, env) {
+  if (!env.ADMIN_TOKEN) {
+    return err(500, 'not_configured', 'Admin token is not configured on this service.');
+  }
+  const token = request.headers.get('x-admin-token');
+  if (!token) return err(401, 'missing_admin_token', 'Provide the x-admin-token header.');
+  if (token !== env.ADMIN_TOKEN) return err(403, 'invalid_admin_token', 'The admin token is incorrect.');
+
+  // Aggregate feedback buckets from the last CURATE_WINDOW_DAYS days.
+  const cutoff = new Date(Date.now() - CURATE_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+  let names;
+  try {
+    const listed = await env.RULES_KV.list({ prefix: 'feedback:' });
+    names = (listed.keys || []).map(k => k.name)
+      .filter(n => n.slice('feedback:'.length) >= cutoff)
+      .sort();
+  } catch (e) {
+    return err(500, 'kv_error', 'Could not list feedback buckets.');
+  }
+
+  const byDetectorId = {};
+  const byType = {};
+  const pairs = {};
+  let totalPatterns = 0;
+  const daysUsed = [];
+  for (const name of names) {
+    let bucket;
+    try {
+      const raw = await env.RULES_KV.get(name);
+      if (!raw) continue;
+      bucket = JSON.parse(raw);
+    } catch { continue; }
+    if (!Array.isArray(bucket)) continue;
+    daysUsed.push(name.slice('feedback:'.length));
+    for (const rec of bucket) {
+      const pats = (rec && Array.isArray(rec.patterns)) ? rec.patterns : [];
+      for (const p of pats) {
+        if (!p || typeof p !== 'object') continue;
+        const d = asStr(p.detectorId, 64);
+        const t = asStr(p.type, 64);
+        if (!d && !t) continue;
+        totalPatterns++;
+        if (d) byDetectorId[d] = (byDetectorId[d] || 0) + 1;
+        if (t) byType[t] = (byType[t] || 0) + 1;
+        const pk = d + '|' + t;
+        if (!pairs[pk]) pairs[pk] = { detectorId: d, type: t, count: 0, severitySum: 0 };
+        pairs[pk].count++;
+        pairs[pk].severitySum += asCount(p.severity);
+      }
+    }
+  }
+  const topPatterns = Object.values(pairs)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20)
+    .map(p => ({ detectorId: p.detectorId, type: p.type, count: p.count, avgSeverity: Math.round((p.severitySum / p.count) * 100) / 100 }));
+  const aggregation = {
+    window_days: daysUsed,
+    buckets: daysUsed.length,
+    totalPatterns,
+    byDetectorId,
+    byType,
+    topPatterns
+  };
+
+  if (totalPatterns === 0) {
+    return json({
+      ok: true,
+      candidates: [],
+      aggregation,
+      constitution_check: curateConstitutionCheck([]),
+      model: 'none',
+      note: 'No feedback patterns in the window; nothing to curate. Draft only — nothing published.'
+    });
+  }
+
+  let candidates = [];
+  let model = 'llama-3.3-70b';
+  let aiError = null;
+  try {
+    const text = await callAi(env, AI_MODEL_STRONG, CURATE_SYSTEM,
+      JSON.stringify({ window_days: daysUsed, totalPatterns, topPatterns }),
+      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 2000, temperature: 0.2 });
+    const parsed = extractJsonObject(text);
+    if (!parsed || !Array.isArray(parsed.candidates)) {
+      throw new Error('model reply has no candidates array');
+    }
+    const seen = new Set();
+    for (const c of parsed.candidates) {
+      if (!c || typeof c !== 'object') continue;
+      const group = (c.group === 'fraud_keywords' || c.group === 'behavioral_markers') ? c.group : null;
+      const term = asStr(c.term, 160).trim();
+      const rationale = asStr(c.rationale, 300).trim();
+      if (!group || term.length < 2 || !rationale) continue;
+      const dedupe = group + ':' + term.toLowerCase();
+      if (seen.has(dedupe)) continue;
+      seen.add(dedupe);
+      candidates.push({ group, term, rationale });
+      if (candidates.length >= MAX_CURATE_CANDIDATES) break;
+    }
+  } catch (e) {
+    model = 'ai-unavailable';
+    candidates = [];
+    aiError = 'AI drafting unavailable; aggregation is returned for manual review.';
+  }
+
+  const check = curateConstitutionCheck(candidates);
+  if (aiError) check.problems.push(aiError);
+  return json({
+    ok: true,
+    candidates,
+    aggregation,
+    constitution_check: check,
+    model,
+    note: 'Draft only — nothing published. Review and publish via /api/v1/admin/publish.'
+  });
+}
+
 // -------------------------------- router ----------------------------------
 
 async function route(request, env) {
@@ -386,9 +889,14 @@ async function route(request, env) {
   if (path === '/api/v1/rules/manifest' && request.method === 'GET') return handleManifest(env);
   if (path === '/api/v1/feedback/patterns' && request.method === 'POST') return handleFeedback(request, env);
   if (path === '/api/v1/admin/publish' && request.method === 'POST') return handleAdminPublish(request, env);
+  if (path === '/api/v1/ai/gatekeep' && request.method === 'POST') return handleAiGatekeep(request, env);
+  if (path === '/api/v1/ai/assess' && request.method === 'POST') return handleAiAssess(request, env);
+  if (path === '/api/v1/ai/narrate' && request.method === 'POST') return handleAiNarrate(request, env);
+  if (path === '/api/v1/ai/curate' && request.method === 'POST') return handleAiCurate(request, env);
   if ((path === '/constitution.pdf' || path === '/docs/constitution.pdf') && request.method === 'GET') return handleConstitutionPdf(env);
 
-  const known = ['/api/v1/status', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish', '/constitution.pdf', '/docs/constitution.pdf'];
+  const known = ['/api/v1/status', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish',
+    '/api/v1/ai/gatekeep', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf'];
   if (known.includes(path)) {
     return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' || path.endsWith('/constitution.pdf') ? 'GET' : 'POST' });
   }
