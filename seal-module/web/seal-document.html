@@ -195,6 +195,18 @@
   #qrPreview { max-width: 200px; border-radius: 12px; background: white; padding: 16px; }
   .qr-section p { font-size: 12px; color: #4A7EC7; margin-top: 10px; }
 
+  .mode-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+  @media (max-width: 640px) { .mode-grid { grid-template-columns: 1fr; } }
+  .mode-card {
+    text-align: left; cursor: pointer; font-family: inherit;
+    background: rgba(15, 52, 96, 0.08); border: 1px solid rgba(26, 46, 82, 0.5);
+    border-radius: 12px; padding: 16px; transition: all 0.25s;
+  }
+  .mode-card strong { display: block; font-size: 14px; color: #F8F9FA; margin-bottom: 6px; }
+  .mode-card span { font-size: 12px; color: #94a3b8; line-height: 1.6; }
+  .mode-card.active { border-color: #D4A843; background: rgba(212,168,67,0.08); box-shadow: 0 0 0 1px #D4A843 inset; }
+  .mode-card.active strong { color: #D4A843; }
+
   .ots-status {
     display: flex; align-items: center; gap: 8px; padding: 14px;
     border-radius: 10px; margin-bottom: 20px; font-size: 13px;
@@ -322,6 +334,21 @@
     <button data-type="commercial" onclick="setSealType('commercial')">&#127970; Commercial</button>
   </div>
 
+  <!-- Sealing Mode: tamper protection only (default) vs tamper protection + forensic analysis -->
+  <div style="margin-bottom:24px;">
+    <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Sealing Mode</label>
+    <div class="mode-grid">
+      <button type="button" class="mode-card active" id="modeSealOnly" onclick="setSealMode('seal-only')">
+        <strong>&#128737; Seal Only -- Tamper Protection <span style="font-size:10px;color:#4A7EC7;font-weight:400;">(default)</span></strong>
+        <span>Cryptographic seal + blockchain timestamp only. No content is analysed and nothing leaves this device. You receive the sealed PDF and a one-page Seal Certificate.</span>
+      </button>
+      <button type="button" class="mode-card" id="modeForensic" onclick="setSealMode('forensic')">
+        <strong>&#128270; Seal + Forensic Analysis</strong>
+        <span>Everything in Seal Only, plus an on-device forensic scan (indicator score + findings for human review), optional AI review, and a sealed forensic report.</span>
+      </button>
+    </div>
+  </div>
+
   <!-- Sender Identity (optional, for affidavit pre-fill) -->
   <div style="margin-bottom:24px;">
     <button type="button" onclick="toggleSection('identitySection')" style="background:none;border:none;color:#4A7EC7;font-family:'Courier New',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;padding:0;">&#128100; + Add Sender Identity (optional -- for affidavit pre-fill, chain of custody)</button>
@@ -352,20 +379,20 @@
     </div>
   </div>
 
-  <!-- Anonymous Pattern Sharing (opt-in) -->
-  <div style="margin-bottom:24px;">
+  <!-- Anonymous Pattern Sharing (opt-in) — forensic analysis mode only -->
+  <div id="patternShareSection" style="margin-bottom:24px;display:none;">
     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;">
       <input type="checkbox" id="sharePatterns" style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
       <span>&#128202; Help improve the forensic engine — share anonymous pattern data only (no document content, names, or quotes ever leave this device).</span>
     </label>
   </div>
 
-  <!-- AI Review Disclosure & Consent -->
-  <div style="margin-bottom:24px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;">
-    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">On-device analysis, optional AI review.</strong> Your document is analysed entirely on this device, in your browser. An optional AI review (Cloudflare Workers AI) can assess the forensic findings and draft the report narrative. When enabled, only finding metadata — the type, severity and a short quote for each finding — leaves this device for that review. The document itself is never uploaded.</p>
+  <!-- AI Review Disclosure & Consent — forensic analysis mode only -->
+  <div id="aiReviewSection" style="margin-bottom:24px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;display:none;">
+    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">On-device analysis, optional AI review.</strong> Your document is analysed entirely on this device, in your browser. An optional AI review (Cloudflare Workers AI) can classify the document, assess the forensic findings and draft the report narrative. When enabled, only finding metadata — the type, severity and a short quote for each finding — plus a short text excerpt (maximum 4,000 characters from the document's first pages, sent for classification) leave this device for that review. The document itself is never uploaded.</p>
     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;margin-bottom:14px;">
       <input type="checkbox" id="aiReviewEnabled" checked style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
-      <span>Enable AI review (recommended) — findings are assessed by AI before the report is built, and an AI narrative summary is added to the report. Advisory only: findings are forensic indicators, not determinations of fraud.</span>
+      <span>Enable AI review (recommended) — a short excerpt is classified for context, findings are assessed by AI before the report is built, and an AI narrative summary is added to the report. Advisory only: findings are forensic indicators, not determinations of fraud.</span>
     </label>
     <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">I am sealing as (optional)</label>
     <select id="tierSelector" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
@@ -392,9 +419,8 @@
   <div class="pipeline" id="pipeline">
     <h3>Sealing Pipeline</h3>
     <div class="step" id="step1"><div class="status pending">&#9675;</div><div class="label"><strong>GPS + Device</strong> -- Capturing location &amp; device fingerprint</div><div class="detail" id="detail1"></div></div>
-    <div class="step" id="step1b"><div class="status pending">&#9675;</div><div class="label"><strong>Fraud Scan</strong> -- Detecting fraudulent content</div><div class="detail" id="detail1b"></div></div>
     <div class="step" id="step2"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-256</strong> -- Computing hash for OpenTimestamps</div><div class="detail" id="detail2"></div></div>
-    <div class="step" id="stepFraud"><div class="status pending">&#9675;</div><div class="label"><strong>Fraud Scan</strong> -- Detecting forgery indicators &amp; manipulation</div><div class="detail" id="detailFraud"></div></div>
+    <div class="step" id="stepFraud"><div class="status pending">&#9675;</div><div class="label"><strong>Forensic Scan</strong> -- Flagging contradiction indicators for review</div><div class="detail" id="detailFraud"></div></div>
     <div class="step" id="step3"><div class="status pending">&#9675;</div><div class="label"><strong>OpenTimestamps</strong> -- Submitting to calendar servers</div><div class="detail" id="detail3"></div></div>
     <div class="step" id="step4"><div class="status pending">&#9675;</div><div class="label"><strong>A4 Watermark</strong> -- Full-page background at 20% opacity</div><div class="detail" id="detail4"></div></div>
     <div class="step" id="step5"><div class="status pending">&#9675;</div><div class="label"><strong>Clean QR Code</strong> -- Encoding hash + identity + GPS + device</div><div class="detail" id="detail5"></div></div>
@@ -546,6 +572,30 @@ function setSealType(type) {
   document.getElementById('clientField').classList.toggle('visible', type === 'commercial');
 }
 
+// ==================== SEALING MODE ====================
+// 'seal-only' (DEFAULT): tamper protection only -- no forensic scan, no score,
+// no findings; outputs are the pristine sealed PDF + a one-page Seal Certificate.
+// 'forensic': full pipeline -- on-device forensic scan, indicator score, optional
+// AI review, sealed original + sealed forensic report.
+let sealMode = 'seal-only';
+function setSealMode(mode) {
+  sealMode = (mode === 'forensic') ? 'forensic' : 'seal-only';
+  var onlyBtn = document.getElementById('modeSealOnly');
+  var fxBtn = document.getElementById('modeForensic');
+  if (onlyBtn) onlyBtn.classList.toggle('active', sealMode === 'seal-only');
+  if (fxBtn) fxBtn.classList.toggle('active', sealMode === 'forensic');
+  applyModeVisibility();
+}
+function applyModeVisibility() {
+  var forensic = (sealMode === 'forensic');
+  var els = ['patternShareSection', 'aiReviewSection', 'stepFraud'];
+  for (var i = 0; i < els.length; i++) {
+    var el = document.getElementById(els[i]);
+    if (el) el.style.display = forensic ? '' : 'none';
+  }
+}
+applyModeVisibility(); // default seal-only: hide all analysis-only UI on load
+
 async function computeSHA256(bytes) {
   const h = await crypto.subtle.digest('SHA-256', bytes);
   return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join('');
@@ -561,6 +611,11 @@ function utf8ToBase64(str) {
   let binary = '';
   bytes.forEach(b => binary += String.fromCharCode(b));
   return btoa(binary);
+}
+function escapeHtml(s) {
+  return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function(c) {
+    return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
+  });
 }
 
 async function deriveKey(password, salt) {
@@ -891,6 +946,7 @@ let _pipelineDetection = null;
 let _pipelineFraudResult = null;
 let _pipelinePageCount = 0;
 let _pipelineAiAddedFindings = [];
+let _pipelineClassification = null;
 
 // ==================== BUILD SEALED PDF ====================
 
@@ -1082,6 +1138,124 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
   return await pdf.save();
 }
 
+// ==================== SEAL CERTIFICATE (Seal Only mode) ====================
+// One-page certificate PDF, generated with the same pdf-lib tooling as the seal.
+// House style matches the forensic report cover: navy full bleed, gold rules,
+// serif wordmark. It states exactly what the seal proves -- integrity and time.
+async function buildSealCertificate(opts) {
+  opts = opts || {};
+  const certDoc = await PDFDocument.create();
+  const helv = await certDoc.embedFont(StandardFonts.Helvetica);
+  const helvBold = await certDoc.embedFont(StandardFonts.HelveticaBold);
+  const times = await certDoc.embedFont(StandardFonts.TimesRoman);
+  const timesBold = await certDoc.embedFont(StandardFonts.TimesRomanBold);
+  const timesItalic = await certDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const courier = await certDoc.embedFont(StandardFonts.Courier);
+  const NAVY = rgb(0x0e/255, 0x1a/255, 0x2b/255);
+  const GOLD = rgb(0xc9/255, 0xa2/255, 0x27/255);
+  const LIGHT = rgb(0.85, 0.88, 0.92);
+  const MUTE = rgb(0.55, 0.63, 0.72);
+  const WHITE = rgb(1, 1, 1);
+  const PW = 595.28, PH = 841.89;
+  const page = certDoc.addPage([PW, PH]);
+  page.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: NAVY });
+  page.drawRectangle({ x: 0, y: PH - 6, width: PW, height: 6, color: GOLD });
+  page.drawRectangle({ x: 0, y: 0, width: PW, height: 6, color: GOLD });
+
+  // WinAnsi-safe text: fold anything the standard fonts cannot encode.
+  function safe(t) {
+    return String(t === undefined || t === null ? '' : t).replace(/[^\x20-\x7E\xA0-\xFF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026]/g, '?');
+  }
+  function cx(t, font, size) { return (PW - font.widthOfTextAtSize(safe(t), size)) / 2; }
+  function wrap(t, font, size, maxW) {
+    var words = safe(t).split(/\s+/), lines = [], cur = '';
+    for (var i = 0; i < words.length; i++) {
+      var trial = cur ? cur + ' ' + words[i] : words[i];
+      if (font.widthOfTextAtSize(trial, size) > maxW && cur) { lines.push(cur); cur = words[i]; }
+      else cur = trial;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  // Wordmark + title
+  var y = PH - 78;
+  page.drawText('VERUM OMNIS', { x: cx('VERUM OMNIS', timesBold, 28), y: y, size: 28, font: timesBold, color: WHITE });
+  y -= 18;
+  var tag = 'A I   F O R E N S I C S   F O R   T R U T H';
+  page.drawText(tag, { x: cx(tag, times, 8.5), y: y, size: 8.5, font: times, color: GOLD });
+  y -= 16;
+  page.drawLine({ start: { x: PW / 2 - 130, y: y }, end: { x: PW / 2 + 130, y: y }, thickness: 0.8, color: GOLD });
+  y -= 40;
+  page.drawText('SEAL CERTIFICATE', { x: cx('SEAL CERTIFICATE', timesBold, 23), y: y, size: 23, font: timesBold, color: GOLD });
+  y -= 20;
+  var sub = 'Cryptographic tamper-evidence certificate';
+  page.drawText(sub, { x: cx(sub, timesItalic, 11), y: y, size: 11, font: timesItalic, color: LIGHT });
+  y -= 42;
+
+  // QR panel (right column) -- links to verify.html with hash + seal metadata
+  var qrSize = 118;
+  var qrX = PW - 70 - qrSize, qrY = y - qrSize + 16;
+  page.drawRectangle({ x: qrX - 8, y: qrY - 8, width: qrSize + 16, height: qrSize + 16, color: WHITE, borderColor: GOLD, borderWidth: 1 });
+  var qrImg = null;
+  if (opts.qrDataURL) {
+    try {
+      const b64 = String(opts.qrDataURL).split(',')[1];
+      const bin = atob(b64);
+      const qb = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) qb[i] = bin.charCodeAt(i);
+      qrImg = await certDoc.embedPng(qb);
+    } catch (e) { qrImg = null; }
+  }
+  if (qrImg) page.drawImage(qrImg, { x: qrX, y: qrY, width: qrSize, height: qrSize });
+  else page.drawText(safe(opts.sealId || ''), { x: qrX, y: qrY + qrSize / 2, size: 8, font: courier, color: rgb(0.3, 0.3, 0.3) });
+  var scan = 'SCAN TO VERIFY';
+  page.drawText(scan, { x: qrX - 8 + (qrSize + 16 - helvBold.widthOfTextAtSize(scan, 7)) / 2, y: qrY - 22, size: 7, font: helvBold, color: GOLD });
+  var vurl = 'verumglobal.foundation/verify.html';
+  page.drawText(vurl, { x: qrX - 8 + (qrSize + 16 - helv.widthOfTextAtSize(vurl, 6.5)) / 2, y: qrY - 33, size: 6.5, font: helv, color: MUTE });
+
+  // Detail rows (left column)
+  var lx = 70, rowMaxW = qrX - 40 - lx;
+  function row(label, valueLines, valueFont, valueSize, gap) {
+    page.drawText(safe(label), { x: lx, y: y, size: 8, font: helvBold, color: GOLD });
+    y -= 14;
+    for (var i = 0; i < valueLines.length; i++) {
+      page.drawText(safe(valueLines[i]), { x: lx, y: y, size: valueSize, font: valueFont, color: LIGHT });
+      y -= (valueSize + 4.5);
+    }
+    y -= (gap === undefined ? 10 : gap);
+  }
+  row('DOCUMENT', wrap(opts.fileName || 'document.pdf', helv, 10, rowMaxW), helv, 10);
+  var h = String(opts.sha512 || '');
+  row('DOCUMENT SHA-512', h ? [h.substring(0, 64), h.substring(64)] : ['n/a'], courier, 7.5);
+  row('SEAL ID', [opts.sealId || 'n/a'], courier, 11);
+  row('SEALED (ISO-8601)', [opts.timestampISO || 'n/a'], courier, 10);
+  row('PAGES', [String(opts.pageCount || 'n/a')], helv, 10);
+  var otsLines = opts.otsSubmitted
+    ? wrap('SUBMITTED -- digest accepted by OpenTimestamps calendar' + (opts.otsCalendar ? ' (' + opts.otsCalendar.replace(/^https?:\/\//, '').replace(/\/.*$/, '') + ')' : '') + '. Bitcoin blockchain confirmation pending (typically 1-2 hours).', helv, 8.5, rowMaxW)
+    : wrap('PENDING -- calendar servers were unreachable at sealing time. The SHA-256 digest is recorded in the seal and can be submitted later; the seal itself is complete and valid without the blockchain anchor.', helv, 8.5, rowMaxW);
+  row('OPENTIMESTAMPS STATUS', otsLines, helv, 8.5);
+
+  // Canonical statement box
+  var boxTop = 240, boxH = 74;
+  page.drawRectangle({ x: 70, y: boxTop - boxH, width: PW - 140, height: boxH, borderColor: GOLD, borderWidth: 1, color: rgb(1, 1, 1), opacity: 0.04 });
+  var c1 = 'This seal proves two things only \u2014 integrity and time.';
+  var c2 = 'It is not a verification of the document\u2019s contents.';
+  page.drawText(c1, { x: cx(c1, timesItalic, 12), y: boxTop - 30, size: 12, font: timesItalic, color: WHITE });
+  page.drawText(c2, { x: cx(c2, timesItalic, 12), y: boxTop - 48, size: 12, font: timesItalic, color: WHITE });
+
+  // Footer
+  page.drawText('VERUM OMNIS FOUNDATION  |  PATENT PENDING', { x: cx('VERUM OMNIS FOUNDATION  |  PATENT PENDING', helvBold, 7.5), y: 52, size: 7.5, font: helvBold, color: MUTE });
+  page.drawText('Verify this seal at verumglobal.foundation/verify.html', { x: cx('Verify this seal at verumglobal.foundation/verify.html', helv, 8), y: 38, size: 8, font: helv, color: GOLD });
+
+  try { certDoc.setTitle('Verum Omnis Seal Certificate -- ' + (opts.sealId || '')); } catch (e) {}
+  try { certDoc.setAuthor('Verum Omnis'); } catch (e) {}
+  try { certDoc.setSubject('SEAL-CERT|' + (opts.sha512 || '') + '|' + (opts.sealId || '')); } catch (e) {}
+  try { certDoc.setProducer('Verum Omnis Document Sealing Service v1.2.9'); } catch (e) {}
+  try { certDoc.setCreationDate(new Date()); } catch (e) {}
+  return await certDoc.save();
+}
+
 // ==================== SEALING FLOW v1.2.6 ====================
 
 async function startSealing() {
@@ -1109,21 +1283,46 @@ async function startSealing() {
     gpsCoords = await gpsPromise;
     updateStep(1, 'complete', gpsCoords ? gpsCoords.lat + ',' + gpsCoords.lng : 'GPS declined');
 
-    // Step 1.5: Forensic Contradiction Engine
-    updateStep('Fraud', 'processing', 'Running forensic contradiction engine (43 types, 37 detectors, 17 serial patterns)...');
+    // Step 1.5: Forensic Contradiction Engine -- FORENSIC ANALYSIS MODE ONLY.
+    // Seal Only mode performs no content analysis of any kind: the seal proves
+    // integrity and time only, and nothing about the document's contents is
+    // scanned, scored, or sent anywhere.
     var forensicResult = null;
-    try {
-      var pdfDocForForensics = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
-      _pipelinePageCount = pdfDocForForensics.getPageCount();
-      forensicResult = await runForensicEngine(fileBytes, pdfDocForForensics);
-    } catch(e) {
-      console.warn('Forensic engine error:', e);
-      forensicResult = { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], scanFailed: true, extractionNotes: 'Forensic engine error: ' + (e && e.message ? e.message : 'unknown') + '. The scan could not complete; absence of findings here is NOT a clean result.', summary: 'Forensic scan could not complete' };
+    _pipelineClassification = null;
+    if (sealMode === 'forensic') {
+      // AI triage (optional; only when AI review is enabled): classify the document
+      // FIRST, concurrently with the deterministic engine run. Defensive: ANY
+      // failure -- including the classify endpoint not being deployed yet (404/500)
+      // -- is silent; the full engine run proceeds with no classification label.
+      var classifyPromise = null;
+      if (isAiReviewEnabled()) {
+        classifyPromise = (async function() {
+          try {
+            var tokens = await extractPdfText(fileBytes);
+            var sample = (Array.isArray(tokens) ? tokens.join(' ') : String(tokens || '')).replace(/\s+/g, ' ').trim().slice(0, 4000);
+            if (!sample) return null;
+            return await aiClassifyDocument(sample, _pipelinePageCount || 0);
+          } catch (e) { return null; }
+        })();
+      }
+      updateStep('Fraud', 'processing', 'Running forensic contradiction engine (43 types, 37 detectors, 17 serial patterns)...');
+      try {
+        var pdfDocForForensics = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
+        _pipelinePageCount = pdfDocForForensics.getPageCount();
+        forensicResult = await runForensicEngine(fileBytes, pdfDocForForensics);
+      } catch(e) {
+        console.warn('Forensic engine error:', e);
+        forensicResult = { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], scanFailed: true, extractionNotes: 'Forensic engine error: ' + (e && e.message ? e.message : 'unknown') + '. The scan could not complete; absence of findings here is NOT a clean result.', summary: 'Forensic scan could not complete' };
+      }
+      if (classifyPromise) { try { _pipelineClassification = await classifyPromise; } catch (e) { _pipelineClassification = null; } }
+      updateStep('Fraud', 'complete',
+        forensicResult.clean
+          ? 'No indicators - ' + (forensicResult.contradictionTypesUsed || 0) + ' contradiction types checked'
+          : forensicResult.totalFindings + ' indicators flagged for human review (indicator score ' + forensicResult.overallScore + '/100)');
+    } else {
+      // Seal Only: grab the page count for the Seal Certificate -- nothing else.
+      try { _pipelinePageCount = (await PDFDocument.load(fileBytes, { ignoreEncryption: true })).getPageCount(); } catch(e) { _pipelinePageCount = 0; }
     }
-    updateStep('Fraud', forensicResult.clean ? 'complete' : 'error',
-      forensicResult.clean
-        ? 'Clean - ' + forensicResult.contradictionTypesUsed + ' contradiction types checked'
-        : 'FRAUD: ' + forensicResult.overallScore + '/100 (' + forensicResult.totalFindings + ' findings)');
 
     // Step 2: Hashes
     updateStep(2, 'processing');
@@ -1301,6 +1500,51 @@ async function aiNarrateReport(findings, score, verdict) {
   return null;
 }
 
+// Classify: triage call made BEFORE/WHILE the engine runs. Returns a normalised
+// { documentClass, confidence, aboutFraud, recommendedScope, model } or null on
+// ANY failure (endpoint not deployed yet, timeout, malformed body). textSample is
+// hard-capped at 4000 chars client-side and is only ever sent when AI review is on.
+async function aiClassifyDocument(textSample, pageCount) {
+  var pc = parseInt(pageCount, 10);
+  if (!isFinite(pc) || pc < 0) pc = 0;
+  var res = await aiApiPost('/api/v1/ai/classify', { textSample: String(textSample || '').slice(0, 4000), pageCount: pc }, 10000);
+  if (!res || typeof res !== 'object') return null;
+  var dc = (typeof res.documentClass === 'string' && res.documentClass.trim()) ? res.documentClass.trim().slice(0, 120) : null;
+  if (dc) dc = dc.replace(/_/g, ' ').replace(/\b\w/g, function(ch) { return ch.toUpperCase(); }); // 'court_filing' -> 'Court Filing'
+  var out = {
+    documentClass: dc,
+    confidence: (typeof res.confidence === 'string' && res.confidence.trim()) ? res.confidence.trim().slice(0, 40) : (isFinite(res.confidence) ? res.confidence : null),
+    aboutFraud: res.aboutFraud === true,
+    recommendedScope: (typeof res.recommendedScope === 'string') ? res.recommendedScope.slice(0, 60) : null,
+    model: (typeof res.model === 'string') ? res.model.slice(0, 80) : null
+  };
+  if (!out.documentClass && !out.aboutFraud) return null; // nothing usable returned
+  return out;
+}
+
+// Serial-pattern label corroboration. A serial-pattern LABEL (e.g. "Advance Fee
+// Fraud (419)") is displayed only when corroborated by >= 2 independent engine
+// findings of severity >= 3 (the engine's upper severity tiers); otherwise the
+// pattern is demoted to a muted "weak signals" note. When the AI classifier says
+// the document is ABOUT fraud (court filing, complaint, etc.), labels are
+// suppressed entirely. Findings themselves are always kept -- only the labels move.
+function getSerialLabelInfo(findings, suppressAll) {
+  var serial = [], support = 0;
+  var list = Array.isArray(findings) ? findings : [];
+  for (var i = 0; i < list.length; i++) {
+    var f = list[i] || {};
+    if (f.type === 'SERIAL') { serial.push(f); continue; }
+    var sev = parseInt(f.severity, 10);
+    if (isFinite(sev) && sev >= 3) support++;
+  }
+  var info = { serial: serial, corroborated: [], weak: [], suppressed: suppressAll === true, supportCount: support };
+  if (serial.length === 0) return info;
+  if (!info.suppressed && support >= 2) info.corroborated = serial;
+  else info.weak = serial;
+  return info;
+}
+function serialNameOf(f) { return (f && (f.serialName || f.serialPattern)) || 'Serial pattern'; }
+
 // ==================== ANONYMOUS PATTERN SHARING (OPT-IN) ====================
 // Feeds the verum-rules feedback loop. PRIVACY HARD LIMIT: only detector IDs,
 // finding types, integer severities (1-5), and page counts are ever sent.
@@ -1339,7 +1583,11 @@ function shareAnonymousPatterns(fraudResult) {
     // curated into the deterministic engine. rationale/text is NEVER sent -- only
     // the four contract fields, per the verum-rules worker contract.
     var aiAdded = Array.isArray(_pipelineAiAddedFindings) ? _pipelineAiAddedFindings : [];
-    for (var a = 0; a < aiAdded.length; a++) {
+    // Worker contract: <=200 patterns total per submission -- engine findings keep
+    // priority; AI-identified patterns fill the remaining budget only. pageCount is
+    // REQUIRED on every pattern (non-negative int; 0 = unknown) or the worker 400s.
+    var aiBudget = 200 - patterns.length;
+    for (var a = 0; a < aiAdded.length && a < aiBudget; a++) {
       var af = aiAdded[a] || {};
       var aType = (typeof af.type === 'string' ? af.type.trim() : '').slice(0, 64);
       if (!aType || aType === 'SERIAL' || /^CT(0[1-9]|[1-3][0-9]|4[0-3])$/.test(aType)) continue;
@@ -1459,7 +1707,20 @@ async function runSealingPipeline() {
         reportFraudResult = Object.assign({}, fraudResult, { findings: mergedFindings, totalFindings: mergedFindings.length });
         aiReviewInfo = { applied: true, retained: assessRes.findings.length, original: originalCount, added: assessRes.added.length };
         _pipelineAiAddedFindings = assessRes.added;
-        aiNarrativeText = await aiNarrateReport(mergedFindings, reportFraudResult.overallScore, reportFraudResult.confidence);
+        // aboutFraud documents: strip serial-pattern LABELS from what the narrator
+        // sees, so the drafted narrative cannot mischaracterise the subject matter.
+        var narrateFindings = mergedFindings;
+        if (_pipelineClassification && _pipelineClassification.aboutFraud === true) {
+          narrateFindings = mergedFindings.map(function(f) {
+            if (!f || f.type !== 'SERIAL') return f;
+            var c = Object.assign({}, f);
+            c.serialName = 'Multi-stage pattern indicator';
+            c.serialPattern = 'MULTI_STAGE_PATTERN';
+            c.evidence = 'Multi-stage pattern indicator (label suppressed for this document class).';
+            return c;
+          });
+        }
+        aiNarrativeText = await aiNarrateReport(narrateFindings, reportFraudResult.overallScore, reportFraudResult.confidence);
         updateStep(7, 'processing', 'AI review applied -- ' + assessRes.findings.length + ' of ' + originalCount + ' retained' + (assessRes.added.length ? ', +' + assessRes.added.length + ' AI-identified' : ''));
       }
     }
@@ -1471,11 +1732,40 @@ async function runSealingPipeline() {
     _pipelineAiAddedFindings = [];
   }
 
-  // Step 9 (optional): sealed forensic report -- NEVER breaks the seal flow
+  // Seal Only mode: one-page Seal Certificate -- NEVER breaks the seal flow
+  window._voSealCert = null;
+  if (sealMode !== 'forensic') {
+    try {
+      updateStep(7, 'processing', 'Building seal certificate...');
+      var certBytes = await buildSealCertificate({
+        fileName: selectedFile.name,
+        sha512: sha512,
+        sealId: sealId,
+        timestampISO: new Date(meta.t || Date.now()).toISOString(),
+        pageCount: _pipelinePageCount || null,
+        otsSubmitted: !!(otsResult && otsResult.success),
+        otsCalendar: otsResult && otsResult.calendar ? otsResult.calendar : null,
+        qrDataURL: qrDataURL
+      });
+      window._voSealCert = { bytes: certBytes };
+      updateStep(7, 'complete', 'Certificate ready');
+    } catch (certErr) {
+      console.warn('Seal certificate generation failed (document seal unaffected):', certErr);
+      window._voSealCert = null;
+      updateStep(7, 'complete');
+    }
+  }
+
+  // Step 9 (optional, FORENSIC ANALYSIS MODE only): sealed forensic report -- NEVER breaks the seal flow
   var reportPack = null;
   try {
-    if (window.VerumReport && typeof window.VerumReport.build === 'function') {
+    if (sealMode === 'forensic' && window.VerumReport && typeof window.VerumReport.build === 'function') {
       updateStep(7, 'processing', 'Building forensic report...');
+      // AI classification (may be null -- classify endpoint is optional/rolling out).
+      // aboutFraud:true suppresses serial-pattern LABELS; corroborated labels need
+      // >=2 independent severity>=3 findings, else they demote to weak signals.
+      var classification = _pipelineClassification;
+      var serialInfo = getSerialLabelInfo(reportFraudResult && reportFraudResult.findings, !!(classification && classification.aboutFraud === true));
       var reportBytes = await window.VerumReport.build({
         findings: reportFraudResult,
         documents: [{
@@ -1492,6 +1782,13 @@ async function runSealingPipeline() {
         extractionNotes: fraudResult && fraudResult.extractionNotes ? fraudResult.extractionNotes : null,
         aiReview: aiReviewInfo,
         aiNarrative: aiNarrativeText,
+        classification: classification,
+        serialLabels: {
+          suppressed: serialInfo.suppressed,
+          corroboratedNames: serialInfo.corroborated.map(serialNameOf),
+          weakNames: serialInfo.weak.map(serialNameOf),
+          supportCount: serialInfo.supportCount
+        },
         ots: { submitted: !!(otsResult && otsResult.success), calendar: otsResult && otsResult.calendar ? otsResult.calendar : null },
         images: { watermark: watermarkBytes }
       });
@@ -1542,40 +1839,65 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     sealedHashRow.style.display = 'block';
   } else if (sealedHashRow) { sealedHashRow.style.display = 'none'; }
 
-  // Fraud warning display
+  // Forensic indicators panel (forensic analysis mode only) -- deliberately
+  // de-alarmed: neutral gold/navy presentation, "indicator" language throughout,
+  // serial-pattern labels only with corroboration, and a standing disclaimer.
   if (forensicResult && !forensicResult.clean) {
-    var fraudDiv = document.createElement('div');
-    fraudDiv.style.cssText = 'background:rgba(239,68,68,0.1);border:2px solid rgba(239,68,68,0.4);border-radius:12px;padding:20px;margin:16px 0;';
+    var findingsPanel = document.createElement('div');
+    findingsPanel.id = 'findingsPanel';
+    findingsPanel.style.cssText = 'background:rgba(15,52,96,0.12);border:1px solid rgba(212,168,67,0.35);border-radius:12px;padding:20px;margin:16px 0;';
 
     var findingsHtml = '';
     var categories = forensicResult.findingsByCategory || {};
     for (var cat in categories) {
       if (categories[cat].length > 0) {
-        findingsHtml += '<strong style="color:#D4A843;">' + cat + ':</strong> ' + categories[cat].length + ' findings<br>';
+        findingsHtml += '<strong style="color:#D4A843;">' + escapeHtml(cat) + ':</strong> ' + categories[cat].length + ' findings<br>';
       }
     }
 
-    var serialPatterns = (forensicResult.findings || []).filter(function(f){return f.type==='SERIAL';});
+    // Serial-pattern labels: shown only when corroborated (>=2 independent
+    // severity>=3 findings); suppressed entirely when the AI classifier says the
+    // document is ABOUT fraud; otherwise demoted to a muted weak-signals note.
+    var classification = _pipelineClassification;
+    var serialInfo = getSerialLabelInfo(forensicResult.findings, !!(classification && classification.aboutFraud === true));
+    var classHtml = '';
+    if (classification && classification.documentClass) {
+      classHtml = '<strong>Document classification (AI):</strong> ' + escapeHtml(classification.documentClass) + '<br>';
+    }
     var serialHtml = '';
-    if (serialPatterns.length > 0) {
-      serialHtml = '<br><strong style="color:#ef4444;">Serial Patterns Detected:</strong><br>';
-      for (var s = 0; s < serialPatterns.length; s++) {
-        serialHtml += '&#9888; ' + serialPatterns[s].serialName + '<br>';
+    if (serialInfo.suppressed && serialInfo.serial.length > 0) {
+      serialHtml = '<br><span style="color:#8ea3b5;font-size:12px;">This document discusses fraud or disputed conduct as its subject matter. Pattern labels have been suppressed to avoid mischaracterising the document\'s contents.</span><br>';
+    } else {
+      if (serialInfo.corroborated.length > 0) {
+        serialHtml += '<br><strong style="color:#D4A843;">Patterns consistent with:</strong> ';
+        for (var s = 0; s < serialInfo.corroborated.length; s++) {
+          serialHtml += (s > 0 ? ', ' : '') + escapeHtml(serialNameOf(serialInfo.corroborated[s]));
+        }
+        serialHtml += '<br>';
+      }
+      if (serialInfo.weak.length > 0) {
+        serialHtml += '<span style="color:#8ea3b5;font-size:12px;">Weak signals (insufficient corroboration to label): ';
+        for (var s2 = 0; s2 < serialInfo.weak.length; s2++) {
+          serialHtml += (s2 > 0 ? ', ' : '') + escapeHtml(serialNameOf(serialInfo.weak[s2]));
+        }
+        serialHtml += '</span><br>';
       }
     }
 
-    fraudDiv.innerHTML = '<h4 style="color:#ef4444;font-size:18px;margin-bottom:10px;">&#9888; FORENSIC CONTRADICTIONS DETECTED</h4>' +
+    findingsPanel.innerHTML = '<h4 style="color:#D4A843;font-size:17px;margin-bottom:10px;">&#128270; ' + (forensicResult.totalFindings || 0) + ' indicators flagged for human review</h4>' +
       '<p style="color:#D5D8DD;font-size:13px;line-height:1.7;">' +
-      '<strong>Overall Score:</strong> ' + forensicResult.overallScore + '/100<br>' +
-      '<strong>Confidence:</strong> ' + forensicResult.confidence + '<br>' +
-      '<strong>Total Findings:</strong> ' + forensicResult.totalFindings + '<br>' +
-      '<strong>Contradiction Types:</strong> ' + (forensicResult.contradictionTypesUsed || 0) + '/43 detected<br>' +
+      '<strong>Indicator score:</strong> ' + forensicResult.overallScore + '/100<br>' +
+      '<strong>Engine confidence:</strong> ' + forensicResult.confidence + '<br>' +
+      '<strong>Total findings:</strong> ' + forensicResult.totalFindings + '<br>' +
+      '<strong>Contradiction types:</strong> ' + (forensicResult.contradictionTypesUsed || 0) + '/43 triggered<br>' +
+      classHtml +
       findingsHtml + serialHtml +
-      '<br><em>Your original document has been sealed pristine -- no forensic markings were added to its pages. ' +
+      '<br><em>Findings are indicators for human review, not determinations of fraud. ' +
+      'Your original document has been sealed pristine -- no forensic markings were added to its pages. ' +
       'The seal proves integrity and time only. ' +
-      'Findings are not a fraud verdict -- they are presented exclusively in the sealed forensic report (download below).</em>' +
+      'Full detail is presented in the sealed forensic report (download below).</em>' +
       '</p>';
-    document.getElementById('results').insertBefore(fraudDiv, document.getElementById('results').firstChild);
+    document.getElementById('results').insertBefore(findingsPanel, document.getElementById('results').firstChild);
   }
 
   const chainEl = document.getElementById('chainDisplay');
@@ -1623,8 +1945,31 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       '  |  SHA-512 ' + rp.sha512.substring(0, 16) + '...' +
       '  |  OpenTimestamps: ' + (rp.ots && rp.ots.success ? 'submitted -- Bitcoin confirmation pending' : 'offline -- hash recorded for retry');
     dg.parentNode.insertBefore(rNote, dg.nextSibling);
-  } else {
+  } else if (sealMode === 'forensic') {
     console.warn('Forensic report unavailable for this seal (generation skipped or failed); document seal is unaffected.');
+  }
+
+  // Seal Certificate download (Seal Only mode) -- clean one-page certificate
+  var oldCertBtn = document.getElementById('downloadSealCertificate');
+  if (oldCertBtn) oldCertBtn.remove();
+  var oldCertNote = document.getElementById('sealCertNote');
+  if (oldCertNote) oldCertNote.remove();
+  if (window._voSealCert && window._voSealCert.bytes) {
+    var cp = window._voSealCert;
+    var cU = URL.createObjectURL(new Blob([cp.bytes], {type: 'application/pdf'}));
+    var cL = document.createElement('a');
+    cL.href = cU;
+    cL.download = base + '-seal-certificate.pdf';
+    cL.className = 'download-btn';
+    cL.id = 'downloadSealCertificate';
+    cL.innerHTML = '&#11015; Download Seal Certificate';
+    var dg2 = document.getElementById('downloadGrid');
+    if (sL.nextSibling) dg2.insertBefore(cL, sL.nextSibling); else dg2.appendChild(cL);
+    var cNote = document.createElement('div');
+    cNote.id = 'sealCertNote';
+    cNote.style.cssText = 'font-size:12px;color:#8ea3b5;margin-top:10px;line-height:1.6;';
+    cNote.textContent = 'This seal proves two things only — integrity and time. It is not a verification of the document\'s contents. Keep the Seal Certificate together with the sealed PDF.';
+    dg2.parentNode.insertBefore(cNote, dg2.nextSibling);
   }
 
   if (password && encryptedBytes) {
@@ -1662,10 +2007,12 @@ function resetSealing() {
   _pipelineFraudResult = null;
   _pipelinePageCount = 0;
   _pipelineAiAddedFindings = [];
+  _pipelineClassification = null;
   window._voReportPack = null;
   window._voSealedFileHash = null;
   var sealedHashRowR = document.getElementById('sealedHashRow');
   if (sealedHashRowR) sealedHashRowR.style.display = 'none';
+  window._voSealCert = null;
   var gkBanner = document.getElementById('gatekeepBanner');
   if (gkBanner) gkBanner.style.display = 'none';
   var oldReportBtn2 = document.getElementById('downloadForensicReport');
@@ -1674,6 +2021,12 @@ function resetSealing() {
   if (oldReportNote2) oldReportNote2.remove();
   var oldShareNote2 = document.getElementById('patternShareNote');
   if (oldShareNote2) oldShareNote2.remove();
+  var oldCertBtn2 = document.getElementById('downloadSealCertificate');
+  if (oldCertBtn2) oldCertBtn2.remove();
+  var oldCertNote2 = document.getElementById('sealCertNote');
+  if (oldCertNote2) oldCertNote2.remove();
+  var oldPanel = document.getElementById('findingsPanel');
+  if (oldPanel) oldPanel.remove();
   // Samsung Browser fix: use var not const
   var banners = document.querySelectorAll('[style*="background:rgba(212,168,67"]');
   banners.forEach(function(b) { if (b.id !== 'gatekeepBanner') b.remove(); });
