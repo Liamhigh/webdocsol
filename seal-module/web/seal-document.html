@@ -1264,8 +1264,8 @@ async function buildSealCertificate(opts) {
   // Canonical statement box
   var boxTop = 240, boxH = 74;
   page.drawRectangle({ x: 70, y: boxTop - boxH, width: PW - 140, height: boxH, borderColor: GOLD, borderWidth: 1, color: rgb(1, 1, 1), opacity: 0.04 });
-  var c1 = 'This seal proves two things only cu2014 integrity and time.';
-  var c2 = 'It is not a verification of the documentcu2019s contents.';
+  var c1 = 'This seal proves two things only — integrity and time.';
+  var c2 = 'It is not a verification of the document’s contents.';
   page.drawText(c1, { x: cx(c1, timesItalic, 12), y: boxTop - 30, size: 12, font: timesItalic, color: WHITE });
   page.drawText(c2, { x: cx(c2, timesItalic, 12), y: boxTop - 48, size: 12, font: timesItalic, color: WHITE });
 
