@@ -807,6 +807,7 @@ function secTimeline(ctx, data) {
       { size: 8 }
     );
   }
+
   ctx.para('Full timeline reconstruction and event ordering require AI consensus review — pending.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
 }
 
@@ -893,7 +894,7 @@ function secMethodology(ctx, data) {
   } else {
     ctx.bullet('Source document digest: OpenTimestamps submission OFFLINE — calendar unreachable; the SHA-256 digest was recorded for retry.', { size: 9.5 });
   }
-  ctx.bullet('This report is itself sealed under VO-DSS after generation: per-page seal footer, verification QR, and PDF Subject metadata VO-SEAL|SHA-512|SEAL_ID. The report seal fingerprint appears in the page footer below.', { size: 9.5 });
+  ctx.bullet('This report is itself sealed under VO-DSS after generation: per-page seal footer, verification QR, and PDF Subject metadata VO-SEAL2|SEALED-FILE-SHA-512|SEAL_ID|ORIG:REPORT-SHA-512 (the sealed-file hash covers the final bytes of this PDF; ORIG preserves the pre-seal report fingerprint). The report seal fingerprint appears in the page footer below.', { size: 9.5 });
   ctx.gap(6);
 
   ctx.para('Verum Omnis  |  verumglobal.foundation  |  Verify this report at verumglobal.foundation/verify.html', { size: 8.5, color: GRAY });
@@ -948,6 +949,7 @@ async function build(opts) {
 
   // 1. cover
   drawCover(ctx, data);
+
   // 2. TOC placeholder page (drawn last with real page numbers)
   var tocPage = doc.addPage([PW, PH]);
   ctx.drawWatermark(tocPage);
@@ -974,7 +976,74 @@ async function build(opts) {
 
 // ================= SEAL (report through the VO-DSS sealing path) =================
 // Adds verification QR panel (top-right), per-page navy seal footer, and
-// Subject metadata VO-SEAL|sha512|sealId. OTS is submitted by the caller.
+// Subject metadata. OTS is submitted by the caller.
+//
+// ---- VO-SEAL2 sealed-file self-integrity scheme (v1.3.0) ----
+// The Subject carries the SHA-512 of the FINAL sealed bytes. Because that hash
+// cannot be known before the file exists, the Subject is written with a fixed
+// 128-char placeholder, the finished file is saved and hashed, and the
+// placeholder is patched in place with the real hex (length-preserving, so all
+// xref offsets stay valid). pdf-lib writes Info strings as UTF-16BE hex
+// strings, so the patch happens in that encoding and save() must use
+// { useObjectStreams: false } to keep the Info dictionary uncompressed.
+// The QR image and footer text are baked in before the final bytes exist (and
+// are compressed/pixel data), so they keep carrying the report's pre-seal
+// hash; only the Subject carries the sealed-file hash. Documented split:
+//   Subject   -> integrity of the sealed file (VO-SEAL2, self-verifiable)
+//   QR/footer -> integrity + time of the report content (OTS-anchored)
+var VO_SEAL2_PREFIX = 'VO-SEAL2|';
+var VO_HASH_PLACEHOLDER = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
+
+function voUtf16Hex(str) {
+  var out = '';
+  for (var i = 0; i < str.length; i++) {
+    var h = str.charCodeAt(i).toString(16).toUpperCase();
+    while (h.length < 4) h = '0' + h;
+    out += h;
+  }
+  return out;
+}
+
+function voFindAscii(hay, needleStr, limit) {
+  var hits = [];
+  var n0 = needleStr.charCodeAt(0);
+  var max = hay.length - needleStr.length;
+  for (var i = 0; i <= max; i++) {
+    if (hay[i] !== n0) continue;
+    var ok = true;
+    for (var j = 1; j < needleStr.length; j++) { if (hay[i + j] !== needleStr.charCodeAt(j)) { ok = false; break; } }
+    if (ok) { hits.push(i); if (limit && hits.length >= limit) return hits; }
+  }
+  return hits;
+}
+
+function voSha512Hex(bytes) {
+  if (typeof crypto !== 'undefined' && crypto.subtle && typeof crypto.subtle.digest === 'function') {
+    return crypto.subtle.digest('SHA-512', bytes).then(function (buf) {
+      var b = new Uint8Array(buf), s = '';
+      for (var i = 0; i < b.length; i++) s += (b[i] < 16 ? '0' : '') + b[i].toString(16);
+      return s;
+    });
+  }
+  // Node fallback (this module also runs outside the browser)
+  return Promise.resolve(require('crypto').createHash('sha512').update(Buffer.from(bytes)).digest('hex'));
+}
+
+// Patch the placeholder Subject hash inside the saved PDF bytes with the real
+// SHA-512 of those bytes. Returns the sealed-file hash hex, or null when the
+// placeholder is not present exactly once (caller then falls back to the
+// legacy VO-SEAL subject -- an honest degradation, never a silent failure).
+function voEmbedSealedFileHash(savedBytes) {
+  var hits = voFindAscii(savedBytes, voUtf16Hex(VO_SEAL2_PREFIX + VO_HASH_PLACEHOLDER), 2);
+  if (hits.length !== 1) return Promise.resolve(null);
+  return voSha512Hex(savedBytes).then(function (hash) {
+    var hashEnc = voUtf16Hex(hash); // 512 ASCII chars == placeholder's encoded length
+    var start = hits[0] + voUtf16Hex(VO_SEAL2_PREFIX).length;
+    for (var k = 0; k < hashEnc.length; k++) savedBytes[start + k] = hashEnc.charCodeAt(k);
+    return hash;
+  });
+}
+
 async function seal(reportBytes, sealOpts) {
   sealOpts = sealOpts || {};
   var PDFDocument = PDFLibRef.PDFDocument, StandardFonts = PDFLibRef.StandardFonts, rgb = PDFLibRef.rgb;
@@ -1030,11 +1099,28 @@ async function seal(reportBytes, sealOpts) {
 
   try { pdf.setTitle((sealOpts.sourceName || 'document') + ' — Sealed Forensic Report'); } catch (e) {}
   try { pdf.setAuthor('Verum Omnis'); } catch (e) {}
-  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId); } catch (e) {}
-  try { pdf.setKeywords(['verum', 'seal', 'forensic-report', sha512.substring(0, 16)]); } catch (e) {}
-  try { pdf.setProducer('Verum Omnis Document Sealing Service v1.2.8'); } catch (e) {}
+  // VO-SEAL2: placeholder sealed-file hash first (patched post-save); ORIG:
+  // preserves the report's pre-seal hash (the OTS-anchored fingerprint).
+  try { pdf.setSubject(VO_SEAL2_PREFIX + VO_HASH_PLACEHOLDER + '|' + sealId + '|ORIG:' + sha512); } catch (e) {}
+  try { pdf.setKeywords(['verum', 'seal', 'forensic-report', 'v2', sha512.substring(0, 16)]); } catch (e) {}
+  try { pdf.setProducer('Verum Omnis Document Sealing Service v1.3.0'); } catch (e) {}
   try { pdf.setCreationDate(now); } catch (e) {}
 
+  sealOpts.sealedHash = null;
+  try {
+    var savedV2 = await pdf.save({ useObjectStreams: false });
+    var sealedHash = await voEmbedSealedFileHash(savedV2);
+    if (sealedHash) {
+      sealOpts.sealedHash = sealedHash;
+      return savedV2;
+    }
+    console.warn('VerumReport.seal: VO-SEAL2 placeholder patch infeasible; falling back to legacy VO-SEAL subject.');
+  } catch (eV2) {
+    console.warn('VerumReport.seal: VO-SEAL2 save failed, falling back to legacy format:', eV2 && eV2.message ? eV2.message : eV2);
+  }
+  // Legacy fallback (pre-v1.3 format): Subject hash covers the pre-seal report.
+  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId); } catch (e) {}
+  try { pdf.setKeywords(['verum', 'seal', 'forensic-report', sha512.substring(0, 16)]); } catch (e) {}
   return await pdf.save();
 }
 
