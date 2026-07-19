@@ -857,7 +857,7 @@
   var FEEDBACK_PATTERNS_URL = 'https://verumglobal.foundation/api/v1/feedback/patterns';
 
   // Best-effort page count from the raw PDF text (counts page objects).
-  // Returns 0 when it cannot be determined; the field is then omitted.
+  // Returns 0 when it cannot be determined; 0 is sent as the "unknown" class.
   function estimatePdfPageCount(pdfText) {
     try {
       var m = pdfText.match(/\/Type\s*\/Page\b/g);
@@ -869,14 +869,13 @@
     try {
       if (!shareMetaOptIn || !shareMetaOptIn.checked) return;
       var severity = outcome === 'VERIFY_GENUINE' ? 1 : (outcome === 'VERIFY_TAMPERED' ? 4 : 2);
-      var pattern = { detectorId: outcome, type: 'VERIFICATION_OUTCOME', severity: severity };
-      if (typeof pageCount === 'number' && isFinite(pageCount) && pageCount > 0) {
-        pattern.pageCount = Math.floor(pageCount);
-      }
+      // The endpoint requires pageCount (non-negative integer) on every pattern; 0 = unknown.
+      var pc = (typeof pageCount === 'number' && isFinite(pageCount) && pageCount > 0) ? Math.floor(pageCount) : 0;
+      var pattern = { detectorId: outcome, type: 'VERIFICATION_OUTCOME', severity: severity, pageCount: pc };
       var patterns = [pattern];
       if (sealVersion) {
         var fmt = String(sealVersion).toUpperCase().replace(/[^A-Z0-9]+/g, '_').replace(/^_+|_+$/g, '');
-        if (fmt) patterns.push({ detectorId: 'SEAL_FORMAT_' + fmt, type: 'SEAL_FORMAT', severity: 1 });
+        if (fmt) patterns.push({ detectorId: 'SEAL_FORMAT_' + fmt, type: 'SEAL_FORMAT', severity: 1, pageCount: pc });
       }
       var ctrl = new AbortController();
       var to = setTimeout(function() { ctrl.abort(); }, 8000);
