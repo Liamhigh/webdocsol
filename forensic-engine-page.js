@@ -1516,133 +1516,95 @@ async function extractPageText(pdfBytes, pageIndex) {
     }
 
     var curFont = null;
-    var ops = [];
-    for (var s2 = 0; s2 < streams.length; s2++) {
-      var st = streams[s2];
-      if (!st) continue;
-      var u8 = null;
-      try {
-        if (PDFLib.PDFRawStream && st instanceof PDFLib.PDFRawStream) {
-          u8 = PDFLib.decodePDFRawStream(st).decode();
-        } else if (st.getContents) {
-          u8 = st.getContents();
-        }
-      } catch (e3) { continue; }
-      if (!u8) continue;
-      var src = new TextDecoder('latin1').decode(u8);
-      var i2 = 0, len = src.length;
-      while (i2 < len) {
-        var ch2 = src[i2];
-        if (ch2 === '(') {
-          var depth = 1, j2 = i2 + 1, raw = '';
-          while (j2 < len && depth > 0) {
-            var cc = src[j2];
-            if (cc === '\\') { raw += cc + (src[j2 + 1] || ''); j2 += 2; continue; }
-            if (cc === '(') depth++;
-            if (cc === ')') { depth--; if (depth === 0) break; }
-            raw += cc; j2++;
+    var pushText = function (t) {
+      if (!t) return;
+      if (!/\S/.test(t)) { texts.push(' '); return; } // word boundary sentinel
+      var tokens = t.split(/\s+/);
+      for (var q = 0; q < tokens.length; q++) {
+        var w = tokens[q];
+        if (w && w.replace(/[^a-zA-Z0-9]/g, '').length >= 1) texts.push(w);
+      }
+    };
+
+    for (var s = 0; s < streams.length; s++) {
+      var st = streams[s];
+      if (!(PDFLib.PDFRawStream && st instanceof PDFLib.PDFRawStream)) continue;
+      var u8;
+      try { u8 = PDFLib.decodePDFRawStream(st).decode(); } catch (e3) { continue; }
+      var str = new TextDecoder('utf-8', { fatal: false }).decode(u8);
+
+      // Walk the stream in order: font selects, literal strings, hex strings, TJ arrays
+      var re = /\/([A-Za-z0-9]+)\s+[\d.]+\s+Tf|\(((?:\\.|[^\\()])*)\)\s*(Tj|'|")|<([0-9A-Fa-f\s]+)>\s*Tj|\[([\s\S]*?)\]\s*TJ/g;
+      var m;
+      while ((m = re.exec(str)) !== null) {
+        if (m[1]) { curFont = m[1]; continue; }
+        var cmap = curFont ? fontMaps[curFont] : null;
+        if (m[2] !== undefined) { pushText(_voDecodeParenString(m[2])); continue; }
+        if (m[4] !== undefined) { pushText(_voDecodeHexString(m[4], cmap)); continue; }
+        if (m[5] !== undefined) {
+          // TJ array: mix of <hex> and (literal) chunks with kerning numbers
+          var body = m[5];
+          var chunkRe = /<([0-9A-Fa-f\s]+)>|\(((?:\\.|[^\\()])*)\)/g;
+          var cm;
+          var acc = '';
+          while ((cm = chunkRe.exec(body)) !== null) {
+            if (cm[1] !== undefined) acc += _voDecodeHexString(cm[1], cmap);
+            else acc += _voDecodeParenString(cm[2]);
           }
-          ops.push({ t: 'str', v: raw });
-          i2 = j2 + 1; continue;
+          pushText(acc);
         }
-        if (ch2 === '<' && src[i2 + 1] !== '<') {
-          var k2 = src.indexOf('>', i2);
-          if (k2 === -1) break;
-          ops.push({ t: 'hex', v: src.substring(i2 + 1, k2) });
-          i2 = k2 + 1; continue;
-        }
-        if (ch2 === '/' ) {
-          var m2 = /^\/([A-Za-z0-9_.-]+)/.exec(src.substring(i2, i2 + 32));
-          if (m2) { ops.push({ t: 'name', v: m2[1] }); i2 += m2[0].length; continue; }
-        }
-        if (/[A-Za-z*'"]/.test(ch2)) {
-          var m3 = /^[A-Za-z*'"]{1,3}/.exec(src.substring(i2));
-          if (m3) { ops.push({ t: 'op', v: m3[0] }); i2 += m3[0].length; continue; }
-          i2++; continue;
-        }
-        i2++;
       }
     }
-
-    // Walk ops: track font via Tf; emit text for Tj, TJ, ', "
-    var pending = [];
-    for (var o = 0; o < ops.length; o++) {
-      var tok = ops[o];
-      if (tok.t === 'op') {
-        if (tok.v === 'Tf') {
-          for (var q = pending.length - 1; q >= 0; q--) {
-            if (pending[q].t === 'name') { curFont = pending[q].v; break; }
-          }
-        } else if (tok.v === 'Tj' || tok.v === "'" || tok.v === '"') {
-          var strTok = null;
-          for (var q2 = pending.length - 1; q2 >= 0; q2--) {
-            if (pending[q2].t === 'str' || pending[q2].t === 'hex') { strTok = pending[q2]; break; }
-          }
-          if (strTok) {
-            if (strTok.t === 'str') texts.push(_voDecodeParenString(strTok.v));
-            else texts.push(_voDecodeHexString(strTok.v, curFont ? fontMaps[curFont] : null));
-          }
-        } else if (tok.v === 'TJ') {
-          for (var q3 = 0; q3 < pending.length; q3++) {
-            var pj = pending[q3];
-            if (pj.t === 'str') texts.push(_voDecodeParenString(pj.v));
-            else if (pj.t === 'hex') texts.push(_voDecodeHexString(pj.v, curFont ? fontMaps[curFont] : null));
-          }
-        }
-        pending = [];
-      } else {
-        pending.push(tok);
-      }
-    }
-
-    // Merge tokens: join letters back into words where spacing indicates
+    // Merge letter-spaced runs ("N F O" -> "NFO") within word boundaries only
     var merged = [];
-    for (var t2 = 0; t2 < texts.length; t2++) {
-      var s3 = texts[t2];
-      if (!s3) continue;
-      if (merged.length && s3.length === 1 && s3 !== ' ' && /^[\w]$/.test(s3) && /[\w]$/.test(merged[merged.length - 1])) {
-        merged[merged.length - 1] += s3;
-      } else {
-        merged.push(s3);
+    var run = [];
+    for (var t = 0; t <= texts.length; t++) {
+      var tok = t < texts.length ? texts[t] : null;
+      if (tok === ' ' || tok === null) { // word boundary
+        if (run.length >= 2) merged.push(run.join(''));
+        else for (var r2 = 0; r2 < run.length; r2++) merged.push(run[r2]);
+        run = [];
+        if (tok !== null) continue; else break;
       }
+      if (tok.length === 1 && /[a-zA-Z0-9]/.test(tok)) { run.push(tok); continue; }
+      if (run.length >= 2) merged.push(run.join(''));
+      else for (var r3 = 0; r3 < run.length; r3++) merged.push(run[r3]);
+      run = [];
+      merged.push(tok);
     }
-    var joined = merged.join(' ');
-    var tokens = joined.split(/[^a-zA-Z0-9]+/).filter(function (t) { return t.length >= 3 && !PDF_STRUCTURE.test(t); });
-    return tokens;
-  } catch (e) {
-    return texts;
-  }
+    texts = merged;
+  } catch (e) {}
+  return texts;
 }
 
-// ===================== MAIN ENGINE =====================
+// ===================== MAIN FORENSIC ENGINE =====================
 
 async function runForensicEngine(pdfBytes, pdfDoc) {
   var allFindings = [];
 
-  // Extract text per page (for page-anchored findings)
+  // Extract text blocks (one per page)
   var textBlocks = [];
-  var pageTexts = [];
+  var extractionNote = 'Per-page PDF content-stream decoding with ToUnicode CMaps.';
   try {
     var pages = pdfDoc.getPages();
     for (var i = 0; i < pages.length; i++) {
-      var tokens = await extractPageText(pdfBytes, i);
-      var pageText = tokens.join(' ');
-      pageTexts.push(pageText);
-      textBlocks.push(pageText);
+      var texts = await extractPageText(pdfBytes, i);
+      textBlocks.push(texts.join(' '));
+    }
+    // If per-page extraction yielded almost nothing (image-only PDF or parse
+    // failure), disclose it and use the whole-document raw scan instead.
+    if (textBlocks.join(' ').replace(/\s+/g, '').length < 20) {
+      throw new Error('per-page extraction yielded too little text');
     }
   } catch(e) {
-    console.warn('Per-page extraction failed, falling back to full-doc:', e.message);
-  }
-
-  // Fallback if per-page failed
-  if (textBlocks.length === 0) {
+    // Fallback: treat entire document as one block
+    extractionNote = 'FALLBACK: per-page text extraction failed (' + (e && e.message ? e.message : 'unknown error') + '); whole-document raw stream scan used. Page anchors may be degraded.';
     var allTexts = await extractPdfText(pdfBytes);
     textBlocks = [allTexts.join(' ')];
-    pageTexts = textBlocks;
   }
 
   // Run all 37 detectors
-  var detectorArray = [
+  var detectors = [
     DETECTORS.D01_DETECT_DIRECT_CONTRADICTION,
     DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY,
     DETECTORS.D03_DETECT_DATE_INCONSISTENCY,
@@ -1681,74 +1643,63 @@ async function runForensicEngine(pdfBytes, pdfDoc) {
     DETECTORS.D36_DETECT_SOURCE_FAILURE
   ];
 
-  for (var d = 0; d < detectorArray.length; d++) {
+  for (var d = 0; d < detectors.length; d++) {
     try {
-      var detector = detectorArray[d];
-      var findings;
-      if (d === 14 || d === 15 || d === 19) {  // D15, D16, D20 need pdfDoc
-        findings = detector(textBlocks, pdfDoc);
+      var detectorFindings;
+      if (detectors[d] === DETECTORS.D15_DETECT_METADATA_FRAUD ||
+          detectors[d] === DETECTORS.D20_DETECT_DIGITAL_FOOTPRINT_MISMATCH) {
+        detectorFindings = detectors[d](pdfDoc);
+      } else if (detectors[d] === DETECTORS.D16_DETECT_FONT_ANOMALY) {
+        detectorFindings = detectors[d](textBlocks, pdfDoc);
       } else {
-        findings = detector(textBlocks);
+        detectorFindings = detectors[d](textBlocks);
       }
-      if (findings && findings.length > 0) {
-        for (var f = 0; f < findings.length; f++) {
-          findings[f].detector = 'D' + String(d + 1).padStart(2, '0');
-          allFindings.push(findings[f]);
-        }
-      }
+      allFindings = allFindings.concat(detectorFindings);
     } catch(e) {
-      console.warn('Detector D' + (d + 1) + ' failed:', e.message);
+      console.warn('Detector ' + (d+1) + ' failed:', e.message);
     }
   }
 
-  // D37 catch-all: run after all other detectors
+  // Run catch-all detector (needs other findings)
   try {
-    var catchAll = DETECTORS.D37_DETECT_INTERNAL_CONFLICT_CATCHALL(textBlocks, allFindings);
-    for (var ca = 0; ca < catchAll.length; ca++) {
-      catchAll[ca].detector = 'D37';
-      allFindings.push(catchAll[ca]);
-    }
+    var catchallFindings = DETECTORS.D37_DETECT_INTERNAL_CONFLICT_CATCHALL(textBlocks, allFindings);
+    allFindings = allFindings.concat(catchallFindings);
   } catch(e) {}
 
   // Run serial pattern detection
   try {
     var serialFindings = detectSerialPatterns(textBlocks);
-    for (var sp = 0; sp < serialFindings.length; sp++) {
-      serialFindings[sp].detector = 'SERIAL';
-      allFindings.push(serialFindings[sp]);
-    }
+    allFindings = allFindings.concat(serialFindings);
   } catch(e) {}
 
-  // Calculate overall forensic score (0-100)
-  var totalSeverity = 0;
+  // Calculate overall score
+  var totalScore = 0;
+  var maxScore = 0;
   var findingsByType = {};
   var findingsByCategory = {};
 
-  for (var g = 0; g < allFindings.length; g++) {
-    var finding = allFindings[g];
-    totalSeverity += finding.severity || 1;
+  for (var f = 0; f < allFindings.length; f++) {
+    var finding = allFindings[f];
+    totalScore += finding.severity;
+    maxScore += 5; // max severity per finding
+
     if (!findingsByType[finding.type]) findingsByType[finding.type] = [];
     findingsByType[finding.type].push(finding);
+
     var ct = CONTRADICTION_TYPES[finding.type];
-    if (ct) {
-      if (!findingsByCategory[ct.category]) findingsByCategory[ct.category] = [];
-      findingsByCategory[ct.category].push(finding);
-    }
+    var cat = ct ? ct.category : (finding.category || 'UNKNOWN');
+    if (!findingsByCategory[cat]) findingsByCategory[cat] = [];
+    findingsByCategory[cat].push(finding);
   }
 
-  var maxScore = allFindings.length * 5;
-  var overallScore = maxScore > 0 ? Math.round((totalSeverity / maxScore) * 100) : 0;
-
-  // Determine confidence level
-  var confidence = 'CLEAN';
-  if (overallScore >= 80) confidence = 'VERY_HIGH';
-  else if (overallScore >= 60) confidence = 'HIGH';
-  else if (overallScore >= 40) confidence = 'MODERATE';
-  else if (overallScore >= 20) confidence = 'LOW';
+  var overallScore = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
+  var confidence = overallScore >= 80 ? 'VERY_HIGH' : overallScore >= 60 ? 'HIGH' :
+                   overallScore >= 40 ? 'MODERATE' : overallScore >= 20 ? 'LOW' : 'CLEAN';
 
   return {
-    clean: allFindings.length === 0,
+    clean: overallScore < 20,
     overallScore: overallScore,
+    maxPossibleScore: 100,
     confidence: confidence,
     totalFindings: allFindings.length,
     findings: allFindings,
@@ -1756,31 +1707,16 @@ async function runForensicEngine(pdfBytes, pdfDoc) {
     findingsByCategory: findingsByCategory,
     contradictionTypesUsed: Object.keys(findingsByType).length,
     serialPatternsDetected: allFindings.filter(function(f){return f.type==='SERIAL';}).length,
-    extractionNotes: 'Per-page PDF content-stream decoding with ToUnicode CMaps.',
+    extractionNotes: extractionNote,
     summary: generateSummary(allFindings, overallScore)
   };
 }
 
 function generateSummary(findings, score) {
-  if (findings.length === 0) {
-    return 'CLEAN: No contradictions or forensic indicators detected. Document appears internally consistent across all ' + Object.keys(DETECTORS).length + ' detectors and ' + Object.keys(SERIAL_PATTERNS).length + ' serial patterns.';
-  }
-  var typeCount = {};
-  for (var i = 0; i < findings.length; i++) {
-    var t = findings[i].type;
-    typeCount[t] = (typeCount[t] || 0) + 1;
-  }
-  var topTypes = Object.keys(typeCount).sort(function(a,b){return typeCount[b]-typeCount[a];}).slice(0, 3);
-  var typeNames = topTypes.map(function(t) {
-    var ct = CONTRADICTION_TYPES[t];
-    return ct ? ct.name : t;
-  });
-
   if (score >= 80) {
-    return 'VERY HIGH: ' + findings.length + ' contradictions detected. Document ' +
-      'shows systematic internal inconsistencies consistent with fraud or ' +
-      'sophisticated tampering. Primary indicators: ' + typeNames.join(', ') + '. ' +
-      'Immediate forensic review required.';
+    return 'CRITICAL: ' + findings.length + ' contradictions detected across ' +
+      'multiple categories. Document shows strong indicators of systematic fraud. ' +
+      'Manual forensic review strongly recommended.';
   } else if (score >= 60) {
     return 'HIGH: ' + findings.length + ' contradictions detected. Document ' +
       'contains significant inconsistencies that suggest fraud or tampering.';
@@ -1806,4 +1742,3 @@ if (typeof module !== 'undefined' && module.exports) {
     detectSerialPatterns: detectSerialPatterns
   };
 }
-
