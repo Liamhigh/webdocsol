@@ -391,6 +391,7 @@ const MAX_ASSESS_FINDINGS = 40;
 const MAX_NARRATE_FINDINGS = 25;
 const MAX_EVIDENCE_CHARS = 300;
 const MAX_CURATE_CANDIDATES = 10;
+const MAX_ADDITIONAL_FINDINGS = 20;
 const CURATE_WINDOW_DAYS = 7;
 
 const GATEKEEP_SYSTEM = 'You are a licensing gatekeeper for the Verum Omnis forensic platform ' +
@@ -401,8 +402,16 @@ const GATEKEEP_SYSTEM = 'You are a licensing gatekeeper for the Verum Omnis fore
 const ASSESS_SYSTEM = 'You are the antithesis reviewer in a forensic contradiction engine. ' +
   'For each candidate finding you receive (type, quoted evidence, location), decide KEEP ' +
   '(genuine contradiction/indicator) or DROP (benign context, definitional text, format ' +
-  'artifact, or keyword coincidence). You may NEVER invent new findings or new quotes. ' +
-  'Reply ONLY compact JSON: {"verdicts":[{"id":...,"verdict":"keep|drop","reason":"<=12 words"}]}';
+  'artifact, or keyword coincidence). ' +
+  'You MUST ALSO catch contradictions the engine missed: when the supplied evidence contains ' +
+  'a clear contradiction or inconsistency that is ABSENT from the submitted findings, add it ' +
+  'to additionalFindings. Be conservative: flag only clear contradictions/inconsistencies ' +
+  'supported by the evidence text you were given; never invent findings or new quotes; keep ' +
+  'any quoted fragment under 120 characters; use an existing CT01-CT43 type name where one ' +
+  'fits, otherwise a short descriptive UPPER_SNAKE type. Return additionalFindings: [] when ' +
+  'nothing was missed. ' +
+  'Reply ONLY compact JSON: {"verdicts":[{"id":...,"verdict":"keep|drop","reason":"<=12 words"}],' +
+  '"additionalFindings":[{"type":"CT01|UPPER_SNAKE","severity":1-5,"rationale":"brief"}]}';
 
 const NARRATE_SYSTEM = 'You are a forensic report writer for Verum Omnis. Write (1) a 120-180 ' +
   'word executive summary paragraph and (2) a 150-250 word critical-evidence narrative, in ' +
@@ -579,6 +588,28 @@ function keepAllVerdicts(findings, reason) {
   return findings.map(f => ({ id: f.id, verdict: 'keep', reason }));
 }
 
+// Coerce model-proposed new findings (contradictions the engine missed) into
+// the strict schema: {type, severity, rationale, source}. Fields outside the
+// schema are stripped; severity is clamped to an integer 1-5; source is always
+// forced to "ai"; at most MAX_ADDITIONAL_FINDINGS are returned.
+function sanitizeAdditionalFindings(value) {
+  if (!Array.isArray(value)) return [];
+  const out = [];
+  for (const f of value) {
+    if (!f || typeof f !== 'object' || Array.isArray(f)) continue;
+    const type = asStr(f.type, 64).trim();
+    if (!type) continue;
+    const sev = Number(f.severity);
+    if (!Number.isFinite(sev)) continue;
+    const severity = Math.min(5, Math.max(1, Math.round(sev)));
+    const rationale = asStr(f.rationale, 300).trim();
+    if (!rationale) continue;
+    out.push({ type, severity, rationale, source: 'ai' });
+    if (out.length >= MAX_ADDITIONAL_FINDINGS) break;
+  }
+  return out;
+}
+
 async function handleAiAssess(request, env) {
   const body = await readBodyText(request, MAX_AI_BODY);
   if (body.tooBig) return err(413, 'body_too_large', 'Request body exceeds the 16 KB limit.');
@@ -625,9 +656,12 @@ async function handleAiAssess(request, env) {
     }
     // Findings the model never judged default to KEEP (conservative).
     const verdicts = findings.map(f => byId.get(f.id) || { id: f.id, verdict: 'keep', reason: 'no verdict returned — kept by default' });
-    return json({ ok: true, reviewed: true, model: 'llama-3.3-70b', verdicts });
+    // Contradictions the engine missed, proposed by the model and sanitized
+    // server-side. A missing/malformed reply degrades to an empty list.
+    const additionalFindings = sanitizeAdditionalFindings(parsed.additionalFindings);
+    return json({ ok: true, reviewed: true, model: 'llama-3.3-70b', verdicts, additionalFindings });
   } catch (e) {
-    return json({ ok: true, reviewed: false, model: 'fallback-keep-all', verdicts: keepAllVerdicts(findings, 'ai unavailable — kept by default') });
+    return json({ ok: true, reviewed: false, model: 'fallback-keep-all', verdicts: keepAllVerdicts(findings, 'ai unavailable — kept by default'), additionalFindings: [] });
   }
 }
 
