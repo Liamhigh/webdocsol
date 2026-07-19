@@ -1,5 +1,5 @@
 /* ========================================================================
-   VERUM OMNIS FORENSIC REPORT BUILDER v1.0
+   VERUM OMNIS FORENSIC REPORT BUILDER v1.3.1 (VO-SEAL2 + optional AI review layer)
    window.VerumReport.build(opts) -> Promise<Uint8Array>
    window.VerumReport.seal(reportBytes, sealOpts) -> Promise<Uint8Array>
    Dependency: pdf-lib (already loaded by seal-document.html via unpkg CDN).
@@ -521,23 +521,29 @@ function secExecSummary(ctx, data) {
   var band = fr.confidence || 'CLEAN';
   var bandLabel = { CLEAN: 'CLEAN', LOW: 'LOW', MODERATE: 'MODERATE', HIGH: 'HIGH', VERY_HIGH: 'VERY HIGH' }[band] || band;
 
-  // score box
+  // score box -- deliberately de-alarmed: neutral navy, "indicator" language.
   var boxH = 86;
   ctx.ensure(boxH + 8);
   ctx.page.drawRectangle({ x: LM, y: ctx.y - boxH, width: CW, height: boxH, color: BOXBG, borderColor: GOLD, borderWidth: 1 });
   var scoreStr = score + ' / 100';
-  ctx.page.drawText(scoreStr, { x: LM + 18, y: ctx.y - 44, size: 26, font: ctx.f.timesBold, color: score >= 40 ? RED : NAVY2 });
-  ctx.page.drawText('Overall forensic score', { x: LM + 18, y: ctx.y - 60, size: 9, font: ctx.f.times, color: GRAY });
+  ctx.page.drawText(scoreStr, { x: LM + 18, y: ctx.y - 44, size: 26, font: ctx.f.timesBold, color: NAVY2 });
+  ctx.page.drawText('Indicator score', { x: LM + 18, y: ctx.y - 60, size: 9, font: ctx.f.times, color: GRAY });
   ctx.page.drawText('Confidence band: ' + bandLabel, { x: LM + 200, y: ctx.y - 34, size: 11, font: ctx.f.timesBold, color: NAVY2 });
   ctx.page.drawText('Total findings: ' + (fr.totalFindings || 0), { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
   ctx.page.drawText('Contradiction types triggered: ' + (fr.contradictionTypesUsed || 0) + ' / ' + CT_COUNT, { x: LM + 200, y: ctx.y - 64, size: 10, font: ctx.f.times, color: INK });
   ctx.y -= boxH + 12;
 
+  // AI document classification (optional; only shown when the classifier ran)
+  if (data.classification && data.classification.documentClass) {
+    var confTxt = (data.classification.confidence !== null && data.classification.confidence !== undefined && data.classification.confidence !== '') ? ' (confidence: ' + data.classification.confidence + ')' : '';
+    ctx.para('Document classification (AI): ' + data.classification.documentClass + confTxt, { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 8 });
+  }
+
   // engine's own summary sentence (honest, engine-generated)
   if (fr.scanFailed) ctx.para('NOTE: the deterministic scan could not complete on this file. Scores shown are not meaningful; the seal itself is unaffected.', { size: 9.5, font: ctx.f.timesBold, color: RED, after: 8 });
   if (fr.summary) ctx.para(fr.summary, { size: 10, after: 10 });
   if (!fr.clean) {
-    ctx.para('Score language: indicators detected — see findings. Keyword and pattern hits are investigative indicators, not determinations of fraud or guilt.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 12 });
+    ctx.para((fr.totalFindings || 0) + ' indicators flagged for human review. Keyword and pattern hits are investigative indicators, not determinations of fraud or guilt.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 12 });
   }
 
   // findings by severity
@@ -573,8 +579,19 @@ function secExecSummary(ctx, data) {
     var top = sorted.slice(0, 5);
     for (var t = 0; t < top.length; t++) {
       var fnd = top[t];
-      var label = (fnd.type === 'SERIAL' ? (fnd.serialName || 'Serial pattern') : (fnd.type + ' ' + (CT_NAMES[fnd.type] || '')));
-      ctx.bullet(label + ' — ' + fmtLocation(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
+      if (fnd.source === 'ai') {
+        ctx.bullet('AI-identified — ' + fnd.type + (CT_NAMES[fnd.type] ? ' ' + CT_NAMES[fnd.type] : '') + ' — ' + (fnd.rationale || ''), { size: 9.5, after: 5 });
+      } else if (fnd.type === 'SERIAL') {
+        // When the label is suppressed or demoted to a weak signal, the engine
+        // evidence quote embeds the pattern label too -- omit it in that case.
+        var slNm = fnd.serialName || fnd.serialPattern || '';
+        var slHidden = data.serialLabels && (data.serialLabels.suppressed || (data.serialLabels.weakNames || []).indexOf(slNm) !== -1);
+        if (slHidden) ctx.bullet(serialDisplay(fnd, data) + ' — ' + fmtLocation(fnd.location), { size: 9.5, after: 5 });
+        else ctx.bullet(serialDisplay(fnd, data) + ' — ' + fmtLocation(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
+      } else {
+        var label = fnd.type + ' ' + (CT_NAMES[fnd.type] || '');
+        ctx.bullet(label + ' — ' + fmtLocation(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
+      }
     }
   }
 
@@ -657,7 +674,7 @@ function secMatrix(ctx, data) {
   for (var i = 0; i < all.length; i++) {
     var f = all[i];
     if (f.type === 'SERIAL') continue; // serial patterns get their own section
-    var cat = CT_CATEGORY[f.type] || f.category || 'DIGITAL';
+    var cat = (f.source === 'ai') ? 'AI_IDENTIFIED' : (CT_CATEGORY[f.type] || f.category || 'DIGITAL');
     if (!byCat[cat]) byCat[cat] = [];
     byCat[cat].push(f);
   }
@@ -700,6 +717,34 @@ function secMatrix(ctx, data) {
     }
   }
 
+  // AI-identified indicators get their own subsection when present
+  var aiList = byCat['AI_IDENTIFIED'];
+  if (aiList && aiList.length > 0) {
+    aiList.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+    ctx.subHeading('3.' + (subNo + 1) + ' AI-Identified Indicators  (' + aiList.length + ' finding' + (aiList.length === 1 ? '' : 's') + ')', { toc: true });
+    ctx.para('Flagged by the optional AI review (Cloudflare Workers AI), not by the deterministic engine. Advisory only; included at the document owner\'s request.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+    var aiRows = [];
+    for (var ar = 0; ar < aiList.length; ar++) {
+      var af = aiList[ar];
+      aiRows.push({
+        n: String(ar + 1),
+        type: af.type || 'AI_INDICATOR',
+        rationale: af.rationale || '',
+        sev: (af.severity || '') + ' ' + sevLabel(af.severity || 0)
+      });
+    }
+    ctx.table(
+      [
+        { key: 'n', title: '#', w: 24, align: 'center' },
+        { key: 'type', title: 'Type', w: 130 },
+        { key: 'rationale', title: 'Rationale (AI)', w: 302 },
+        { key: 'sev', title: 'Severity', w: 48 }
+      ],
+      aiRows,
+      { size: 7.5 }
+    );
+  }
+
   // offence-style summary
   ctx.subHeading('Finding type summary', { toc: true });
   var byType = {};
@@ -740,6 +785,20 @@ function secMatrix(ctx, data) {
 }
 
 // ================= SECTION: SERIAL PATTERN ANALYSIS =================
+// Serial-pattern label guard. When the caller supplies serialLabels
+// ({ suppressed, weakNames, corroboratedNames, supportCount }): suppressed hides
+// every serial-pattern label (document is ABOUT fraud); weak signals (below the
+// >=2 severity>=3 corroboration threshold) render without their pattern label.
+// Legacy callers (no serialLabels option) get the historical behaviour.
+function serialDisplay(fnd, data) {
+  var name = fnd.serialName || fnd.serialPattern || 'Serial pattern';
+  var sl = data && data.serialLabels;
+  if (!sl) return name;
+  if (sl.suppressed) return 'Multi-stage pattern indicator (label suppressed)';
+  if (sl.weakNames && sl.weakNames.indexOf(name) !== -1) return 'Multi-stage pattern indicator (weak signal)';
+  return name;
+}
+
 function secSerial(ctx, data) {
   ctx.newBodyPage();
   ctx.heading('SERIAL PATTERN ANALYSIS');
@@ -752,26 +811,62 @@ function secSerial(ctx, data) {
     ctx.para('The engine evaluated ' + SP_COUNT + ' known multi-stage fraud patterns against the document text. None matched the required stage threshold.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
     return;
   }
-  ctx.para(serial.length + ' serial pattern' + (serial.length === 1 ? '' : 's') + ' detected. Serial patterns are multi-stage fraud schemes; a match means several stages of a known pattern were found in the document text.', { size: 9.5, after: 10 });
-  var rows = [];
-  for (var s = 0; s < serial.length; s++) {
-    rows.push({
-      n: String(s + 1),
-      name: serial[s].serialName || serial[s].serialPattern || 'Serial pattern',
-      evidence: quoteEvidence(serial[s].evidence),
-      sev: (serial[s].severity || '') + ' ' + sevLabel(serial[s].severity || 0)
-    });
+
+  var sl = data.serialLabels || null;
+
+  // Suppression: the AI classifier determined the document is ABOUT fraud or
+  // disputed conduct (e.g. a court filing or complaint) -- labels are withheld
+  // entirely so the document's subject matter is not mischaracterised.
+  if (sl && sl.suppressed) {
+    ctx.para('Pattern labels suppressed.', { size: 10.5, after: 6 });
+    ctx.para('This document discusses fraud or disputed conduct as its subject matter. Pattern labels have been suppressed to avoid mischaracterising the document\'s contents. The engine\'s underlying findings remain listed in the findings matrix as indicators for human review.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
+    return;
   }
-  ctx.table(
-    [
-      { key: 'n', title: '#', w: 24, align: 'center' },
-      { key: 'name', title: 'Pattern', w: 130 },
-      { key: 'evidence', title: 'Matched stages (engine evidence)', w: 302 },
-      { key: 'sev', title: 'Severity', w: 48 }
-    ],
-    rows,
-    { size: 8 }
-  );
+
+  // Corroboration: a serial-pattern label is presented only when backed by >= 2
+  // independent engine findings of severity >= 3; otherwise it demotes to a
+  // muted weak-signals note. (Legacy callers without serialLabels: all shown.)
+  var labelled = serial, weak = [];
+  if (sl) {
+    labelled = [];
+    var weakNames = sl.weakNames || [];
+    for (var w = 0; w < serial.length; w++) {
+      var nm = serial[w].serialName || serial[w].serialPattern || 'Serial pattern';
+      if (weakNames.indexOf(nm) !== -1) weak.push(serial[w]); else labelled.push(serial[w]);
+    }
+  }
+
+  if (labelled.length > 0) {
+    ctx.para('Patterns consistent with: see below. ' + labelled.length + ' serial pattern' + (labelled.length === 1 ? '' : 's') + ' corroborated by independent findings. Serial patterns are multi-stage fraud schemes; a corroborated match means several stages of a known pattern were found in the document text AND at least two independent findings of severity 3 or higher support it. These are patterns the document is consistent with — indicators for human review, not determinations of fraud.', { size: 9.5, after: 10 });
+    var rows = [];
+    for (var s = 0; s < labelled.length; s++) {
+      rows.push({
+        n: String(s + 1),
+        name: labelled[s].serialName || labelled[s].serialPattern || (labelled[s].source === 'ai' ? 'AI-identified pattern' : 'Serial pattern'),
+        evidence: (labelled[s].source === 'ai' && labelled[s].rationale) ? labelled[s].rationale : quoteEvidence(labelled[s].evidence),
+        sev: (labelled[s].severity || '') + ' ' + sevLabel(labelled[s].severity || 0)
+      });
+    }
+    ctx.table(
+      [
+        { key: 'n', title: '#', w: 24, align: 'center' },
+        { key: 'name', title: 'Pattern', w: 130 },
+        { key: 'evidence', title: 'Matched stages (engine evidence)', w: 302 },
+        { key: 'sev', title: 'Severity', w: 48 }
+      ],
+      rows,
+      { size: 8 }
+    );
+  } else {
+    ctx.para('No serial pattern reached the corroboration threshold for labelling.', { size: 10.5, after: 6 });
+  }
+
+  if (weak.length > 0) {
+    var names = [];
+    for (var q = 0; q < weak.length; q++) names.push(weak[q].serialName || weak[q].serialPattern || 'Serial pattern');
+    ctx.gap(4);
+    ctx.para('Weak signals (insufficient corroboration to label — fewer than two independent findings of severity 3 or higher): ' + names.join(', ') + '. Listed without labels as muted signals only.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
+  }
 }
 
 // ================= SECTION: TIMELINE ANALYSIS =================
@@ -854,7 +949,7 @@ function secMethodology(ctx, data) {
   ctx.bullet('Engine: Verum Omnis Forensic Contradiction Engine v' + ENGINE_VERSION + ' (Constitutional Forensic AI v' + CONSTITUTION_VERSION + ').', { size: 9.5 });
   ctx.bullet('Detectors run: ' + DETECTOR_COUNT + ' deterministic detectors across ' + CT_COUNT + ' contradiction types, plus ' + SP_COUNT + ' serial-pattern definitions.', { size: 9.5 });
   ctx.bullet('Mode: deterministic — keyword, pattern, numeric and structural heuristics over extracted page text. No generative AI was used to produce findings.', { size: 9.5 });
-  ctx.bullet('AI consensus review (multi-model, Gemma): NOT applied — pending.', { size: 9.5 });
+  ctx.bullet('AI consensus review (multi-model, Gemma): ' + (data.aiReview ? 'applied (advisory) — see AI REVIEW section.' : 'NOT applied — pending.'), { size: 9.5 });
   ctx.bullet('Text extraction: ' + (data.extractionNotes || 'per-page PDF content-stream decoding with ToUnicode CMaps.'), { size: 9.5 });
   ctx.gap(4);
 
@@ -897,6 +992,29 @@ function secMethodology(ctx, data) {
   ctx.gap(6);
 
   ctx.para('Verum Omnis  |  verumglobal.foundation  |  Verify this report at verumglobal.foundation/verify.html', { size: 8.5, color: GRAY });
+}
+
+// ================= SECTION: AI REVIEW (optional cloud layer) =================
+function secAiReview(ctx, data) {
+  var ar = data.aiReview;
+  var narr = data.aiNarrative ? san(data.aiNarrative) : '';
+  if (!ar && !narr) return;
+  ctx.newBodyPage();
+  ctx.heading('AI REVIEW');
+  ctx.para('This section is present only because the user enabled the optional cloud AI review. The AI pass is advisory: it carries no scoring weight and all deterministic findings remain anchored to quoted text.', { size: 9.5, after: 10 });
+  if (ar) {
+    var attemptedTxt = '';
+    if (ar.attempted && ar.attempted !== ar.assessed) attemptedTxt = ' (of ' + ar.attempted + ' assessed)';
+    var parts = 'AI review applied — ' + (ar.retained | 0) + ' of ' + (ar.assessed | 0) + ' engine findings retained' + attemptedTxt;
+    if ((ar.dropped | 0) > 0) parts += '; ' + (ar.dropped | 0) + ' dropped as unsupported';
+    if ((ar.added | 0) > 0) parts += '; +' + (ar.added | 0) + ' additional AI-identified';
+    parts += '.';
+    ctx.para(parts, { size: 9.5, after: 10 });
+  }
+  if (narr) {
+    ctx.box('AI NARRATIVE SUMMARY', [narr], { size: 9, titleColor: NAVY2 });
+    ctx.para('The AI narrative is advisory text generated from the finding set. It carries no scoring weight.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
 }
 
 // ================= BUILD =================
@@ -943,7 +1061,11 @@ async function build(opts) {
     pageCount: doc0.pageCount || 'n/a',
     sha512: doc0.sha512 || '',
     ots: opts.ots || null,
-    extractionNotes: opts.extractionNotes || null
+    extractionNotes: opts.extractionNotes || null,
+    aiReview: opts.aiReview || null,
+    aiNarrative: opts.aiNarrative || null,
+    classification: opts.classification || null,
+    serialLabels: opts.serialLabels || null
   };
 
   // 1. cover
@@ -952,7 +1074,7 @@ async function build(opts) {
   var tocPage = doc.addPage([PW, PH]);
   ctx.drawWatermark(tocPage);
   ctx.drawHeader(tocPage);
-  // 3-9. sections
+  // 3-10. sections
   secExecSummary(ctx, data);
   secEvidenceIndex(ctx, data);
   secMatrix(ctx, data);
@@ -961,12 +1083,13 @@ async function build(opts) {
   secDeclaration(ctx, data);
   secConstitution(ctx, data);
   secMethodology(ctx, data);
+  secAiReview(ctx, data);
   // draw TOC now that section page numbers are known
   drawToc(ctx, tocPage);
 
   try { doc.setTitle('Verum Omnis Forensic Report — ' + (doc0.name || 'document')); } catch (e) {}
   try { doc.setAuthor('Verum Omnis Constitutional Forensic AI'); } catch (e) {}
-  try { doc.setProducer('Verum Omnis Forensic Report Builder v1.0 (pdf-lib)'); } catch (e) {}
+  try { doc.setProducer('Verum Omnis Forensic Report Builder v1.3.1 (pdf-lib)'); } catch (e) {}
   try { doc.setCreationDate(generatedAt); } catch (e) {}
 
   return await doc.save();
