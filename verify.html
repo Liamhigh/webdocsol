@@ -100,10 +100,12 @@
   .result-box.visible { display: block; }
   .result-verified { background: rgba(34, 139, 104, 0.1); border: 1px solid rgba(34, 139, 104, 0.3); }
   .result-tampered { background: rgba(180, 60, 60, 0.1); border: 1px solid rgba(180, 60, 60, 0.3); }
+  .result-legacy { background: rgba(74, 126, 199, 0.1); border: 1px solid rgba(74, 126, 199, 0.35); }
   .result-box .status-icon { font-size: 64px; margin-bottom: 16px; }
   .result-box h2 { font-family: 'Cormorant Garamond', Georgia, serif; font-size: 2rem; font-weight: 400; margin-bottom: 8px; }
   .result-verified h2 { color: #4ADE80; }
   .result-tampered h2 { color: #F87171; }
+  .result-legacy h2 { color: #7EA8E0; }
   .result-box .timestamp { font-family: 'Courier New', monospace; font-size: 12px; color: #D5D8DD; opacity: 0.7; margin-top: 12px; }
 
   .fraud-section { margin: 24px 0; text-align: left; }
@@ -186,6 +188,7 @@
   .custody-badge { display: inline-block; padding: 3px 14px; border-radius: 999px; font-size: 11px; letter-spacing: 0.08em; font-weight: 600; }
   .custody-badge.match { background: rgba(34, 139, 104, 0.15); border: 1px solid rgba(34, 139, 104, 0.4); color: #4ADE80; }
   .custody-badge.seal_found { background: rgba(74, 126, 199, 0.15); border: 1px solid rgba(74, 126, 199, 0.4); color: #7EA8E0; }
+  .custody-badge.legacy, .custody-badge.seal_present { background: rgba(74, 126, 199, 0.15); border: 1px solid rgba(74, 126, 199, 0.4); color: #7EA8E0; }
   .custody-badge.tampered { background: rgba(180, 60, 60, 0.15); border: 1px solid rgba(180, 60, 60, 0.4); color: #F87171; }
   .custody-badge.no_seal { background: rgba(212, 168, 67, 0.12); border: 1px solid rgba(212, 168, 67, 0.4); color: #D4A843; }
   .custody-ots-anchored { color: #D4A843; }
@@ -208,6 +211,10 @@
   .footer p { font-size: 0.8rem; color: #D5D8DD; opacity: 0.5; }
 </style>
 <script src="https://cdn.jsdelivr.net/npm/qrcode@1.5.3/build/qrcode.min.js"></script>
+<!-- pdf.js (legacy ES5 build for widest browser support): parses the PDF Info
+     dictionary and page text so seals stored in compressed object streams and
+     subset-font content streams are still detected. -->
+<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js"></script>
 </head>
 <body>
 
@@ -248,6 +255,11 @@
       <span>Share anonymous verification metadata to improve the forensic engine</span>
     </label>
     <p class="share-meta-note">Only the verification outcome and the document's page/size class are sent &mdash; never document content, hashes, or URLs.</p>
+  </div>
+
+  <div class="share-meta" id="qrParamBox" style="display:none">
+    <p class="share-meta-label" style="cursor:default">Scanned QR payload loaded &mdash; upload the sealed PDF below to verify it against this payload.</p>
+    <p class="share-meta-note" id="qrParamNote" style="margin-left:0"></p>
   </div>
 
   <div class="spinner" id="spinner">
@@ -425,18 +437,188 @@
     }
   }
 
+  // ===== VO-SEAL / VO-SEAL2 seal detection (PDF.js + raw fast paths) =====
+  // Detection strategy, in order:
+  //   1. Raw fast paths over the file bytes (no parser needed):
+  //      - literal "VO-SEAL|<hash>|<sealId>" (old uncompressed Info dicts)
+  //      - UTF-16BE-hex "VO-SEAL2|..." (v1.3+ seals; pdf-lib writes Info strings
+  //        as hex, and v1.3+ sealers keep the Info dictionary uncompressed)
+  //   2. pdf.js getMetadata() -> info.Subject (authoritative; works even when
+  //      the Info dictionary lives inside a compressed object stream).
+  //      info.Keywords is read as a secondary signal.
+  //   3. pdf.js getTextContent() per page -> footer seal patterns. pdf.js
+  //      applies ToUnicode maps, so this works regardless of font encoding.
+  //   4. The legacy %%VO_SEAL_START raw-bytes scan (below) stays as the fast
+  //      path for the oldest appended-comment seals.
+  var VO_SEAL2_PREFIX = 'VO-SEAL2|';
+  var VO_HASH_PLACEHOLDER = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
+  var PDFJS_WORKER_SRC = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
+
+  function bufToHex(buf) {
+    return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+  }
+
+  function voUtf16Hex(str) {
+    var out = '';
+    for (var i = 0; i < str.length; i++) {
+      var h = str.charCodeAt(i).toString(16).toUpperCase();
+      while (h.length < 4) h = '0' + h;
+      out += h;
+    }
+    return out;
+  }
+
+  function voUtf16HexDecode(hex) {
+    var out = '';
+    for (var i = 0; i + 3 < hex.length; i += 4) {
+      var code = parseInt(hex.substr(i, 4), 16);
+      if (!isFinite(code)) break;
+      out += String.fromCharCode(code);
+    }
+    return out;
+  }
+
+  function voFindAscii(hay, needleStr, limit) {
+    var hits = [];
+    var n0 = needleStr.charCodeAt(0);
+    var max = hay.length - needleStr.length;
+    for (var i = 0; i <= max; i++) {
+      if (hay[i] !== n0) continue;
+      var ok = true;
+      for (var j = 1; j < needleStr.length; j++) { if (hay[i + j] !== needleStr.charCodeAt(j)) { ok = false; break; } }
+      if (ok) { hits.push(i); if (limit && hits.length >= limit) return hits; }
+    }
+    return hits;
+  }
+
+  function parseSealSubject(subject) {
+    // Returns { scheme, sealId, embeddedHash, origHash, chain } or null.
+    if (!subject) return null;
+    var isV2 = subject.indexOf(VO_SEAL2_PREFIX) === 0;
+    var isLegacy = subject.indexOf('VO-SEAL|') === 0;
+    if (!isV2 && !isLegacy) return null;
+    var parts = subject.split('|');
+    if (parts.length < 3) return null;
+    if (!/^[0-9a-fA-F]{128}$/.test(parts[1])) return null;
+    if (!/^VO-[0-9A-Za-z-]+$/.test(parts[2])) return null;
+    var out = {
+      scheme: isV2 ? 'v2' : 'legacy',
+      embeddedHash: parts[1].toLowerCase(),
+      sealId: parts[2],
+      origHash: null,
+      chain: null
+    };
+    for (var i = 3; i < parts.length; i++) {
+      if (parts[i].indexOf('ORIG:') === 0) out.origHash = parts[i].substring(5).toLowerCase();
+      else if (parts[i].indexOf('CHAIN:') === 0) out.chain = parts[i].substring(6);
+    }
+    return out;
+  }
+
+  // Raw fast paths over the latin1-decoded bytes (no PDF parser required).
+  function detectSealRaw(text) {
+    var mV2 = text.indexOf(voUtf16Hex(VO_SEAL2_PREFIX));
+    if (mV2 !== -1) {
+      var decoded = voUtf16HexDecode(text.substring(mV2, mV2 + 1600));
+      var parsedV2 = parseSealSubject(decoded);
+      if (parsedV2) { console.debug('Seal detected via raw UTF-16-hex fast path (VO-SEAL2).'); return parsedV2; }
+    }
+    var mLit = text.match(/VO-SEAL\|([0-9a-fA-F]{128})\|(VO-[0-9A-Za-z-]+)/);
+    if (mLit) {
+      var parsedLit = parseSealSubject(mLit[0]);
+      if (parsedLit) { console.debug('Seal detected via raw literal fast path (legacy VO-SEAL).'); return parsedLit; }
+    }
+    return null;
+  }
+
+  // pdf.js-based detection: Info dictionary first, footer text as fallback.
+  // IMPORTANT: pass a copy of the bytes -- pdf.js detaches the buffer it gets.
+  async function detectPdfSeal(bytesCopy) {
+    var out = { scheme: null, sealId: null, embeddedHash: null, origHash: null, chain: null,
+                keywords: null, producer: null, pageCount: 0, footerSealId: null, footerHashPrefix: null, error: null };
+    if (typeof pdfjsLib === 'undefined') { out.error = 'pdfjs-unavailable'; console.debug('pdf.js not loaded; PDF parser detection skipped.'); return out; }
+    var doc = null;
+    try {
+      if (pdfjsLib.GlobalWorkerOptions && !pdfjsLib.GlobalWorkerOptions.workerSrc) pdfjsLib.GlobalWorkerOptions.workerSrc = PDFJS_WORKER_SRC;
+      doc = await pdfjsLib.getDocument({ data: bytesCopy }).promise;
+      out.pageCount = doc.numPages || 0;
+      var info = {};
+      try {
+        var md = await doc.getMetadata();
+        info = md && md.info ? md.info : {};
+      } catch (me) { console.debug('getMetadata failed (continuing with text scan):', me && me.message ? me.message : me); }
+      out.keywords = info.Keywords || null;
+      out.producer = info.Producer || null;
+      var parsed = parseSealSubject(info.Subject || '');
+      if (parsed) {
+        out.scheme = parsed.scheme; out.sealId = parsed.sealId; out.embeddedHash = parsed.embeddedHash;
+        out.origHash = parsed.origHash; out.chain = parsed.chain;
+        console.debug('Seal detected via PDF Info dictionary:', parsed.scheme, parsed.sealId);
+        return out;
+      }
+      if (info.Subject || info.Keywords) console.debug('PDF metadata present but no VO-SEAL subject; Keywords:', out.keywords);
+      // Fallback: per-page footer text scan (first pages only -- the seal footer
+      // is stamped on every page). pdf.js applies ToUnicode maps, so subset
+      // embedded fonts still yield readable text.
+      var maxPages = Math.min(doc.numPages || 0, 3);
+      for (var p = 1; p <= maxPages; p++) {
+        try {
+          var page = await doc.getPage(p);
+          var tc = await page.getTextContent();
+          var txt = '';
+          for (var it = 0; it < tc.items.length; it++) txt += tc.items[it].str + ' ';
+          var mId = txt.match(/Seal:\s*(VO-[0-9A-F]{12})/) || txt.match(/VERUM\s+OMNIS\s+SEAL\s*\|\s*(VO-[0-9A-Za-z-]+)/);
+          if (mId) out.footerSealId = out.footerSealId || mId[1];
+          var mH = txt.match(/SHA-512:\s*([0-9a-f]{12,16})/i);
+          if (mH) out.footerHashPrefix = out.footerHashPrefix || mH[1].toLowerCase();
+          if (out.footerSealId) { out.scheme = 'footer'; console.debug('Seal footer detected in page text:', out.footerSealId); break; }
+        } catch (pe) { console.debug('Page text scan failed on page ' + p + ':', pe && pe.message ? pe.message : pe); }
+      }
+      if (!out.scheme) console.debug('No seal found via pdf.js (metadata or page text).');
+    } catch (e) {
+      out.error = e && e.message ? e.message : String(e);
+      console.debug('pdf.js seal detection failed:', out.error);
+    } finally {
+      if (doc) { try { doc.destroy(); } catch (de) {} }
+    }
+    return out;
+  }
+
+  // VO-SEAL2 integrity: substitute the embedded sealed-file hash back to the
+  // fixed placeholder (in the UTF-16BE-hex Subject encoding, same length), then
+  // recompute SHA-512 over the restored bytes. Match -> the sealed file is
+  // byte-identical to what the sealer produced. Only possible when the Info
+  // dictionary is still uncompressed (files re-saved by other PDF tools get
+  // an honest "check not applicable" instead of a verdict).
+  async function verifyV2Integrity(bytes, embeddedHash) {
+    try {
+      var needle = voUtf16Hex(VO_SEAL2_PREFIX + embeddedHash);
+      var hits = voFindAscii(bytes, needle, 2);
+      if (hits.length !== 1) return { feasible: false };
+      var start = hits[0] + voUtf16Hex(VO_SEAL2_PREFIX).length;
+      var ph = voUtf16Hex(VO_HASH_PLACEHOLDER);
+      var restored = new Uint8Array(bytes);
+      for (var k = 0; k < ph.length; k++) restored[start + k] = ph.charCodeAt(k);
+      var buf = await crypto.subtle.digest('SHA-512', restored);
+      var hex = bufToHex(buf);
+      return { feasible: true, match: hex === embeddedHash, recomputed: hex };
+    } catch (e) {
+      console.debug('VO-SEAL2 integrity check failed:', e && e.message ? e.message : e);
+      return { feasible: false };
+    }
+  }
+
   async function verifyPdf(arrayBuffer, filename) {
     var bytes = new Uint8Array(arrayBuffer);
     var text = new TextDecoder('latin1').decode(bytes);
     var pageCount = estimatePdfPageCount(text);
 
-    // Extract metadata
+    // Extract metadata from the oldest appended-comment format (fast path)
     var meta = extractMetadata(text);
-    parsedMeta = meta;
 
-    // Compute SHA-512
+    // Compute SHA-512 of the whole uploaded file (shown for manual comparison)
     var hashBuf = await crypto.subtle.digest('SHA-512', arrayBuffer);
-    var hashHex = Array.from(new Uint8Array(hashBuf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+    var hashHex = bufToHex(hashBuf);
 
     // Compute hash of just the original (everything before %%VO_SEAL_START)
     var originalHashHex = null;
@@ -444,16 +626,58 @@
     if (sealStartIdx > 0) {
       var originalBytes = bytes.slice(0, sealStartIdx);
       var originalHashBuf = await crypto.subtle.digest('SHA-512', originalBytes);
-      originalHashHex = Array.from(new Uint8Array(originalHashBuf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
+      originalHashHex = bufToHex(originalHashBuf);
     }
+
+    // Seal detection: raw fast paths first, then pdf.js (metadata -> page text).
+    // pdf.js gets a COPY of the bytes because it detaches the buffer it reads.
+    var seal = detectSealRaw(text);
+    var pdfSeal = await detectPdfSeal(bytes.slice(0));
+    if (pdfSeal && pdfSeal.scheme) seal = pdfSeal;
+    if (pdfSeal && pdfSeal.pageCount > 0) pageCount = pdfSeal.pageCount;
 
     spinner.classList.remove('visible');
     resultBox.classList.add('visible');
     actionsBox.style.display = 'block';
 
     var verdict = 'NO_SEAL';
-    if (meta && meta.sealId) {
-      // Has embedded seal metadata
+    var sealVersion = null;
+
+    if (seal && seal.scheme === 'v2') {
+      // ---- VO-SEAL2 (v1.3+): hash covers the FINAL sealed bytes ----
+      sealVersion = 'VO-SEAL2';
+      meta = meta || {};
+      meta.sealId = seal.sealId;
+      meta.sealedHash = seal.embeddedHash;
+      if (seal.origHash) meta.originalHash = seal.origHash;
+      meta.version = 'VO-SEAL2';
+      var v2 = await verifyV2Integrity(bytes, seal.embeddedHash);
+      if (v2.feasible && v2.match) {
+        verdict = 'MATCH';
+        showVerified(meta, seal.embeddedHash, null, 'v2');
+      } else if (v2.feasible) {
+        verdict = 'TAMPERED';
+        showTampered(meta, hashHex, seal.embeddedHash, null, 'v2', v2.recomputed);
+      } else {
+        // Seal metadata present but the file was re-encoded by another PDF
+        // tool (Info dictionary recompressed) -- honest "check not applicable".
+        verdict = 'SEAL_PRESENT';
+        showSealPresent(meta, hashHex, 'reencoded');
+      }
+    } else if (seal && seal.scheme === 'legacy') {
+      // ---- Legacy website seal (pre-v1.3): hash covers the PRE-SEAL original.
+      // The sealed file's own hash can never match it, so NO tamper verdict is
+      // computed from hashes -- the seal's presence is reported honestly. ----
+      sealVersion = 'VO-SEAL';
+      meta = meta || {};
+      meta.sealId = seal.sealId;
+      meta.originalHash = seal.embeddedHash;
+      meta.version = meta.version || 'VO-SEAL (legacy)';
+      verdict = 'LEGACY';
+      showLegacySeal(meta, hashHex);
+    } else if (meta && meta.sealId) {
+      // ---- Oldest appended-comment seal format (original logic, unchanged) ----
+      sealVersion = meta.version || null;
       var storedHash = meta.originalHash || meta.sha512;
       var hashMatches = storedHash && (hashHex === storedHash || (originalHashHex && originalHashHex === storedHash));
 
@@ -464,17 +688,24 @@
         verdict = 'TAMPERED';
         showTampered(meta, hashHex, storedHash, originalHashHex);
       }
+    } else if (seal && seal.scheme === 'footer') {
+      // ---- Seal footer found in page text, but no readable seal metadata ----
+      verdict = 'SEAL_PRESENT';
+      meta = meta || {};
+      meta.sealId = seal.footerSealId;
+      showSealPresent(meta, hashHex, 'footer');
     } else {
       // No embedded metadata — show hash only
       showNoSeal(hashHex);
     }
+    parsedMeta = meta;
 
     // Anonymous, opt-in engine-improvement feedback (outcome + page class only;
     // never content, hashes, sealId, or URLs). Fire-and-forget, non-blocking.
     reportVerificationOutcome(
       verdict === 'MATCH' ? 'VERIFY_GENUINE' : (verdict === 'TAMPERED' ? 'VERIFY_TAMPERED' : 'VERIFY_FORMAT_ONLY'),
       pageCount,
-      meta && meta.version ? meta.version : null
+      sealVersion || (meta && meta.version ? meta.version : null)
     );
 
     // Show PDF preview
@@ -493,6 +724,9 @@
     params.set('hash', hashHex.substring(0, 32));
     currentVerifyUrl = verifyBase + '?' + params.toString();
 
+    // Cross-check against a scanned QR payload (?h=...&m=...), when present
+    try { crossCheckQrPayload(meta, seal, hashHex); } catch (qe) { console.warn('QR cross-check failed (verification unaffected):', qe); }
+
     // Verification custody anchor — fire-and-forget, fully non-fatal.
     // Anchors the verification EVENT (never the document itself) to OpenTimestamps.
     try {
@@ -504,17 +738,27 @@
     }
   }
 
-  function showVerified(meta, hashHex, originalHashHex) {
+  function showVerified(meta, hashHex, originalHashHex, scheme) {
     resultBox.className = 'result-box visible result-verified';
     document.getElementById('statusIcon').textContent = '&#9989;';
-    document.getElementById('statusTitle').textContent = 'Seal Verified';
-    document.getElementById('statusMessage').textContent = 'This document\'s SHA-512 hash matches the embedded seal. The document has not been altered since sealing.';
+    if (scheme === 'v2') {
+      document.getElementById('statusTitle').textContent = 'Seal Verified — Genuine';
+      document.getElementById('statusMessage').textContent = 'This sealed file\'s own SHA-512 matches the hash embedded in its seal (VO-SEAL2 self-integrity check over the final sealed bytes). The document has not been altered since sealing.';
+    } else {
+      document.getElementById('statusTitle').textContent = 'Seal Verified';
+      document.getElementById('statusMessage').textContent = 'This document\'s SHA-512 hash matches the embedded seal. The document has not been altered since sealing.';
+    }
     document.getElementById('timestamp').textContent = 'Sealed: ' + (meta.timestamp ? new Date(meta.timestamp).toLocaleString() : 'Unknown');
 
     var metaHtml = '<div class="meta-grid">';
     metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
-    metaHtml += '<div class="meta-card"><h4>Document SHA-512</h4><p>' + hashHex + '</p></div>';
-    if (originalHashHex) metaHtml += '<div class="meta-card"><h4>Original Content Hash</h4><p>' + originalHashHex + '</p></div>';
+    if (scheme === 'v2') {
+      metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (verified)</h4><p>' + hashHex + '</p></div>';
+      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + meta.originalHash + '</p></div>';
+    } else {
+      metaHtml += '<div class="meta-card"><h4>Document SHA-512</h4><p>' + hashHex + '</p></div>';
+      if (originalHashHex) metaHtml += '<div class="meta-card"><h4>Original Content Hash</h4><p>' + originalHashHex + '</p></div>';
+    }
     metaHtml += '<div class="meta-card"><h4>OTS Digest (Bitcoin)</h4><p>' + (meta.otsDigest || 'N/A') + '</p></div>';
     metaHtml += '<div class="meta-card"><h4>Sender Identity</h4><p>' + (meta.sender || meta.identity || 'N/A') + '</p></div>';
     if (meta.gps) metaHtml += '<div class="meta-card"><h4>GPS Location</h4><p>' + meta.gps + '</p></div>';
@@ -549,20 +793,74 @@
     }
   }
 
-  function showTampered(meta, hashHex, storedHash, originalHashHex) {
+  function showTampered(meta, hashHex, storedHash, originalHashHex, scheme, recomputedHash) {
     resultBox.className = 'result-box visible result-tampered';
     document.getElementById('statusIcon').textContent = '&#10060;';
     document.getElementById('statusTitle').textContent = 'Seal Invalid / Tampered';
-    document.getElementById('statusMessage').textContent = 'The document\'s current hash does NOT match the embedded seal hash. The document may have been altered after sealing.';
+    if (scheme === 'v2') {
+      document.getElementById('statusMessage').textContent = 'The sealed file\'s recomputed SHA-512 does NOT match the hash embedded in its VO-SEAL2 seal. This file has been modified after sealing.';
+    } else {
+      document.getElementById('statusMessage').textContent = 'The document\'s current hash does NOT match the embedded seal hash. The document may have been altered after sealing.';
+    }
     document.getElementById('timestamp').textContent = 'Original seal: ' + (meta.timestamp ? new Date(meta.timestamp).toLocaleString() : 'Unknown');
 
     var metaHtml = '<div class="meta-grid">';
     metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
-    metaHtml += '<div class="meta-card"><h4>Current Hash</h4><p style="color:#F87171">' + hashHex + '</p></div>';
-    metaHtml += '<div class="meta-card"><h4>Embedded Hash</h4><p style="color:#4ADE80">' + (storedHash || 'N/A') + '</p></div>';
-    if (originalHashHex) metaHtml += '<div class="meta-card"><h4>Original Content Hash</h4><p>' + originalHashHex + '</p></div>';
+    if (scheme === 'v2') {
+      metaHtml += '<div class="meta-card"><h4>Recomputed Sealed-File Hash</h4><p style="color:#F87171">' + (recomputedHash || hashHex) + '</p></div>';
+      metaHtml += '<div class="meta-card"><h4>Embedded Sealed-File Hash</h4><p style="color:#4ADE80">' + (storedHash || 'N/A') + '</p></div>';
+      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + meta.originalHash + '</p></div>';
+    } else {
+      metaHtml += '<div class="meta-card"><h4>Current Hash</h4><p style="color:#F87171">' + hashHex + '</p></div>';
+      metaHtml += '<div class="meta-card"><h4>Embedded Hash</h4><p style="color:#4ADE80">' + (storedHash || 'N/A') + '</p></div>';
+      if (originalHashHex) metaHtml += '<div class="meta-card"><h4>Original Content Hash</h4><p>' + originalHashHex + '</p></div>';
+    }
     metaHtml += '<div class="meta-card"><h4>OTS Digest (Bitcoin)</h4><p>' + (meta.otsDigest || 'N/A') + '</p></div>';
     metaHtml += '<div class="meta-card"><h4>Sender Identity</h4><p>' + (meta.sender || meta.identity || 'N/A') + '</p></div>';
+    metaHtml += '</div>';
+    metaSection.innerHTML = metaHtml;
+  }
+
+  // Legacy website seal (pre-v1.3 VO-SEAL format): the embedded hash covers the
+  // pre-seal original, so a whole-file hash comparison is meaningless here.
+  // This is an honest "seal present" report -- never a tamper finding.
+  function showLegacySeal(meta, hashHex) {
+    resultBox.className = 'result-box visible result-legacy';
+    document.getElementById('statusIcon').textContent = '&#128274;';
+    document.getElementById('statusTitle').textContent = 'Seal Present — Legacy Format';
+    document.getElementById('statusMessage').textContent = 'This PDF carries a Verum Omnis seal in the legacy (pre-v1.3) format. The embedded SHA-512 covers the document\'s original pre-seal content; integrity of that original is attested by the embedded hash and its OpenTimestamps anchoring at sealing time. A sealed-file hash check is not applicable to this format — this is not a tamper finding.';
+    document.getElementById('timestamp').textContent = '';
+
+    var metaHtml = '<div class="meta-grid">';
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (embedded, OTS-anchored)</h4><p>' + (meta.originalHash || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (informational)</h4><p>' + hashHex + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Seal Format</h4><p>VO-SEAL (legacy — pre-v1.3)</p></div>';
+    metaHtml += '</div>';
+    metaSection.innerHTML = metaHtml;
+  }
+
+  // Seal detected but no integrity verdict can be computed:
+  //  - 'footer': footer text found, seal metadata missing/unreadable
+  //  - 'reencoded': VO-SEAL2 metadata present, but the file was re-saved by
+  //    another PDF tool, so the sealed-file hash can no longer be recomputed.
+  function showSealPresent(meta, hashHex, reason) {
+    resultBox.className = 'result-box visible result-legacy';
+    document.getElementById('statusIcon').textContent = '&#128274;';
+    if (reason === 'reencoded') {
+      document.getElementById('statusTitle').textContent = 'Seal Present — Check Not Applicable';
+      document.getElementById('statusMessage').textContent = 'This PDF carries a VO-SEAL2 seal, but the file was re-encoded by another PDF tool after sealing (the seal metadata no longer sits at its original byte position), so the sealed-file hash cannot be recomputed. The embedded hashes are shown for manual comparison. This is not a tamper finding.';
+    } else {
+      document.getElementById('statusTitle').textContent = 'Seal Footer Detected';
+      document.getElementById('statusMessage').textContent = 'A Verum Omnis seal footer was found in this PDF\'s page text, but the seal metadata is missing or unreadable, so no integrity verdict can be computed. The file hash is shown for manual comparison.';
+    }
+    document.getElementById('timestamp').textContent = '';
+
+    var metaHtml = '<div class="meta-grid">';
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    if (meta.sealedHash) metaHtml += '<div class="meta-card"><h4>Embedded Sealed-File SHA-512</h4><p>' + meta.sealedHash + '</p></div>';
+    if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + meta.originalHash + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Uploaded File SHA-512</h4><p>' + hashHex + '</p></div>';
     metaHtml += '</div>';
     metaSection.innerHTML = metaHtml;
   }
@@ -887,6 +1185,79 @@
       }).then(function() { clearTimeout(to); }).catch(function() { clearTimeout(to); });
     } catch (e) { /* silent by design: telemetry must never affect verification */ }
   }
+
+  // ===== Scanned QR payload (?h=...&m=...) =====
+  // Seal QR codes encode https://verumglobal.foundation/verify.html?h=<first 32
+  // hex of the ORIGINAL content SHA-512>&m=<base64 JSON seal metadata>. When a
+  // user lands here via a QR scan, we display that payload and, after upload,
+  // cross-check the uploaded file against it. Fully non-fatal.
+  var qrPayload = null;
+
+  function base64ToUtf8(b64) {
+    var bin = atob(b64);
+    var bytes = new Uint8Array(bin.length);
+    for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    return new TextDecoder('utf-8').decode(bytes);
+  }
+
+  function parseQrParams() {
+    try {
+      var qs = new URLSearchParams(window.location.search);
+      var h = qs.get('h');
+      var m = qs.get('m');
+      if (!h && !m) return null;
+      var out = { h: null, meta: null };
+      if (h && /^[0-9a-fA-F]{8,128}$/.test(h)) out.h = h.toLowerCase();
+      if (m) {
+        try { out.meta = JSON.parse(base64ToUtf8(m)); } catch (me) { console.debug('QR m= payload not decodable:', me && me.message ? me.message : me); }
+      }
+      return (out.h || out.meta) ? out : null;
+    } catch (e) { return null; }
+  }
+
+  function initQrPayload() {
+    qrPayload = parseQrParams();
+    if (!qrPayload) return;
+    var box = document.getElementById('qrParamBox');
+    var note = document.getElementById('qrParamNote');
+    if (!box || !note) return;
+    var bits = [];
+    var meta = qrPayload.meta || {};
+    if (meta.sealId) bits.push('Seal ID: ' + meta.sealId);
+    var hashRef = meta.sha512 || meta.originalHash || qrPayload.h || null;
+    if (hashRef) bits.push('Original content SHA-512: ' + hashRef.substring(0, 32) + (hashRef.length > 32 ? '…' : ''));
+    if (meta.otsDigest) bits.push('OTS digest: ' + String(meta.otsDigest).substring(0, 16) + '…');
+    if (meta.timestamp) bits.push('Sealed: ' + meta.timestamp);
+    note.textContent = bits.length ? bits.join('  |  ') : 'QR payload present (no decodable metadata).';
+    box.style.display = 'block';
+  }
+
+  function crossCheckQrPayload(meta, seal, hashHex) {
+    if (!qrPayload) return;
+    var note = document.getElementById('qrParamNote');
+    if (!note) return;
+    var msgs = [];
+    var qMeta = qrPayload.meta || {};
+    var expectedSeal = qMeta.sealId || null;
+    var actualSeal = meta && meta.sealId ? meta.sealId : null;
+    if (expectedSeal && actualSeal) {
+      if (expectedSeal === actualSeal) msgs.push('✓ Seal ID matches the scanned QR payload (' + actualSeal + ').');
+      else msgs.push('⚠ WARNING: the uploaded file\'s seal (' + actualSeal + ') does NOT match the scanned QR payload (' + expectedSeal + ') — you may have uploaded a different document.');
+    }
+    if (qrPayload.h) {
+      var ref = null;
+      if (seal && seal.scheme === 'v2' && seal.origHash) ref = seal.origHash;
+      else if (seal && seal.scheme === 'legacy' && seal.embeddedHash) ref = seal.embeddedHash;
+      else if (meta && (meta.originalHash || meta.sha512)) ref = meta.originalHash || meta.sha512;
+      if (ref) {
+        if (ref.substring(0, 32).toLowerCase() === qrPayload.h) msgs.push('✓ QR hash prefix matches this document\'s original content hash.');
+        else msgs.push('⚠ WARNING: the scanned QR hash prefix does not match this document.');
+      }
+    }
+    if (msgs.length) note.textContent = msgs.join('  ');
+  }
+
+  initQrPayload();
 
   // ===== Metadata Extraction =====
   function extractMetadata(pdfText) {
