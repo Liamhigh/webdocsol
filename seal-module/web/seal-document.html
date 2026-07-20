@@ -5,6 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<meta name="vo-seal-build" content="1.4.1-20260720-qrprivacy">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -353,6 +354,7 @@
   <div style="margin-bottom:24px;">
     <button type="button" onclick="toggleSection('identitySection')" style="background:none;border:none;color:#4A7EC7;font-family:'Courier New',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;padding:0;">&#128100; + Add Sender Identity (optional -- for affidavit pre-fill, chain of custody)</button>
     <div id="identitySection" style="display:none;margin-top:16px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;">
+      <p style="font-size:12px;color:#94a3b8;margin:0 0 14px;line-height:1.6;">Identity details appear only in your private Seal Certificate — never in the public QR code.</p>
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Full Name</label>
       <input type="text" id="senderName" placeholder="e.g., John van der Merwe" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:12px;font-family:inherit;">
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">ID / Passport Number</label>
@@ -361,6 +363,10 @@
       <input type="text" id="senderAddress" placeholder="e.g., 12 Main Street, Sandton, Johannesburg" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:12px;font-family:inherit;">
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Contact Email</label>
       <input type="email" id="senderEmail" placeholder="e.g., john@email.com" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;margin-top:14px;">
+        <input type="checkbox" id="includeIdentityInQr" style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
+        <span>Include identity + GPS in the public QR code (opt-in, default off). <strong style="color:#D4A843;">Warning: anyone holding the sealed document can read the QR payload.</strong> Leave unchecked to keep identity and GPS only in your private Seal Certificate.</span>
+      </label>
     </div>
   </div>
 
@@ -423,7 +429,7 @@
     <div class="step" id="stepFraud"><div class="status pending">&#9675;</div><div class="label"><strong>Forensic Scan</strong> -- Flagging contradiction indicators for review</div><div class="detail" id="detailFraud"></div></div>
     <div class="step" id="step3"><div class="status pending">&#9675;</div><div class="label"><strong>OpenTimestamps</strong> -- Submitting to calendar servers</div><div class="detail" id="detail3"></div></div>
     <div class="step" id="step4"><div class="status pending">&#9675;</div><div class="label"><strong>A4 Watermark</strong> -- Full-page background at 20% opacity</div><div class="detail" id="detail4"></div></div>
-    <div class="step" id="step5"><div class="status pending">&#9675;</div><div class="label"><strong>Clean QR Code</strong> -- Encoding hash + identity + GPS + device</div><div class="detail" id="detail5"></div></div>
+    <div class="step" id="step5"><div class="status pending">&#9675;</div><div class="label"><strong>Clean QR Code</strong> -- Encoding hash + seal metadata (identity stays private)</div><div class="detail" id="detail5"></div></div>
     <div class="step" id="step6"><div class="status pending">&#9675;</div><div class="label"><strong>Seal Footer</strong> -- Hash + timestamp on every page</div><div class="detail" id="detail6"></div></div>
     <div class="step" id="step7"><div class="status pending">&#9675;</div><div class="label"><strong>Finalize</strong> -- Preparing sealed PDF package</div><div class="detail" id="detail7"></div></div>
     <div class="step" id="step8"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-512</strong> -- Verum Forensic Fingerprint (final verification)</div><div class="detail" id="detail8"></div></div>
@@ -469,7 +475,7 @@
       <div class="item"><h4>&#128241; Clean QR Code</h4><p>QR sits in the top-right margin with white background panel -- never covers document text. Original document layout is fully preserved. Scans instantly with any phone.</p></div>
       <div class="item"><h4>&#128274; Dual Hash</h4><p>SHA-256 for OpenTimestamps blockchain anchoring. SHA-512 as the Verum forensic fingerprint. Two independent hashes, zero trust required.</p></div>
       <div class="item"><h4>&#9939; Bitcoin Blockchain</h4><p>OpenTimestamps anchors the SHA-256 hash into Bitcoin. Once confirmed (~1-2 hours), the timestamp is permanently and independently verifiable.</p></div>
-      <div class="item"><h4>&#128100; Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) encoded into the QR code for affidavit pre-fill and chain of custody.</p></div>
+      <div class="item"><h4>&#128100; Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) is written into your private Seal Certificate for affidavit pre-fill and chain of custody — never into the public QR code unless you explicitly opt in.</p></div>
       <div class="item"><h4>&#128205; GPS + Device</h4><p>Automatic geolocation and device fingerprint capture. Proves where and from what device the seal was applied.</p></div>
       <div class="item"><h4>&#128272; Password Protection</h4><p>Optional AES-256 password protection with delivery receipt cover page. Recipient must email sender for password -- that email IS the read receipt.</p></div>
       <div class="item"><h4>&#128737; Tamper Detection</h4><p>Recipient uploads document to verify page. If SHA-512 doesn't match --> "TAMPERED -- DO NOT ACCEPT". Cryptographically impossible to forge.</p></div>
@@ -485,9 +491,9 @@
 
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="/forensic-report.js"></script>
-<script src="/forensic-engine-page.js"></script>
-<script src="/ots-proof.js"></script>
+<script src="/forensic-report.js?v=1.4.1-20260720"></script>
+<script src="/forensic-engine-page.js?v=1.4.1-20260720"></script>
+<script src="/ots-proof.js?v=1.4.1-20260720"></script>
 <script>
 const { PDFDocument, rgb, StandardFonts } = PDFLib;
 
@@ -541,6 +547,32 @@ function collectSealMetadata() {
   meta.type = sealType;
   if (sealType === 'commercial') { const org = document.getElementById('clientName')?.value?.trim(); if (org) meta.org = org; }
   return meta;
+}
+
+// ==================== QR PAYLOAD PRIVACY BOUNDARY ====================
+// The QR / verify-URL payload is PUBLIC: anyone holding the sealed document
+// can scan and base64-decode it. It therefore carries ONLY seal-integrity
+// data: {v, t, type, sha512, otsDigest, otsStatus, sealId} plus chain-of-
+// custody ids when present. Sender identity (id{n,id,a,e}), GPS (gps/acc) and
+// device fingerprint (dev) are NEVER included by default -- they live only in
+// the private Seal Certificate PDF the user keeps. An explicit opt-in
+// (#includeIdentityInQr, default OFF, with a warning) re-adds them for legacy
+// workflows. Parsers (verify page, Android app): fields may be absent --
+// tolerate unknown/missing keys.
+function buildQrPayload(meta, chainIds) {
+  var p = { v: meta.v, t: meta.t, type: meta.type };
+  if (meta.sha512) p.sha512 = meta.sha512;
+  if (meta.otsDigest) p.otsDigest = meta.otsDigest;
+  if (meta.otsStatus !== undefined && meta.otsStatus !== null) p.otsStatus = meta.otsStatus;
+  if (meta.sealId) p.sealId = meta.sealId;
+  if (chainIds && chainIds.length) p.chain = chainIds.slice();
+  var optIn = document.getElementById('includeIdentityInQr');
+  if (optIn && optIn.checked) {
+    if (meta.id) p.id = meta.id;
+    if (meta.gps) { p.gps = meta.gps; if (meta.acc) p.acc = meta.acc; }
+    if (meta.dev) p.dev = meta.dev;
+  }
+  return p;
 }
 
 fetch('/images/watermark_portrait.png').then(r => r.arrayBuffer()).then(buf => { watermarkBytes = buf; }).catch(err => console.warn('Watermark load failed:', err));
@@ -1239,6 +1271,33 @@ async function buildSealCertificate(opts) {
   var vurl = 'verumglobal.foundation/verify.html';
   page.drawText(vurl, { x: qrX - 8 + (qrSize + 16 - helv.widthOfTextAtSize(vurl, 6.5)) / 2, y: qrY - 33, size: 6.5, font: helv, color: MUTE });
 
+  // Sender identity block (PRIVATE): identity, GPS and device live ONLY here,
+  // in the user's own Seal Certificate -- never in the public QR payload.
+  var idy = opts.identity || null;
+  var hasIdy = !!(idy && (idy.n || idy.id || idy.a || idy.e));
+  if (hasIdy || opts.gps || opts.dev) {
+    var iy = qrY - 54;
+    page.drawText('SENDER IDENTITY (PRIVATE)', { x: qrX - 8, y: iy, size: 7, font: helvBold, color: GOLD });
+    iy -= 11;
+    var idLines = [];
+    if (hasIdy) {
+      if (idy.n) idLines.push('Name: ' + idy.n);
+      if (idy.id) idLines.push('ID: ' + idy.id);
+      if (idy.a) idLines.push('Addr: ' + idy.a);
+      if (idy.e) idLines.push('Email: ' + idy.e);
+    }
+    if (opts.gps) idLines.push('GPS: ' + opts.gps + (opts.acc ? ' (±' + opts.acc + 'm)' : ''));
+    if (opts.dev) idLines.push('Device: ' + opts.dev);
+    for (var ii = 0; ii < idLines.length; ii++) {
+      var wl = wrap(idLines[ii], helv, 7, qrSize + 16);
+      for (var wi = 0; wi < wl.length; wi++) {
+        if (iy < 250) break; // keep clear of the canonical statement box
+        page.drawText(safe(wl[wi]), { x: qrX - 8, y: iy, size: 7, font: helv, color: LIGHT });
+        iy -= 9.5;
+      }
+    }
+  }
+
   // Detail rows (left column)
   var lx = 70, rowMaxW = qrX - 40 - lx;
   function row(label, valueLines, valueFont, valueSize, gap) {
@@ -1818,7 +1877,10 @@ async function runSealingPipeline() {
   meta.otsDigest = otsDigestHex;     // 64-char OTS SHA-256 digest for blockchain lookup
   meta.otsStatus = otsResult.success; // Whether OTS calendar accepted the digest
   meta.sealId = sealId;              // VO-XXXXXXXXXXXX seal identifier
-  var metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(meta)));
+  // PRIVACY: public QR payload excludes identity/GPS/device (buildQrPayload);
+  // those stay in the private Seal Certificate only.
+  var chainIdsQr = chain.map(function(c) { return c.sealId; }).filter(function(id) { return id && id !== sealId; });
+  var metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(meta, chainIdsQr))));
   var qrContent = 'https://verumglobal.foundation/verify.html?h=' + sha512.substring(0,32) + '&m=' + metaStr;
   // QR ROBUSTNESS: QR generation or preview rendering must NEVER abort the seal.
   // The QR is a convenience pointer to the verify page; the SHA-512 fingerprint,
@@ -1939,7 +2001,11 @@ async function runSealingPipeline() {
         pageCount: _pipelinePageCount || null,
         otsSubmitted: !!(otsResult && otsResult.success),
         otsCalendar: otsResult && otsResult.calendar ? otsResult.calendar : null,
-        qrDataURL: qrDataURL
+        qrDataURL: qrDataURL,
+        identity: meta.id || null,
+        gps: meta.gps || null,
+        acc: meta.acc || null,
+        dev: meta.dev || null
       });
       window._voSealCert = { bytes: certBytes };
       updateStep(7, 'complete', 'Certificate ready');
@@ -2019,7 +2085,7 @@ async function runSealingPipeline() {
       rMeta.otsStatus = rOts.success;
       rMeta.sealId = rSealId;
       rMeta.report = true;
-      var rQrContent = 'https://verumglobal.foundation/verify.html?h=' + rSha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(rMeta)));
+      var rQrContent = 'https://verumglobal.foundation/verify.html?h=' + rSha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(rMeta, null))));
       var rQr = await generateQRDataURL(rQrContent, 400);
       var rSealedBytes = await window.VerumReport.seal(reportBytes, {
         sealId: rSealId,
@@ -2125,7 +2191,10 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   } else if (chainEl) { document.getElementById('chainRow').style.display = 'none'; }
 
   let verifyUrl = 'https://verumglobal.foundation/verify.html?h=' + sha512.substring(0,32);
-  try { const metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(meta))); verifyUrl += '&m=' + metaStr; } catch(e) {}
+  try {
+    var vChainIds = (chain || []).map(function(c) { return c.sealId; }).filter(function(id) { return id && id !== sealId; });
+    verifyUrl += '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(meta, vChainIds))));
+  } catch(e) {}
   document.getElementById('verifyLink').href = verifyUrl;
 
   const el = document.getElementById('otsStatus');
