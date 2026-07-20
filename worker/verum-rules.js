@@ -8,6 +8,8 @@
 //   POST /api/v1/admin/publish    admin: publish a new signed rule package
 //   GET  /constitution.pdf        sealed Verum Omnis Constitution v6 PDF (from KV)
 //   GET  /docs/constitution.pdf   alias of /constitution.pdf
+//   GET  /images/logo-full.png    site logo PNG (from KV)
+//   GET  /images/watermark_portrait.png  watermark PNG (from KV)
 //   POST /api/v1/ai/gatekeep      AI licensing gatekeeper (commercial-use signals)
 //   POST /api/v1/ai/classify      AI document triage classification (pre-engine scope)
 //   POST /api/v1/ai/assess        AI antithesis review of candidate findings
@@ -213,6 +215,41 @@ async function handleConstitutionPdf(env) {
     headers: corsHeaders({
       'Content-Type': 'application/pdf',
       'Content-Disposition': 'inline; filename="' + filename + '"',
+      'Cache-Control': 'public, max-age=86400'
+    })
+  });
+}
+
+// Site images served from KV (single base64 key per image, e.g. img:logo-full:b64).
+const SITE_IMAGES = {
+  '/images/logo-full.png': { key: 'img:logo-full:b64', contentType: 'image/png' },
+  '/images/watermark_portrait.png': { key: 'img:watermark-portrait:b64', contentType: 'image/png' }
+};
+
+// Serve a site image stored in KV as base64. Decodes base64 in slices to stay
+// clear of call-stack / arg-count limits (same approach as handleConstitutionPdf).
+async function handleImageKv(env, kvKey, contentType) {
+  const b64 = await env.RULES_KV.get(kvKey);
+  if (b64 === null) {
+    return err(404, 'not_found', 'Image is not available.');
+  }
+  const SLICE = 32768; // multiple of 4, keeps atob input aligned
+  let padding = 0;
+  if (b64.endsWith('==')) padding = 2;
+  else if (b64.endsWith('=')) padding = 1;
+  const totalLen = Math.floor(b64.length / 4) * 3 - padding;
+  const bytes = new Uint8Array(totalLen);
+  let offset = 0;
+  for (let i = 0; i < b64.length; i += SLICE) {
+    const bin = atob(b64.slice(i, i + SLICE));
+    for (let j = 0; j < bin.length; j++) bytes[offset + j] = bin.charCodeAt(j);
+    offset += bin.length;
+  }
+  return new Response(bytes, {
+    status: 200,
+    headers: corsHeaders({
+      'Content-Type': contentType,
+      'Content-Length': String(bytes.length),
       'Cache-Control': 'public, max-age=86400'
     })
   });
@@ -439,8 +476,8 @@ const ASSESS_SYSTEM = 'You are the antithesis reviewer in a forensic contradicti
 
 const NARRATE_SYSTEM = 'You are a forensic report writer for Verum Omnis. Write (1) a 120-180 ' +
   'word executive summary paragraph and (2) a 150-250 word critical-evidence narrative, in ' +
-  'formal forensic English, third person, measured tone. RULES: state only facts present in ' +
-  'the supplied findings; after every factual claim cite the finding id in square brackets ' +
+  'formal forensic English, third person, measured tone. RULES: state only facts present in the ' +
+  'supplied findings; after every factual claim cite the finding id in square brackets ' +
   '[F7]; never quantify beyond supplied data; end with one sentence: \'These findings are ' +
   'investigative indicators, not determinations of guilt.\' Reply ONLY JSON ' +
   '{"executiveSummary":"...","criticalEvidence":"..."}';
@@ -1042,9 +1079,10 @@ async function route(request, env) {
   if (path === '/api/v1/ai/narrate' && request.method === 'POST') return handleAiNarrate(request, env);
   if (path === '/api/v1/ai/curate' && request.method === 'POST') return handleAiCurate(request, env);
   if ((path === '/constitution.pdf' || path === '/docs/constitution.pdf') && request.method === 'GET') return handleConstitutionPdf(env);
+  if ((path === '/images/logo-full.png' || path === '/images/watermark_portrait.png') && request.method === 'GET') return handleImageKv(env, SITE_IMAGES[path].key, SITE_IMAGES[path].contentType);
 
   const known = ['/api/v1/status', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish',
-    '/api/v1/ai/gatekeep', '/api/v1/ai/classify', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf'];
+    '/api/v1/ai/gatekeep', '/api/v1/ai/classify', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf', '/images/logo-full.png', '/images/watermark_portrait.png'];
   if (known.includes(path)) {
     return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' || path.endsWith('/constitution.pdf') ? 'GET' : 'POST' });
   }
