@@ -225,7 +225,7 @@
      failure class; showQrCode() still typeof-guards so QR problems can never
      block verification. -->
 <script>
-var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],f={},c=function(t,r){o=function(t){for(var r=new Array(t),e=0;e<t;e+=1){r[e]=new Array(t);for(var n=0;n<t;n+=1)r[e][n]=null}return r}(i=4*e+17),l(0,0),l(i-7,0),l(0,i-7),s(),h(),d(t,r),e>=7&&v(t),null==a&&(a=p(e,n,u)),w(a,r)},l=function(t,r){for(var e=-1;e<=7;e+=1)if(!(t+e<=-1||i<=t+e))for(var n=-1;n<=7;n+=1)r+n<=-1||i<=r+n||(o[t+e][r+n]=0<=e&&e<=6&&(0==n||6==n)||0<=n&&n<=6&&(0==e||6==e)||2<=e&&e<=4&&2<=n&&n<=4)},h=function(){for(var t=8;t<i-8;t+=1)null==o[t][6]&&(o[t][6]=t%2==0);for(var r=8;r<i-8;r+=1)null==o[6][r]&&(o[6][r]=r%2==0)},s=function(){for(var t=B.getPatternPosition(e),r=0;r<t.length;r+=1)for(var n=0;n<t.length;n+=1){var i=t[r],a=t[n];if(null==o[i][a])for(var u=-2;u<=2;u+=1)for(var f=-2;f<=2;f+=1)o[i+u][a+f]=-2==u||2==u||-2==f||2==f||0==u&&0==f}},v=function(t){for(var r=B.getBCHTypeNumber(e),n=0;n<18;n+=1){var a=!t&&1==(r>>n&1);o[Math.floor(n/3)][n%3+i-8-3]=a}for(n=0;n<18;n+=1){a=!t&&1==(r>>n&1);o[n%3+i-8-3][Math.floor(n/3)]=a}},d=function(t,r){for(var e=n<<3|r,a=B.getBCHTypeInfo(e),u=0;u<15;u+=1){var f=!t&&1==(a>>u&1);u<6?o[u][8]=f:u<8?o[u+1][8]=f:o[i-15+u][8]=f}for(u=0;u<15;u+=1){f=!t&&1==(a>>u&1);u<8?o[8][i-u-1]=f:u<9?o[8][15-u-1+1]=f:o[8][15-u-1]=f}o[i-8][8]=!t},w=function(t,r){for(var e=-1,n=i-1,a=7,u=0,f=B.getMaskFunction(r),c=i-1;c>0;c-=2)for(6==c&&(c-=1);;){for(var g=0;g<2;g+=1)if(null==o[n][c-g]){var l=!1;u<t.length&&(l=1==(t[u]>>>a&1)),f(n,c-g)&&(l=!l),o[n][c-g]=l,-1==(a-=1)&&(u+=1,a=7)}if((n+=e)<0||i<=n){n-=e,e=-e;break}}},p=function(t,r,e){for(var n=A.getRSBlocks(t,r),o=b(),i=0;i<e.length;i+=1){var a=e[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var u=0;for(i=0;i<n.length;i+=1)u+=n[i].dataCount;if(o.getLengthInBits()>8*u)throw"code length overflow. ("+o.getLengthInBits()+">"+8*u+")";for(o.getLengthInBits()+4<=8*u&&o.put(0,4);o.getLengthInBits()%8!=0;)o.putBit(!1);for(;!(o.getLengthInBits()>=8*u||(o.put(236,8),o.getLengthInBits()>=8*u));)o.put(17,8);return function(t,r){for(var e=0,n=0,o=0,i=new Array(r.length),a=new Array(r.length),u=0;u<r.length;u+=1){var f=r[u].dataCount,c=r[u].totalCount-f;n=Math.max(n,f),o=Math.max(o,c),i[u]=new Array(f);for(var g=0;g<i[u].length;g+=1)i[u][g]=255&t.getBuffer()[g+e];e+=f;var l=B.getErrorCorrectPolynomial(c),h=k(i[u],l.getLength()-1).mod(l);for(a[u]=new Array(l.getLength()-1),g=0;g<a[u].length;g+=1){var s=g+h.getLength()-a[u].length;a[u][g]=s>=0?h.getAt(s):0}}var v=0;for(g=0;g<r.length;g+=1)v+=r[g].totalCount;var d=new Array(v),w=0;for(g=0;g<n;g+=1)for(u=0;u<r.length;u+=1)g<i[u].length&&(d[w]=i[u][g],w+=1);for(g=0;g<o;g+=1)for(u=0;u<r.length;u+=1)g<a[u].length&&(d[w]=a[u][g],w+=1);return d}(o,n)};f.addData=function(t,r){var e=null;switch(r=r||"Byte"){case"Numeric":e=M(t);break;case"Alphanumeric":e=x(t);break;case"Byte":e=m(t);break;case"Kanji":e=L(t);break;default:throw"mode:"+r}u.push(e),a=null},f.isDark=function(t,r){if(t<0||i<=t||r<0||i<=r)throw t+","+r;return o[t][r]},f.getModuleCount=function(){return i},f.make=function(){if(e<1){for(var t=1;t<40;t++){for(var r=A.getRSBlocks(t,n),o=b(),i=0;i<u.length;i++){var a=u[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var g=0;for(i=0;i<r.length;i++)g+=r[i].dataCount;if(o.getLengthInBits()<=8*g)break}e=t}c(!1,function(){for(var t=0,r=0,e=0;e<8;e+=1){c(!0,e);var n=B.getLostPoint(f);(0==e||t>n)&&(t=n,r=e)}return r}())},f.createTableTag=function(t,r){t=t||2;var e="";e+='<table style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: "+(r=void 0===r?4*t:r)+"px;",e+='">',e+="<tbody>";for(var n=0;n<f.getModuleCount();n+=1){e+="<tr>";for(var o=0;o<f.getModuleCount();o+=1)e+='<td style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: 0px;",e+=" width: "+t+"px;",e+=" height: "+t+"px;",e+=" background-color: ",e+=f.isDark(n,o)?"#000000":"#ffffff",e+=";",e+='"/>';e+="</tr>"}return e+="</tbody>",e+="</table>"},f.createSvgTag=function(t,r,e,n){var o={};"object"==typeof arguments[0]&&(t=(o=arguments[0]).cellSize,r=o.margin,e=o.alt,n=o.title),t=t||2,r=void 0===r?4*t:r,(e="string"==typeof e?{text:e}:e||{}).text=e.text||null,e.id=e.text?e.id||"qrcode-description":null,(n="string"==typeof n?{text:n}:n||{}).text=n.text||null,n.id=n.text?n.id||"qrcode-title":null;var i,a,u,c,g=f.getModuleCount()*t+2*r,l="";for(c="l"+t+",0 0,"+t+" -"+t+",0 0,-"+t+"z ",l+='<svg version="1.1" xmlns="http://www.w3.org/2000/svg"',l+=o.scalable?"":' width="'+g+'px" height="'+g+'px"',l+=' viewBox="0 0 '+g+" "+g+'" ',l+=' preserveAspectRatio="xMinYMin meet"',l+=n.text||e.text?' role="img" aria-labelledby="'+y([n.id,e.id].join(" ").trim())+'"':"",l+=">",l+=n.text?'<title id="'+y(n.id)+'">'+y(n.text)+"</title>":"",l+=e.text?'<description id="'+y(e.id)+'">'+y(e.text)+"</description>":"",l+='<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>',l+='<path d="',a=0;a<f.getModuleCount();a+=1)for(u=a*t+r,i=0;i<f.getModuleCount();i+=1)f.isDark(a,i)&&(l+="M"+(i*t+r)+","+u+c);return l+='" stroke="transparent" fill="black"/>',l+="</svg>"},f.createDataURL=function(t,r){t=t||2,r=void 0===r?4*t:r;var e=f.getModuleCount()*t+2*r,n=r,o=e-r;return I(e,e,(function(r,e){if(n<=r&&r<o&&n<=e&&e<o){var i=Math.floor((r-n)/t),a=Math.floor((e-n)/t);return f.isDark(a,i)?0:1}return 1}))},f.createImgTag=function(t,r,e){t=t||2,r=void 0===r?4*t:r;var n=f.getModuleCount()*t+2*r,o="";return o+="<img",o+=' src="',o+=f.createDataURL(t,r),o+='"',o+=' width="',o+=n,o+='"',o+=' height="',o+=n,o+='"',e&&(o+=' alt="',o+=y(e),o+='"'),o+="/>"};var y=function(t){for(var r="",e=0;e<t.length;e+=1){var n=t.charAt(e);switch(n){case"<":r+="&lt;";break;case">":r+="&gt;";break;case"&":r+="&amp;";break;case'"':r+="&quot;";break;default:r+=n}}return r};return f.createASCII=function(t,r){if((t=t||1)<2)return function(t){t=void 0===t?2:t;var r,e,n,o,i,a=1*f.getModuleCount()+2*t,u=t,c=a-t,g={"██":"█","█ ":"▀"," █":"▄","  ":" "},l={"██":"▀","█ ":"▀"," █":" ","  ":" "},h="";for(r=0;r<a;r+=2){for(n=Math.floor((r-u)/1),o=Math.floor((r+1-u)/1),e=0;e<a;e+=1)i="█",u<=e&&e<c&&u<=r&&r<c&&f.isDark(n,Math.floor((e-u)/1))&&(i=" "),u<=e&&e<c&&u<=r+1&&r+1<c&&f.isDark(o,Math.floor((e-u)/1))?i+=" ":i+="█",h+=t<1&&r+1>=c?l[i]:g[i];h+="\n"}return a%2&&t>0?h.substring(0,h.length-a-1)+Array(a+1).join("▀"):h.substring(0,h.length-1)}(r);t-=1,r=void 0===r?2*t:r;var e,n,o,i,a=f.getModuleCount()*t+2*r,u=r,c=a-r,g=Array(t+1).join("██"),l=Array(t+1).join("  "),h="",s="";for(e=0;e<a;e+=1){for(o=Math.floor((e-u)/t),s="",n=0;n<a;n+=1)i=1,u<=n&&n<c&&u<=e&&e<c&&f.isDark(o,Math.floor((n-u)/t))&&(i=0),s+=i?g:l;for(o=0;o<t;o+=1)h+=s+"\n"}return h.substring(0,h.length-1)},f.renderTo2dContext=function(t,r){r=r||2;for(var e=f.getModuleCount(),n=0;n<e;n++)for(var o=0;o<e;o+=1)t.fillStyle=f.isDark(n,o)?"black":"white",t.fillRect(n*r,o*r,r,r)},f};t.stringToBytes=(t.stringToBytesFuncs={default:function(t){for(var r=[],e=0;e<t.length;e+=1){var n=t.charCodeAt(e);r.push(255&n)}return r}}).default,t.createStringToBytes=function(t,r){var e=function(){for(var e=S(t),n=function(){var t=e.read();if(-1==t)throw"eof";return t},o=0,i={};;){var a=e.read();if(-1==a)break;var u=n(),f=n()<<8|n();i[String.fromCharCode(a<<8|u)]=f,o+=1}if(o!=r)throw o+" != "+r;return e}(),n="?".charCodeAt(0);return function(t){for(var r=[],o=0;o<t.length;o+=1){var i=t.charCodeAt(o);if(i<128)r.push(i);else{var a=e[t.charAt(o)];"number"==typeof a?(255&a)==a?r.push(a):(r.push(a>>>8),r.push(255&a)):r.push(n)}}return r}};var r,e,n,o,i,a=1,u=2,f=4,c=8,g={L:1,M:0,Q:3,H:2},l=0,h=1,s=2,v=3,d=4,w=5,p=6,y=7,B=(r=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],e=1335,n=7973,i=function(t){for(var r=0;0!=t;)r+=1,t>>>=1;return r},(o={}).getBCHTypeInfo=function(t){for(var r=t<<10;i(r)-i(e)>=0;)r^=e<<i(r)-i(e);return 21522^(t<<10|r)},o.getBCHTypeNumber=function(t){for(var r=t<<12;i(r)-i(n)>=0;)r^=n<<i(r)-i(n);return t<<12|r},o.getPatternPosition=function(t){return r[t-1]},o.getMaskFunction=function(t){switch(t){case l:return function(t,r){return(t+r)%2==0};case h:return function(t,r){return t%2==0};case s:return function(t,r){return r%3==0};case v:return function(t,r){return(t+r)%3==0};case d:return function(t,r){return(Math.floor(t/2)+Math.floor(r/3))%2==0};case w:return function(t,r){return t*r%2+t*r%3==0};case p:return function(t,r){return(t*r%2+t*r%3)%2==0};case y:return function(t,r){return(t*r%3+(t+r)%2)%2==0};default:throw"bad maskPattern:"+t}},o.getErrorCorrectPolynomial=function(t){for(var r=k([1],0),e=0;e<t;e+=1)r=r.multiply(k([1,C.gexp(e)],0));return r},o.getLengthInBits=function(t,r){if(1<=r&&r<10)switch(t){case a:return 10;case u:return 9;case f:case c:return 8;default:throw"mode:"+t}else if(r<27)switch(t){case a:return 12;case u:return 11;case f:return 16;case c:return 10;default:throw"mode:"+t}else{if(!(r<41))throw"type:"+r;switch(t){case a:return 14;case u:return 13;case f:return 16;case c:return 12;default:throw"mode:"+t}}},o.getLostPoint=function(t){for(var r=t.getModuleCount(),e=0,n=0;n<r;n+=1)for(var o=0;o<r;o+=1){for(var i=0,a=t.isDark(n,o),u=-1;u<=1;u+=1)if(!(n+u<0||r<=n+u))for(var f=-1;f<=1;f+=1)o+f<0||r<=o+f||0==u&&0==f||a==t.isDark(n+u,o+f)&&(i+=1);i>5&&(e+=3+i-5)}for(n=0;n<r-1;n+=1)for(o=0;o<r-1;o+=1){var c=0;t.isDark(n,o)&&(c+=1),t.isDark(n+1,o)&&(c+=1),t.isDark(n,o+1)&&(c+=1),t.isDark(n+1,o+1)&&(c+=1),0!=c&&4!=c||(e+=3)}for(n=0;n<r;n+=1)for(o=0;o<r-6;o+=1)t.isDark(n,o)&&!t.isDark(n,o+1)&&t.isDark(n,o+2)&&t.isDark(n,o+3)&&t.isDark(n,o+4)&&!t.isDark(n,o+5)&&t.isDark(n,o+6)&&(e+=40);for(o=0;o<r;o+=1)for(n=0;n<r-6;n+=1)t.isDark(n,o)&&!t.isDark(n+1,o)&&t.isDark(n+2,o)&&t.isDark(n+3,o)&&t.isDark(n+4,o)&&!t.isDark(n+5,o)&&t.isDark(n+6,o)&&(e+=40);var g=0;for(o=0;o<r;o+=1)for(n=0;n<r;n+=1)t.isDark(n,o)&&(g+=1);return e+=Math.abs(100*g/r/r-50)/5*10},o),C=function(){for(var t=new Array(256),r=new Array(256),e=0;e<8;e+=1)t[e]=1<<e;for(e=8;e<256;e+=1)t[e]=t[e-4]^t[e-5]^t[e-6]^t[e-8];for(e=0;e<255;e+=1)r[t[e]]=e;var n={glog:function(t){if(t<1)throw"glog("+t+")";return r[t]},gexp:function(r){for(;r<0;)r+=255;for(;r>=256;)r-=255;return t[r]}};return n}();function k(t,r){if(void 0===t.length)throw t.length+"/"+r;var e=function(){for(var e=0;e<t.length&&0==t[e];)e+=1;for(var n=new Array(t.length-e+r),o=0;o<t.length-e;o+=1)n[o]=t[o+e];return n}(),n={getAt:function(t){return e[t]},getLength:function(){return e.length},multiply:function(t){for(var r=new Array(n.getLength()+t.getLength()-1),e=0;e<n.getLength();e+=1)for(var o=0;o<t.getLength();o+=1)r[e+o]^=C.gexp(C.glog(n.getAt(e))+C.glog(t.getAt(o)));return k(r,0)},mod:function(t){if(n.getLength()-t.getLength()<0)return n;for(var r=C.glog(n.getAt(0))-C.glog(t.getAt(0)),e=new Array(n.getLength()),o=0;o<n.getLength();o+=1)e[o]=n.getAt(o);for(o=0;o<t.getLength();o+=1)e[o]^=C.gexp(C.glog(t.getAt(o))+r);return k(e,0).mod(t)}};return n}var A=function(){var t=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12,7,37,13],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]],r=function(t,r){var e={};return e.totalCount=t,e.dataCount=r,e},e={};return e.getRSBlocks=function(e,n){var o=function(r,e){switch(e){case g.L:return t[4*(r-1)+0];case g.M:return t[4*(r-1)+1];case g.Q:return t[4*(r-1)+2];case g.H:return t[4*(r-1)+3];default:return}}(e,n);if(void 0===o)throw"bad rs block @ typeNumber:"+e+"/errorCorrectionLevel:"+n;for(var i=o.length/3,a=[],u=0;u<i;u+=1)for(var f=o[3*u+0],c=o[3*u+1],l=o[3*u+2],h=0;h<f;h+=1)a.push(r(c,l));return a},e}(),b=function(){var t=[],r=0,e={getBuffer:function(){return t},getAt:function(r){var e=Math.floor(r/8);return 1==(t[e]>>>7-r%8&1)},put:function(t,r){for(var n=0;n<r;n+=1)e.putBit(1==(t>>>r-n-1&1))},getLengthInBits:function(){return r},putBit:function(e){var n=Math.floor(r/8);t.length<=n&&t.push(0),e&&(t[n]|=128>>>r%8),r+=1}};return e},M=function(t){var r=a,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+2<r.length;)t.put(o(r.substring(n,n+3)),10),n+=3;n<r.length&&(r.length-n==1?t.put(o(r.substring(n,n+1)),4):r.length-n==2&&t.put(o(r.substring(n,n+2)),7))}},o=function(t){for(var r=0,e=0;e<t.length;e+=1)r=10*r+i(t.charAt(e));return r},i=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);throw"illegal char :"+t};return n},x=function(t){var r=u,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+1<r.length;)t.put(45*o(r.charAt(n))+o(r.charAt(n+1)),11),n+=2;n<r.length&&t.put(o(r.charAt(n)),6)}},o=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);if("A"<=t&&t<="Z")return t.charCodeAt(0)-"A".charCodeAt(0)+10;switch(t){case" ":return 36;case"$":return 37;case"%":return 38;case"*":return 39;case"+":return 40;case"-":return 41;case".":return 42;case"/":return 43;case":":return 44;default:throw"illegal char :"+t}};return n},m=function(r){var e=f,n=t.stringToBytes(r),o={getMode:function(){return e},getLength:function(t){return n.length},write:function(t){for(var r=0;r<n.length;r+=1)t.put(n[r],8)}};return o},L=function(r){var e=c,n=t.stringToBytesFuncs.SJIS;if(!n)throw"sjis not supported.";!function(){var t=n("友");if(2!=t.length||38726!=(t[0]<<8|t[1]))throw"sjis not supported."}();var o=n(r),i={getMode:function(){return e},getLength:function(t){return~~(o.length/2)},write:function(t){for(var r=o,e=0;e+1<r.length;){var n=(255&r[e])<<8|255&r[e+1];if(33088<=n&&n<=40956)n-=33088;else{if(!(57408<=n&&n<=60351))throw"illegal char at "+(e+1)+"/"+n;n-=49472}n=192*(n>>>8&255)+(255&n),t.put(n,13),e+=2}if(e<r.length)throw"illegal char at "+(e+1)}};return i},D=function(){var t=[],r={writeByte:function(r){t.push(255&r)},writeShort:function(t){r.writeByte(t),r.writeByte(t>>>8)},writeBytes:function(t,e,n){e=e||0,n=n||t.length;for(var o=0;o<n;o+=1)r.writeByte(t[o+e])},writeString:function(t){for(var e=0;e<t.length;e+=1)r.writeByte(t.charCodeAt(e))},toByteArray:function(){return t},toString:function(){var r="";r+="[";for(var e=0;e<t.length;e+=1)e>0&&(r+=","),r+=t[e];return r+="]"}};return r},S=function(t){var r=t,e=0,n=0,o=0,i={read:function(){for(;o<8;){if(e>=r.length){if(0==o)return-1;throw"unexpected end of file./"+o}var t=r.charAt(e);if(e+=1,"="==t)return o=0,-1;t.match(/^\s$/)||(n=n<<6|a(t.charCodeAt(0)),o+=6)}var i=n>>>o-8&255;return o-=8,i}},a=function(t){if(65<=t&&t<=90)return t-65;if(97<=t&&t<=122)return t-97+26;if(48<=t&&t<=57)return t-48+52;if(43==t)return 62;if(47==t)return 63;throw"c:"+t};return i},I=function(t,r,e){for(var n=function(t,r){var e=t,n=r,o=new Array(t*r),i={setPixel:function(t,r,n){o[r*e+t]=n},write:function(t){t.writeString("GIF87a"),t.writeShort(e),t.writeShort(n),t.writeByte(128),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(255),t.writeByte(255),t.writeByte(255),t.writeString(","),t.writeShort(0),t.writeShort(0),t.writeShort(e),t.writeShort(n),t.writeByte(0);var r=a(2);t.writeByte(2);for(var o=0;r.length-o>255;)t.writeByte(255),t.writeBytes(r,o,255),o+=255;t.writeByte(r.length-o),t.writeBytes(r,o,r.length-o),t.writeByte(0),t.writeString(";")}},a=function(t){for(var r=1<<t,e=1+(1<<t),n=t+1,i=u(),a=0;a<r;a+=1)i.add(String.fromCharCode(a));i.add(String.fromCharCode(r)),i.add(String.fromCharCode(e));var f,c,g,l=D(),h=(f=l,c=0,g=0,{write:function(t,r){if(t>>>r!=0)throw"length over";for(;c+r>=8;)f.writeByte(255&(t<<c|g)),r-=8-c,t>>>=8-c,g=0,c=0;g|=t<<c,c+=r},flush:function(){c>0&&f.writeByte(g)}});h.write(r,n);var s=0,v=String.fromCharCode(o[s]);for(s+=1;s<o.length;){var d=String.fromCharCode(o[s]);s+=1,i.contains(v+d)?v+=d:(h.write(i.indexOf(v),n),i.size()<4095&&(i.size()==1<<n&&(n+=1),i.add(v+d)),v=d)}return h.write(i.indexOf(v),n),h.write(e,n),h.flush(),l.toByteArray()},u=function(){var t={},r=0,e={add:function(n){if(e.contains(n))throw"dup key:"+n;t[n]=r,r+=1},size:function(){return r},indexOf:function(r){return t[r]},contains:function(r){return void 0!==t[r]}};return e};return i}(t,r),o=0;o<r;o+=1)for(var i=0;i<t;i+=1)n.setPixel(i,o,e(i,o));var a=D();n.write(a);for(var u=function(){var t=0,r=0,e=0,n="",o={},i=function(t){n+=String.fromCharCode(a(63&t))},a=function(t){if(t<0);else{if(t<26)return 65+t;if(t<52)return t-26+97;if(t<62)return t-52+48;if(62==t)return 43;if(63==t)return 47}throw"n:"+t};return o.writeByte=function(n){for(t=t<<8|255&n,r+=8,e+=1;r>=6;)i(t>>>r-6),r-=6},o.flush=function(){if(r>0&&(i(t<<6-r),t=0,r=0),e%3!=0)for(var o=3-e%3,a=0;a<o;a+=1)n+="="},o.toString=function(){return n},o}(),f=a.toByteArray(),c=0;c<f.length;c+=1)u.writeByte(f[c]);return u.flush(),"data:image/gif;base64,"+u};return t}();qrcode.stringToBytesFuncs["UTF-8"]=function(t){return function(t){for(var r=[],e=0;e<t.length;e++){var n=t.charCodeAt(e);n<128?r.push(n):n<2048?r.push(192|n>>6,128|63&n):n<55296||n>=57344?r.push(224|n>>12,128|n>>6&63,128|63&n):(e++,n=65536+((1023&n)<<10|1023&t.charCodeAt(e)),r.push(240|n>>18,128|n>>12&63,128|n>>6&63,128|63&n))}return r}(t)},function(t){"function"==typeof define&&define.amd?define([],t):"object"==typeof exports&&(module.exports=t())}((function(){return qrcode}));
+var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],f={},c=function(t,r){o=function(t){for(var r=new Array(t),e=0;e<t;e+=1){r[e]=new Array(t);for(var n=0;n<t;n+=1)r[e][n]=null}return r}(i=4*e+17),l(0,0),l(i-7,0),l(0,i-7),s(),h(),d(t,r),e>=7&&v(t),null==a&&(a=p(e,n,u)),w(a,r)},l=function(t,r){for(var e=-1;e<=7;e+=1)if(!(t+e<=-1||i<=t+e))for(var n=-1;n<=7;n+=1)r+n<=-1||i<=r+n||(o[t+e][r+n]=0<=e&&e<=6&&(0==n||6==n)||0<=n&&n<=6&&(0==e||6==e)||2<=e&&e<=4&&2<=n&&n<=4)},h=function(){for(var t=8;t<i-8;t+=1)null==o[t][6]&&(o[t][6]=t%2==0);for(var r=8;r<i-8;r+=1)null==o[6][r]&&(o[6][r]=r%2==0)},s=function(){for(var t=B.getPatternPosition(e),r=0;r<t.length;r+=1)for(var n=0;n<t.length;n+=1){var i=t[r],a=t[n];if(null==o[i][a])for(var u=-2;u<=2;u+=1)for(var f=-2;f<=2;f+=1)o[i+u][a+f]=-2==u||2==u||-2==f||2==f||0==u&&0==f}},v=function(t){for(var r=B.getBCHTypeNumber(e),n=0;n<18;n+=1){var a=!t&&1==(r>>n&1);o[Math.floor(n/3)][n%3+i-8-3]=a}for(n=0;n<18;n+=1){a=!t&&1==(r>>n&1);o[n%3+i-8-3][Math.floor(n/3)]=a}},d=function(t,r){for(var e=n<<3|r,a=B.getBCHTypeInfo(e),u=0;u<15;u+=1){var f=!t&&1==(a>>u&1);u<6?o[u][8]=f:u<8?o[u+1][8]=f:o[i-15+u][8]=f}for(u=0;u<15;u+=1){f=!t&&1==(a>>u&1);u<8?o[8][i-u-1]=f:u<9?o[8][15-u-1+1]=f:o[8][15-u-1]=f}o[i-8][8]=!t},w=function(t,r){for(var e=-1,n=i-1,a=7,u=0,f=B.getMaskFunction(r),c=i-1;c>0;c-=2)for(6==c&&(c-=1);;){for(var g=0;g<2;g+=1)if(null==o[n][c-g]){var l=!1;u<t.length&&(l=1==(t[u]>>>a&1)),f(n,c-g)&&(l=!l),o[n][c-g]=l,-1==(a-=1)&&(u+=1,a=7)}if((n+=e)<0||i<=n){n-=e,e=-e;break}}},p=function(t,r,e){for(var n=A.getRSBlocks(t,r),o=b(),i=0;i<e.length;i+=1){var a=e[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var u=0;for(i=0;i<n.length;i+=1)u+=n[i].dataCount;if(o.getLengthInBits()>8*u)throw"code length overflow. ("+o.getLengthInBits()+">"+8*u+")";for(o.getLengthInBits()+4<=8*u&&o.put(0,4);o.getLengthInBits()%8!=0;)o.putBit(!1);for(;!(o.getLengthInBits()>=8*u||(o.put(236,8),o.getLengthInBits()>=8*u));)o.put(17,8);return function(t,r){for(var e=0,n=0,o=0,i=new Array(r.length),a=new Array(r.length),u=0;u<r.length;u+=1){var f=r[u].dataCount,c=r[u].totalCount-f;n=Math.max(n,f),o=Math.max(o,c),i[u]=new Array(f);for(var g=0;g<i[u].length;g+=1)i[u][g]=255&t.getBuffer()[g+e];e+=f;var l=B.getErrorCorrectPolynomial(c),h=k(i[u],l.getLength()-1).mod(l);for(a[u]=new Array(l.getLength()-1),g=0;g<a[u].length;g+=1){var s=g+h.getLength()-a[u].length;a[u][g]=s>=0?h.getAt(s):0}}var v=0;for(g=0;g<r.length;g+=1)v+=r[g].totalCount;var d=new Array(v),w=0;for(g=0;g<n;g+=1)for(u=0;u<r.length;u+=1)g<i[u].length&&(d[w]=i[u][g],w+=1);for(g=0;g<o;g+=1)for(u=0;u<r.length;u+=1)g<a[u].length&&(d[w]=a[u][g],w+=1);return d}(o,n)};f.addData=function(t,r){var e=null;switch(r=r||"Byte"){case"Numeric":e=M(t);break;case"Alphanumeric":e=x(t);break;case"Byte":e=m(t);break;case"Kanji":e=L(t);break;default:throw"mode:"+r}u.push(e),a=null},f.isDark=function(t,r){if(t<0||i<=t||r<0||i<=r)throw t+","+r;return o[t][r]},f.getModuleCount=function(){return i},f.make=function(){if(e<1){for(var t=1;t<40;t++){for(var r=A.getRSBlocks(t,n),o=b(),i=0;i<u.length;i++){var a=u[i];o.put(a.getMode(),4),o.put(a.getLength(),B.getLengthInBits(a.getMode(),t)),a.write(o)}var g=0;for(i=0;i<r.length;i++)g+=r[i].dataCount;if(o.getLengthInBits()<=8*g)break}e=t}c(!1,function(){for(var t=0,r=0,e=0;e<8;e+=1){c(!0,e);var n=B.getLostPoint(f);(0==e||t>n)&&(t=n,r=e)}return r}())},f.createTableTag=function(t,r){t=t||2;var e="";e+='<table style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: "+(r=void 0===r?4*t:r)+"px;",e+='">',e+="<tbody>";for(var n=0;n<f.getModuleCount();n+=1){e+="<tr>";for(var o=0;o<f.getModuleCount();o+=1)e+='<td style="',e+=" border-width: 0px; border-style: none;",e+=" border-collapse: collapse;",e+=" padding: 0px; margin: 0px;",e+=" width: "+t+"px;",e+=" height: "+t+"px;",e+=" background-color: ",e+=f.isDark(n,o)?"#000000":"#ffffff",e+=";",e+='"/>';e+="</tr>"}return e+="</tbody>",e+="</table>"},f.createSvgTag=function(t,r,e,n){var o={};"object"==typeof arguments[0]&&(t=(o=arguments[0]).cellSize,r=o.margin,e=o.alt,n=o.title),t=t||2,r=void 0===r?4*t:r,(e="string"==typeof e?{text:e}:e||{}).text=e.text||null,e.id=e.text?e.id||"qrcode-description":null,(n="string"==typeof n?{text:n}:n||{}).text=n.text||null,n.id=n.text?n.id||"qrcode-title":null;var i,a,u,c,g=f.getModuleCount()*t+2*r,l="";for(c="l"+t+",0 0,"+t+" -"+t+",0 0,-"+t+"z ",l+='<svg version="1.1" xmlns="http://www.w3.org/2000/svg"',l+=o.scalable?"":' width="'+g+'px" height="'+g+'px"',l+=' viewBox="0 0 '+g+" "+g+'" ',l+=' preserveAspectRatio="xMinYMin meet"',l+=n.text||e.text?' role="img" aria-labelledby="'+y([n.id,e.id].join(" ").trim())+'"':"",l+=">",l+=n.text?'<title id="'+y(n.id)+'">'+y(n.text)+"</title>":"",l+=e.text?'<description id="'+y(e.id)+'">'+y(e.text)+"</description>":"",l+='<rect width="100%" height="100%" fill="white" cx="0" cy="0"/>',l+='<path d="',a=0;a<f.getModuleCount();a+=1)for(u=a*t+r,i=0;i<f.getModuleCount();i+=1)f.isDark(a,i)&&(l+="M"+(i*t+r)+","+u+c);return l+='" stroke="transparent" fill="black"/>',l+="</svg>"},f.createDataURL=function(t,r){t=t||2,r=void 0===r?4*t:r;var e=f.getModuleCount()*t+2*r,n=r,o=e-r;return I(e,e,(function(r,e){if(n<=r&&r<o&&n<=e&&e<o){var i=Math.floor((r-n)/t),a=Math.floor((e-n)/t);return f.isDark(a,i)?0:1}return 1}))},f.createImgTag=function(t,r,e){t=t||2,r=void 0===r?4*t:r;var n=f.getModuleCount()*t+2*r,o="";return o+="<img",o+=' src="',o+=f.createDataURL(t,r),o+='"',o+=' width="',o+=n,o+='"',o+=' height="',o+=n,o+='"',e&&(o+=' alt="',o+=y(e),o+='"'),o+="/>"};var y=function(t){for(var r="",e=0;e<t.length;e+=1){var n=t.charAt(e);switch(n){case"<":r+="&lt;";break;case">":r+="&gt;";break;case"&":r+="&amp;";break;case'"':r+="&quot;";break;default:r+=n}}return r};return f.createASCII=function(t,r){if((t=t||1)<2)return function(t){t=void 0===t?2:t;var r,e,n,o,i,a=1*f.getModuleCount()+2*t,u=t,c=a-t,g={"██":"█","█ ":"▀"," █":"▄","  ":" "},l={"██":"▀","█ ":"▀"," █":" ","  ":" "},h="";for(r=0;r<a;r+=2){for(n=Math.floor((r-u)/1),o=Math.floor((r+1-u)/1),e=0;e<a;e+=1)i="█",u<=e&&e<c&&u<=r&&r<c&&f.isDark(n,Math.floor((e-u)/1))&&(i=" "),u<=e&&e<c&&u<=r+1&&r+1<c&&f.isDark(o,Math.floor((e-u)/1))?i+=" ":i+="█",h+=t<1&&r+1>=c?l[i]:g[i];h+="\n"}return a%2&&t>0?h.substring(0,h.length-a-1)+Array(a+1).join("▀"):h.substring(0,h.length-1)}(r);t-=1,r=void 0===r?2*t:r;var e,n,o,i,a=f.getModuleCount()*t+2*r,u=r,c=a-r,g=Array(t+1).join("██"),l=Array(t+1).join("  "),h="",s="";for(e=0;e<a;e+=1){for(o=Math.floor((e-u)/t),s="",n=0;n<a;n+=1)i=1,u<=n&&n<c&&u<=e&&e<c&&f.isDark(o,Math.floor((n-u)/t))&&(i=0),s+=i?g:l;for(o=0;o<t;o+=1)h+=s+"\n"}return h.substring(0,h.length-1)},f.renderTo2dContext=function(t,r){r=r||2;for(var e=f.getModuleCount(),n=0;n<e;n++)for(var o=0;o<e;o++)t.fillStyle=f.isDark(n,o)?"black":"white",t.fillRect(n*r,o*r,r,r)},f};t.stringToBytes=(t.stringToBytesFuncs={default:function(t){for(var r=[],e=0;e<t.length;e+=1){var n=t.charCodeAt(e);r.push(255&n)}return r}}).default,t.createStringToBytes=function(t,r){var e=function(){for(var e=S(t),n=function(){var t=e.read();if(-1==t)throw"eof";return t},o=0,i={};;){var a=e.read();if(-1==a)break;var u=n(),f=n()<<8|n();i[String.fromCharCode(a<<8|u)]=f,o+=1}if(o!=r)throw o+" != "+r;return i}(),n="?".charCodeAt(0);return function(t){for(var r=[],o=0;o<t.length;o+=1){var i=t.charCodeAt(o);if(i<128)r.push(i);else{var a=e[t.charAt(o)];"number"==typeof a?(255&a)==a?r.push(a):(r.push(a>>>8),r.push(255&a)):r.push(n)}}return r}};var r,e,n,o,i,a=1,u=2,f=4,c=8,g={L:1,M:0,Q:3,H:2},l=0,h=1,s=2,v=3,d=4,w=5,p=6,y=7,B=(r=[[],[6,18],[6,22],[6,26],[6,30],[6,34],[6,22,38],[6,24,42],[6,26,46],[6,28,50],[6,30,54],[6,32,58],[6,34,62],[6,26,46,66],[6,26,48,70],[6,26,50,74],[6,30,54,78],[6,30,56,82],[6,30,58,86],[6,34,62,90],[6,28,50,72,94],[6,26,50,74,98],[6,30,54,78,102],[6,28,54,80,106],[6,32,58,84,110],[6,30,58,86,114],[6,34,62,90,118],[6,26,50,74,98,122],[6,30,54,78,102,126],[6,26,52,78,104,130],[6,30,56,82,108,134],[6,34,60,86,112,138],[6,30,58,86,114,142],[6,34,62,90,118,146],[6,30,54,78,102,126,150],[6,24,50,76,102,128,154],[6,28,54,80,106,132,158],[6,32,58,84,110,136,162],[6,26,54,82,110,138,166],[6,30,58,86,114,142,170]],e=1335,n=7973,i=function(t){for(var r=0;0!=t;)r+=1,t>>>=1;return r},(o={}).getBCHTypeInfo=function(t){for(var r=t<<10;i(r)-i(e)>=0;)r^=e<<i(r)-i(e);return 21522^(t<<10|r)},o.getBCHTypeNumber=function(t){for(var r=t<<12;i(r)-i(n)>=0;)r^=n<<i(r)-i(n);return t<<12|r},o.getPatternPosition=function(t){return r[t-1]},o.getMaskFunction=function(t){switch(t){case l:return function(t,r){return(t+r)%2==0};case h:return function(t,r){return t%2==0};case s:return function(t,r){return r%3==0};case v:return function(t,r){return(t+r)%3==0};case d:return function(t,r){return(Math.floor(t/2)+Math.floor(r/3))%2==0};case w:return function(t,r){return t*r%2+t*r%3==0};case p:return function(t,r){return(t*r%2+t*r%3)%2==0};case y:return function(t,r){return(t*r%3+(t+r)%2)%2==0};default:throw"bad maskPattern:"+t}},o.getErrorCorrectPolynomial=function(t){for(var r=k([1],0),e=0;e<t;e+=1)r=r.multiply(k([1,C.gexp(e)],0));return r},o.getLengthInBits=function(t,r){if(1<=r&&r<10)switch(t){case a:return 10;case u:return 9;case f:case c:return 8;default:throw"mode:"+t}else if(r<27)switch(t){case a:return 12;case u:return 11;case f:return 16;case c:return 10;default:throw"mode:"+t}else{if(!(r<41))throw"type:"+r;switch(t){case a:return 14;case u:return 13;case f:return 16;case c:return 12;default:throw"mode:"+t}}},o.getLostPoint=function(t){for(var r=t.getModuleCount(),e=0,n=0;n<r;n+=1)for(var o=0;o<r;o+=1){for(var i=0,a=t.isDark(n,o),u=-1;u<=1;u+=1)if(!(n+u<0||r<=n+u))for(var f=-1;f<=1;f+=1)o+f<0||r<=o+f||0==u&&0==f||a==t.isDark(n+u,o+f)&&(i+=1);i>5&&(e+=3+i-5)}for(n=0;n<r-1;n+=1)for(o=0;o<r-1;o+=1){var c=0;t.isDark(n,o)&&(c+=1),t.isDark(n+1,o)&&(c+=1),t.isDark(n,o+1)&&(c+=1),t.isDark(n+1,o+1)&&(c+=1),0!=c&&4!=c||(e+=3)}for(n=0;n<r;n+=1)for(o=0;o<r-6;o+=1)t.isDark(n,o)&&!t.isDark(n,o+1)&&t.isDark(n,o+2)&&t.isDark(n,o+3)&&t.isDark(n,o+4)&&!t.isDark(n,o+5)&&t.isDark(n,o+6)&&(e+=40);for(o=0;o<r;o+=1)for(n=0;n<r-6;n+=1)t.isDark(n,o)&&!t.isDark(n+1,o)&&t.isDark(n+2,o)&&t.isDark(n+3,o)&&t.isDark(n+4,o)&&!t.isDark(n+5,o)&&t.isDark(n+6,o)&&(e+=40);var g=0;for(o=0;o<r;o+=1)for(n=0;n<r;n+=1)t.isDark(n,o)&&(g+=1);return e+=Math.abs(100*g/r/r-50)/5*10},o),C=function(){for(var t=new Array(256),r=new Array(256),e=0;e<8;e+=1)t[e]=1<<e;for(e=8;e<256;e+=1)t[e]=t[e-4]^t[e-5]^t[e-6]^t[e-8];for(e=0;e<255;e+=1)r[t[e]]=e;var n={glog:function(t){if(t<1)throw"glog("+t+")";return r[t]},gexp:function(r){for(;r<0;)r+=255;for(;r>=256;)r-=255;return t[r]}};return n}();function k(t,r){if(void 0===t.length)throw t.length+"/"+r;var e=function(){for(var e=0;e<t.length&&0==t[e];)e+=1;for(var n=new Array(t.length-e+r),o=0;o<t.length-e;o+=1)n[o]=t[o+e];return n}(),n={getAt:function(t){return e[t]},getLength:function(){return e.length},multiply:function(t){for(var r=new Array(n.getLength()+t.getLength()-1),e=0;e<n.getLength();e+=1)for(var o=0;o<t.getLength();o+=1)r[e+o]^=C.gexp(C.glog(n.getAt(e))+C.glog(t.getAt(o)));return k(r,0)},mod:function(t){if(n.getLength()-t.getLength()<0)return n;for(var r=C.glog(n.getAt(0))-C.glog(t.getAt(0)),e=new Array(n.getLength()),o=0;o<n.getLength();o+=1)e[o]=n.getAt(o);for(o=0;o<t.getLength();o+=1)e[o]^=C.gexp(C.glog(t.getAt(o))+r);return k(e,0).mod(t)}};return n}var A=function(){var t=[[1,26,19],[1,26,16],[1,26,13],[1,26,9],[1,44,34],[1,44,28],[1,44,22],[1,44,16],[1,70,55],[1,70,44],[2,35,17],[2,35,13],[1,100,80],[2,50,32],[2,50,24],[4,25,9],[1,134,108],[2,67,43],[2,33,15,2,34,16],[2,33,11,2,34,12],[2,86,68],[4,43,27],[4,43,19],[4,43,15],[2,98,78],[4,49,31],[2,32,14,4,33,15],[4,39,13,1,40,14],[2,121,97],[2,60,38,2,61,39],[4,40,18,2,41,19],[4,40,14,2,41,15],[2,146,116],[3,58,36,2,59,37],[4,36,16,4,37,17],[4,36,12,4,37,13],[2,86,68,2,87,69],[4,69,43,1,70,44],[6,43,19,2,44,20],[6,43,15,2,44,16],[4,101,81],[1,80,50,4,81,51],[4,50,22,4,51,23],[3,36,12,8,37,13],[2,116,92,2,117,93],[6,58,36,2,59,37],[4,46,20,6,47,21],[7,42,14,4,43,15],[4,133,107],[8,59,37,1,60,38],[8,44,20,4,45,21],[12,33,11,4,34,12],[3,145,115,1,146,116],[4,64,40,5,65,41],[11,36,16,5,37,17],[11,36,12,5,37,13],[5,109,87,1,110,88],[5,65,41,5,66,42],[5,54,24,7,55,25],[11,36,12,7,37,13],[5,122,98,1,123,99],[7,73,45,3,74,46],[15,43,19,2,44,20],[3,45,15,13,46,16],[1,135,107,5,136,108],[10,74,46,1,75,47],[1,50,22,15,51,23],[2,42,14,17,43,15],[5,150,120,1,151,121],[9,69,43,4,70,44],[17,50,22,1,51,23],[2,42,14,19,43,15],[3,141,113,4,142,114],[3,70,44,11,71,45],[17,47,21,4,48,22],[9,39,13,16,40,14],[3,135,107,5,136,108],[3,67,41,13,68,42],[15,54,24,5,55,25],[15,43,15,10,44,16],[4,144,116,4,145,117],[17,68,42],[17,50,22,6,51,23],[19,46,16,6,47,17],[2,139,111,7,140,112],[17,74,46],[7,54,24,16,55,25],[34,37,13],[4,151,121,5,152,122],[4,75,47,14,76,48],[11,54,24,14,55,25],[16,45,15,14,46,16],[6,147,117,4,148,118],[6,73,45,14,74,46],[11,54,24,16,55,25],[30,46,16,2,47,17],[8,132,106,4,133,107],[8,75,47,13,76,48],[7,54,24,22,55,25],[22,45,15,13,46,16],[10,142,114,2,143,115],[19,74,46,4,75,47],[28,50,22,6,51,23],[33,46,16,4,47,17],[8,152,122,4,153,123],[22,73,45,3,74,46],[8,53,23,26,54,24],[12,45,15,28,46,16],[3,147,117,10,148,118],[3,73,45,23,74,46],[4,54,24,31,55,25],[11,45,15,31,46,16],[7,146,116,7,147,117],[21,73,45,7,74,46],[1,53,23,37,54,24],[19,45,15,26,46,16],[5,145,115,10,146,116],[19,75,47,10,76,48],[15,54,24,25,55,25],[23,45,15,25,46,16],[13,145,115,3,146,116],[2,74,46,29,75,47],[42,54,24,1,55,25],[23,45,15,28,46,16],[17,145,115],[10,74,46,23,75,47],[10,54,24,35,55,25],[19,45,15,35,46,16],[17,145,115,1,146,116],[14,74,46,21,75,47],[29,54,24,19,55,25],[11,45,15,46,46,16],[13,145,115,6,146,116],[14,74,46,23,75,47],[44,54,24,7,55,25],[59,46,16,1,47,17],[12,151,121,7,152,122],[12,75,47,26,76,48],[39,54,24,14,55,25],[22,45,15,41,46,16],[6,151,121,14,152,122],[6,75,47,34,76,48],[46,54,24,10,55,25],[2,45,15,64,46,16],[17,152,122,4,153,123],[29,74,46,14,75,47],[49,54,24,10,55,25],[24,45,15,46,46,16],[4,152,122,18,153,123],[13,74,46,32,75,47],[48,54,24,14,55,25],[42,45,15,32,46,16],[20,147,117,4,148,118],[40,75,47,7,76,48],[43,54,24,22,55,25],[10,45,15,67,46,16],[19,148,118,6,149,119],[18,75,47,31,76,48],[34,54,24,34,55,25],[20,45,15,61,46,16]],r=function(t,r){var e={};return e.totalCount=t,e.dataCount=r,e},e={};return e.getRSBlocks=function(e,n){var o=function(r,e){switch(e){case g.L:return t[4*(r-1)+0];case g.M:return t[4*(r-1)+1];case g.Q:return t[4*(r-1)+2];case g.H:return t[4*(r-1)+3];default:return}}(e,n);if(void 0===o)throw"bad rs block @ typeNumber:"+e+"/errorCorrectionLevel:"+n;for(var i=o.length/3,a=[],u=0;u<i;u+=1)for(var f=o[3*u+0],c=o[3*u+1],l=o[3*u+2],h=0;h<f;h+=1)a.push(r(c,l));return a},e}(),b=function(){var t=[],r=0,e={getBuffer:function(){return t},getAt:function(r){var e=Math.floor(r/8);return 1==(t[e]>>>7-r%8&1)},put:function(t,r){for(var n=0;n<r;n+=1)e.putBit(1==(t>>>r-n-1&1))},getLengthInBits:function(){return r},putBit:function(e){var n=Math.floor(r/8);t.length<=n&&t.push(0),e&&(t[n]|=128>>>r%8),r+=1}};return e},M=function(t){var r=a,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+2<r.length;)t.put(o(r.substring(n,n+3)),10),n+=3;n<r.length&&(r.length-n==1?t.put(o(r.substring(n,n+1)),4):r.length-n==2&&t.put(o(r.substring(n,n+2)),7))}},o=function(t){for(var r=0,e=0;e<t.length;e+=1)r=10*r+i(t.charAt(e));return r},i=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);throw"illegal char :"+t};return n},x=function(t){var r=u,e=t,n={getMode:function(){return r},getLength:function(t){return e.length},write:function(t){for(var r=e,n=0;n+1<r.length;)t.put(45*o(r.charAt(n))+o(r.charAt(n+1)),11),n+=2;n<r.length&&t.put(o(r.charAt(n)),6)}},o=function(t){if("0"<=t&&t<="9")return t.charCodeAt(0)-"0".charCodeAt(0);if("A"<=t&&t<="Z")return t.charCodeAt(0)-"A".charCodeAt(0)+10;switch(t){case" ":return 36;case"$":return 37;case"%":return 38;case"*":return 39;case"+":return 40;case"-":return 41;case".":return 42;case"/":return 43;case":":return 44;default:throw"illegal char :"+t}};return n},m=function(r){var e=f,n=t.stringToBytes(r),o={getMode:function(){return e},getLength:function(t){return n.length},write:function(t){for(var r=0;r<n.length;r+=1)t.put(n[r],8)}};return o},L=function(r){var e=c,n=t.stringToBytesFuncs.SJIS;if(!n)throw"sjis not supported.";!function(){var t=n("友");if(2!=t.length||38726!=(t[0]<<8|t[1]))throw"sjis not supported."}();var o=n(r),i={getMode:function(){return e},getLength:function(t){return~~(o.length/2)},write:function(t){for(var r=o,e=0;e+1<r.length;){var n=(255&r[e])<<8|255&r[e+1];if(33088<=n&&n<=40956)n-=33088;else{if(!(57408<=n&&n<=60351))throw"illegal char at "+(e+1)+"/"+n;n-=49472}n=192*(n>>>8&255)+(255&n),t.put(n,13),e+=2}if(e<r.length)throw"illegal char at "+(e+1)}};return i},D=function(){var t=[],r={writeByte:function(r){t.push(255&r)},writeShort:function(t){r.writeByte(t),r.writeByte(t>>>8)},writeBytes:function(t,e,n){e=e||0,n=n||t.length;for(var o=0;o<n;o+=1)r.writeByte(t[o+e])},writeString:function(t){for(var e=0;e<t.length;e+=1)r.writeByte(t.charCodeAt(e))},toByteArray:function(){return t},toString:function(){var r="";r+="[";for(var e=0;e<t.length;e+=1)e>0&&(r+=","),r+=t[e];return r+="]"}};return r},S=function(t){var r=t,e=0,n=0,o=0,i={read:function(){for(;o<8;){if(e>=r.length){if(0==o)return-1;throw"unexpected end of file./"+o}var t=r.charAt(e);if(e+=1,"="==t)return o=0,-1;t.match(/^\s$/)||(n=n<<6|a(t.charCodeAt(0)),o+=6)}var i=n>>>o-8&255;return o-=8,i}},a=function(t){if(65<=t&&t<=90)return t-65;if(97<=t&&t<=122)return t-97+26;if(48<=t&&t<=57)return t-48+52;if(43==t)return 62;if(47==t)return 63;throw"c:"+t};return i},I=function(t,r,e){for(var n=function(t,r){var e=t,n=r,o=new Array(t*r),i={setPixel:function(t,r,n){o[r*e+t]=n},write:function(t){t.writeString("GIF87a"),t.writeShort(e),t.writeShort(n),t.writeByte(128),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(0),t.writeByte(255),t.writeByte(255),t.writeByte(255),t.writeString(","),t.writeShort(0),t.writeShort(0),t.writeShort(e),t.writeShort(n),t.writeByte(0);var r=a(2);t.writeByte(2);for(var o=0;r.length-o>255;)t.writeByte(255),t.writeBytes(r,o,255),o+=255;t.writeByte(r.length-o),t.writeBytes(r,o,r.length-o),t.writeByte(0),t.writeString(";")}},a=function(t){for(var r=1<<t,e=1+(1<<t),n=t+1,i=u(),a=0;a<r;a+=1)i.add(String.fromCharCode(a));i.add(String.fromCharCode(r)),i.add(String.fromCharCode(e));var f,c,g,l=D(),h=(f=l,c=0,g=0,{write:function(t,r){if(t>>>r!=0)throw"length over";for(;c+r>=8;)f.writeByte(255&(t<<c|g)),r-=8-c,t>>>=8-c,g=0,c=0;g|=t<<c,c+=r},flush:function(){c>0&&f.writeByte(g)}});h.write(r,n);var s=0,v=String.fromCharCode(o[s]);for(s+=1;s<o.length;){var d=String.fromCharCode(o[s]);s+=1,i.contains(v+d)?v+=d:(h.write(i.indexOf(v),n),i.size()<4095&&(i.size()==1<<n&&(n+=1),i.add(v+d)),v=d)}return h.write(i.indexOf(v),n),h.write(e,n),h.flush(),l.toByteArray()},u=function(){var t={},r=0,e={add:function(n){if(e.contains(n))throw"dup key:"+n;t[n]=r,r+=1},size:function(){return r},indexOf:function(r){return t[r]},contains:function(r){return void 0!==t[r]}};return e};return i}(t,r),o=0;o<r;o+=1)for(var i=0;i<t;i+=1)n.setPixel(i,o,e(i,o));var a=D();n.write(a);for(var u=function(){var t=0,r=0,e=0,n="",o={},i=function(t){n+=String.fromCharCode(a(63&t))},a=function(t){if(t<0);else{if(t<26)return 65+t;if(t<52)return t-26+97;if(t<62)return t-52+48;if(62==t)return 43;if(63==t)return 47}throw"n:"+t};return o.writeByte=function(n){for(t=t<<8|255&n,r+=8,e+=1;r>=6;)i(t>>>r-6),r-=6},o.flush=function(){if(r>0&&(i(t<<6-r),t=0,r=0),e%3!=0)for(var o=3-e%3,a=0;a<o;a+=1)n+="="},o.toString=function(){return n},o}(),f=a.toByteArray(),c=0;c<f.length;c+=1)u.writeByte(f[c]);return u.flush(),"data:image/gif;base64,"+u};return t}();qrcode.stringToBytesFuncs["UTF-8"]=function(t){return function(t){for(var r=[],e=0;e<t.length;e++){var n=t.charCodeAt(e);n<128?r.push(n):n<2048?r.push(192|n>>6,128|63&n):n<55296||n>=57344?r.push(224|n>>12,128|n>>6&63,128|63&n):(e++,n=65536+((1023&n)<<10|1023&t.charCodeAt(e)),r.push(240|n>>18,128|n>>12&63,128|n>>6&63,128|63&n))}return r}(t)},function(t){"function"==typeof define&&define.amd?define([],t):"object"==typeof exports&&(module.exports=t())}((function(){return qrcode}));
 //# sourceMappingURL=/sm/26b4b0d0b1e283d6b3ec9857ac597d7a60c76ac17be1ef4c965f03086de426bb.map
 </script>
 <!-- pdf.js (legacy ES5 build for widest browser support): parses the PDF Info
@@ -768,319 +768,716 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       var v2 = await verifyV2Integrity(bytes, seal.embeddedHash);
       if (v2.feasible && v2.match) {
         verdict = 'MATCH';
-        showVerified(meta, seal.embeddedHash, null, 'sealed-file');
-      } else if (v2.feasible && !v2.match) {
+        showVerified(meta, seal.embeddedHash, null, 'v2');
+      } else if (v2.feasible) {
         verdict = 'TAMPERED';
-        showTampered('sealed-file', seal.embeddedHash, v2.recomputed, seal);
+        showTampered(meta, hashHex, seal.embeddedHash, null, 'v2', v2.recomputed);
       } else {
-        // Check not applicable (Info dictionary recompressed by a PDF tool):
-        // honest non-verdict -- show the seal, say the self-check could not run.
-        verdict = 'SEAL_PRESENT_UNVERIFIED';
-        showSealPresentUnverified(meta, seal);
+        // Seal metadata present but the file was re-encoded by another PDF
+        // tool (Info dictionary recompressed) -- honest "check not applicable".
+        verdict = 'SEAL_PRESENT';
+        showSealPresent(meta, hashHex, 'reencoded');
       }
     } else if (seal && seal.scheme === 'legacy') {
-      // ---- VO-SEAL (pre-v1.3): hash covers the PRE-SEAL original bytes ----
+      // ---- Legacy website seal (pre-v1.3): hash covers the PRE-SEAL original.
+      // The sealed file's own hash can never match it, so NO tamper verdict is
+      // computed from hashes -- the seal's presence is reported honestly. ----
       sealVersion = 'VO-SEAL';
       meta = meta || {};
       meta.sealId = seal.sealId;
       meta.originalHash = seal.embeddedHash;
-      if (seal.chain) meta.chain = seal.chain;
-      meta.version = 'VO-SEAL';
-      // The uploaded file is the SEALED file; the embedded hash is of the
-      // original content, which is not separately recoverable here. Report the
-      // seal as present and consistent -- tamper evidence for legacy seals comes
-      // from the QR/OTS cross-check, not a byte-level recomputation.
-      verdict = 'LEGACY_SEAL';
-      showLegacySeal(meta, seal);
+      meta.version = meta.version || 'VO-SEAL (legacy)';
+      verdict = 'LEGACY';
+      showLegacySeal(meta, hashHex);
+    } else if (meta && meta.sealId) {
+      // ---- Oldest appended-comment seal format (original logic, unchanged) ----
+      sealVersion = meta.version || null;
+      var storedHash = meta.originalHash || meta.sha512;
+      var hashMatches = storedHash && (hashHex === storedHash || (originalHashHex && originalHashHex === storedHash));
+
+      if (hashMatches) {
+        verdict = 'MATCH';
+        showVerified(meta, hashHex, originalHashHex);
+      } else {
+        verdict = 'TAMPERED';
+        showTampered(meta, hashHex, storedHash, originalHashHex);
+      }
     } else if (seal && seal.scheme === 'footer') {
-      // ---- Footer-only detection: seal text found on the pages but no parseable
-      // Subject (e.g. Info dictionary stripped by another tool). ----
-      sealVersion = 'VO-FOOTER';
+      // ---- Seal footer found in page text, but no readable seal metadata ----
+      verdict = 'SEAL_PRESENT';
       meta = meta || {};
       meta.sealId = seal.footerSealId;
-      meta.version = 'VO-FOOTER';
-      verdict = 'SEAL_FOUND';
-      showSealFound(meta, seal);
-    } else if (meta && meta.sealId) {
-      // ---- Appended-comment format (oldest): %%VO_SEAL_START block ----
-      sealVersion = 'VO-APPENDED';
-      verdict = 'SEAL_FOUND';
-      showSealFound(meta, null);
+      showSealPresent(meta, hashHex, 'footer');
     } else {
-      showNoSeal();
+      // No embedded metadata — show hash only
+      showNoSeal(hashHex);
     }
+    parsedMeta = meta;
 
-    // QR code (verify URL with hash + metadata) -- guard so QR problems can
-    // never block verification.
-    try { showQrCode(hashHex, meta, seal); } catch (qe) { console.debug('QR display failed (verification unaffected):', qe && qe.message ? qe.message : qe); }
+    // Parser honesty: if pdf.js was unavailable or failed, say so openly. Raw
+    // byte analysis still proves VO-SEAL2 integrity, but seals living only in
+    // compressed PDF objects (e.g. SEAL-CERT certificates) cannot be detected
+    // without the parser -- the user deserves to know which mode ran.
+    renderParserNote(pdfSeal);
 
-    // Cross-check against scanned QR payload, if the user arrived via QR scan
-    try { crossCheckQrPayload(meta, seal, hashHex); } catch (ce) { console.debug('QR cross-check failed (non-fatal):', ce && ce.message ? ce.message : ce); }
+    // Anonymous, opt-in engine-improvement feedback (outcome + page class only;
+    // never content, hashes, sealId, or URLs). Fire-and-forget, non-blocking.
+    reportVerificationOutcome(
+      verdict === 'MATCH' ? 'VERIFY_GENUINE' : (verdict === 'TAMPERED' ? 'VERIFY_TAMPERED' : 'VERIFY_FORMAT_ONLY'),
+      pageCount,
+      sealVersion || (meta && meta.version ? meta.version : null)
+    );
 
-    // Chain-of-custody share panel
-    try { chainBox.style.display = 'block'; } catch (cbe) {}
+    // Show PDF preview (non-essential; never let a preview failure kill a verdict)
+    try { showPreview(currentPdfBlob); } catch (pe) { console.warn('Preview failed (verification unaffected):', pe); }
 
-    // Telemetry (opt-in): outcome + page count class + seal format only
-    try { reportVerificationOutcome(verdict === 'MATCH' ? 'VERIFY_GENUINE' : (verdict === 'TAMPERED' ? 'VERIFY_TAMPERED' : 'VERIFY_OTHER'), pageCount, sealVersion); } catch (te) {}
+    // Show QR code with full metadata (guarded internally; QR library optional)
+    try { showQrCode(meta, hashHex); } catch (qe2) { console.warn('QR step failed (verification unaffected):', qe2); }
 
-    // OTS BLOCKCHAIN ANCHOR upgrade check -- fire-and-forget; never blocks.
-    try { runOtsAnchorCheck(meta, seal, pageCount); } catch (oe) { console.debug('OTS anchor check failed to start:', oe && oe.message ? oe.message : oe); }
+    // Show chain of custody
+    chainBox.style.display = 'block';
 
-    // Verification custody anchor -- fire-and-forget; never blocks.
-    try { runCustodyAnchor(verdict, hashHex, meta, seal, pageCount); } catch (cae) { console.debug('Custody anchor failed to start:', cae && cae.message ? cae.message : cae); }
-  }
+    // Build verification URL
+    var verifyBase = window.location.origin + window.location.pathname;
+    var params = new URLSearchParams();
+    if (meta && meta.sealId) params.set('seal', meta.sealId);
+    params.set('hash', hashHex.substring(0, 32));
+    currentVerifyUrl = verifyBase + '?' + params.toString();
 
-  // ===== Result renderers =====
+    // Cross-check against a scanned QR payload (?h=...&m=...), when present
+    try { crossCheckQrPayload(meta, seal, hashHex); } catch (qe) { console.warn('QR cross-check failed (verification unaffected):', qe); }
 
-  function esc(s) {
-    return String(s === undefined || s === null ? '' : s).replace(/[&<>"']/g, function(c) {
-      return { '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c];
-    });
-  }
-
-  function setResult(kind, icon, title, message, tsText) {
-    resultBox.className = 'result-box visible ' + kind;
-    document.getElementById('statusIcon').textContent = icon;
-    document.getElementById('statusTitle').textContent = title;
-    document.getElementById('statusMessage').innerHTML = message;
-    document.getElementById('timestamp').textContent = tsText || '';
-  }
-
-  function metaCard(title, bodyHtml) {
-    return '<div class="meta-card"><h4>' + title + '</h4><p>' + bodyHtml + '</p></div>';
-  }
-
-  function renderMetaCards(cards) {
-    metaSection.innerHTML = '<div class="meta-grid">' + cards.join('') + '</div>';
-  }
-
-  // MATCH -- sealed file byte-identical to what the sealer produced.
-  function showVerified(meta, sealedHash, originalHash, hashLabel) {
-    var ts = meta.timestamp ? esc(meta.timestamp) : 'Embedded in seal';
-    setResult('result-verified', '✓', 'GENUINE — Seal Intact',
-      'The sealed file is byte-identical to what the Verum Omnis sealer produced. Its ' + esc(hashLabel || 'sealed-file') + ' SHA-512 matches the hash embedded in the seal.',
-      'Verified at ' + new Date().toISOString());
-    var cards = [];
-    cards.push(metaCard('Seal ID', esc(meta.sealId || 'n/a')));
-    cards.push(metaCard('Sealed File SHA-512', esc(sealedHash || 'n/a')));
-    if (meta.originalHash) cards.push(metaCard('Original Content SHA-512', esc(meta.originalHash)));
-    if (meta.chain) cards.push(metaCard('Chain of Custody', esc(meta.chain)));
-    if (meta.sender) cards.push(metaCard('Sender', esc(meta.sender)));
-    renderMetaCards(cards);
-  }
-
-  // CERTIFICATE -- a seal certificate PDF (not itself tamper-checked).
-  function showCertificate(meta, fileHash, seal) {
-    setResult('result-legacy', '&#128220;', 'Seal Certificate',
-      'This file is a <strong>Verum Omnis Seal Certificate</strong> attesting that another document was sealed. The SHA-512 in its metadata belongs to the <strong>certified document</strong>, not to this certificate file &mdash; upload the certified document itself to verify its integrity.',
-      'Verified at ' + new Date().toISOString());
-    var cards = [];
-    cards.push(metaCard('Certificate Seal ID', esc(meta.sealId || 'n/a')));
-    cards.push(metaCard('Certified Document SHA-512', esc(meta.originalHash || 'n/a')));
-    if (meta.timestamp) cards.push(metaCard('Sealed At (ISO-8601)', esc(meta.timestamp)));
-    cards.push(metaCard('This File\'s SHA-512', esc(fileHash)));
-    renderMetaCards(cards);
-  }
-
-  // TAMPERED -- the recomputed hash does not match the embedded one.
-  function showTampered(label, expected, actual, seal) {
-    setResult('result-tampered', '✕', 'TAMPERED — DO NOT ACCEPT',
-      'The ' + esc(label) + ' SHA-512 recomputed from this file does NOT match the hash embedded in its seal. The file has been modified since sealing.',
-      'Checked at ' + new Date().toISOString());
-    var cards = [];
-    if (seal && seal.sealId) cards.push(metaCard('Seal ID', esc(seal.sealId)));
-    cards.push(metaCard('Expected (embedded)', esc(expected || 'n/a')));
-    cards.push(metaCard('Actual (recomputed)', esc(actual || 'n/a')));
-    renderMetaCards(cards);
-  }
-
-  // SEAL PRESENT but self-check not applicable (Info dict recompressed).
-  function showSealPresentUnverified(meta, seal) {
-    setResult('result-legacy', '&#8505;', 'Seal Present — Self-Check N/A',
-      'A VO-SEAL2 seal was found, but this file appears to have been re-saved by another PDF tool, so the sealed-file integrity check cannot run. The seal metadata below is intact; verify against the original sealed file for a byte-level verdict.',
-      'Checked at ' + new Date().toISOString());
-    var cards = [];
-    cards.push(metaCard('Seal ID', esc(meta.sealId || 'n/a')));
-    cards.push(metaCard('Sealed File SHA-512 (embedded)', esc(meta.sealedHash || 'n/a')));
-    if (meta.originalHash) cards.push(metaCard('Original Content SHA-512', esc(meta.originalHash)));
-    renderMetaCards(cards);
-  }
-
-  // LEGACY seal (pre-v1.3) -- hash covers original content, not this file.
-  function showLegacySeal(meta, seal) {
-    setResult('result-legacy', '&#8505;', 'Legacy Seal Found',
-      'This document carries a pre-v1.3 Verum Omnis seal. The embedded SHA-512 covers the <strong>original content</strong> (before sealing), which is not separately recoverable from the sealed file &mdash; no byte-level tamper verdict applies. Cross-check the QR / OpenTimestamps anchor below.',
-      'Checked at ' + new Date().toISOString());
-    var cards = [];
-    cards.push(metaCard('Seal ID', esc(meta.sealId || 'n/a')));
-    cards.push(metaCard('Original Content SHA-512', esc(meta.originalHash || 'n/a')));
-    if (meta.chain) cards.push(metaCard('Chain of Custody', esc(meta.chain)));
-    renderMetaCards(cards);
-  }
-
-  // SEAL FOUND via footer text or appended comment (no parseable Subject).
-  function showSealFound(meta, seal) {
-    setResult('result-legacy', '&#8505;', 'Seal Found',
-      'Verum Omnis seal markers were found in this document. The full seal metadata could not be parsed from the PDF dictionary, so no byte-level verdict applies &mdash; the details below are from the seal markers.',
-      'Checked at ' + new Date().toISOString());
-    var cards = [];
-    cards.push(metaCard('Seal ID', esc(meta.sealId || 'n/a')));
-    if (meta.originalHash) cards.push(metaCard('Original Content SHA-512', esc(meta.originalHash)));
-    if (meta.timestamp) cards.push(metaCard('Timestamp', esc(meta.timestamp)));
-    if (meta.sender) cards.push(metaCard('Sender', esc(meta.sender)));
-    if (meta.gps) cards.push(metaCard('GPS', esc(meta.gps)));
-    if (meta.device) cards.push(metaCard('Device', esc(meta.device)));
-    renderMetaCards(cards);
-  }
-
-  function showNoSeal() {
-    setResult('result-tampered', '&#128196;', 'No Seal Found',
-      'This PDF does not contain a detectable Verum Omnis seal. It may be an unsealed document, or the seal metadata may have been stripped by another tool.',
-      'Checked at ' + new Date().toISOString());
-    metaSection.innerHTML = '';
-  }
-
-  // ===== QR display (verify URL) =====
-  function showQrCode(hashHex, meta, seal) {
-    if (typeof qrcode === 'undefined') { console.debug('QR library unavailable; QR display skipped.'); return; }
-    var h = (meta && meta.originalHash) || (seal && seal.origHash) || hashHex;
-    var payload = { v: '1.2', t: Date.now(), type: 'verify' };
-    if (meta && meta.sealId) payload.sealId = meta.sealId;
-    if (h) payload.sha512 = h;
-    var mStr = encodeURIComponent(btoa(unescape(encodeURIComponent(JSON.stringify(payload)))));
-    var url = 'https://verumglobal.foundation/verify.html?h=' + String(h).substring(0, 32) + '&m=' + mStr;
-    currentVerifyUrl = url;
-    var qr = qrcode(0, 'M');
-    qr.addData(url);
-    qr.make();
-    var ctx = qrCanvas.getContext('2d');
-    var size = qr.getModuleCount();
-    var cell = Math.floor(220 / size);
-    var pad = Math.floor((220 - cell * size) / 2);
-    qrCanvas.width = 220; qrCanvas.height = 220;
-    ctx.fillStyle = '#ffffff'; ctx.fillRect(0, 0, 220, 220);
-    ctx.fillStyle = '#000000';
-    for (var r = 0; r < size; r++) {
-      for (var c = 0; c < size; c++) {
-        if (qr.isDark(r, c)) ctx.fillRect(pad + c * cell, pad + r * cell, cell, cell);
-      }
-    }
-    qrBox.classList.add('visible');
-  }
-
-  // ===== Chain-of-custody share actions =====
-  function quickSharePdf() {
+    // Verification custody anchor — fire-and-forget, fully non-fatal.
+    // Anchors the verification EVENT (never the document itself) to OpenTimestamps.
     try {
-      if (navigator.share && currentPdfBlob) {
-        var file = new File([currentPdfBlob], 'sealed-document.pdf', { type: 'application/pdf' });
-        navigator.share({ files: [file], title: 'Verum Omnis Sealed Document' }).catch(function() {});
-      } else if (currentVerifyUrl) {
-        shareVerificationLink();
+      anchorVerificationEvent(verdict, hashHex, meta).catch(function(ce) {
+        console.warn('Custody anchor error (verification unaffected):', ce);
+      });
+    } catch (ce) {
+      console.warn('Custody anchor failed to start (verification unaffected):', ce);
+    }
+
+    // OTS blockchain anchor upgrade check — fire-and-forget, fully non-fatal.
+    // Runs after ANY seal detection (any scheme, any verdict: the anchor speaks
+    // for the embedded ORIGINAL hash, even when the file drifted from it).
+    // Resolves the digest the sealer submitted, then polls the public calendars
+    // via /ots-proof.js (window.VoOts) for the upgraded Bitcoin-anchored proof.
+    try {
+      if (verdict !== 'NO_SEAL') {
+        runOtsAnchorCheck(meta, seal, pageCount).catch(function(oe) {
+          console.warn('OTS anchor check error (verification unaffected):', oe);
+        });
       }
-    } catch (e) { console.debug('Quick share failed:', e && e.message ? e.message : e); }
+    } catch (oe) {
+      console.warn('OTS anchor check failed to start (verification unaffected):', oe);
+    }
   }
+
+  function showVerified(meta, hashHex, originalHashHex, scheme) {
+    resultBox.className = 'result-box visible result-verified';
+    document.getElementById('statusIcon').innerHTML = '&#9989;';
+    if (scheme === 'v2') {
+      document.getElementById('statusTitle').textContent = 'Seal Verified — Genuine';
+      document.getElementById('statusMessage').textContent = 'This sealed file\'s own SHA-512 matches the hash embedded in its seal (VO-SEAL2 self-integrity check over the final sealed bytes). The document has not been altered since sealing.' +
+        (meta && meta.chain ? ' This is a chained seal: the document was sealed again after an earlier seal — this seal chains to previous seal ' + meta.chain + '.' : '');
+    } else {
+      document.getElementById('statusTitle').textContent = 'Seal Verified';
+      document.getElementById('statusMessage').textContent = 'This document\'s SHA-512 hash matches the embedded seal. The document has not been altered since sealing.';
+    }
+    document.getElementById('timestamp').textContent = 'Sealed: ' + (meta.timestamp ? new Date(meta.timestamp).toLocaleString() : 'Unknown');
+
+    var metaHtml = (scheme === 'v2') ? sealIdentityCardHtml(meta, 'v2') : '';
+    metaHtml += '<div class="meta-grid">';
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    if (scheme === 'v2') {
+      metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (verified)</h4><p>' + hashHex + '</p></div>';
+      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + meta.originalHash + '</p></div>';
+    } else {
+      metaHtml += '<div class="meta-card"><h4>Document SHA-512</h4><p>' + hashHex + '</p></div>';
+      if (originalHashHex) metaHtml += '<div class="meta-card"><h4>Original Content Hash</h4><p>' + originalHashHex + '</p></div>';
+    }
+    metaHtml += '<div class="meta-card"><h4>OTS Digest (Bitcoin)</h4><p>' + (meta.otsDigest || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Sender Identity</h4><p>' + (meta.sender || meta.identity || 'N/A') + '</p></div>';
+    if (meta.gps) metaHtml += '<div class="meta-card"><h4>GPS Location</h4><p>' + meta.gps + '</p></div>';
+    if (meta.device) metaHtml += '<div class="meta-card"><h4>Device</h4><p>' + meta.device + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Version</h4><p>' + (meta.version || 'N/A') + '</p></div>';
+    metaHtml += '</div>';
+    metaSection.innerHTML = metaHtml;
+
+    // Show fraud detection results if present
+    if (meta.fraud) {
+      try {
+        var f = typeof meta.fraud === 'string' ? JSON.parse(meta.fraud) : meta.fraud;
+        var fHtml = '<div class="fraud-section"><h4>Fraud Detection Results</h4><div class="fraud-grid">';
+        var items = [
+          { key: 'keywords', label: 'Keyword Scan' },
+          { key: 'patternScore', label: 'Pattern Score' },
+          { key: 'contradictions', label: 'Contradictions' },
+          { key: 'riskLevel', label: 'Risk Level' }
+        ];
+        items.forEach(function(item) {
+          var val = f[item.key];
+          var cls = 'clean';
+          if (item.key === 'riskLevel' && (val === 'HIGH' || val === 'CRITICAL')) cls = 'hit';
+          if (item.key === 'contradictions' && val > 0) cls = 'hit';
+          if (item.key === 'patternScore' && val > 50) cls = 'hit';
+          if (item.key === 'keywords' && val > 0) cls = 'hit';
+          fHtml += '<div class="fraud-item"><div class="f-label">' + item.label + '</div><div class="f-val ' + cls + '">' + (val !== undefined ? val : 'N/A') + '</div></div>';
+        });
+        fHtml += '</div></div>';
+        metaSection.innerHTML += fHtml;
+      } catch(e) {}
+    }
+  }
+
+  function showTampered(meta, hashHex, storedHash, originalHashHex, scheme, recomputedHash) {
+    resultBox.className = 'result-box visible result-tampered';
+    document.getElementById('statusIcon').innerHTML = '&#10060;';
+    document.getElementById('statusTitle').textContent = 'Seal Invalid / Tampered';
+    if (scheme === 'v2') {
+      document.getElementById('statusMessage').textContent = 'The sealed file\'s recomputed SHA-512 does NOT match the hash embedded in its VO-SEAL2 seal. This file has been modified after sealing.';
+    } else {
+      document.getElementById('statusMessage').textContent = 'The document\'s current hash does NOT match the embedded seal hash. The document may have been altered after sealing.';
+    }
+    document.getElementById('timestamp').textContent = 'Original seal: ' + (meta.timestamp ? new Date(meta.timestamp).toLocaleString() : 'Unknown');
+
+    var metaHtml = (scheme === 'v2') ? sealIdentityCardHtml(meta, 'v2') : '';
+    metaHtml += '<div class="meta-grid">';
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    if (scheme === 'v2') {
+      metaHtml += '<div class="meta-card"><h4>Recomputed Sealed-File Hash</h4><p style="color:#F87171">' + (recomputedHash || hashHex) + '</p></div>';
+      metaHtml += '<div class="meta-card"><h4>Embedded Sealed-File Hash</h4><p style="color:#4ADE80">' + (storedHash || 'N/A') + '</p></div>';
+      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + meta.originalHash + '</p></div>';
+    } else {
+      metaHtml += '<div class="meta-card"><h4>Current Hash</h4><p style="color:#F87171">' + hashHex + '</p></div>';
+      metaHtml += '<div class="meta-card"><h4>Embedded Hash</h4><p style="color:#4ADE80">' + (storedHash || 'N/A') + '</p></div>';
+      if (originalHashHex) metaHtml += '<div class="meta-card"><h4>Original Content Hash</h4><p>' + originalHashHex + '</p></div>';
+    }
+    metaHtml += '<div class="meta-card"><h4>OTS Digest (Bitcoin)</h4><p>' + (meta.otsDigest || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Sender Identity</h4><p>' + (meta.sender || meta.identity || 'N/A') + '</p></div>';
+    metaHtml += '</div>';
+    metaSection.innerHTML = metaHtml;
+  }
+
+  // Legacy website seal (pre-v1.3 VO-SEAL format): the embedded hash covers the
+  // pre-seal original, so a whole-file hash comparison is meaningless here.
+  // This is an honest "seal present" report -- never a tamper finding.
+  function showLegacySeal(meta, hashHex) {
+    resultBox.className = 'result-box visible result-legacy';
+    document.getElementById('statusIcon').innerHTML = '&#128274;';
+    document.getElementById('statusTitle').textContent = 'Seal Present — Legacy Format';
+    document.getElementById('statusMessage').textContent = 'This PDF carries a Verum Omnis seal in the legacy (pre-v1.3) format. The embedded SHA-512 covers the document\'s original pre-seal content; integrity of that original is attested by the embedded hash and its OpenTimestamps anchoring at sealing time. A sealed-file hash check is not applicable to this format — this is not a tamper finding.';
+    document.getElementById('timestamp').textContent = '';
+
+    var metaHtml = '<div class="meta-grid">';
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (embedded, OTS-anchored)</h4><p>' + (meta.originalHash || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (informational)</h4><p>' + hashHex + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Seal Format</h4><p>VO-SEAL (legacy — pre-v1.3)</p></div>';
+    metaHtml += '</div>';
+    metaSection.innerHTML = metaHtml;
+  }
+
+  // Seal detected but no integrity verdict can be computed:
+  //  - 'footer': footer text found, seal metadata missing/unreadable
+  //  - 'reencoded': VO-SEAL2 metadata present, but the file was re-saved by
+  //    another PDF tool, so the sealed-file hash can no longer be recomputed.
+  function showSealPresent(meta, hashHex, reason) {
+    resultBox.className = 'result-box visible result-legacy';
+    document.getElementById('statusIcon').innerHTML = '&#128274;';
+    if (reason === 'reencoded') {
+      document.getElementById('statusTitle').textContent = 'Seal Present — Check Not Applicable';
+      document.getElementById('statusMessage').textContent = 'This PDF carries a VO-SEAL2 seal, but the file was re-encoded by another PDF tool after sealing (the seal metadata no longer sits at its original byte position), so the sealed-file hash cannot be recomputed. The embedded hashes are shown for manual comparison. This is not a tamper finding.';
+    } else {
+      document.getElementById('statusTitle').textContent = 'Seal Footer Detected';
+      document.getElementById('statusMessage').textContent = 'A Verum Omnis seal footer was found in this PDF\'s page text, but the seal metadata is missing or unreadable, so no integrity verdict can be computed. The file hash is shown for manual comparison.';
+    }
+    document.getElementById('timestamp').textContent = '';
+
+    var metaHtml = '<div class="meta-grid">';
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    if (meta.sealedHash) metaHtml += '<div class="meta-card"><h4>Embedded Sealed-File SHA-512</h4><p>' + meta.sealedHash + '</p></div>';
+    if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + meta.originalHash + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Uploaded File SHA-512</h4><p>' + hashHex + '</p></div>';
+    metaHtml += '</div>';
+    metaSection.innerHTML = metaHtml;
+  }
+
+  // Seal identity card (uses the .identity-card styles). Summarises what the
+  // seal IS: format, chain position, and who produced it. For chained seals
+  // (a sealed document that was sealed again) the previous seal is named
+  // explicitly -- the CHAIN field only ever references the immediate
+  // predecessor, so chain depth beyond that is honestly not claimed.
+  function sealIdentityCardHtml(meta, scheme) {
+    if (!meta || !meta.sealId) return '';
+    function row(label, value) {
+      return '<div class="id-field"><span class="id-label">' + label + '</span><span class="id-value">' + value + '</span></div>';
+    }
+    var rows = row('Seal ID', meta.sealId);
+    if (scheme === 'sealcert') rows += row('Type', 'Seal Certificate (SEAL-CERT)');
+    else if (scheme === 'v2') rows += row('Type', 'Sealed Document (VO-SEAL2)');
+    else rows += row('Type', meta.version || 'VO-SEAL (legacy)');
+    if (meta.chain) rows += row('Chain', 'Chained seal &mdash; chains to previous seal ' + meta.chain);
+    else if (scheme === 'v2') rows += row('Chain', 'First seal (no previous seal referenced)');
+    if (meta.producer) rows += row('Sealed By', meta.producer);
+    return '<div class="identity-card" style="text-align:left;margin-top:24px"><h3>Seal Identity</h3>' + rows + '</div>';
+  }
+
+  // SEAL-CERT verdict: the uploaded file is a certificate ABOUT a seal, not a
+  // sealed document. Blue/neutral styling -- never green (nothing about the
+  // certified document's current state was checked) and never red (the
+  // certificate file's own hash legitimately differs from the certified hash).
+  function showCertificate(meta, hashHex, seal) {
+    resultBox.className = 'result-box visible result-legacy';
+    document.getElementById('statusIcon').innerHTML = '&#128220;';
+    document.getElementById('statusTitle').textContent = 'Seal Certificate';
+    document.getElementById('statusMessage').textContent = 'This PDF is a Verum Omnis seal certificate: it attests that the document with the SHA-512 below was sealed as ' + (meta.sealId || 'the named seal') + '. It is not itself the sealed document, and its own file hash is not expected to match the certified hash. To verify integrity of the document, upload the sealed document itself.';
+    document.getElementById('timestamp').textContent = meta.timestamp ? 'Certified sealing time: ' + meta.timestamp : '';
+
+    var metaHtml = sealIdentityCardHtml(meta, 'sealcert');
+    metaHtml += '<div class="meta-grid">';
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Certified Document SHA-512</h4><p>' + (meta.originalHash || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Certificate File SHA-512 (informational)</h4><p>' + hashHex + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>What This Proves</h4><p>Integrity &amp; sealing time of the certified document only &mdash; not its contents. Upload the sealed document itself for an integrity verdict.</p></div>';
+    metaHtml += '</div>';
+    metaSection.innerHTML = metaHtml;
+  }
+
+  // pdf.js failure honesty: when the parser could not run, say so openly.
+  // Raw byte analysis still proves VO-SEAL2 integrity for seals with an
+  // uncompressed Info dictionary, but seals that exist only inside compressed
+  // PDF objects (SEAL-CERT certificates, re-saved files) are invisible then.
+  function renderParserNote(pdfSeal) {
+    if (!pdfSeal || !pdfSeal.error) return;
+    var unavailable = pdfSeal.error === 'pdfjs-unavailable';
+    var note = document.createElement('div');
+    note.className = 'meta-card';
+    note.style.marginTop = '16px';
+    note.innerHTML = '<h4>Parser Note</h4><p>' +
+      (unavailable
+        ? 'The advanced PDF parser (pdf.js) did not load, so verification ran on raw byte analysis only. VO-SEAL2 integrity checks are unaffected, but a seal stored only inside compressed PDF objects (e.g. a SEAL-CERT certificate or a re-saved file) cannot be detected in this state. If you expected a seal that was not found, retry when cdn.jsdelivr.net is reachable.'
+        : 'The advanced PDF parser (pdf.js) reported an error (' + pdfSeal.error + '). Verification proceeded on raw byte analysis only; a seal stored only inside compressed PDF objects may not be detected.') +
+      '</p>';
+    metaSection.appendChild(note);
+  }
+
+  function showNoSeal(hashHex) {
+    resultBox.className = 'result-box visible result-tampered';
+    document.getElementById('statusIcon').innerHTML = '&#9888;&#65039;';
+    document.getElementById('statusTitle').textContent = 'No Seal Found';
+    document.getElementById('statusMessage').textContent = 'This PDF does not contain an embedded Verum Omnis seal. The SHA-512 hash of the file is shown below for manual comparison.';
+    document.getElementById('timestamp').textContent = '';
+
+    metaSection.innerHTML = '<div class="meta-grid"><div class="meta-card"><h4>File SHA-512</h4><p>' + hashHex + '</p></div></div>';
+  }
+
+  function showPreview(blob) {
+    var url = URL.createObjectURL(blob);
+    previewContent.innerHTML = '<iframe src="' + url + '" style="width:100%;height:400px;border:none;border-radius:8px"></iframe>';
+    previewBox.classList.add('visible');
+  }
+
+  // QR display is a convenience extra. The generator is inlined above, but the
+  // typeof guard stays: verification must NEVER hard-fail because of a QR
+  // problem. If anything goes wrong, skip the QR card silently and keep the
+  // metadata verdict.
+  function showQrCode(meta, hashHex) {
+    try {
+      if (typeof qrcode !== 'function') {
+        console.debug('QR generator unavailable; QR card skipped (verification unaffected).');
+        if (qrBox) { qrBox.classList.remove('visible'); qrBox.style.display = 'none'; }
+        return;
+      }
+      var qrData = buildQrData(meta, hashHex);
+      var qr = qrcode(0, 'M'); // type 0 = auto size, EC level M
+      // qrcode-generator maps char codes 1:1 to bytes, so hand it the payload
+      // as UTF-8 bytes in a latin1 string (encodeURIComponent trick) — scanners
+      // then decode the JSON as UTF-8.
+      qr.addData(unescape(encodeURIComponent(qrData)));
+      qr.make();
+      var count = qr.getModuleCount();
+      var margin = 4;
+      var scale = Math.max(1, Math.floor(220 / (count + margin * 2)));
+      var size = scale * (count + margin * 2);
+      qrCanvas.width = size; qrCanvas.height = size;
+      var c2d = qrCanvas.getContext('2d');
+      if (!c2d) throw new Error('canvas 2d context unavailable');
+      c2d.fillStyle = '#F8F9FA'; c2d.fillRect(0, 0, size, size);
+      c2d.fillStyle = '#040D1B';
+      for (var qrow = 0; qrow < count; qrow++) {
+        for (var qcol = 0; qcol < count; qcol++) {
+          if (qr.isDark(qrow, qcol)) c2d.fillRect((qcol + margin) * scale, (qrow + margin) * scale, scale, scale);
+        }
+      }
+      qrBox.style.display = '';
+      qrBox.classList.add('visible');
+    } catch (e) {
+      console.warn('QR card rendering failed (verification unaffected):', e && e.message ? e.message : e);
+      if (qrBox) { qrBox.classList.remove('visible'); qrBox.style.display = 'none'; }
+    }
+  }
+
+  function buildQrData(meta, hashHex) {
+    var data = {
+      v: 'VO-DSS-1.2',
+      url: window.location.origin + '/verify.html',
+      sealId: meta && meta.sealId ? meta.sealId : null,
+      sha512: hashHex,
+      otsDigest: meta && meta.otsDigest ? meta.otsDigest : null,
+      identity: meta && (meta.sender || meta.identity) ? (meta.sender || meta.identity) : null,
+      gps: meta && meta.gps ? meta.gps : null,
+      device: meta && meta.device ? meta.device : null,
+      timestamp: meta && meta.timestamp ? meta.timestamp : null,
+      version: meta && meta.version ? meta.version : null
+    };
+    // Remove nulls
+    var cleaned = {};
+    for (var k in data) { if (data[k] !== null) cleaned[k] = data[k]; }
+    return JSON.stringify(cleaned);
+  }
+
+  // ===== Web Share API / Samsung Quick Share =====
+  function canShare() {
+    return typeof navigator !== 'undefined' && navigator.share;
+  }
+
+  async function quickSharePdf() {
+    if (!currentPdfBlob) {
+      fallbackShare(currentVerifyUrl || window.location.href);
+      return;
+    }
+    var fileName = (parsedMeta && parsedMeta.sealId ? parsedMeta.sealId : 'sealed-document') + '.pdf';
+    var file = new File([currentPdfBlob], fileName, { type: 'application/pdf' });
+    var shareData = {
+      title: 'Verum Omnis Sealed Document',
+      text: 'Sealed document from verumglobal.foundation -- recipient scans QR code inside to verify authenticity. Chain of custody transfer.',
+      files: [file]
+    };
+    if (canShare() && navigator.canShare && navigator.canShare({ files: [file] })) {
+      try {
+        await navigator.share(shareData);
+      } catch (e) {
+        if (e.name !== 'AbortError') {
+          fallbackShare(currentVerifyUrl || window.location.href);
+        }
+      }
+    } else {
+      fallbackShare(currentVerifyUrl || window.location.href);
+    }
+  }
+  window.quickSharePdf = quickSharePdf;
 
   function shareVerificationLink() {
-    try {
-      var url = currentVerifyUrl || window.location.href;
-      if (navigator.share) {
-        navigator.share({ url: url, title: 'Verify this document' }).catch(function() {});
-      } else if (navigator.clipboard) {
-        navigator.clipboard.writeText(url).then(function() { alert('Verification link copied to clipboard.'); });
-      }
-    } catch (e) { console.debug('Share link failed:', e && e.message ? e.message : e); }
+    var url = currentVerifyUrl || window.location.href;
+    if (canShare()) {
+      navigator.share({ title: 'Verify Verum Omnis Seal', text: 'Verify this sealed document at', url: url }).catch(function() {});
+    } else {
+      fallbackShare(url);
+    }
+  }
+  window.shareVerificationLink = shareVerificationLink;
+
+  function fallbackShare(url) {
+    var ta = document.createElement('textarea');
+    ta.value = url;
+    document.body.appendChild(ta);
+    ta.select();
+    document.execCommand('copy');
+    document.body.removeChild(ta);
+    alert('Link copied to clipboard: ' + url);
   }
 
   function goToReport() {
-    window.location.href = '/verify-data.html';
+    var sealId = parsedMeta && parsedMeta.sealId ? parsedMeta.sealId : '';
+    window.location.href = '/verify-data.html' + (sealId ? '?seal=' + encodeURIComponent(sealId) : '');
   }
+  window.goToReport = goToReport;
 
   // ===== Verification Custody Anchor =====
-  // Anchors the verification EVENT (digest of verdict + time + optional GPS)
-  // to OpenTimestamps. The original seal timestamp remains authoritative for
-  // sealing time; this proves WHEN/WHERE verification happened.
-  var CUSTODY_PREV_KEY = 'vo-custody-prev-digest';
+  // Anchors each verification EVENT to OpenTimestamps (Bitcoin) and chains
+  // consecutive verifications of the same document via localStorage.
+  // This NEVER re-anchors the document itself: the digest submitted to the
+  // calendars is SHA-256 of the custody record below, NOT the document hash.
+  // Record format:
+  //   VO-CUSTODY|<docSha512>|<verdict>|<ISO8601 UTC timestamp>|<sealId or "NONE">|<prevCustodyDigest or "GENESIS">[|gps=<lat6,lon6>|acc=<accuracy m>]
+  // The optional gps/acc tail is present ONLY when the user explicitly opted in
+  // for this session AND the browser returned a fix -- so when a location is
+  // shown, it is inside the OTS-anchored digest (cannot be altered after the
+  // fact). No fix => no location fields in the record at all (never faked).
+  // Fully non-fatal: any failure is logged and the custody block stays hidden.
 
-  async function runCustodyAnchor(verdict, hashHex, meta, seal, pageCount) {
+  var CUSTODY_CALENDARS = [
+    'https://a.pool.opentimestamps.org/digest',
+    'https://b.pool.opentimestamps.org/digest',
+    'https://a.pool.eternitywall.com/digest'
+  ];
+
+  function custodyHexToBytes(hex) {
+    var b = new Uint8Array(hex.length / 2);
+    for (var i = 0; i < hex.length; i += 2) b[i / 2] = parseInt(hex.substring(i, i + 2), 16);
+    return b;
+  }
+
+  function custodyBufToHex(buf) {
+    return Array.from(new Uint8Array(buf)).map(function(x) { return x.toString(16).padStart(2, '0'); }).join('');
+  }
+
+  function custodyTruncate(hex) {
+    if (!hex) return '';
+    if (hex === 'GENESIS') return 'GENESIS';
+    if (hex.length <= 36) return hex;
+    return hex.substring(0, 24) + '...' + hex.substring(hex.length - 8);
+  }
+
+  // Same non-fatal calendar submission pattern as seal-document.html:
+  // POST raw digest bytes to each calendar pool in order, 15s AbortController
+  // timeout per attempt, stop at first acceptance, never throw.
+  async function submitCustodyToOTS(digestHex) {
+    var hashBytes = custodyHexToBytes(digestHex);
+    var accepted = [];
+    for (var i = 0; i < CUSTODY_CALENDARS.length; i++) {
+      var url = CUSTODY_CALENDARS[i];
+      try {
+        var ctrl = new AbortController();
+        var to = setTimeout(function() { ctrl.abort(); }, 15000);
+        var res = await fetch(url, { method: 'POST', headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/vnd.opentimestamps.v1' }, body: hashBytes, signal: ctrl.signal });
+        clearTimeout(to);
+        if (res.ok) {
+          var d = await res.arrayBuffer();
+          if (d.byteLength > 0) { accepted.push(url); return { success: true, accepted: accepted }; }
+        }
+      } catch (e) { console.warn('Custody calendar failed:', url, e.message); }
+    }
+    return { success: false, accepted: accepted };
+  }
+
+  function custodyStorageKey(docSha512) { return 'vo-custody-' + docSha512; }
+
+  function readPrevCustodyDigest(docSha512) {
     try {
-      if (!custodyBox) return;
-      var sealId = (meta && meta.sealId) || (seal && seal.sealId) || null;
-      var gps = null;
-      if (gpsOptInEl && gpsOptInEl.checked && navigator.geolocation) {
-        gps = await new Promise(function(resolve) {
-          navigator.geolocation.getCurrentPosition(
-            function(pos) { resolve({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6) }); },
-            function() { resolve(null); },
-            { timeout: 8000, maximumAge: 60000 }
-          );
-        });
+      var raw = localStorage.getItem(custodyStorageKey(docSha512));
+      if (!raw) return null;
+      try {
+        var parsed = JSON.parse(raw);
+        if (parsed && parsed.custodyDigest) return parsed.custodyDigest;
+        return null;
+      } catch (je) {
+        // Legacy/plain-string value: treat the raw stored value as the digest
+        return raw;
       }
-      var now = new Date().toISOString();
-      var prevDigest = null;
-      try { prevDigest = localStorage.getItem(CUSTODY_PREV_KEY); } catch (le) {}
-      var payload = {
-        event: 'VO_VERIFY',
-        verdict: verdict,
-        sealId: sealId,
-        docHashPrefix: hashHex.substring(0, 32),
-        pageCount: pageCount || 0,
-        verifiedAtUtc: now,
-        gps: gps,
-        prevEventDigest: prevDigest
-      };
-      var digestBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(JSON.stringify(payload)));
-      var digestHex = bufToHex(digestBuf);
-      try { localStorage.setItem(CUSTODY_PREV_KEY, digestHex); } catch (se) {}
+    } catch (e) { return null; }
+  }
 
-      // Render the custody box
-      document.getElementById('custodyVerdict').textContent = verdict;
-      document.getElementById('custodyVerdict').className = 'custody-badge ' + (verdict === 'MATCH' ? 'match' : (verdict === 'TAMPERED' ? 'tampered' : 'seal_found'));
-      document.getElementById('custodyTime').textContent = now;
-      document.getElementById('custodyDigest').textContent = digestHex;
-      document.getElementById('custodyPrev').textContent = prevDigest || '(none — first verification on this device)';
-      var gpsRow = document.getElementById('custodyGpsRow');
-      if (gps) {
-        gpsRow.style.display = 'flex';
-        document.getElementById('custodyGps').textContent = gps.lat + ', ' + gps.lng;
+  function writeCustodyState(docSha512, state) {
+    try {
+      localStorage.setItem(custodyStorageKey(docSha512), JSON.stringify(state));
+    } catch (e) {
+      console.warn('Custody state persist failed (chain unaffected on-chain):', e);
+    }
+  }
+
+  function custodyFileStamp(isoDate) {
+    var d = new Date(isoDate);
+    function p(n) { return (n < 10 ? '0' : '') + n; }
+    return d.getUTCFullYear() + p(d.getUTCMonth() + 1) + p(d.getUTCDate()) + '-' + p(d.getUTCHours()) + p(d.getUTCMinutes()) + p(d.getUTCSeconds());
+  }
+
+  // ===== GPS at verification (opt-in, per-session) =====
+  // Captures the browser's geolocation fix so the custody record can prove
+  // WHERE the verification happened (e.g. "verified at the courthouse").
+  // Privacy contract:
+  //   * runs ONLY when the user checked the box for this session;
+  //   * the fix goes ONLY into the local custody record, the OTS-anchored
+  //     custody digest (as hash input), and the downloadable custody receipt;
+  //   * NEVER into feedback telemetry, NEVER transmitted anywhere else
+  //     (only the irreversible SHA-256 custody digest leaves the device);
+  //   * on denial / timeout / unavailability the flow proceeds WITHOUT a
+  //     location and says so honestly -- it never blocks and never fakes.
+  // Resolves {ok:true, lat, lon, accuracyM} or {ok:false, reason}; never throws.
+  function captureVerificationGps() {
+    return new Promise(function(resolve) {
+      function fail(reason) { resolve({ ok: false, reason: reason }); }
+      try {
+        if (!('geolocation' in navigator) || !navigator.geolocation || typeof navigator.geolocation.getCurrentPosition !== 'function') {
+          fail('unavailable');
+          return;
+        }
+        navigator.geolocation.getCurrentPosition(
+          function(pos) {
+            try {
+              var c = pos && pos.coords ? pos.coords : {};
+              if (typeof c.latitude !== 'number' || typeof c.longitude !== 'number' || !isFinite(c.latitude) || !isFinite(c.longitude)) {
+                fail('invalid-fix');
+                return;
+              }
+              resolve({
+                ok: true,
+                lat: c.latitude,
+                lon: c.longitude,
+                accuracyM: (typeof c.accuracy === 'number' && isFinite(c.accuracy)) ? c.accuracy : null
+              });
+            } catch (e) { fail('error'); }
+          },
+          function(err) {
+            // GeolocationPositionError: 1=PERMISSION_DENIED, 2=POSITION_UNAVAILABLE, 3=TIMEOUT
+            var reason = 'unavailable';
+            if (err) {
+              if (err.code === 1) reason = 'permission-denied';
+              else if (err.code === 2) reason = 'position-unavailable';
+              else if (err.code === 3) reason = 'timeout';
+            }
+            fail(reason);
+          },
+          // 10s timeout per spec; maximumAge 0 = the fix must be fresh (the
+          // proof is about where the verification happened NOW, not a cached
+          // location from earlier); no high-accuracy request -- the reported
+          // accuracy field is displayed honestly alongside.
+          { timeout: 10000, maximumAge: 0, enableHighAccuracy: false }
+        );
+      } catch (e) { fail('error'); }
+    });
+  }
+
+  // Pure custody-record builder (kept separate so the format is testable and
+  // the receipt can be reproduced field-for-field from the downloaded JSON).
+  // gpsField: null, or {lat6, lon6, accuracyM} where lat6/lon6 are the
+  // 6-decimal strings embedded verbatim in the record.
+  function buildCustodyRecord(docSha512, verdict, verifiedAtUtc, sealId, prevDigest, gpsField) {
+    var record = 'VO-CUSTODY|' + docSha512 + '|' + verdict + '|' + verifiedAtUtc + '|' + sealId + '|' + prevDigest;
+    if (gpsField) {
+      record += '|gps=' + gpsField.lat6 + ',' + gpsField.lon6 +
+                '|acc=' + (gpsField.accuracyM != null ? gpsField.accuracyM + 'm' : 'unknown');
+    }
+    return record;
+  }
+
+  async function anchorVerificationEvent(verdict, docSha512, meta) {
+    try {
+      if (!docSha512) return;
+      if (!window.crypto || !crypto.subtle) throw new Error('Web Crypto unavailable (secure context required)');
+
+      var sealId = (meta && meta.sealId) ? meta.sealId : 'NONE';
+      var prevDigest = readPrevCustodyDigest(docSha512) || 'GENESIS';
+      var verifiedAtUtc = new Date().toISOString();
+
+      // 0. Optional GPS-at-verification. Runs only on explicit per-session
+      //    opt-in; failure proceeds without location and is noted honestly.
+      var gpsRequested = !!(gpsOptInEl && gpsOptInEl.checked);
+      var gpsFix = null;
+      if (gpsRequested) {
+        gpsFix = await captureVerificationGps();
+      }
+      var gpsField = (gpsFix && gpsFix.ok) ? {
+        lat6: gpsFix.lat.toFixed(6),
+        lon6: gpsFix.lon.toFixed(6),
+        accuracyM: (gpsFix.accuracyM != null ? Math.round(gpsFix.accuracyM) : null)
+      } : null;
+
+      // 1. Build the custody record and compute its digest (this is what gets anchored)
+      var record = buildCustodyRecord(docSha512, verdict, verifiedAtUtc, sealId, prevDigest, gpsField);
+      var digestBuf = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(record));
+      var custodyDigest = custodyBufToHex(digestBuf);
+
+      // 2. Submit ONLY the custody digest to the OTS calendars (non-fatal)
+      var ots = await submitCustodyToOTS(custodyDigest);
+      var otsStatus = ots.success ? 'PENDING' : 'OFFLINE';
+
+      // Location block shared by the local chain state, the receipt, and the
+      // custody display. gps is the exact 6dp string inside the anchored digest.
+      var locationBlock = {
+        requested: gpsRequested,
+        captured: !!gpsField,
+        gps: gpsField ? gpsField.lat6 + ',' + gpsField.lon6 : null,
+        accuracyM: gpsField ? gpsField.accuracyM : null,
+        note: gpsField
+          ? 'Captured by the browser at verification time; included in the anchored custody record only -- not uploaded anywhere else.'
+          : (gpsRequested
+              ? 'location not captured (' + ((gpsFix && gpsFix.reason) ? gpsFix.reason : 'error') + ')'
+              : 'not requested')
+      };
+
+      // 3. Persist chain state — even when OTS failed the record still exists;
+      //    otsStatus is stored alongside so the chain remains honest.
+      writeCustodyState(docSha512, {
+        custodyDigest: custodyDigest,
+        otsStatus: otsStatus,
+        verdict: verdict,
+        verifiedAtUtc: verifiedAtUtc,
+        sealId: sealId,
+        prevCustodyDigest: prevDigest,
+        location: locationBlock
+      });
+
+      // 4. Build the downloadable custody receipt
+      var receipt = {
+        type: 'VO-CUSTODY-1',
+        docSha512: docSha512,
+        sealId: sealId,
+        verdict: verdict,
+        verifiedAtUtc: verifiedAtUtc,
+        custodyDigest: custodyDigest,
+        prevCustodyDigest: prevDigest,
+        location: locationBlock,
+        ots: { status: otsStatus, calendars: ots.accepted },
+        originalSeal: {
+          sha512: (meta && (meta.originalHash || meta.sha512)) ? (meta.originalHash || meta.sha512) : null,
+          otsStatus: (meta && meta.otsDigest) ? 'DIGEST_EMBEDDED (Bitcoin confirmation status not independently checked by this page)' : 'NONE_EMBEDDED'
+        }
+      };
+      currentCustodyReceipt = receipt;
+      var nameBase = sealId !== 'NONE' ? sealId : docSha512.substring(0, 12);
+      currentCustodyFilename = 'vo-custody-' + nameBase + '-' + custodyFileStamp(verifiedAtUtc) + '.json';
+
+      // 5. Render the custody block below the verdict
+      renderCustodyBlock(receipt);
+    } catch (e) {
+      console.warn('Custody anchor failed (verification unaffected):', e);
+      if (custodyBox) custodyBox.style.display = 'none';
+    }
+  }
+
+  function renderCustodyBlock(receipt) {
+    if (!custodyBox) return;
+    var badgeEl = document.getElementById('custodyVerdict');
+    badgeEl.textContent = receipt.verdict;
+    badgeEl.className = 'custody-badge ' + receipt.verdict.toLowerCase();
+    document.getElementById('custodyTime').textContent = receipt.verifiedAtUtc;
+    var digestEl = document.getElementById('custodyDigest');
+    digestEl.textContent = custodyTruncate(receipt.custodyDigest);
+    digestEl.title = receipt.custodyDigest;
+    var prevEl = document.getElementById('custodyPrev');
+    prevEl.textContent = custodyTruncate(receipt.prevCustodyDigest);
+    prevEl.title = receipt.prevCustodyDigest === 'GENESIS' ? 'First verification of this document on this device' : receipt.prevCustodyDigest;
+    var otsEl = document.getElementById('custodyOts');
+    if (receipt.ots.status === 'PENDING') {
+      otsEl.textContent = 'ANCHORED — Bitcoin confirmation pending';
+      otsEl.className = 'custody-value custody-ots-anchored';
+    } else {
+      otsEl.textContent = 'OFFLINE — not anchored';
+      otsEl.className = 'custody-value custody-ots-offline';
+    }
+    // Location row: three honest states -- captured (show the fix + accuracy),
+    // requested but not captured (say so plainly), not requested (row hidden).
+    var gpsRow = document.getElementById('custodyGpsRow');
+    var gpsEl = document.getElementById('custodyGps');
+    var loc = receipt.location || null;
+    if (gpsRow && gpsEl) {
+      if (loc && loc.captured && loc.gps) {
+        gpsRow.style.display = '';
+        gpsEl.textContent = loc.gps.replace(',', ', ') + (loc.accuracyM != null ? ' (±' + loc.accuracyM + 'm)' : '');
+        gpsEl.title = 'Browser geolocation fix at verification time; included in the anchored custody digest.';
+      } else if (loc && loc.requested) {
+        gpsRow.style.display = '';
+        gpsEl.textContent = loc.note || 'location not captured';
+        gpsEl.title = 'Location was requested but the browser did not provide a fix; the custody record honestly contains no location.';
       } else {
         gpsRow.style.display = 'none';
+        gpsEl.textContent = '';
+        gpsEl.title = '';
       }
-      var otsEl = document.getElementById('custodyOts');
-      otsEl.textContent = 'Submitting to calendars…';
-      otsEl.className = 'custody-value';
-      custodyBox.style.display = 'block';
-
-      // Receipt (downloadable JSON)
-      currentCustodyReceipt = {
-        standard: 'VO-CUSTODY-1',
-        event: payload,
-        custodyDigestSha256: digestHex,
-        ots: { status: 'submitting' }
-      };
-      currentCustodyFilename = (sealId || 'verum-omnis') + '-custody-receipt.json';
-
-      // Submit the custody digest to OTS calendars (best-effort, honest states)
-      if (window.VoOts && typeof window.VoOts.submitDigest === 'function') {
-        try {
-          var sub = await window.VoOts.submitDigest(digestHex);
-          if (sub && sub.success) {
-            otsEl.innerHTML = '<span class="custody-ots-anchored">Receipt anchored — pending Bitcoin confirmation</span>';
-            currentCustodyReceipt.ots = { status: 'pending', calendar: sub.calendar || null };
-          } else {
-            otsEl.innerHTML = '<span class="custody-ots-offline">Calendars unreachable — digest recorded locally for retry</span>';
-            currentCustodyReceipt.ots = { status: 'offline' };
-          }
-        } catch (oe) {
-          otsEl.innerHTML = '<span class="custody-ots-offline">Calendars unreachable — digest recorded locally for retry</span>';
-          currentCustodyReceipt.ots = { status: 'offline' };
-        }
-      } else {
-        otsEl.textContent = 'OTS module unavailable — digest recorded locally';
-        currentCustodyReceipt.ots = { status: 'unavailable' };
-      }
-    } catch (e) {
-      console.debug('Custody anchor failed (verification unaffected):', e && e.message ? e.message : e);
     }
+    custodyBox.style.display = 'block';
   }
 
   function downloadCustodyReceipt() {
@@ -1090,19 +1487,33 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       var url = URL.createObjectURL(blob);
       var a = document.createElement('a');
       a.href = url;
-      a.download = currentCustodyFilename || 'custody-receipt.json';
+      a.download = currentCustodyFilename || 'vo-custody-receipt.json';
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
       setTimeout(function() { URL.revokeObjectURL(url); }, 5000);
-    } catch (e) { console.debug('Custody receipt download failed:', e && e.message ? e.message : e); }
+    } catch (e) { console.warn('Custody receipt download failed:', e); }
   }
   window.downloadCustodyReceipt = downloadCustodyReceipt;
 
-  // ===== OTS BLOCKCHAIN ANCHOR (upgrade check) =====
-  // Calendars polled for the upgraded (Bitcoin-anchored) proof. This is the
-  // READ path: the seal page submitted the digest at sealing time; here we
-  // check whether it has been confirmed into a Bitcoin block yet.
+  // ===== OTS Blockchain Anchor (upgrade check via /ots-proof.js) =====
+  // Every Verum Omnis seal submits an OpenTimestamps digest to the public
+  // calendars at sealing time:
+  //   otsDigestHex = SHA-256( UTF-8 bytes of the ORIGINAL document's
+  //   lowercase sha512 HEX string )  — identical to the seal page's formula
+  //   (computeSHA256(TextEncoder.encode(sha512))).
+  // This section resolves that digest for an uploaded document, polls the
+  // calendars for the upgraded (Bitcoin-anchored) proof via window.VoOts, and
+  // renders the honest result. 'Confirmed' is shown only when VoOts verified a
+  // real Bitcoin block attestation inside the returned proof — never assumed,
+  // never faked.
+  //
+  // Methodology Defence: the anchor proves TIME-OF-EXISTENCE of the hash,
+  // never the truth of the document's contents. A Verum Omnis seal proves two
+  // things only — integrity and time. No court-validation claim is made.
+
+  // Base URLs of the calendars the sealer submits to (VoOts normalizes them
+  // and appends /timestamp/<digest> itself).
   var OTS_ANCHOR_CALENDARS = [
     'https://a.pool.opentimestamps.org',
     'https://b.pool.opentimestamps.org',
@@ -1219,7 +1630,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
   function otsEsc(s) {
     return String(s === undefined || s === null ? '' : s).replace(/[&<>"]/g, function(c) {
-      return c === '&' ? '&amp;' : (c === '<' ? '&lt;' : (c === '>' ? '&gt;' : '&quot;');
+      return c === '&' ? '&amp;' : (c === '<' ? '&lt;' : (c === '>' ? '&gt;' : '&quot;'));
     });
   }
 
