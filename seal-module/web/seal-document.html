@@ -362,7 +362,7 @@
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Physical Address</label>
       <input type="text" id="senderAddress" placeholder="e.g., 12 Main Street, Sandton, Johannesburg" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:12px;font-family:inherit;">
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Contact Email</label>
-      <input type="email" id="senderEmail" placeholder="e.g., john@email.com" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
+      <input type="email" id="senderEmail" placeholder="e.g., john@email.com" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:12px;font-family:inherit;">
       <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;margin-top:14px;">
         <input type="checkbox" id="includeIdentityInQr" style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
         <span>Include identity + GPS in the public QR code (opt-in, default off). <strong style="color:#D4A843;">Warning: anyone holding the sealed document can read the QR payload.</strong> Leave unchecked to keep identity and GPS only in your private Seal Certificate.</span>
@@ -1121,7 +1121,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     const chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
     const chainLabel = chainIds.length > 0 ? '  |  Chain: ' + chainIds.length + ' prev' : '';
     pg.drawText(stLabel + chainLabel, { x: pageW*0.03, y: fy+fs*1.8, size: fs*0.8, font: helvBold, color: rgb(0.82,0.65,0.28) });
-    pg.drawText('Seal: ' + sealId + '  |  SHA-512: ' + short + '...  |  ' + ts + '  |  ' + (i+1) + '/' + pages.length, { x: pageW*0.03, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.58,0.71,0.78) });
+    pg.drawText('VERUM OMNIS SEALED ORIGINAL  |  Seal: ' + sealId + '  |  SHA-512: ' + short + '...  |  ' + ts + '  |  ' + (i+1) + '/' + pages.length + chainLabel, { x: pageW*0.03, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.58,0.71,0.78) });
     pg.drawText('verumglobal.foundation  |  OpenTimestamps  |  Patent Pending', { x: pageW*0.55, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.36,0.42,0.48) });
 
     updateStep(6, 'processing', 'Page ' + (i+1) + ' of ' + pages.length);
@@ -1958,6 +1958,11 @@ async function runSealingPipeline() {
       updateStep(7, 'processing', 'AI review of findings (optional)...');
       var originalCount = fraudResult.findings.length;
       var assessRes = await aiAssessFindings(fraudResult.findings);
+      if (!assessRes || !assessRes.ran) {
+        // Honest antithesis marker: review was enabled but did not run.
+        aiReviewInfo = { applied: false, reason: 'service unavailable' };
+        updateStep(7, 'processing', 'AI review unavailable -- findings are engine output, unreviewed');
+      }
       if (assessRes && assessRes.ran) {
         var mergedFindings = assessRes.findings.concat(assessRes.added);
         reportFraudResult = Object.assign({}, fraudResult, { findings: mergedFindings, totalFindings: mergedFindings.length });
@@ -1983,7 +1988,8 @@ async function runSealingPipeline() {
   } catch (aiErr) {
     console.warn('AI review skipped (sealing unaffected):', aiErr && aiErr.message ? aiErr.message : aiErr);
     reportFraudResult = fraudResult;
-    aiReviewInfo = null;
+    aiReviewInfo = (isAiReviewEnabled() && fraudResult && !fraudResult.scanFailed && fraudResult.findings && fraudResult.findings.length > 0)
+      ? { applied: false, reason: 'service unavailable' } : null;
     aiNarrativeText = null;
     _pipelineAiAddedFindings = [];
   }
