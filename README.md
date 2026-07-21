@@ -136,7 +136,7 @@ https://verumglobal.foundation/verify.html?h=<SHA512_PREFIX_32>&m=<BASE64_METADA
 | `acc` | number | No | GPS accuracy in metres |
 | `dev` | string | No | Platform\|Cores\|Timezone |
 | `type` | string | Yes | `private` or `commercial` |
-| `org` | string | No | Organisation Name (commercial only) |
+| `org` | string | No | Organisation name (commercial only) |
 | `sha512` | string | Yes | Full SHA-512 fingerprint (128 hex chars) |
 | `otsDigest` | string | Yes | OTS SHA-256 digest for blockchain lookup |
 | `otsStatus` | boolean | Yes | Whether OTS calendar accepted the digest |
