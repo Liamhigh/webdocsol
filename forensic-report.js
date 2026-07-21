@@ -4,6 +4,12 @@
    window.VerumReport.seal(reportBytes, sealOpts) -> Promise<Uint8Array>
    Dependency: pdf-lib (already loaded by seal-document.html via unpkg CDN).
    Deterministic: renders only real engine output; no invented analysis.
+   DETERMINISM: this module contains NO randomness. The report reference is
+   derived deterministically from the document SHA-512 (or a stable FNV-1a
+   hash of name+date when no hash exists), so building twice from the same
+   inputs yields the same reference. Wall-clock time is used only for the
+   generatedAt/seal timestamps of an actual sealing event, and an explicit
+   opts.generatedAt / sealOpts.timestamp always takes precedence.
    ======================================================================== */
 (function (global) {
 'use strict';
@@ -81,7 +87,7 @@ var CT_CATEGORY = {
   CT23: 'INTEGRITY', CT24: 'INTEGRITY', CT25: 'INTEGRITY', CT26: 'INTEGRITY', CT27: 'INTEGRITY',
   CT28: 'INTEGRITY', CT29: 'INTEGRITY', CT30: 'INTEGRITY',
   CT31: 'CROSS_REF', CT32: 'CROSS_REF', CT33: 'CROSS_REF', CT34: 'CROSS_REF', CT35: 'CROSS_REF',
-  CT36: 'CONTACT', CT37: 'CONTACT', CT38: 'CONTACT',
+  CT36: 'CONTACT', CT37: 'CONTACT', CT38: 'JURISDICTION',
   CT39: 'EVIDENCE', CT40: 'EVIDENCE', CT41: 'EVIDENCE',
   CT42: 'DIGITAL', CT43: 'DIGITAL'
 };
@@ -949,7 +955,7 @@ function secMethodology(ctx, data) {
   ctx.bullet('Engine: Verum Omnis Forensic Contradiction Engine v' + ENGINE_VERSION + ' (Constitutional Forensic AI v' + CONSTITUTION_VERSION + ').', { size: 9.5 });
   ctx.bullet('Detectors run: ' + DETECTOR_COUNT + ' deterministic detectors across ' + CT_COUNT + ' contradiction types, plus ' + SP_COUNT + ' serial-pattern definitions.', { size: 9.5 });
   ctx.bullet('Mode: deterministic — keyword, pattern, numeric and structural heuristics over extracted page text. No generative AI was used to produce findings.', { size: 9.5 });
-  ctx.bullet('AI consensus review (multi-model, Gemma): ' + (data.aiReview ? 'applied (advisory) — see AI REVIEW section.' : 'NOT applied — pending.'), { size: 9.5 });
+  ctx.bullet('AI consensus review (multi-model, Gemma): ' + (data.aiReview && data.aiReview.applied ? 'applied (advisory) — see AI REVIEW section.' : (data.aiReview && data.aiReview.applied === false ? 'NOT RUN (' + (data.aiReview.reason || 'service unavailable') + ') — findings are engine output, unreviewed.' : 'NOT applied — pending.')), { size: 9.5 });
   ctx.bullet('Text extraction: ' + (data.extractionNotes || 'per-page PDF content-stream decoding with ToUnicode CMaps.'), { size: 9.5 });
   ctx.gap(4);
 
@@ -996,7 +1002,7 @@ function secMethodology(ctx, data) {
 
 // ================= SECTION: AI REVIEW (optional cloud layer) =================
 function secAiReview(ctx, data) {
-  var ar = data.aiReview;
+  var ar = (data.aiReview && data.aiReview.applied) ? data.aiReview : null;
   var narr = data.aiNarrative ? san(data.aiNarrative) : '';
   if (!ar && !narr) return;
   ctx.newBodyPage();
@@ -1017,16 +1023,33 @@ function secAiReview(ctx, data) {
   }
 }
 
+// Deterministic 4-hex reference suffix when no sealId exists: first 4 hex of
+// the document SHA-512 when available, else an FNV-1a hash of name+date.
+// Never random: the same inputs always produce the same reference.
+function voDeterministicRefHex(doc0, generatedAt) {
+  var h = doc0 && doc0.sha512 ? String(doc0.sha512).replace(/[^0-9a-fA-F]/g, '').substring(0, 4).toUpperCase() : '';
+  if (h.length === 4) return h;
+  var src = (doc0 && doc0.name ? String(doc0.name) : 'document') + '|' + generatedAt.toISOString().substring(0, 10);
+  var fnv = 0x811c9dc5;
+  for (var i = 0; i < src.length; i++) {
+    fnv ^= src.charCodeAt(i);
+    fnv = (fnv + ((fnv << 1) + (fnv << 4) + (fnv << 7) + (fnv << 8) + (fnv << 24))) >>> 0;
+  }
+  return ('0000' + fnv.toString(16).toUpperCase()).slice(-4);
+}
+
 // ================= BUILD =================
 async function build(opts) {
   opts = opts || {};
   var fr = opts.findings || { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], summary: '' };
   var docs = opts.documents && opts.documents.length ? opts.documents : [{ name: 'document.pdf', pageCount: 'n/a', sha512: '', sealId: '' }];
   var identity = opts.identity || {};
-  var generatedAt = opts.generatedAt ? new Date(opts.generatedAt) : new Date();
+  var generatedAt = opts.generatedAt ? new Date(opts.generatedAt)
+    : (opts.timestamp || opts.sealedAt) ? new Date(opts.timestamp || opts.sealedAt)
+    : new Date();
   var doc0 = docs[0];
   var reference = identity.reference ||
-    ('VO-WEB-' + fmtDateStamp(generatedAt) + '-' + (doc0.sealId ? String(doc0.sealId).replace(/^VO-/, '').substring(8, 12) : Math.floor(Math.random() * 65536).toString(16).toUpperCase().padStart(4, '0')));
+    ('VO-WEB-' + fmtDateStamp(generatedAt) + '-' + (doc0.sealId ? String(doc0.sealId).replace(/^VO-/, '').substring(8, 12) : voDeterministicRefHex(doc0, generatedAt)));
 
   var PDFDocument = PDFLibRef.PDFDocument, StandardFonts = PDFLibRef.StandardFonts;
   var doc = await PDFDocument.create();
@@ -1170,7 +1193,7 @@ async function seal(reportBytes, sealOpts) {
   var PDFDocument = PDFLibRef.PDFDocument, StandardFonts = PDFLibRef.StandardFonts, rgb = PDFLibRef.rgb;
   var sealId = sealOpts.sealId || 'VO-UNKNOWN';
   var sha512 = sealOpts.sha512 || '';
-  var now = sealOpts.timestamp ? new Date(sealOpts.timestamp) : new Date();
+  var now = (sealOpts.timestamp || sealOpts.sealedAt) ? new Date(sealOpts.timestamp || sealOpts.sealedAt) : new Date();
   var ts = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
 
   var pdf = await PDFDocument.load(reportBytes);
@@ -1211,7 +1234,7 @@ async function seal(reportBytes, sealOpts) {
     // navy seal footer on every page
     var fh = 34;
     pg.drawRectangle({ x: 0, y: 0, width: pageW, height: fh, color: NAVY, opacity: 0.97 });
-    var line1 = 'VERUM OMNIS SEAL  |  ' + sealId + '  |  ' + short + '  |  ' + (p + 1) + '/' + pages.length;
+    var line1 = 'VERUM OMNIS SEALED ORIGINAL  |  ' + sealId + '  |  ' + short + '  |  ' + (p + 1) + '/' + pages.length;
     pg.drawText(line1, { x: 16, y: fh - 14, size: 6.8, font: courier, color: GOLD });
     var line2 = ts + '  |  verumglobal.foundation  |  OpenTimestamps  |  Patent Pending';
     pg.drawText(line2, { x: 16, y: fh - 25, size: 6.2, font: helv, color: FOOT_TXT });
