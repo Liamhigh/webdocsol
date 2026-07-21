@@ -9,7 +9,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-verify-build" content="1.5.0-20260721-qrlegacy">
+<meta name="vo-verify-build" content="1.5.1-20260721-legacyfix">
 <title>Verify Seal — Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -440,7 +440,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 </div>
 
 <div class="footer">
-  <p>Verum Omnis Document Sealing Standard (VO-DSS) v1.2.7 &middot; Verify build 1.5.0-20260721-qrlegacy &middot; All verification is client-side</p>
+  <p>Verum Omnis Document Sealing Standard (VO-DSS) v1.2.7 &middot; Verify build 1.5.1-20260721-legacyfix &middot; All verification is client-side</p>
   <p style="margin-top:8px;font-size:0.75rem">Forensic integrity through SHA-512, AES-256-GCM &amp; OpenTimestamps (Bitcoin)</p>
 </div>
 
@@ -452,7 +452,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   // Build stamp — keep in sync with <meta name="vo-verify-build"> and the
   // footer. Surfaced in the console so support can confirm which verifier a
   // device actually loaded (cache meta tags above fight stale copies).
-  var VERIFY_BUILD = '1.5.0-20260721-qrlegacy';
+  var VERIFY_BUILD = '1.5.1-20260721-legacyfix';
   console.info('Verum Omnis verify build ' + VERIFY_BUILD);
 
   var dropZone = document.getElementById('dropZone');
@@ -719,18 +719,63 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       // is stamped on every page). pdf.js applies ToUnicode maps, so subset
       // embedded fonts still yield readable text.
       var maxPages = Math.min(doc.numPages || 0, 3);
-      for (var p = 1; p <= maxPages; p++) {
+      // Legacy footers ("VERUM OMNIS SEAL | seal-XXXX | hash...hash | N/M"):
+      // once one is seen, keep scanning the remaining pages so merged bundles
+      // (several distinct seal IDs) are counted honestly.
+      var legacyIds = []; var legacySeen = {}; var legacyPagesWithSeal = 0;
+      var scanPages = maxPages;
+      for (var p = 1; p <= scanPages; p++) {
         try {
           var page = await doc.getPage(p);
           var tc = await page.getTextContent();
           var txt = '';
           for (var it = 0; it < tc.items.length; it++) txt += tc.items[it].str + ' ';
+          var mLegacyId = txt.match(/VERUM\s+OMNIS\s+SEAL\s*\|\s*((?:seal-)?(?:case-)?[0-9a-f]{16,32})/i);
+          var lsrc = txt;
+          if (!mLegacyId) {
+            // Some sealers stamp the footer letter-spaced; pdf.js then yields
+            // "V E R U M  O M N I S ..." -- match a whitespace-stripped copy.
+            lsrc = txt.replace(/\s+/g, '');
+            mLegacyId = lsrc.match(/VERUMOMNISSEAL\|((?:seal-)?(?:case-)?[0-9a-f]{16,32})/i);
+          }
+          if (mLegacyId) {
+            legacyPagesWithSeal++;
+            var lid = mLegacyId[1].toLowerCase();
+            if (!legacySeen[lid]) { legacySeen[lid] = true; legacyIds.push(lid); }
+            var mFrag = lsrc.match(/([0-9a-f]{12,})\.\.\.([0-9a-f]{8})/i);
+            if (mFrag) {
+              out.footerHashPrefix = out.footerHashPrefix || mFrag[1].toLowerCase();
+              out.footerHashSuffix = out.footerHashSuffix || mFrag[2].toLowerCase();
+            }
+            // Page-count: prefer the candidate whose total equals the real
+            // page count ("1/187", "Page 1 of 528"); else first plausible N/M.
+            var bestTot = 0;
+            var rePg = /([0-9]{1,6})\s*\/\s*([0-9]{1,6})/g; var mmPg;
+            while ((mmPg = rePg.exec(lsrc))) {
+              var tNum = parseInt(mmPg[1], 10), tTot = parseInt(mmPg[2], 10);
+              if (tNum >= 1 && tNum <= tTot && tTot === (doc.numPages || 0)) { bestTot = tTot; break; }
+              if (!bestTot && tNum >= 1 && tNum <= tTot) bestTot = tTot;
+            }
+            if (!bestTot) {
+              var mPof = lsrc.match(/page\s*([0-9]{1,6})\s*of\s*([0-9]{1,6})/i);
+              if (mPof && parseInt(mPof[1], 10) <= parseInt(mPof[2], 10)) bestTot = parseInt(mPof[2], 10);
+            }
+            if (bestTot && (bestTot === (doc.numPages || 0) || !out.footerPageTotal)) out.footerPageTotal = bestTot;
+            if (scanPages < (doc.numPages || 0)) scanPages = doc.numPages || 0;
+          }
           var mId = txt.match(/Seal:\s*(VO-[0-9A-F]{12})/) || txt.match(/VERUM\s+OMNIS\s+SEAL\s*\|\s*(VO-[0-9A-Za-z-]+)/);
           if (mId) out.footerSealId = out.footerSealId || mId[1];
           var mH = txt.match(/SHA-512:\s*([0-9a-f]{12,16})/i);
           if (mH) out.footerHashPrefix = out.footerHashPrefix || mH[1].toLowerCase();
           if (out.footerSealId) { out.scheme = 'footer'; console.debug('Seal footer detected in page text:', out.footerSealId); break; }
         } catch (pe) { console.debug('Page text scan failed on page ' + p + ':', pe && pe.message ? pe.message : pe); }
+      }
+      if (!out.scheme && legacyIds.length) {
+        out.scheme = 'footer-legacy';
+        out.footerSealId = legacyIds[0];
+        out.footerSealIds = legacyIds;
+        out.footerPagesWithSeal = legacyPagesWithSeal;
+        console.debug('Legacy seal footer(s) detected in page text:', legacyIds.join(', '), '-', legacyPagesWithSeal, 'pages with seal');
       }
       if (!out.scheme) console.debug('No seal found via pdf.js (metadata or page text).');
     } catch (e) {
@@ -861,6 +906,17 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         verdict = 'TAMPERED';
         showTampered(meta, hashHex, storedHash, originalHashHex);
       }
+    } else if (seal && seal.scheme === 'footer-legacy') {
+      // ---- Legacy text footer seal (seal-XXXX IDs): no readable seal
+      // metadata, but the per-page footer proves sealing. Same honest legacy
+      // presentation as legacy VO-SEAL: presence reported, NO tamper verdict.
+      // Merged bundles carry several distinct seal IDs -- reported as a count.
+      sealVersion = 'VO-SEAL';
+      meta = meta || {};
+      meta.sealId = seal.footerSealId;
+      meta.version = 'VO-SEAL (legacy)';
+      verdict = 'LEGACY';
+      showLegacyFooterSeal(meta, hashHex, seal);
     } else if (seal && seal.scheme === 'footer') {
       // ---- Seal footer found in page text, but no readable seal metadata ----
       verdict = 'SEAL_PRESENT';
@@ -1036,6 +1092,36 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (informational)</h4><p>' + hashHex + '</p></div>';
     metaHtml += '<div class="meta-card"><h4>Seal Format</h4><p>VO-SEAL (legacy — pre-v1.3)</p></div>';
     metaHtml += '</div>';
+    metaSection.innerHTML = metaHtml;
+  }
+
+  // Legacy footer-only seal (seal-XXXX IDs): same honest legacy presentation
+  // as showLegacySeal, plus the footer hash fragment and per-page seal counts.
+  // Multiple distinct seal IDs = merged bundle: reported as a count, never
+  // as tampering.
+  function showLegacyFooterSeal(meta, hashHex, seal) {
+    resultBox.className = 'result-box visible result-legacy';
+    document.getElementById('statusIcon').innerHTML = '&#128274;';
+    document.getElementById('statusTitle').textContent = 'Seal Found — Legacy Format';
+    var ids = (seal && seal.footerSealIds) || [];
+    document.getElementById('statusMessage').textContent = 'This PDF carries a Verum Omnis seal in the legacy (pre-v1.3) footer format. The seal ID is stamped on the document pages; the embedded hash covers the document\'s original pre-seal content. A sealed-file hash check is not applicable to this format — the sealed-file hash is shown for reference only. This is not a tamper determination.' +
+      (ids.length > 1 ? ' This is a merged bundle: ' + ids.length + ' distinct seal IDs were found across the sealed pages — multiple seals in a merged bundle are expected and are NOT evidence of tampering.' : '');
+    document.getElementById('timestamp').textContent = '';
+
+    var metaHtml = '<div class="meta-grid">';
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    if (seal && seal.footerHashPrefix) {
+      metaHtml += '<div class="meta-card"><h4>Seal SHA-512 (footer fragment)</h4><p>' + seal.footerHashPrefix + (seal.footerHashSuffix ? '…' + seal.footerHashSuffix : '') + '</p></div>';
+    }
+    metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (reference only)</h4><p>' + hashHex + '</p></div>';
+    if (seal && seal.footerPagesWithSeal) {
+      metaHtml += '<div class="meta-card"><h4>Pages With Seal</h4><p>' + seal.footerPagesWithSeal + ((seal.pageCount || seal.footerPageTotal) ? ' of ' + (seal.pageCount || seal.footerPageTotal) : '') + '</p></div>';
+    }
+    metaHtml += '<div class="meta-card"><h4>Seal Format</h4><p>VO-SEAL (legacy footer — pre-v1.3)</p></div>';
+    metaHtml += '</div>';
+    if (ids.length > 1) {
+      metaHtml += '<div class="meta-grid"><div class="meta-card"><h4>Seals Found</h4><p>' + ids.length + ' distinct seal IDs across ' + (seal.footerPagesWithSeal || 0) + ' pages: ' + ids.slice(0, 5).join(', ') + (ids.length > 5 ? ', …' : '') + '</p></div></div>';
+    }
     metaSection.innerHTML = metaHtml;
   }
 
