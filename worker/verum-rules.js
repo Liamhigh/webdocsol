@@ -474,13 +474,23 @@ const ASSESS_SYSTEM = 'You are the antithesis reviewer in a forensic contradicti
   'Reply ONLY compact JSON: {"verdicts":[{"id":...,"verdict":"keep|drop","reason":"<=12 words"}],' +
   '"additionalFindings":[{"type":"CT01|UPPER_SNAKE","severity":1-5,"rationale":"brief"}]}';
 
-const NARRATE_SYSTEM = 'You are a forensic report writer for Verum Omnis. Write (1) a 120-180 ' +
-  'word executive summary paragraph and (2) a 150-250 word critical-evidence narrative, in ' +
-  'formal forensic English, third person, measured tone. RULES: state only facts present in ' +
-  'the supplied findings; after every factual claim cite the finding id in square brackets ' +
-  '[F7]; never quantify beyond supplied data; end with one sentence: \'These findings are ' +
-  'investigative indicators, not determinations of guilt.\' Reply ONLY JSON ' +
-  '{"executiveSummary":"...","criticalEvidence":"..."}';
+const NARRATE_SYSTEM = 'You are a forensic report writer for Verum Omnis Constitutional Forensic AI. ' +
+  'Generate a DETAILED COURT-READY forensic narrative from the supplied findings JSON. ' +
+  'Structure: (1) Executive Summary (300-400 words) with core findings, financial impact, and confirmed victim count; ' +
+  '(2) Key Findings section (400-600 words) with EVERY major finding anchored to evidence citations [F1], [F2], etc.; ' +
+  '(3) Perjury Analysis (200-300 words) comparing sworn statements vs. sealed documentary evidence; ' +
+  '(4) Victim Evidence Profiles (200+ words) naming each confirmed victim, their losses, and evidence chain; ' +
+  '(5) Contradiction Patterns (250-400 words) documenting all identified contradictions with legal significance; ' +
+  '(6) Legal Framework Analysis (300-400 words) citing applicable statutes, common law principles, and court precedent; ' +
+  '(7) Offence Matrix (200-300 words) mapping findings to criminal charges/civil causes of action; ' +
+  '(8) Page-by-Page Evidence Map (150-250 words) - reference format "Bundle p.XXX" for each key document. ' +
+  'TONE: formal forensic English, third person, measured professional. ' +
+  'RULES: (1) State only facts from supplied findings - never invent; (2) ALWAYS cite finding IDs [F#] after every factual claim; ' +
+  '(3) Anchor victims by name/ID and documented losses; (4) Reference page numbers from source bundles; ' +
+  '(5) Flag any contradictions between statements; (6) NO probability estimates - use HIGH/VERY HIGH confidence grading from findings; ' +
+  '(7) End with CLOSING: "These findings are investigative indicators, not determinations of guilt. Court admission requires verification of seal integrity and expert authentication." ' +
+  'Reply ONLY valid JSON: ' +
+  '{"executiveSummary":"...","keyFindings":"...","perjuryAnalysis":"...","victimProfiles":"...","contradictions":"...","legalFramework":"...","offenceMatrix":"...","evidenceMap":"...","closing":"..."}';
 
 const CURATE_SYSTEM = 'You are a conservative fraud-rules curator for the Verum Omnis forensic ' +
   'platform. You receive aggregated, anonymized detector statistics; no document content exists ' +
@@ -858,26 +868,57 @@ async function handleAiNarrate(request, env) {
   try {
     const text = await callAi(env, AI_MODEL_STRONG, NARRATE_SYSTEM,
       JSON.stringify({ ...input, findingsKept: kept }),
-      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 2048, temperature: 0.2 });
+      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 4096, temperature: 0.2 });
     const parsed = extractJsonObject(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('model reply is not a JSON object');
     }
-    let executiveSummary = asStr(parsed.executiveSummary, 4000).trim();
-    let criticalEvidence = asStr(parsed.criticalEvidence, 6000).trim();
-    if (!executiveSummary || !criticalEvidence) {
-      throw new Error('model reply is missing narrative sections');
+
+    // Support detailed court-ready format (new) with fallback to basic format (legacy)
+    const narrative = {
+      executiveSummary: asStr(parsed.executiveSummary, 4000).trim(),
+      keyFindings: asStr(parsed.keyFindings, 8000).trim(),
+      perjuryAnalysis: asStr(parsed.perjuryAnalysis, 5000).trim(),
+      victimProfiles: asStr(parsed.victimProfiles, 5000).trim(),
+      contradictions: asStr(parsed.contradictions, 6000).trim(),
+      legalFramework: asStr(parsed.legalFramework, 6000).trim(),
+      offenceMatrix: asStr(parsed.offenceMatrix, 4000).trim(),
+      evidenceMap: asStr(parsed.evidenceMap, 3000).trim(),
+      closing: asStr(parsed.closing, 500).trim()
+    };
+
+    // If detailed sections are missing, fall back to legacy format
+    if (!narrative.executiveSummary && !parsed.criticalEvidence) {
+      throw new Error('model reply contains no narrative sections');
     }
-    if (!hasCitation(executiveSummary + '\n' + criticalEvidence, idSet)) {
+
+    // Legacy fallback: if only basic sections provided
+    if (narrative.executiveSummary && !narrative.keyFindings) {
+      let criticalEvidence = asStr(parsed.criticalEvidence, 6000).trim();
+      if (!criticalEvidence) throw new Error('model reply is missing narrative sections');
+      if (!hasCitation(narrative.executiveSummary + '\n' + criticalEvidence, idSet)) {
+        throw new Error('model reply contains no citation of a supplied finding id');
+      }
+      if (narrative.executiveSummary.indexOf('investigative indicators') < 0 && criticalEvidence.indexOf('investigative indicators') < 0) {
+        criticalEvidence += (criticalEvidence.endsWith(' ') ? '' : ' ') + CLOSING_SENTENCE;
+      }
+      return json({ ok: true, executiveSummary: narrative.executiveSummary, criticalEvidence, format: 'legacy', model: 'llama-3.3-70b' });
+    }
+
+    // Validate detailed format has citations
+    const allText = Object.values(narrative).join('\n');
+    if (!hasCitation(allText, idSet)) {
       throw new Error('model reply contains no citation of a supplied finding id');
     }
-    // Guarantee the mandated closing sentence is present somewhere.
-    if (executiveSummary.indexOf('investigative indicators') < 0 && criticalEvidence.indexOf('investigative indicators') < 0) {
-      criticalEvidence += (criticalEvidence.endsWith(' ') ? '' : ' ') + CLOSING_SENTENCE;
+
+    // Ensure closing sentence
+    if (narrative.closing.indexOf('investigative indicators') < 0) {
+      narrative.closing = (narrative.closing ? narrative.closing + ' ' : '') + CLOSING_SENTENCE;
     }
-    return json({ ok: true, executiveSummary, criticalEvidence, model: 'llama-3.3-70b' });
+
+    return json({ ok: true, ...narrative, format: 'detailed', model: 'llama-3.3-70b' });
   } catch (e) {
-    return json({ ok: true, ...narrateTemplate(input, kept), model: 'template-fallback' });
+    return json({ ok: true, ...narrateTemplate(input, kept), format: 'template', model: 'template-fallback' });
   }
 }
 
