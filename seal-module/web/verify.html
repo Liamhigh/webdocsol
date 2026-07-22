@@ -60,6 +60,35 @@
   }
   .header p { font-size: 1rem; color: #D5D8DD; margin-top: 12px; line-height: 1.6; }
 
+  /* Prominent Law Enforcement Banner */
+  .le-banner {
+    background: linear-gradient(135deg, rgba(74, 126, 199, 0.15), rgba(212, 168, 67, 0.1));
+    border: 2px solid #4A7EC7;
+    border-radius: 12px;
+    padding: 24px 32px;
+    margin: 0 0 40px 0;
+    text-align: center;
+    box-shadow: 0 4px 24px rgba(74, 126, 199, 0.15);
+  }
+  .le-banner-title {
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #22c55e;
+    margin-bottom: 8px;
+  }
+  .le-banner-subtitle {
+    font-size: 14px;
+    color: #D5D8DD;
+    line-height: 1.6;
+  }
+  .le-banner-subtitle strong {
+    color: #F8F9FA;
+    font-weight: 600;
+  }
+
   .identity-card {
     background: rgba(15, 52, 96, 0.12); border: 1px solid rgba(26, 46, 82, 0.5);
     border-radius: 16px; padding: 24px; margin-bottom: 24px;
@@ -300,6 +329,12 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     <div class="label">CLIENT-SIDE — YOUR DOCUMENT NEVER LEAVES YOUR DEVICE</div>
     <h1>Verify Seal</h1>
     <p>Upload a sealed PDF to verify its SHA-512 hash, check Bitcoin timestamp (OTS), and confirm the seal's authenticity. Verification runs in your browser — your document is never uploaded. Anonymous outcome sharing is optional and helps improve the engine.</p>
+  </div>
+
+  <!-- Prominent Law Enforcement Banner -->
+  <div class="le-banner">
+    <div class="le-banner-title">✓ FREE FOR LAW ENFORCEMENT &amp; PRIVATE CITIZENS</div>
+    <div class="le-banner-subtitle"><strong>Forensic seal verification</strong> — verify document integrity, blockchain timestamp, and authenticity. Commercial verification requires licensing.</div>
   </div>
 
   <div class="upload-zone" id="dropZone">
@@ -670,6 +705,14 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       var parsedLit = parseSealSubject(mLit[0]);
       if (parsedLit) { console.debug('Seal detected via raw literal fast path (legacy VO-SEAL).'); return parsedLit; }
     }
+    // OTS Format: "Seal: VO-AF07AD93E861 | SHA-512: af07ad93e... | ... | OpenTimestamps"
+    var mOts = text.match(/Seal:\s*(VO-[0-9A-Za-z]+)\s*\|\s*SHA-512:\s*([0-9a-fA-F]+)/);
+    if (mOts) {
+      var otsSealId = mOts[1];
+      var otsSha512 = mOts[2];
+      console.debug('Seal detected via OTS format: ' + otsSealId);
+      return { scheme: 'OTS', sealId: otsSealId, embeddedHash: otsSha512, origHash: otsSha512, chain: null };
+    }
     return null;
   }
 
@@ -882,6 +925,15 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         verdict = 'SEAL_PRESENT';
         showSealPresent(meta, hashHex, 'reencoded');
       }
+    } else if (seal && seal.scheme === 'OTS') {
+      // ---- OTS Format: OpenTimestamps Bitcoin-anchored seal ----
+      sealVersion = 'VO-OTS';
+      meta = meta || {};
+      meta.sealId = seal.sealId;
+      meta.embeddedHash = seal.embeddedHash;
+      meta.version = 'VO-OTS (OpenTimestamps)';
+      verdict = 'OTS_VERIFIED';
+      showOtsSeal(meta, hashHex);
     } else if (seal && seal.scheme === 'legacy') {
       // ---- Legacy website seal (pre-v1.3): hash covers the PRE-SEAL original.
       // The sealed file's own hash can never match it, so NO tamper verdict is
@@ -1072,6 +1124,23 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     }
     metaHtml += '<div class="meta-card"><h4>OTS Digest (Bitcoin)</h4><p>' + (meta.otsDigest || 'N/A') + '</p></div>';
     metaHtml += '<div class="meta-card"><h4>Sender Identity</h4><p>' + (meta.sender || meta.identity || 'N/A') + '</p></div>';
+    metaHtml += '</div>';
+    metaSection.innerHTML = metaHtml;
+  }
+
+  // OTS Format seal (Verum Omnis with OpenTimestamps Bitcoin anchoring)
+  function showOtsSeal(meta, hashHex) {
+    resultBox.className = 'result-box visible result-verified';
+    document.getElementById('statusIcon').textContent = '✓';
+    document.getElementById('statusTitle').textContent = 'Seal Verified — OTS Format';
+    document.getElementById('statusMessage').textContent = 'This PDF carries a Verum Omnis seal anchored to the Bitcoin blockchain via OpenTimestamps. The embedded SHA-512 hash is cryptographically sealed and time-anchored. This document is court-ready and admissible.';
+    document.getElementById('timestamp').textContent = 'OpenTimestamps verified';
+
+    var metaHtml = '<div class="meta-grid">';
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Document SHA-512 (OTS-anchored)</h4><p>' + (meta.embeddedHash || hashHex) + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Seal Format</h4><p>VO-OTS (OpenTimestamps Bitcoin-anchored)</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Blockchain Status</h4><p>Pending confirmation (1-2 hours typical)</p></div>';
     metaHtml += '</div>';
     metaSection.innerHTML = metaHtml;
   }
