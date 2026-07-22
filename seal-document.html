@@ -65,6 +65,35 @@
     .topnav-links, .topnav-cta { display: none; }
   }
 
+  /* Prominent Law Enforcement Banner */
+  .le-banner {
+    background: linear-gradient(135deg, rgba(74, 126, 199, 0.15), rgba(212, 168, 67, 0.1));
+    border: 2px solid #4A7EC7;
+    border-radius: 12px;
+    padding: 24px 32px;
+    margin: 0 0 40px 0;
+    text-align: center;
+    box-shadow: 0 4px 24px rgba(74, 126, 199, 0.15);
+  }
+  .le-banner-title {
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #22c55e;
+    margin-bottom: 8px;
+  }
+  .le-banner-subtitle {
+    font-size: 14px;
+    color: #D5D8DD;
+    line-height: 1.6;
+  }
+  .le-banner-subtitle strong {
+    color: #F8F9FA;
+    font-weight: 600;
+  }
+
   /* Header */
   .header { text-align: center; margin: 80px 0 40px; }
   .header .logo-main {
@@ -313,6 +342,12 @@
     <div class="label">AI FORENSICS FOR TRUTH -- CLIENT-SIDE -- NOTHING LEAVES YOUR DEVICE</div>
     <h1>Document Sealing Service</h1>
     <p>Apply a forensic-grade cryptographic seal with A4 watermark, clean QR code, SHA-512 fingerprint, identity verification, GPS/device tracking, optional password protection, and Bitcoin blockchain anchoring via OpenTimestamps.</p>
+  </div>
+
+  <!-- Prominent Law Enforcement Banner -->
+  <div class="le-banner">
+    <div class="le-banner-title">✓ FREE FOR LAW ENFORCEMENT &amp; PRIVATE CITIZENS</div>
+    <div class="le-banner-subtitle"><strong>Secure document sealing with forensic verification</strong> — powered by Verum Omnis cryptographic platform. Commercial sealing requires licensing.</div>
   </div>
 
   <!-- Upload Area -->
@@ -857,14 +892,52 @@ function concatUint8Arrays(arrays) {
 async function detectCommercialDocument(pdfBytes) {
   const texts = await extractPdfText(pdfBytes);
   const textLower = texts.map(t => t.toLowerCase());
-  const matches = [];
-  for (const kw of COMMERCIAL_KEYWORDS) {
-    if (textLower.includes(kw)) matches.push(kw);
+
+  // Score different categories of commercial indicators
+  let companyMatches = 0, financialMatches = 0, legalMatches = 0, regulatoryMatches = 0;
+
+  // Company formation/type keywords (weighted: 3 points)
+  const companyKeywords = ['pty ltd','proprietary limited','ltd','limited','inc','incorporated','corp','corporation','llc','cc','close corporation'];
+  for (const kw of companyKeywords) {
+    if (textLower.includes(kw)) companyMatches += 3;
   }
-  return { isCommercial: matches.length >= 2, matches: matches.slice(0, 10), count: matches.length };
+
+  // Financial/commercial transaction keywords (weighted: 2 points)
+  const financialKeywords = ['invoice','purchase order','po number','quotation','quote','tax invoice','tender','rfq','request for quotation','bid','procurement','rfx','contract','agreement','mou','nda'];
+  for (const kw of financialKeywords) {
+    if (textLower.includes(kw)) financialMatches += 2;
+  }
+
+  // Legal/regulatory keywords (weighted: 1 point)
+  const legalKeywords = ['vat','vat number','tax number','tin','registration number','bbbee','bee certificate','bee level','bank account','account number','swift','iban','routing number','director','managing director','ceo','cfo','coo','board of directors','shareholder','annual report','financial statement','balance sheet','profit and loss','income statement','audit','audited','sars','company registration','ck number','enterprise number'];
+  for (const kw of legalKeywords) {
+    if (textLower.includes(kw)) legalKeywords += 1;
+  }
+
+  // Regulatory keywords (weighted: 2 points)
+  const regulatoryKeywords = ['memorandum of understanding','black economic empowerment','financial statement','annual report'];
+  for (const kw of regulatoryKeywords) {
+    if (textLower.includes(kw)) regulatoryMatches += 2;
+  }
+
+  const totalScore = companyMatches + financialMatches + legalMatches + regulatoryMatches;
+  const allMatches = [];
+  for (const kw of COMMERCIAL_KEYWORDS) {
+    if (textLower.includes(kw)) allMatches.push(kw);
+  }
+
+  // Commercial threshold: 6+ points (was 2+ keyword matches)
+  // This reduces false positives while catching clear commercial use
+  return {
+    isCommercial: totalScore >= 6,
+    matches: allMatches.slice(0, 10),
+    count: allMatches.length,
+    score: totalScore,
+    details: { company: companyMatches, financial: financialMatches, legal: legalMatches, regulatory: regulatoryMatches }
+  };
 }
 
-const LAW_ENFORCEMENT_DOMAINS = ['.gov.za','.gov','.police','.hawks','.npa','.justice','.saps'];
+const LAW_ENFORCEMENT_DOMAINS = ['.gov.za','.gov','.police','.hawks','.npa','.justice','.saps','.fbi.gov','.doj.gov','.interpol.int','.europol.europa.eu'];
 
 function getPricing() {
   let price = { amount: 50, currency: 'USD', symbol: '$', label: 'International' };
@@ -876,9 +949,23 @@ function getPricing() {
       price = { amount: 500, currency: 'ZAR', symbol: 'R', label: 'SADC Region' };
     }
   }
+
+  // Enhanced law enforcement detection
   const email = (document.getElementById('senderEmail')?.value || '').toLowerCase().trim();
   const isLE = LAW_ENFORCEMENT_DOMAINS.some(d => email.endsWith(d));
-  if (isLE) price = { ...price, amount: 0, label: price.label + ' -- LAW ENFORCEMENT (FREE)' };
+
+  // Also detect if user identifies as law enforcement
+  const userType = document.getElementById('sealType')?.value || 'private';
+  const senderName = (document.getElementById('senderName')?.value || '').toLowerCase();
+  const identifierText = (document.getElementById('senderIdentifier')?.value || '').toLowerCase();
+
+  const leKeywords = ['police', 'law enforcement', 'police service', 'npa', 'saps', 'hawks', 'fbi', 'interpol', 'detective', 'officer', 'prosecutor', 'magistrate', 'judge'];
+  const identifiesAsLE = leKeywords.some(kw => senderName.includes(kw) || identifierText.includes(kw));
+
+  if (isLE || identifiesAsLE) {
+    price = { ...price, amount: 0, label: price.label + ' -- LAW ENFORCEMENT (FREE)' };
+  }
+
   return price;
 }
 
@@ -898,23 +985,28 @@ function showPaymentGate(price, detectionResult) {
   const isFree = price.amount === 0;
   const keywordList = detectionResult.matches.map(m => '<code style="background:rgba(212,168,67,0.15);padding:2px 6px;border-radius:4px;color:#D4A843;">' + m + '</code>').join(' ');
 
+  const commercialNote = !isFree ?
+    '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:10px;padding:14px;margin-top:16px;font-size:12px;line-height:1.6;color:#D5D8DD;">' +
+    '<strong style="color:#D4A843;">&#9888; Commercial Sealing License</strong><br>' +
+    'Your document contains commercial indicators (company registration, invoices, contracts, financial statements, etc.). Commercial use of the Verum Omnis sealing platform requires a license to fund ongoing development, forensic engine improvements, and support. Private citizens and law enforcement seal documents free of charge. Organizations can obtain a commercial license via ' +
+    '<a href="mailto:licensing@verumglobal.foundation" style="color:#D4A843;text-decoration:underline;">licensing@verumglobal.foundation</a>.' +
+    '</div>' : '';
+
   gateEl.innerHTML =
-    '<h3 style="color:' + (isFree ? '#22c55e' : '#D4A843') + ';">' + (isFree ? '&#10003; Law Enforcement -- Free' : '&#127970; Commercial Document Detected') + '</h3>' +
+    '<h3 style="color:' + (isFree ? '#22c55e' : '#D4A843') + ';">' + (isFree ? '&#10003; Law Enforcement -- Free' : '&#127970; Commercial Sealing Detected') + '</h3>' +
     '<div style="background:rgba(15,52,96,0.12);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;margin:16px 0;font-size:13px;line-height:1.7;color:#D5D8DD;">' +
-    '<strong style="color:#F8F9FA;">Detected keywords:</strong> ' + keywordList + '<br>' +
-    '<strong style="color:#F8F9FA;">Total matches:</strong> ' + detectionResult.count + '<br>' +
-    '<strong style="color:#F8F9FA;">Your location:</strong> ' + (gpsCoords ? gpsCoords.lat + ',' + gpsCoords.lng : 'GPS not available') + '<br>' +
-    '<strong style="color:#F8F9FA;">Pricing tier:</strong> ' + price.label + '<br>' +
-    (isFree ?
-      '<strong style="color:#22c55e;">This document qualifies for FREE law enforcement sealing.</strong>' :
-      '<strong style="color:#D4A843;">Price: ' + price.symbol + price.amount + ' ' + price.currency + '</strong>'
-    ) +
+    (isFree ? '<strong style="color:#22c55e;">✓ Law Enforcement Exemption Applied</strong><br>' : '') +
+    '<strong style="color:#F8F9FA;">Detected indicators:</strong> ' + (detectionResult.count > 0 ? keywordList : 'Document context suggests commercial use') + '<br>' +
+    (detectionResult.score ? '<strong style="color:#F8F9FA;">Commercial score:</strong> ' + detectionResult.score + '/40<br>' : '') +
+    '<strong style="color:#F8F9FA;">Location:</strong> ' + (gpsCoords ? gpsCoords.lat.toFixed(2) + ',' + gpsCoords.lng.toFixed(2) : 'GPS not available') + '<br>' +
+    '<strong style="color:#F8F9FA;">Pricing:</strong> ' + price.label + (isFree ? ' (FREE)' : ' (' + price.symbol + price.amount + ' ' + price.currency + ')') + '<br>' +
     '</div>' +
+    commercialNote +
     '<div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:20px;">' +
     '<button onclick="proceedAsPrivate()" class="download-btn" style="flex:1;min-width:140px;background:transparent;border:1px solid #4A7EC7;color:#4A7EC7;">&#8617; Seal as Private (Free)</button>' +
     (isFree ?
       '<button onclick="proceedWithSealing()" class="download-btn primary" style="flex:1;min-width:140px;">&#10003; Proceed with FREE Seal</button>' :
-      '<button onclick="initiateStripePayment()" class="download-btn primary" style="flex:1;min-width:140px;">&#128179; Pay ' + price.symbol + price.amount + ' & Seal</button>'
+      '<button onclick="initiateStripePayment()" class="download-btn primary" style="flex:1;min-width:140px;">&#128179; License & Seal (' + price.symbol + price.amount + ')</button>'
     ) +
     '</div>';
   gateEl.scrollIntoView({behavior:'smooth'});

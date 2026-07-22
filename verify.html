@@ -60,6 +60,35 @@
   }
   .header p { font-size: 1rem; color: #D5D8DD; margin-top: 12px; line-height: 1.6; }
 
+  /* Prominent Law Enforcement Banner */
+  .le-banner {
+    background: linear-gradient(135deg, rgba(74, 126, 199, 0.15), rgba(212, 168, 67, 0.1));
+    border: 2px solid #4A7EC7;
+    border-radius: 12px;
+    padding: 24px 32px;
+    margin: 0 0 40px 0;
+    text-align: center;
+    box-shadow: 0 4px 24px rgba(74, 126, 199, 0.15);
+  }
+  .le-banner-title {
+    font-family: 'Courier New', monospace;
+    font-size: 16px;
+    font-weight: 700;
+    text-transform: uppercase;
+    letter-spacing: 0.15em;
+    color: #22c55e;
+    margin-bottom: 8px;
+  }
+  .le-banner-subtitle {
+    font-size: 14px;
+    color: #D5D8DD;
+    line-height: 1.6;
+  }
+  .le-banner-subtitle strong {
+    color: #F8F9FA;
+    font-weight: 600;
+  }
+
   .identity-card {
     background: rgba(15, 52, 96, 0.12); border: 1px solid rgba(26, 46, 82, 0.5);
     border-radius: 16px; padding: 24px; margin-bottom: 24px;
@@ -300,6 +329,12 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     <div class="label">CLIENT-SIDE — YOUR DOCUMENT NEVER LEAVES YOUR DEVICE</div>
     <h1>Verify Seal</h1>
     <p>Upload a sealed PDF to verify its SHA-512 hash, check Bitcoin timestamp (OTS), and confirm the seal's authenticity. Verification runs in your browser — your document is never uploaded. Anonymous outcome sharing is optional and helps improve the engine.</p>
+  </div>
+
+  <!-- Prominent Law Enforcement Banner -->
+  <div class="le-banner">
+    <div class="le-banner-title">✓ FREE FOR LAW ENFORCEMENT &amp; PRIVATE CITIZENS</div>
+    <div class="le-banner-subtitle"><strong>Forensic seal verification</strong> — verify document integrity, blockchain timestamp, and authenticity. Commercial verification requires licensing.</div>
   </div>
 
   <div class="upload-zone" id="dropZone">
