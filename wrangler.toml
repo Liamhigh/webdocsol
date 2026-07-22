@@ -3,6 +3,10 @@ main = "worker/verum-rules.js"
 compatibility_date = "2024-11-07"
 compatibility_flags = ["nodejs_compat"]
 
+# Build configuration
+[build]
+command = "echo 'No build required for worker'"
+
 [env.production]
 name = "verum-omnis-rules-prod"
 routes = [
@@ -12,25 +16,21 @@ routes = [
   { pattern = "verumglobal.foundation/images/*", zone_name = "verumglobal.foundation" }
 ]
 
-# KV Namespace for rule storage
-[[kv_namespaces]]
+# KV Namespace for rule storage (must be in env section)
+[[env.production.kv_namespaces]]
 binding = "RULES_KV"
 id = "3ecf5dc4e00c45b89f3e2d7c1b4a2e9f"
 preview_id = "4fd6a8d1b2e3c4f5a6b7c8d9e0f1a2b3"
 
-# Workers AI
-[ai]
+# Workers AI (must be in env section)
+[env.production.ai]
 binding = "AI"
 
-# Environment variables (secrets are set via 'wrangler secret put')
-[vars]
+# Environment variables (must be in env section)
+[env.production.vars]
 ENVIRONMENT = "production"
 SERVICE_VERSION = "1.5.1-20260721-mistral-enhanced"
 
-# Build configuration
-[build]
-command = "echo 'No build required for worker'"
-
 # Observability
-[observability]
+[env.production.observability]
 enabled = true
