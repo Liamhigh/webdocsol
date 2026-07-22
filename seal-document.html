@@ -5,6 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
+<meta name="vo-seal-build" content="1.4.1-20260720-qrprivacy">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -353,6 +354,7 @@
   <div style="margin-bottom:24px;">
     <button type="button" onclick="toggleSection('identitySection')" style="background:none;border:none;color:#4A7EC7;font-family:'Courier New',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;padding:0;">&#128100; + Add Sender Identity (optional -- for affidavit pre-fill, chain of custody)</button>
     <div id="identitySection" style="display:none;margin-top:16px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;">
+      <p style="font-size:12px;color:#94a3b8;margin:0 0 14px;line-height:1.6;">Identity details appear only in your private Seal Certificate — never in the public QR code.</p>
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Full Name</label>
       <input type="text" id="senderName" placeholder="e.g., John van der Merwe" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:12px;font-family:inherit;">
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">ID / Passport Number</label>
@@ -361,6 +363,10 @@
       <input type="text" id="senderAddress" placeholder="e.g., 12 Main Street, Sandton, Johannesburg" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:12px;font-family:inherit;">
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Contact Email</label>
       <input type="email" id="senderEmail" placeholder="e.g., john@email.com" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
+      <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;margin-top:14px;">
+        <input type="checkbox" id="includeIdentityInQr" style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
+        <span>Include identity + GPS in the public QR code (opt-in, default off). <strong style="color:#D4A843;">Warning: anyone holding the sealed document can read the QR payload.</strong> Leave unchecked to keep identity and GPS only in your private Seal Certificate.</span>
+      </label>
     </div>
   </div>
 
@@ -423,11 +429,16 @@
     <div class="step" id="stepFraud"><div class="status pending">&#9675;</div><div class="label"><strong>Forensic Scan</strong> -- Flagging contradiction indicators for review</div><div class="detail" id="detailFraud"></div></div>
     <div class="step" id="step3"><div class="status pending">&#9675;</div><div class="label"><strong>OpenTimestamps</strong> -- Submitting to calendar servers</div><div class="detail" id="detail3"></div></div>
     <div class="step" id="step4"><div class="status pending">&#9675;</div><div class="label"><strong>A4 Watermark</strong> -- Full-page background at 20% opacity</div><div class="detail" id="detail4"></div></div>
-    <div class="step" id="step5"><div class="status pending">&#9675;</div><div class="label"><strong>Clean QR Code</strong> -- Encoding hash + identity + GPS + device</div><div class="detail" id="detail5"></div></div>
+    <div class="step" id="step5"><div class="status pending">&#9675;</div><div class="label"><strong>Clean QR Code</strong> -- Encoding hash + seal metadata (identity stays private)</div><div class="detail" id="detail5"></div></div>
     <div class="step" id="step6"><div class="status pending">&#9675;</div><div class="label"><strong>Seal Footer</strong> -- Hash + timestamp on every page</div><div class="detail" id="detail6"></div></div>
     <div class="step" id="step7"><div class="status pending">&#9675;</div><div class="label"><strong>Finalize</strong> -- Preparing sealed PDF package</div><div class="detail" id="detail7"></div></div>
     <div class="step" id="step8"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-512</strong> -- Verum Forensic Fingerprint (final verification)</div><div class="detail" id="detail8"></div></div>
   </div>
+
+  <!-- Payment gate (commercial detection). Rendered in its OWN container so the
+       static #results skeleton below (qrPreview canvas, hash displays, download
+       grid) is never destroyed before the sealing pipeline needs it. -->
+  <div class="results" id="paymentGate"></div>
 
   <!-- Results -->
   <div class="results" id="results">
@@ -439,7 +450,7 @@
     </div>
     <div class="qr-section">
       <canvas id="qrPreview" width="220" height="220" style="background:white; padding:16px; border-radius:12px;"></canvas>
-      <p>Clean QR -- no border, no interfering box. Scans instantly.</p>
+      <p id="qrPreviewNote">Clean QR -- no border, no interfering box. Scans instantly.</p>
     </div>
     <div class="hash-row"><label>SHA-256 (OpenTimestamps)</label><div class="hash-display" id="sha256Display"></div></div>
     <div class="hash-row"><label>SHA-512 (Verum Fingerprint)</label><div class="hash-display" id="sha512Display"></div></div>
@@ -449,8 +460,10 @@
     <a href="/verify.html" class="verify-link" id="verifyLink">&#128269; Verify on verumglobal.foundation</a>
     <div class="download-grid" id="downloadGrid">
       <a href="#" class="download-btn primary" id="downloadSealedPdf" download>&#11015; Download Sealed PDF</a>
-      <a href="#" class="download-btn" id="downloadOts" download>&#11015; Download .OTS Proof</a>
+      <a href="#" class="download-btn" id="downloadOts" download>&#11015; Download blockchain receipt (.ots) — PENDING</a>
+      <a href="#" class="download-btn" id="downloadAnchorCert" download style="display:none;">&#11015; Download Anchor Certificate (PDF)</a>
     </div>
+    <div id="otsReceiptNote" style="display:none;font-size:12px;color:#8ea3b5;margin-top:10px;line-height:1.6;">Pending: the Bitcoin anchor typically confirms within 1–2 hours. Verify this document later on verumglobal.foundation/verify.html to upgrade this receipt to a confirmed proof.</div>
   </div>
 
   <!-- Info Section -->
@@ -462,7 +475,7 @@
       <div class="item"><h4>&#128241; Clean QR Code</h4><p>QR sits in the top-right margin with white background panel -- never covers document text. Original document layout is fully preserved. Scans instantly with any phone.</p></div>
       <div class="item"><h4>&#128274; Dual Hash</h4><p>SHA-256 for OpenTimestamps blockchain anchoring. SHA-512 as the Verum forensic fingerprint. Two independent hashes, zero trust required.</p></div>
       <div class="item"><h4>&#9939; Bitcoin Blockchain</h4><p>OpenTimestamps anchors the SHA-256 hash into Bitcoin. Once confirmed (~1-2 hours), the timestamp is permanently and independently verifiable.</p></div>
-      <div class="item"><h4>&#128100; Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) encoded into the QR code for affidavit pre-fill and chain of custody.</p></div>
+      <div class="item"><h4>&#128100; Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) is written into your private Seal Certificate for affidavit pre-fill and chain of custody — never into the public QR code unless you explicitly opt in.</p></div>
       <div class="item"><h4>&#128205; GPS + Device</h4><p>Automatic geolocation and device fingerprint capture. Proves where and from what device the seal was applied.</p></div>
       <div class="item"><h4>&#128272; Password Protection</h4><p>Optional AES-256 password protection with delivery receipt cover page. Recipient must email sender for password -- that email IS the read receipt.</p></div>
       <div class="item"><h4>&#128737; Tamper Detection</h4><p>Recipient uploads document to verify page. If SHA-512 doesn't match --> "TAMPERED -- DO NOT ACCEPT". Cryptographically impossible to forge.</p></div>
@@ -478,8 +491,9 @@
 
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
-<script src="/forensic-report.js"></script>
-<script src="/forensic-engine-page.js"></script>
+<script src="/forensic-report.js?v=1.4.1-20260720"></script>
+<script src="/forensic-engine-page.js?v=1.4.1-20260720"></script>
+<script src="/ots-proof.js?v=1.4.1-20260720"></script>
 <script>
 const { PDFDocument, rgb, StandardFonts } = PDFLib;
 
@@ -533,6 +547,32 @@ function collectSealMetadata() {
   meta.type = sealType;
   if (sealType === 'commercial') { const org = document.getElementById('clientName')?.value?.trim(); if (org) meta.org = org; }
   return meta;
+}
+
+// ==================== QR PAYLOAD PRIVACY BOUNDARY ====================
+// The QR / verify-URL payload is PUBLIC: anyone holding the sealed document
+// can scan and base64-decode it. It therefore carries ONLY seal-integrity
+// data: {v, t, type, sha512, otsDigest, otsStatus, sealId} plus chain-of-
+// custody ids when present. Sender identity (id{n,id,a,e}), GPS (gps/acc) and
+// device fingerprint (dev) are NEVER included by default -- they live only in
+// the private Seal Certificate PDF the user keeps. An explicit opt-in
+// (#includeIdentityInQr, default OFF, with a warning) re-adds them for legacy
+// workflows. Parsers (verify page, Android app): fields may be absent --
+// tolerate unknown/missing keys.
+function buildQrPayload(meta, chainIds) {
+  var p = { v: meta.v, t: meta.t, type: meta.type };
+  if (meta.sha512) p.sha512 = meta.sha512;
+  if (meta.otsDigest) p.otsDigest = meta.otsDigest;
+  if (meta.otsStatus !== undefined && meta.otsStatus !== null) p.otsStatus = meta.otsStatus;
+  if (meta.sealId) p.sealId = meta.sealId;
+  if (chainIds && chainIds.length) p.chain = chainIds.slice();
+  var optIn = document.getElementById('includeIdentityInQr');
+  if (optIn && optIn.checked) {
+    if (meta.id) p.id = meta.id;
+    if (meta.gps) { p.gps = meta.gps; if (meta.acc) p.acc = meta.acc; }
+    if (meta.dev) p.dev = meta.dev;
+  }
+  return p;
 }
 
 fetch('/images/watermark_portrait.png').then(r => r.arrayBuffer()).then(buf => { watermarkBytes = buf; }).catch(err => console.warn('Watermark load failed:', err));
@@ -674,21 +714,23 @@ async function generateQRDataURL(text, size) {
     } catch(e) { document.body.removeChild(container); resolve(null); return; }
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
-        const img = container.querySelector('img');
-        const canvas = container.querySelector('canvas');
-        if (img && img.src && img.src.startsWith('data:image')) {
-          document.body.removeChild(container);
-          resolve(img.src);
-        } else if (canvas) {
-          try {
-            const dataUrl = canvas.toDataURL('image/png');
+        try {
+          const img = container.querySelector('img');
+          const canvas = container.querySelector('canvas');
+          if (img && img.src && img.src.startsWith('data:image')) {
             document.body.removeChild(container);
-            resolve(dataUrl);
-          } catch(e) { document.body.removeChild(container); resolve(null); }
-        } else {
-          document.body.removeChild(container);
-          resolve(null);
-        }
+            resolve(img.src);
+          } else if (canvas) {
+            try {
+              const dataUrl = canvas.toDataURL('image/png');
+              document.body.removeChild(container);
+              resolve(dataUrl);
+            } catch(e) { document.body.removeChild(container); resolve(null); }
+          } else {
+            document.body.removeChild(container);
+            resolve(null);
+          }
+        } catch(e) { try { document.body.removeChild(container); } catch(e2) {} resolve(null); }
       });
     });
   });
@@ -847,12 +889,16 @@ const STRIPE_LINKS = {
 };
 
 function showPaymentGate(price, detectionResult) {
-  const resultsEl = document.getElementById('results');
-  resultsEl.classList.add('visible');
+  // Render into the dedicated #paymentGate container -- NEVER into #results:
+  // replacing #results would destroy the static qrPreview canvas, hash displays
+  // and download grid that runSealingPipeline()/showResults() depend on (this
+  // was the "Cannot read properties of null (reading 'getContext')" crash).
+  const gateEl = document.getElementById('paymentGate');
+  gateEl.classList.add('visible');
   const isFree = price.amount === 0;
   const keywordList = detectionResult.matches.map(m => '<code style="background:rgba(212,168,67,0.15);padding:2px 6px;border-radius:4px;color:#D4A843;">' + m + '</code>').join(' ');
 
-  resultsEl.innerHTML =
+  gateEl.innerHTML =
     '<h3 style="color:' + (isFree ? '#22c55e' : '#D4A843') + ';">' + (isFree ? '&#10003; Law Enforcement -- Free' : '&#127970; Commercial Document Detected') + '</h3>' +
     '<div style="background:rgba(15,52,96,0.12);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;margin:16px 0;font-size:13px;line-height:1.7;color:#D5D8DD;">' +
     '<strong style="color:#F8F9FA;">Detected keywords:</strong> ' + keywordList + '<br>' +
@@ -871,7 +917,7 @@ function showPaymentGate(price, detectionResult) {
       '<button onclick="initiateStripePayment()" class="download-btn primary" style="flex:1;min-width:140px;">&#128179; Pay ' + price.symbol + price.amount + ' & Seal</button>'
     ) +
     '</div>';
-  resultsEl.scrollIntoView({behavior:'smooth'});
+  gateEl.scrollIntoView({behavior:'smooth'});
   document.getElementById('sealBtn').disabled = false;
 }
 
@@ -879,7 +925,7 @@ async function proceedAsPrivate() {
   sealType = 'private';
   document.querySelectorAll('.seal-type button').forEach(btn => btn.classList.toggle('active', btn.dataset.type === 'private'));
   document.getElementById('clientField').classList.remove('visible');
-  document.getElementById('results').classList.remove('visible');
+  document.getElementById('paymentGate').classList.remove('visible');
   try {
     await runSealingPipeline();
   } catch (err) {
@@ -895,7 +941,7 @@ async function proceedAsPrivate() {
 }
 
 async function proceedWithSealing() {
-  document.getElementById('results').classList.remove('visible');
+  document.getElementById('paymentGate').classList.remove('visible');
   try {
     await runSealingPipeline();
   } catch (err) {
@@ -916,12 +962,12 @@ function initiateStripePayment() {
   const link = STRIPE_LINKS[key];
   if (link && !link.includes('YOUR_')) {
     window.open(link, '_blank');
-    document.getElementById('results').innerHTML +=
+    document.getElementById('paymentGate').innerHTML +=
       '<div style="background:rgba(34,197,94,0.08);border:1px solid rgba(34,197,94,0.25);border-radius:12px;padding:16px;margin-top:16px;font-size:13px;color:#22c55e;">' +
       '&#10003; Payment window opened. After completing payment, click <strong>Seal Document</strong> again to proceed.' +
       '</div>';
   } else {
-    document.getElementById('results').innerHTML +=
+    document.getElementById('paymentGate').innerHTML +=
       '<div style="background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.25);border-radius:12px;padding:16px;margin-top:16px;font-size:13px;color:#D4A843;">' +
       '&#9888; Stripe payment links not yet configured. To set up:<br>' +
       '1. Go to <a href="https://dashboard.stripe.com/payment-links" target="_blank" style="color:#D4A843;text-decoration:underline;">dashboard.stripe.com/payment-links</a><br>' +
@@ -1075,7 +1121,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     const chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
     const chainLabel = chainIds.length > 0 ? '  |  Chain: ' + chainIds.length + ' prev' : '';
     pg.drawText(stLabel + chainLabel, { x: pageW*0.03, y: fy+fs*1.8, size: fs*0.8, font: helvBold, color: rgb(0.82,0.65,0.28) });
-    pg.drawText('Seal: ' + sealId + '  |  SHA-512: ' + short + '...  |  ' + ts + '  |  ' + (i+1) + '/' + pages.length, { x: pageW*0.03, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.58,0.71,0.78) });
+    pg.drawText('VERUM OMNIS SEALED ORIGINAL  |  Seal: ' + sealId + '  |  SHA-512: ' + short + '...  |  ' + ts + '  |  ' + (i+1) + '/' + pages.length + chainLabel, { x: pageW*0.03, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.58,0.71,0.78) });
     pg.drawText('verumglobal.foundation  |  OpenTimestamps  |  Patent Pending', { x: pageW*0.55, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.36,0.42,0.48) });
 
     updateStep(6, 'processing', 'Page ' + (i+1) + ' of ' + pages.length);
@@ -1164,7 +1210,18 @@ async function buildSealCertificate(opts) {
 
   // WinAnsi-safe text: fold anything the standard fonts cannot encode.
   function safe(t) {
-    return String(t === undefined || t === null ? '' : t).replace(/[^\x20-\x7E\xA0-\xFF\u2013\u2014\u2018\u2019\u201C\u201D\u2022\u2026]/g, '?');
+    // Whitelist as numeric code points only -- no unicode escapes and no
+    // non-ASCII literals in source (transport-safe). Allowed: printable ASCII 0x20-0x7E,
+    // Latin-1 0xA0-0xFF, en/em dash, curly quotes, bullet, ellipsis (all
+    // WinAnsi-encodable); everything else folds to '?'.
+    var s = String(t === undefined || t === null ? '' : t), out = '', i, c;
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      out += ((c >= 0x20 && c <= 0x7E) || (c >= 0xA0 && c <= 0xFF) ||
+        c === 0x2013 || c === 0x2014 || c === 0x2018 || c === 0x2019 ||
+        c === 0x201C || c === 0x201D || c === 0x2022 || c === 0x2026) ? s.charAt(i) : '?';
+    }
+    return out;
   }
   function cx(t, font, size) { return (PW - font.widthOfTextAtSize(safe(t), size)) / 2; }
   function wrap(t, font, size, maxW) {
@@ -1214,6 +1271,33 @@ async function buildSealCertificate(opts) {
   var vurl = 'verumglobal.foundation/verify.html';
   page.drawText(vurl, { x: qrX - 8 + (qrSize + 16 - helv.widthOfTextAtSize(vurl, 6.5)) / 2, y: qrY - 33, size: 6.5, font: helv, color: MUTE });
 
+  // Sender identity block (PRIVATE): identity, GPS and device live ONLY here,
+  // in the user's own Seal Certificate -- never in the public QR payload.
+  var idy = opts.identity || null;
+  var hasIdy = !!(idy && (idy.n || idy.id || idy.a || idy.e));
+  if (hasIdy || opts.gps || opts.dev) {
+    var iy = qrY - 54;
+    page.drawText('SENDER IDENTITY (PRIVATE)', { x: qrX - 8, y: iy, size: 7, font: helvBold, color: GOLD });
+    iy -= 11;
+    var idLines = [];
+    if (hasIdy) {
+      if (idy.n) idLines.push('Name: ' + idy.n);
+      if (idy.id) idLines.push('ID: ' + idy.id);
+      if (idy.a) idLines.push('Addr: ' + idy.a);
+      if (idy.e) idLines.push('Email: ' + idy.e);
+    }
+    if (opts.gps) idLines.push('GPS: ' + opts.gps + (opts.acc ? ' (±' + opts.acc + 'm)' : ''));
+    if (opts.dev) idLines.push('Device: ' + opts.dev);
+    for (var ii = 0; ii < idLines.length; ii++) {
+      var wl = wrap(idLines[ii], helv, 7, qrSize + 16);
+      for (var wi = 0; wi < wl.length; wi++) {
+        if (iy < 250) break; // keep clear of the canonical statement box
+        page.drawText(safe(wl[wi]), { x: qrX - 8, y: iy, size: 7, font: helv, color: LIGHT });
+        iy -= 9.5;
+      }
+    }
+  }
+
   // Detail rows (left column)
   var lx = 70, rowMaxW = qrX - 40 - lx;
   function row(label, valueLines, valueFont, valueSize, gap) {
@@ -1239,8 +1323,8 @@ async function buildSealCertificate(opts) {
   // Canonical statement box
   var boxTop = 240, boxH = 74;
   page.drawRectangle({ x: 70, y: boxTop - boxH, width: PW - 140, height: boxH, borderColor: GOLD, borderWidth: 1, color: rgb(1, 1, 1), opacity: 0.04 });
-  var c1 = 'This seal proves two things only \u2014 integrity and time.';
-  var c2 = 'It is not a verification of the document\u2019s contents.';
+  var c1 = 'This seal proves two things only — integrity and time.';
+  var c2 = 'It is not a verification of the document’s contents.';
   page.drawText(c1, { x: cx(c1, timesItalic, 12), y: boxTop - 30, size: 12, font: timesItalic, color: WHITE });
   page.drawText(c2, { x: cx(c2, timesItalic, 12), y: boxTop - 48, size: 12, font: timesItalic, color: WHITE });
 
@@ -1252,6 +1336,141 @@ async function buildSealCertificate(opts) {
   try { certDoc.setAuthor('Verum Omnis'); } catch (e) {}
   try { certDoc.setSubject('SEAL-CERT|' + (opts.sha512 || '') + '|' + (opts.sealId || '')); } catch (e) {}
   try { certDoc.setProducer('Verum Omnis Document Sealing Service v1.2.9'); } catch (e) {}
+  try { certDoc.setCreationDate(new Date()); } catch (e) {}
+  return await certDoc.save();
+}
+
+// ==================== ANCHOR CERTIFICATE (OTS submitted) ====================
+// One-page certificate recording the OpenTimestamps submission itself: which
+// digest went to which calendars, and when. Same house style as the Seal
+// Certificate (navy full bleed, gold rules, serif wordmark). It is issued only
+// when a calendar accepted the digest, and it is explicitly PENDING: the
+// canonical statement says exactly what the seal proves -- integrity and time.
+async function buildAnchorCertificate(opts) {
+  opts = opts || {};
+  const certDoc = await PDFDocument.create();
+  const helv = await certDoc.embedFont(StandardFonts.Helvetica);
+  const helvBold = await certDoc.embedFont(StandardFonts.HelveticaBold);
+  const times = await certDoc.embedFont(StandardFonts.TimesRoman);
+  const timesBold = await certDoc.embedFont(StandardFonts.TimesRomanBold);
+  const timesItalic = await certDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const courier = await certDoc.embedFont(StandardFonts.Courier);
+  const NAVY = rgb(0x0e/255, 0x1a/255, 0x2b/255);
+  const GOLD = rgb(0xc9/255, 0xa2/255, 0x27/255);
+  const LIGHT = rgb(0.85, 0.88, 0.92);
+  const MUTE = rgb(0.55, 0.63, 0.72);
+  const WHITE = rgb(1, 1, 1);
+  const PW = 595.28, PH = 841.89;
+  const page = certDoc.addPage([PW, PH]);
+  page.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: NAVY });
+  page.drawRectangle({ x: 0, y: PH - 6, width: PW, height: 6, color: GOLD });
+  page.drawRectangle({ x: 0, y: 0, width: PW, height: 6, color: GOLD });
+
+  // WinAnsi-safe text: fold anything the standard fonts cannot encode.
+  function safe(t) {
+    // Whitelist as numeric code points only -- no unicode escapes and no
+    // non-ASCII literals in source (transport-safe). Allowed: printable ASCII 0x20-0x7E,
+    // Latin-1 0xA0-0xFF, en/em dash, curly quotes, bullet, ellipsis (all
+    // WinAnsi-encodable); everything else folds to '?'.
+    var s = String(t === undefined || t === null ? '' : t), out = '', i, c;
+    for (i = 0; i < s.length; i++) {
+      c = s.charCodeAt(i);
+      out += ((c >= 0x20 && c <= 0x7E) || (c >= 0xA0 && c <= 0xFF) ||
+        c === 0x2013 || c === 0x2014 || c === 0x2018 || c === 0x2019 ||
+        c === 0x201C || c === 0x201D || c === 0x2022 || c === 0x2026) ? s.charAt(i) : '?';
+    }
+    return out;
+  }
+  function cx(t, font, size) { return (PW - font.widthOfTextAtSize(safe(t), size)) / 2; }
+  function wrap(t, font, size, maxW) {
+    var words = safe(t).split(/\s+/), lines = [], cur = '';
+    for (var i = 0; i < words.length; i++) {
+      var trial = cur ? cur + ' ' + words[i] : words[i];
+      if (font.widthOfTextAtSize(trial, size) > maxW && cur) { lines.push(cur); cur = words[i]; }
+      else cur = trial;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+
+  // Wordmark + title
+  var y = PH - 78;
+  page.drawText('VERUM OMNIS', { x: cx('VERUM OMNIS', timesBold, 28), y: y, size: 28, font: timesBold, color: WHITE });
+  y -= 18;
+  var tag = 'A I   F O R E N S I C S   F O R   T R U T H';
+  page.drawText(tag, { x: cx(tag, times, 8.5), y: y, size: 8.5, font: times, color: GOLD });
+  y -= 16;
+  page.drawLine({ start: { x: PW / 2 - 130, y: y }, end: { x: PW / 2 + 130, y: y }, thickness: 0.8, color: GOLD });
+  y -= 40;
+  page.drawText('BLOCKCHAIN ANCHOR CERTIFICATE', { x: cx('BLOCKCHAIN ANCHOR CERTIFICATE', timesBold, 23), y: y, size: 23, font: timesBold, color: GOLD });
+  y -= 20;
+  var sub = '— PENDING CONFIRMATION';
+  page.drawText(sub, { x: cx(sub, timesItalic, 11), y: y, size: 11, font: timesItalic, color: LIGHT });
+  y -= 42;
+
+  // QR panel (right column) -- same verify link as the Seal Certificate
+  var qrSize = 118;
+  var qrX = PW - 70 - qrSize, qrY = y - qrSize + 16;
+  page.drawRectangle({ x: qrX - 8, y: qrY - 8, width: qrSize + 16, height: qrSize + 16, color: WHITE, borderColor: GOLD, borderWidth: 1 });
+  var qrImg = null;
+  if (opts.qrDataURL) {
+    try {
+      const b64 = String(opts.qrDataURL).split(',')[1];
+      const bin = atob(b64);
+      const qb = new Uint8Array(bin.length);
+      for (let i = 0; i < bin.length; i++) qb[i] = bin.charCodeAt(i);
+      qrImg = await certDoc.embedPng(qb);
+    } catch (e) { qrImg = null; }
+  }
+  if (qrImg) page.drawImage(qrImg, { x: qrX, y: qrY, width: qrSize, height: qrSize });
+  else page.drawText(safe(opts.sealId || ''), { x: qrX, y: qrY + qrSize / 2, size: 8, font: courier, color: rgb(0.3, 0.3, 0.3) });
+  var scan = 'SCAN TO VERIFY';
+  page.drawText(scan, { x: qrX - 8 + (qrSize + 16 - helvBold.widthOfTextAtSize(scan, 7)) / 2, y: qrY - 22, size: 7, font: helvBold, color: GOLD });
+  var vurl = 'verumglobal.foundation/verify.html';
+  page.drawText(vurl, { x: qrX - 8 + (qrSize + 16 - helv.widthOfTextAtSize(vurl, 6.5)) / 2, y: qrY - 33, size: 6.5, font: helv, color: MUTE });
+
+  // Detail rows (left column)
+  var lx = 70, rowMaxW = qrX - 40 - lx;
+  function row(label, valueLines, valueFont, valueSize, gap) {
+    page.drawText(safe(label), { x: lx, y: y, size: 8, font: helvBold, color: GOLD });
+    y -= 14;
+    for (var i = 0; i < valueLines.length; i++) {
+      page.drawText(safe(valueLines[i]), { x: lx, y: y, size: valueSize, font: valueFont, color: LIGHT });
+      y -= (valueSize + 4.5);
+    }
+    y -= (gap === undefined ? 10 : gap);
+  }
+  row('SEAL ID', [opts.sealId || 'n/a'], courier, 11);
+  var h = String(opts.sha512 || '');
+  row('DOCUMENT SHA-512', h ? [h.substring(0, 64), h.substring(64)] : ['n/a'], courier, 7.5);
+  row('OTS DIGEST (SHA-256 SUBMITTED)', [opts.otsDigest || 'n/a'], courier, 7.5);
+  var calLines = (Array.isArray(opts.calendars) && opts.calendars.length > 0)
+    ? opts.calendars.map(function(c) { return String(c).replace(/^https?:\/\//, ''); })
+    : ['n/a'];
+  row('OPENTIMESTAMPS CALENDARS', calLines, helv, 9);
+  row('SUBMITTED (ISO-8601)', [opts.timestampISO || 'n/a'], courier, 10);
+  var pendLines = wrap('Digest accepted by the calendar(s) above. Bitcoin blockchain confirmation pending (typically 1-2 hours); until then this certificate and the .ots receipt are marked PENDING.', helv, 8.5, rowMaxW);
+  row('ANCHOR STATUS', pendLines, helv, 8.5);
+
+  // Canonical statement box
+  var boxTop = 240, boxH = 74;
+  page.drawRectangle({ x: 70, y: boxTop - boxH, width: PW - 140, height: boxH, borderColor: GOLD, borderWidth: 1, color: rgb(1, 1, 1), opacity: 0.04 });
+  var canonical = 'This certificate records submission of the document digest to the OpenTimestamps calendars. The seal proves two things only — integrity and time.';
+  var cLines = wrap(canonical, timesItalic, 11.5, PW - 140 - 32);
+  var cy = boxTop - 28;
+  for (var ci = 0; ci < cLines.length && ci < 3; ci++) {
+    page.drawText(cLines[ci], { x: cx(cLines[ci], timesItalic, 11.5), y: cy, size: 11.5, font: timesItalic, color: WHITE });
+    cy -= 17;
+  }
+
+  // Footer
+  page.drawText('VERUM OMNIS FOUNDATION  |  PATENT PENDING', { x: cx('VERUM OMNIS FOUNDATION  |  PATENT PENDING', helvBold, 7.5), y: 52, size: 7.5, font: helvBold, color: MUTE });
+  page.drawText('Confirm and upgrade at verumglobal.foundation/verify.html', { x: cx('Confirm and upgrade at verumglobal.foundation/verify.html', helv, 8), y: 38, size: 8, font: helv, color: GOLD });
+
+  try { certDoc.setTitle('Verum Omnis Anchor Certificate -- ' + (opts.sealId || '')); } catch (e) {}
+  try { certDoc.setAuthor('Verum Omnis'); } catch (e) {}
+  try { certDoc.setSubject('ANCHOR-CERT|' + (opts.otsDigest || '') + '|' + (opts.sealId || '')); } catch (e) {}
+  try { certDoc.setProducer('Verum Omnis Document Sealing Service v1.3.0'); } catch (e) {}
   try { certDoc.setCreationDate(new Date()); } catch (e) {}
   return await certDoc.save();
 }
@@ -1618,7 +1837,17 @@ function shareAnonymousPatterns(fraudResult) {
   } catch (e) { /* silent -- feedback must never disturb sealing */ }
 }
 
+// Static #results skeleton captured at load. The "Sealing Failed" panels replace
+// #results content to show the error; without a restore, every subsequent seal in
+// the same page session found the qrPreview canvas / hash displays / download grid
+// gone and crashed at the QR step with "Cannot read properties of null (reading
+// 'getContext')". Restored defensively at the single pipeline entry point.
+var RESULTS_SKELETON_HTML = document.getElementById('results').innerHTML;
+
 async function runSealingPipeline() {
+  if (!document.getElementById('qrPreview') && RESULTS_SKELETON_HTML) {
+    document.getElementById('results').innerHTML = RESULTS_SKELETON_HTML;
+  }
   var fileBytes = _pipelineFileBytes;
   var sha256 = _pipelineSha256;
   var sha512 = _pipelineSha512;
@@ -1648,15 +1877,42 @@ async function runSealingPipeline() {
   meta.otsDigest = otsDigestHex;     // 64-char OTS SHA-256 digest for blockchain lookup
   meta.otsStatus = otsResult.success; // Whether OTS calendar accepted the digest
   meta.sealId = sealId;              // VO-XXXXXXXXXXXX seal identifier
-  var metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(meta)));
+  // PRIVACY: public QR payload excludes identity/GPS/device (buildQrPayload);
+  // those stay in the private Seal Certificate only.
+  var chainIdsQr = chain.map(function(c) { return c.sealId; }).filter(function(id) { return id && id !== sealId; });
+  var metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(meta, chainIdsQr))));
   var qrContent = 'https://verumglobal.foundation/verify.html?h=' + sha512.substring(0,32) + '&m=' + metaStr;
-  qrDataURL = await generateQRDataURL(qrContent, 400);
-  var pC = document.getElementById('qrPreview');
-  var pX = pC.getContext('2d');
-  pC.width = 220; pC.height = 220;
-  pX.fillStyle = '#ffffff'; pX.fillRect(0, 0, 220, 220);
-  if (qrDataURL) { const qI = new Image(); qI.onload = () => { pX.drawImage(qI, 10, 10, 200, 200); }; qI.onerror = () => { pX.fillStyle = '#ff0000'; pX.fillText('QR Error', 80, 110); }; qI.src = qrDataURL; }
-  updateStep(5, 'complete');
+  // QR ROBUSTNESS: QR generation or preview rendering must NEVER abort the seal.
+  // The QR is a convenience pointer to the verify page; the SHA-512 fingerprint,
+  // the per-page seal footer text and the PDF metadata Subject remain the
+  // authoritative seal. On ANY failure the seal proceeds without the QR image
+  // and the UI states the omission honestly.
+  var qrOmitted = false;
+  try {
+    qrDataURL = await generateQRDataURL(qrContent, 400);
+  } catch (qrErr) {
+    console.warn('QR generation failed (seal continues without QR):', qrErr);
+    qrDataURL = null;
+  }
+  if (!qrDataURL) qrOmitted = true;
+  try {
+    var pC = document.getElementById('qrPreview');
+    if (pC && pC.getContext) {
+      var pX = pC.getContext('2d');
+      pC.width = 220; pC.height = 220;
+      pX.fillStyle = '#ffffff'; pX.fillRect(0, 0, 220, 220);
+      if (qrDataURL) { const qI = new Image(); qI.onload = () => { pX.drawImage(qI, 10, 10, 200, 200); }; qI.onerror = () => { pX.fillStyle = '#ff0000'; pX.fillText('QR Error', 80, 110); }; qI.src = qrDataURL; }
+    }
+  } catch (pvErr) {
+    console.warn('QR preview render failed (seal continues without QR):', pvErr);
+  }
+  if (qrOmitted) {
+    updateStep(5, 'complete', 'QR omitted (generation failed) -- hash + footer remain the authoritative seal');
+    var qrNoteEl = document.getElementById('qrPreviewNote');
+    if (qrNoteEl) qrNoteEl.textContent = 'QR code omitted for this seal (generation failed). The SHA-512 fingerprint and the seal footer on every page remain the authoritative proof of integrity and time.';
+  } else {
+    updateStep(5, 'complete');
+  }
 
   // Step 6: Seal Footer
   updateStep(6, 'processing', 'Compositing ' + selectedFile.name + '...');
@@ -1702,6 +1958,11 @@ async function runSealingPipeline() {
       updateStep(7, 'processing', 'AI review of findings (optional)...');
       var originalCount = fraudResult.findings.length;
       var assessRes = await aiAssessFindings(fraudResult.findings);
+      if (!assessRes || !assessRes.ran) {
+        // Honest antithesis marker: review was enabled but did not run.
+        aiReviewInfo = { applied: false, reason: 'service unavailable' };
+        updateStep(7, 'processing', 'AI review unavailable -- findings are engine output, unreviewed');
+      }
       if (assessRes && assessRes.ran) {
         var mergedFindings = assessRes.findings.concat(assessRes.added);
         reportFraudResult = Object.assign({}, fraudResult, { findings: mergedFindings, totalFindings: mergedFindings.length });
@@ -1727,7 +1988,8 @@ async function runSealingPipeline() {
   } catch (aiErr) {
     console.warn('AI review skipped (sealing unaffected):', aiErr && aiErr.message ? aiErr.message : aiErr);
     reportFraudResult = fraudResult;
-    aiReviewInfo = null;
+    aiReviewInfo = (isAiReviewEnabled() && fraudResult && !fraudResult.scanFailed && fraudResult.findings && fraudResult.findings.length > 0)
+      ? { applied: false, reason: 'service unavailable' } : null;
     aiNarrativeText = null;
     _pipelineAiAddedFindings = [];
   }
@@ -1745,7 +2007,11 @@ async function runSealingPipeline() {
         pageCount: _pipelinePageCount || null,
         otsSubmitted: !!(otsResult && otsResult.success),
         otsCalendar: otsResult && otsResult.calendar ? otsResult.calendar : null,
-        qrDataURL: qrDataURL
+        qrDataURL: qrDataURL,
+        identity: meta.id || null,
+        gps: meta.gps || null,
+        acc: meta.acc || null,
+        dev: meta.dev || null
       });
       window._voSealCert = { bytes: certBytes };
       updateStep(7, 'complete', 'Certificate ready');
@@ -1753,6 +2019,29 @@ async function runSealingPipeline() {
       console.warn('Seal certificate generation failed (document seal unaffected):', certErr);
       window._voSealCert = null;
       updateStep(7, 'complete');
+    }
+  }
+
+  // Anchor Certificate (BOTH modes, only when a calendar accepted the digest):
+  // records the OpenTimestamps submission -- seal ID, document SHA-512, OTS
+  // digest, calendar list, ISO-8601 submission time. NEVER breaks the seal flow.
+  window._voAnchorCert = null;
+  if (otsResult && otsResult.success) {
+    try {
+      window._voAnchorCert = {
+        bytes: await buildAnchorCertificate({
+          fileName: selectedFile.name,
+          sha512: sha512,
+          sealId: sealId,
+          otsDigest: otsDigestHex,
+          calendars: [window.VoOts ? VoOts.normalizeCalendarUrl(otsResult.calendar) : otsResult.calendar],
+          timestampISO: new Date(meta.t || Date.now()).toISOString(),
+          qrDataURL: qrDataURL
+        })
+      };
+    } catch (anchorErr) {
+      console.warn('Anchor certificate generation failed (document seal unaffected):', anchorErr);
+      window._voAnchorCert = null;
     }
   }
 
@@ -1802,7 +2091,7 @@ async function runSealingPipeline() {
       rMeta.otsStatus = rOts.success;
       rMeta.sealId = rSealId;
       rMeta.report = true;
-      var rQrContent = 'https://verumglobal.foundation/verify.html?h=' + rSha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(rMeta)));
+      var rQrContent = 'https://verumglobal.foundation/verify.html?h=' + rSha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(rMeta, null))));
       var rQr = await generateQRDataURL(rQrContent, 400);
       var rSealedBytes = await window.VerumReport.seal(reportBytes, {
         sealId: rSealId,
@@ -1908,7 +2197,10 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   } else if (chainEl) { document.getElementById('chainRow').style.display = 'none'; }
 
   let verifyUrl = 'https://verumglobal.foundation/verify.html?h=' + sha512.substring(0,32);
-  try { const metaStr = encodeURIComponent(utf8ToBase64(JSON.stringify(meta))); verifyUrl += '&m=' + metaStr; } catch(e) {}
+  try {
+    var vChainIds = (chain || []).map(function(c) { return c.sealId; }).filter(function(id) { return id && id !== sealId; });
+    verifyUrl += '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(meta, vChainIds))));
+  } catch(e) {}
   document.getElementById('verifyLink').href = verifyUrl;
 
   const el = document.getElementById('otsStatus');
@@ -1989,10 +2281,49 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     el.parentNode.insertBefore(banner, el.nextSibling);
   }
 
-  if (otsResult && otsResult.success && otsResult.proof) {
-    const oU = URL.createObjectURL(new Blob([otsResult.proof], {type: 'application/vnd.opentimestamps.v1'}));
-    const oL = document.getElementById('downloadOts'); oL.href = oU; oL.download = base + '.ots'; oL.style.display = 'block';
-  } else { document.getElementById('downloadOts').style.display = 'none'; }
+  // Blockchain receipt (.ots) — the "little slip": a VALID OpenTimestamps
+  // pending receipt the user keeps and upgrades later on the verify page.
+  // Preferred content: the calendar-issued timestamp fragment (byte-identical
+  // to what `ots stamp` embeds) wrapped in the detached-file header; fallback:
+  // a locally built receipt with a PendingAttestation naming the calendar that
+  // accepted the digest. No button at all when the submission failed or the
+  // proof module is unavailable — never a broken or fake receipt.
+  var otsBtn = document.getElementById('downloadOts');
+  var otsNote = document.getElementById('otsReceiptNote');
+  var anchorBtn = document.getElementById('downloadAnchorCert');
+  if (otsResult && otsResult.success && window.VoOts) {
+    var receiptBytes = null;
+    try {
+      if (otsResult.proof && otsResult.proof.length > 0) {
+        var candidate = VoOts.buildFileFromFragment(meta.otsDigest, otsResult.proof);
+        var probe = VoOts.parseSummary(candidate);
+        if (probe.valid && probe.attestations.some(function(a) { return a.type === 'pending'; })) receiptBytes = candidate;
+      }
+    } catch (fragErr) { receiptBytes = null; }
+    if (!receiptBytes) {
+      try { receiptBytes = VoOts.buildPendingReceipt(meta.otsDigest, [otsResult.calendar]); }
+      catch (pendErr) { receiptBytes = null; }
+    }
+    if (receiptBytes) {
+      const oU = URL.createObjectURL(new Blob([receiptBytes], {type: 'application/vnd.opentimestamps.v1'}));
+      otsBtn.href = oU; otsBtn.download = base + '-' + sealId + '.ots'; otsBtn.style.display = 'block';
+      if (otsNote) otsNote.style.display = 'block';
+    } else {
+      otsBtn.style.display = 'none';
+      if (otsNote) otsNote.style.display = 'none';
+    }
+  } else {
+    otsBtn.style.display = 'none';
+    if (otsNote) otsNote.style.display = 'none';
+  }
+  if (anchorBtn) {
+    if (window._voAnchorCert && window._voAnchorCert.bytes) {
+      const aU = URL.createObjectURL(new Blob([window._voAnchorCert.bytes], {type: 'application/pdf'}));
+      anchorBtn.href = aU; anchorBtn.download = base + '-' + sealId + '-anchor-certificate.pdf'; anchorBtn.style.display = 'block';
+    } else {
+      anchorBtn.style.display = 'none';
+    }
+  }
 
   document.getElementById('results').classList.add('visible');
   document.getElementById('results').scrollIntoView({behavior:'smooth'});
@@ -2013,6 +2344,11 @@ function resetSealing() {
   var sealedHashRowR = document.getElementById('sealedHashRow');
   if (sealedHashRowR) sealedHashRowR.style.display = 'none';
   window._voSealCert = null;
+  window._voAnchorCert = null;
+  var anchorBtnR = document.getElementById('downloadAnchorCert');
+  if (anchorBtnR) anchorBtnR.style.display = 'none';
+  var otsNoteR = document.getElementById('otsReceiptNote');
+  if (otsNoteR) otsNoteR.style.display = 'none';
   var gkBanner = document.getElementById('gatekeepBanner');
   if (gkBanner) gkBanner.style.display = 'none';
   var oldReportBtn2 = document.getElementById('downloadForensicReport');

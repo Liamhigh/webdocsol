@@ -74,8 +74,10 @@ User uploads PDF
        - A4 watermark background at 20% opacity
        - Original content scaled to 88%
        - Clean QR code top-right (no border)
-       - Seal footer on every page (SHA-512 + timestamp + chain)
-       - Fraud watermark overlay (if fraud detected -- red X + banner)
+       - Seal footer on every page (VERUM OMNIS SEALED ORIGINAL + SHA-512 + timestamp + chain)
+       - Pristine Seal Doctrine: the original is sealed pristine (watermark,
+         footer + QR only) -- NO fraud/verdict overlays are drawn on it.
+         Verdicts and analysis appear only in the separate forensic report.
        - Optional: Password-protected cover page
        |
        v
@@ -181,13 +183,7 @@ The fraud detection engine scans uploaded documents for:
 - **Metadata anomalies**: Photoshop, GIMP, Canva detection in PDF producer/creator fields
 - **Scoring**: 0-100 scale; >=20 flags as fraudulent
 
-If fraud is detected, the document still seals (preserving evidence integrity) but **every page** is marked with:
-- Red X cross overlay (diagonal lines)
-- "FRAUDULENT CONTENT DETECTED" banner (top of each page)
-- "FRAUD MARK -- SEALED FOR EVIDENCE" footer stamp
-- Score displayed on the results page
-
-The document seals but the fraud is **EXPOSED not hidden**.
+If fraud indicators are detected, the document still seals (preserving evidence integrity and time). Under the **Pristine Seal Doctrine** the original is sealed **pristine**: the A4 watermark, per-page seal footer and verification QR only -- **no verdict, fraud or analysis overlays are drawn on the original**. Findings are forensic indicators, not determinations of fraud; they and the score appear only in the **separate sealed forensic report** and on the results page, never on the original document.
 
 ---
 

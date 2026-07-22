@@ -8,6 +8,8 @@
 //   POST /api/v1/admin/publish    admin: publish a new signed rule package
 //   GET  /constitution.pdf        sealed Verum Omnis Constitution v6 PDF (from KV)
 //   GET  /docs/constitution.pdf   alias of /constitution.pdf
+//   GET  /images/logo-full.png    site logo PNG (from KV)
+//   GET  /images/watermark_portrait.png  watermark PNG (from KV)
 //   POST /api/v1/ai/gatekeep      AI licensing gatekeeper (commercial-use signals)
 //   POST /api/v1/ai/classify      AI document triage classification (pre-engine scope)
 //   POST /api/v1/ai/assess        AI antithesis review of candidate findings
@@ -218,6 +220,41 @@ async function handleConstitutionPdf(env) {
   });
 }
 
+// Site images served from KV (single base64 key per image, e.g. img:logo-full:b64).
+const SITE_IMAGES = {
+  '/images/logo-full.png': { key: 'img:logo-full:b64', contentType: 'image/png' },
+  '/images/watermark_portrait.png': { key: 'img:watermark-portrait:b64', contentType: 'image/png' }
+};
+
+// Serve a site image stored in KV as base64. Decodes base64 in slices to stay
+// clear of call-stack / arg-count limits (same approach as handleConstitutionPdf).
+async function handleImageKv(env, kvKey, contentType) {
+  const b64 = await env.RULES_KV.get(kvKey);
+  if (b64 === null) {
+    return err(404, 'not_found', 'Image is not available.');
+  }
+  const SLICE = 32768; // multiple of 4, keeps atob input aligned
+  let padding = 0;
+  if (b64.endsWith('==')) padding = 2;
+  else if (b64.endsWith('=')) padding = 1;
+  const totalLen = Math.floor(b64.length / 4) * 3 - padding;
+  const bytes = new Uint8Array(totalLen);
+  let offset = 0;
+  for (let i = 0; i < b64.length; i += SLICE) {
+    const bin = atob(b64.slice(i, i + SLICE));
+    for (let j = 0; j < bin.length; j++) bytes[offset + j] = bin.charCodeAt(j);
+    offset += bin.length;
+  }
+  return new Response(bytes, {
+    status: 200,
+    headers: corsHeaders({
+      'Content-Type': contentType,
+      'Content-Length': String(bytes.length),
+      'Cache-Control': 'public, max-age=86400'
+    })
+  });
+}
+
 // Recursively collect banned field names present anywhere in the value.
 function findBannedFields(value, path, hits) {
   if (value === null || typeof value !== 'object') return;
@@ -405,6 +442,11 @@ const CLASSIFY_SYSTEM = 'You are a document triage classifier for the Verum Omni
   'contradiction engine. Given a text sample from a document, decide its class, whether it is ' +
   'ABOUT fraud, and which detector categories the engine should run. Classes: court_filing, ' +
   'contract, invoice, financial_application, personal_correspondence, business_record, other. ' +
+  'Affidavits and witness statements ARE court_filing: recognise them by sworn-language markers ' +
+  'such as "I hereby make oath and state", "the contents of this affidavit", "deponent", ' +
+  '"commissioner of oaths", numbered deposition paragraphs, and police or court references ' +
+  '(for example SAPS, Hawks, or court case numbers); classify them court_filing with medium or ' +
+  'high confidence when such markers are present instead of defaulting to "other". ' +
   'aboutFraud MUST be true when the document CONTAINS fraud allegations, accusations or heavy ' +
   'fraud vocabulary (e.g. a court filing, complaint or affidavit ABOUT fraud) so the client can ' +
   'suppress serial-pattern labels that would otherwise false-fire on vocabulary alone; it is ' +
@@ -1037,9 +1079,10 @@ async function route(request, env) {
   if (path === '/api/v1/ai/narrate' && request.method === 'POST') return handleAiNarrate(request, env);
   if (path === '/api/v1/ai/curate' && request.method === 'POST') return handleAiCurate(request, env);
   if ((path === '/constitution.pdf' || path === '/docs/constitution.pdf') && request.method === 'GET') return handleConstitutionPdf(env);
+  if ((path === '/images/logo-full.png' || path === '/images/watermark_portrait.png') && request.method === 'GET') return handleImageKv(env, SITE_IMAGES[path].key, SITE_IMAGES[path].contentType);
 
   const known = ['/api/v1/status', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish',
-    '/api/v1/ai/gatekeep', '/api/v1/ai/classify', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf'];
+    '/api/v1/ai/gatekeep', '/api/v1/ai/classify', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf', '/images/logo-full.png', '/images/watermark_portrait.png'];
   if (known.includes(path)) {
     return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' || path.endsWith('/constitution.pdf') ? 'GET' : 'POST' });
   }
