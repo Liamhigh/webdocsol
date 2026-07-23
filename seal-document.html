@@ -1729,7 +1729,8 @@ async function aiApiPost(path, payload, timeoutMs) {
   var ctrl = new AbortController();
   var timer = setTimeout(function() { ctrl.abort(); }, timeoutMs || 10000);
   try {
-    var res = await fetch(path, {
+    var url = 'https://verumglobal.foundation' + path;
+    var res = await fetch(url, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
