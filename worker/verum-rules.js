@@ -476,7 +476,7 @@ const ASSESS_SYSTEM = 'You are the antithesis reviewer in a forensic contradicti
 
 const NARRATE_SYSTEM = 'You are a forensic report writer for Verum Omnis Constitutional Forensic AI. ' +
   'Generate a DETAILED COURT-READY forensic narrative from the supplied findings JSON. ' +
-  'Structure: (1) Executive Summary (300-400 words) with core findings, financial impact, and confirmed victim count; ' +
+  'Structure: (1) Executive Summary (300-400 words) with core findings, financial impact, confirmed victim count, and GPS coordinates of seal application if provided; ' +
   '(2) Key Findings section (400-600 words) with EVERY major finding anchored to evidence citations [F1], [F2], etc.; ' +
   '(3) Perjury Analysis (200-300 words) comparing sworn statements vs. sealed documentary evidence; ' +
   '(4) Victim Evidence Profiles (200+ words) naming each confirmed victim, their losses, and evidence chain; ' +
@@ -484,13 +484,14 @@ const NARRATE_SYSTEM = 'You are a forensic report writer for Verum Omnis Constit
   '(6) Legal Framework Analysis (300-400 words) citing applicable statutes, common law principles, and court precedent; ' +
   '(7) Offence Matrix (200-300 words) mapping findings to criminal charges/civil causes of action; ' +
   '(8) Page-by-Page Evidence Map (150-250 words) - reference format "Bundle p.XXX" for each key document. ' +
+  '(9) Chain of Custody Section: include GPS coordinates, device fingerprint, and timestamp of seal if available. ' +
   'TONE: formal forensic English, third person, measured professional. ' +
   'RULES: (1) State only facts from supplied findings - never invent; (2) ALWAYS cite finding IDs [F#] after every factual claim; ' +
   '(3) Anchor victims by name/ID and documented losses; (4) Reference page numbers from source bundles; ' +
   '(5) Flag any contradictions between statements; (6) NO probability estimates - use HIGH/VERY HIGH confidence grading from findings; ' +
-  '(7) End with CLOSING: "These findings are investigative indicators, not determinations of guilt. Court admission requires verification of seal integrity and expert authentication." ' +
+  '(7) Include GPS coordinates in geographic/chain-of-custody context when available; (8) End with CLOSING: "These findings are investigative indicators, not determinations of guilt. Court admission requires verification of seal integrity and expert authentication." ' +
   'Reply ONLY valid JSON: ' +
-  '{"executiveSummary":"...","keyFindings":"...","perjuryAnalysis":"...","victimProfiles":"...","contradictions":"...","legalFramework":"...","offenceMatrix":"...","evidenceMap":"...","closing":"..."}';
+  '{"executiveSummary":"...","keyFindings":"...","perjuryAnalysis":"...","victimProfiles":"...","contradictions":"...","legalFramework":"...","offenceMatrix":"...","evidenceMap":"...","chainOfCustody":"...","closing":"..."}';
 
 const CURATE_SYSTEM = 'You are a conservative fraud-rules curator for the Verum Omnis forensic ' +
   'platform. You receive aggregated, anonymized detector statistics; no document content exists ' +
@@ -855,7 +856,10 @@ async function handleAiNarrate(request, env) {
     score: (typeof data.score === 'number' && Number.isFinite(data.score)) ? data.score : (asStr(data.score, 32) || 'not supplied'),
     confidence: (typeof data.confidence === 'number' && Number.isFinite(data.confidence)) ? data.confidence : (asStr(data.confidence, 32) || 'not supplied'),
     findingsPruned: asCount(data.findingsPruned),
-    generatedUtc: asStr(data.generatedUtc, 64) || new Date().toISOString()
+    generatedUtc: asStr(data.generatedUtc, 64) || new Date().toISOString(),
+    gps: asStr(data.gps, 40) || null,
+    gpsAccuracy: asStr(data.gpsAccuracy, 20) || null,
+    device: asStr(data.device, 100) || null
   };
 
   // With no findings there is nothing the model may cite; go straight to the

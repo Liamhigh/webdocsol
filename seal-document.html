@@ -1805,9 +1805,12 @@ async function aiAssessFindings(findings) {
 }
 
 // Narrate: returns the AI-drafted narrative string, or null on any failure
-// (including template-fallback absence and timeouts).
+// (including template-fallback absence and timeouts). Includes GPS, device, and metadata.
 async function aiNarrateReport(findings, score, verdict) {
-  var res = await aiApiPost('/api/v1/ai/narrate', { findings: findings, score: score, verdict: verdict }, 10000);
+  var metadata = { findings: findings, score: score, verdict: verdict };
+  if (gpsCoords) { metadata.gps = gpsCoords.lat + ',' + gpsCoords.lng; if (gpsCoords.accuracy) metadata.gpsAccuracy = Math.round(gpsCoords.accuracy) + 'm'; }
+  if (deviceInfo) { metadata.device = deviceInfo; }
+  var res = await aiApiPost('/api/v1/ai/narrate', metadata, 10000);
   if (res && typeof res.narrative === 'string' && res.narrative.trim()) return res.narrative;
   return null;
 }
