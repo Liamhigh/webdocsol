@@ -863,18 +863,18 @@ function rawInflate(data) {
         wrapped[wrapped.length - 3] = (adler >> 16) & 0xFF;
         wrapped[wrapped.length - 2] = (adler >>  8) & 0xFF;
         wrapped[wrapped.length - 1] = adler & 0xFF;
-        const ds = new DecompressionStream('deflate');
-        const writer = ds.writable.getWriter();
+        var ds = new DecompressionStream('deflate');
+        var writer = ds.writable.getWriter();
         writer.write(wrapped).then(() => writer.close());
-        const reader = ds.readable.getReader();
-      const chunks = [];
-      function read() {
-        reader.read().then(({done, value}) => {
-          if (done) { resolve(concatUint8Arrays(chunks)); return; }
-          chunks.push(value); read();
-        }).catch(() => resolve(null));
-      }
-      read();
+        var reader = ds.readable.getReader();
+        var chunks = [];
+        function read() {
+          reader.read().then(function({done, value}) {
+            if (done) { resolve(concatUint8Arrays(chunks)); return; }
+            chunks.push(value); read();
+          }).catch(function() { resolve(null); });
+        }
+        read();
     } else { resolve(null); }
   } catch(e) { resolve(null); }
 });
