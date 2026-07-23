@@ -1811,7 +1811,28 @@ async function aiNarrateReport(findings, score, verdict) {
   if (gpsCoords) { metadata.gps = gpsCoords.lat + ',' + gpsCoords.lng; if (gpsCoords.accuracy) metadata.gpsAccuracy = Math.round(gpsCoords.accuracy) + 'm'; }
   if (deviceInfo) { metadata.device = deviceInfo; }
   var res = await aiApiPost('/api/v1/ai/narrate', metadata, 10000);
-  if (res && typeof res.narrative === 'string' && res.narrative.trim()) return res.narrative;
+  if (!res || typeof res !== 'object') return null;
+
+  // Professional format: compile multiple sections into narrative
+  if (res.executiveSummary && res.forensicNarrative) {
+    var sections = [];
+    if (res.executiveSummary) sections.push('EXECUTIVE SUMMARY\n\n' + res.executiveSummary);
+    if (res.forensicNarrative) sections.push('FORENSIC ANALYSIS\n\n' + res.forensicNarrative);
+    if (res.credibilityAnalysis) sections.push('CREDIBILITY ASSESSMENT\n\n' + res.credibilityAnalysis);
+    if (res.victimImpact) sections.push('VICTIM IMPACT\n\n' + res.victimImpact);
+    if (res.legalAnalysis) sections.push('LEGAL ANALYSIS\n\n' + res.legalAnalysis);
+    if (res.conclusionsMap) sections.push('CONCLUSIONS AND EVIDENCE MAP\n\n' + res.conclusionsMap);
+    if (res.chainOfCustody) sections.push('CHAIN OF CUSTODY\n\n' + res.chainOfCustody);
+    if (res.disclaimer) sections.push('DISCLAIMER\n\n' + res.disclaimer);
+    return sections.join('\n\n' + '='.repeat(80) + '\n\n');
+  }
+
+  // Legacy format fallback
+  if (res.narrative && typeof res.narrative === 'string' && res.narrative.trim()) return res.narrative;
+  if (res.criticalEvidence && typeof res.criticalEvidence === 'string') {
+    return (res.executiveSummary || '') + '\n\n' + res.criticalEvidence;
+  }
+
   return null;
 }
 

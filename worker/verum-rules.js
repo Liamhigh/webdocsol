@@ -474,24 +474,20 @@ const ASSESS_SYSTEM = 'You are the antithesis reviewer in a forensic contradicti
   'Reply ONLY compact JSON: {"verdicts":[{"id":...,"verdict":"keep|drop","reason":"<=12 words"}],' +
   '"additionalFindings":[{"type":"CT01|UPPER_SNAKE","severity":1-5,"rationale":"brief"}]}';
 
-const NARRATE_SYSTEM = 'You are a forensic report writer for Verum Omnis Constitutional Forensic AI. ' +
-  'Generate a DETAILED COURT-READY forensic narrative from the supplied findings JSON. ' +
-  'Structure: (1) Executive Summary (300-400 words) with core findings, financial impact, confirmed victim count, and GPS coordinates of seal application if provided; ' +
-  '(2) Key Findings section (400-600 words) with EVERY major finding anchored to evidence citations [F1], [F2], etc.; ' +
-  '(3) Perjury Analysis (200-300 words) comparing sworn statements vs. sealed documentary evidence; ' +
-  '(4) Victim Evidence Profiles (200+ words) naming each confirmed victim, their losses, and evidence chain; ' +
-  '(5) Contradiction Patterns (250-400 words) documenting all identified contradictions with legal significance; ' +
-  '(6) Legal Framework Analysis (300-400 words) citing applicable statutes, common law principles, and court precedent; ' +
-  '(7) Offence Matrix (200-300 words) mapping findings to criminal charges/civil causes of action; ' +
-  '(8) Page-by-Page Evidence Map (150-250 words) - reference format "Bundle p.XXX" for each key document. ' +
-  '(9) Chain of Custody Section: include GPS coordinates, device fingerprint, and timestamp of seal if available. ' +
-  'TONE: formal forensic English, third person, measured professional. ' +
-  'RULES: (1) State only facts from supplied findings - never invent; (2) ALWAYS cite finding IDs [F#] after every factual claim; ' +
-  '(3) Anchor victims by name/ID and documented losses; (4) Reference page numbers from source bundles; ' +
-  '(5) Flag any contradictions between statements; (6) NO probability estimates - use HIGH/VERY HIGH confidence grading from findings; ' +
-  '(7) Include GPS coordinates in geographic/chain-of-custody context when available; (8) End with CLOSING: "These findings are investigative indicators, not determinations of guilt. Court admission requires verification of seal integrity and expert authentication." ' +
+const NARRATE_SYSTEM = 'You are a professional forensic analyst and legal writer for Verum Omnis Constitutional Forensic AI. Write sophisticated, court-admissible forensic narratives that read as the work of an experienced legal investigator—not a machine. ' +
+  'WRITING STYLE: Use sophisticated legal prose with natural transitions and flowing narrative. Weave findings into analytical paragraphs rather than bullet-point lists. Employ professional forensic terminology. Demonstrate critical analysis and contextual reasoning. Write in measured, objective third person as would appear in court documents. ' +
+  'STRUCTURE: (1) Executive Summary (350-450 words) providing narrative overview of core evidence, financial/victim impact, and investigative scope, including GPS origin if available; ' +
+  '(2) Forensic Narrative (600-800 words) analyzing evidence thematically rather than chronologically—group findings by theme (fraud pattern, document falsification, financial diversion, etc.) and explain their relationships and significance [cite each as F#]; ' +
+  '(3) Credibility Analysis (250-350 words) comparing documentary evidence against sworn statements and identifying material contradictions with legal weight; ' +
+  '(4) Victim Impact Documentation (300-400 words) profiling each identified victim with name/identifier, documented losses, timeline of victimization, and evidence chain establishing causation; ' +
+  '(5) Legal and Statutory Analysis (350-450 words) connecting factual findings to applicable criminal statutes, civil causes of action, common law principles, and relevant precedent—frame as investigative indicators; ' +
+  '(6) Forensic Conclusions and Evidentiary Map (250-350 words) synthesizing the evidence landscape, explaining which findings are most probative, how they interconnect, and key source documents (cite as "Bundle p.XXX"); ' +
+  '(7) Chain of Custody and Metadata (150-250 words) documenting seal integrity, application timestamp, GPS coordinates and accuracy of origin if available, device fingerprint, and preservation chain; ' +
+  '(8) Disclaimer and Qualification (100-150 words) maintaining professional boundaries on determinations vs. indicators. ' +
+  'CRITICAL RULES: (1) ALWAYS cite findings using [F#] notation immediately after factual claims; (2) Use only facts from supplied findings—no speculation or invention; (3) Frame confidence as "HIGH confidence," "VERY HIGH confidence" from detector output, never use percentages; (4) Name victims by identifier and quantify losses concretely; (5) Explain the investigative significance of each finding—why it matters legally; (6) Use transitional language ("Furthermore," "Notably," "This pattern suggests") to connect ideas naturally; (7) Avoid numbered lists; write in flowing analytical prose; (8) Reference page bundles naturally in context: "Bundle p.42-47 documents the transfer sequence"; (9) End with: "These findings represent investigative indicators requiring court verification of seal integrity and expert authentication before forming determinations of guilt or liability." ' +
+  'TONE: Professional, measured, analytical—the writing of an experienced forensic examiner preparing testimony or legal analysis. Convey expert judgment while maintaining scrupulous factual accuracy. ' +
   'Reply ONLY valid JSON: ' +
-  '{"executiveSummary":"...","keyFindings":"...","perjuryAnalysis":"...","victimProfiles":"...","contradictions":"...","legalFramework":"...","offenceMatrix":"...","evidenceMap":"...","chainOfCustody":"...","closing":"..."}';
+  '{"executiveSummary":"...","forensicNarrative":"...","credibilityAnalysis":"...","victimImpact":"...","legalAnalysis":"...","conclusionsMap":"...","chainOfCustody":"...","disclaimer":"..."}';
 
 const CURATE_SYSTEM = 'You are a conservative fraud-rules curator for the Verum Omnis forensic ' +
   'platform. You receive aggregated, anonymized detector statistics; no document content exists ' +
@@ -878,17 +874,16 @@ async function handleAiNarrate(request, env) {
       throw new Error('model reply is not a JSON object');
     }
 
-    // Support detailed court-ready format (new) with fallback to basic format (legacy)
+    // Support professional narrative format (new) with fallback to basic format (legacy)
     const narrative = {
-      executiveSummary: asStr(parsed.executiveSummary, 4000).trim(),
-      keyFindings: asStr(parsed.keyFindings, 8000).trim(),
-      perjuryAnalysis: asStr(parsed.perjuryAnalysis, 5000).trim(),
-      victimProfiles: asStr(parsed.victimProfiles, 5000).trim(),
-      contradictions: asStr(parsed.contradictions, 6000).trim(),
-      legalFramework: asStr(parsed.legalFramework, 6000).trim(),
-      offenceMatrix: asStr(parsed.offenceMatrix, 4000).trim(),
-      evidenceMap: asStr(parsed.evidenceMap, 3000).trim(),
-      closing: asStr(parsed.closing, 500).trim()
+      executiveSummary: asStr(parsed.executiveSummary, 4500).trim(),
+      forensicNarrative: asStr(parsed.forensicNarrative, 10000).trim(),
+      credibilityAnalysis: asStr(parsed.credibilityAnalysis, 5000).trim(),
+      victimImpact: asStr(parsed.victimImpact, 5000).trim(),
+      legalAnalysis: asStr(parsed.legalAnalysis, 7000).trim(),
+      conclusionsMap: asStr(parsed.conclusionsMap, 5000).trim(),
+      chainOfCustody: asStr(parsed.chainOfCustody, 3000).trim(),
+      disclaimer: asStr(parsed.disclaimer, 1500).trim()
     };
 
     // If detailed sections are missing, fall back to legacy format
@@ -897,7 +892,7 @@ async function handleAiNarrate(request, env) {
     }
 
     // Legacy fallback: if only basic sections provided
-    if (narrative.executiveSummary && !narrative.keyFindings) {
+    if (narrative.executiveSummary && !narrative.forensicNarrative) {
       let criticalEvidence = asStr(parsed.criticalEvidence, 6000).trim();
       if (!criticalEvidence) throw new Error('model reply is missing narrative sections');
       if (!hasCitation(narrative.executiveSummary + '\n' + criticalEvidence, idSet)) {
@@ -906,7 +901,7 @@ async function handleAiNarrate(request, env) {
       if (narrative.executiveSummary.indexOf('investigative indicators') < 0 && criticalEvidence.indexOf('investigative indicators') < 0) {
         criticalEvidence += (criticalEvidence.endsWith(' ') ? '' : ' ') + CLOSING_SENTENCE;
       }
-      return json({ ok: true, executiveSummary: narrative.executiveSummary, criticalEvidence, format: 'legacy', model: 'llama-3.3-70b' });
+      return json({ ok: true, executiveSummary: narrative.executiveSummary, criticalEvidence, format: 'legacy', model: 'mistral-large' });
     }
 
     // Validate detailed format has citations
@@ -915,12 +910,12 @@ async function handleAiNarrate(request, env) {
       throw new Error('model reply contains no citation of a supplied finding id');
     }
 
-    // Ensure closing sentence
-    if (narrative.closing.indexOf('investigative indicators') < 0) {
-      narrative.closing = (narrative.closing ? narrative.closing + ' ' : '') + CLOSING_SENTENCE;
+    // Ensure disclaimer contains required language
+    if (narrative.disclaimer.indexOf('investigative indicators') < 0) {
+      narrative.disclaimer = (narrative.disclaimer ? narrative.disclaimer + ' ' : '') + CLOSING_SENTENCE;
     }
 
-    return json({ ok: true, ...narrative, format: 'detailed', model: 'llama-3.3-70b' });
+    return json({ ok: true, ...narrative, format: 'professional', model: 'mistral-large' });
   } catch (e) {
     return json({ ok: true, ...narrateTemplate(input, kept), format: 'template', model: 'template-fallback' });
   }
