@@ -1420,13 +1420,23 @@ async function runForensicEngine(pdfBytes, pdfDoc) {
     } catch(e) {
       console.warn('Detector ' + (d+1) + ' failed:', e.message);
     }
+    // Yield to browser every 8 detectors to prevent UI freeze
+    if ((d + 1) % 8 === 0) {
+      await new Promise(function(resolve) { setTimeout(resolve, 0); });
+    }
   }
+
+  // Yield before catch-all detector
+  await new Promise(function(resolve) { setTimeout(resolve, 0); });
 
   // Run catch-all detector (needs other findings)
   try {
     var catchallFindings = DETECTORS.D37_DETECT_INTERNAL_CONFLICT_CATCHALL(textBlocks, allFindings);
     allFindings = allFindings.concat(catchallFindings);
   } catch(e) {}
+
+  // Yield before serial pattern detection
+  await new Promise(function(resolve) { setTimeout(resolve, 0); });
 
   // Run serial pattern detection
   try {
