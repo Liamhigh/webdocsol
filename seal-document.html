@@ -1616,10 +1616,11 @@ async function startSealing() {
           } catch (e) { return null; }
         })();
       }
-      updateStep('Fraud', 'processing', 'Running forensic contradiction engine (43 types, 37 detectors, 17 serial patterns)...');
+      updateStep('Fraud', 'processing', 'Loading PDF and extracting text...');
       try {
         var pdfDocForForensics = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
         _pipelinePageCount = pdfDocForForensics.getPageCount();
+        updateStep('Fraud', 'processing', 'Scanning ' + _pipelinePageCount + ' page(s) - 37 contradiction detectors running...');
         forensicResult = await runForensicEngine(fileBytes, pdfDocForForensics);
       } catch(e) {
         console.warn('Forensic engine error:', e);
