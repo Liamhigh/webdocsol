@@ -29,8 +29,10 @@ if (!PDFLibRef) {
     },
     _error: 'pdf-lib (PDFLib) is required but not available - network/proxy may be blocking unpkg.com'
   };
-  // Return early - do NOT throw, just set error stubs and continue
-  // This allows the main script to continue and handle the error gracefully
+  // Return early - do NOT throw, just leave the error stubs in place. Without
+  // this return, execution fell through to `PDFLibRef.rgb` below and threw a
+  // TypeError (PDFLibRef is null), aborting module setup.
+  return;
 }
 
 // ---------------- palette / geometry ----------------
