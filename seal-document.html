@@ -526,11 +526,30 @@
 
 <script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script>
+// Check if CDN scripts loaded before proceeding
+window._cdrReady = {
+  pdfLib: typeof window.PDFLib !== 'undefined',
+  qrCode: typeof window.QRCode !== 'undefined',
+  timestamp: new Date().toISOString()
+};
+if (!window._cdrReady.pdfLib) {
+  console.error('[SEAL-FLOW] FATAL: PDFLib (pdf-lib) failed to load from CDN');
+  document.body.innerHTML = '<div style="padding:40px;color:#FF6B6B;background:#1a1a1a;font-family:monospace;">' +
+    '<h1>⚠ Error: CDN Library Failed to Load</h1>' +
+    '<p>pdf-lib library (PDFLib) could not be loaded from unpkg.com</p>' +
+    '<p>This may be due to network proxy or firewall settings.</p>' +
+    '<p>Error details: window.PDFLib = ' + typeof window.PDFLib + '</p>' +
+    '<p>Timestamp: ' + window._cdrReady.timestamp + '</p>' +
+    '<p><a href="javascript:location.reload()" style="color:#4A7EC7;">Retry</a></p>' +
+    '</div>';
+}
+</script>
 <script src="/forensic-report.js?v=1.4.1-20260720"></script>
 <script src="/forensic-engine-page.js?v=1.4.1-20260720"></script>
 <script src="/ots-proof.js?v=1.4.1-20260720"></script>
 <script>
-const { PDFDocument, rgb, StandardFonts } = PDFLib;
+const { PDFDocument, rgb, StandardFonts } = PDFLib || {};
 
 let selectedFile = null, sealType = 'private', otsProof = null, watermarkBytes = null;
 let gpsCoords = null, deviceInfo = null;

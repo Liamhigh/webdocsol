@@ -15,7 +15,15 @@
 'use strict';
 
 var PDFLibRef = global.PDFLib || (typeof require === 'function' ? require('pdf-lib') : null);
-if (!PDFLibRef) throw new Error('VerumReport: pdf-lib (PDFLib) is required');
+if (!PDFLibRef) {
+  console.error('[VerumReport] FATAL: pdf-lib not available. global.PDFLib =', global.PDFLib);
+  global.VerumReport = {
+    build: function() { return Promise.reject(new Error('pdf-lib not loaded')); },
+    seal: function() { return Promise.reject(new Error('pdf-lib not loaded')); },
+    _error: 'pdf-lib (PDFLib) is required but not available'
+  };
+  throw new Error('VerumReport: pdf-lib (PDFLib) is required');
+}
 
 // ---------------- palette / geometry ----------------
 var RGB = PDFLibRef.rgb;
