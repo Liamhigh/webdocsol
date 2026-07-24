@@ -9,17 +9,34 @@
 
 ## Deployment Architecture
 
+Two independent pieces serve `verumglobal.foundation`, and they are deployed
+in two different ways. Confusing them is the most common cause of "I changed
+the page but the site looks the same".
+
 ```
-GitHub (liamhigh/webdocsol)
-       ↓
-   [main branch]
-       ↓
-  wrangler deploy
-       ↓
-  Cloudflare Workers
-       ↓
-  verumglobal.foundation
+                    verumglobal.foundation
+                             │
+             ┌───────────────┴────────────────┐
+             │                                │
+   /api/*, /docs/*, /images/*,        everything else
+      /constitution.pdf               (all HTML pages)
+             │                                │
+   Worker: verum-omnis-rules-prod    Worker: verumglobal-static
+   source: worker/verum-rules.js     source: worker/verumglobal-static.js
+             │                                │
+      wrangler deploy                  reverse-proxies to
+      --env production                       ↓
+                                    https://verumglobal.pages.dev
+                                    (Cloudflare Pages project)
 ```
+
+**The website's HTML does not come from this repository.** It is served by the
+Cloudflare Pages project `verumglobal.pages.dev`, which the `verumglobal-static`
+Worker proxies. This repo has no CI and no Pages build configuration, so
+committing to `main` does not update the Pages project and neither does
+`wrangler deploy`. Until a Pages deployment is wired up, changes to
+`index.html`, `seal-document.html`, `verify.html` and friends reach the public
+site only when that Pages project is updated separately.
 
 ### Why Cloudflare Workers?
 
@@ -108,11 +125,13 @@ verumglobal.foundation/docs/*
 verumglobal.foundation/images/*
 ```
 
-All other routes are served as static assets from Cloudflare's CDN.
+All other routes fall through to the `verumglobal-static` Worker.
 
 ## Static Assets
 
-Static files (HTML, JS, CSS, images) are served directly by Cloudflare:
+Static files are served by the Cloudflare Pages project
+`verumglobal.pages.dev`, which the `verumglobal-static` Worker reverse-proxies
+(source: `worker/verumglobal-static.js`):
 
 - `seal-document.html` — Main sealing interface
 - `verify.html` — Document verification page
@@ -121,7 +140,14 @@ Static files (HTML, JS, CSS, images) are served directly by Cloudflare:
 - `forensic-engine-page.js` — Forensic engine (37 detectors)
 - `images/` — Logos, watermarks, assets
 
-**Caching**: Cloudflare CDN caches immutable assets; HTML pages bypass cache.
+The proxy maps extensionless URLs onto the matching `.html` file, so
+`/verify` serves `verify.html`. A page added to this repo will not be
+reachable at its extensionless URL until it is added to the `PAGES` list in
+`worker/verumglobal-static.js` **and** that Worker is redeployed.
+
+**Caching**: the proxy sets `no-store` and appends a cache-busting query
+parameter, so nothing it serves is cached at the edge or in the browser.
+Every request goes to the Pages origin.
 
 ## API Endpoints
 
@@ -249,8 +275,15 @@ wrangler tail --env production --format pretty
 ### Before Making Changes
 1. Review `wrangler.toml` for current routes & bindings
 2. Check `DEPLOYMENT.md` (this file) for deployment process
-3. For client-side changes (HTML/JS): no deployment needed (Cloudflare caches)
-4. For API changes (worker/): **must** run `wrangler deploy --env production`
+3. For client-side changes (HTML/JS): committing is **not** enough. The pages
+   are served from the `verumglobal.pages.dev` Pages project, which is not
+   built from this repo — the update must be published to that Pages project.
+4. For API changes (`worker/verum-rules.js`): **must** run
+   `wrangler deploy --env production`. Without `--env production` the Worker
+   deploys under a default name with no routes and no KV/AI bindings, so it
+   serves no traffic.
+5. For proxy/routing changes (`worker/verumglobal-static.js`): must be
+   deployed to the `verumglobal-static` Worker.
 
 ### Testing Deployment Locally
 ```bash
