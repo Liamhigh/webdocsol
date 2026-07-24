@@ -1814,9 +1814,24 @@ async function aiNarrateReport(findings, score, verdict) {
   var res = await aiApiPost('/api/v1/ai/narrate', metadata, 10000);
   if (!res || typeof res !== 'object') return null;
 
-  // Professional format: compile multiple sections into narrative
+  var sections = [];
+
+  // New plain-language format (preferred): uses simpler field names
+  if (res.summary || res.findings) {
+    if (res.summary) sections.push('SUMMARY\n\n' + res.summary);
+    if (res.findings) sections.push('WHAT THE EVIDENCE SHOWS\n\n' + res.findings);
+    if (res.contradictions) sections.push('CONTRADICTIONS AND INCONSISTENCIES\n\n' + res.contradictions);
+    if (res.impact) sections.push('IMPACT ON PEOPLE\n\n' + res.impact);
+    if (res.legalContext) sections.push('WHAT THE LAW SAYS\n\n' + res.legalContext);
+    if (res.evidence) sections.push('KEY EVIDENCE AND NEXT STEPS\n\n' + res.evidence);
+    if (res.seal) sections.push('SEAL AND VERIFICATION DETAILS\n\n' + res.seal);
+    if (res.limits) sections.push('IMPORTANT LIMITS\n\n' + res.limits);
+    if (sections.length > 0) return sections.join('\n\n' + '='.repeat(80) + '\n\n');
+  }
+
+  // Professional format (backward compatible): old field names
   if (res.executiveSummary && res.forensicNarrative) {
-    var sections = [];
+    sections = [];
     if (res.executiveSummary) sections.push('EXECUTIVE SUMMARY\n\n' + res.executiveSummary);
     if (res.forensicNarrative) sections.push('FORENSIC ANALYSIS\n\n' + res.forensicNarrative);
     if (res.credibilityAnalysis) sections.push('CREDIBILITY ASSESSMENT\n\n' + res.credibilityAnalysis);
