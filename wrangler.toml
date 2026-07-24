@@ -1,36 +1,48 @@
-name = "verum-omnis-rules"
+# Verum Omnis rules/API Worker
+#
+# WARNING — this config describes the API-ONLY Worker in worker/verum-rules.js.
+# That script serves /api/v1/*, /constitution.pdf and two /images/* paths, and
+# returns 404 "Unknown endpoint" for everything else (see the router at the
+# bottom of worker/verum-rules.js). It must never be deployed onto a Worker
+# that serves the static site, or the site goes dark.
+name = "verum-rules"
 main = "worker/verum-rules.js"
 compatibility_date = "2024-11-07"
 compatibility_flags = ["nodejs_compat"]
 
-# Build configuration
-[build]
-command = "echo 'No build required for worker'"
+# Single environment, deliberately.
+#
+# These bindings used to live only under [env.production]. Cloudflare Workers
+# Builds deploys with `npx wrangler versions upload` and no `--env` flag, so it
+# built the top-level environment, which had no bindings and no vars at all.
+# The resulting Worker had `env.RULES_KV === undefined`, so every KV-backed
+# route threw and was swallowed into a generic HTTP 500 by the catch-all in
+# `export default { fetch }`. Keeping one environment means an --env-less
+# deploy and an explicit one can no longer diverge.
 
-[env.production]
-name = "verum-omnis-rules-prod"
-routes = [
-  { pattern = "verumglobal.foundation/api/*", zone_name = "verumglobal.foundation" },
-  { pattern = "verumglobal.foundation/constitution.pdf", zone_name = "verumglobal.foundation" },
-  { pattern = "verumglobal.foundation/docs/*", zone_name = "verumglobal.foundation" },
-  { pattern = "verumglobal.foundation/images/*", zone_name = "verumglobal.foundation" }
-]
-
-# KV Namespace for rule storage (must be in env section)
-[[env.production.kv_namespaces]]
+[[kv_namespaces]]
 binding = "RULES_KV"
-id = "3ecf5dc4e00c45b89f3e2d7c1b4a2e9f"
-preview_id = "4fd6a8d1b2e3c4f5a6b7c8d9e0f1a2b3"
+# verum-rules-kv. The previous value (3ecf5dc4e00c45b89f3e2d7c1b4a2e9f) and its
+# preview_id were not real namespace IDs, so `wrangler deploy` against this
+# config could never have succeeded.
+id = "3e032b900b5344bd8785371cd1fd1810"
 
-# Workers AI (must be in env section)
-[env.production.ai]
+[ai]
 binding = "AI"
 
-# Environment variables (must be in env section)
-[env.production.vars]
+[vars]
 ENVIRONMENT = "production"
 SERVICE_VERSION = "1.5.1-20260721-mistral-enhanced"
 
-# Observability
-[env.production.observability]
+[observability]
 enabled = true
+
+# Routes are intentionally NOT declared here; they are managed in the Cloudflare
+# dashboard on the verum-rules Worker. Declaring them would let any deploy from
+# this repo re-point live production traffic for verumglobal.foundation.
+#
+# The routes this Worker is expected to answer on:
+#   verumglobal.foundation/api/*
+#   verumglobal.foundation/constitution.pdf
+#   verumglobal.foundation/docs/*
+#   verumglobal.foundation/images/*

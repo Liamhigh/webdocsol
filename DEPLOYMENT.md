@@ -14,12 +14,18 @@ GitHub (liamhigh/webdocsol)
        ↓
    [main branch]
        ↓
-  wrangler deploy
+  wrangler deploy          (Cloudflare Workers Builds runs
+       ↓                    `npx wrangler versions upload`)
+  Worker: verum-rules
        ↓
-  Cloudflare Workers
-       ↓
-  verumglobal.foundation
+  verumglobal.foundation/api/*, /docs/*, /images/*, /constitution.pdf
 ```
+
+> **This repo deploys the API Worker only.** `worker/verum-rules.js` answers the
+> routes listed above and returns `404 not_found` for every other path. The
+> static site (`/`, `seal-document.html`, `verify.html`, …) is served by a
+> *different* Cloudflare project. Never point this repo's build at the Worker
+> that serves the site — doing so replaces the site with a 404-only API.
 
 ### Why Cloudflare Workers?
 
@@ -67,23 +73,31 @@ export CLOUDFLARE_API_TOKEN=<your-token-here>
 ### Step 3: Deploy to Production
 
 ```bash
-wrangler deploy --env production
+wrangler deploy
 ```
 
-**Output**: Should show:
-```
-✔ Deployed to production
-  https://verumglobal.foundation/
+Do **not** pass `--env production`. `wrangler.toml` deliberately defines a
+single, top-level environment. It previously kept all bindings under an
+`[env.production]` section while CI deployed without `--env`, which shipped a
+Worker with no `RULES_KV` binding and turned every KV-backed route into an
+HTTP 500. Verify before deploying — this must list the bindings, not
+`No bindings found`:
+
+```bash
+wrangler deploy --dry-run
 ```
 
 ### Step 4: Verify Deployment
 
 ```bash
-# Check the website is live
-curl -I https://verumglobal.foundation/seal-document.html
+# The API must answer, not 500. A 500 "internal_error" here almost always
+# means the deployed version is missing its RULES_KV binding.
+curl -sS https://verumglobal.foundation/api/v1/status
 
-# Verify forensic report functionality
-# (manual test: upload a document, seal with Forensic Analysis mode)
+# The static site must still be served by its own project, not by this Worker.
+# A 404 "Unknown endpoint" here means this API Worker has taken over the site.
+curl -sS -o /dev/null -w '%{http_code} %{content_type}\n' \
+  https://verumglobal.foundation/seal-document.html
 ```
 
 ## Configuration Files
@@ -92,15 +106,15 @@ curl -I https://verumglobal.foundation/seal-document.html
 
 Main configuration for Cloudflare Workers deployment:
 
-- **name**: `verum-omnis-rules` — Worker project name
+- **name**: `verum-rules` — Worker project name
 - **main**: `worker/verum-rules.js` — Entry point
-- **env.production**: Production environment settings
-  - **routes**: URL patterns served by this worker
-  - **kv_namespaces**: KV storage bindings (RULES_KV)
-  - **ai**: Workers AI binding for narrative generation
-  - **vars**: Environment variables (SERVICE_VERSION, ENVIRONMENT)
+- **kv_namespaces**: KV storage binding (`RULES_KV` → `verum-rules-kv`)
+- **ai**: Workers AI binding for narrative generation
+- **vars**: Environment variables (SERVICE_VERSION, ENVIRONMENT)
 
-**Production Routes:**
+**Production Routes** (managed in the Cloudflare dashboard, not in
+`wrangler.toml`, so that a deploy from this repo can never silently re-point
+live traffic):
 ```
 verumglobal.foundation/api/*
 verumglobal.foundation/constitution.pdf
@@ -108,7 +122,7 @@ verumglobal.foundation/docs/*
 verumglobal.foundation/images/*
 ```
 
-All other routes are served as static assets from Cloudflare's CDN.
+Every other path is served by a separate Cloudflare project, not by this repo.
 
 ## Static Assets
 
@@ -137,7 +151,7 @@ POST /api/v1/feedback/patterns — Anonymous pattern feedback
 
 ## Environment Variables
 
-Set in `wrangler.toml` under `[env.production.vars]`:
+Set in `wrangler.toml` under `[vars]`:
 
 | Variable | Purpose | Example |
 |----------|---------|---------|
@@ -147,7 +161,7 @@ Set in `wrangler.toml` under `[env.production.vars]`:
 ## KV Namespace
 
 **Binding**: `RULES_KV`  
-**ID**: `3ecf5dc4e00c45b89f3e2d7c1b4a2e9f`
+**ID**: `3e032b900b5344bd8785371cd1fd1810`
 
 Used for:
 - Caching forensic engine rules
@@ -166,19 +180,19 @@ Used for:
 ### Check Deployment Status
 
 ```bash
-wrangler deployments list --env production
+wrangler deployments list
 ```
 
 ### View Logs
 
 ```bash
-wrangler tail --env production
+wrangler tail
 ```
 
 ### Rollback to Previous Version
 
 ```bash
-wrangler deployments rollback --env production
+wrangler deployments rollback
 ```
 
 (Select from list of previous deployments)
@@ -187,7 +201,7 @@ wrangler deployments rollback --env production
 
 ```bash
 # Start Wrangler dev server
-wrangler dev --env production
+wrangler dev
 
 # Navigate to http://localhost:8787
 # Upload a document and test sealing flow
@@ -202,10 +216,13 @@ wrangler dev --env production
 **Solution**: Check `wrangler.toml` build step; ensure no unnecessary bundles are included.
 
 ### Issue: "KV namespace not found"
-**Solution**: Verify KV namespace ID in `wrangler.toml` matches Cloudflare dashboard.
+**Solution**: Verify the KV namespace ID in `wrangler.toml` against `wrangler kv namespace list`. `RULES_KV` must be `verum-rules-kv` (`3e032b900b5344bd8785371cd1fd1810`). The config previously carried an ID that existed in no account.
 
-### Issue: "Static assets returning 404"
-**Solution**: Check routes in `wrangler.toml`; ensure `verumglobal.foundation` zone is configured.
+### Issue: Every API route returns HTTP 500 `internal_error`
+**Solution**: The deployed version has no `RULES_KV` binding, so `env.RULES_KV.get()` throws and the catch-all in `worker/verum-rules.js` converts it to a generic 500. Run `wrangler deploy --dry-run` — if it prints `No bindings found`, the bindings are not reaching the deployed environment. Do not "fix" this by adding an `[env.*]` section; keep the config single-environment.
+
+### Issue: The site returns 404 `Unknown endpoint` instead of HTML
+**Solution**: This API Worker has been deployed onto the Worker that serves the static site. Roll that Worker back to its last pre-overwrite version in the Cloudflare dashboard, then re-point this repo's Workers Build at `verum-rules`.
 
 ## Monitoring & Observability
 
@@ -213,7 +230,7 @@ wrangler dev --env production
 
 1. Go to https://dash.cloudflare.com/
 2. Select `verumglobal.foundation` zone
-3. Navigate to **Workers & Pages** → **verum-omnis-rules-prod**
+3. Navigate to **Workers & Pages** → **verum-rules**
 
 **Metrics**:
 - Request count & latency
@@ -226,7 +243,7 @@ wrangler dev --env production
 Real-time logs via Wrangler:
 
 ```bash
-wrangler tail --env production --format pretty
+wrangler tail --format pretty
 ```
 
 ## Future Improvements
@@ -241,20 +258,27 @@ wrangler tail --env production --format pretty
 
 ### Key Context
 - This site is **live at Cloudflare** using **Cloudflare Workers**
-- **Deployment method**: `wrangler deploy --env production`
+- **Deployment method**: `wrangler deploy` — never with `--env`
 - **API token required**: Set `CLOUDFLARE_API_TOKEN` environment variable
-- **Static assets**: Served by Cloudflare CDN (no build step)
-- **Worker code**: `worker/verum-rules.js` (routes API requests)
+- **Worker code**: `worker/verum-rules.js` — an **API-only** Worker. It handles
+  `/api/v1/*`, `/constitution.pdf`, `/docs/*` and two `/images/*` paths, and
+  returns `404 not_found` for everything else.
+- **This repo does not deploy the static site.** The HTML at the top level of
+  this repo is served by a separate Cloudflare project. Deploying this
+  `wrangler.toml` onto that project takes the whole site down.
 
 ### Before Making Changes
-1. Review `wrangler.toml` for current routes & bindings
+1. Review `wrangler.toml` for current bindings; routes live in the dashboard
 2. Check `DEPLOYMENT.md` (this file) for deployment process
 3. For client-side changes (HTML/JS): no deployment needed (Cloudflare caches)
-4. For API changes (worker/): **must** run `wrangler deploy --env production`
+4. For API changes (worker/): **must** run `wrangler deploy`
+5. Run `npm test` and `npm run check` before deploying
+6. Never move bindings into an `[env.*]` section. CI deploys without `--env`,
+   so anything under a named environment is silently dropped from the build.
 
 ### Testing Deployment Locally
 ```bash
-wrangler dev --env production
+wrangler dev
 # Opens http://localhost:8787 with live reload
 ```
 
