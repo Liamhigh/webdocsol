@@ -1246,8 +1246,8 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     cover.drawText('Seal: ' + sealId + '  |  verumglobal.foundation', { x: cx-100, y: ph*0.03, size: 9, font: helv, color: rgb(0.36, 0.42, 0.48) });
   }
 
-  const chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
-  const chainStr = chainIds.length > 0 ? '|CHAIN:' + chainIds.join(',') : '';
+  var chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
+  var chainStr = chainIds.length > 0 ? '|CHAIN:' + chainIds.join(',') : '';
 
   try { pdf.setTitle(selectedFile ? selectedFile.name : 'Sealed Document'); } catch(e) {}
   try { pdf.setAuthor('Verum Omnis'); } catch(e) {}
