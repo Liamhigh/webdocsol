@@ -1051,6 +1051,15 @@ async function build(opts) {
   var reference = identity.reference ||
     ('VO-WEB-' + fmtDateStamp(generatedAt) + '-' + (doc0.sealId ? String(doc0.sealId).replace(/^VO-/, '').substring(8, 12) : voDeterministicRefHex(doc0, generatedAt)));
 
+  console.log('[VerumReport.build] Starting build', {
+    findings_obj_provided: !!opts.findings,
+    findings_count: (opts.findings?.findings?.length) || 0,
+    findings_array_present: Array.isArray(opts.findings?.findings),
+    is_clean: fr.clean,
+    score: fr.overallScore,
+    doc_name: doc0.name
+  });
+
   var PDFDocument = PDFLibRef.PDFDocument, StandardFonts = PDFLibRef.StandardFonts;
   var doc = await PDFDocument.create();
   var fonts = {
@@ -1195,6 +1204,12 @@ async function seal(reportBytes, sealOpts) {
   var sha512 = sealOpts.sha512 || '';
   var now = (sealOpts.timestamp || sealOpts.sealedAt) ? new Date(sealOpts.timestamp || sealOpts.sealedAt) : new Date();
   var ts = now.toISOString().replace('T', ' ').substring(0, 19) + ' UTC';
+
+  console.log('[VerumReport.seal] Starting seal process', {
+    report_bytes: reportBytes?.length,
+    seal_id: sealId,
+    has_qr: !!sealOpts.qrDataURL
+  });
 
   var pdf = await PDFDocument.load(reportBytes);
   var helv = await pdf.embedFont(StandardFonts.Helvetica);

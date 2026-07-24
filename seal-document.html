@@ -1811,8 +1811,18 @@ async function aiNarrateReport(findings, score, verdict) {
   var metadata = { findings: findings, score: score, verdict: verdict };
   if (gpsCoords) { metadata.gps = gpsCoords.lat + ',' + gpsCoords.lng; if (gpsCoords.accuracy) metadata.gpsAccuracy = Math.round(gpsCoords.accuracy) + 'm'; }
   if (deviceInfo) { metadata.device = deviceInfo; }
+  console.log('[VO-AI-NARRATE] Requesting AI narrative for', findings?.length || 0, 'findings');
   var res = await aiApiPost('/api/v1/ai/narrate', metadata, 10000);
-  if (!res || typeof res !== 'object') return null;
+  console.log('[VO-AI-NARRATE] Received response:', {
+    is_object: typeof res === 'object',
+    has_summary: !!res?.summary,
+    has_findings: !!res?.findings,
+    has_legacy_narrative: !!res?.narrative
+  });
+  if (!res || typeof res !== 'object') {
+    console.warn('[VO-AI-NARRATE] Invalid response, returning null');
+    return null;
+  }
 
   var sections = [];
 
@@ -2183,11 +2193,26 @@ async function runSealingPipeline() {
   try {
     if (sealMode === 'forensic' && window.VerumReport && typeof window.VerumReport.build === 'function') {
       updateStep(7, 'processing', 'Building forensic report...');
+      console.log('[VO-REPORT-DEBUG] Starting forensic report build', {
+        sealMode: sealMode,
+        verum_report_available: !!window.VerumReport,
+        build_fn_available: typeof window.VerumReport.build,
+        findings_count: reportFraudResult?.findings?.length,
+        findings_is_array: Array.isArray(reportFraudResult?.findings)
+      });
+
       // AI classification (may be null -- classify endpoint is optional/rolling out).
       // aboutFraud:true suppresses serial-pattern LABELS; corroborated labels need
       // >=2 independent severity>=3 findings, else they demote to weak signals.
       var classification = _pipelineClassification;
       var serialInfo = getSerialLabelInfo(reportFraudResult && reportFraudResult.findings, !!(classification && classification.aboutFraud === true));
+
+      console.log('[VO-REPORT-DEBUG] Build options prepared', {
+        serial_info_suppressed: serialInfo.suppressed,
+        ai_narrative_present: !!aiNarrativeText,
+        ai_review_applied: aiReviewInfo?.applied
+      });
+
       var reportBytes = await window.VerumReport.build({
         findings: reportFraudResult,
         documents: [{
@@ -2214,6 +2239,12 @@ async function runSealingPipeline() {
         ots: { submitted: !!(otsResult && otsResult.success), calendar: otsResult && otsResult.calendar ? otsResult.calendar : null },
         images: { watermark: watermarkBytes }
       });
+
+      console.log('[VO-REPORT-DEBUG] Report PDF built successfully', {
+        report_bytes: reportBytes?.length,
+        is_uint8array: reportBytes instanceof Uint8Array
+      });
+
       var rSha512 = await computeSHA512(reportBytes);
       var rSealId = 'VO-' + rSha512.substring(0, 12).toUpperCase();
       var rOtsDigestHex = await computeSHA256(new TextEncoder().encode(rSha512));
@@ -2226,21 +2257,45 @@ async function runSealingPipeline() {
       rMeta.report = true;
       var rQrContent = 'https://verumglobal.foundation/verify.html?h=' + rSha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(rMeta, null))));
       var rQr = await generateQRDataURL(rQrContent, 400);
+
+      console.log('[VO-REPORT-DEBUG] About to seal report', {
+        seal_id: rSealId,
+        report_size_kb: (reportBytes?.length / 1024).toFixed(2)
+      });
+
       var rSealedBytes = await window.VerumReport.seal(reportBytes, {
         sealId: rSealId,
         sha512: rSha512,
         qrDataURL: rQr,
         sourceName: selectedFile.name
       });
+
+      console.log('[VO-REPORT-DEBUG] Report sealed successfully', {
+        sealed_size_kb: (rSealedBytes?.length / 1024).toFixed(2),
+        size_increase_bytes: (rSealedBytes?.length - reportBytes?.length)
+      });
+
       reportPack = { bytes: rSealedBytes, sealId: rSealId, sha512: rSha512, ots: rOts };
+      window._voReportPack = reportPack;
+      console.log('[VO-REPORT-DEBUG] Report pack created and stored');
       updateStep(7, 'complete');
+    } else {
+      console.log('[VO-REPORT-DEBUG] Report build skipped', {
+        sealMode_is_forensic: sealMode === 'forensic',
+        verum_report_exists: !!window.VerumReport,
+        build_fn_exists: typeof window.VerumReport?.build === 'function'
+      });
     }
   } catch (repErr) {
-    console.warn('Forensic report generation failed (document seal unaffected):', repErr);
+    console.error('[VO-REPORT-DEBUG] Report generation failed:', {
+      error_message: repErr?.message,
+      error_name: repErr?.name,
+      stack_preview: repErr?.stack?.substring(0, 300)
+    });
     reportPack = null;
+    window._voReportPack = reportPack;
     updateStep(7, 'complete');
   }
-  window._voReportPack = reportPack;
 
   showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, fraudResult);
 
