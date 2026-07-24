@@ -1,0 +1,13 @@
+{
+  "name": "webdocsol",
+  "version": "1.2.5",
+  "private": true,
+  "description": "Verum Omnis Document Sealing & Verification Standard — static site, Cloudflare Worker, and forensic engine.",
+  "scripts": {
+    "test": "node tests/run-all.js",
+    "test:forensic": "node tests/forensic-engine.test.js",
+    "test:ots": "node tests/ots-proof.test.js",
+    "test:worker": "node tests/worker.test.mjs",
+    "check": "node --check forensic-engine.js && node --check forensic-engine-page.js && node --check forensic-report.js && node --check ots-proof.js && node --check worker/verum-rules.js"
+  }
+}
