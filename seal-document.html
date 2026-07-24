@@ -911,7 +911,7 @@ async function detectCommercialDocument(pdfBytes) {
   // Legal/regulatory keywords (weighted: 1 point)
   const legalKeywords = ['vat','vat number','tax number','tin','registration number','bbbee','bee certificate','bee level','bank account','account number','swift','iban','routing number','director','managing director','ceo','cfo','coo','board of directors','shareholder','annual report','financial statement','balance sheet','profit and loss','income statement','audit','audited','sars','company registration','ck number','enterprise number'];
   for (const kw of legalKeywords) {
-    if (textLower.includes(kw)) legalKeywords += 1;
+    if (textLower.includes(kw)) legalMatches += 1;
   }
 
   // Regulatory keywords (weighted: 2 points)
