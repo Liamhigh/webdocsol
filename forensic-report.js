@@ -29,8 +29,13 @@ if (!PDFLibRef) {
     },
     _error: 'pdf-lib (PDFLib) is required but not available - network/proxy may be blocking unpkg.com'
   };
-  // Return early - do NOT throw, just set error stubs and continue
-  // This allows the main script to continue and handle the error gracefully
+  // Return early - do NOT throw, just leave the error stubs in place.
+  // The `return` is load-bearing: without it execution fell through to
+  // `PDFLibRef.rgb` below and threw "Cannot read properties of null (reading
+  // 'rgb')", which aborted the rest of this module. The stubs survived, so
+  // callers got a confusing top-level TypeError in the console instead of the
+  // intended "pdf-lib not loaded" rejection from VerumReport.build().
+  return;
 }
 
 // ---------------- palette / geometry ----------------
