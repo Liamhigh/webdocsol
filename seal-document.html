@@ -2190,9 +2190,19 @@ async function runSealingPipeline() {
 
   // Step 9 (optional, FORENSIC ANALYSIS MODE only): sealed forensic report -- NEVER breaks the seal flow
   var reportPack = null;
+  window._voReportDebug = {
+    sealMode: sealMode,
+    verum_report_available: !!window.VerumReport,
+    build_fn_available: typeof window.VerumReport?.build,
+    findings_count: reportFraudResult?.findings?.length,
+    findings_is_array: Array.isArray(reportFraudResult?.findings),
+    ai_review_info: aiReviewInfo,
+    timestamp: new Date().toISOString()
+  };
   try {
     if (sealMode === 'forensic' && window.VerumReport && typeof window.VerumReport.build === 'function') {
       updateStep(7, 'processing', 'Building forensic report...');
+      window._voReportDebug.stage = 'BUILDING';
       console.log('[VO-REPORT-DEBUG] Starting forensic report build', {
         sealMode: sealMode,
         verum_report_available: !!window.VerumReport,
@@ -2315,6 +2325,23 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     document.getElementById('sealedHashDisplay').textContent = window._voSealedFileHash;
     sealedHashRow.style.display = 'block';
   } else if (sealedHashRow) { sealedHashRow.style.display = 'none'; }
+
+  // Show forensic report debug info if report wasn't generated
+  if (window._voReportDebug && !window._voReportPack) {
+    var debugPanel = document.createElement('div');
+    debugPanel.style.cssText = 'background:rgba(239,68,68,0.08);border:1px solid rgba(239,68,68,0.35);border-radius:12px;padding:20px;margin:16px 0;';
+    var debugHTML = '<div style="color:#FF6B6B;font-weight:bold;margin-bottom:12px;">⚠ Forensic Report Not Generated</div>';
+    debugHTML += '<div style="font-size:12px;color:#D5D8DD;font-family:monospace;line-height:1.6;">';
+    debugHTML += 'sealMode="' + (window._voReportDebug.sealMode || 'undefined') + '" (expected: "forensic")<br>';
+    debugHTML += 'VerumReport.build available: ' + window._voReportDebug.build_fn_available + '<br>';
+    debugHTML += 'Findings count: ' + window._voReportDebug.findings_count + '<br>';
+    debugHTML += 'AI review info: ' + JSON.stringify(window._voReportDebug.ai_review_info).substring(0,80) + '<br>';
+    debugHTML += 'Stage: ' + (window._voReportDebug.stage || 'UNKNOWN') + '<br>';
+    debugHTML += 'Timestamp: ' + window._voReportDebug.timestamp;
+    debugHTML += '</div>';
+    debugPanel.innerHTML = debugHTML;
+    document.querySelector('.results') && document.querySelector('.results').appendChild(debugPanel);
+  }
 
   // Forensic indicators panel (forensic analysis mode only) -- deliberately
   // de-alarmed: neutral gold/navy presentation, "indicator" language throughout,
