@@ -1,5 +1,42 @@
 # Deployment Guide — Verum Omnis Document Sealing & Forensic Analysis
 
+> ## ⚠️ HOW THIS SITE IS ACTUALLY SERVED (read first — prevents regressions)
+>
+> The **static site** (`seal-document.html`, `index.html`, `forensic-report.js`,
+> `forensic-engine-page.js`, `ots-proof.js`, …) is served by **Cloudflare
+> Pages**, project **`verumglobal`**:
+>
+> - **Production branch**: `main`, **automatic deployments enabled**. Merging to
+>   `main` auto-deploys. There is no manual step for the static site.
+> - **Pages custom domains** (all must point *directly* at the Pages project):
+>   `verumglobal.foundation`, `www.verumglobal.foundation`, `verumglobal.pages.dev`.
+>
+> The **API** (`/api/*`, `/constitution.pdf`, `/docs/*`, `/images/*`) is served
+> by the **`verum-rules`** Worker (`worker/verum-rules.js`, config in
+> `wrangler.toml`). Deploy that with `wrangler deploy --env production`. This is
+> the *only* thing `wrangler deploy` touches — it does **not** deploy the static
+> site.
+>
+> ### 🚫 The `verumglobal-static` worker must NOT intercept the apex domain
+>
+> A legacy Worker named **`verumglobal-static`** exists that proxies the apex
+> `verumglobal.foundation` to `verumglobal.pages.dev`. When a Worker **route**
+> binds it to `verumglobal.foundation/*`, the apex is served through that proxy
+> **instead of** directly by Pages — and it served **stale forensic-report.js**,
+> so the apex produced no forensic report while `www.` (served directly by Pages)
+> worked. **Fix / guard:** the apex must be served *directly by Pages*, exactly
+> like `www.`. Remove the `verumglobal-static` route from the apex (or delete the
+> worker). Do not reintroduce an apex proxy worker.
+>
+> ### ✅ Regression check after ANY deploy or DNS/route change
+>
+> `verumglobal.foundation` and `www.verumglobal.foundation` must serve
+> **byte-identical, current** assets. Quick check — the cache-bust version in
+> both pages' `<script src="/forensic-report.js?v=...">` tags must match the repo,
+> and on the live page the debug panel must show `VerumReport.build available:
+> function` (not `undefined`). If the apex differs from `www.`, an apex proxy
+> worker has crept back in.
+
 ## Hosting & Infrastructure
 
 **Current Host**: [Cloudflare Workers](https://workers.cloudflare.com/)  
