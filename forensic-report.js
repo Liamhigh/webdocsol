@@ -17,12 +17,20 @@
 var PDFLibRef = global.PDFLib || (typeof require === 'function' ? require('pdf-lib') : null);
 if (!PDFLibRef) {
   console.error('[VerumReport] FATAL: pdf-lib not available. global.PDFLib =', global.PDFLib);
+  console.error('[VerumReport] Setting error stubs and returning gracefully');
   global.VerumReport = {
-    build: function() { return Promise.reject(new Error('pdf-lib not loaded')); },
-    seal: function() { return Promise.reject(new Error('pdf-lib not loaded')); },
-    _error: 'pdf-lib (PDFLib) is required but not available'
+    build: function() {
+      console.error('[VerumReport.build] ERROR: pdf-lib library is not loaded. Check if unpkg.com CDN is accessible.');
+      return Promise.reject(new Error('pdf-lib not loaded - CDN may be blocked by network proxy'));
+    },
+    seal: function() {
+      console.error('[VerumReport.seal] ERROR: pdf-lib library is not loaded.');
+      return Promise.reject(new Error('pdf-lib not loaded - CDN may be blocked by network proxy'));
+    },
+    _error: 'pdf-lib (PDFLib) is required but not available - network/proxy may be blocking unpkg.com'
   };
-  throw new Error('VerumReport: pdf-lib (PDFLib) is required');
+  // Return early - do NOT throw, just set error stubs and continue
+  // This allows the main script to continue and handle the error gracefully
 }
 
 // ---------------- palette / geometry ----------------

@@ -524,20 +524,38 @@
 
 </div>
 
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" onload="window._pdfLibLoaded=true;" onerror="window._pdfLibError=true;"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onload="window._qrCodeLoaded=true;" onerror="window._qrCodeError=true;"></script>
 <script>
 // Check if CDN scripts loaded for diagnostics
 window._cdrReady = {
   pdfLib: typeof window.PDFLib !== 'undefined',
   qrCode: typeof window.QRCode !== 'undefined',
+  pdfLibLoadEvent: window._pdfLibLoaded || false,
+  pdfLibError: window._pdfLibError || false,
+  qrCodeLoadEvent: window._qrCodeLoaded || false,
+  qrCodeError: window._qrCodeError || false,
   timestamp: new Date().toISOString()
 };
 if (!window._cdrReady.pdfLib) {
-  console.error('[SEAL-FLOW] WARNING: PDFLib (pdf-lib) failed to load from CDN at ' + window._cdrReady.timestamp);
+  console.error('[SEAL-FLOW] WARNING: PDFLib (pdf-lib) failed to load from CDN', window._cdrReady);
 }
+console.log('[SEAL-FLOW] CDN Status:', window._cdrReady);
 </script>
 <script src="/forensic-report.js?v=1.4.1-20260720"></script>
+<script>
+// After forensic-report.js loads, verify VerumReport is available
+console.log('[SEAL-FLOW] VerumReport available?', typeof window.VerumReport !== 'undefined');
+if (window.VerumReport) {
+  console.log('[SEAL-FLOW] VerumReport.build available?', typeof window.VerumReport.build);
+  console.log('[SEAL-FLOW] VerumReport.seal available?', typeof window.VerumReport.seal);
+  if (window.VerumReport._error) {
+    console.error('[SEAL-FLOW] VerumReport error stub active:', window.VerumReport._error);
+  }
+} else {
+  console.error('[SEAL-FLOW] CRITICAL: VerumReport object is NOT set on window');
+}
+</script>
 <script src="/forensic-engine-page.js?v=1.4.1-20260720"></script>
 <script src="/ots-proof.js?v=1.4.1-20260720"></script>
 <script>
