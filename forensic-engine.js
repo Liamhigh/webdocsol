@@ -1420,14 +1420,14 @@ async function runForensicEngine(pdfBytes, pdfDoc) {
     } catch(e) {
       console.warn('Detector ' + (d+1) + ' failed:', e.message);
     }
-    // Yield to browser every 8 detectors to prevent UI freeze
-    if ((d + 1) % 8 === 0) {
-      await new Promise(function(resolve) { setTimeout(resolve, 0); });
+    // Yield to browser every 4 detectors to prevent UI freeze
+    if ((d + 1) % 4 === 0) {
+      await new Promise(function(resolve) { setTimeout(resolve, 10); });
     }
   }
 
   // Yield before catch-all detector
-  await new Promise(function(resolve) { setTimeout(resolve, 0); });
+  await new Promise(function(resolve) { setTimeout(resolve, 15); });
 
   // Run catch-all detector (needs other findings)
   try {
@@ -1436,13 +1436,16 @@ async function runForensicEngine(pdfBytes, pdfDoc) {
   } catch(e) {}
 
   // Yield before serial pattern detection
-  await new Promise(function(resolve) { setTimeout(resolve, 0); });
+  await new Promise(function(resolve) { setTimeout(resolve, 15); });
 
   // Run serial pattern detection
   try {
     var serialFindings = detectSerialPatterns(textBlocks);
     allFindings = allFindings.concat(serialFindings);
   } catch(e) {}
+
+  // Final yield to ensure UI can process
+  await new Promise(function(resolve) { setTimeout(resolve, 10); });
 
   // Calculate overall score
   var totalScore = 0;
