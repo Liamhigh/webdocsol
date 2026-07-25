@@ -21,10 +21,36 @@ let r = await worker.fetch(mk('/api/v1/status', 'OPTIONS'), env, {});
 ok(r.status === 204, 'OPTIONS preflight returns 204');
 ok(r.headers.get('access-control-allow-origin') !== null, 'OPTIONS response carries CORS header');
 
-r = await worker.fetch(mk('/nope'), env, {});
-ok(r.status === 404, 'unknown path returns 404');
+r = await worker.fetch(mk('/api/v1/nope'), env, {});
+ok(r.status === 404, 'unknown API path returns 404');
 const j = await r.json().catch(() => null);
 ok(j && j.error === 'not_found', '404 body has error=not_found');
+
+// A non-API path must be served as the website, NOT answered with a JSON 404.
+// This Worker gets deployed by CI onto a Worker owning the site's routes, so
+// 404ing `/` here takes the entire site down -- it did, on 2026-07-25.
+{
+  const realFetch = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (req) => {
+    seen.push(typeof req === 'string' ? req : req.url);
+    return new Response('<!DOCTYPE html><title>site</title>', {
+      status: 200, headers: { 'content-type': 'text/html' }
+    });
+  };
+  try {
+    r = await worker.fetch(mk('/'), env, {});
+    ok(r.status === 200, 'site root is served, not 404 (' + r.status + ')');
+    ok((r.headers.get('content-type') || '').includes('text/html'), 'site root returns HTML');
+    ok(seen.some(u => u.includes('verumglobal.pages.dev')), 'site root proxies to the Pages origin');
+
+    seen.length = 0;
+    r = await worker.fetch(mk('/dashboard'), env, {});
+    ok(seen.some(u => u.includes('/dashboard.html')), 'extensionless page maps to its .html file');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
 
 r = await worker.fetch(mk('/api/v1/ai/classify', 'GET'), env, {});
 ok(r.status === 405, 'GET on a POST-only endpoint returns 405');
