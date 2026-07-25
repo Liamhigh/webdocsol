@@ -519,28 +519,43 @@ async function callAi(env, model, system, userPayload, opts) {
     throw new Error('Workers AI binding "AI" is not configured on this service.');
   }
   const o = opts || {};
-  const run = env.AI.run(model, {
-    messages: [
-      { role: 'system', content: system },
-      { role: 'user', content: userPayload }
-    ],
-    max_tokens: o.maxTokens || 1024,
-    temperature: (o.temperature === undefined) ? 0 : o.temperature
-  });
-  const res = await withTimeout(run, o.timeoutMs || AI_TIMEOUT_MS, 'Workers AI call');
-  if (!res) throw new Error('empty response from model');
-  // The binding returns a string for prose replies but may return an already
-  // parsed object when the model emits valid JSON — normalise both to text.
-  let text;
-  if (typeof res.response === 'string') {
-    text = res.response;
-  } else if (res.response !== null && res.response !== undefined) {
-    try { text = JSON.stringify(res.response); } catch { text = ''; }
-  } else {
-    text = '';
+  // Try the primary model, then any fallback. The 70B strong model can be
+  // throttled, over the account's neuron budget, or slow enough to time out,
+  // while the 8B fast model still answers -- so narrate/assess degrade to the
+  // smaller model instead of failing outright ("service unavailable"). A
+  // lower-quality narrative beats no narrative.
+  const models = o.fallbackModel && o.fallbackModel !== model ? [model, o.fallbackModel] : [model];
+  let lastErr = new Error('no model attempted');
+  for (let i = 0; i < models.length; i++) {
+    try {
+      const run = env.AI.run(models[i], {
+        messages: [
+          { role: 'system', content: system },
+          { role: 'user', content: userPayload }
+        ],
+        max_tokens: o.maxTokens || 1024,
+        temperature: (o.temperature === undefined) ? 0 : o.temperature
+      });
+      const res = await withTimeout(run, o.timeoutMs || AI_TIMEOUT_MS, 'Workers AI call');
+      if (!res) throw new Error('empty response from model');
+      // The binding returns a string for prose replies but may return an
+      // already parsed object when the model emits valid JSON — normalise both.
+      let text;
+      if (typeof res.response === 'string') {
+        text = res.response;
+      } else if (res.response !== null && res.response !== undefined) {
+        try { text = JSON.stringify(res.response); } catch { text = ''; }
+      } else {
+        text = '';
+      }
+      if (!text.trim()) throw new Error('model returned no text');
+      return text;
+    } catch (e) {
+      lastErr = e;
+      // fall through to the next model
+    }
   }
-  if (!text.trim()) throw new Error('model returned no text');
-  return text;
+  throw lastErr;
 }
 
 // Models sometimes wrap JSON in prose or code fences. Extract the outermost
@@ -755,7 +770,7 @@ async function handleAiAssess(request, env) {
 
   try {
     const text = await callAi(env, AI_MODEL_STRONG, ASSESS_SYSTEM, JSON.stringify({ findings }),
-      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 1500, temperature: 0 });
+      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 1500, temperature: 0, fallbackModel: AI_MODEL_FAST });
     const parsed = extractJsonObject(text);
     if (!parsed || !Array.isArray(parsed.verdicts)) {
       throw new Error('model reply has no verdicts array');
@@ -870,7 +885,7 @@ async function handleAiNarrate(request, env) {
   try {
     const text = await callAi(env, AI_MODEL_STRONG, NARRATE_SYSTEM,
       JSON.stringify({ ...input, findingsKept: kept }),
-      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 4096, temperature: 0.2 });
+      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 4096, temperature: 0.2, fallbackModel: AI_MODEL_FAST });
     const parsed = extractJsonObject(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('model reply is not a JSON object');
