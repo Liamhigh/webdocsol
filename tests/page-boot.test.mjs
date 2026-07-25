@@ -84,8 +84,9 @@ for (const page of PAGES) {
   const html = readFileSync('seal-document.html', 'utf8');
   const meta = html.match(/name="vo-seal-build" content="(\d+\.\d+\.\d+-\d+)[^"]*"/);
   ok(Boolean(meta), 'seal-document.html declares a vo-seal-build version');
+  // The forensic scripts are now inlined (see inline-scripts.test.mjs), so
+  // there may be no external ?v= tags left. Any that remain must still match.
   const vs = [...html.matchAll(/\?v=([0-9.]+-\d+)"/g)].map((m) => m[1]);
-  ok(vs.length >= 3, `expected 3+ versioned script tags, found ${vs.length}`);
   for (const v of vs) {
     ok(v === meta?.[1],
       `script cache key ?v=${v} out of sync with vo-seal-build ${meta?.[1]}`);
