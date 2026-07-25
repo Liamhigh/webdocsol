@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.5.5-20260725-forensic-script-retry">
+<meta name="vo-seal-build" content="1.5.6-20260725-ai-timeout">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -553,10 +553,10 @@ if (!window._cdrReady.pdfLib) {
   console.error('[SEAL-FLOW] WARNING: PDFLib (pdf-lib) failed to load from CDN at ' + window._cdrReady.timestamp);
 }
 </script>
-<script src="/forensic-report.js?v=1.5.5-20260725"></script>
-<script src="/forensic-engine-page.js?v=1.5.5-20260725"></script>
-<script src="/ots-proof.js?v=1.5.5-20260725"></script>
-<script src="/pdf-encrypt.js?v=1.5.5-20260725"></script>
+<script src="/forensic-report.js?v=1.5.6-20260725"></script>
+<script src="/forensic-engine-page.js?v=1.5.6-20260725"></script>
+<script src="/ots-proof.js?v=1.5.6-20260725"></script>
+<script src="/pdf-encrypt.js?v=1.5.6-20260725"></script>
 <script>
 // `PDFLib` unqualified throws ReferenceError when the script above fails to
 // load -- an undeclared identifier, unlike a property miss on window. That
@@ -1859,7 +1859,8 @@ async function aiAssessFindings(findings) {
     if (copy.id === undefined || copy.id === null) copy.id = i;
     return copy;
   });
-  var res = await aiApiPost('/api/v1/ai/assess', { findings: assessed }, 10000);
+  // Assess also runs on the strong model; give it the server's 30 s, not 10.
+  var res = await aiApiPost('/api/v1/ai/assess', { findings: assessed }, 35000);
   if (!res || !Array.isArray(res.verdicts)) return null;
   var dropIds = {}, dropIdx = {};
   for (var i = 0; i < res.verdicts.length; i++) {
@@ -1902,7 +1903,11 @@ async function aiNarrateReport(findings, score, verdict) {
   if (gpsCoords) { metadata.gps = gpsCoords.lat + ',' + gpsCoords.lng; if (gpsCoords.accuracy) metadata.gpsAccuracy = Math.round(gpsCoords.accuracy) + 'm'; }
   if (deviceInfo) { metadata.device = deviceInfo; }
   console.log('[VO-AI-NARRATE] Requesting AI narrative for', findings?.length || 0, 'findings');
-  var res = await aiApiPost('/api/v1/ai/narrate', metadata, 10000);
+  // The narrative is drafted by the strong model (llama-70b) and routinely
+  // needs longer than the fast endpoints. The old 10 s client timeout aborted
+  // before it finished, so the narrative silently never appeared and the report
+  // fell back to raw findings ("AI review: NOT RUN"). Match the server's 30 s.
+  var res = await aiApiPost('/api/v1/ai/narrate', metadata, 35000);
   console.log('[VO-AI-NARRATE] Received response:', {
     is_object: typeof res === 'object',
     has_summary: !!res?.summary,
