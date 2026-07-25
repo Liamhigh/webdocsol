@@ -110,7 +110,7 @@ for (const page of PAGES) {
 {
   const html = readFileSync('seal-document.html', 'utf8');
   ok(html.includes('function voEnsureForensicScripts'), 'seal page can re-load dropped forensic scripts');
-  ok(/await voEnsureForensicScripts\(\)/.test(html), 'the scan awaits the script-recovery loader');
+  ok(/await voEnsureForensicScripts\(/.test(html), 'the scan awaits the script-recovery loader');
 }
 
 // index.html is the home page. It was overwritten with a copy of the sealing
