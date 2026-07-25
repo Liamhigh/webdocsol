@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.5.4-20260725-fewer-false-positives">
+<meta name="vo-seal-build" content="1.5.5-20260725-forensic-script-retry">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -553,10 +553,10 @@ if (!window._cdrReady.pdfLib) {
   console.error('[SEAL-FLOW] WARNING: PDFLib (pdf-lib) failed to load from CDN at ' + window._cdrReady.timestamp);
 }
 </script>
-<script src="/forensic-report.js?v=1.5.4-20260725"></script>
-<script src="/forensic-engine-page.js?v=1.5.4-20260725"></script>
-<script src="/ots-proof.js?v=1.5.4-20260725"></script>
-<script src="/pdf-encrypt.js?v=1.5.4-20260725"></script>
+<script src="/forensic-report.js?v=1.5.5-20260725"></script>
+<script src="/forensic-engine-page.js?v=1.5.5-20260725"></script>
+<script src="/ots-proof.js?v=1.5.5-20260725"></script>
+<script src="/pdf-encrypt.js?v=1.5.5-20260725"></script>
 <script>
 // `PDFLib` unqualified throws ReferenceError when the script above fails to
 // load -- an undeclared identifier, unlike a property miss on window. That
@@ -564,6 +564,45 @@ if (!window._cdrReady.pdfLib) {
 // below was never defined and the page rendered but did nothing. Read it off
 // window so a missing library degrades instead of freezing the UI.
 const { PDFDocument, rgb, StandardFonts } = window.PDFLib || {};
+
+// Self-healing loader for the same-origin forensic scripts. A dropped request
+// on a phone otherwise left runForensicEngine / VerumReport undefined and the
+// scan or report failed with no recovery. Re-inject any that did not load,
+// reusing the original tag's URL (so the ?v= version never drifts) with a
+// couple of retries and a cache-buster.
+function voLoadScript(src) {
+  return new Promise(function (resolve, reject) {
+    var s = document.createElement('script');
+    s.src = src; s.async = false;
+    s.onload = function () { resolve(); };
+    s.onerror = function () { reject(new Error('load failed: ' + src)); };
+    document.head.appendChild(s);
+  });
+}
+function voOriginalSrc(pathPart) {
+  var tags = document.querySelectorAll('script[src]');
+  for (var i = 0; i < tags.length; i++) {
+    var src = tags[i].getAttribute('src') || '';
+    if (src.indexOf(pathPart) !== -1) return src;
+  }
+  return pathPart;
+}
+async function voEnsureForensicScripts() {
+  var need = [];
+  if (typeof runForensicEngine === 'undefined') need.push('/forensic-engine-page.js');
+  if (!window.VerumReport) need.push('/forensic-report.js');
+  for (var i = 0; i < need.length; i++) {
+    var base = voOriginalSrc(need[i]);
+    for (var a = 0; a < 3; a++) {
+      try {
+        await voLoadScript(base + (base.indexOf('?') >= 0 ? '&' : '?') + 'retry=' + a);
+        break;
+      } catch (e) {
+        await new Promise(function (r) { setTimeout(r, 400 * (a + 1)); });
+      }
+    }
+  }
+}
 
 let selectedFile = null, sealType = 'private', otsProof = null, watermarkBytes = null;
 let gpsCoords = null, deviceInfo = null;
@@ -1651,6 +1690,11 @@ async function startSealing() {
       }
       updateStep('Fraud', 'processing', 'Loading PDF and extracting text...');
       try {
+        // The forensic scripts are same-origin <script> tags with no fallback.
+        // On a phone a single dropped request left runForensicEngine undefined
+        // and the whole scan failed with "runForensicEngine is not defined".
+        // Re-fetch any that did not arrive before the scan runs.
+        await voEnsureForensicScripts();
         var pdfDocForForensics = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
         _pipelinePageCount = pdfDocForForensics.getPageCount();
         updateStep('Fraud', 'processing', 'Scanning ' + _pipelinePageCount + ' page(s) - 37 contradiction detectors running...');
@@ -2263,6 +2307,10 @@ async function runSealingPipeline() {
     ai_review_info: aiReviewInfo,
     timestamp: new Date().toISOString()
   };
+  // Recover the report builder too if its script was the one that dropped.
+  if (sealMode === 'forensic' && (!window.VerumReport || typeof window.VerumReport.build !== 'function')) {
+    try { await voEnsureForensicScripts(); } catch (e) {}
+  }
   try {
     if (sealMode === 'forensic' && window.VerumReport && typeof window.VerumReport.build === 'function') {
       updateStep(7, 'processing', 'Building forensic report...');
