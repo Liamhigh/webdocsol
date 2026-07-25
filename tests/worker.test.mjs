@@ -65,6 +65,32 @@ r = await worker.fetch(mk('/api/v1/status'), {}, {});
 const body = await r.text();
 ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
 
+// Assets must be cacheable. The proxy previously appended a cache-buster and
+// no-store to EVERY response, so the 525 KB pdf-lib bundle was re-fetched from
+// origin on every page view and uncached anywhere. A dropped request then left
+// window.PDFLib undefined and killed the sealing pipeline.
+{
+  const realFetch = globalThis.fetch;
+  const seen = [];
+  globalThis.fetch = async (req) => {
+    seen.push(typeof req === 'string' ? req : req.url);
+    return new Response('x', { status: 200, headers: { 'content-type': 'application/javascript' } });
+  };
+  try {
+    let r = await worker.fetch(mk('/vendor/pdf-lib.min.js'), env, {});
+    const cc = r.headers.get('cache-control') || '';
+    ok(!/no-store/.test(cc), 'asset response is cacheable (' + cc + ')');
+    ok(!seen.some(u => u.includes('_cb=')), 'asset request carries no cache-buster');
+
+    seen.length = 0;
+    r = await worker.fetch(mk('/seal-document'), env, {});
+    ok(/no-store/.test(r.headers.get('cache-control') || ''), 'HTML stays uncached');
+    ok(seen.some(u => u.includes('_cb=')), 'HTML request is still cache-busted');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
+}
+
 console.log('\n[worker] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[worker] ALL GREEN');
