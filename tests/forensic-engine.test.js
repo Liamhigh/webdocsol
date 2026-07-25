@@ -48,7 +48,10 @@ const fires = (fn, input, type, name) => {
   t.ok(out.length > 0 && out.some(f => f.type === type), name + ' fires (' + out.length + ' findings)');
 };
 fires(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION, ['payment was paid', 'it was not paid'], 'CT01', 'D01 paid/not-paid');
-fires(DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY, ['Total R50,000.00', 'Actual R10,000.00'], 'CT02', 'D02 amount variance');
+// D02 compares a labelled quantity against itself across the document. The
+// same "Total" stated at two different values is the contradiction; two
+// different line items that merely differ in size are not.
+fires(DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY, ['Total R50,000.00', 'Total R10,000.00'], 'CT02', 'D02 amount variance');
 fires(DETECTORS.D03_DETECT_DATE_INCONSISTENCY, ['Signed 31/02/2024 by hand'], 'CT03', 'D03 impossible Feb date');
 fires(DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY, ['before the incident and also after the incident'], 'CT04', 'D04 temporal conflict');
 
@@ -72,6 +75,16 @@ const clean = ['This is a normal letter. Everything is consistent. Thank you for
 t.ok(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(clean).length === 0, 'D01 no false-positive on clean text');
 t.ok(DETECTORS.D03_DETECT_DATE_INCONSISTENCY(['Dated 15 March 2024']).length === 0, 'D03 no false-positive on valid date');
 t.ok(DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(clean).length === 0, 'D04 no false-positive on clean text');
+
+// An itemised invoice is not a contradiction. D02 used to compare every amount
+// against every other, so ordinary line items produced a finding per pair --
+// 739 of 742 findings on the repo's test document came from this one detector.
+t.ok(DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY(
+  ['Consulting R120,000.00', 'Travel R8,500.00', 'Licence fee R64,000.00']
+).length === 0, 'D02 no false-positive across unrelated line items');
+// One statement of a quantity cannot contradict anything.
+t.ok(DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY(['Total R50,000.00']).length === 0,
+  'D02 quiet when a label appears once');
 
 // ---- 4. Serial-pattern engine ----
 t.ok(Array.isArray(detectSerialPatterns([''])), 'detectSerialPatterns returns array on empty');
