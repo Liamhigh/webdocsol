@@ -1,4 +1,4 @@
-name = "verum-omnis-rules"
+name = "webdocsol"
 main = "worker/verum-rules.js"
 compatibility_date = "2024-11-07"
 compatibility_flags = ["nodejs_compat"]
