@@ -10,6 +10,7 @@ const suites = [
   'forensic-engine.test.js',
   'ots-proof.test.js',
   'worker.test.mjs',
+  'page-boot.test.mjs',
 ];
 
 let failed = 0;

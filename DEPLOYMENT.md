@@ -30,13 +30,26 @@ the page but the site looks the same".
                                     (Cloudflare Pages project)
 ```
 
-**The website's HTML does not come from this repository.** It is served by the
-Cloudflare Pages project `verumglobal.pages.dev`, which the `verumglobal-static`
-Worker proxies. This repo has no CI and no Pages build configuration, so
-committing to `main` does not update the Pages project and neither does
-`wrangler deploy`. Until a Pages deployment is wired up, changes to
-`index.html`, `seal-document.html`, `verify.html` and friends reach the public
-site only when that Pages project is updated separately.
+**The website's HTML is deployed by Cloudflare Pages, not by `wrangler`.** The
+Pages project is named `verumglobal`; it is connected to this repository
+through Cloudflare's Git integration (configured in the Cloudflare dashboard,
+which is why there is no workflow file in `.github/`). Pushes build there and
+are served at `verumglobal.pages.dev`, which the `verumglobal-static` Worker
+proxies onto the live domain.
+
+So `wrangler deploy` never updates a single HTML page — that path only ships
+`worker/verum-rules.js`. Conversely, a push that fails to build in Pages leaves
+the old HTML live with no error anywhere in this repo. Check the Pages project,
+not the Worker, when a page change does not appear.
+
+### Third-party scripts
+
+The pages load pdf-lib, qrcodejs and pdf.js from `/vendor/`, committed to this
+repo. They were previously loaded from unpkg, cdnjs and jsdelivr. Do not move
+them back: when one of those CDNs was slow or blocked, `pdf-lib` was undefined,
+and `const { PDFDocument } = PDFLib || {}` threw a ReferenceError that aborted
+the entire inline script — so every button on the sealing page silently stopped
+working. `tests/page-boot.test.mjs` guards against both regressions.
 
 ### Why Cloudflare Workers?
 
