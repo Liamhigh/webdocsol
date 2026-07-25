@@ -1027,8 +1027,28 @@ function secAiReview(ctx, data) {
   var narr = data.aiNarrative ? san(data.aiNarrative) : '';
   if (!ar && !narr) return;
   ctx.newBodyPage();
-  ctx.heading('AI REVIEW');
-  ctx.para('This section is present only because the user enabled the optional cloud AI review. The AI pass is advisory: it carries no scoring weight and all deterministic findings remain anchored to quoted text.', { size: 9.5, after: 10 });
+  // When a narrative exists it is the report's story and gets the prominent
+  // heading; the assess stats become a short trailer. With only assess stats
+  // (no narrative) the section stays titled "AI REVIEW".
+  ctx.heading(narr ? 'FORENSIC NARRATIVE' : 'AI REVIEW');
+  if (narr) {
+    ctx.para('Plain-language analysis of the findings below. Advisory: it carries no scoring weight, and every finding remains anchored to the quoted text in the sections that follow.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+    // Render the narrative as flowing paragraphs (split on blank lines and
+    // single newlines) so it reads like a report, not one dense block.
+    var paras = narr.split(/\n{2,}/);
+    for (var p = 0; p < paras.length; p++) {
+      var block = paras[p].replace(/\s*\n\s*/g, ' ').trim();
+      if (!block) continue;
+      // A short ALL-CAPS or "Heading:" line becomes a sub-heading.
+      if (block.length < 60 && (/^[A-Z0-9 ,'&()\-]+$/.test(block) || /^[A-Z][^.]{0,58}:$/.test(block))) {
+        ctx.subHeading(block.replace(/:$/, ''));
+      } else {
+        ctx.para(block, { size: 10.5, after: 8 });
+      }
+    }
+  } else {
+    ctx.para('This section is present only because the user enabled the optional cloud AI review. The AI pass is advisory: it carries no scoring weight and all deterministic findings remain anchored to quoted text.', { size: 9.5, after: 10 });
+  }
   if (ar) {
     var attemptedTxt = '';
     if (ar.attempted && ar.attempted !== ar.assessed) attemptedTxt = ' (of ' + ar.attempted + ' assessed)';
@@ -1036,11 +1056,7 @@ function secAiReview(ctx, data) {
     if ((ar.dropped | 0) > 0) parts += '; ' + (ar.dropped | 0) + ' dropped as unsupported';
     if ((ar.added | 0) > 0) parts += '; +' + (ar.added | 0) + ' additional AI-identified';
     parts += '.';
-    ctx.para(parts, { size: 9.5, after: 10 });
-  }
-  if (narr) {
-    ctx.box('AI NARRATIVE SUMMARY', [narr], { size: 9, titleColor: NAVY2 });
-    ctx.para('The AI narrative is advisory text generated from the finding set. It carries no scoring weight.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    ctx.para(parts, { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   }
 }
 
@@ -1123,12 +1139,17 @@ async function build(opts) {
 
   // 1. cover
   drawCover(ctx, data);
+  // The AI narrative is the human-readable "story" of the report. When present
+  // it leads, right after the executive summary, instead of being buried as an
+  // advisory footnote after the methodology. secAiReview returns early when no
+  // narrative/review exists, so nothing changes when AI review is off.
   // 2. TOC placeholder page (drawn last with real page numbers)
   var tocPage = doc.addPage([PW, PH]);
   ctx.drawWatermark(tocPage);
   ctx.drawHeader(tocPage);
   // 3-10. sections
   secExecSummary(ctx, data);
+  secAiReview(ctx, data);        // narrative story leads (no-op when AI review off)
   secEvidenceIndex(ctx, data);
   secMatrix(ctx, data);
   secSerial(ctx, data);
@@ -1136,7 +1157,6 @@ async function build(opts) {
   secDeclaration(ctx, data);
   secConstitution(ctx, data);
   secMethodology(ctx, data);
-  secAiReview(ctx, data);
   // draw TOC now that section page numbers are known
   drawToc(ctx, tocPage);
 
