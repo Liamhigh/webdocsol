@@ -75,6 +75,23 @@ for (const page of PAGES) {
     `${page}: boot script threw without pdf-lib (${threw && threw.message}) -- page would freeze`);
 }
 
+// The build version lives in four places in seal-document.html: the
+// vo-seal-build meta and three ?v= cache keys. They are edited by hand -- this
+// repo has no build step to substitute them, deliberately -- so this pins them
+// to each other. A ?v= that lags the meta means a stale cache key that can
+// serve an old (or poisoned) cached copy of that script.
+{
+  const html = readFileSync('seal-document.html', 'utf8');
+  const meta = html.match(/name="vo-seal-build" content="(\d+\.\d+\.\d+-\d+)[^"]*"/);
+  ok(Boolean(meta), 'seal-document.html declares a vo-seal-build version');
+  const vs = [...html.matchAll(/\?v=([0-9.]+-\d+)"/g)].map((m) => m[1]);
+  ok(vs.length >= 3, `expected 3+ versioned script tags, found ${vs.length}`);
+  for (const v of vs) {
+    ok(v === meta?.[1],
+      `script cache key ?v=${v} out of sync with vo-seal-build ${meta?.[1]}`);
+  }
+}
+
 // index.html is the home page. It was overwritten with a copy of the sealing
 // app in 4cb88ff to paper over a blank screen, which silently deleted the
 // site's front door -- `/` and `/seal-document` served the same thing.
