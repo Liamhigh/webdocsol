@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.5.2-20260725-pdf-encrypt-share">
+<meta name="vo-seal-build" content="1.5.3-20260725-share-fix">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -553,10 +553,10 @@ if (!window._cdrReady.pdfLib) {
   console.error('[SEAL-FLOW] WARNING: PDFLib (pdf-lib) failed to load from CDN at ' + window._cdrReady.timestamp);
 }
 </script>
-<script src="/forensic-report.js?v=1.5.2-20260725"></script>
-<script src="/forensic-engine-page.js?v=1.5.2-20260725"></script>
-<script src="/ots-proof.js?v=1.5.2-20260725"></script>
-<script src="/pdf-encrypt.js?v=1.5.2-20260725"></script>
+<script src="/forensic-report.js?v=1.5.3-20260725"></script>
+<script src="/forensic-engine-page.js?v=1.5.3-20260725"></script>
+<script src="/ots-proof.js?v=1.5.3-20260725"></script>
+<script src="/pdf-encrypt.js?v=1.5.3-20260725"></script>
 <script>
 // `PDFLib` unqualified throws ReferenceError when the script above fails to
 // load -- an undeclared identifier, unlike a property miss on window. That
@@ -2382,29 +2382,70 @@ async function runSealingPipeline() {
 // Reads window._voShareBytes/_voShareName/_voShareType set by showResults.
 // Hidden entirely where file sharing is unsupported, so desktop users just use
 // the download button and nothing looks broken.
+// Build a File from the share payload. window._voShareBytes may be a
+// Uint8Array; copy it so the underlying ArrayBuffer is never detached by a
+// previous share attempt.
+function voShareFile() {
+  if (!window._voShareBytes) return null;
+  try {
+    var copy = new Uint8Array(window._voShareBytes);
+    return new File([copy], window._voShareName, { type: window._voShareType });
+  } catch (e) { return null; }
+}
+
 function addShareButton() {
   var old = document.getElementById('shareSealedBtn');
   if (old) old.remove();
+  var hintOld = document.getElementById('shareHint');
+  if (hintOld) hintOld.remove();
+  // Show whenever the browser can share at all. We do NOT gate on
+  // canShare({files}) up front: on some Android builds it returns false even
+  // though the share sheet works, which is exactly what hid this button before.
   if (!window._voShareBytes || !navigator.share) return;
-  var probe;
-  try { probe = new File([window._voShareBytes], window._voShareName, { type: window._voShareType }); }
-  catch (e) { return; }
-  if (navigator.canShare && !navigator.canShare({ files: [probe] })) return;
   var grid = document.getElementById('downloadGrid');
   if (!grid) return;
+
   var btn = document.createElement('button');
   btn.id = 'shareSealedBtn';
   btn.type = 'button';
-  btn.className = 'download-btn';
-  btn.innerHTML = '&#128228; Share (WhatsApp, email, …)';
+  btn.className = 'download-btn primary';
+  btn.innerHTML = '&#128228; Share to WhatsApp, email, …';
+  var hint = document.createElement('div');
+  hint.id = 'shareHint';
+  hint.style.cssText = 'font-size:12px;color:#8ea3b5;margin:6px 0 4px;line-height:1.5;';
+  hint.textContent = 'Opens your phone’s share menu so you can send the file straight to WhatsApp, email or any app — no hunting for the download.';
+
   btn.addEventListener('click', function () {
-    var f;
-    try { f = new File([window._voShareBytes], window._voShareName, { type: window._voShareType }); }
-    catch (e) { return; }
-    navigator.share({ files: [f], title: window._voShareName, text: 'Sealed with Verum Omnis' })
-      .catch(function () { /* user dismissed the sheet -- nothing to do */ });
+    // navigator.share MUST be called synchronously in the click handler to keep
+    // the user-activation token; build the File first, no await before share.
+    var f = voShareFile();
+    if (!f) { fallbackDownload('Could not prepare the file to share.'); return; }
+    var data = { files: [f], title: window._voShareName, text: 'Sealed with Verum Omnis' };
+    if (navigator.canShare && !navigator.canShare(data)) {
+      // This device can't share files. Best we can do is hand back the download.
+      fallbackDownload('This browser can’t share files directly — the file has downloaded instead; attach it from your Downloads.');
+      return;
+    }
+    navigator.share(data).catch(function (err) {
+      // AbortError = the user closed the share sheet on purpose. Ignore it.
+      if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
+      fallbackDownload('Sharing didn’t work on this device — the file has downloaded instead.');
+    });
   });
-  grid.appendChild(btn);
+
+  function fallbackDownload(msg) {
+    try {
+      var a = document.createElement('a');
+      a.href = URL.createObjectURL(new Blob([new Uint8Array(window._voShareBytes)], { type: window._voShareType }));
+      a.download = window._voShareName;
+      document.body.appendChild(a); a.click(); a.remove();
+    } catch (e) {}
+    hint.style.color = '#D4A843';
+    hint.textContent = msg;
+  }
+
+  grid.insertBefore(btn, grid.firstChild);
+  grid.parentNode.insertBefore(hint, grid.nextSibling);
 }
 
 function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, forensicResult) {
