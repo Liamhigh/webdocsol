@@ -12,6 +12,7 @@ const suites = [
   'worker.test.mjs',
   'page-boot.test.mjs',
   'engine-perf.test.mjs',
+  'voice-crypto.test.mjs',
 ];
 
 let failed = 0;

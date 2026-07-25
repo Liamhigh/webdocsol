@@ -1,37 +1,39 @@
-name = "verum-omnis-rules"
+# Config for the Worker that Cloudflare Workers Builds deploys on every push
+# to main. The Worker is named "webdocsol" in the dashboard and owns the
+# verumglobal.foundation routes, so this script serves BOTH the API and (via
+# the static-proxy fallback in worker/verum-rules.js) the website.
+name = "webdocsol"
 main = "worker/verum-rules.js"
 compatibility_date = "2024-11-07"
 compatibility_flags = ["nodejs_compat"]
 
-# Build configuration
-[build]
-command = "echo 'No build required for worker'"
+# Single environment, deliberately.
+#
+# These bindings used to live under [env.production] only. Workers Builds
+# deploys with no --env flag, which builds the TOP-LEVEL environment -- so the
+# deployed Worker had no KV and no AI binding at all, and every /api/v1/ai/*
+# call returned 500. The page's AI review (classify, assess, narrate) fell
+# back silently and never ran. Keeping one environment means an --env-less
+# deploy and an explicit one cannot diverge.
 
-[env.production]
-name = "verum-omnis-rules-prod"
-routes = [
-  { pattern = "verumglobal.foundation/api/*", zone_name = "verumglobal.foundation" },
-  { pattern = "verumglobal.foundation/constitution.pdf", zone_name = "verumglobal.foundation" },
-  { pattern = "verumglobal.foundation/docs/*", zone_name = "verumglobal.foundation" },
-  { pattern = "verumglobal.foundation/images/*", zone_name = "verumglobal.foundation" }
-]
-
-# KV Namespace for rule storage (must be in env section)
-# id is the real "verum-rules-kv" namespace in the account. The previous value
-# (3ecf5dc4...) did not exist, so production deploys bound nothing.
-[[env.production.kv_namespaces]]
+[[kv_namespaces]]
 binding = "RULES_KV"
+# "verum-rules-kv" -- the namespace that actually exists in the account.
 id = "3e032b900b5344bd8785371cd1fd1810"
 
-# Workers AI (must be in env section)
-[env.production.ai]
+[ai]
 binding = "AI"
 
-# Environment variables (must be in env section)
-[env.production.vars]
+[vars]
 ENVIRONMENT = "production"
 SERVICE_VERSION = "1.5.1-20260721-mistral-enhanced"
 
-# Observability
-[env.production.observability]
+[observability]
 enabled = true
+
+# Routes are deliberately NOT declared here. They are attached to the Worker
+# in the Cloudflare dashboard; declaring them would let any deploy from this
+# repo re-point live production traffic.
+#
+# Routes this Worker answers on (dashboard-managed):
+#   verumglobal.foundation/*  (site via Pages proxy, /api/* via the router)
