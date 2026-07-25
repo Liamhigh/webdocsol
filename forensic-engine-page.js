@@ -317,20 +317,36 @@ var DETECTORS = {
   // D01-D05: Statemental detectors
   D01_DETECT_DIRECT_CONTRADICTION: function(textBlocks) {
     var findings = [];
+    // Genuine same-subject action negations. The loose topic-word pairs that
+    // used to be here (true/false, valid/invalid, agreed/disputed,
+    // authorized/unauthorized) were removed: they co-occur in ordinary legal
+    // and constitutional prose and flagged clean documents. Just as important,
+    // the two terms must now appear TOGETHER (same passage), not merely both
+    // somewhere in the document -- "paid" on page 1 and "not paid" on page 12
+    // is not a contradiction.
     var negationPairs = [
       ['paid','not paid'],['received','not received'],['approved','rejected'],
-      ['accepted','declined'],['valid','invalid'],['true','false'],
-      ['completed','incomplete'],['submitted','not submitted'],['agreed','disputed'],
-      ['confirmed','denied'],['authorized','unauthorized'],['registered','deregistered']
+      ['accepted','declined'],['completed','incomplete'],['submitted','not submitted'],
+      ['confirmed','denied'],['registered','deregistered']
     ];
     var fullText = textBlocks.join(' ').toLowerCase();
+    var WINDOW = 80; // ~one clause; both terms must sit this close to be a local contradiction
+    function positions(term) {
+      var re = new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+      var m, out = [];
+      while ((m = re.exec(fullText)) !== null) out.push(m.index);
+      return out;
+    }
     for (var i = 0; i < negationPairs.length; i++) {
-      var hasPos = fullText.indexOf(negationPairs[i][0]) !== -1;
-      var hasNeg = fullText.indexOf(negationPairs[i][1]) !== -1;
-      if (hasPos && hasNeg) {
-        findings.push({ type: 'CT01', severity: 5,
-          evidence: 'Document contains both "' + negationPairs[i][0] + '" and "' + negationPairs[i][1] + '"',
-          location: 'Full document text' });
+      var a = negationPairs[i][0], b = negationPairs[i][1];
+      // A positive assertion of `a` is one NOT already negated by "not ".
+      var aPos = positions(a).filter(function(p) { return fullText.slice(Math.max(0, p - 4), p) !== 'not '; });
+      var bPos = positions(b);
+      var hit = aPos.some(function(pa) { return bPos.some(function(pb) { return Math.abs(pa - pb) <= WINDOW; }); });
+      if (hit) {
+        findings.push({ type: 'CT01', severity: 4,
+          evidence: 'Opposing statements "' + a + '" and "' + b + '" appear in the same passage',
+          location: 'Same passage' });
       }
     }
     return findings;
@@ -811,14 +827,22 @@ var DETECTORS = {
 
   D17_DETECT_FORMAT_ANOMALY: function(textBlocks) {
     var findings = [];
-    var pageLengths = textBlocks.map(function(t){return t.length;});
-    if (pageLengths.length >= 3) {
-      var avg = pageLengths.reduce(function(a,b){return a+b;},0) / pageLengths.length;
-      for (var i = 0; i < pageLengths.length; i++) {
-        if (Math.abs(pageLengths[i] - avg) > avg * 0.5) {
-          findings.push({ type: 'CT26', severity: 2,
-            evidence: 'Page ' + (i+1) + ' text length (' + pageLengths[i] + ') deviates ' + Math.round(Math.abs(pageLengths[i]-avg)/avg*100) + '% from average',
-            location: 'Page ' + (i+1) });
+    // Generic page-length variance is NOT a forensic indicator -- title pages,
+    // dense pages and sparse pages are all normal, and flagging every one of
+    // them produced a "red cross on every page" report. The only version of
+    // this with real signal is a NEAR-BLANK page sitting among full ones, which
+    // can mark an inserted or removed page. Only that is flagged, at low
+    // severity.
+    var lens = textBlocks.map(function(t){ return t.length; });
+    if (lens.length >= 4) {
+      var avg = lens.reduce(function(a,b){ return a+b; }, 0) / lens.length;
+      if (avg > 300) {
+        for (var i = 0; i < lens.length; i++) {
+          if (lens[i] < 40 && lens[i] < avg * 0.1) {
+            findings.push({ type: 'CT26', severity: 2,
+              evidence: 'Page ' + (i+1) + ' is nearly empty (' + lens[i] + ' chars) among pages averaging ' + Math.round(avg) + ' — possible inserted or removed page',
+              location: 'Page ' + (i+1) });
+          }
         }
       }
     }
