@@ -92,6 +92,18 @@ for (const page of PAGES) {
   }
 }
 
+// The mobile share button must stay wired: shown when navigator.share exists,
+// called synchronously in the click handler (user-activation), and failing to
+// a download instead of silently doing nothing. It regressed once by being
+// hidden behind an over-strict canShare({files}) gate.
+{
+  const html = readFileSync('seal-document.html', 'utf8');
+  ok(html.includes('function addShareButton'), 'seal page defines addShareButton');
+  ok(html.includes('navigator.share'), 'share button uses the Web Share API');
+  ok(html.includes('fallbackDownload'), 'share button falls back to download, never nothing');
+  ok(html.includes("'shareSealedBtn'"), 'share button has a stable id');
+}
+
 // index.html is the home page. It was overwritten with a copy of the sealing
 // app in 4cb88ff to paper over a blank screen, which silently deleted the
 // site's front door -- `/` and `/seal-document` served the same thing.
