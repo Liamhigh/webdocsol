@@ -85,6 +85,18 @@ t.ok(DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY(
 // One statement of a quantity cannot contradict anything.
 t.ok(DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY(['Total R50,000.00']).length === 0,
   'D02 quiet when a label appears once');
+// A label that states no amount must not reach past the next label and adopt
+// its figure. Scanning a fixed distance forward read the Deposit below as a
+// second Total and manufactured a 179% discrepancy that is not in the text --
+// a fabricated allegation, the worst failure available to a forensic detector.
+t.ok(DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY(
+  ['Total R50,000.00 for the works. Total: refer to annexure. Deposit R900,000.00 held in trust.']
+).length === 0, 'D02 does not borrow a neighbouring label\'s amount');
+// Amounts still bind to their own label when labels sit close together.
+t.ok(DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY(
+  ['Total R50,000.00 Subtotal R44,000.00 Total R70,000.00']
+).some(f => /R50,000\.00.*R70,000\.00/.test(f.evidence)),
+  'D02 binds each amount to its own adjacent label');
 
 // ---- 4. Serial-pattern engine ----
 t.ok(Array.isArray(detectSerialPatterns([''])), 'detectSerialPatterns returns array on empty');
