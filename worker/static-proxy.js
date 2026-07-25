@@ -40,24 +40,37 @@ export async function serveStatic(request) {
     path = '/' + slug + '.html';
   }
 
-  // Cache-busting param forces a fresh fetch from the Pages origin, so an
-  // edge-cached copy never outlives a redeploy.
-  const cacheBust = '_cb=' + Date.now();
-  const target = ORIGIN + path + url.search + (url.search ? '&' : '?') + cacheBust;
+  // Only HTML is cache-busted. Applying it to everything meant each page load
+  // re-fetched every asset from the origin uncached -- including the 525 KB
+  // pdf-lib bundle. On a phone that request intermittently failed, leaving
+  // window.PDFLib undefined and the sealing pipeline dead with
+  // "Cannot read properties of undefined (reading 'load')". Scripts and images
+  // are safe to cache; only the HTML must never outlive a redeploy.
+  const isAsset = /\.[a-z0-9]+$/i.test(path) && !/\.html?$/i.test(path);
+
+  const target = isAsset
+    ? ORIGIN + path + url.search
+    : ORIGIN + path + url.search + (url.search ? '&' : '?') + '_cb=' + Date.now();
 
   const response = await fetch(
     new Request(target, {
       method: request.method,
       headers: request.headers,
       body: request.body,
-      cf: { cacheTtl: 0 },
+      cf: isAsset ? { cacheEverything: true, cacheTtl: 3600 } : { cacheTtl: 0 },
     })
   );
 
   const headers = new Headers(response.headers);
-  headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
-  headers.set('Pragma', 'no-cache');
-  headers.set('Expires', '0');
+  if (isAsset) {
+    // Short enough that a redeploy propagates quickly, long enough that the
+    // bundle is not re-downloaded on every page view.
+    headers.set('Cache-Control', 'public, max-age=300, must-revalidate');
+  } else {
+    headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+    headers.set('Pragma', 'no-cache');
+    headers.set('Expires', '0');
+  }
 
   return new Response(response.body, {
     status: response.status,

@@ -527,6 +527,22 @@
 <script src="/vendor/pdf-lib.min.js"></script>
 <script src="/vendor/qrcode.min.js"></script>
 <script>
+// If either bundle failed to arrive -- a dropped request on a phone is enough
+// -- pull it from the CDN before the application script runs. Without this a
+// single failed fetch left PDFLib undefined and the whole sealing pipeline
+// died with "Cannot read properties of undefined (reading 'load')".
+// document.write is deliberate: it loads synchronously during parsing, so the
+// library is present by the time the inline script below executes.
+(function () {
+  if (!window.PDFLib) {
+    document.write('<scr' + 'ipt src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"><\/scr' + 'ipt>');
+  }
+  if (!window.QRCode) {
+    document.write('<scr' + 'ipt src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"><\/scr' + 'ipt>');
+  }
+})();
+</script>
+<script>
 // Check if CDN scripts loaded for diagnostics
 window._cdrReady = {
   pdfLib: typeof window.PDFLib !== 'undefined',

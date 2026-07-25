@@ -39,8 +39,15 @@ for (const f of VENDOR) {
 for (const page of PAGES) {
   const html = readFileSync(page, 'utf8');
 
-  ok(!/src="https:\/\/(unpkg|cdnjs|cdn\.jsdelivr)/.test(html),
-    `${page} still loads a script from an external CDN`);
+  // The primary source must be same-origin. A CDN URL inside a script *string*
+  // is the deliberate fallback for a dropped request, so only real tags count.
+  ok(!/<script[^>]*\bsrc="https:\/\/(unpkg|cdnjs|cdn\.jsdelivr)/.test(html),
+    `${page} still loads a script tag from an external CDN`);
+  ok(/<script[^>]*\bsrc="\/vendor\/pdf-lib\.min\.js"/.test(html),
+    `${page} loads pdf-lib from /vendor/`);
+  // A single dropped fetch previously killed the whole sealing pipeline.
+  ok(/if \(!window\.PDFLib\)/.test(html),
+    `${page} recovers if the vendored bundle fails to arrive`);
 
   ok(!/\}\s*=\s*PDFLib\s*\|\|/.test(html),
     `${page} still destructures the bare PDFLib identifier`);
