@@ -386,6 +386,24 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
        payload is escaped before it reaches the DOM. -->
   <div id="qrParamBox" style="display:none;margin:-8px 0 24px"></div>
 
+  <!-- Find a sealed document among many files. Paste a seal ID or hash, pick a
+       batch of PDFs, and it flags which one carries that seal. Everything is
+       read on-device; nothing is uploaded. Built for "I have hundreds of PDFs
+       on my phone and need to find the original sealed one." -->
+  <div class="share-meta" id="findSealBox">
+    <label class="share-meta-label" for="findSealTerm" style="cursor:default">Lost the original? Find a sealed document</label>
+    <input type="text" id="findSealTerm" class="qr-paste-input" spellcheck="false" autocomplete="off"
+      placeholder="Seal ID or hash to find, e.g. VO-AF07AD93E861 or af07ad93 (leave blank to list every sealed file)">
+    <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap">
+      <label class="btn btn-outline" style="margin:0;padding:10px 22px;cursor:pointer">
+        Choose PDFs to scan
+        <input type="file" id="findSealFiles" accept=".pdf,application/pdf" multiple style="display:none">
+      </label>
+      <p class="share-meta-note" style="margin:0">Scanned on your device &mdash; never uploaded, never stored.</p>
+    </div>
+    <div id="findSealResults" style="margin-top:14px"></div>
+  </div>
+
   <div class="spinner" id="spinner">
     <div class="spinner-ring"></div>
     <p style="font-family:'Courier New',monospace;font-size:12px;text-transform:uppercase;letter-spacing:0.1em;color:#D4A843;">Verifying seal...</p>
@@ -525,6 +543,107 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
   dropZone.addEventListener('click', function() { fileInput.click(); });
   fileInput.addEventListener('change', function(e) { if (e.target.files[0]) handleFile(e.target.files[0]); });
+
+  // ===== Find a sealed document among many files (all on-device) =====
+  // Scans each chosen PDF's raw bytes for seal markers (VO-SEAL2 / VO-SEAL /
+  // SEAL-CERT), extracting the seal ID and embedded hash. pdf-lib writes Info
+  // strings as UTF-16BE hex, so each marker is searched in BOTH plain ASCII and
+  // UTF-16-hex form. A search term (seal ID or hash) is matched the same way.
+  var findFilesInput = document.getElementById('findSealFiles');
+  var findResultsEl = document.getElementById('findSealResults');
+  var findTermEl = document.getElementById('findSealTerm');
+
+  function voScanSealMarkers(latin1Text) {
+    // Returns { scheme, sealId, hash } for the first marker found, or null.
+    var forms = [
+      { scheme: 'VO-SEAL2', re: /VO-SEAL2\|([0-9a-fA-F]{128})\|(VO-[0-9A-Za-z-]+)/ },
+      { scheme: 'SEAL-CERT', re: /SEAL-CERT\|([0-9a-fA-F]{128})\|(VO-[0-9A-Za-z-]+)/ },
+      { scheme: 'VO-SEAL', re: /VO-SEAL\|([0-9a-fA-F]{128})\|(VO-[0-9A-Za-z-]+)/ }
+    ];
+    for (var i = 0; i < forms.length; i++) {
+      // plain ASCII
+      var m = latin1Text.match(forms[i].re);
+      if (m) return { scheme: forms[i].scheme, hash: m[1].toLowerCase(), sealId: m[2] };
+      // UTF-16BE hex (decode candidate windows): find the hex of the prefix
+      var hexPrefix = voUtf16Hex(forms[i].scheme + '|');
+      var idx = latin1Text.toUpperCase().indexOf(hexPrefix);
+      if (idx >= 0) {
+        var slice = latin1Text.substr(idx, hexPrefix.length + (128 + 20) * 4);
+        try {
+          var decoded = voUtf16HexDecode(slice.replace(/[^0-9A-Fa-f]/g, ''));
+          var m2 = decoded.match(forms[i].re);
+          if (m2) return { scheme: forms[i].scheme, hash: m2[1].toLowerCase(), sealId: m2[2] };
+        } catch (e) {}
+      }
+    }
+    return null;
+  }
+
+  function voFileMatchesTerm(latin1Text, termRaw) {
+    if (!termRaw) return false;
+    var term = termRaw.trim();
+    if (!term) return false;
+    var low = latin1Text.toLowerCase();
+    if (low.indexOf(term.toLowerCase()) >= 0) return true;             // plain
+    var hex = voUtf16Hex(term).toUpperCase();                          // UTF-16 hex
+    return latin1Text.toUpperCase().indexOf(hex) >= 0;
+  }
+
+  if (findFilesInput) {
+    findFilesInput.addEventListener('change', async function (e) {
+      var files = Array.from(e.target.files || []);
+      if (!files.length) return;
+      var term = findTermEl ? findTermEl.value : '';
+      findResultsEl.innerHTML = '<p class="share-meta-note">Scanning ' + files.length + ' file(s) on your device&hellip;</p>';
+      var rows = [];
+      for (var i = 0; i < files.length; i++) {
+        var f = files[i];
+        var text;
+        try {
+          var buf = await f.arrayBuffer();
+          text = new TextDecoder('latin1').decode(new Uint8Array(buf));
+        } catch (err) { continue; }
+        var seal = voScanSealMarkers(text);
+        var matches = voFileMatchesTerm(text, term);
+        if (!seal && !matches) continue; // skip unsealed, non-matching files
+        rows.push({ name: f.name, seal: seal, matches: matches });
+      }
+      // Matches to the search term first, then other sealed files.
+      rows.sort(function (a, b) { return (b.matches ? 1 : 0) - (a.matches ? 1 : 0); });
+      if (!rows.length) {
+        findResultsEl.innerHTML = '<div class="qr-check qr-check-mismatch"><span class="qr-check-label">No match</span>' +
+          'None of the ' + files.length + ' file(s) are sealed' + (term ? ' or contain &ldquo;' + esc(term) + '&rdquo;' : '') +
+          '. The original sealed file may be elsewhere &mdash; check other folders, or where you first saved or emailed it.</div>';
+        return;
+      }
+      // A VO-SEAL2 file that matches is the self-verifying ORIGINAL; a
+      // SEAL-CERT that matches is only the certificate that references it.
+      // Show the original(s) first, then certificates, then other sealed files.
+      var rank = function (r) {
+        if (r.matches && r.seal && r.seal.scheme === 'VO-SEAL2') return 0;
+        if (r.matches) return 1;
+        return 2;
+      };
+      rows.sort(function (a, b) { return rank(a) - rank(b); });
+      var html = '';
+      rows.forEach(function (r) {
+        var isOriginal = r.matches && r.seal && r.seal.scheme === 'VO-SEAL2';
+        var isCert = r.matches && r.seal && r.seal.scheme === 'SEAL-CERT';
+        var cls = isOriginal ? 'qr-check-match' : '';
+        var label = isOriginal ? '✅ ORIGINAL SEALED DOCUMENT — this one verifies'
+          : isCert ? '📜 Certificate (references this seal, does not self-verify)'
+          : r.matches ? '✅ Contains this term'
+          : (r.seal ? r.seal.scheme + ' sealed' : 'contains term');
+        html += '<div class="qr-check ' + cls + '" style="margin-top:8px">' +
+          '<span class="qr-check-label">' + label + '</span>' +
+          '<strong>' + esc(r.name) + '</strong>' +
+          (r.seal ? '<br>Seal ID: ' + esc(r.seal.sealId) + '<br>Hash: ' + esc(r.seal.hash.slice(0, 32)) + '&hellip;' : '') +
+          (isOriginal ? '<br><em>Open this one and drop it in the verify box above for the green tick.</em>' : '') +
+          '</div>';
+      });
+      findResultsEl.innerHTML = html;
+    });
+  }
   dropZone.addEventListener('dragover', function(e) { e.preventDefault(); dropZone.classList.add('dragover'); });
   dropZone.addEventListener('dragleave', function() { dropZone.classList.remove('dragover'); });
   dropZone.addEventListener('drop', function(e) {
