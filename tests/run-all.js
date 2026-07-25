@@ -15,6 +15,7 @@ const suites = [
   'voice-crypto.test.mjs',
   'pdf-encrypt.test.mjs',
   'find-seal.test.mjs',
+  'home-verify.test.mjs',
 ];
 
 let failed = 0;

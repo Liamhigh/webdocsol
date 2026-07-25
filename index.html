@@ -1398,6 +1398,74 @@ function initVerifier(){
   /* \x00OpenTimestamps\x00\x00Proof\x00\xbf\x89\xe2\xe8\x84\xe8\x92\x94 */
   var OTS_MAGIC=[0x00,0x4f,0x70,0x65,0x6e,0x54,0x69,0x6d,0x65,0x73,0x74,0x61,0x6d,0x70,0x73,0x00,0x00,0x50,0x72,0x6f,0x6f,0x66,0x00,0xbf,0x89,0xe2,0xe8,0x84,0xe8,0x92,0x94];
 
+  // VO-SEAL2 / legacy VO-SEAL / SEAL-CERT detection + integrity. The seal lives
+  // in the PDF Info dictionary, which pdf-lib writes as UTF-16BE hex -- so the
+  // old plaintext SEAL_RE (which looked for "VERUM OMNIS SEAL|...") never found
+  // current seals and this widget wrongly reported "No seal found" on valid
+  // documents. This mirrors verify.html's proven logic: locate the hex marker,
+  // for VO-SEAL2 restore the hash placeholder and recompute SHA-512 to confirm
+  // the file is byte-for-byte intact.
+  function voU16(str){ var o=''; for(var i=0;i<str.length;i++){ var h=str.charCodeAt(i).toString(16).toUpperCase(); while(h.length<4) h='0'+h; o+=h; } return o; }
+  function voU16Decode(hex){ var o=''; for(var i=0;i+3<hex.length;i+=4){ o+=String.fromCharCode(parseInt(hex.substr(i,4),16)); } return o; }
+  async function voVerifySeal(bytes, fullText){
+    var UP = fullText.toUpperCase();
+    var markers = [
+      { scheme:'sealcert', pfx:'SEAL-CERT|', re:/(SEAL-CERT)\|([0-9a-fA-F]{128})\|(VO-[0-9A-Za-z-]+)/ },
+      { scheme:'v2',       pfx:'VO-SEAL2|',  re:/(VO-SEAL2)\|([0-9a-fA-F]{128})\|(VO-[0-9A-Za-z-]+)/ },
+      { scheme:'legacy',   pfx:'VO-SEAL|',   re:/(VO-SEAL)\|([0-9a-fA-F]{128})\|(VO-[0-9A-Za-z-]+)/ }
+    ];
+    for(var mi=0; mi<markers.length; mi++){
+      var hpfx = voU16(markers[mi].pfx);
+      var idx = UP.indexOf(hpfx);
+      if(idx < 0) continue;
+      var decoded = voU16Decode(fullText.substr(idx, hpfx.length + 1700).replace(/[^0-9A-Fa-f]/g,''));
+      var m = decoded.match(markers[mi].re);
+      if(!m) continue;
+      var res = { scheme:markers[mi].scheme, sealId:m[3], hash:m[2].toLowerCase() };
+      if(markers[mi].scheme === 'v2' && window.crypto && window.crypto.subtle){
+        // Restore the placeholder for the ONE marker carrying this hash, then
+        // recompute. Exactly one occurrence is required to avoid ambiguity.
+        var needle = voU16('VO-SEAL2|' + res.hash);
+        var first = UP.indexOf(needle);
+        var second = first < 0 ? -1 : UP.indexOf(needle, first + needle.length);
+        if(first >= 0 && second === -1){
+          var start = first + voU16('VO-SEAL2|').length;
+          var phHex = voU16('0'.repeat(128));
+          var restored = new Uint8Array(bytes);
+          for(var k=0;k<phHex.length;k++) restored[start+k] = phHex.charCodeAt(k);
+          try {
+            var dig = await window.crypto.subtle.digest('SHA-512', restored);
+            var rehex = toHex(new Uint8Array(dig));
+            res.integrity = (rehex === res.hash) ? 'match' : 'tamper';
+            res.recomputed = rehex;
+          } catch(e){ res.integrity = 'infeasible'; }
+        } else { res.integrity = 'infeasible'; }
+      }
+      return res;
+    }
+    // Literal (non-hex) marker fallback: a merged or re-saved file may store the
+    // Info string as a plain PDF string rather than UTF-16 hex.
+    var lit = fullText.match(/(SEAL-CERT|VO-SEAL2|VO-SEAL)\|([0-9a-fA-F]{128})\|(VO-[0-9A-Za-z-]+)/);
+    if(lit){
+      var r2 = { scheme: lit[1]==='SEAL-CERT' ? 'sealcert' : (lit[1]==='VO-SEAL2' ? 'v2' : 'legacy'), sealId:lit[3], hash:lit[2].toLowerCase() };
+      if(r2.scheme==='v2' && window.crypto && window.crypto.subtle){
+        var needleL = 'VO-SEAL2|' + r2.hash;
+        var f1 = fullText.indexOf(needleL);
+        var f2 = f1 < 0 ? -1 : fullText.indexOf(needleL, f1 + needleL.length);
+        if(f1 >= 0 && f2 === -1){
+          var startL = f1 + 'VO-SEAL2|'.length;
+          var phL = '0'.repeat(128);
+          var restoredL = new Uint8Array(bytes);
+          for(var kk=0;kk<phL.length;kk++) restoredL[startL+kk] = phL.charCodeAt(kk);
+          try { var digL = await window.crypto.subtle.digest('SHA-512', restoredL); r2.integrity = (toHex(new Uint8Array(digL))===r2.hash) ? 'match':'tamper'; }
+          catch(e){ r2.integrity = 'infeasible'; }
+        } else { r2.integrity = 'infeasible'; }
+      }
+      return r2;
+    }
+    return null;
+  }
+
   function log(m){ logs.push(m); if(procLog && !proc.hidden){ procLog.textContent=logs.join('\n'); procLog.scrollTop=procLog.scrollHeight; } }
   function setStatus(m){ if(statusEl) statusEl.textContent=m; }
   function showView(v){
@@ -1695,6 +1763,32 @@ function initVerifier(){
         if(cp.indexOf(BLOCKLIST[bi])!==-1){ suspicious=true; break; }
       }
       var o={name:file.name,seal:seal,fileHex:fileHex,pages:pages,streams:streams,ots:ots,meta:meta,suspicious:suspicious,matched:false};
+      // Current-format seals (VO-SEAL2 / SEAL-CERT / legacy VO-SEAL in the Info
+      // dictionary) take priority over the old plaintext-seal path below.
+      var vo2=await voVerifySeal(bytes,fullText);
+      if(vo2 && vo2.scheme==='v2'){
+        if(vo2.integrity==='match'){
+          o.state='verified'; o.color='green'; o.title='VERIFIED';
+          o.matched=true;
+          o.msg='Document verified — not tampered. Seal '+vo2.sealId+', SHA-512 recomputed and matches byte-for-byte.'+
+            (ots && ots.height ? ' Blockchain anchored at block '+ots.height+'.' : '');
+        } else if(vo2.integrity==='tamper'){
+          o.state='tampered'; o.color='red'; o.title='TAMPERED';
+          o.msg='WARNING: this document has been altered since sealing. Seal '+vo2.sealId+' expects a different SHA-512 than the file now produces.';
+        } else {
+          o.state='seal-found'; o.color='blue'; o.title='SEAL FOUND';
+          o.msg='Seal '+vo2.sealId+' is present, but this copy was re-saved by another PDF tool so the byte-exact check could not run. Verify the original sealed file for a green tick.';
+        }
+        renderResult(o); return;
+      } else if(vo2 && vo2.scheme==='sealcert'){
+        o.state='seal-found'; o.color='blue'; o.title='SEAL CERTIFICATE';
+        o.msg='This is a seal certificate for '+vo2.sealId+', attesting another document was sealed. Upload the sealed document itself for an integrity verdict.';
+        renderResult(o); return;
+      } else if(vo2 && vo2.scheme==='legacy'){
+        o.state='seal-found'; o.color='blue'; o.title='SEAL FOUND';
+        o.msg='Older-format Verum Omnis seal '+vo2.sealId+' detected. This format records the original document hash; re-seal with the current version for a byte-exact tamper check.';
+        renderResult(o); return;
+      }
       if(seal){
         var matched=hashMatches(seal[2].trim(),fileHex);
         o.matched=matched;
