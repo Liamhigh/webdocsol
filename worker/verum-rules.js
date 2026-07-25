@@ -28,6 +28,8 @@
 // Bindings: RULES_KV (KV namespace "verum-rules-kv"), AI (Workers AI).
 // ============================================================================
 
+import { serveStatic } from './static-proxy.js';
+
 const ALGORITHM = 'RSASSA-PKCS1-v1_5-SHA512';
 const PUBLIC_KEY_ID = 'vo-master-1';
 const CURRENT_KEY = 'rules:current';
@@ -1126,7 +1128,17 @@ async function route(request, env) {
   if (known.includes(path)) {
     return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' || path.endsWith('/constitution.pdf') ? 'GET' : 'POST' });
   }
-  return err(404, 'not_found', 'Unknown endpoint: ' + path);
+
+  // An unrecognised API path is a client error and must stay JSON.
+  if (path === '/api' || path.startsWith('/api/')) {
+    return err(404, 'not_found', 'Unknown endpoint: ' + path);
+  }
+
+  // Anything else is a website request. Workers Builds deploys this script
+  // automatically onto a Worker that owns the verumglobal.foundation routes,
+  // so answering `/` with a JSON 404 takes the whole site down -- which is
+  // exactly what happened. Serve the site instead of 404ing it.
+  return serveStatic(request);
 }
 
 export default {
