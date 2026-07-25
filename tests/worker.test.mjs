@@ -82,6 +82,18 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     ok(!/no-store/.test(cc), 'asset response is cacheable (' + cc + ')');
     ok(!seen.some(u => u.includes('_cb=')), 'asset request carries no cache-buster');
 
+    // A failed asset must never be cached. Caching every status code for an
+    // hour pinned a transient 404 at the edge, so forensic-engine-page.js came
+    // back missing and the page reported "runForensicEngine is not defined".
+    globalThis.fetch = async () => new Response('not found', { status: 404 });
+    r = await worker.fetch(mk('/forensic-engine-page.js'), env, {});
+    ok(/no-store/.test(r.headers.get('cache-control') || ''),
+      'failed asset is not cached (' + (r.headers.get('cache-control') || '') + ')');
+
+    globalThis.fetch = async (req) => {
+      seen.push(typeof req === 'string' ? req : req.url);
+      return new Response('x', { status: 200, headers: { 'content-type': 'application/javascript' } });
+    };
     seen.length = 0;
     r = await worker.fetch(mk('/seal-document'), env, {});
     ok(/no-store/.test(r.headers.get('cache-control') || ''), 'HTML stays uncached');

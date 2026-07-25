@@ -57,15 +57,28 @@ export async function serveStatic(request) {
       method: request.method,
       headers: request.headers,
       body: request.body,
-      cf: isAsset ? { cacheEverything: true, cacheTtl: 3600 } : { cacheTtl: 0 },
+      // Cache successful asset responses only. A flat cacheTtl applies to every
+      // status code, so one 404 or 5xx during a redeploy was pinned at the edge
+      // for the full hour -- which is how forensic-engine-page.js came back
+      // missing and the page reported "runForensicEngine is not defined".
+      // Failures must always be retried, never cached.
+      cf: isAsset
+        ? {
+            cacheEverything: true,
+            cacheTtlByStatus: { '200-299': 3600, '300-399': 0, '400-499': 0, '500-599': 0 },
+          }
+        : { cacheTtl: 0 },
     })
   );
 
   const headers = new Headers(response.headers);
-  if (isAsset) {
+  if (isAsset && response.status >= 200 && response.status < 300) {
     // Short enough that a redeploy propagates quickly, long enough that the
     // bundle is not re-downloaded on every page view.
     headers.set('Cache-Control', 'public, max-age=300, must-revalidate');
+  } else if (isAsset) {
+    // A failed asset must not stick in the browser cache either.
+    headers.set('Cache-Control', 'no-store');
   } else {
     headers.set('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
     headers.set('Pragma', 'no-cache');
