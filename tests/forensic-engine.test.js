@@ -76,6 +76,28 @@ t.ok(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(clean).length === 0, 'D01 no fals
 t.ok(DETECTORS.D03_DETECT_DATE_INCONSISTENCY(['Dated 15 March 2024']).length === 0, 'D03 no false-positive on valid date');
 t.ok(DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(clean).length === 0, 'D04 no false-positive on clean text');
 
+// D01 must not fire on opposing words that merely both appear somewhere. It
+// used to flag any document containing both "true" and "false" (or paid/not
+// paid pages apart) -- garbage on ordinary legal prose.
+t.ok(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(
+  ['We value the truth. Falsehood is condemned.']).length === 0,
+  'D01 no false-positive on unrelated true/false wording');
+t.ok(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(
+  ['The deposit was paid on time.', 'x'.repeat(300), 'The final invoice was not paid.']).length === 0,
+  'D01 does not flag paid / not paid that are far apart');
+t.ok(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(
+  ['The invoice was paid, yet the ledger says it was not paid.']).some(f => f.type === 'CT01'),
+  'D01 still fires when paid and not paid are in the same passage');
+
+// D17 must not flag normal page-length variation (title page vs dense page).
+// Only a near-blank page among full ones is a real signal.
+t.ok(DETECTORS.D17_DETECT_FORMAT_ANOMALY(
+  ['A sparse cover page with a title and a few lines of text.'.repeat(5), 'x'.repeat(2000), 'y'.repeat(1500), 'z'.repeat(2500)]).length === 0,
+  'D17 no false-positive on ordinary page-length variation');
+t.ok(DETECTORS.D17_DETECT_FORMAT_ANOMALY(
+  ['x'.repeat(2000), 'y'.repeat(1800), '', 'z'.repeat(2200)]).some(f => f.type === 'CT26'),
+  'D17 flags a near-blank page among full ones');
+
 // An itemised invoice is not a contradiction. D02 used to compare every amount
 // against every other, so ordinary line items produced a finding per pair --
 // 739 of 742 findings on the repo's test document came from this one detector.
