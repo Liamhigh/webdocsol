@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.5.1-20260725-ai-voice-dates">
+<meta name="vo-seal-build" content="1.5.2-20260725-pdf-encrypt-share">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -553,9 +553,10 @@ if (!window._cdrReady.pdfLib) {
   console.error('[SEAL-FLOW] WARNING: PDFLib (pdf-lib) failed to load from CDN at ' + window._cdrReady.timestamp);
 }
 </script>
-<script src="/forensic-report.js?v=1.5.1-20260725"></script>
-<script src="/forensic-engine-page.js?v=1.5.1-20260725"></script>
-<script src="/ots-proof.js?v=1.5.1-20260725"></script>
+<script src="/forensic-report.js?v=1.5.2-20260725"></script>
+<script src="/forensic-engine-page.js?v=1.5.2-20260725"></script>
+<script src="/ots-proof.js?v=1.5.2-20260725"></script>
+<script src="/pdf-encrypt.js?v=1.5.2-20260725"></script>
 <script>
 // `PDFLib` unqualified throws ReferenceError when the script above fails to
 // load -- an undeclared identifier, unlike a property miss on window. That
@@ -2113,7 +2114,25 @@ async function runSealingPipeline() {
   sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain, fraudResult);
 
   if (password) {
-    encryptedBytes = await encryptSealedPDF(sealedBytes, password);
+    // Produce a STANDARD password-protected PDF: one ordinary .pdf that opens
+    // in any reader (Adobe, Preview, Chrome, phones) with a password prompt.
+    // The recipient cannot open it without asking the sender for the password
+    // -- that request is the delivery receipt. Falls back to the legacy .voice
+    // container only if standard encryption is somehow unavailable, so a
+    // password is never silently dropped.
+    if (typeof window.VOEncryptPDF === 'function') {
+      try {
+        encryptedBytes = window.VOEncryptPDF(sealedBytes, password, null, sha512);
+        window._voEncFormat = 'pdf';
+      } catch (encErr) {
+        console.warn('Standard PDF encryption failed, falling back to .voice:', encErr && encErr.message);
+        encryptedBytes = await encryptSealedPDF(sealedBytes, password);
+        window._voEncFormat = 'voice';
+      }
+    } else {
+      encryptedBytes = await encryptSealedPDF(sealedBytes, password);
+      window._voEncFormat = 'voice';
+    }
   }
   updateStep(6, 'complete');
 
@@ -2358,6 +2377,36 @@ async function runSealingPipeline() {
   shareAnonymousPatterns(fraudResult);
 }
 
+// Native share via the Web Share API. On a phone this opens the system share
+// sheet (WhatsApp, email, Drive, …) with the sealed/protected file attached.
+// Reads window._voShareBytes/_voShareName/_voShareType set by showResults.
+// Hidden entirely where file sharing is unsupported, so desktop users just use
+// the download button and nothing looks broken.
+function addShareButton() {
+  var old = document.getElementById('shareSealedBtn');
+  if (old) old.remove();
+  if (!window._voShareBytes || !navigator.share) return;
+  var probe;
+  try { probe = new File([window._voShareBytes], window._voShareName, { type: window._voShareType }); }
+  catch (e) { return; }
+  if (navigator.canShare && !navigator.canShare({ files: [probe] })) return;
+  var grid = document.getElementById('downloadGrid');
+  if (!grid) return;
+  var btn = document.createElement('button');
+  btn.id = 'shareSealedBtn';
+  btn.type = 'button';
+  btn.className = 'download-btn';
+  btn.innerHTML = '&#128228; Share (WhatsApp, email, …)';
+  btn.addEventListener('click', function () {
+    var f;
+    try { f = new File([window._voShareBytes], window._voShareName, { type: window._voShareType }); }
+    catch (e) { return; }
+    navigator.share({ files: [f], title: window._voShareName, text: 'Sealed with Verum Omnis' })
+      .catch(function () { /* user dismissed the sheet -- nothing to do */ });
+  });
+  grid.appendChild(btn);
+}
+
 function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, forensicResult) {
   document.getElementById('sha256Display').textContent = sha256;
   document.getElementById('sha512Display').textContent = sha512;
@@ -2525,21 +2574,67 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   }
 
   if (password && encryptedBytes) {
-    const downloadGrid = document.getElementById('downloadGrid');
-    downloadGrid.style.gridTemplateColumns = '1fr';
-    const encL = document.createElement('a');
-    encL.href = URL.createObjectURL(new Blob([encryptedBytes], {type: 'application/octet-stream'}));
-    encL.download = base + suffix + '-sealed.voice';
-    encL.className = 'download-btn';
-    encL.innerHTML = '&#11015; Download .VOICE (Encrypted)';
-    if (sL.nextSibling) downloadGrid.insertBefore(encL, sL.nextSibling);
-    else downloadGrid.appendChild(encL);
+    var isPdfEnc = window._voEncFormat === 'pdf';
+    if (isPdfEnc) {
+      // The protected PDF is the prominent download -- it is the copy you send.
+      // The plain sealed PDF stays available as "your copy": its seal marker is
+      // encrypted inside the protected file, so keeping the unlocked original
+      // is what lets you verify the seal later without the password.
+      sL.className = 'download-btn';
+      sL.innerHTML = '&#11015; Sealed PDF — your copy (keep for verification)';
+      var protL = document.createElement('a');
+      protL.className = 'download-btn primary';
+      protL.href = URL.createObjectURL(new Blob([encryptedBytes], { type: 'application/pdf' }));
+      protL.download = base + '-sealed-protected.pdf';
+      protL.setAttribute('download', base + '-sealed-protected.pdf');
+      protL.innerHTML = '&#128274; Download Password-Protected PDF (send this)';
+      sL.parentNode.insertBefore(protL, sL);
+      window._voShareBytes = encryptedBytes;
+      window._voShareName = base + '-sealed-protected.pdf';
+      window._voShareType = 'application/pdf';
+    } else {
+      // Legacy .voice fallback (standard encryption unavailable).
+      const downloadGrid = document.getElementById('downloadGrid');
+      const encL = document.createElement('a');
+      encL.href = URL.createObjectURL(new Blob([encryptedBytes], { type: 'application/octet-stream' }));
+      encL.download = base + suffix + '-sealed.voice';
+      encL.className = 'download-btn';
+      encL.innerHTML = '&#11015; Download .VOICE (Encrypted)';
+      if (sL.nextSibling) downloadGrid.insertBefore(encL, sL.nextSibling); else downloadGrid.appendChild(encL);
+      window._voShareBytes = encryptedBytes;
+      window._voShareName = base + suffix + '-sealed.voice';
+      window._voShareType = 'application/octet-stream';
+    }
 
-    const banner = document.createElement('div');
+    var banner = document.createElement('div');
     banner.style.cssText = 'background:rgba(212,168,67,0.1);border:1px solid rgba(212,168,67,0.3);border-radius:12px;padding:20px;margin:16px 0;font-size:13px;color:#D5D8DD;line-height:1.7;';
-    banner.innerHTML = '<strong style="color:#D4A843;font-size:16px;">&#128272; Password Delivery Receipt Active</strong><br><br>This document is password-protected. The recipient receives the lock-screen PDF first, then uploads the .voice file to verify.html and enters the password to decrypt.<br><br><strong>How delivery confirmation works:</strong><br>1. You send BOTH files to the recipient (PDF + .voice)<br>2. They see the lock screen with your contact info<br>3. They email you asking for the password<br><strong>4. That email IS your delivery receipt</strong> -- you know they received it<br>5. You reply with the password<br>6. They upload the .voice file to verumglobal.foundation/verify.html and enter the password to view<br><br><strong>Your password:</strong> <span style="color:#D4A843;font-family:monospace;">' + password + '</span><br><strong style="color:#ef4444;">Keep this password safe. Do not include it in the same email as the document files.</strong>';
+    banner.innerHTML = isPdfEnc
+      ? '<strong style="color:#D4A843;font-size:16px;">&#128274; Password protection active — this is your read receipt</strong><br><br>' +
+        'The file above is a normal password-protected PDF. Send it however you like — email, WhatsApp, any app. It opens in any PDF reader, but only after the password is entered.<br><br>' +
+        '<strong>How the read receipt works:</strong><br>' +
+        '1. Send the protected PDF to the recipient.<br>' +
+        '2. They try to open it — their reader asks for a password.<br>' +
+        '3. To get in, they must email you asking for it.<br>' +
+        '<strong>4. That email is your proof a human received and opened it.</strong><br>' +
+        '5. You reply with the password. Silence means it was never opened.<br><br>' +
+        '<strong>Your password:</strong> <span style="color:#D4A843;font-family:monospace;">' + password + '</span><br>' +
+        '<strong style="color:#ef4444;">Send the password in a separate message, never with the document.</strong>'
+      : '<strong style="color:#D4A843;font-size:16px;">&#128272; Password protection active (.voice)</strong><br><br>' +
+        'Standard PDF encryption was unavailable, so this is a .voice container. The recipient opens it at verumglobal.foundation/verify.html with the password.<br><br>' +
+        '<strong>Your password:</strong> <span style="color:#D4A843;font-family:monospace;">' + password + '</span><br>' +
+        '<strong style="color:#ef4444;">Send the password separately from the document.</strong>';
     el.parentNode.insertBefore(banner, el.nextSibling);
+  } else {
+    // No password: the sealed PDF itself is the thing to share.
+    window._voShareBytes = sealedBytes;
+    window._voShareName = base + '-sealed.pdf';
+    window._voShareType = 'application/pdf';
   }
+
+  // Native share (Web Share API) — on a phone this opens the system share
+  // sheet (WhatsApp, email, Drive, …); where file sharing is unsupported it
+  // hides itself so nothing appears broken.
+  addShareButton();
 
   // Blockchain receipt (.ots) — the "little slip": a VALID OpenTimestamps
   // pending receipt the user keeps and upgrades later on the verify page.

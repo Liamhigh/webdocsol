@@ -13,6 +13,7 @@ const suites = [
   'page-boot.test.mjs',
   'engine-perf.test.mjs',
   'voice-crypto.test.mjs',
+  'pdf-encrypt.test.mjs',
 ];
 
 let failed = 0;
