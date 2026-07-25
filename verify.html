@@ -297,7 +297,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 <!-- pdf.js (legacy ES5 build for widest browser support): parses the PDF Info
      dictionary and page text so seals stored in compressed object streams and
      subset-font content streams are still detected. -->
-<script src="https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.min.js"></script>
+<script src="/vendor/pdf.min.js"></script>
 <!-- Shared OpenTimestamps proof utilities (window.VoOts): polls the public
      calendars for the upgraded Bitcoin-anchored proof of a seal's OTS digest,
      parses block attestations, and serves .ots downloads. Same module the seal
@@ -605,7 +605,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   //      path for the oldest appended-comment seals.
   var VO_SEAL2_PREFIX = 'VO-SEAL2|';
   var VO_HASH_PLACEHOLDER = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
-  var PDFJS_WORKER_SRC = 'https://cdn.jsdelivr.net/npm/pdfjs-dist@3.11.174/legacy/build/pdf.worker.min.js';
+  var PDFJS_WORKER_SRC = '/vendor/pdf.worker.min.js';
 
   function bufToHex(buf) {
     return Array.from(new Uint8Array(buf)).map(function(b) { return b.toString(16).padStart(2, '0'); }).join('');
@@ -1272,7 +1272,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     note.style.marginTop = '16px';
     note.innerHTML = '<h4>Parser Note</h4><p>' +
       (unavailable
-        ? 'The advanced PDF parser (pdf.js) did not load, so verification ran on raw byte analysis only. VO-SEAL2 integrity checks are unaffected, but a seal stored only inside compressed PDF objects (e.g. a SEAL-CERT certificate or a re-saved file) cannot be detected in this state. If you expected a seal that was not found, retry when cdn.jsdelivr.net is reachable.'
+        ? 'The advanced PDF parser (pdf.js) did not load, so verification ran on raw byte analysis only. VO-SEAL2 integrity checks are unaffected, but a seal stored only inside compressed PDF objects (e.g. a SEAL-CERT certificate or a re-saved file) cannot be detected in this state. If you expected a seal that was not found, reload the page so /vendor/pdf.min.js can load.'
         : 'The advanced PDF parser (pdf.js) reported an error (' + pdfSeal.error + '). Verification proceeded on raw byte analysis only; a seal stored only inside compressed PDF objects may not be detected.') +
       '</p>';
     metaSection.appendChild(note);

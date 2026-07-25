@@ -17,10 +17,11 @@ routes = [
 ]
 
 # KV Namespace for rule storage (must be in env section)
+# id is the real "verum-rules-kv" namespace in the account. The previous value
+# (3ecf5dc4...) did not exist, so production deploys bound nothing.
 [[env.production.kv_namespaces]]
 binding = "RULES_KV"
-id = "3ecf5dc4e00c45b89f3e2d7c1b4a2e9f"
-preview_id = "4fd6a8d1b2e3c4f5a6b7c8d9e0f1a2b3"
+id = "3e032b900b5344bd8785371cd1fd1810"
 
 # Workers AI (must be in env section)
 [env.production.ai]

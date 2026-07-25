@@ -524,8 +524,8 @@
 
 </div>
 
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js" onload="window._pdfLibLoaded=true;" onerror="window._pdfLibError=true;"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" onload="window._qrCodeLoaded=true;" onerror="window._qrCodeError=true;"></script>
+<script src="/vendor/pdf-lib.min.js" onload="window._pdfLibLoaded=true;" onerror="window._pdfLibError=true;"></script>
+<script src="/vendor/qrcode.min.js" onload="window._qrCodeLoaded=true;" onerror="window._qrCodeError=true;"></script>
 <script>
 // Check if CDN scripts loaded for diagnostics
 window._cdrReady = {
@@ -559,7 +559,12 @@ if (window.VerumReport) {
 <script src="/forensic-engine-page.js?v=1.4.1-20260720"></script>
 <script src="/ots-proof.js?v=1.4.1-20260720"></script>
 <script>
-const { PDFDocument, rgb, StandardFonts } = PDFLib || {};
+// `PDFLib` unqualified throws ReferenceError when the script above fails to
+// load -- an undeclared identifier, unlike a property miss on window. That
+// killed this entire <script> block, so startSealing() and every other handler
+// below was never defined and the page rendered but did nothing. Read it off
+// window so a missing library degrades instead of freezing the UI.
+const { PDFDocument, rgb, StandardFonts } = window.PDFLib || {};
 
 let selectedFile = null, sealType = 'private', otsProof = null, watermarkBytes = null;
 let gpsCoords = null, deviceInfo = null;

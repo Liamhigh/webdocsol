@@ -524,8 +524,8 @@
 
 </div>
 
-<script src="https://unpkg.com/pdf-lib@1.17.1/dist/pdf-lib.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+<script src="/vendor/pdf-lib.min.js"></script>
+<script src="/vendor/qrcode.min.js"></script>
 <script>
 // Check if CDN scripts loaded for diagnostics
 window._cdrReady = {
@@ -541,7 +541,12 @@ if (!window._cdrReady.pdfLib) {
 <script src="/forensic-engine-page.js?v=1.4.1-20260720"></script>
 <script src="/ots-proof.js?v=1.4.1-20260720"></script>
 <script>
-const { PDFDocument, rgb, StandardFonts } = PDFLib || {};
+// `PDFLib` unqualified throws ReferenceError when the script above fails to
+// load -- an undeclared identifier, unlike a property miss on window. That
+// killed this entire <script> block, so startSealing() and every other handler
+// below was never defined and the page rendered but did nothing. Read it off
+// window so a missing library degrades instead of freezing the UI.
+const { PDFDocument, rgb, StandardFonts } = window.PDFLib || {};
 
 let selectedFile = null, sealType = 'private', otsProof = null, watermarkBytes = null;
 let gpsCoords = null, deviceInfo = null;
@@ -1635,13 +1640,24 @@ async function startSealing() {
         forensicResult = await runForensicEngine(fileBytes, pdfDocForForensics);
       } catch(e) {
         console.warn('Forensic engine error:', e);
-        forensicResult = { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], scanFailed: true, extractionNotes: 'Forensic engine error: ' + (e && e.message ? e.message : 'unknown') + '. The scan could not complete; absence of findings here is NOT a clean result.', summary: 'Forensic scan could not complete' };
+        forensicResult = { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], scanFailed: true, scanError: (e && e.message ? e.message : 'unknown'), extractionNotes: 'Forensic engine error: ' + (e && e.message ? e.message : 'unknown') + '. The scan could not complete; absence of findings here is NOT a clean result.', summary: 'Forensic scan could not complete' };
       }
       if (classifyPromise) { try { _pipelineClassification = await classifyPromise; } catch (e) { _pipelineClassification = null; } }
-      updateStep('Fraud', 'complete',
-        forensicResult.clean
-          ? 'No indicators - ' + (forensicResult.contradictionTypesUsed || 0) + ' contradiction types checked'
-          : forensicResult.totalFindings + ' indicators flagged for human review (indicator score ' + forensicResult.overallScore + '/100)');
+      // A scan that crashed is NOT a clean scan. The catch above sets clean:true
+      // purely so the seal can still complete, so rendering that as a green tick
+      // told the user "no indicators found" when the engine had in fact never
+      // run. Surface the failure instead -- for a forensic tool, a silent false
+      // clean is worse than no scan at all.
+      if (forensicResult.scanFailed) {
+        updateStep('Fraud', 'error', 'Scan could NOT complete (' + (forensicResult.scanError || 'unknown error') + ') - this is not a clean result');
+      } else {
+        updateStep('Fraud', 'complete',
+          forensicResult.clean
+            // contradictionTypesUsed counts the finding types that fired, not the
+            // number of detectors run -- "checked" read as "the engine did nothing".
+            ? 'No indicators - ' + (forensicResult.contradictionTypesUsed || 0) + ' of 43 contradiction types triggered'
+            : forensicResult.totalFindings + ' indicators flagged for human review (indicator score ' + forensicResult.overallScore + '/100)');
+      }
     } else {
       // Seal Only: grab the page count for the Seal Certificate -- nothing else.
       try { _pipelinePageCount = (await PDFDocument.load(fileBytes, { ignoreEncryption: true })).getPageCount(); } catch(e) { _pipelinePageCount = 0; }
