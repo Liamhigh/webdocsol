@@ -336,30 +336,57 @@ var DETECTORS = {
     return findings;
   },
 
+  // Flags a *labelled* quantity that the document states at two different
+  // values -- "Total: R450,000" on one page and "Total: R470,000" on another.
+  //
+  // This previously compared every amount in the document against every other
+  // amount and reported any pair differing by >10%. That is not a
+  // contradiction: a R150 line item and a R60,000 line item are simply
+  // different line items. On the repo's 10-page test document it emitted 739
+  // findings, drowning the 3 real ones, and being O(n^2) in amount count it
+  // also scaled badly. Comparing like with like is the actual signal.
   D02_DETECT_NUMERICAL_DISCREPANCY: function(textBlocks) {
     var findings = [];
-    var amounts = [];
-    var amountRe = /[R$€£]\s*[\d,]+(?:\.\d{2})?|\b\d{1,3}(?:,\d{3})+(?:\.\d{2})?\b/g;
+    var LABEL_RE = /\b(grand total|sub-?total|total|balance(?:\s+due)?|amount(?:\s+(?:due|payable|paid))?|invoice total|net(?:\s+amount)?|gross(?:\s+amount)?|vat|tax|deposit|purchase price|contract (?:value|price|sum))\b/gi;
+    var AMOUNT_RE = /(?:[R$€£]\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)\d+(?:\.\d{2})?/;
+
+    var byLabel = {};
     for (var i = 0; i < textBlocks.length; i++) {
-      var matches = textBlocks[i].match(amountRe);
-      if (matches) {
-        for (var j = 0; j < matches.length; j++) {
-          var num = parseFloat(matches[j].replace(/[^0-9.]/g, ''));
-          if (!isNaN(num) && num > 100) amounts.push({ value: num, page: i, raw: matches[j] });
-        }
+      var block = textBlocks[i];
+      LABEL_RE.lastIndex = 0;
+      var m;
+      while ((m = LABEL_RE.exec(block)) !== null) {
+        // The amount belongs to the label only if it follows closely.
+        var window = block.slice(m.index + m[0].length, m.index + m[0].length + 40);
+        var am = window.match(AMOUNT_RE);
+        if (!am) continue;
+        var value = parseFloat(am[0].replace(/[^0-9.]/g, ''));
+        if (isNaN(value) || value <= 100) continue;
+
+        var label = m[0].toLowerCase().replace(/\s+/g, ' ').replace(/^sub-total$/, 'subtotal');
+        if (!byLabel[label]) byLabel[label] = [];
+        byLabel[label].push({ value: value, raw: am[0].trim(), page: i });
       }
     }
-    // Check for amounts that appear as both total and subtotal with >10% variance
-    if (amounts.length >= 2) {
-      for (var a = 0; a < amounts.length; a++) {
-        for (var b = a + 1; b < amounts.length; b++) {
-          var diff = Math.abs(amounts[a].value - amounts[b].value);
-          var avg = (amounts[a].value + amounts[b].value) / 2;
-          if (diff / avg > 0.1 && diff > 1000) {
-            findings.push({ type: 'CT02', severity: 4,
-              evidence: 'Amount ' + amounts[a].raw + ' differs from ' + amounts[b].raw + ' (variance: ' + Math.round(diff/avg*100) + '%)',
-              location: 'Page ' + (amounts[a].page + 1) + ' vs Page ' + (amounts[b].page + 1) });
-          }
+
+    for (var label in byLabel) {
+      if (!Object.prototype.hasOwnProperty.call(byLabel, label)) continue;
+      var entries = byLabel[label];
+      if (entries.length < 2) continue;
+
+      // Compare each distinct stated value against the lowest one, rather than
+      // every pair, so N statements yield at most N-1 findings.
+      var sorted = entries.slice().sort(function(x, y) { return x.value - y.value; });
+      var base = sorted[0];
+      for (var k = 1; k < sorted.length; k++) {
+        var cur = sorted[k];
+        var diff = cur.value - base.value;
+        var avg = (cur.value + base.value) / 2;
+        if (diff / avg > 0.1 && diff > 1000) {
+          findings.push({ type: 'CT02', severity: 4,
+            evidence: '"' + label + '" is stated as ' + base.raw + ' and as ' + cur.raw +
+              ' (variance: ' + Math.round(diff / avg * 100) + '%)',
+            location: 'Page ' + (base.page + 1) + ' vs Page ' + (cur.page + 1) });
         }
       }
     }
@@ -1687,6 +1714,39 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     var serialFindings = detectSerialPatterns(textBlocks);
     allFindings = allFindings.concat(serialFindings);
   } catch(e) {}
+
+  // Drop findings that repeat an earlier one verbatim, and bound how many any
+  // single contradiction type may contribute. A detector that misfires
+  // otherwise buries the real findings -- D02 alone once produced 739 of 742.
+  // Suppression is reported rather than silent: a report that quietly dropped
+  // evidence would be worse than a noisy one.
+  var MAX_PER_TYPE = 25;
+  var deduped = [];
+  var seenEvidence = {};
+  var countPerType = {};
+  var suppressed = {};
+  for (var g = 0; g < allFindings.length; g++) {
+    var cand = allFindings[g];
+    var sig = cand.type + '|' + (cand.evidence || '') + '|' + (cand.location || '');
+    if (seenEvidence[sig]) { suppressed[cand.type] = (suppressed[cand.type] || 0) + 1; continue; }
+    seenEvidence[sig] = true;
+    countPerType[cand.type] = (countPerType[cand.type] || 0) + 1;
+    if (countPerType[cand.type] > MAX_PER_TYPE) {
+      suppressed[cand.type] = (suppressed[cand.type] || 0) + 1;
+      continue;
+    }
+    deduped.push(cand);
+  }
+  var suppressedTypes = Object.keys(suppressed);
+  if (suppressedTypes.length) {
+    var parts = [];
+    for (var s = 0; s < suppressedTypes.length; s++) {
+      parts.push(suppressedTypes[s] + ': ' + suppressed[suppressedTypes[s]]);
+    }
+    extractionNote += ' Duplicate/over-cap findings withheld (max ' + MAX_PER_TYPE +
+      ' per contradiction type) -- ' + parts.join(', ') + '.';
+  }
+  allFindings = deduped;
 
   // Calculate overall score
   var totalScore = 0;
