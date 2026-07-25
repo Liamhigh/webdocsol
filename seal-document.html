@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.5.6-20260725-ai-timeout">
+<meta name="vo-seal-build" content="1.5.7-20260725-patient-loader">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -553,10 +553,10 @@ if (!window._cdrReady.pdfLib) {
   console.error('[SEAL-FLOW] WARNING: PDFLib (pdf-lib) failed to load from CDN at ' + window._cdrReady.timestamp);
 }
 </script>
-<script src="/forensic-report.js?v=1.5.6-20260725"></script>
-<script src="/forensic-engine-page.js?v=1.5.6-20260725"></script>
-<script src="/ots-proof.js?v=1.5.6-20260725"></script>
-<script src="/pdf-encrypt.js?v=1.5.6-20260725"></script>
+<script src="/forensic-report.js?v=1.5.7-20260725"></script>
+<script src="/forensic-engine-page.js?v=1.5.7-20260725"></script>
+<script src="/ots-proof.js?v=1.5.7-20260725"></script>
+<script src="/pdf-encrypt.js?v=1.5.7-20260725"></script>
 <script>
 // `PDFLib` unqualified throws ReferenceError when the script above fails to
 // load -- an undeclared identifier, unlike a property miss on window. That
@@ -587,20 +587,43 @@ function voOriginalSrc(pathPart) {
   }
   return pathPart;
 }
-async function voEnsureForensicScripts() {
-  var need = [];
-  if (typeof runForensicEngine === 'undefined') need.push('/forensic-engine-page.js');
-  if (!window.VerumReport) need.push('/forensic-report.js');
+// Present-check for each forensic script's global.
+function voScriptLoaded(pathPart) {
+  if (pathPart.indexOf('forensic-engine-page') !== -1) return typeof runForensicEngine !== 'undefined';
+  if (pathPart.indexOf('forensic-report') !== -1) return !!window.VerumReport;
+  if (pathPart.indexOf('ots-proof') !== -1) return !!window.VoOts;
+  return true;
+}
+// Patient loader: up to 6 attempts per script with growing backoff (~15 s
+// total), so a flaky mobile link that drops for several seconds still recovers
+// instead of failing the scan. `onStatus` surfaces progress so it never looks
+// frozen. Fetch-then-inject is used on retries so a genuine 404 is detected
+// (a <script> 404 is silent in some browsers) and reported honestly.
+async function voEnsureForensicScripts(onStatus) {
+  var need = ['/forensic-engine-page.js', '/forensic-report.js', '/ots-proof.js']
+    .filter(function (p) { return !voScriptLoaded(p); });
   for (var i = 0; i < need.length; i++) {
     var base = voOriginalSrc(need[i]);
-    for (var a = 0; a < 3; a++) {
+    var ok = false;
+    for (var a = 0; a < 6 && !ok; a++) {
+      if (onStatus) onStatus('Loading analysis engine' + (a > 0 ? ' (retry ' + a + ')' : '') + '...');
       try {
-        await voLoadScript(base + (base.indexOf('?') >= 0 ? '&' : '?') + 'retry=' + a);
-        break;
+        // Verify the file is actually fetchable before injecting it, so a 404
+        // or MIME problem is caught rather than silently swallowed.
+        var url = base + (base.indexOf('?') >= 0 ? '&' : '?') + 'r=' + a + '_' + (a * 131 + 7);
+        var resp = await fetch(url, { cache: 'no-store' });
+        if (!resp.ok) throw new Error('HTTP ' + resp.status + ' for ' + need[i]);
+        var code = await resp.text();
+        var s = document.createElement('script');
+        s.text = code;
+        document.head.appendChild(s);
+        if (voScriptLoaded(need[i])) ok = true;
+        else throw new Error('script ran but global still missing');
       } catch (e) {
-        await new Promise(function (r) { setTimeout(r, 400 * (a + 1)); });
+        await new Promise(function (r) { setTimeout(r, Math.min(3000, 600 * (a + 1))); });
       }
     }
+    if (!ok) throw new Error('Could not load ' + need[i] + ' after 6 attempts');
   }
 }
 
@@ -1694,7 +1717,7 @@ async function startSealing() {
         // On a phone a single dropped request left runForensicEngine undefined
         // and the whole scan failed with "runForensicEngine is not defined".
         // Re-fetch any that did not arrive before the scan runs.
-        await voEnsureForensicScripts();
+        await voEnsureForensicScripts(function(msg){ updateStep('Fraud','processing',msg); });
         var pdfDocForForensics = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
         _pipelinePageCount = pdfDocForForensics.getPageCount();
         updateStep('Fraud', 'processing', 'Scanning ' + _pipelinePageCount + ' page(s) - 37 contradiction detectors running...');
@@ -2314,7 +2337,7 @@ async function runSealingPipeline() {
   };
   // Recover the report builder too if its script was the one that dropped.
   if (sealMode === 'forensic' && (!window.VerumReport || typeof window.VerumReport.build !== 'function')) {
-    try { await voEnsureForensicScripts(); } catch (e) {}
+    try { await voEnsureForensicScripts(function(msg){ updateStep(7,'processing',msg); }); } catch (e) {}
   }
   try {
     if (sealMode === 'forensic' && window.VerumReport && typeof window.VerumReport.build === 'function') {
