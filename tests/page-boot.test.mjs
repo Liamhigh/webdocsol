@@ -17,7 +17,8 @@ const ok = (cond, msg) => {
   else { fail++; console.error('  FAIL: ' + msg); }
 };
 
-const PAGES = ['seal-document.html', 'index.html'];
+// Pages that load pdf-lib and would freeze if it were missing.
+const PAGES = ['seal-document.html'];
 const VENDOR = [
   'vendor/pdf-lib.min.js',
   'vendor/qrcode.min.js',
@@ -65,6 +66,19 @@ for (const page of PAGES) {
   }
   ok(threw === null,
     `${page}: boot script threw without pdf-lib (${threw && threw.message}) -- page would freeze`);
+}
+
+// index.html is the home page. It was overwritten with a copy of the sealing
+// app in 4cb88ff to paper over a blank screen, which silently deleted the
+// site's front door -- `/` and `/seal-document` served the same thing.
+{
+  const home = readFileSync('index.html', 'utf8');
+  ok(/<title>\s*Verum Omnis - AI Forensics for Truth\s*<\/title>/.test(home),
+    'index.html is the home page, not a copy of the sealing app');
+  ok(!home.includes('async function startSealing'),
+    'index.html does not duplicate the sealing application');
+  ok(home.includes('/seal-document'),
+    'home page links to the sealing app');
 }
 
 console.log(`\n[page-boot] PASS=${pass} FAIL=${fail}`);
