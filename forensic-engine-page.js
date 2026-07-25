@@ -350,20 +350,40 @@ var DETECTORS = {
     var LABEL_RE = /\b(grand total|sub-?total|total|balance(?:\s+due)?|amount(?:\s+(?:due|payable|paid))?|invoice total|net(?:\s+amount)?|gross(?:\s+amount)?|vat|tax|deposit|purchase price|contract (?:value|price|sum))\b/gi;
     var AMOUNT_RE = /(?:[R$€£]\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)\d+(?:\.\d{2})?/;
 
+    // How far after a label an amount may sit and still belong to it.
+    var MAX_LOOKAHEAD = 40;
+
     var byLabel = {};
     for (var i = 0; i < textBlocks.length; i++) {
       var block = textBlocks[i];
+
+      // Collect every label position first so each one's search window can be
+      // stopped at the next label. Scanning a fixed distance forward let a
+      // label that states no amount of its own reach past the next label and
+      // adopt its figure -- "Total: refer to annexure. Deposit R900,000" was
+      // read as a Total of R900,000, manufacturing a discrepancy that is not
+      // in the document. Inventing an allegation is the worst thing a forensic
+      // detector can do, so a label's amount must lie strictly before the
+      // next label, and a label with no amount of its own is skipped.
+      var marks = [];
       LABEL_RE.lastIndex = 0;
       var m;
       while ((m = LABEL_RE.exec(block)) !== null) {
-        // The amount belongs to the label only if it follows closely.
-        var window = block.slice(m.index + m[0].length, m.index + m[0].length + 40);
-        var am = window.match(AMOUNT_RE);
+        marks.push({ text: m[0], start: m.index, end: m.index + m[0].length });
+      }
+
+      for (var k = 0; k < marks.length; k++) {
+        var from = marks[k].end;
+        var boundary = k + 1 < marks.length ? marks[k + 1].start : block.length;
+        var to = Math.min(boundary, from + MAX_LOOKAHEAD);
+        if (to <= from) continue;
+
+        var am = block.slice(from, to).match(AMOUNT_RE);
         if (!am) continue;
         var value = parseFloat(am[0].replace(/[^0-9.]/g, ''));
         if (isNaN(value) || value <= 100) continue;
 
-        var label = m[0].toLowerCase().replace(/\s+/g, ' ').replace(/^sub-total$/, 'subtotal');
+        var label = marks[k].text.toLowerCase().replace(/\s+/g, ' ').replace(/^sub-total$/, 'subtotal');
         if (!byLabel[label]) byLabel[label] = [];
         byLabel[label].push({ value: value, raw: am[0].trim(), page: i });
       }
