@@ -16,6 +16,7 @@ const suites = [
   'pdf-encrypt.test.mjs',
   'find-seal.test.mjs',
   'home-verify.test.mjs',
+  'inline-scripts.test.mjs',
 ];
 
 let failed = 0;
