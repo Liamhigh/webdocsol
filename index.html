@@ -1766,11 +1766,16 @@ function initVerifier(){
       // Current-format seals (VO-SEAL2 / SEAL-CERT / legacy VO-SEAL in the Info
       // dictionary) take priority over the old plaintext-seal path below.
       var vo2=await voVerifySeal(bytes,fullText);
+      // Page count for reassurance ("all N pages verified"). VO-SEAL2 covers the
+      // whole file in one hash, so every page is verified together -- this just
+      // shows how many. Counts uncompressed page objects.
+      var voPages=(fullText.match(/\/Type\s*\/Page(?!s)/g)||[]).length;
+      var voPagesTxt=voPages>0?('all '+voPages+' page'+(voPages===1?'':'s')):'every page';
       if(vo2 && vo2.scheme==='v2'){
         if(vo2.integrity==='match'){
           o.state='verified'; o.color='green'; o.title='VERIFIED';
           o.matched=true;
-          o.msg='Document verified — not tampered. Seal '+vo2.sealId+', SHA-512 recomputed and matches byte-for-byte.'+
+          o.msg='Document verified — '+voPagesTxt+' intact, not tampered. Seal '+vo2.sealId+', SHA-512 recomputed and matches byte-for-byte.'+
             (ots && ots.height ? ' Blockchain anchored at block '+ots.height+'.' : '');
         } else if(vo2.integrity==='tamper'){
           o.state='tampered'; o.color='red'; o.title='TAMPERED';
