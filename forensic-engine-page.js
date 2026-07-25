@@ -1472,10 +1472,14 @@ function _voDecodeHexString(hex, cmap) {
   return out;
 }
 
-async function extractPageText(pdfBytes, pageIndex) {
+// `preloadedDoc` is the already-parsed document. Without it this reloaded and
+// re-parsed the whole PDF once per page, making extraction quadratic in
+// document size: a 159-page file meant 159 full parses, which locked up the
+// browser for so long the scan looked permanently frozen.
+async function extractPageText(pdfBytes, pageIndex, preloadedDoc) {
   var texts = [];
   try {
-    var doc = await PDFLib.PDFDocument.load(pdfBytes, { ignoreEncryption: true });
+    var doc = preloadedDoc || await PDFLib.PDFDocument.load(pdfBytes, { ignoreEncryption: true });
     var page = doc.getPages()[pageIndex];
     if (!page) return texts;
 
@@ -1577,9 +1581,14 @@ async function extractPageText(pdfBytes, pageIndex) {
   return texts;
 }
 
+// Yields to the event loop so the browser can repaint mid-scan.
+function _voYield() {
+  return new Promise(function (r) { setTimeout(r, 0); });
+}
+
 // ===================== MAIN FORENSIC ENGINE =====================
 
-async function runForensicEngine(pdfBytes, pdfDoc) {
+async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   var allFindings = [];
 
   // Extract text blocks (one per page)
@@ -1588,8 +1597,15 @@ async function runForensicEngine(pdfBytes, pdfDoc) {
   try {
     var pages = pdfDoc.getPages();
     for (var i = 0; i < pages.length; i++) {
-      var texts = await extractPageText(pdfBytes, i);
+      var texts = await extractPageText(pdfBytes, i, pdfDoc);
       textBlocks.push(texts.join(' '));
+      // Hand the main thread back periodically. `await` on an already-resolved
+      // value only drains microtasks, so without this the browser never
+      // repaints during a long scan and the page appears hung.
+      if ((i & 7) === 7) {
+        if (onProgress) onProgress(i + 1, pages.length);
+        await _voYield();
+      }
     }
     // If per-page extraction yielded almost nothing (image-only PDF or parse
     // failure), disclose it and use the whole-document raw scan instead.
