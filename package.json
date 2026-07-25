@@ -9,6 +9,7 @@
     "test:ots": "node tests/ots-proof.test.js",
     "test:worker": "node tests/worker.test.mjs",
     "test:page-boot": "node tests/page-boot.test.mjs",
+    "test:engine-perf": "node tests/engine-perf.test.mjs",
     "check": "node --check forensic-engine-page.js && node --check forensic-report.js && node --check ots-proof.js && node --check worker/verum-rules.js && node --check worker/verumglobal-static.js"
   }
 }

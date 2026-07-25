@@ -1637,7 +1637,9 @@ async function startSealing() {
         var pdfDocForForensics = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
         _pipelinePageCount = pdfDocForForensics.getPageCount();
         updateStep('Fraud', 'processing', 'Scanning ' + _pipelinePageCount + ' page(s) - 37 contradiction detectors running...');
-        forensicResult = await runForensicEngine(fileBytes, pdfDocForForensics);
+        forensicResult = await runForensicEngine(fileBytes, pdfDocForForensics, function (done, total) {
+          updateStep('Fraud', 'processing', 'Scanning page ' + done + ' of ' + total + ' - 37 contradiction detectors running...');
+        });
       } catch(e) {
         console.warn('Forensic engine error:', e);
         forensicResult = { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], scanFailed: true, scanError: (e && e.message ? e.message : 'unknown'), extractionNotes: 'Forensic engine error: ' + (e && e.message ? e.message : 'unknown') + '. The scan could not complete; absence of findings here is NOT a clean result.', summary: 'Forensic scan could not complete' };

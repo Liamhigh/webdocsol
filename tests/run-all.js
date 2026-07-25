@@ -11,6 +11,7 @@ const suites = [
   'ots-proof.test.js',
   'worker.test.mjs',
   'page-boot.test.mjs',
+  'engine-perf.test.mjs',
 ];
 
 let failed = 0;
