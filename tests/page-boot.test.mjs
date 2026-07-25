@@ -104,6 +104,15 @@ for (const page of PAGES) {
   ok(html.includes("'shareSealedBtn'"), 'share button has a stable id');
 }
 
+// The forensic scripts are same-origin with no CDN fallback, so a dropped
+// request must be recoverable: the scan re-injects them before running. It
+// broke twice as "runForensicEngine is not defined".
+{
+  const html = readFileSync('seal-document.html', 'utf8');
+  ok(html.includes('function voEnsureForensicScripts'), 'seal page can re-load dropped forensic scripts');
+  ok(/await voEnsureForensicScripts\(\)/.test(html), 'the scan awaits the script-recovery loader');
+}
+
 // index.html is the home page. It was overwritten with a copy of the sealing
 // app in 4cb88ff to paper over a blank screen, which silently deleted the
 // site's front door -- `/` and `/seal-document` served the same thing.
