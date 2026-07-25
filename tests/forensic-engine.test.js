@@ -98,6 +98,20 @@ t.ok(DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY(
 ).some(f => /R50,000\.00.*R70,000\.00/.test(f.evidence)),
   'D02 binds each amount to its own adjacent label');
 
+// D03: a labelled date restated at a different value is a contradiction; a
+// consistent date, a different label's date, or an ambiguous numeric date is
+// not. Numeric forms are skipped deliberately -- day/month order is ambiguous
+// and a false "restated date" would be a fabricated allegation.
+const d03restate = (input) => DETECTORS.D03_DETECT_DATE_INCONSISTENCY(input).filter(f => f.evidence.includes('is stated as'));
+t.ok(d03restate(['Effective Date: January 15, 2023', 'Effective Date: March 1, 2023']).length === 1,
+  'D03 fires when a labelled date is restated differently');
+t.ok(d03restate(['Effective Date: January 15, 2023', 'Effective Date: January 15, 2023']).length === 0,
+  'D03 quiet when the labelled date is consistent');
+t.ok(d03restate(['Effective Date: January 15, 2023 Execution Date: January 10, 2023']).length === 0,
+  'D03 does not compare different labels');
+t.ok(d03restate(['Due date: 01/02/2023 and due date: 02/01/2023']).length === 0,
+  'D03 skips ambiguous numeric dates');
+
 // ---- 4. Serial-pattern engine ----
 t.ok(Array.isArray(detectSerialPatterns([''])), 'detectSerialPatterns returns array on empty');
 t.noThrow(() => detectSerialPatterns(['random benign words']), 'detectSerialPatterns on benign text');

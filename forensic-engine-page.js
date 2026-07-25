@@ -449,6 +449,60 @@ var DETECTORS = {
         }
       }
     }
+
+    // A *labelled* date stated at two different values -- "Effective Date:
+    // January 15, 2023" here, "Effective Date: March 1, 2023" there -- is the
+    // date analogue of D02's restated amounts, and was previously invisible:
+    // this detector only checked for impossible calendar dates. Same window
+    // discipline as D02: a date belongs to a label only if it appears before
+    // the next label, so a label with no date cannot borrow a neighbour's.
+    var DATE_LABEL_RE = /\b(effective date|execution date|date signed|date of signature|signature date|commencement date|termination date|expiry date|expiration date|invoice date|due date|closing date|date of birth)\b/gi;
+    var MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+    // Month-name formats only: numeric dates are ambiguous (US vs rest of
+    // world day/month order), and a false "restated date" is a fabricated
+    // allegation. Better to miss than to invent.
+    var LABELLED_DATE_RE = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4}))\b/;
+    function normDate(m) {
+      var day, mon, year;
+      if (m[1]) { day = +m[1]; mon = MONTHS[m[2].slice(0, 3).toLowerCase()]; year = +m[3]; }
+      else { mon = MONTHS[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
+      if (!mon || day < 1 || day > 31) return null;
+      return { key: year * 10000 + mon * 100 + day, raw: m[0] };
+    }
+    var byDateLabel = {};
+    for (var b = 0; b < textBlocks.length; b++) {
+      var block = textBlocks[b];
+      var marks = [];
+      DATE_LABEL_RE.lastIndex = 0;
+      var lm;
+      while ((lm = DATE_LABEL_RE.exec(block)) !== null) {
+        marks.push({ text: lm[0], start: lm.index, end: lm.index + lm[0].length });
+      }
+      for (var k = 0; k < marks.length; k++) {
+        var from = marks[k].end;
+        var boundary = k + 1 < marks.length ? marks[k + 1].start : block.length;
+        var to = Math.min(boundary, from + 50);
+        if (to <= from) continue;
+        var dm = block.slice(from, to).match(LABELLED_DATE_RE);
+        if (!dm) continue;
+        var nd = normDate(dm);
+        if (!nd) continue;
+        var lab = marks[k].text.toLowerCase().replace(/\s+/g, ' ');
+        if (!byDateLabel[lab]) byDateLabel[lab] = [];
+        byDateLabel[lab].push({ key: nd.key, raw: nd.raw, page: b });
+      }
+    }
+    for (var lab2 in byDateLabel) {
+      if (!Object.prototype.hasOwnProperty.call(byDateLabel, lab2)) continue;
+      var st = byDateLabel[lab2].slice().sort(function (x, y) { return x.key - y.key; });
+      var base2 = st[0];
+      for (var q = 1; q < st.length; q++) {
+        if (st[q].key === base2.key) continue;
+        findings.push({ type: 'CT03', severity: 4,
+          evidence: '"' + lab2 + '" is stated as ' + base2.raw + ' and as ' + st[q].raw,
+          location: 'Page ' + (base2.page + 1) + ' vs Page ' + (st[q].page + 1) });
+      }
+    }
     return findings;
   },
 

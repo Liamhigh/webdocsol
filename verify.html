@@ -339,9 +339,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
   <div class="upload-zone" id="dropZone">
     <div class="icon">&#128203;</div>
-    <p>Drag &amp; drop a sealed PDF here, or click to browse</p>
+    <p>Drag &amp; drop a sealed PDF (or encrypted .voice file) here, or click to browse</p>
     <p class="hint">Supports VO-DSS sealed documents (.pdf with embedded metadata)</p>
-    <input type="file" id="fileInput" accept=".pdf,application/pdf" style="display:none">
+    <input type="file" id="fileInput" accept=".pdf,.voice,application/pdf" style="display:none">
   </div>
 
   <div class="share-meta" id="shareMetaBox">
@@ -574,8 +574,10 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
   async function handleFile(file) {
     resetUI();
-    if (!file.name.toLowerCase().endsWith('.pdf')) {
-      showError('Please select a PDF file.');
+    var lower = file.name.toLowerCase();
+    if (lower.endsWith('.voice')) { handleVoiceFile(file); return; }
+    if (!lower.endsWith('.pdf')) {
+      showError('Please select a PDF file, or a .voice encrypted file.');
       reportVerificationOutcome('VERIFY_ERROR', 0, null);
       return;
     }
@@ -588,6 +590,78 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       showError('Error reading file: ' + e.message);
       reportVerificationOutcome('VERIFY_ERROR', 0, null);
     }
+  }
+
+  // ===== .voice decryption (password-protected sealed documents) =====
+  // The seal page's results banner has always told recipients to "upload the
+  // .voice file to verify.html and enter the password to decrypt" -- but no
+  // decrypt path existed here, so recipients could never open the file. This
+  // implements the receiving half. The format and KDF parameters MUST mirror
+  // encryptSealedPDF in seal-document.html exactly:
+  //   bytes = salt(16) | iv(12) | AES-256-GCM ciphertext
+  //   key   = PBKDF2(password, salt, 100000 iterations, SHA-256) -> AES-GCM 256
+  // A cross-page test (tests/voice-crypto.test.mjs) round-trips the two
+  // implementations against each other so they cannot drift apart.
+  async function voDeriveKey(password, salt) {
+    var enc = new TextEncoder();
+    var keyMaterial = await crypto.subtle.importKey('raw', enc.encode(password), 'PBKDF2', false, ['deriveKey']);
+    return crypto.subtle.deriveKey({ name: 'PBKDF2', salt: salt, iterations: 100000, hash: 'SHA-256' }, keyMaterial, { name: 'AES-GCM', length: 256 }, false, ['decrypt']);
+  }
+  async function voDecryptVoice(encryptedBytes, password) {
+    if (encryptedBytes.length < 29) throw new Error('Not a valid .voice file');
+    var salt = encryptedBytes.slice(0, 16);
+    var iv = encryptedBytes.slice(16, 28);
+    var ciphertext = encryptedBytes.slice(28);
+    var key = await voDeriveKey(password, salt);
+    var decrypted = await crypto.subtle.decrypt({ name: 'AES-GCM', iv: iv }, key, ciphertext);
+    return new Uint8Array(decrypted);
+  }
+
+  function handleVoiceFile(file) {
+    var old = document.getElementById('voicePwdOverlay');
+    if (old) old.remove();
+    var box = document.createElement('div');
+    box.id = 'voicePwdOverlay';
+    box.style.cssText = 'background:rgba(15,52,96,0.15);border:1px solid rgba(212,168,67,0.4);border-radius:12px;padding:20px;margin:16px 0;';
+    box.innerHTML =
+      '<div style="font-size:15px;color:#D4A843;font-weight:600;margin-bottom:8px;">&#128274; Password-protected document</div>' +
+      '<div style="font-size:13px;color:#94a3b8;line-height:1.6;margin-bottom:12px;">This .voice file is AES-256 encrypted. Enter the password the sender gave you. Decryption happens on your device -- nothing is uploaded.</div>' +
+      '<input type="password" id="voicePwdInput" placeholder="Document password" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;margin-bottom:10px;">' +
+      '<div id="voicePwdError" style="display:none;color:#ef4444;font-size:13px;margin-bottom:10px;"></div>' +
+      '<button type="button" id="voicePwdGo" style="padding:12px 24px;border:none;border-radius:10px;background:#D4A843;color:#0a1628;font-weight:600;font-size:14px;cursor:pointer;">Decrypt &amp; Verify</button>';
+    dropZone.parentNode.insertBefore(box, dropZone.nextSibling);
+    var input = box.querySelector('#voicePwdInput');
+    var errEl = box.querySelector('#voicePwdError');
+    var go = box.querySelector('#voicePwdGo');
+    input.focus();
+    async function attempt() {
+      var pwd = input.value;
+      if (!pwd) { errEl.textContent = 'Enter the password.'; errEl.style.display = 'block'; return; }
+      go.disabled = true; go.textContent = 'Decrypting...'; errEl.style.display = 'none';
+      try {
+        var buf = new Uint8Array(await file.arrayBuffer());
+        var pdfBytes = await voDecryptVoice(buf, pwd);
+        var pdfName = file.name.replace(/\.voice$/i, '.pdf');
+        currentPdfBlob = new Blob([pdfBytes], { type: 'application/pdf' });
+        var dl = document.createElement('a');
+        dl.href = URL.createObjectURL(currentPdfBlob);
+        dl.download = pdfName;
+        dl.textContent = '⬇ Save decrypted PDF (' + pdfName + ')';
+        dl.style.cssText = 'display:inline-block;margin-top:4px;color:#D4A843;font-size:13px;';
+        box.innerHTML = '<div style="font-size:14px;color:#22c55e;">&#10003; Decrypted successfully -- verifying seal...</div>';
+        box.appendChild(dl);
+        spinner.classList.add('visible');
+        await verifyPdf(pdfBytes.buffer, pdfName);
+      } catch (e) {
+        // AES-GCM authenticates: a wrong password OR a tampered file both land
+        // here, and the two are indistinguishable by design.
+        go.disabled = false; go.textContent = 'Decrypt & Verify';
+        errEl.textContent = 'Decryption failed: wrong password, or the file has been modified.';
+        errEl.style.display = 'block';
+      }
+    }
+    go.addEventListener('click', attempt);
+    input.addEventListener('keydown', function (e) { if (e.key === 'Enter') attempt(); });
   }
 
   // ===== VO-SEAL / VO-SEAL2 seal detection (PDF.js + raw fast paths) =====
