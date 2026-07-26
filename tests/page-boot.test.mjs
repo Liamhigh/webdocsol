@@ -187,12 +187,13 @@ for (const page of PAGES) {
   };
   const structural = html.match(/var VO_BUNDLE_STRUCTURAL = \{[^}]*\};/);
   const fnBundle = grab('applyBundleMode');
-  ok(Boolean(structural && fnBundle), 'seal page defines VO_BUNDLE_STRUCTURAL and applyBundleMode');
-  if (structural && fnBundle) {
-    const sandbox = { legalCaseFile: true };
+  const fnLooks = grab('voLooksLikeBundle');
+  ok(Boolean(structural && fnBundle && fnLooks), 'seal page defines VO_BUNDLE_STRUCTURAL, voLooksLikeBundle and applyBundleMode');
+  if (structural && fnBundle && fnLooks) {
+    const sandbox = { legalCaseFile: true, _pipelinePageCount: 0 };
     sandbox.voIsLegalCaseFile = () => sandbox.legalCaseFile;
     vm.createContext(sandbox);
-    vm.runInContext(structural[0] + '\n' + fnBundle, sandbox);
+    vm.runInContext(structural[0] + '\n' + fnLooks + '\n' + fnBundle, sandbox);
     const result = {
       findings: [
         { type: 'CT27', severity: 4, evidence: 'dup page' },
@@ -211,10 +212,30 @@ for (const page of PAGES) {
     ok(out.overallScore === Math.round(((2 + 4 + 5 + 2) / 20) * 100),
       'indicator score is recomputed from demoted severities');
     ok(/Bundle mode/.test(out.extractionNotes), 'demotion is disclosed in extraction notes');
+
+    // No case details AND a small document => ordinary document, no-op.
     sandbox.legalCaseFile = false;
+    sandbox._pipelinePageCount = 10;
     const untouched = vm.runInContext('applyBundleMode(' + JSON.stringify(result) + ')', sandbox);
     ok(untouched.findings[0].severity === 4 && untouched.overallScore === 80,
-      'bundle mode is a no-op without case details (no regression on ordinary documents)');
+      'bundle mode is a no-op on an ordinary document (no case details, few pages)');
+
+    // No case details but a large PDF with repeated internal page numbers =>
+    // auto-detected as a bundle so structural noise still demotes.
+    sandbox._pipelinePageCount = 528;
+    const bundleFindings = { findings: [
+      { type: 'CT27', severity: 4, evidence: 'Page number 10 appears on multiple pages' },
+      { type: 'CT27', severity: 4, evidence: 'Page number 11 appears on multiple pages' },
+      { type: 'CT27', severity: 4, evidence: 'Page number 12 appears on multiple pages' },
+      { type: 'CT02', severity: 4, evidence: 'totals differ' }
+    ], overallScore: 80, confidence: 'VERY_HIGH', clean: false, extractionNotes: 'note.' };
+    const auto = vm.runInContext('applyBundleMode(' + JSON.stringify(bundleFindings) + ')', sandbox);
+    ok(auto.findings[0].severity === 2 && auto.findings[3].severity === 4,
+      'large bundle auto-detected without case details: CT27 demotes, CT02 untouched');
+    ok(auto.bundleMode && auto.bundleMode.auto === true,
+      'auto-detected bundle mode is flagged as automatic');
+    ok(/detected automatically/.test(auto.extractionNotes),
+      'auto bundle detection is disclosed in extraction notes');
   }
 }
 
