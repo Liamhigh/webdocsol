@@ -127,6 +127,21 @@ for (const page of PAGES) {
     'home page links to the sealing app');
 }
 
+// The forensic narrative must render as paragraphs, not one squashed block.
+// san() converts every newline to a space, so sanitizing the whole narrative
+// BEFORE splitting it on blank lines collapsed the entire section into a single
+// dense paragraph. Guard: the renderer must NOT san the full narrative up front,
+// and must split it into paragraphs before sanitizing each block.
+{
+  const rep = readFileSync('forensic-report.js', 'utf8');
+  ok(!/data\.aiNarrative\s*\?\s*san\(data\.aiNarrative\)/.test(rep),
+    'narrative is NOT sanitized before the paragraph split (would squash it)');
+  ok(/var paras = narr\.split\(\/\\n\{2,\}\/\)/.test(rep),
+    'narrative is split into paragraphs on blank lines');
+  ok(/san\(paras\[p\]\)/.test(rep),
+    'each narrative paragraph is sanitized after the split');
+}
+
 console.log(`\n[page-boot] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) {
   console.log('[page-boot] FAILURES');
