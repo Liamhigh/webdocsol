@@ -7176,7 +7176,16 @@ async function runSealingPipeline() {
     updateStep(6, 'complete', 'Protected PDF — sealed as-is; seal record lives on the Seal Certificate');
   }
 
-  if (password) {
+  window._voNewPasswordSkipped = false;
+  if (password && window._voSealedAsIs) {
+    // The input already carries its own password protection (it was sealed
+    // as-is). Encrypting an encrypted file double-encrypts its streams and
+    // renders garbage pages, so the new password is NOT applied -- stated
+    // plainly in the step and on the results card, never silently.
+    encryptedBytes = null;
+    window._voNewPasswordSkipped = true;
+    updateStep(6, 'complete', 'Already password-protected — existing password kept; the new password was NOT applied');
+  } else if (password) {
     // Produce a STANDARD password-protected PDF: one ordinary .pdf that opens
     // in any reader (Adobe, Preview, Chrome, phones) with a password prompt.
     // The recipient cannot open it without asking the sender for the password
@@ -7596,9 +7605,17 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   document.getElementById('sha512Display').textContent = sha512;
   document.getElementById('sealIdDisplay').textContent = sealId;
 
-  // Protected-input seals: state plainly that the file was sealed as-is.
+  // Protected-input seals: state plainly that the file was sealed as-is, and
+  // whether a requested new password was skipped (re-encrypting an encrypted
+  // file corrupts it -- honesty over silence).
   var asIsNoteEl = document.getElementById('asIsNote');
-  if (asIsNoteEl) asIsNoteEl.style.display = window._voSealedAsIs ? 'block' : 'none';
+  if (asIsNoteEl) {
+    if (!asIsNoteEl.dataset.baseHtml) asIsNoteEl.dataset.baseHtml = asIsNoteEl.innerHTML;
+    asIsNoteEl.innerHTML = asIsNoteEl.dataset.baseHtml + (window._voNewPasswordSkipped
+      ? ' <strong>The new password you entered was NOT applied</strong> &mdash; this file already has its own password, and re-encrypting a locked file would corrupt it. The document keeps its existing password.'
+      : '');
+    asIsNoteEl.style.display = window._voSealedAsIs ? 'block' : 'none';
+  }
 
   // VO-SEAL2: show the sealed-file self-integrity hash when the new scheme
   // was applied (hidden for legacy-fallback seals -- no such hash exists).
