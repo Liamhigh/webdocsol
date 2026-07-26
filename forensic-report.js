@@ -624,7 +624,14 @@ function secExecSummary(ctx, data) {
     if (plDemoted > 0) {
       plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
     }
-    plLines.push('That leaves ' + plSubstantive + ' substantive indicator' + (plSubstantive === 1 ? '' : 's') + (plSerious > 0 ? ', of which ' + plSerious + ' ' + (plSerious === 1 ? 'is' : 'are') + ' rated critical or high. Start there: they appear under "Top findings" below and in full in the findings matrix.' : '. None reached the critical or high band.'));
+    // "That leaves" only reads correctly after something was subtracted; when
+    // nothing was demoted, lead with the substantive count directly.
+    var substLead = (plDemoted > 0)
+      ? 'That leaves ' + plSubstantive + ' substantive indicator' + (plSubstantive === 1 ? '' : 's')
+      : (plSerial > 0
+          ? 'Of these, ' + plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's') + ' (the rest are multi-stage pattern matches, described below)'
+          : plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's'));
+    plLines.push(substLead + (plSerious > 0 ? ', of which ' + plSerious + ' ' + (plSerious === 1 ? 'is' : 'are') + ' rated critical or high. Start there: they appear under "Top findings" below and in full in the findings matrix.' : '. None reached the critical or high band.'));
     if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern indicator' + (plSerial === 1 ? '' : 's') + ' also matched - see the Serial Pattern Analysis section.');
     plLines.push('The indicator score (' + score + '/100) measures how densely the engine found inconsistencies. It is a signpost for a human investigator - not a percentage chance of fraud, and not a verdict.');
     ctx.box('IN PLAIN LANGUAGE', plLines, { titleColor: NAVY2 });

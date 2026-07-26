@@ -1425,52 +1425,67 @@ var SERIAL_PATTERNS = {
 
 // ===================== SERIAL PATTERN DETECTOR =====================
 
+// Serial patterns are multi-stage fraud schemes (e.g. a 419 letter: big sum
+// promised -> upfront fee -> urgency -> secrecy). A real scheme has those
+// stages TOGETHER in one short document. The old detector joined every page
+// into one string and asked whether each stage's keyword appeared ANYWHERE --
+// so a 528-page legal bundle "matched" 419 Scam, Money Laundering, Bribery and
+// more purely because those common words each occur somewhere across 500 pages.
+// That is a false-positive machine that put fabricated fraud-scheme headlines
+// on top of the report.
+//
+// Co-location fix: a pattern is only detected when its stages cluster within a
+// sliding window of consecutive pages (WINDOW). A genuine scam email (1-3 pages)
+// still matches; scattered vocabulary across a large bundle does not. The
+// detected location becomes the real page range of the cluster, not
+// "Full document". textBlocks are per-page (see extractPageText); a single
+// collapsed block (short doc / OCR fallback) is treated as one window.
+var SERIAL_WINDOW_PAGES = 3;
+
 function detectSerialPatterns(textBlocks) {
   var findings = [];
-  var fullText = textBlocks.join(' ').toLowerCase();
+  var blocks = (textBlocks && textBlocks.length) ? textBlocks.map(function (b) { return String(b || '').toLowerCase(); }) : [''];
+  var nWin = Math.max(1, blocks.length - SERIAL_WINDOW_PAGES + 1);
 
   for (var spKey in SERIAL_PATTERNS) {
     var pattern = SERIAL_PATTERNS[spKey];
-    var matchedStages = 0;
-    var matchedDetails = [];
+    var best = null; // { matchedStages, details, startPage, endPage }
 
-    for (var s = 0; s < pattern.stages.length; s++) {
-      var stage = pattern.stages[s];
-      var stageMatched = false;
-      for (var k = 0; k < stage.keywords.length; k++) {
-        if (fullText.indexOf(stage.keywords[k]) !== -1) {
-          stageMatched = true;
-          matchedDetails.push(stage.indicator + ': "' + stage.keywords[k] + '"');
-          break;
+    for (var w = 0; w < nWin; w++) {
+      var windowText = blocks.slice(w, w + SERIAL_WINDOW_PAGES).join(' ');
+      var matchedStages = 0, matchedDetails = [];
+      for (var s = 0; s < pattern.stages.length; s++) {
+        var stage = pattern.stages[s];
+        for (var k = 0; k < stage.keywords.length; k++) {
+          if (windowText.indexOf(stage.keywords[k]) !== -1) {
+            matchedStages++;
+            matchedDetails.push(stage.indicator + ': "' + stage.keywords[k] + '"');
+            break;
+          }
         }
       }
-      if (stageMatched) matchedStages++;
+      if (!best || matchedStages > best.matchedStages) {
+        best = { matchedStages: matchedStages, details: matchedDetails, startPage: w + 1, endPage: Math.min(blocks.length, w + SERIAL_WINDOW_PAGES) };
+      }
     }
 
-    // Flag if 3+ stages of a 4+ stage pattern are matched
-    if (matchedStages >= 3 && pattern.stages.length >= 4) {
-      findings.push({
-        type: 'SERIAL',
-        serialPattern: spKey,
-        serialName: pattern.name,
-        severity: pattern.severity,
-        category: pattern.category,
-        evidence: pattern.name + ' detected: ' + matchedStages + '/' + pattern.stages.length + ' stages matched. ' + matchedDetails.join('; '),
-        location: 'Full document'
-      });
-    }
-    // Flag if 2+ stages of a 3- stage pattern
-    else if (matchedStages >= 2 && pattern.stages.length < 4) {
-      findings.push({
-        type: 'SERIAL',
-        serialPattern: spKey,
-        serialName: pattern.name,
-        severity: pattern.severity,
-        category: pattern.category,
-        evidence: pattern.name + ' detected: ' + matchedStages + '/' + pattern.stages.length + ' stages matched',
-        location: 'Full document'
-      });
-    }
+    var enough = (pattern.stages.length >= 4) ? (best.matchedStages >= 3) : (best.matchedStages >= 2);
+    if (!enough) continue;
+
+    // Report the location as the page cluster where the stages co-occurred.
+    var loc = (blocks.length <= 1)
+      ? 'Full document'
+      : (best.startPage === best.endPage ? ('Page ' + best.startPage) : ('Pages ' + best.startPage + '-' + best.endPage));
+    findings.push({
+      type: 'SERIAL',
+      serialPattern: spKey,
+      serialName: pattern.name,
+      severity: pattern.severity,
+      category: pattern.category,
+      evidence: pattern.name + ' detected: ' + best.matchedStages + '/' + pattern.stages.length + ' stages matched within a ' +
+        SERIAL_WINDOW_PAGES + '-page window. ' + best.details.join('; '),
+      location: loc
+    });
   }
 
   return findings;

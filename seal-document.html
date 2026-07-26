@@ -1199,7 +1199,14 @@ function secExecSummary(ctx, data) {
     if (plDemoted > 0) {
       plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
     }
-    plLines.push('That leaves ' + plSubstantive + ' substantive indicator' + (plSubstantive === 1 ? '' : 's') + (plSerious > 0 ? ', of which ' + plSerious + ' ' + (plSerious === 1 ? 'is' : 'are') + ' rated critical or high. Start there: they appear under "Top findings" below and in full in the findings matrix.' : '. None reached the critical or high band.'));
+    // "That leaves" only reads correctly after something was subtracted; when
+    // nothing was demoted, lead with the substantive count directly.
+    var substLead = (plDemoted > 0)
+      ? 'That leaves ' + plSubstantive + ' substantive indicator' + (plSubstantive === 1 ? '' : 's')
+      : (plSerial > 0
+          ? 'Of these, ' + plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's') + ' (the rest are multi-stage pattern matches, described below)'
+          : plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's'));
+    plLines.push(substLead + (plSerious > 0 ? ', of which ' + plSerious + ' ' + (plSerious === 1 ? 'is' : 'are') + ' rated critical or high. Start there: they appear under "Top findings" below and in full in the findings matrix.' : '. None reached the critical or high band.'));
     if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern indicator' + (plSerial === 1 ? '' : 's') + ' also matched - see the Serial Pattern Analysis section.');
     plLines.push('The indicator score (' + score + '/100) measures how densely the engine found inconsistencies. It is a signpost for a human investigator - not a percentage chance of fraud, and not a verdict.');
     ctx.box('IN PLAIN LANGUAGE', plLines, { titleColor: NAVY2 });
@@ -3522,52 +3529,67 @@ var SERIAL_PATTERNS = {
 
 // ===================== SERIAL PATTERN DETECTOR =====================
 
+// Serial patterns are multi-stage fraud schemes (e.g. a 419 letter: big sum
+// promised -> upfront fee -> urgency -> secrecy). A real scheme has those
+// stages TOGETHER in one short document. The old detector joined every page
+// into one string and asked whether each stage's keyword appeared ANYWHERE --
+// so a 528-page legal bundle "matched" 419 Scam, Money Laundering, Bribery and
+// more purely because those common words each occur somewhere across 500 pages.
+// That is a false-positive machine that put fabricated fraud-scheme headlines
+// on top of the report.
+//
+// Co-location fix: a pattern is only detected when its stages cluster within a
+// sliding window of consecutive pages (WINDOW). A genuine scam email (1-3 pages)
+// still matches; scattered vocabulary across a large bundle does not. The
+// detected location becomes the real page range of the cluster, not
+// "Full document". textBlocks are per-page (see extractPageText); a single
+// collapsed block (short doc / OCR fallback) is treated as one window.
+var SERIAL_WINDOW_PAGES = 3;
+
 function detectSerialPatterns(textBlocks) {
   var findings = [];
-  var fullText = textBlocks.join(' ').toLowerCase();
+  var blocks = (textBlocks && textBlocks.length) ? textBlocks.map(function (b) { return String(b || '').toLowerCase(); }) : [''];
+  var nWin = Math.max(1, blocks.length - SERIAL_WINDOW_PAGES + 1);
 
   for (var spKey in SERIAL_PATTERNS) {
     var pattern = SERIAL_PATTERNS[spKey];
-    var matchedStages = 0;
-    var matchedDetails = [];
+    var best = null; // { matchedStages, details, startPage, endPage }
 
-    for (var s = 0; s < pattern.stages.length; s++) {
-      var stage = pattern.stages[s];
-      var stageMatched = false;
-      for (var k = 0; k < stage.keywords.length; k++) {
-        if (fullText.indexOf(stage.keywords[k]) !== -1) {
-          stageMatched = true;
-          matchedDetails.push(stage.indicator + ': "' + stage.keywords[k] + '"');
-          break;
+    for (var w = 0; w < nWin; w++) {
+      var windowText = blocks.slice(w, w + SERIAL_WINDOW_PAGES).join(' ');
+      var matchedStages = 0, matchedDetails = [];
+      for (var s = 0; s < pattern.stages.length; s++) {
+        var stage = pattern.stages[s];
+        for (var k = 0; k < stage.keywords.length; k++) {
+          if (windowText.indexOf(stage.keywords[k]) !== -1) {
+            matchedStages++;
+            matchedDetails.push(stage.indicator + ': "' + stage.keywords[k] + '"');
+            break;
+          }
         }
       }
-      if (stageMatched) matchedStages++;
+      if (!best || matchedStages > best.matchedStages) {
+        best = { matchedStages: matchedStages, details: matchedDetails, startPage: w + 1, endPage: Math.min(blocks.length, w + SERIAL_WINDOW_PAGES) };
+      }
     }
 
-    // Flag if 3+ stages of a 4+ stage pattern are matched
-    if (matchedStages >= 3 && pattern.stages.length >= 4) {
-      findings.push({
-        type: 'SERIAL',
-        serialPattern: spKey,
-        serialName: pattern.name,
-        severity: pattern.severity,
-        category: pattern.category,
-        evidence: pattern.name + ' detected: ' + matchedStages + '/' + pattern.stages.length + ' stages matched. ' + matchedDetails.join('; '),
-        location: 'Full document'
-      });
-    }
-    // Flag if 2+ stages of a 3- stage pattern
-    else if (matchedStages >= 2 && pattern.stages.length < 4) {
-      findings.push({
-        type: 'SERIAL',
-        serialPattern: spKey,
-        serialName: pattern.name,
-        severity: pattern.severity,
-        category: pattern.category,
-        evidence: pattern.name + ' detected: ' + matchedStages + '/' + pattern.stages.length + ' stages matched',
-        location: 'Full document'
-      });
-    }
+    var enough = (pattern.stages.length >= 4) ? (best.matchedStages >= 3) : (best.matchedStages >= 2);
+    if (!enough) continue;
+
+    // Report the location as the page cluster where the stages co-occurred.
+    var loc = (blocks.length <= 1)
+      ? 'Full document'
+      : (best.startPage === best.endPage ? ('Page ' + best.startPage) : ('Pages ' + best.startPage + '-' + best.endPage));
+    findings.push({
+      type: 'SERIAL',
+      serialPattern: spKey,
+      serialName: pattern.name,
+      severity: pattern.severity,
+      category: pattern.category,
+      evidence: pattern.name + ' detected: ' + best.matchedStages + '/' + pattern.stages.length + ' stages matched within a ' +
+        SERIAL_WINDOW_PAGES + '-page window. ' + best.details.join('; '),
+      location: loc
+    });
   }
 
   return findings;
@@ -6879,9 +6901,28 @@ function voIsLegalCaseFile() {
 // demotion itself is disclosed in the extraction notes (Prime Directive 6).
 var VO_BUNDLE_STRUCTURAL = { CT04: 1, CT08: 1, CT27: 1, CT31: 1, CT35: 1, CT36: 1 };
 
+// A compiled bundle is recognisable from its own findings even when the user
+// typed no case details: concatenating many documents makes internal page
+// numbers repeat, so the CT27 "page number appears on multiple pages" detector
+// fires several times. Combined with a large page count that is the signature
+// of a bound bundle. Auto-detecting it means a 528-page evidence bundle sealed
+// without case details still gets structural indicators demoted, instead of
+// leading the report with 27 page-numbering "HIGH" findings.
+function voLooksLikeBundle(result) {
+  var pages = _pipelinePageCount | 0;
+  if (pages < 50) return false;
+  var dupPageNumbers = 0;
+  var fs = result.findings;
+  for (var i = 0; i < fs.length; i++) {
+    if (fs[i] && fs[i].type === 'CT27' && /appears on multiple pages/i.test(String(fs[i].evidence || ''))) dupPageNumbers++;
+  }
+  return dupPageNumbers >= 3;
+}
+
 function applyBundleMode(result) {
   if (!result || result.scanFailed || !Array.isArray(result.findings)) return result;
-  if (!voIsLegalCaseFile()) return result;
+  var autoBundle = voLooksLikeBundle(result);
+  if (!voIsLegalCaseFile() && !autoBundle) return result;
   var demoted = 0;
   var findings = result.findings.map(function (f) {
     if (!f || f.type === 'SERIAL' || !VO_BUNDLE_STRUCTURAL[f.type]) return f;
@@ -6904,9 +6945,10 @@ function applyBundleMode(result) {
     overallScore: score,
     confidence: confidence,
     clean: score < 20,
-    bundleMode: { applied: true, demoted: demoted },
+    bundleMode: { applied: true, demoted: demoted, auto: autoBundle && !voIsLegalCaseFile() },
     summary: (typeof generateSummary === 'function') ? generateSummary(findings, score) : result.summary,
-    extractionNotes: (((result.extractionNotes || '') + ' Bundle mode: this is a compiled multi-document case file (case details supplied), so ' + demoted +
+    extractionNotes: (((result.extractionNotes || '') + ' Bundle mode: this is a compiled multi-document case file (' +
+      (voIsLegalCaseFile() ? 'case details supplied' : 'detected automatically from ' + (_pipelinePageCount | 0) + ' pages with repeated internal page numbers') + '), so ' + demoted +
       ' structural indicator' + (demoted === 1 ? '' : 's') + ' (repeated internal page numbers, term/temporal-language repetition, address counts, per-document formalities and annexure references) ' +
       (demoted === 1 ? 'was' : 'were') + ' demoted to Low and the indicator score recomputed. Contradiction, date, identity and financial findings are unaffected.').trim())
   });

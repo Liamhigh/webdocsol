@@ -141,6 +141,25 @@ const firstSP = SERIAL_PATTERNS[Object.keys(SERIAL_PATTERNS)[0]];
 const spInput = firstSP.stages.map(s => s.keywords[0]).join(' ');
 t.ok(Array.isArray(detectSerialPatterns([spInput])), 'detectSerialPatterns on crafted multi-stage input');
 
+// Co-location: all of a pattern's stage keywords packed into ONE page must
+// still be detected (a real scam document has its stages together).
+const coLocated = detectSerialPatterns([spInput]);
+t.ok(coLocated.some(f => f.serialPattern === Object.keys(SERIAL_PATTERNS)[0]),
+  'serial pattern detected when its stages are co-located on one page');
+
+// Scatter guard (the annexure-EB regression): the SAME keywords spread one per
+// page across a large bundle, each surrounded by filler, must NOT trigger the
+// pattern — that was the false "419 Scam / Money Laundering detected" bug.
+const filler = 'lorem ipsum dolor sit amet consectetur '.repeat(20);
+const scattered = [];
+for (let i = 0; i < firstSP.stages.length; i++) {
+  scattered.push(filler + ' ' + firstSP.stages[i].keywords[0] + ' ' + filler);
+  scattered.push(filler); scattered.push(filler); scattered.push(filler); // spacer pages > window
+}
+const scatterFindings = detectSerialPatterns(scattered).filter(f => f.serialPattern === Object.keys(SERIAL_PATTERNS)[0]);
+t.ok(scatterFindings.length === 0,
+  'serial pattern NOT detected when stage keywords are scattered across a large bundle');
+
 // ---- 5. Full pipeline (runForensicEngine) via the raw-text fallback path ----
 // In the browser, extractPdfText is a global defined in the page HTML; stub it
 // here so the fallback branch of runForensicEngine can be exercised in Node.
