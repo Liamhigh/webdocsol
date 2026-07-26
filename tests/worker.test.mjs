@@ -161,6 +161,10 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'the system prompt carries the two-tier rule and the contradiction shape');
   ok(/DECLARATIVE FINDINGS RULE/.test(capturedSystem) && /hallmarks of fraud/.test(capturedSystem),
     'the system prompt makes anchored facts declarative (forensic-instrument voice)');
+  ok(/constitutional forensic investigator/.test(capturedSystem)
+    && /AI-raised candidate - pending engine verification/.test(capturedSystem)
+    && /Never print CT\/SP codes unexplained/.test(capturedSystem),
+    'narrator is an investigator: translates codes, raises missed contradictions as labelled candidates');
   ok(/EVENT-LEVEL DETERMINATION/.test(capturedSystem) && /the documents evidence fraud/.test(capturedSystem)
     && /Person-level guilt is never declared/.test(capturedSystem),
     'the system prompt certifies corroborated events (pathologist standard) but never person-level guilt');

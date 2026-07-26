@@ -543,6 +543,17 @@ function drawToc(ctx, tocPage) {
 function secExecSummary(ctx, data) {
   ctx.newBodyPage();
   ctx.heading('EXECUTIVE SUMMARY');
+  // A document with no machine-readable text must never present as clean:
+  // zero findings on an unread document is an absence of analysis, not a
+  // verdict of consistency (Prime Directive 6).
+  if (data.findings && data.findings.unreadable) {
+    ctx.box('DOCUMENT NOT ANALYSED — NOT A CLEAN RESULT', [
+      'This document contains no usable machine-readable text (scanned or image-only PDF).',
+      'The deterministic engine could not read its content. Zero findings below means NOTHING WAS EXAMINED — it does not mean the document is consistent.',
+      'The cryptographic seal (hash, timestamp, QR) is unaffected and remains valid. For contradiction analysis, re-submit a text-layer copy; any pages recovered by on-device OCR are disclosed in the methodology section.'
+    ]);
+    ctx.gap(10);
+  }
 
   var fr = data.findings;
   var score = fr.overallScore || 0;
@@ -686,6 +697,12 @@ function secMatrix(ctx, data) {
   if (data.findings && data.findings.scanFailed) {
     ctx.para('The forensic scan could not complete on this document' + (data.findings.extractionNotes ? ': ' + data.findings.extractionNotes : '.'), { size: 10 });
     ctx.para('No findings are available. The document seal (hash, timestamp, QR) is unaffected, but this report contains no contradiction analysis. Re-submit or retry on a desktop computer if analysis is required.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
+    return;
+  }
+
+  if (data.findings && data.findings.unreadable) {
+    ctx.para('No contradiction analysis was possible: the document contains no usable machine-readable text (scanned or image-only PDF). The ' + DETECTOR_COUNT + ' detectors require text to examine, and there was none to give them.', { size: 10 });
+    ctx.para('This is NOT a clean result and NOT a certification of consistency — the content was simply not read. The seal on the document (hash, timestamp) remains valid. Re-submit a text-layer copy for analysis; any pages recovered by on-device OCR are disclosed in the methodology section.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
     return;
   }
 
