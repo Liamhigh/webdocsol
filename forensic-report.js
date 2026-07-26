@@ -260,11 +260,17 @@ var QUOTE_MAX = 300;
 function cleanQuote(ev) {
   ev = String(ev === null || ev === undefined ? '' : ev);
   ev = ev
-    .replace(/verum omnis sha-512 \(partial\):\s*[0-9a-f]{6,}/gi, ' ')
-    .replace(/verum omnis sealed (evidence|document)\s*(source:)?[^"]{0,80}?page \d+ of \d+/gi, ' ')
+    // Seal-footer debris left in the text layer of an already-sealed input.
+    // Several footer formats exist across VO versions, so strip them all:
+    .replace(/verum omnis sha-?512 \(partial\):\s*[0-9a-f]{6,}/gi, ' ')
+    .replace(/verum omnis seal(ed)?\s*(original|evidence|document)?\s*(case-[0-9a-f]+)?/gi, ' ')
+    .replace(/\bcase-[0-9a-f]{6,}\b/gi, ' ')
+    .replace(/\b[0-9a-f]{6,}\s*\.{2,3}\s*[0-9a-f]{6,}\b/gi, ' ')     // truncated hash "ae76fb34...77f3ac68"
+    .replace(/\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{8,}\b/gi, ' ') // bare hex hash token (has a digit and a letter)
     .replace(/\b\d+\s*\/\s*\d+\s*verify seal\b/gi, ' ')
     .replace(/\bverify seal\b/gi, ' ')
     .replace(/\bclean bundle page \d+ of \d+\b/gi, ' ')
+    .replace(/\bpage \d+ of \d+\b/gi, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
   if (ev.length > QUOTE_MAX) {
@@ -1518,7 +1524,7 @@ async function seal(reportBytes, sealOpts) {
 }
 
 // ================= exports =================
-var api = { build: build, seal: seal, _sanitize: san };
+var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote };
 global.VerumReport = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
