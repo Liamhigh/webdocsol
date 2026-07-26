@@ -1024,7 +1024,11 @@ function secMethodology(ctx, data) {
 // ================= SECTION: AI REVIEW (optional cloud layer) =================
 function secAiReview(ctx, data) {
   var ar = (data.aiReview && data.aiReview.applied) ? data.aiReview : null;
-  var narr = data.aiNarrative ? san(data.aiNarrative) : '';
+  // Keep the RAW narrative (newlines intact) so we can split it into paragraphs.
+  // san() turns every newline into a space, so sanitizing BEFORE the split
+  // collapsed the whole narrative into one squashed block with no structure --
+  // sanitize each paragraph AFTER the split instead.
+  var narr = data.aiNarrative ? String(data.aiNarrative) : '';
   if (!ar && !narr) return;
   ctx.newBodyPage();
   // When a narrative exists it is the report's story and gets the prominent
@@ -1033,12 +1037,14 @@ function secAiReview(ctx, data) {
   ctx.heading(narr ? 'FORENSIC NARRATIVE' : 'AI REVIEW');
   if (narr) {
     ctx.para('Plain-language analysis of the findings below. Advisory: it carries no scoring weight, and every finding remains anchored to the quoted text in the sections that follow.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
-    // Render the narrative as flowing paragraphs (split on blank lines and
-    // single newlines) so it reads like a report, not one dense block.
+    // Render the narrative as flowing paragraphs (blank line = new paragraph)
+    // so it reads like a report, not one dense block.
     var paras = narr.split(/\n{2,}/);
     for (var p = 0; p < paras.length; p++) {
-      var block = paras[p].replace(/\s*\n\s*/g, ' ').trim();
+      var block = san(paras[p]).replace(/\s*\n\s*/g, ' ').trim();
       if (!block) continue;
+      // Skip the separator rules (rows of = or -) that divide narrative sections.
+      if (/^[=_\-—–]{3,}$/.test(block)) continue;
       // A short ALL-CAPS or "Heading:" line becomes a sub-heading.
       if (block.length < 60 && (/^[A-Z0-9 ,'&()\-]+$/.test(block) || /^[A-Z][^.]{0,58}:$/.test(block))) {
         ctx.subHeading(block.replace(/:$/, ''));

@@ -426,7 +426,7 @@ const AI_MODEL_FAST = '@cf/meta/llama-3.1-8b-instruct-fp8';
 const AI_MODEL_STRONG = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const MAX_AI_BODY = 16 * 1024;          // 16 KB hard cap for most AI endpoints
 const MAX_AI_NARRATE_BODY = 96 * 1024;  // narrate also carries the document text excerpt
-const MAX_NARRATE_EXCERPT = 16000;      // chars of document text sent to the narrator
+const MAX_NARRATE_EXCERPT = 12000;      // chars of document text sent to the narrator (kept lean so the fast model answers well within timeout)
 const AI_GATEKEEP_TIMEOUT_MS = 10000;   // 10 s for the fast model
 const AI_TIMEOUT_MS = 30000;            // 30 s for the strong model
 const MAX_ASSESS_FINDINGS = 40;
@@ -964,7 +964,7 @@ async function handleAiNarrate(request, env) {
     // keeps the server's worst case at one AI_TIMEOUT_MS, which the client's
     // narrate timeout comfortably covers.
     const text = await callAi(env, AI_MODEL_FAST, NARRATE_SYSTEM, userContent,
-      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 4096, temperature: 0.2 });
+      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 2560, temperature: 0.2 });
     const parsed = extractJsonObject(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('model reply is not a JSON object');
