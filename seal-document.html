@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.7.3-20260726-anchored-ai-narrative">
+<meta name="vo-seal-build" content="1.7.4-20260726-narrate-timeout-sync">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -6249,11 +6249,11 @@ async function aiNarrateReport(findings, score, verdict) {
   if (_pipelineTextSample) { metadata.documentExcerpt = String(_pipelineTextSample).slice(0, 16000); }
   console.log('[VO-AI-NARRATE] Requesting AI narrative for', findingsKept.length, 'findings',
     metadata.documentExcerpt ? '(with ' + metadata.documentExcerpt.length + ' chars of document text)' : '(findings only)');
-  // The narrative is drafted by the strong model (llama-70b) and routinely
-  // needs longer than the fast endpoints. The old 10 s client timeout aborted
-  // before it finished, so the narrative silently never appeared and the report
-  // fell back to raw findings ("AI review: NOT RUN"). Match the server's 30 s.
-  var res = await aiApiPost('/api/v1/ai/narrate', metadata, 45000);
+  // Narrate now runs on the fast 8B model server-side with a single 30 s AI
+  // timeout (no slow 70B fallback). This client timeout sits just above that
+  // (30 s + network/JSON margin) so it waits out a legitimately slow generation
+  // but does not hang far past the point the server itself would have given up.
+  var res = await aiApiPost('/api/v1/ai/narrate', metadata, 38000);
   console.log('[VO-AI-NARRATE] Received response:', {
     is_object: typeof res === 'object',
     has_summary: !!res?.summary,
