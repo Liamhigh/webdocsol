@@ -161,6 +161,9 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'the system prompt carries the two-tier rule and the contradiction shape');
   ok(/DECLARATIVE FINDINGS RULE/.test(capturedSystem) && /hallmarks of fraud/.test(capturedSystem),
     'the system prompt makes anchored facts declarative (forensic-instrument voice)');
+  ok(/EVENT-LEVEL DETERMINATION/.test(capturedSystem) && /the documents evidence fraud/.test(capturedSystem)
+    && /Person-level guilt is never declared/.test(capturedSystem),
+    'the system prompt certifies corroborated events (pathologist standard) but never person-level guilt');
   ok(capturedUser.indexOf('SEALED CASE FILE') >= 0,
     'the case file is clearly labelled for the narrator');
 }
