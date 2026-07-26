@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.6.1-20260726-narrative-always">
+<meta name="vo-seal-build" content="1.6.2-20260726-local-narrative-fallback">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -6036,6 +6036,43 @@ async function aiAssessFindings(findings) {
 
 // Narrate: returns the AI-drafted narrative string, or null on any failure
 // (including template-fallback absence and timeouts). Includes GPS, device, and metadata.
+// Deterministic, fully on-device narrative built straight from the engine
+// findings -- used whenever the AI narrate endpoint is unreachable or returns
+// nothing (a dropped connection, the model down, an empty reply). It guarantees
+// the report ALWAYS has a readable narrative section, and it never leaves the
+// device or asserts anything beyond the supplied findings.
+function buildLocalNarrative(findings, score, verdict) {
+  var list = Array.isArray(findings) ? findings.filter(Boolean) : [];
+  var byType = {};
+  list.forEach(function (f) { var t = f.type || 'OTHER'; byType[t] = (byType[t] || 0) + 1; });
+  var typeCount = Object.keys(byType).length;
+  var band = (verdict || '').toString().toUpperCase() || 'REVIEW';
+
+  var summary = 'This report was generated on this device from the sealed document. The forensic engine ' +
+    'identified ' + list.length + ' indicator' + (list.length === 1 ? '' : 's') + ' across ' + typeCount +
+    ' contradiction type' + (typeCount === 1 ? '' : 's') + ', giving an overall indicator score of ' +
+    (score != null ? score : 'n/a') + ' (' + band + '). These are investigative indicators drawn only from ' +
+    'the document itself; a human reviewer or court makes the final determination. An AI-written narrative ' +
+    'was not available for this report, so the findings are presented directly below.';
+
+  var top = list.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); }).slice(0, 12);
+  var evidence = top.length
+    ? top.map(function (f, i) {
+        var where = f.location || (f.page ? 'Page ' + f.page : 'the document');
+        var ev = (f.evidence || f.description || 'indicator flagged').toString().slice(0, 220);
+        return (i + 1) + '. [' + (f.type || 'OTHER') + ', severity ' + (f.severity || '?') + '] ' + where + ': ' + ev;
+      }).join('\n')
+    : 'No individual findings were available to quote.';
+
+  return 'SUMMARY\n\n' + summary +
+    '\n\n' + '='.repeat(80) + '\n\n' +
+    'WHAT THE EVIDENCE SHOWS\n\n' + evidence +
+    '\n\n' + '='.repeat(80) + '\n\n' +
+    'IMPORTANT LIMITS\n\nThese are findings, not final proof. The cryptographic seal proves the document is ' +
+    'authentic and unaltered; it does not prove the findings are correct. A court or investigator must verify ' +
+    'and decide. These findings are investigative indicators, not determinations of guilt.';
+}
+
 async function aiNarrateReport(findings, score, verdict) {
   var metadata = { findings: findings, score: score, verdict: verdict };
   if (gpsCoords) { metadata.gps = gpsCoords.lat + ',' + gpsCoords.lng; if (gpsCoords.accuracy) metadata.gpsAccuracy = Math.round(gpsCoords.accuracy) + 'm'; }
@@ -6357,7 +6394,7 @@ async function runSealingPipeline() {
       // the review unavailable -- it never blocks the narrative below.
       var assessRes = null;
       try { assessRes = await aiAssessFindings(fraudResult.findings); }
-      catch (assessErr) { assessRes = null; }
+      catch (assessErr) { console.warn('[VO-AI] assess failed:', assessErr && assessErr.message ? assessErr.message : assessErr); assessRes = null; }
       if (!assessRes || !assessRes.ran) {
         // Honest antithesis marker: review was enabled but did not run.
         aiReviewInfo = { applied: false, reason: 'service unavailable' };
@@ -6395,7 +6432,12 @@ async function runSealingPipeline() {
         // template even when the model fails, so this should always yield a
         // narrative -- but if anything does throw, the report still builds.
         try { aiNarrativeText = await aiNarrateReport(narrateFindings, reportFraudResult.overallScore, reportFraudResult.confidence); }
-        catch (narrErr) { aiNarrativeText = null; }
+        catch (narrErr) { console.warn('[VO-AI] narrate failed:', narrErr && narrErr.message ? narrErr.message : narrErr); aiNarrativeText = null; }
+        // Guarantee a narrative even when the AI endpoint is unreachable: fall
+        // back to an on-device narrative built directly from the findings.
+        if (!aiNarrativeText) {
+          aiNarrativeText = buildLocalNarrative(narrateFindings, reportFraudResult.overallScore, reportFraudResult.confidence);
+        }
       }
     }
   } catch (aiErr) {
