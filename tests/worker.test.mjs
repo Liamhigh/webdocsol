@@ -103,6 +103,44 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   }
 }
 
+// --- narrate contract: the client/worker field names must agree, and the
+// documented {summary, findings, ...} reply shape must flow through untouched.
+// A mismatch here (findings vs findingsKept) silently 400'd every narrate call,
+// which is why reports showed no AI narrative.
+{
+  // Correct client payload shape -> accepted (200). Uses the template because
+  // env.AI here has no run(), so callAi throws and the deterministic template
+  // answers -- but the request itself must validate.
+  const good = {
+    documentName: 'demo.pdf', pageCount: 3, score: 62, confidence: 'HIGH',
+    findingsPruned: 0, generatedUtc: '2026-07-26T00:00:00Z',
+    documentExcerpt: 'On 3 March 2026 Acme Ltd transferred R2,000,000 to a shell account.',
+    findingsKept: [{ id: 'F1', type: 'CT02', severity: 4, location: 'Page 2', evidence: 'signature mismatch' }]
+  };
+  r = await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify(good)), env, {});
+  ok(r.status === 200, 'narrate accepts the documented payload shape (' + r.status + ')');
+  const nb = await r.json().catch(() => null);
+  ok(nb && nb.ok === true, 'narrate returns ok:true');
+
+  // The OLD client payload {findings, score, verdict} is the wrong shape and
+  // must be rejected -- documents the contract the client now satisfies.
+  r = await worker.fetch(mk('/api/v1/ai/narrate', 'POST',
+    JSON.stringify({ findings: [{ type: 'CT02' }], score: 50, verdict: 'HIGH' })), env, {});
+  ok(r.status === 400, 'narrate rejects the legacy {findings} shape (' + r.status + ')');
+
+  // The documented {summary, findings, ...} reply passes through as format:plain.
+  const AIenv = { ...env, AI: { run: async () => ({ response: JSON.stringify({
+    summary: 'Acme Ltd moved R2m to a shell account.',
+    findings: 'The document shows a transfer flagged as a signature mismatch [F1].',
+    contradictions: '', impact: '', legalContext: '', evidence: '', seal: '', limits: ''
+  }) }) } };
+  r = await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify(good)), AIenv, {});
+  const pb = await r.json().catch(() => null);
+  ok(pb && pb.format === 'plain', 'documented reply shape flows through as format:plain');
+  ok(pb && /Acme Ltd/.test(pb.summary || ''), 'narrate passes the model summary through');
+  ok(pb && /investigative indicators/.test(pb.limits || ''), 'narrate appends the closing disclaimer to limits');
+}
+
 console.log('\n[worker] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[worker] ALL GREEN');

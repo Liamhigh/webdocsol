@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.6.2-20260726-local-narrative-fallback">
+<meta name="vo-seal-build" content="1.7.0-20260726-ai-reads-document">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -5295,6 +5295,10 @@ let _pipelineFraudResult = null;
 let _pipelinePageCount = 0;
 let _pipelineAiAddedFindings = [];
 let _pipelineClassification = null;
+// Bounded document text captured during the scan so the AI narrator can write
+// from the document's own words (real parties, dates, amounts). Populated only
+// when AI review is on; sent to /api/v1/ai/narrate. Empty => findings-only.
+let _pipelineTextSample = '';
 
 // ==================== BUILD SEALED PDF ====================
 
@@ -5810,6 +5814,7 @@ async function startSealing() {
     // scanned, scored, or sent anywhere.
     var forensicResult = null;
     _pipelineClassification = null;
+    _pipelineTextSample = '';
     if (sealMode === 'forensic') {
       // AI triage (optional; only when AI review is enabled): classify the document
       // FIRST, concurrently with the deterministic engine run. Defensive: ANY
@@ -5820,7 +5825,11 @@ async function startSealing() {
         classifyPromise = (async function() {
           try {
             var tokens = await extractPdfText(fileBytes);
-            var sample = (Array.isArray(tokens) ? tokens.join(' ') : String(tokens || '')).replace(/\s+/g, ' ').trim().slice(0, 4000);
+            var fullSample = (Array.isArray(tokens) ? tokens.join(' ') : String(tokens || '')).replace(/\s+/g, ' ').trim();
+            // Keep a larger excerpt for the narrator (real names/dates/amounts);
+            // classify still only needs the first 4000 chars for triage.
+            _pipelineTextSample = fullSample.slice(0, 16000);
+            var sample = fullSample.slice(0, 4000);
             if (!sample) return null;
             return await aiClassifyDocument(sample, _pipelinePageCount || 0);
           } catch (e) { return null; }
@@ -6074,10 +6083,39 @@ function buildLocalNarrative(findings, score, verdict) {
 }
 
 async function aiNarrateReport(findings, score, verdict) {
-  var metadata = { findings: findings, score: score, verdict: verdict };
+  // Build the exact shape the worker's /api/v1/ai/narrate contract requires.
+  // The old payload sent {findings, score, verdict} but the worker validates
+  // findingsKept/confidence/documentName -- so every narrate call 400'd and the
+  // report silently fell back to no AI narrative. Ids are assigned F1, F2, ...
+  // so the model's [F#] citations line up with the findings list.
+  var list = Array.isArray(findings) ? findings.filter(Boolean) : [];
+  var findingsKept = list.map(function (f, i) {
+    return {
+      id: 'F' + (i + 1),
+      type: f.type || 'unknown',
+      severity: f.severity,
+      location: f.location || (f.page ? 'Page ' + f.page : ''),
+      evidence: (f.evidence || f.description || '').toString()
+    };
+  });
+  var metadata = {
+    documentName: (typeof selectedFile !== 'undefined' && selectedFile && selectedFile.name) ? selectedFile.name : 'sealed document',
+    pageCount: _pipelinePageCount || 0,
+    score: score,
+    confidence: verdict,
+    findingsKept: findingsKept,
+    findingsPruned: 0,
+    generatedUtc: new Date().toISOString()
+  };
   if (gpsCoords) { metadata.gps = gpsCoords.lat + ',' + gpsCoords.lng; if (gpsCoords.accuracy) metadata.gpsAccuracy = Math.round(gpsCoords.accuracy) + 'm'; }
   if (deviceInfo) { metadata.device = deviceInfo; }
-  console.log('[VO-AI-NARRATE] Requesting AI narrative for', findings?.length || 0, 'findings');
+  // Give the narrator the document's own words so it can name the real parties,
+  // dates and amounts instead of writing from bare finding codes. Bounded and
+  // sent only because the user consented to AI review (text -> their own
+  // Cloudflare AI). Empty when extraction produced nothing -> findings-only.
+  if (_pipelineTextSample) { metadata.documentExcerpt = String(_pipelineTextSample).slice(0, 16000); }
+  console.log('[VO-AI-NARRATE] Requesting AI narrative for', findingsKept.length, 'findings',
+    metadata.documentExcerpt ? '(with ' + metadata.documentExcerpt.length + ' chars of document text)' : '(findings only)');
   // The narrative is drafted by the strong model (llama-70b) and routinely
   // needs longer than the fast endpoints. The old 10 s client timeout aborted
   // before it finished, so the narrative silently never appeared and the report
@@ -6987,6 +7025,7 @@ function resetSealing() {
   _pipelinePageCount = 0;
   _pipelineAiAddedFindings = [];
   _pipelineClassification = null;
+  _pipelineTextSample = '';
   window._voReportPack = null;
   window._voSealedFileHash = null;
   var sealedHashRowR = document.getElementById('sealedHashRow');

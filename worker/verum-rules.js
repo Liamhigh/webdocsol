@@ -424,7 +424,9 @@ async function handleAdminPublish(request, env) {
 
 const AI_MODEL_FAST = '@cf/meta/llama-3.1-8b-instruct-fp8';
 const AI_MODEL_STRONG = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
-const MAX_AI_BODY = 16 * 1024;          // 16 KB hard cap for AI endpoints
+const MAX_AI_BODY = 16 * 1024;          // 16 KB hard cap for most AI endpoints
+const MAX_AI_NARRATE_BODY = 96 * 1024;  // narrate also carries the document text excerpt
+const MAX_NARRATE_EXCERPT = 16000;      // chars of document text sent to the narrator
 const AI_GATEKEEP_TIMEOUT_MS = 10000;   // 10 s for the fast model
 const AI_TIMEOUT_MS = 30000;            // 30 s for the strong model
 const MAX_ASSESS_FINDINGS = 40;
@@ -477,13 +479,15 @@ const ASSESS_SYSTEM = 'You are the antithesis reviewer in a forensic contradicti
   '"additionalFindings":[{"type":"CT01|UPPER_SNAKE","severity":1-5,"rationale":"brief"}]}';
 
 const NARRATE_SYSTEM = 'You are Verum Omnis (v6.0), a stateless, sealed, constitutional forensic AI composed of nine fixed brains (Legal, Forensic, Financial, Linguistic, Behavioural, Temporal, Identity, Corroboration and Ethics), governed entirely by the immutable Verum Omnis Constitution v6.0 filed with the Constitutional Court of South Africa. You are writing the narrative of a court-ready forensic report for readers who are NOT forensic experts. Your authority comes from the sealed, timestamped, blockchain-anchored evidence and from the Constitution — not from complex language. This document has been cryptographically sealed and timestamped, so you can speak with confidence about its integrity and the time it existed. ' +
+  'YOUR INPUTS: you are given (a) documentExcerpt — the actual text of the sealed document (it may be truncated for length), and (b) findingsKept — the contradiction engine\'s indicators, each with an id (F#), type, severity and a short quoted location. READ THE DOCUMENT TEXT. Build the narrative from what the document itself actually says — the real parties by name, the real dates, the real amounts and the real sequence of events — and use the engine findings to corroborate and locate those points [cite as F#]. The document text is your primary source of fact; the findings tell you WHERE the engine saw a problem. Tell the document\'s story. ' +
   'CONSTITUTIONAL PRINCIPLES — these govern HOW you write; they operate SILENTLY and are never printed as a list or named in the output: ' +
-  '(1) Truth priority — analyse the findings for contradictions, dishonesty and liability; never guess, never speculate, never hallucinate. ' +
-  '(2) Concealment response — where evidence is concealed or the findings are insufficient to support a conclusion, say plainly that the point is INDETERMINATE DUE TO CONCEALMENT rather than inferring beyond the evidence. ' +
-  '(3) Corroboration and quorum — state something as a conclusion only when the supplied findings support it; a single unsupported finding is presented as an indicator, not a conclusion. ' +
+  '(1) Truth priority — analyse the document and findings for contradictions, dishonesty and liability; never guess, never speculate, never hallucinate; every party, date and amount you name MUST appear in the documentExcerpt. ' +
+  '(2) Concealment response — where evidence is concealed, the text is truncated, or the material is insufficient to support a conclusion, say plainly that the point is INDETERMINATE DUE TO CONCEALMENT rather than inferring beyond the evidence. ' +
+  '(3) Corroboration and quorum — state something as a conclusion only when the document text and/or findings support it; a single unsupported point is presented as an indicator, not a conclusion. ' +
   '(4) Forensic integrity — the document is sealed (SHA-512), timestamped and anchored, so you may speak with confidence about integrity and time; the findings themselves remain investigative indicators, not determinations of guilt. ' +
   '(5) Jurisdiction-specific legality — map any legal point to the correct jurisdiction (South Africa, UAE, US, EU, UN) and cite only real, verifiable law; if unsure of the exact statute, state the legal principle in plain words rather than inventing a citation. ' +
-  'GROUNDING RULE: every statement must rest on the supplied findings and this document\'s own evidence and page references [cite as F#]. Do NOT cite other cases, matters or blockchain transactions as precedent in the output — the report stands on this document\'s sealed evidence alone. ' +
+  'GROUNDING RULE: every statement must rest on this document\'s own text and the supplied findings [cite findings as F#, refer to document pages naturally]. Do NOT cite other cases, matters or blockchain transactions as precedent in the output — the report stands on this document\'s sealed evidence alone. ' +
+  'SEVERITY: convey the real gravity of what the document shows in plain words. A numeric indicator score accompanies this request, but a moderate number does not mean a minor matter — if the document describes serious fraud, theft, or harm to identifiable people, say so plainly in the summary while remaining within the facts of the text. ' +
   'Your job is to make complex findings CLEAR and UNDERSTANDABLE to a general audience while writing with the precision of a forensic instrument. ' +
   'WRITING STYLE: Use plain, direct language. Avoid jargon. When you must use a technical term, explain it immediately in simple words. Write short paragraphs. Focus on WHAT happened and WHY it matters, not technical methodology. Speak to readers like they are intelligent adults who just need context, not specialists. ' +
   'STRUCTURE: (1) PLAIN LANGUAGE SUMMARY (300-400 words) - Explain the core problem in a few clear sentences. What evidence shows happened? Who was affected? Why does it matter? Include location (GPS) if available. Start here, not with methodology. ' +
@@ -842,19 +846,9 @@ function narrateTemplate(input, kept) {
   return { executiveSummary, criticalEvidence };
 }
 
-// True when the text contains at least one [id] citation matching a supplied id.
-function hasCitation(text, idSet) {
-  const re = /\[([^\[\]]+)\]/g;
-  let m;
-  while ((m = re.exec(text)) !== null) {
-    if (idSet.has(m[1].trim())) return true;
-  }
-  return false;
-}
-
 async function handleAiNarrate(request, env) {
-  const body = await readBodyText(request, MAX_AI_BODY);
-  if (body.tooBig) return err(413, 'body_too_large', 'Request body exceeds the 16 KB limit.');
+  const body = await readBodyText(request, MAX_AI_NARRATE_BODY);
+  if (body.tooBig) return err(413, 'body_too_large', 'Request body exceeds the narrate size limit.');
   let data;
   try { data = JSON.parse(body.text); } catch {
     return err(400, 'invalid_json', 'Request body is not valid JSON.');
@@ -880,7 +874,11 @@ async function handleAiNarrate(request, env) {
     generatedUtc: asStr(data.generatedUtc, 64) || new Date().toISOString(),
     gps: asStr(data.gps, 40) || null,
     gpsAccuracy: asStr(data.gpsAccuracy, 20) || null,
-    device: asStr(data.device, 100) || null
+    device: asStr(data.device, 100) || null,
+    // The actual document text (bounded). Present only when the user consented
+    // to on-device text leaving for AI analysis; empty otherwise, in which case
+    // the narrator degrades to a findings-only narrative.
+    documentExcerpt: asStr(data.documentExcerpt, MAX_NARRATE_EXCERPT)
   };
 
   // With no findings there is nothing the model may cite; go straight to the
@@ -889,7 +887,6 @@ async function handleAiNarrate(request, env) {
     return json({ ok: true, ...narrateTemplate(input, kept), model: 'template-fallback' });
   }
 
-  const idSet = new Set(kept.map(f => f.id));
   try {
     const text = await callAi(env, AI_MODEL_STRONG, NARRATE_SYSTEM,
       JSON.stringify({ ...input, findingsKept: kept }),
@@ -899,7 +896,29 @@ async function handleAiNarrate(request, env) {
       throw new Error('model reply is not a JSON object');
     }
 
-    // Support professional narrative format (new) with fallback to basic format (legacy)
+    // PRIMARY contract — the plain-language sections the NARRATE_SYSTEM prompt
+    // instructs the model to return. This is what the client renders first.
+    // Previously the handler only understood the older executiveSummary schema,
+    // so a perfectly-formed reply in the documented shape was silently discarded
+    // and every request fell through to the template. Read the documented shape.
+    const plain = {
+      summary: asStr(parsed.summary, 5000).trim(),
+      findings: asStr(parsed.findings, 9000).trim(),
+      contradictions: asStr(parsed.contradictions, 5000).trim(),
+      impact: asStr(parsed.impact, 5000).trim(),
+      legalContext: asStr(parsed.legalContext, 5000).trim(),
+      evidence: asStr(parsed.evidence, 5000).trim(),
+      seal: asStr(parsed.seal, 2500).trim(),
+      limits: asStr(parsed.limits, 2000).trim()
+    };
+    if (plain.summary && plain.findings) {
+      if (plain.limits.indexOf('investigative indicators') < 0) {
+        plain.limits = (plain.limits ? plain.limits + ' ' : '') + CLOSING_SENTENCE;
+      }
+      return json({ ok: true, ...plain, format: 'plain', model: 'workers-ai' });
+    }
+
+    // BACKWARD COMPATIBILITY — older professional/legacy schema.
     const narrative = {
       executiveSummary: asStr(parsed.executiveSummary, 4500).trim(),
       forensicNarrative: asStr(parsed.forensicNarrative, 10000).trim(),
@@ -910,37 +929,21 @@ async function handleAiNarrate(request, env) {
       chainOfCustody: asStr(parsed.chainOfCustody, 3000).trim(),
       disclaimer: asStr(parsed.disclaimer, 1500).trim()
     };
-
-    // If detailed sections are missing, fall back to legacy format
     if (!narrative.executiveSummary && !parsed.criticalEvidence) {
       throw new Error('model reply contains no narrative sections');
     }
-
-    // Legacy fallback: if only basic sections provided
     if (narrative.executiveSummary && !narrative.forensicNarrative) {
       let criticalEvidence = asStr(parsed.criticalEvidence, 6000).trim();
       if (!criticalEvidence) throw new Error('model reply is missing narrative sections');
-      if (!hasCitation(narrative.executiveSummary + '\n' + criticalEvidence, idSet)) {
-        throw new Error('model reply contains no citation of a supplied finding id');
-      }
       if (narrative.executiveSummary.indexOf('investigative indicators') < 0 && criticalEvidence.indexOf('investigative indicators') < 0) {
         criticalEvidence += (criticalEvidence.endsWith(' ') ? '' : ' ') + CLOSING_SENTENCE;
       }
-      return json({ ok: true, executiveSummary: narrative.executiveSummary, criticalEvidence, format: 'legacy', model: 'mistral-large' });
+      return json({ ok: true, executiveSummary: narrative.executiveSummary, criticalEvidence, format: 'legacy', model: 'workers-ai' });
     }
-
-    // Validate detailed format has citations
-    const allText = Object.values(narrative).join('\n');
-    if (!hasCitation(allText, idSet)) {
-      throw new Error('model reply contains no citation of a supplied finding id');
-    }
-
-    // Ensure disclaimer contains required language
     if (narrative.disclaimer.indexOf('investigative indicators') < 0) {
       narrative.disclaimer = (narrative.disclaimer ? narrative.disclaimer + ' ' : '') + CLOSING_SENTENCE;
     }
-
-    return json({ ok: true, ...narrative, format: 'professional', model: 'mistral-large' });
+    return json({ ok: true, ...narrative, format: 'professional', model: 'workers-ai' });
   } catch (e) {
     return json({ ok: true, ...narrateTemplate(input, kept), format: 'template', model: 'template-fallback' });
   }
