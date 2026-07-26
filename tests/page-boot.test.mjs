@@ -173,6 +173,74 @@ for (const page of PAGES) {
     'serial-pattern label suppression also triggers on user-entered case details');
 }
 
+// Bundle mode: on a legal case file the single-document structural detectors
+// (CT27 duplicate page numbers, CT08 term repetition, CT04 temporal word
+// pairs, CT36 address counts, CT35 formalities, CT31 annexure references)
+// must demote to Low and the indicator score must be recomputed — while
+// contradiction/financial findings and serial patterns stay untouched.
+// Executable harness, not just source inspection.
+{
+  const html = readFileSync('seal-document.html', 'utf8');
+  const grab = (name) => {
+    const m = html.match(new RegExp('(function ' + name + '\\([\\s\\S]*?\\n})\\n'));
+    return m && m[1];
+  };
+  const structural = html.match(/var VO_BUNDLE_STRUCTURAL = \{[^}]*\};/);
+  const fnBundle = grab('applyBundleMode');
+  ok(Boolean(structural && fnBundle), 'seal page defines VO_BUNDLE_STRUCTURAL and applyBundleMode');
+  if (structural && fnBundle) {
+    const sandbox = { legalCaseFile: true };
+    sandbox.voIsLegalCaseFile = () => sandbox.legalCaseFile;
+    vm.createContext(sandbox);
+    vm.runInContext(structural[0] + '\n' + fnBundle, sandbox);
+    const result = {
+      findings: [
+        { type: 'CT27', severity: 4, evidence: 'dup page' },
+        { type: 'CT02', severity: 4, evidence: 'totals differ' },
+        { type: 'SERIAL', severity: 5, evidence: 'pattern' },
+        { type: 'CT08', severity: 3, evidence: 'term twice' }
+      ],
+      overallScore: 80, confidence: 'VERY_HIGH', clean: false, extractionNotes: 'note.'
+    };
+    const out = vm.runInContext('applyBundleMode(' + JSON.stringify(result) + ')', sandbox);
+    ok(out.findings[0].severity === 2 && out.findings[0].bundleDemoted === true,
+      'CT27 demotes to Low in bundle mode');
+    ok(out.findings[3].severity === 2, 'CT08 demotes to Low in bundle mode');
+    ok(out.findings[1].severity === 4 && out.findings[2].severity === 5,
+      'CT02 and SERIAL findings are untouched by bundle mode');
+    ok(out.overallScore === Math.round(((2 + 4 + 5 + 2) / 20) * 100),
+      'indicator score is recomputed from demoted severities');
+    ok(/Bundle mode/.test(out.extractionNotes), 'demotion is disclosed in extraction notes');
+    sandbox.legalCaseFile = false;
+    const untouched = vm.runInContext('applyBundleMode(' + JSON.stringify(result) + ')', sandbox);
+    ok(untouched.findings[0].severity === 4 && untouched.overallScore === 80,
+      'bundle mode is a no-op without case details (no regression on ordinary documents)');
+  }
+}
+
+// OCR rescue: image-only pages must be recoverable on-device. The vendored
+// tesseract assets must exist (CDNs are blocked by the network policy), the
+// seal page must define the hook, and the engine must call it guarded so the
+// scan never dies when OCR is unavailable.
+{
+  for (const f of [
+    'vendor/tesseract.min.js',
+    'vendor/tesseract-worker.min.js',
+    'vendor/tesseract-core-lstm.wasm.js',
+    'vendor/tesseract-core-simd-lstm.wasm.js',
+    'vendor/eng.traineddata.gz',
+  ]) {
+    ok(existsSync(f), `vendored OCR asset missing: ${f}`);
+  }
+  const html = readFileSync('seal-document.html', 'utf8');
+  ok(html.includes('async function voOcrRescuePages'), 'seal page defines the OCR rescue helper');
+  ok(/workerPath:\s*'\/vendor\/tesseract-worker\.min\.js'/.test(html),
+    'OCR worker loads from /vendor (same-origin, no CDN)');
+  const engine = readFileSync('forensic-engine-page.js', 'utf8');
+  ok(/voOcrRescuePages/.test(engine), 'engine calls the OCR rescue hook');
+  ok(/OCR rescue attempted but failed/.test(engine), 'engine discloses OCR failure instead of dying');
+}
+
 console.log(`\n[page-boot] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) {
   console.log('[page-boot] FAILURES');

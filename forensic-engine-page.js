@@ -1744,6 +1744,24 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     textBlocks = [allTexts.join(' ')];
   }
 
+  // OCR rescue hook (optional). A page whose text layer is empty is invisible
+  // to every detector -- exactly where scanned exhibits hide. When the hosting
+  // page provides window.voOcrRescuePages (on-device tesseract.js, vendored),
+  // it may recover text for image-only pages. Inert when absent; a failure is
+  // disclosed in the extraction notes, never fatal (Prime Directive 6).
+  try {
+    var _g = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+    if (_g && typeof _g.voOcrRescuePages === 'function' && textBlocks.length > 1) {
+      var _ocr = await _g.voOcrRescuePages(pdfBytes, textBlocks, onProgress);
+      if (_ocr && Array.isArray(_ocr.textBlocks) && _ocr.textBlocks.length === textBlocks.length) {
+        textBlocks = _ocr.textBlocks;
+        if (_ocr.note) extractionNote += ' ' + _ocr.note;
+      }
+    }
+  } catch (ocrErr) {
+    extractionNote += ' OCR rescue attempted but failed (' + (ocrErr && ocrErr.message ? ocrErr.message : 'unknown') + '); image-only pages remain unread.';
+  }
+
   // Run all 37 detectors
   var detectors = [
     DETECTORS.D01_DETECT_DIRECT_CONTRADICTION,
