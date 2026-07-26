@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.7.2-20260726-narrative-not-dump">
+<meta name="vo-seal-build" content="1.7.3-20260726-anchored-ai-narrative">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -6059,13 +6059,48 @@ function buildLocalNarrative(findings, score, verdict) {
   var scoreNum = (score != null && isFinite(score)) ? Number(score) : null;
   var SEP = '\n\n' + '='.repeat(80) + '\n\n';
 
-  // Lookups come from the inlined forensic-report.js (same page scope); guard so
-  // this still works if that block ever changes.
-  var CATLAB = (typeof CATEGORY_LABEL !== 'undefined') ? CATEGORY_LABEL : {};
-  var CATORD = (typeof CATEGORY_ORDER !== 'undefined') ? CATEGORY_ORDER
-    : ['STATEMENTAL', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL'];
-  var nameOf = function (t) { return (typeof CT_NAMES !== 'undefined' && CT_NAMES[t]) ? CT_NAMES[t] : (t || 'indicator'); };
-  var catOf = function (t) { return (typeof CT_CATEGORY !== 'undefined' && CT_CATEGORY[t]) ? CT_CATEGORY[t] : null; };
+  // CT lookups. forensic-report.js keeps its copies inside a closure, so they are
+  // NOT visible here -- define them locally (compact) so grouping and type names
+  // work in this on-device narrative instead of collapsing every finding to
+  // "DIGITAL" and showing raw codes like "ct14".
+  var CATLAB = {
+    STATEMENTAL: 'Statemental Contradictions', IDENTITY: 'Identity Contradictions',
+    FINANCIAL: 'Financial Contradictions', INTEGRITY: 'Document Integrity Contradictions',
+    CROSS_REF: 'Cross-Reference Contradictions', CONTACT: 'Contact & Location Contradictions',
+    EVIDENCE: 'Evidence & Witness Contradictions', DIGITAL: 'Digital Contradictions'
+  };
+  var CATORD = ['STATEMENTAL', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL'];
+  var CTNAME = {
+    CT01: 'Direct Statement Contradiction', CT02: 'Numerical Discrepancy', CT03: 'Date Inconsistency',
+    CT04: 'Temporal Sequence Break', CT05: 'Causal Impossibility', CT06: 'Logical Impossibility',
+    CT07: 'Scope Creep Indicator', CT08: 'Term Definition Contradiction', CT09: 'Identity Contradiction',
+    CT10: 'Role Contradiction', CT11: 'Authority Contradiction', CT12: 'Name Spelling Variation',
+    CT13: 'Title Inconsistency', CT14: 'Entity Status Contradiction', CT15: 'Amount Discrepancy',
+    CT16: 'Currency Mismatch', CT17: 'Account Number Invalidity', CT18: 'Bank Detail Mismatch',
+    CT19: 'VAT Number Invalid', CT20: 'Registration Number Fake', CT21: 'Quotation Mismatch',
+    CT22: 'Financial Calculation Error', CT23: 'Signature Mismatch', CT24: 'Metadata Contradiction',
+    CT25: 'Font Inconsistency', CT26: 'Format Anomaly', CT27: 'Layout Manipulation',
+    CT28: 'Image Integrity Failure', CT29: 'Timestamp Manipulation', CT30: 'Version Control Anomaly',
+    CT31: 'Cross-Reference Failure', CT32: 'Source Attribution Failure', CT33: 'Legal Reference Invalid',
+    CT34: 'Precedent Violation', CT35: 'Procedure Breach', CT36: 'Address Contradiction',
+    CT37: 'Contact Detail Mismatch', CT38: 'Jurisdictional Impossibility', CT39: 'Chain of Custody Break',
+    CT40: 'Witness Statement Conflict', CT41: 'Evidence Tampering Indicator', CT42: 'Digital Footprint Mismatch',
+    CT43: 'Document Internal Conflict'
+  };
+  var CTCAT = {
+    CT01: 'STATEMENTAL', CT02: 'STATEMENTAL', CT03: 'STATEMENTAL', CT04: 'STATEMENTAL', CT05: 'STATEMENTAL',
+    CT06: 'STATEMENTAL', CT07: 'STATEMENTAL', CT08: 'STATEMENTAL',
+    CT09: 'IDENTITY', CT10: 'IDENTITY', CT11: 'IDENTITY', CT12: 'IDENTITY', CT13: 'IDENTITY', CT14: 'IDENTITY',
+    CT15: 'FINANCIAL', CT16: 'FINANCIAL', CT17: 'FINANCIAL', CT18: 'FINANCIAL', CT19: 'FINANCIAL',
+    CT20: 'FINANCIAL', CT21: 'FINANCIAL', CT22: 'FINANCIAL',
+    CT23: 'INTEGRITY', CT24: 'INTEGRITY', CT25: 'INTEGRITY', CT26: 'INTEGRITY', CT27: 'INTEGRITY',
+    CT28: 'INTEGRITY', CT29: 'INTEGRITY', CT30: 'INTEGRITY',
+    CT31: 'CROSS_REF', CT32: 'CROSS_REF', CT33: 'CROSS_REF', CT34: 'CROSS_REF', CT35: 'CROSS_REF',
+    CT36: 'CONTACT', CT37: 'CONTACT', CT38: 'CONTACT', CT39: 'EVIDENCE', CT40: 'EVIDENCE', CT41: 'EVIDENCE',
+    CT42: 'DIGITAL', CT43: 'DIGITAL'
+  };
+  var nameOf = function (t) { return CTNAME[t] || t || 'indicator'; };
+  var catOf = function (t) { return CTCAT[t] || null; };
 
   // Plain-language meaning of each category -- generic forensic context, always
   // true of the category, never a case-specific claim.
@@ -6218,7 +6253,7 @@ async function aiNarrateReport(findings, score, verdict) {
   // needs longer than the fast endpoints. The old 10 s client timeout aborted
   // before it finished, so the narrative silently never appeared and the report
   // fell back to raw findings ("AI review: NOT RUN"). Match the server's 30 s.
-  var res = await aiApiPost('/api/v1/ai/narrate', metadata, 35000);
+  var res = await aiApiPost('/api/v1/ai/narrate', metadata, 45000);
   console.log('[VO-AI-NARRATE] Received response:', {
     is_object: typeof res === 'object',
     has_summary: !!res?.summary,
