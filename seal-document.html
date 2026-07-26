@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.6.0-20260726-ai-narrative-fix">
+<meta name="vo-seal-build" content="1.6.1-20260726-narrative-always">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -6351,7 +6351,13 @@ async function runSealingPipeline() {
     if (isAiReviewEnabled() && fraudResult && !fraudResult.scanFailed && Array.isArray(fraudResult.findings) && fraudResult.findings.length > 0) {
       updateStep(7, 'processing', 'AI review of findings (optional)...');
       var originalCount = fraudResult.findings.length;
-      var assessRes = await aiAssessFindings(fraudResult.findings);
+      // Assess in its OWN try: the endpoint throws (non-2xx) when the model is
+      // unavailable, and that throw previously escaped to the outer catch and
+      // skipped the narrative entirely. Isolate it so assess failing only marks
+      // the review unavailable -- it never blocks the narrative below.
+      var assessRes = null;
+      try { assessRes = await aiAssessFindings(fraudResult.findings); }
+      catch (assessErr) { assessRes = null; }
       if (!assessRes || !assessRes.ran) {
         // Honest antithesis marker: review was enabled but did not run.
         aiReviewInfo = { applied: false, reason: 'service unavailable' };
@@ -6385,7 +6391,11 @@ async function runSealingPipeline() {
       }
       if (narrateFindings.length > 0) {
         updateStep(7, 'processing', 'Drafting report narrative (AI)...');
-        aiNarrativeText = await aiNarrateReport(narrateFindings, reportFraudResult.overallScore, reportFraudResult.confidence);
+        // Narrate in its OWN try too: the endpoint returns a deterministic
+        // template even when the model fails, so this should always yield a
+        // narrative -- but if anything does throw, the report still builds.
+        try { aiNarrativeText = await aiNarrateReport(narrateFindings, reportFraudResult.overallScore, reportFraudResult.confidence); }
+        catch (narrErr) { aiNarrativeText = null; }
       }
     }
   } catch (aiErr) {
