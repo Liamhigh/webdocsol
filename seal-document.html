@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.9.0-20260726-bundle-mode-and-ocr-rescue">
+<meta name="vo-seal-build" content="1.9.1-20260726-watermark-share-bundle-plain-findings">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -1190,7 +1190,7 @@ function secExecSummary(ctx, data) {
         if (slHidden) ctx.bullet(serialDisplay(fnd, data) + ' — ' + fmtLocation(fnd.location), { size: 9.5, after: 5 });
         else ctx.bullet(serialDisplay(fnd, data) + ' — ' + fmtLocation(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
       } else {
-        var label = fnd.type + ' ' + (CT_NAMES[fnd.type] || '');
+        var label = (CT_NAMES[fnd.type] || fnd.type) + ' (' + fnd.type + ')';
         ctx.bullet(label + ' — ' + fmtLocation(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
       }
     }
@@ -1294,9 +1294,11 @@ function secMatrix(ctx, data) {
     for (var r2 = 0; r2 < shown.length; r2++) {
       var g = shown[r2];
       var det = CT_DETECTOR[g.type] || '—';
+      // Plain language leads; the detector/type codes trail in brackets as the
+      // audit reference. "Numerical Discrepancy (D02·CT02)", never bare codes.
       rows.push({
         n: String(r2 + 1),
-        det: det + ' · ' + g.type + ' ' + (CT_NAMES[g.type] || g.type),
+        det: (CT_NAMES[g.type] || g.type) + '  (' + det + '·' + g.type + ')',
         claim: quoteEvidence(g.evidence),
         page: pageAnchor(g.location),
         sev: (g.severity || '') + ' ' + sevLabel(g.severity || 0)
@@ -1364,7 +1366,7 @@ function secMatrix(ctx, data) {
     var bt = byType[tkey];
     typeRows.push({
       n: String(idx++),
-      type: tkey === 'SERIAL' ? 'Serial patterns' : (tkey + ' ' + (CT_NAMES[tkey] || '')),
+      type: tkey === 'SERIAL' ? 'Serial patterns' : ((CT_NAMES[tkey] || tkey) + ' (' + tkey + ')'),
       count: String(bt.count),
       maxsev: bt.maxSev + ' ' + sevLabel(bt.maxSev),
       pages: Object.keys(bt.pages).map(Number).sort(function (a, b) { return a - b; }).slice(0, 8).join(', ') || '—'
@@ -4865,7 +4867,23 @@ function buildQrPayload(meta, chainIds) {
   return p;
 }
 
-fetch('/images/watermark_portrait.png').then(r => r.arrayBuffer()).then(buf => { watermarkBytes = buf; }).catch(err => console.warn('Watermark load failed:', err));
+// Watermark loads eagerly at boot, but a single dropped request on a phone
+// used to leave watermarkBytes null for the whole session -- every sealed
+// document and report then silently lost its watermark layer. The pipeline
+// now re-fetches (both known paths) at seal time when the eager load failed.
+async function voEnsureWatermark() {
+  if (watermarkBytes) return watermarkBytes;
+  var paths = ['/images/watermark_portrait.png', '/watermark_portrait.png'];
+  for (var i = 0; i < paths.length; i++) {
+    try {
+      var r = await fetch(paths[i]);
+      if (r.ok) { watermarkBytes = await r.arrayBuffer(); return watermarkBytes; }
+    } catch (e) {}
+  }
+  console.warn('Watermark image unavailable after retry; sealing continues without the watermark layer.');
+  return null;
+}
+voEnsureWatermark();
 
 document.getElementById('uploadZone').addEventListener('click', () => document.getElementById('fileInput').click());
 document.getElementById('fileInput').addEventListener('change', (e) => {
@@ -6311,6 +6329,21 @@ function buildLocalNarrative(findings, score, verdict) {
     'reviewer, investigator or court makes the final determination. This narrative was generated deterministically ' +
     'on this device from the sealed findings -- no external service was used.';
 
+  // ---------- KEY CONTRADICTIONS (top findings as plain sentences) ----------
+  // "The actual contradiction, on which page" -- one full sentence per top
+  // finding, no bare detector codes, page anchor always stated. This is the
+  // deterministic answer to a reader who never wants to decode "CT02".
+  var SEVWORD = { 5: 'Critical', 4: 'High', 3: 'Moderate', 2: 'Low', 1: 'Informational' };
+  var keyList = list.filter(function (f) { return f.type !== 'SERIAL'; })
+    .slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); }).slice(0, 8);
+  var keyParts = keyList.map(function (f, i) {
+    var nm = nameOf(f.type);
+    var sev = SEVWORD[parseInt(f.severity, 10)] || 'Moderate';
+    var where = whereOf(f);
+    var whereTxt = (where === 'the document') ? 'across the document' : 'at ' + where;
+    return (i + 1) + '. ' + nm + ' (' + sev + ') — ' + whereTxt + ': "' + quoteOf(f) + '"';
+  });
+
   // ---------- WHAT THE EVIDENCE SHOWS (prose per category) ----------
   var evParts = [];
   counts.forEach(function (x) {
@@ -6355,7 +6388,9 @@ function buildLocalNarrative(findings, score, verdict) {
     'are the ones an investigator should examine first; the medium and low ones add corroborating context.';
 
   // ---------- assemble ----------
-  var out = 'SUMMARY\n\n' + summary + SEP + 'WHAT THE EVIDENCE SHOWS\n\n' + evidence;
+  var out = 'SUMMARY\n\n' + summary;
+  if (keyParts.length) out += SEP + 'KEY CONTRADICTIONS\n\n' + keyParts.join('\n\n');
+  out += SEP + 'WHAT THE EVIDENCE SHOWS\n\n' + evidence;
   if (patterns) out += SEP + 'PATTERNS OF CONCERN\n\n' + patterns;
   out += SEP + 'HOW SERIOUS THIS IS\n\n' + serious +
     SEP + 'IMPORTANT LIMITS\n\nThese are findings, not final proof. The cryptographic seal proves the document is ' +
@@ -6809,6 +6844,7 @@ async function runSealingPipeline() {
     if (p1 && p1 === p2 && p1.length >= 8) password = p1;
   }
   senderEmail = document.getElementById('senderEmail')?.value?.trim() || '';
+  await voEnsureWatermark(); // retry the watermark if the boot-time fetch dropped
   sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain, fraudResult);
 
   if (password) {
@@ -7148,6 +7184,21 @@ function voShareFile() {
   } catch (e) { return null; }
 }
 
+// Build the FULL share list -- sealed/protected document + sealed forensic
+// report + findings JSON -- from window._voShareFiles. Each byte payload is
+// copied so a previous share attempt can never leave a detached buffer.
+function voShareFileList() {
+  var out = [];
+  var items = window._voShareFiles || [];
+  for (var i = 0; i < items.length; i++) {
+    try {
+      out.push(new File([new Uint8Array(items[i].bytes)], items[i].name, { type: items[i].type }));
+    } catch (e) {}
+  }
+  if (!out.length) { var f = voShareFile(); if (f) out.push(f); }
+  return out;
+}
+
 function addShareButton() {
   var old = document.getElementById('shareSealedBtn');
   if (old) old.remove();
@@ -7168,14 +7219,22 @@ function addShareButton() {
   var hint = document.createElement('div');
   hint.id = 'shareHint';
   hint.style.cssText = 'font-size:12px;color:#8ea3b5;margin:6px 0 4px;line-height:1.5;';
-  hint.textContent = 'Opens your phone’s share menu so you can send the file straight to WhatsApp, email or any app — no hunting for the download.';
+  var bundleN = (window._voShareFiles || []).length;
+  hint.textContent = bundleN > 1
+    ? 'Opens your phone’s share menu with the whole bundle attached (' + bundleN + ' files: sealed document, forensic report' + (bundleN > 2 ? ', findings JSON' : '') + ') — no hunting for downloads.'
+    : 'Opens your phone’s share menu so you can send the file straight to WhatsApp, email or any app — no hunting for the download.';
 
   btn.addEventListener('click', function () {
     // navigator.share MUST be called synchronously in the click handler to keep
-    // the user-activation token; build the File first, no await before share.
-    var f = voShareFile();
-    if (!f) { fallbackDownload('Could not prepare the file to share.'); return; }
-    var data = { files: [f], title: window._voShareName, text: 'Sealed with Verum Omnis' };
+    // the user-activation token; build the Files first, no await before share.
+    // The share carries the WHOLE bundle (document + report + findings JSON);
+    // devices that can only share a single file degrade to the document alone.
+    var files = voShareFileList();
+    if (!files.length) { fallbackDownload('Could not prepare the file to share.'); return; }
+    var data = { files: files, title: window._voShareName, text: 'Sealed with Verum Omnis' };
+    if (files.length > 1 && navigator.canShare && !navigator.canShare(data)) {
+      data = { files: [files[0]], title: window._voShareName, text: 'Sealed with Verum Omnis' };
+    }
     if (navigator.canShare && !navigator.canShare(data)) {
       // This device can't share files. Best we can do is hand back the download.
       fallbackDownload('This browser can’t share files directly — the file has downloaded instead; attach it from your Downloads.');
@@ -7443,6 +7502,27 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     window._voShareBytes = sealedBytes;
     window._voShareName = base + '-sealed.pdf';
     window._voShareType = 'application/pdf';
+  }
+
+  // The whole bundle in one share. A password-protected forensic seal used to
+  // share only the protected document; the founder's direction is that the
+  // share sheet carries everything -- sealed/protected document, the sealed
+  // forensic report, and the machine-readable findings JSON -- so nothing has
+  // to be hunted down and attached separately.
+  window._voShareFiles = [];
+  if (window._voShareBytes) {
+    window._voShareFiles.push({ bytes: window._voShareBytes, name: window._voShareName, type: window._voShareType });
+  }
+  if (window._voReportPack && window._voReportPack.bytes) {
+    window._voShareFiles.push({ bytes: window._voReportPack.bytes, name: base + '-forensic-report-sealed.pdf', type: 'application/pdf' });
+  }
+  if (window._voFindingsJson) {
+    try {
+      window._voShareFiles.push({
+        bytes: new TextEncoder().encode(JSON.stringify(window._voFindingsJson, null, 2)),
+        name: base + '-findings.json', type: 'application/json'
+      });
+    } catch (e) {}
   }
 
   // Native share (Web Share API) — on a phone this opens the system share

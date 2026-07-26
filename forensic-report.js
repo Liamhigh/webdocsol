@@ -617,7 +617,7 @@ function secExecSummary(ctx, data) {
         if (slHidden) ctx.bullet(serialDisplay(fnd, data) + ' — ' + fmtLocation(fnd.location), { size: 9.5, after: 5 });
         else ctx.bullet(serialDisplay(fnd, data) + ' — ' + fmtLocation(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
       } else {
-        var label = fnd.type + ' ' + (CT_NAMES[fnd.type] || '');
+        var label = (CT_NAMES[fnd.type] || fnd.type) + ' (' + fnd.type + ')';
         ctx.bullet(label + ' — ' + fmtLocation(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
       }
     }
@@ -721,9 +721,11 @@ function secMatrix(ctx, data) {
     for (var r2 = 0; r2 < shown.length; r2++) {
       var g = shown[r2];
       var det = CT_DETECTOR[g.type] || '—';
+      // Plain language leads; the detector/type codes trail in brackets as the
+      // audit reference. "Numerical Discrepancy (D02·CT02)", never bare codes.
       rows.push({
         n: String(r2 + 1),
-        det: det + ' · ' + g.type + ' ' + (CT_NAMES[g.type] || g.type),
+        det: (CT_NAMES[g.type] || g.type) + '  (' + det + '·' + g.type + ')',
         claim: quoteEvidence(g.evidence),
         page: pageAnchor(g.location),
         sev: (g.severity || '') + ' ' + sevLabel(g.severity || 0)
@@ -791,7 +793,7 @@ function secMatrix(ctx, data) {
     var bt = byType[tkey];
     typeRows.push({
       n: String(idx++),
-      type: tkey === 'SERIAL' ? 'Serial patterns' : (tkey + ' ' + (CT_NAMES[tkey] || '')),
+      type: tkey === 'SERIAL' ? 'Serial patterns' : ((CT_NAMES[tkey] || tkey) + ' (' + tkey + ')'),
       count: String(bt.count),
       maxsev: bt.maxSev + ' ' + sevLabel(bt.maxSev),
       pages: Object.keys(bt.pages).map(Number).sort(function (a, b) { return a - b; }).slice(0, 8).join(', ') || '—'

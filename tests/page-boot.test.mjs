@@ -241,6 +241,37 @@ for (const page of PAGES) {
   ok(/OCR rescue attempted but failed/.test(engine), 'engine discloses OCR failure instead of dying');
 }
 
+// Founder-reported issues of 26 Jul (PR #41 comment): missing watermark,
+// unreadable contradiction codes, and password-protected forensic seals
+// sharing only the document instead of the whole bundle.
+{
+  // Watermark: the fetched path must exist in the repo, and the pipeline must
+  // retry the fetch at seal time instead of trusting one boot-time request.
+  ok(existsSync('images/watermark_portrait.png'),
+    'watermark exists at the path the page fetches (/images/watermark_portrait.png)');
+  const html = readFileSync('seal-document.html', 'utf8');
+  ok(html.includes('async function voEnsureWatermark'), 'watermark fetch has a retry helper');
+  ok(/await voEnsureWatermark\(\);.*\n.*buildSealedPDF/.test(html),
+    'the pipeline retries the watermark before sealing');
+
+  // Whole-bundle share: report + findings JSON ride along with the document.
+  ok(html.includes('function voShareFileList'), 'share builds the full bundle file list');
+  ok(/_voShareFiles\.push\(\{ bytes: window\._voReportPack\.bytes/.test(html),
+    'sealed forensic report is included in the share bundle');
+  ok(/window\._voFindingsJson/.test(html) && /-findings\.json/.test(html),
+    'findings JSON is included in the share bundle');
+
+  // Human-readable findings: plain names lead, codes trail; the deterministic
+  // narrative lists top findings as sentences under KEY CONTRADICTIONS.
+  const rep = readFileSync('forensic-report.js', 'utf8');
+  ok(!/det \+ ' · ' \+ g\.type/.test(rep),
+    'matrix rows no longer lead with bare detector codes');
+  ok(/\(CT_NAMES\[g\.type\] \|\| g\.type\) \+ '  \('/.test(rep),
+    'matrix rows lead with the plain-language finding name');
+  ok(html.includes('KEY CONTRADICTIONS'),
+    'on-device narrative lists top findings as plain sentences with page anchors');
+}
+
 console.log(`\n[page-boot] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) {
   console.log('[page-boot] FAILURES');
