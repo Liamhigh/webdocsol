@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.7.1-20260726-constitution-loaded">
+<meta name="vo-seal-build" content="1.7.2-20260726-narrative-not-dump">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -6047,39 +6047,137 @@ async function aiAssessFindings(findings) {
 // (including template-fallback absence and timeouts). Includes GPS, device, and metadata.
 // Deterministic, fully on-device narrative built straight from the engine
 // findings -- used whenever the AI narrate endpoint is unreachable or returns
-// nothing (a dropped connection, the model down, an empty reply). It guarantees
-// the report ALWAYS has a readable narrative section, and it never leaves the
-// device or asserts anything beyond the supplied findings.
+// nothing (a dropped connection, the model down, an empty reply). This is the
+// deterministic "_deterministic_generate" fallback: it reads like a real
+// forensic account -- grouped by theme, in flowing prose, explaining what each
+// cluster means and how serious it is -- NOT a raw dump of numbered findings.
+// It guarantees the report ALWAYS has a readable narrative, never leaves the
+// device, and asserts nothing beyond the supplied findings.
 function buildLocalNarrative(findings, score, verdict) {
   var list = Array.isArray(findings) ? findings.filter(Boolean) : [];
-  var byType = {};
-  list.forEach(function (f) { var t = f.type || 'OTHER'; byType[t] = (byType[t] || 0) + 1; });
-  var typeCount = Object.keys(byType).length;
   var band = (verdict || '').toString().toUpperCase() || 'REVIEW';
+  var scoreNum = (score != null && isFinite(score)) ? Number(score) : null;
+  var SEP = '\n\n' + '='.repeat(80) + '\n\n';
 
-  var summary = 'This report was generated on this device from the sealed document. The forensic engine ' +
-    'identified ' + list.length + ' indicator' + (list.length === 1 ? '' : 's') + ' across ' + typeCount +
-    ' contradiction type' + (typeCount === 1 ? '' : 's') + ', giving an overall indicator score of ' +
-    (score != null ? score : 'n/a') + ' (' + band + '). These are investigative indicators drawn only from ' +
-    'the document itself; a human reviewer or court makes the final determination. An AI-written narrative ' +
-    'was not available for this report, so the findings are presented directly below.';
+  // Lookups come from the inlined forensic-report.js (same page scope); guard so
+  // this still works if that block ever changes.
+  var CATLAB = (typeof CATEGORY_LABEL !== 'undefined') ? CATEGORY_LABEL : {};
+  var CATORD = (typeof CATEGORY_ORDER !== 'undefined') ? CATEGORY_ORDER
+    : ['STATEMENTAL', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL'];
+  var nameOf = function (t) { return (typeof CT_NAMES !== 'undefined' && CT_NAMES[t]) ? CT_NAMES[t] : (t || 'indicator'); };
+  var catOf = function (t) { return (typeof CT_CATEGORY !== 'undefined' && CT_CATEGORY[t]) ? CT_CATEGORY[t] : null; };
 
-  var top = list.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); }).slice(0, 12);
-  var evidence = top.length
-    ? top.map(function (f, i) {
-        var where = f.location || (f.page ? 'Page ' + f.page : 'the document');
-        var ev = (f.evidence || f.description || 'indicator flagged').toString().slice(0, 220);
-        return (i + 1) + '. [' + (f.type || 'OTHER') + ', severity ' + (f.severity || '?') + '] ' + where + ': ' + ev;
-      }).join('\n')
-    : 'No individual findings were available to quote.';
+  // Plain-language meaning of each category -- generic forensic context, always
+  // true of the category, never a case-specific claim.
+  var MEAN = {
+    STATEMENTAL: 'the document states conflicting facts, figures or definitions in different places -- internal contradictions a single truthful record should not contain',
+    IDENTITY: 'the names, titles, roles or entity statuses claimed in the document do not line up -- a common marker of misrepresentation or impersonation',
+    FINANCIAL: 'amounts, bank details, VAT or registration numbers or currencies conflict -- the kind of discrepancy that accompanies invoice fraud, laundering or fabricated accounts',
+    INTEGRITY: "the document's structure shows signs of alteration -- layout, metadata, fonts, timestamps or page order inconsistent with a single untouched original",
+    CROSS_REF: 'the document relies on sources, precedents or procedures that do not resolve when checked',
+    CONTACT: 'addresses or contact details conflict, or place a party where they could not consistently be',
+    EVIDENCE: 'there are signs of witness-statement conflict, evidence tampering or a broken chain of custody',
+    DIGITAL: "the document's digital footprint or internal references are inconsistent"
+  };
 
-  return 'SUMMARY\n\n' + summary +
-    '\n\n' + '='.repeat(80) + '\n\n' +
-    'WHAT THE EVIDENCE SHOWS\n\n' + evidence +
-    '\n\n' + '='.repeat(80) + '\n\n' +
-    'IMPORTANT LIMITS\n\nThese are findings, not final proof. The cryptographic seal proves the document is ' +
-    'authentic and unaltered; it does not prove the findings are correct. A court or investigator must verify ' +
-    'and decide. These findings are investigative indicators, not determinations of guilt.';
+  var clean = function (s) { return (s == null ? '' : String(s)).replace(/\s+/g, ' ').trim(); };
+  var quoteOf = function (f) { var e = clean(f.evidence || f.description || ''); return e.length > 200 ? e.slice(0, 197) + '...' : e; };
+  var whereOf = function (f) { return clean(f.location) || (f.page ? 'Page ' + f.page : 'the document'); };
+  var atWhere = function (f) { var w = whereOf(f); return w === 'the document' ? 'in the document' : 'at ' + w; };
+  var art = function (w) { return /^[aeiou]/i.test(clean(w)) ? 'an' : 'a'; };
+  var joinList = function (a) { return a.length <= 1 ? (a[0] || '') : a.slice(0, -1).join(', ') + ' and ' + a[a.length - 1]; };
+
+  // Partition: serial patterns and AI-identified are handled separately.
+  var serial = [], byCat = {};
+  list.forEach(function (f) {
+    if (f.type === 'SERIAL') { serial.push(f); return; }
+    var c = (f.source === 'ai') ? 'AI_IDENTIFIED' : (catOf(f.type) || f.category || 'DIGITAL');
+    (byCat[c] = byCat[c] || []).push(f);
+  });
+  var sev = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  list.forEach(function (f) { var s = parseInt(f.severity, 10); if (sev[s] !== undefined) sev[s]++; });
+
+  var gravity = (scoreNum == null) ? 'The result warrants human review'
+    : scoreNum >= 70 ? 'This is a critical-level result'
+    : scoreNum >= 50 ? 'This is a serious result'
+    : scoreNum >= 30 ? 'This is a notable result'
+    : 'This is a limited result';
+
+  var counts = CATORD.map(function (c) { return { cat: c, n: (byCat[c] || []).length }; })
+    .filter(function (x) { return x.n > 0; })
+    .sort(function (a, b) { return b.n - a.n; });
+
+  // ---------- SUMMARY ----------
+  var summary = 'The forensic engine examined this sealed document and flagged ' + list.length +
+    ' indicator' + (list.length === 1 ? '' : 's');
+  if (scoreNum != null) summary += ', producing an overall indicator score of ' + scoreNum + ' out of 100 (confidence band ' + band + ')';
+  summary += '. ' + gravity + ' for a single document: a moderate number is not proof of a minor matter, ' +
+    'because a handful of high-severity contradictions can carry far more weight than many trivial ones. ';
+  if (counts.length) {
+    var dom = counts.slice(0, 3).map(function (x) { return (CATLAB[x.cat] || x.cat).toLowerCase() + ' (' + x.n + ')'; });
+    summary += 'The concerns cluster in ' + joinList(dom) + '. ';
+  }
+  if (serial.length) {
+    var snames = [];
+    serial.forEach(function (f) { var n = clean(f.serialName || f.serialPattern || ''); if (n && snames.indexOf(n) < 0) snames.push(n); });
+    summary += 'The engine also matched ' + serial.length + ' multi-stage pattern' + (serial.length === 1 ? '' : 's') +
+      (snames.length ? ' -- including ' + joinList(snames.slice(0, 4)) + (snames.length > 4 ? ', among others' : '') : '') + '. ';
+  }
+  summary += 'Every point below is drawn only from the document itself and is an investigative indicator; a human ' +
+    'reviewer, investigator or court makes the final determination. This narrative was generated deterministically ' +
+    'on this device from the sealed findings -- no external service was used.';
+
+  // ---------- WHAT THE EVIDENCE SHOWS (prose per category) ----------
+  var evParts = [];
+  counts.forEach(function (x) {
+    var arr = (byCat[x.cat] || []).slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+    var lead = arr[0];
+    var leadName = nameOf(lead.type).toLowerCase();
+    var p = (CATLAB[x.cat] || x.cat) + ' -- ' + x.n + ' indicator' + (x.n === 1 ? '' : 's') + '. ' +
+      'In this group, ' + (MEAN[x.cat] || 'the document shows internal inconsistencies') + '. ' +
+      'The strongest is ' + art(leadName) + ' ' + leadName + ' ' + atWhere(lead) + ': "' + quoteOf(lead) + '"';
+    if (arr.length > 1) {
+      var second = arr[1];
+      var secName = nameOf(second.type).toLowerCase();
+      p += '; another is ' + art(secName) + ' ' + secName + ' ' + atWhere(second) + ' ("' + quoteOf(second) + '")';
+    }
+    p += '.';
+    if (x.n > 2) p += ' A further ' + (x.n - 2) + ' indicator' + ((x.n - 2) === 1 ? ' was' : 's were') + ' recorded in this group.';
+    evParts.push(p);
+  });
+  var ai = byCat['AI_IDENTIFIED'] || [];
+  if (ai.length) {
+    evParts.push('AI-identified indicators -- ' + ai.length + '. The optional AI review flagged ' + ai.length +
+      ' further point' + (ai.length === 1 ? '' : 's') + ' the deterministic detectors did not, for example: "' +
+      clean(ai[0].rationale || ai[0].evidence || '') + '". These are advisory and carry no scoring weight.');
+  }
+  var evidence = evParts.length ? evParts.join('\n\n') : 'No categorised indicators were available to describe.';
+
+  // ---------- PATTERNS OF CONCERN ----------
+  var patterns = '';
+  if (serial.length) {
+    var lines = serial.slice(0, 8).map(function (f) {
+      return '- ' + clean(f.serialName || f.serialPattern || 'Multi-stage pattern') + ': ' + quoteOf(f);
+    });
+    patterns = 'A pattern is flagged only when several independent stages appear together in the same document, ' +
+      'which is harder to explain as coincidence than any single indicator. The engine matched:\n\n' + lines.join('\n');
+    if (serial.length > 8) patterns += '\n\n(' + (serial.length - 8) + ' further pattern(s) not listed here were included in the findings.)';
+  }
+
+  // ---------- HOW SERIOUS THIS IS ----------
+  var serious = 'Of the ' + list.length + ' indicator' + (list.length === 1 ? '' : 's') + ', ' +
+    sev[5] + ' ' + (sev[5] === 1 ? 'is' : 'are') + ' critical (severity 5), ' + sev[4] + ' high (4), ' +
+    sev[3] + ' medium (3), and ' + (sev[2] + sev[1]) + ' low or informational. The critical and high indicators ' +
+    'are the ones an investigator should examine first; the medium and low ones add corroborating context.';
+
+  // ---------- assemble ----------
+  var out = 'SUMMARY\n\n' + summary + SEP + 'WHAT THE EVIDENCE SHOWS\n\n' + evidence;
+  if (patterns) out += SEP + 'PATTERNS OF CONCERN\n\n' + patterns;
+  out += SEP + 'HOW SERIOUS THIS IS\n\n' + serious +
+    SEP + 'IMPORTANT LIMITS\n\nThese are findings, not final proof. The cryptographic seal proves the document is ' +
+    'authentic and unaltered; it does not prove the findings are correct. A court or investigator must verify and ' +
+    'decide. These findings are investigative indicators, not determinations of guilt.';
+  return out;
 }
 
 async function aiNarrateReport(findings, score, verdict) {
