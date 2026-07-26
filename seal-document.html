@@ -363,6 +363,7 @@
     <span style="color:#D4A843;">&#128206;</span> <span id="fileName" style="color:#F8F9FA;"></span>
     <span id="fileSize" style="color:#4A7EC7; margin-left:10px;"></span>
   </div>
+  <div id="protectedNote" style="display:none;margin:0 0 20px;background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:10px;padding:14px;font-size:13px;color:#D4A843;line-height:1.6;">&#128274; <strong>This PDF is password-protected.</strong> It can still be sealed — the seal (SHA-512 fingerprint + blockchain timestamp) will cover these exact bytes, and remains fully verifiable. But the watermark, QR code and footer cannot be stamped inside a locked file, so they will appear on your Seal Certificate instead of on the document pages. If you want a stamped copy, remove the password first (e.g. print the PDF to a new PDF), then seal that.</div>
 
   <!-- Seal Type Toggle -->
   <div class="seal-type">
@@ -495,6 +496,7 @@
   <div class="results" id="results">
     <h3>Document Sealed</h3>
     <div class="ots-status pending" id="otsStatus">&#8987; OpenTimestamps proof pending Bitcoin blockchain confirmation (typically 1-2 hours)</div>
+    <div class="ots-status pending" id="asIsNote" style="display:none;">&#128274; This document is password-protected, so it was sealed exactly as-is: the SHA-512 fingerprint and blockchain timestamp cover these exact bytes and verify normally. The watermark, QR and footer could not be stamped inside the locked file &mdash; your Seal Certificate carries the seal record instead.</div>
     <div class="preview-section">
       <h4>What Your Sealed Document Looks Like</h4>
       <p>Every page has the <strong>A4 watermark</strong> as a background layer at 20% opacity. Your <strong>original document text is preserved exactly</strong> -- no content is moved, scaled, or altered. The <strong>QR code</strong> sits in the top-right margin and the <strong>seal footer</strong> with your SHA-512 fingerprint appears at the bottom of every page.</p>
@@ -5081,6 +5083,41 @@ async function voEnsureWatermark() {
 }
 voEnsureWatermark();
 
+// A PDF with an /Encrypt dictionary (password-protected) cannot be composited
+// -- pdf-lib refuses to load it, and force-loading with ignoreEncryption would
+// re-save encrypted streams as garbage. Detect it cheaply at selection time so
+// the user is told up front, and the pipeline seals the exact bytes as-is
+// instead of crashing after the OTS submission (seen in production with a
+// previously password-protected sealed file).
+function voPdfIsEncrypted(bytes) {
+  try {
+    var b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
+    // "/Encrypt" = 2F 45 6E 63 72 79 70 74 (appears in the trailer dictionary)
+    for (var i = 0, n = b.length - 8; i < n; i++) {
+      if (b[i] === 0x2F && b[i + 1] === 0x45 && b[i + 2] === 0x6E && b[i + 3] === 0x63 &&
+          b[i + 4] === 0x72 && b[i + 5] === 0x79 && b[i + 6] === 0x70 && b[i + 7] === 0x74) return true;
+    }
+    return false;
+  } catch (e) { return false; }
+}
+
+// Selection-time warning: read the file and show the protected-PDF notice
+// immediately. Never blocks selection -- sealing a protected file as-is is a
+// legitimate, fully valid seal (hash + timestamp of those exact bytes).
+async function voCheckProtectedOnSelect(file) {
+  var note = document.getElementById('protectedNote');
+  if (!note) return;
+  note.style.display = 'none';
+  window._voSelectedIsProtected = false;
+  try {
+    var buf = await file.arrayBuffer();
+    if (voPdfIsEncrypted(buf)) {
+      window._voSelectedIsProtected = true;
+      note.style.display = 'block';
+    }
+  } catch (e) { /* detection is best-effort; the pipeline has its own fallback */ }
+}
+
 document.getElementById('uploadZone').addEventListener('click', () => document.getElementById('fileInput').click());
 document.getElementById('fileInput').addEventListener('change', (e) => {
   if (e.target.files.length > 0) {
@@ -5090,6 +5127,7 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
     document.getElementById('fileSize').textContent = (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB';
     document.getElementById('fileInfo').classList.add('visible');
     document.getElementById('sealBtn').disabled = false;
+    voCheckProtectedOnSelect(selectedFile);
   }
 });
 ['dragover','dragleave','drop'].forEach(evt => {
@@ -5105,6 +5143,7 @@ document.getElementById('fileInput').addEventListener('change', (e) => {
         document.getElementById('fileSize').textContent = (f.size / 1024 / 1024).toFixed(2) + ' MB';
         document.getElementById('fileInfo').classList.add('visible');
         document.getElementById('sealBtn').disabled = false;
+        voCheckProtectedOnSelect(f);
       }
     }
   });
@@ -5621,7 +5660,24 @@ async function voEmbedSealedFileHash(savedBytes) {
 }
 
 async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain, fraudResult) {
-  const pdf = await PDFDocument.load(origBytes);
+  // Password-protected input: the overlay (watermark/QR/footer) cannot be
+  // stamped inside a locked file, and force-loading would corrupt it. The
+  // honest degradation is to seal the EXACT original bytes as-is -- the
+  // SHA-512 + OTS anchor already cover them, the verify page will match them,
+  // and the Seal Certificate carries the QR and seal record instead. This
+  // replaces a hard pipeline crash observed in production.
+  window._voSealedAsIs = false;
+  let pdf;
+  try {
+    pdf = await PDFDocument.load(origBytes);
+  } catch (loadErr) {
+    if (/encrypt/i.test(String(loadErr && loadErr.message))) {
+      window._voSealedAsIs = true;
+      window._voSealedFileHash = null; // no VO-SEAL2 subject can be written into a locked file
+      return origBytes instanceof Uint8Array ? origBytes : new Uint8Array(origBytes);
+    }
+    throw loadErr;
+  }
   let wmImg = null;
   if (watermarkBytes) { try { wmImg = await pdf.embedPng(watermarkBytes); } catch(e) {} }
   let qrImg = null;
@@ -7116,6 +7172,9 @@ async function runSealingPipeline() {
   senderEmail = document.getElementById('senderEmail')?.value?.trim() || '';
   await voEnsureWatermark(); // retry the watermark if the boot-time fetch dropped
   sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain, fraudResult);
+  if (window._voSealedAsIs) {
+    updateStep(6, 'complete', 'Protected PDF — sealed as-is; seal record lives on the Seal Certificate');
+  }
 
   if (password) {
     // Produce a STANDARD password-protected PDF: one ordinary .pdf that opens
@@ -7536,6 +7595,10 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   document.getElementById('sha256Display').textContent = sha256;
   document.getElementById('sha512Display').textContent = sha512;
   document.getElementById('sealIdDisplay').textContent = sealId;
+
+  // Protected-input seals: state plainly that the file was sealed as-is.
+  var asIsNoteEl = document.getElementById('asIsNote');
+  if (asIsNoteEl) asIsNoteEl.style.display = window._voSealedAsIs ? 'block' : 'none';
 
   // VO-SEAL2: show the sealed-file self-integrity hash when the new scheme
   // was applied (hidden for legacy-fallback seals -- no such hash exists).
