@@ -33,6 +33,34 @@ for (const f of FILES) {
   ok(m[1] === source, `${f} inline copy matches the source file (no drift)`);
 }
 
+// CT map drift guard. buildLocalNarrative() in seal-document.html keeps its own
+// copy of the indicator name/category maps (CTNAME/CTCAT) because forensic-report.js
+// holds CT_NAMES/CT_CATEGORY inside a closure that is not visible to the seal
+// page. That duplication is deliberate, but the two copies MUST stay in sync or
+// the on-device narrative would mis-name or mis-group findings. This asserts
+// they are identical.
+function objLiteral(src, name) {
+  const m = src.match(new RegExp('var ' + name + '\\s*=\\s*(\\{[\\s\\S]*?\\})\\s*;'));
+  if (!m) return null;
+  // eslint-disable-next-line no-eval
+  return eval('(' + m[1] + ')');
+}
+{
+  const report = readFileSync('forensic-report.js', 'utf8');
+  const pairs = [['CT_NAMES', 'CTNAME'], ['CT_CATEGORY', 'CTCAT']];
+  for (const [srcName, copyName] of pairs) {
+    const canonical = objLiteral(report, srcName);
+    const copy = objLiteral(html, copyName);
+    ok(canonical && copy, `${srcName}/${copyName} literals both found`);
+    if (!canonical || !copy) continue;
+    const kc = Object.keys(canonical), kk = Object.keys(copy);
+    ok(kc.length === kk.length, `${copyName} has the same key count as ${srcName} (${kk.length} vs ${kc.length})`);
+    let mismatch = '';
+    for (const k of kc) { if (canonical[k] !== copy[k]) { mismatch = k; break; } }
+    ok(!mismatch, `${copyName} matches ${srcName} for every key (drift at ${mismatch || 'none'})`);
+  }
+}
+
 console.log(`\n[inline-scripts] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[inline-scripts] FAILURES'); process.exit(1); }
 console.log('[inline-scripts] ALL GREEN');

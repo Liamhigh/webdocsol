@@ -952,15 +952,19 @@ async function handleAiNarrate(request, env) {
     'CASE METADATA AND ENGINE FINDINGS:\n' +
     JSON.stringify({ ...input, documentExcerpt: undefined, findingsKept: kept });
   try {
-    // Primary is the FAST 8B model, not the 70B. The strong model is throttled
-    // / over-budget on this account and times out, and narrate is now the
-    // heaviest call (Constitution + document text + findings) so it timed out
-    // most reliably of all -- which is why the report kept falling back to the
+    // The FAST 8B model only -- NOT the 70B. The strong model is throttled /
+    // over-budget on this account and times out, and narrate is now the heaviest
+    // call (Constitution + document text + findings) so it timed out most
+    // reliably of all -- which is why the report kept falling back to the
     // on-device narrative. The 8B model has the same 128k context, answers in a
-    // fraction of the time, and reads the document + Constitution fine. Strong
-    // stays as a fallback for the rare case the fast model itself errors.
+    // fraction of the time, and reads the document + Constitution fine. No slow
+    // 70B fallback: if the fast model fails, the on-device deterministic
+    // narrative is the safety net, so there is no point making the user wait a
+    // second 30 s on a model that is already known to be throttled here. This
+    // keeps the server's worst case at one AI_TIMEOUT_MS, which the client's
+    // narrate timeout comfortably covers.
     const text = await callAi(env, AI_MODEL_FAST, NARRATE_SYSTEM, userContent,
-      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 4096, temperature: 0.2, fallbackModel: AI_MODEL_STRONG });
+      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 4096, temperature: 0.2 });
     const parsed = extractJsonObject(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('model reply is not a JSON object');
