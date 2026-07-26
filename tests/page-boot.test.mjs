@@ -272,6 +272,32 @@ for (const page of PAGES) {
     'on-device narrative lists top findings as plain sentences with page anchors');
 }
 
+// False-clean guard: a 187-page scanned bundle that had been sealed before
+// carried ~130 chars of seal-footer text per page, cleared the "some text
+// exists" check, and reported "CLEAN: internally consistent" with 0 findings
+// -- a false clean on a document the engine never read. The engine must flag
+// such documents unreadable, the seal page must show an error (not a green
+// tick), and the report must say NOT ANALYSED instead of clean.
+{
+  const engine = readFileSync('forensic-engine-page.js', 'utf8');
+  ok(/var unreadable = allFindings\.length === 0 && textBlocks\.length >= 3/.test(engine),
+    'engine flags zero-finding low-text multi-page documents as unreadable');
+  ok(/clean: unreadable \? false : overallScore < 20/.test(engine),
+    'an unreadable document is never reported clean');
+  ok(/UNREADABLE: the document has no usable machine-readable text/.test(engine),
+    'engine summary states the document was not read');
+  const html = readFileSync('seal-document.html', 'utf8');
+  ok(/forensicResult\.unreadable/.test(html) && /NOT analysed \(scanned\/image PDF\)/.test(html),
+    'seal page shows an error status for unreadable documents, not a green tick');
+  ok(/var THIN = 200/.test(html) && /thinCount >= Math\.ceil\(lens\.length \* 0\.6\)/.test(html),
+    'OCR rescue also covers image-dominant documents (seal-footer-only pages)');
+  const rep = readFileSync('forensic-report.js', 'utf8');
+  ok(/DOCUMENT NOT ANALYSED — NOT A CLEAN RESULT/.test(rep),
+    'report executive summary declares NOT ANALYSED for unreadable documents');
+  ok(/No contradiction analysis was possible/.test(rep),
+    'report matrix explains the absence of analysis instead of implying consistency');
+}
+
 console.log(`\n[page-boot] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) {
   console.log('[page-boot] FAILURES');

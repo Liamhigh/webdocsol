@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.9.1-20260726-watermark-share-bundle-plain-findings">
+<meta name="vo-seal-build" content="1.10.0-20260726-false-clean-guard-investigator-narrator">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -1116,6 +1116,17 @@ function drawToc(ctx, tocPage) {
 function secExecSummary(ctx, data) {
   ctx.newBodyPage();
   ctx.heading('EXECUTIVE SUMMARY');
+  // A document with no machine-readable text must never present as clean:
+  // zero findings on an unread document is an absence of analysis, not a
+  // verdict of consistency (Prime Directive 6).
+  if (data.findings && data.findings.unreadable) {
+    ctx.box('DOCUMENT NOT ANALYSED — NOT A CLEAN RESULT', [
+      'This document contains no usable machine-readable text (scanned or image-only PDF).',
+      'The deterministic engine could not read its content. Zero findings below means NOTHING WAS EXAMINED — it does not mean the document is consistent.',
+      'The cryptographic seal (hash, timestamp, QR) is unaffected and remains valid. For contradiction analysis, re-submit a text-layer copy; any pages recovered by on-device OCR are disclosed in the methodology section.'
+    ]);
+    ctx.gap(10);
+  }
 
   var fr = data.findings;
   var score = fr.overallScore || 0;
@@ -1259,6 +1270,12 @@ function secMatrix(ctx, data) {
   if (data.findings && data.findings.scanFailed) {
     ctx.para('The forensic scan could not complete on this document' + (data.findings.extractionNotes ? ': ' + data.findings.extractionNotes : '.'), { size: 10 });
     ctx.para('No findings are available. The document seal (hash, timestamp, QR) is unaffected, but this report contains no contradiction analysis. Re-submit or retry on a desktop computer if analysis is required.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
+    return;
+  }
+
+  if (data.findings && data.findings.unreadable) {
+    ctx.para('No contradiction analysis was possible: the document contains no usable machine-readable text (scanned or image-only PDF). The ' + DETECTOR_COUNT + ' detectors require text to examine, and there was none to give them.', { size: 10 });
+    ctx.para('This is NOT a clean result and NOT a certification of consistency — the content was simply not read. The seal on the document (hash, timestamp) remains valid. Re-submit a text-layer copy for analysis; any pages recovered by on-device OCR are disclosed in the methodology section.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
     return;
   }
 
@@ -3654,6 +3671,25 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
         await _voYield();
       }
     }
+    // OCR rescue hook (optional). A page whose text layer is empty is
+    // invisible to every detector -- exactly where scanned exhibits hide.
+    // When the hosting page provides window.voOcrRescuePages (on-device
+    // tesseract.js, vendored), it may recover text for image-only pages.
+    // Runs BEFORE the too-little-text check so a fully scanned document can
+    // be rescued rather than falling through to the raw-stream fallback.
+    // Inert when absent; a failure is disclosed, never fatal (PD6).
+    try {
+      var _g = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+      if (_g && typeof _g.voOcrRescuePages === 'function' && textBlocks.length > 1) {
+        var _ocr = await _g.voOcrRescuePages(pdfBytes, textBlocks, onProgress);
+        if (_ocr && Array.isArray(_ocr.textBlocks) && _ocr.textBlocks.length === textBlocks.length) {
+          textBlocks = _ocr.textBlocks;
+          if (_ocr.note) extractionNote += ' ' + _ocr.note;
+        }
+      }
+    } catch (ocrErr) {
+      extractionNote += ' OCR rescue attempted but failed (' + (ocrErr && ocrErr.message ? ocrErr.message : 'unknown') + '); image-only pages remain unread.';
+    }
     // If per-page extraction yielded almost nothing (image-only PDF or parse
     // failure), disclose it and use the whole-document raw scan instead.
     if (textBlocks.join(' ').replace(/\s+/g, '').length < 20) {
@@ -3664,24 +3700,6 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     extractionNote = 'FALLBACK: per-page text extraction failed (' + (e && e.message ? e.message : 'unknown error') + '); whole-document raw stream scan used. Page anchors may be degraded.';
     var allTexts = await extractPdfText(pdfBytes);
     textBlocks = [allTexts.join(' ')];
-  }
-
-  // OCR rescue hook (optional). A page whose text layer is empty is invisible
-  // to every detector -- exactly where scanned exhibits hide. When the hosting
-  // page provides window.voOcrRescuePages (on-device tesseract.js, vendored),
-  // it may recover text for image-only pages. Inert when absent; a failure is
-  // disclosed in the extraction notes, never fatal (Prime Directive 6).
-  try {
-    var _g = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
-    if (_g && typeof _g.voOcrRescuePages === 'function' && textBlocks.length > 1) {
-      var _ocr = await _g.voOcrRescuePages(pdfBytes, textBlocks, onProgress);
-      if (_ocr && Array.isArray(_ocr.textBlocks) && _ocr.textBlocks.length === textBlocks.length) {
-        textBlocks = _ocr.textBlocks;
-        if (_ocr.note) extractionNote += ' ' + _ocr.note;
-      }
-    }
-  } catch (ocrErr) {
-    extractionNote += ' OCR rescue attempted but failed (' + (ocrErr && ocrErr.message ? ocrErr.message : 'unknown') + '); image-only pages remain unread.';
   }
 
   // Run all 37 detectors
@@ -3810,8 +3828,26 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   var confidence = overallScore >= 80 ? 'VERY_HIGH' : overallScore >= 60 ? 'HIGH' :
                    overallScore >= 40 ? 'MODERATE' : overallScore >= 20 ? 'LOW' : 'CLEAN';
 
+  // False-clean guard (Prime Directive 6). A scanned document that was sealed
+  // before carries ~130 chars of seal-footer text per page, which passed the
+  // "some text exists" check while the page CONTENT stayed unread -- and a
+  // 187-page image bundle then reported "CLEAN: internally consistent". If
+  // zero findings came out of a multi-page document averaging under 200
+  // non-space chars per page, the honest verdict is UNREADABLE, not clean.
+  var _contentChars = 0;
+  for (var _tb = 0; _tb < textBlocks.length; _tb++) _contentChars += (textBlocks[_tb] || '').replace(/\s+/g, '').length;
+  var unreadable = allFindings.length === 0 && textBlocks.length >= 3 &&
+                   (_contentChars / textBlocks.length) < 200;
+  if (unreadable) {
+    confidence = 'INSUFFICIENT';
+    extractionNote += ' UNREADABLE: the document averages under 200 machine-readable characters per page (' +
+      Math.round(_contentChars / textBlocks.length) + ' chars/page over ' + textBlocks.length +
+      ' pages) -- effectively no text layer. Zero findings here means the content was NOT examined, not that it is consistent.';
+  }
+
   return {
-    clean: overallScore < 20,
+    clean: unreadable ? false : overallScore < 20,
+    unreadable: unreadable,
     overallScore: overallScore,
     maxPossibleScore: 100,
     confidence: confidence,
@@ -3822,7 +3858,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     contradictionTypesUsed: Object.keys(findingsByType).length,
     serialPatternsDetected: allFindings.filter(function(f){return f.type==='SERIAL';}).length,
     extractionNotes: extractionNote,
-    summary: generateSummary(allFindings, overallScore)
+    summary: unreadable
+      ? 'UNREADABLE: the document has no usable machine-readable text (scanned or image-only PDF). ' +
+        'No contradiction analysis was performed. This is NOT a clean result -- it is an unread document. ' +
+        'Re-submit a text-layer copy, or rely on the OCR-rescued pages disclosed in the extraction notes.'
+      : generateSummary(allFindings, overallScore)
   };
 }
 
@@ -5927,6 +5967,8 @@ async function startSealing() {
       // clean is worse than no scan at all.
       if (forensicResult.scanFailed) {
         updateStep('Fraud', 'error', 'Scan could NOT complete (' + (forensicResult.scanError || 'unknown error') + ') - this is not a clean result');
+      } else if (forensicResult.unreadable) {
+        updateStep('Fraud', 'error', 'No machine-readable text - document NOT analysed (scanned/image PDF). This is NOT a clean result.');
       } else {
         updateStep('Fraud', 'complete',
           forensicResult.clean
@@ -6628,17 +6670,35 @@ function voLoadScriptOnce(src, globalCheck) {
 
 async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   var lens = textBlocks.map(function (t) { return (t || '').replace(/\s+/g, '').length; });
-  var nonEmpty = lens.filter(function (n) { return n > VO_OCR_EMPTY_CHARS; });
-  if (!nonEmpty.length) return null; // whole doc image-only: full OCR would take far too long
-  var avg = nonEmpty.reduce(function (a, b) { return a + b; }, 0) / nonEmpty.length;
-  if (avg < VO_OCR_MIN_AVG) return null;
+  // A page under ~200 chars holds no real content -- a previously-sealed scan
+  // carries ~130 chars of seal-footer text per page, which must NOT count as
+  // "this page has text" (that exact case produced a false CLEAN on a
+  // 187-page image bundle).
+  var THIN = 200;
+  var thinCount = lens.filter(function (n) { return n < THIN; }).length;
   var candidates = [];
-  for (var i = 0; i < lens.length; i++) {
-    if (lens[i] <= VO_OCR_EMPTY_CHARS) candidates.push(i);
+  var skipped = 0;
+  if (thinCount >= Math.ceil(lens.length * 0.6)) {
+    // Image-dominant document (scanned bundle): OCR the first pages up to the
+    // cap -- partial recovery with disclosure beats reading nothing.
+    for (var d = 0; d < lens.length && candidates.length < VO_OCR_MAX_PAGES; d++) {
+      if (lens[d] < THIN) candidates.push(d);
+    }
+    skipped = Math.max(0, thinCount - candidates.length);
+  } else {
+    // Text document with scattered image-only pages (scanned exhibits).
+    var nonEmpty = lens.filter(function (n) { return n > VO_OCR_EMPTY_CHARS; });
+    if (!nonEmpty.length) return null;
+    var avg = nonEmpty.reduce(function (a, b) { return a + b; }, 0) / nonEmpty.length;
+    if (avg < VO_OCR_MIN_AVG) return null;
+    for (var i = 0; i < lens.length; i++) {
+      if (lens[i] <= VO_OCR_EMPTY_CHARS) candidates.push(i);
+    }
+    if (!candidates.length) return null;
+    skipped = Math.max(0, candidates.length - VO_OCR_MAX_PAGES);
+    candidates = candidates.slice(0, VO_OCR_MAX_PAGES);
   }
   if (!candidates.length) return null;
-  var skipped = Math.max(0, candidates.length - VO_OCR_MAX_PAGES);
-  candidates = candidates.slice(0, VO_OCR_MAX_PAGES);
 
   updateStep('Fraud', 'processing', 'OCR on ' + candidates.length + ' image-only page' + (candidates.length === 1 ? '' : 's') + ' (on-device)...');
   await voLoadScriptOnce('/vendor/pdf.min.js', function () { return typeof pdfjsLib !== 'undefined'; });

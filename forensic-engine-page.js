@@ -1732,6 +1732,25 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
         await _voYield();
       }
     }
+    // OCR rescue hook (optional). A page whose text layer is empty is
+    // invisible to every detector -- exactly where scanned exhibits hide.
+    // When the hosting page provides window.voOcrRescuePages (on-device
+    // tesseract.js, vendored), it may recover text for image-only pages.
+    // Runs BEFORE the too-little-text check so a fully scanned document can
+    // be rescued rather than falling through to the raw-stream fallback.
+    // Inert when absent; a failure is disclosed, never fatal (PD6).
+    try {
+      var _g = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+      if (_g && typeof _g.voOcrRescuePages === 'function' && textBlocks.length > 1) {
+        var _ocr = await _g.voOcrRescuePages(pdfBytes, textBlocks, onProgress);
+        if (_ocr && Array.isArray(_ocr.textBlocks) && _ocr.textBlocks.length === textBlocks.length) {
+          textBlocks = _ocr.textBlocks;
+          if (_ocr.note) extractionNote += ' ' + _ocr.note;
+        }
+      }
+    } catch (ocrErr) {
+      extractionNote += ' OCR rescue attempted but failed (' + (ocrErr && ocrErr.message ? ocrErr.message : 'unknown') + '); image-only pages remain unread.';
+    }
     // If per-page extraction yielded almost nothing (image-only PDF or parse
     // failure), disclose it and use the whole-document raw scan instead.
     if (textBlocks.join(' ').replace(/\s+/g, '').length < 20) {
@@ -1742,24 +1761,6 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     extractionNote = 'FALLBACK: per-page text extraction failed (' + (e && e.message ? e.message : 'unknown error') + '); whole-document raw stream scan used. Page anchors may be degraded.';
     var allTexts = await extractPdfText(pdfBytes);
     textBlocks = [allTexts.join(' ')];
-  }
-
-  // OCR rescue hook (optional). A page whose text layer is empty is invisible
-  // to every detector -- exactly where scanned exhibits hide. When the hosting
-  // page provides window.voOcrRescuePages (on-device tesseract.js, vendored),
-  // it may recover text for image-only pages. Inert when absent; a failure is
-  // disclosed in the extraction notes, never fatal (Prime Directive 6).
-  try {
-    var _g = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
-    if (_g && typeof _g.voOcrRescuePages === 'function' && textBlocks.length > 1) {
-      var _ocr = await _g.voOcrRescuePages(pdfBytes, textBlocks, onProgress);
-      if (_ocr && Array.isArray(_ocr.textBlocks) && _ocr.textBlocks.length === textBlocks.length) {
-        textBlocks = _ocr.textBlocks;
-        if (_ocr.note) extractionNote += ' ' + _ocr.note;
-      }
-    }
-  } catch (ocrErr) {
-    extractionNote += ' OCR rescue attempted but failed (' + (ocrErr && ocrErr.message ? ocrErr.message : 'unknown') + '); image-only pages remain unread.';
   }
 
   // Run all 37 detectors
@@ -1888,8 +1889,26 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   var confidence = overallScore >= 80 ? 'VERY_HIGH' : overallScore >= 60 ? 'HIGH' :
                    overallScore >= 40 ? 'MODERATE' : overallScore >= 20 ? 'LOW' : 'CLEAN';
 
+  // False-clean guard (Prime Directive 6). A scanned document that was sealed
+  // before carries ~130 chars of seal-footer text per page, which passed the
+  // "some text exists" check while the page CONTENT stayed unread -- and a
+  // 187-page image bundle then reported "CLEAN: internally consistent". If
+  // zero findings came out of a multi-page document averaging under 200
+  // non-space chars per page, the honest verdict is UNREADABLE, not clean.
+  var _contentChars = 0;
+  for (var _tb = 0; _tb < textBlocks.length; _tb++) _contentChars += (textBlocks[_tb] || '').replace(/\s+/g, '').length;
+  var unreadable = allFindings.length === 0 && textBlocks.length >= 3 &&
+                   (_contentChars / textBlocks.length) < 200;
+  if (unreadable) {
+    confidence = 'INSUFFICIENT';
+    extractionNote += ' UNREADABLE: the document averages under 200 machine-readable characters per page (' +
+      Math.round(_contentChars / textBlocks.length) + ' chars/page over ' + textBlocks.length +
+      ' pages) -- effectively no text layer. Zero findings here means the content was NOT examined, not that it is consistent.';
+  }
+
   return {
-    clean: overallScore < 20,
+    clean: unreadable ? false : overallScore < 20,
+    unreadable: unreadable,
     overallScore: overallScore,
     maxPossibleScore: 100,
     confidence: confidence,
@@ -1900,7 +1919,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     contradictionTypesUsed: Object.keys(findingsByType).length,
     serialPatternsDetected: allFindings.filter(function(f){return f.type==='SERIAL';}).length,
     extractionNotes: extractionNote,
-    summary: generateSummary(allFindings, overallScore)
+    summary: unreadable
+      ? 'UNREADABLE: the document has no usable machine-readable text (scanned or image-only PDF). ' +
+        'No contradiction analysis was performed. This is NOT a clean result -- it is an unread document. ' +
+        'Re-submit a text-layer copy, or rely on the OCR-rescued pages disclosed in the extraction notes.'
+      : generateSummary(allFindings, overallScore)
   };
 }
 
