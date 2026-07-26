@@ -497,6 +497,7 @@ function drawCover(ctx, data) {
   cLine('Source SHA-512: ' + truncHash(data.sha512, 24, 12), ctx.f.courier, 7.5, LGRAY, 20);
 
   // optional identity rows (only if user supplied)
+  if (data.identity.caseRefs) cLine('Case Reference(s): ' + data.identity.caseRefs, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.fullName) cLine('Prepared for: ' + data.identity.fullName, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.parties) cLine('Parties: ' + data.identity.parties, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.jurisdiction) cLine('Jurisdiction: ' + data.identity.jurisdiction, ctx.f.timesBold, 9.5, GOLD, 15);
@@ -749,7 +750,7 @@ function secMatrix(ctx, data) {
   if (aiList && aiList.length > 0) {
     aiList.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
     ctx.subHeading(ctx.sectionNo + '.' + (subNo + 1) + ' AI-Identified Indicators  (' + aiList.length + ' finding' + (aiList.length === 1 ? '' : 's') + ')', { toc: true });
-    ctx.para('Flagged by the optional AI review (Cloudflare Workers AI), not by the deterministic engine. Advisory only; included at the document owner\'s request.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+    ctx.para('Flagged by the optional AI review (Cloudflare Workers AI), not by the deterministic engine. Candidate tier — pending engine or human verification; never presented as engine-verified. Advisory only; included at the document owner\'s request.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
     var aiRows = [];
     for (var ar = 0; ar < aiList.length; ar++) {
       var af = aiList[ar];
