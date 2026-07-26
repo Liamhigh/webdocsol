@@ -142,6 +142,25 @@ for (const page of PAGES) {
     'each narrative paragraph is sanitized after the split');
 }
 
+// Report-content regressions caught in the sealed Greensky report of 26 Jul 2026:
+// (1) the AI-review trailer printed "19 of 0 engine findings retained" because
+// the renderer read ar.assessed while the seal page supplied only ar.original;
+// (2) the FINDINGS & CONTRADICTION MATRIX hardcoded its subsection labels as
+// "3.x", so when the FORENSIC NARRATIVE section shifted it to section 4 the
+// TOC and body showed "3.1..." under "4. FINDINGS & CONTRADICTION MATRIX".
+{
+  const rep = readFileSync('forensic-report.js', 'utf8');
+  ok(/ar\.assessed != null \? ar\.assessed : ar\.original/.test(rep),
+    'AI-review trailer accepts both `assessed` and legacy `original` counts');
+  ok(!/subHeading\('3\.'/.test(rep),
+    'matrix subsections derive their number from ctx.sectionNo, not a hardcoded "3."');
+  ok(/subHeading\(ctx\.sectionNo \+ '\.'/.test(rep),
+    'matrix subsections use the live section number');
+  const html = readFileSync('seal-document.html', 'utf8');
+  ok(/assessed:\s*assessedCount/.test(html),
+    'seal page passes the assessed count to the report builder');
+}
+
 console.log(`\n[page-boot] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) {
   console.log('[page-boot] FAILURES');
