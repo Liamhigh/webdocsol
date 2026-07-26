@@ -159,6 +159,8 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'the user\'s case context reaches the narrator');
   ok(/TWO-TIER RULE/.test(capturedSystem) && /CONTRADICTION SHAPE/.test(capturedSystem),
     'the system prompt carries the two-tier rule and the contradiction shape');
+  ok(/DECLARATIVE FINDINGS RULE/.test(capturedSystem) && /hallmarks of fraud/.test(capturedSystem),
+    'the system prompt makes anchored facts declarative (forensic-instrument voice)');
   ok(capturedUser.indexOf('SEALED CASE FILE') >= 0,
     'the case file is clearly labelled for the narrator');
 }
