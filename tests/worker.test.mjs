@@ -128,17 +128,28 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     JSON.stringify({ findings: [{ type: 'CT02' }], score: 50, verdict: 'HIGH' })), env, {});
   ok(r.status === 400, 'narrate rejects the legacy {findings} shape (' + r.status + ')');
 
-  // The documented {summary, findings, ...} reply passes through as format:plain.
-  const AIenv = { ...env, AI: { run: async () => ({ response: JSON.stringify({
-    summary: 'Acme Ltd moved R2m to a shell account.',
-    findings: 'The document shows a transfer flagged as a signature mismatch [F1].',
-    contradictions: '', impact: '', legalContext: '', evidence: '', seal: '', limits: ''
-  }) }) } };
+  // The documented {summary, findings, ...} reply passes through as format:plain,
+  // and the model MUST receive the Constitution + the sealed case file text.
+  let capturedUser = '';
+  const AIenv = { ...env, AI: { run: async (_model, opts) => {
+    capturedUser = (opts.messages.find(m => m.role === 'user') || {}).content || '';
+    return { response: JSON.stringify({
+      summary: 'Acme Ltd moved R2m to a shell account. Constitutional confidence: HIGH.',
+      findings: 'The document shows a transfer flagged as a signature mismatch [F1].',
+      contradictions: '', impact: '', legalContext: '', evidence: '', seal: '', limits: ''
+    }) };
+  } } };
   r = await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify(good)), AIenv, {});
   const pb = await r.json().catch(() => null);
   ok(pb && pb.format === 'plain', 'documented reply shape flows through as format:plain');
   ok(pb && /Acme Ltd/.test(pb.summary || ''), 'narrate passes the model summary through');
   ok(pb && /investigative indicators/.test(pb.limits || ''), 'narrate appends the closing disclaimer to limits');
+  ok(/CONSTITUTION/.test(capturedUser) && /Truth over probability/.test(capturedUser),
+    'the Constitution is loaded into the narrator context');
+  ok(/Acme Ltd transferred R2,000,000/.test(capturedUser),
+    'the sealed case file text reaches the narrator');
+  ok(capturedUser.indexOf('SEALED CASE FILE') >= 0,
+    'the case file is clearly labelled for the narrator');
 }
 
 console.log('\n[worker] PASS=' + pass + ' FAIL=' + fail);
