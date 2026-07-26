@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.8.0-20260726-case-details-and-findings-json">
+<meta name="vo-seal-build" content="1.8.1-20260726-case-file-serial-label-suppression">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -6488,6 +6488,18 @@ function getSerialLabelInfo(findings, suppressAll) {
 }
 function serialNameOf(f) { return (f && (f.serialName || f.serialPattern)) || 'Serial pattern'; }
 
+// A document with user-entered case details is a legal case file: a bundle
+// ABOUT allegations. Its text naturally contains the vocabulary of the
+// offences it describes ("compensation", "urgent", "payroll", "cash"), so
+// keyword-matched serial-pattern LABELS ("419 Scam", "Money Laundering")
+// reflect the subject matter, not the document's own conduct — exactly the
+// aboutFraud rationale, extended to court bundles. Labels are suppressed;
+// the underlying findings stay in the report as multi-stage indicators.
+function voIsLegalCaseFile() {
+  var ci = voCaseDetails();
+  return !!(ci.caseName || ci.caseRefs || ci.parties || ci.jurisdiction);
+}
+
 // ==================== ANONYMOUS PATTERN SHARING (OPT-IN) ====================
 // Feeds the verum-rules feedback loop. PRIVACY HARD LIMIT: only detector IDs,
 // finding types, integer severities (1-5), and page counts are ever sent.
@@ -6739,7 +6751,7 @@ async function runSealingPipeline() {
       // documents get serial-pattern LABELS suppressed so the drafted narrative
       // cannot mischaracterise the subject matter.
       var narrateFindings = (reportFraudResult && reportFraudResult.findings) || [];
-      if (_pipelineClassification && _pipelineClassification.aboutFraud === true) {
+      if ((_pipelineClassification && _pipelineClassification.aboutFraud === true) || voIsLegalCaseFile()) {
         narrateFindings = narrateFindings.map(function(f) {
           if (!f || f.type !== 'SERIAL') return f;
           var c = Object.assign({}, f);
@@ -6854,7 +6866,7 @@ async function runSealingPipeline() {
       // aboutFraud:true suppresses serial-pattern LABELS; corroborated labels need
       // >=2 independent severity>=3 findings, else they demote to weak signals.
       var classification = _pipelineClassification;
-      var serialInfo = getSerialLabelInfo(reportFraudResult && reportFraudResult.findings, !!(classification && classification.aboutFraud === true));
+      var serialInfo = getSerialLabelInfo(reportFraudResult && reportFraudResult.findings, !!(classification && classification.aboutFraud === true) || voIsLegalCaseFile());
 
       console.log('[VO-REPORT-DEBUG] Build options prepared', {
         serial_info_suppressed: serialInfo.suppressed,

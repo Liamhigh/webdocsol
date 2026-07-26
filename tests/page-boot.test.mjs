@@ -161,6 +161,18 @@ for (const page of PAGES) {
     'seal page passes the assessed count to the report builder');
 }
 
+// A Constitutional Court bundle came out labelled "Advance Fee Fraud (419
+// Scam)" / "Money Laundering" from keyword hits — a legal case file naturally
+// contains the vocabulary of the offences it DESCRIBES. When the user enters
+// case details, serial-pattern labels must be suppressed (aboutFraud rationale
+// extended to court bundles).
+{
+  const html = readFileSync('seal-document.html', 'utf8');
+  ok(html.includes('function voIsLegalCaseFile'), 'seal page can recognise a legal case file');
+  ok(/aboutFraud === true\) \|\| voIsLegalCaseFile\(\)/.test(html),
+    'serial-pattern label suppression also triggers on user-entered case details');
+}
+
 console.log(`\n[page-boot] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) {
   console.log('[page-boot] FAILURES');
