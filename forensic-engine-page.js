@@ -693,25 +693,44 @@ var DETECTORS = {
 
   D12_DETECT_BANK_DETAIL_MISMATCH: function(textBlocks) {
     var findings = [];
-    var bankRe = /\b\d{6,12}\b/g;
-    var accounts = [];
-    for (var i = 0; i < textBlocks.length; i++) {
-      var match;
-      while ((match = bankRe.exec(textBlocks[i])) !== null) {
-        if (match[0].length >= 8) {
-          accounts.push({ number: match[0], page: i });
-        }
+    // Only treat an 8-12 digit number as a bank account when it sits next to
+    // banking context ("account", "a/c", "acc no", "bank", "branch", "iban").
+    // The old detector matched ANY 8+ digit run, so in a legal bundle it read
+    // dates (11122018 = 11/12/2018), concatenated years (20162017), reference
+    // and case numbers as "account numbers" and cried mismatch. False positives
+    // like that on a HIGH finding destroy the report's credibility.
+    var CONTEXT = /(account|acc\.?\s*no|a\/c|bank|branch|iban|swift)/i;
+    // Reject values that are really dates or year-runs.
+    function looksLikeDateOrYears(n) {
+      if (/^(19|20)\d{2}(19|20)\d{2}$/.test(n)) return true;      // 20162017
+      if (/^\d{2}\d{2}(19|20)\d{2}$/.test(n)) {                    // DDMMYYYY / MMDDYYYY
+        var dd = +n.slice(0,2), mm = +n.slice(2,4);
+        if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) return true;
+        if (mm >= 1 && mm <= 31 && dd >= 1 && dd <= 12) return true;
       }
+      if (/^(19|20)\d{2}\d{2}\d{2}$/.test(n)) {                    // YYYYMMDD
+        var m2 = +n.slice(4,6), d2 = +n.slice(6,8);
+        if (m2 >= 1 && m2 <= 12 && d2 >= 1 && d2 <= 31) return true;
+      }
+      return false;
     }
-    // Check for multiple different account numbers
+    var numRe = /\b\d{8,12}\b/g;
     var uniqueAccounts = {};
-    for (var j = 0; j < accounts.length; j++) {
-      uniqueAccounts[accounts[j].number] = true;
+    for (var i = 0; i < textBlocks.length; i++) {
+      var text = textBlocks[i], match;
+      while ((match = numRe.exec(text)) !== null) {
+        var n = match[0];
+        if (looksLikeDateOrYears(n)) continue;
+        // require a banking keyword within 40 chars before the number
+        var windowStart = Math.max(0, match.index - 40);
+        if (!CONTEXT.test(text.slice(windowStart, match.index))) continue;
+        uniqueAccounts[n] = true;
+      }
     }
     var accountList = Object.keys(uniqueAccounts);
     if (accountList.length >= 2) {
       findings.push({ type: 'CT18', severity: 4,
-        evidence: accountList.length + ' different account numbers found: ' + accountList.slice(0,3).join(', '),
+        evidence: accountList.length + ' different bank account numbers found near banking references: ' + accountList.slice(0,3).join(', '),
         location: 'Multiple pages' });
     }
     return findings;

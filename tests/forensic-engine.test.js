@@ -55,6 +55,19 @@ fires(DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY, ['Total R50,000.00', 'Total R1
 fires(DETECTORS.D03_DETECT_DATE_INCONSISTENCY, ['Signed 31/02/2024 by hand'], 'CT03', 'D03 impossible Feb date');
 fires(DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY, ['before the incident and also after the incident'], 'CT04', 'D04 temporal conflict');
 
+// D12 bank-detail: fires only for numbers next to banking context, and NEVER
+// for dates/years/reference numbers (the annexure-EB false positive:
+// "11 different account numbers found: 11122018, 16689375, 20162017").
+fires(DETECTORS.D12_DETECT_BANK_DETAIL_MISMATCH,
+  ['Bank account 62834571902 for payment', 'Please use account no 40190283746 instead'],
+  'CT18', 'D12 fires for two real account numbers near banking context');
+t.ok(DETECTORS.D12_DETECT_BANK_DETAIL_MISMATCH(
+  ['Signed 11122018 and dated 20162017', 'Case reference 16689375 filed', 'meeting on 15032024']
+).length === 0, 'D12 no false-positive on dates / years / case numbers (annexure-EB regression)');
+t.ok(DETECTORS.D12_DETECT_BANK_DETAIL_MISMATCH(
+  ['the account number 62834571902 appears once only']
+).length === 0, 'D12 no finding when only one account number is present');
+
 t.ok(DETECTORS.D15_DETECT_METADATA_FRAUD({
   getProducer: () => 'Adobe Photoshop 2024', getCreator: () => '',
   getCreationDate: () => null, getModificationDate: () => null,

@@ -835,11 +835,17 @@ var QUOTE_MAX = 300;
 function cleanQuote(ev) {
   ev = String(ev === null || ev === undefined ? '' : ev);
   ev = ev
-    .replace(/verum omnis sha-512 \(partial\):\s*[0-9a-f]{6,}/gi, ' ')
-    .replace(/verum omnis sealed (evidence|document)\s*(source:)?[^"]{0,80}?page \d+ of \d+/gi, ' ')
+    // Seal-footer debris left in the text layer of an already-sealed input.
+    // Several footer formats exist across VO versions, so strip them all:
+    .replace(/verum omnis sha-?512 \(partial\):\s*[0-9a-f]{6,}/gi, ' ')
+    .replace(/verum omnis seal(ed)?\s*(original|evidence|document)?\s*(case-[0-9a-f]+)?/gi, ' ')
+    .replace(/\bcase-[0-9a-f]{6,}\b/gi, ' ')
+    .replace(/\b[0-9a-f]{6,}\s*\.{2,3}\s*[0-9a-f]{6,}\b/gi, ' ')     // truncated hash "ae76fb34...77f3ac68"
+    .replace(/\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{8,}\b/gi, ' ') // bare hex hash token (has a digit and a letter)
     .replace(/\b\d+\s*\/\s*\d+\s*verify seal\b/gi, ' ')
     .replace(/\bverify seal\b/gi, ' ')
     .replace(/\bclean bundle page \d+ of \d+\b/gi, ' ')
+    .replace(/\bpage \d+ of \d+\b/gi, ' ')
     .replace(/\s{2,}/g, ' ')
     .trim();
   if (ev.length > QUOTE_MAX) {
@@ -2093,7 +2099,7 @@ async function seal(reportBytes, sealOpts) {
 }
 
 // ================= exports =================
-var api = { build: build, seal: seal, _sanitize: san };
+var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote };
 global.VerumReport = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
@@ -2797,25 +2803,44 @@ var DETECTORS = {
 
   D12_DETECT_BANK_DETAIL_MISMATCH: function(textBlocks) {
     var findings = [];
-    var bankRe = /\b\d{6,12}\b/g;
-    var accounts = [];
-    for (var i = 0; i < textBlocks.length; i++) {
-      var match;
-      while ((match = bankRe.exec(textBlocks[i])) !== null) {
-        if (match[0].length >= 8) {
-          accounts.push({ number: match[0], page: i });
-        }
+    // Only treat an 8-12 digit number as a bank account when it sits next to
+    // banking context ("account", "a/c", "acc no", "bank", "branch", "iban").
+    // The old detector matched ANY 8+ digit run, so in a legal bundle it read
+    // dates (11122018 = 11/12/2018), concatenated years (20162017), reference
+    // and case numbers as "account numbers" and cried mismatch. False positives
+    // like that on a HIGH finding destroy the report's credibility.
+    var CONTEXT = /(account|acc\.?\s*no|a\/c|bank|branch|iban|swift)/i;
+    // Reject values that are really dates or year-runs.
+    function looksLikeDateOrYears(n) {
+      if (/^(19|20)\d{2}(19|20)\d{2}$/.test(n)) return true;      // 20162017
+      if (/^\d{2}\d{2}(19|20)\d{2}$/.test(n)) {                    // DDMMYYYY / MMDDYYYY
+        var dd = +n.slice(0,2), mm = +n.slice(2,4);
+        if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) return true;
+        if (mm >= 1 && mm <= 31 && dd >= 1 && dd <= 12) return true;
       }
+      if (/^(19|20)\d{2}\d{2}\d{2}$/.test(n)) {                    // YYYYMMDD
+        var m2 = +n.slice(4,6), d2 = +n.slice(6,8);
+        if (m2 >= 1 && m2 <= 12 && d2 >= 1 && d2 <= 31) return true;
+      }
+      return false;
     }
-    // Check for multiple different account numbers
+    var numRe = /\b\d{8,12}\b/g;
     var uniqueAccounts = {};
-    for (var j = 0; j < accounts.length; j++) {
-      uniqueAccounts[accounts[j].number] = true;
+    for (var i = 0; i < textBlocks.length; i++) {
+      var text = textBlocks[i], match;
+      while ((match = numRe.exec(text)) !== null) {
+        var n = match[0];
+        if (looksLikeDateOrYears(n)) continue;
+        // require a banking keyword within 40 chars before the number
+        var windowStart = Math.max(0, match.index - 40);
+        if (!CONTEXT.test(text.slice(windowStart, match.index))) continue;
+        uniqueAccounts[n] = true;
+      }
     }
     var accountList = Object.keys(uniqueAccounts);
     if (accountList.length >= 2) {
       findings.push({ type: 'CT18', severity: 4,
-        evidence: accountList.length + ' different account numbers found: ' + accountList.slice(0,3).join(', '),
+        evidence: accountList.length + ' different bank account numbers found near banking references: ' + accountList.slice(0,3).join(', '),
         location: 'Multiple pages' });
     }
     return findings;
@@ -6568,11 +6593,16 @@ function buildLocalNarrative(findings, score, verdict) {
   var quoteOf = function (f) {
     var e = clean(f.evidence || f.description || '');
     // strip seal-footer debris dragged in when the analysed file is itself sealed
-    e = e.replace(/verum omnis sha-512 \(partial\):\s*[0-9a-f]{6,}/gi, ' ')
-      .replace(/verum omnis sealed (evidence|document)\s*(source:)?[^"]{0,80}?page \d+ of \d+/gi, ' ')
+    // (matches the report builder's cleanQuote -- several footer formats exist)
+    e = e.replace(/verum omnis sha-?512 \(partial\):\s*[0-9a-f]{6,}/gi, ' ')
+      .replace(/verum omnis seal(ed)?\s*(original|evidence|document)?\s*(case-[0-9a-f]+)?/gi, ' ')
+      .replace(/\bcase-[0-9a-f]{6,}\b/gi, ' ')
+      .replace(/\b[0-9a-f]{6,}\s*\.{2,3}\s*[0-9a-f]{6,}\b/gi, ' ')
+      .replace(/\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{8,}\b/gi, ' ')
       .replace(/\b\d+\s*\/\s*\d+\s*verify seal\b/gi, ' ')
       .replace(/\bverify seal\b/gi, ' ')
       .replace(/\bclean bundle page \d+ of \d+\b/gi, ' ')
+      .replace(/\bpage \d+ of \d+\b/gi, ' ')
       .replace(DEMRE, ' ')
       .replace(/\s+/g, ' ').trim();
     return e.length > 200 ? e.slice(0, 197) + '...' : e;
@@ -6621,10 +6651,20 @@ function buildLocalNarrative(findings, score, verdict) {
     summary += 'The concerns cluster in ' + joinList(dom) + '. ';
   }
   if (serial.length) {
+    // Only name genuinely-labelled patterns. Suppressed/weak/fallback names
+    // ("Multi-stage pattern indicator", "... label suppressed") must never leak
+    // into the prose -- when none survive, say the labels were withheld.
     var snames = [];
-    serial.forEach(function (f) { var n = clean(f.serialName || f.serialPattern || ''); if (n && /suppressed/i.test(n) === false && snames.indexOf(n) < 0) snames.push(n); });
+    serial.forEach(function (f) {
+      var n = clean(f.serialName || f.serialPattern || '');
+      if (!n) return;
+      if (/suppressed|weak signal|^multi-stage pattern indicator$/i.test(n)) return;
+      if (snames.indexOf(n) < 0) snames.push(n);
+    });
     summary += 'The engine also matched ' + serial.length + ' multi-stage pattern' + (serial.length === 1 ? '' : 's') +
-      (snames.length ? ' -- including ' + joinList(snames.slice(0, 4)) + (snames.length > 4 ? ', among others' : '') : '') + '. ';
+      (snames.length
+        ? ' -- including ' + joinList(snames.slice(0, 4)) + (snames.length > 4 ? ', among others' : '')
+        : ' (labels withheld to avoid mischaracterising a document that discusses fraud as its subject -- see the Serial Pattern Analysis section)') + '. ';
   }
   summary += 'Every point below is drawn only from the document itself and is an investigative indicator; a human ' +
     'reviewer, investigator or court makes the final determination. This narrative was generated deterministically ' +
