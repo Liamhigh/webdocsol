@@ -497,6 +497,7 @@ function drawCover(ctx, data) {
   cLine('Source SHA-512: ' + truncHash(data.sha512, 24, 12), ctx.f.courier, 7.5, LGRAY, 20);
 
   // optional identity rows (only if user supplied)
+  if (data.identity.caseRefs) cLine('Case Reference(s): ' + data.identity.caseRefs, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.fullName) cLine('Prepared for: ' + data.identity.fullName, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.parties) cLine('Parties: ' + data.identity.parties, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.jurisdiction) cLine('Jurisdiction: ' + data.identity.jurisdiction, ctx.f.timesBold, 9.5, GOLD, 15);
@@ -713,7 +714,7 @@ function secMatrix(ctx, data) {
     if (!list || list.length === 0) continue;
     subNo++;
     list.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-    ctx.subHeading('3.' + subNo + ' ' + (CATEGORY_LABEL[cat2] || cat2) + '  (' + list.length + ' finding' + (list.length === 1 ? '' : 's') + ')', { toc: true });
+    ctx.subHeading(ctx.sectionNo + '.' + subNo + ' ' + (CATEGORY_LABEL[cat2] || cat2) + '  (' + list.length + ' finding' + (list.length === 1 ? '' : 's') + ')', { toc: true });
 
     var shown = list.slice(0, MAX_ROWS);
     var rows = [];
@@ -748,8 +749,8 @@ function secMatrix(ctx, data) {
   var aiList = byCat['AI_IDENTIFIED'];
   if (aiList && aiList.length > 0) {
     aiList.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-    ctx.subHeading('3.' + (subNo + 1) + ' AI-Identified Indicators  (' + aiList.length + ' finding' + (aiList.length === 1 ? '' : 's') + ')', { toc: true });
-    ctx.para('Flagged by the optional AI review (Cloudflare Workers AI), not by the deterministic engine. Advisory only; included at the document owner\'s request.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+    ctx.subHeading(ctx.sectionNo + '.' + (subNo + 1) + ' AI-Identified Indicators  (' + aiList.length + ' finding' + (aiList.length === 1 ? '' : 's') + ')', { toc: true });
+    ctx.para('Flagged by the optional AI review (Cloudflare Workers AI), not by the deterministic engine. Candidate tier — pending engine or human verification; never presented as engine-verified. Advisory only; included at the document owner\'s request.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
     var aiRows = [];
     for (var ar = 0; ar < aiList.length; ar++) {
       var af = aiList[ar];
@@ -1056,9 +1057,13 @@ function secAiReview(ctx, data) {
     ctx.para('This section is present only because the user enabled the optional cloud AI review. The AI pass is advisory: it carries no scoring weight and all deterministic findings remain anchored to quoted text.', { size: 9.5, after: 10 });
   }
   if (ar) {
+    // The seal page historically supplied the pre-review count as `original`;
+    // newer callers supply `assessed`. Accept either so the trailer can never
+    // again print "19 of 0 engine findings retained".
+    var assessedN = (ar.assessed != null ? ar.assessed : ar.original) | 0;
     var attemptedTxt = '';
-    if (ar.attempted && ar.attempted !== ar.assessed) attemptedTxt = ' (of ' + ar.attempted + ' assessed)';
-    var parts = 'AI review applied — ' + (ar.retained | 0) + ' of ' + (ar.assessed | 0) + ' engine findings retained' + attemptedTxt;
+    if (ar.attempted && ar.attempted !== assessedN) attemptedTxt = ' (of ' + ar.attempted + ' assessed)';
+    var parts = 'AI review applied — ' + (ar.retained | 0) + ' of ' + assessedN + ' engine findings retained' + attemptedTxt;
     if ((ar.dropped | 0) > 0) parts += '; ' + (ar.dropped | 0) + ' dropped as unsupported';
     if ((ar.added | 0) > 0) parts += '; +' + (ar.added | 0) + ' additional AI-identified';
     parts += '.';

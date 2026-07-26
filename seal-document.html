@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.7.5-20260726-narrative-formatting-fix">
+<meta name="vo-seal-build" content="1.8.0-20260726-case-details-and-findings-json">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -443,6 +443,22 @@
       <option value="commercial">Commercial</option>
     </select>
     <div id="gatekeepBanner" style="display:none;margin-top:14px;background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:10px;padding:14px;font-size:13px;color:#D4A843;line-height:1.6;">&#9888; This platform is free for private citizens and law enforcement. Commercial use requires a licence — see <a href="/constitution.html" style="color:#D4A843;text-decoration:underline;">verumglobal.foundation/constitution.html</a>.</div>
+  </div>
+
+  <!-- Case Details (optional) — forensic analysis mode only. Everything here is
+       optional and printed verbatim on the forensic report cover (and given to
+       the AI narrator as authoritative case context). Nothing is uploaded with
+       the document itself; it travels only inside the generated report. -->
+  <div id="caseDetailsSection" style="margin-bottom:24px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;display:none;">
+    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#128196; <strong style="color:#F8F9FA;">Case details (optional).</strong> Anything you enter here is printed on the forensic report cover — like a case file. Leave blank and the report simply uses the document name.</p>
+    <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Case name</label>
+    <input type="text" id="caseNameInput" placeholder="e.g., Greensky Ornamentals FZ-LLC — Shareholder Oppression Investigation" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;margin-bottom:12px;">
+    <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Case reference(s)</label>
+    <input type="text" id="caseRefsInput" placeholder="e.g., RAKEZ Case #1295911  |  SAPS CAS 126/4/2025" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;margin-bottom:12px;">
+    <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Parties</label>
+    <input type="text" id="casePartiesInput" placeholder="e.g., Complainant: L. Highcock  |  Respondents: M. Nortje, K. Lappeman" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;margin-bottom:12px;">
+    <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Jurisdiction</label>
+    <input type="text" id="caseJurisdictionInput" placeholder="e.g., United Arab Emirates (RAKEZ) &amp; South Africa" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
   </div>
 
   <!-- Client Name (commercial only) -->
@@ -1054,6 +1070,7 @@ function drawCover(ctx, data) {
   cLine('Source SHA-512: ' + truncHash(data.sha512, 24, 12), ctx.f.courier, 7.5, LGRAY, 20);
 
   // optional identity rows (only if user supplied)
+  if (data.identity.caseRefs) cLine('Case Reference(s): ' + data.identity.caseRefs, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.fullName) cLine('Prepared for: ' + data.identity.fullName, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.parties) cLine('Parties: ' + data.identity.parties, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.jurisdiction) cLine('Jurisdiction: ' + data.identity.jurisdiction, ctx.f.timesBold, 9.5, GOLD, 15);
@@ -1270,7 +1287,7 @@ function secMatrix(ctx, data) {
     if (!list || list.length === 0) continue;
     subNo++;
     list.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-    ctx.subHeading('3.' + subNo + ' ' + (CATEGORY_LABEL[cat2] || cat2) + '  (' + list.length + ' finding' + (list.length === 1 ? '' : 's') + ')', { toc: true });
+    ctx.subHeading(ctx.sectionNo + '.' + subNo + ' ' + (CATEGORY_LABEL[cat2] || cat2) + '  (' + list.length + ' finding' + (list.length === 1 ? '' : 's') + ')', { toc: true });
 
     var shown = list.slice(0, MAX_ROWS);
     var rows = [];
@@ -1305,8 +1322,8 @@ function secMatrix(ctx, data) {
   var aiList = byCat['AI_IDENTIFIED'];
   if (aiList && aiList.length > 0) {
     aiList.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-    ctx.subHeading('3.' + (subNo + 1) + ' AI-Identified Indicators  (' + aiList.length + ' finding' + (aiList.length === 1 ? '' : 's') + ')', { toc: true });
-    ctx.para('Flagged by the optional AI review (Cloudflare Workers AI), not by the deterministic engine. Advisory only; included at the document owner\'s request.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+    ctx.subHeading(ctx.sectionNo + '.' + (subNo + 1) + ' AI-Identified Indicators  (' + aiList.length + ' finding' + (aiList.length === 1 ? '' : 's') + ')', { toc: true });
+    ctx.para('Flagged by the optional AI review (Cloudflare Workers AI), not by the deterministic engine. Candidate tier — pending engine or human verification; never presented as engine-verified. Advisory only; included at the document owner\'s request.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
     var aiRows = [];
     for (var ar = 0; ar < aiList.length; ar++) {
       var af = aiList[ar];
@@ -1613,9 +1630,13 @@ function secAiReview(ctx, data) {
     ctx.para('This section is present only because the user enabled the optional cloud AI review. The AI pass is advisory: it carries no scoring weight and all deterministic findings remain anchored to quoted text.', { size: 9.5, after: 10 });
   }
   if (ar) {
+    // The seal page historically supplied the pre-review count as `original`;
+    // newer callers supply `assessed`. Accept either so the trailer can never
+    // again print "19 of 0 engine findings retained".
+    var assessedN = (ar.assessed != null ? ar.assessed : ar.original) | 0;
     var attemptedTxt = '';
-    if (ar.attempted && ar.attempted !== ar.assessed) attemptedTxt = ' (of ' + ar.attempted + ' assessed)';
-    var parts = 'AI review applied — ' + (ar.retained | 0) + ' of ' + (ar.assessed | 0) + ' engine findings retained' + attemptedTxt;
+    if (ar.attempted && ar.attempted !== assessedN) attemptedTxt = ' (of ' + ar.attempted + ' assessed)';
+    var parts = 'AI review applied — ' + (ar.retained | 0) + ' of ' + assessedN + ' engine findings retained' + attemptedTxt;
     if ((ar.dropped | 0) > 0) parts += '; ' + (ar.dropped | 0) + ' dropped as unsupported';
     if ((ar.added | 0) > 0) parts += '; +' + (ar.added | 0) + ' additional AI-identified';
     parts += '.';
@@ -4879,7 +4900,7 @@ function setSealMode(mode) {
 }
 function applyModeVisibility() {
   var forensic = (sealMode === 'forensic');
-  var els = ['patternShareSection', 'aiReviewSection', 'stepFraud'];
+  var els = ['patternShareSection', 'aiReviewSection', 'caseDetailsSection', 'stepFraud'];
   for (var i = 0; i < els.length; i++) {
     var el = document.getElementById(els[i]);
     if (el) el.style.display = forensic ? '' : 'none';
@@ -6059,6 +6080,106 @@ async function aiAssessFindings(findings) {
 // cluster means and how serious it is -- NOT a raw dump of numbered findings.
 // It guarantees the report ALWAYS has a readable narrative, never leaves the
 // device, and asserts nothing beyond the supplied findings.
+// Case details the user typed on the seal page (all optional). Printed on the
+// report cover and handed to the AI narrator as authoritative case context.
+function voCaseDetails() {
+  var g = function (id) {
+    var el = document.getElementById(id);
+    var v = el && el.value ? String(el.value).trim() : '';
+    return v || null;
+  };
+  return {
+    caseName: g('caseNameInput'),
+    caseRefs: g('caseRefsInput'),
+    parties: g('casePartiesInput'),
+    jurisdiction: g('caseJurisdictionInput')
+  };
+}
+
+// Ordinal severity per the Verum Omnis Constitution / 1verum Findings JSON
+// contract v1.0.0 — reports and exports speak in ordinals, never percentages.
+var VO_SEV_ORDINAL = { 5: 'CRITICAL', 4: 'HIGH', 3: 'MODERATE', 2: 'LOW', 1: 'LOW' };
+
+// First page number recoverable from an engine location string
+// ("p. 95 vs 224", "Pages 17, 17", "Full document") — 0 when none.
+function voFirstPage(location) {
+  var m = /(\d{1,5})/.exec(String(location || ''));
+  return m ? parseInt(m[1], 10) : 0;
+}
+
+// Findings JSON — the 1verum GHRP contract v1.0.0 (FINDINGS_JSON_SCHEMA.json).
+// One record per finding, ordinal severity/confidence only, every record
+// anchored (document, page, hash). Engine findings are ENGINE-VERIFIED;
+// findings raised by the optional AI review are candidates pending
+// verification and are labelled so — the two tiers never mix. This file is
+// what the Verum Omnis app / G3 narrator can consume directly.
+function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
+  var list = (result && Array.isArray(result.findings)) ? result.findings.filter(Boolean) : [];
+  var records = [];
+  for (var i = 0; i < list.length; i++) {
+    var f = list[i];
+    var fromAi = f.source === 'ai';
+    var quote = String(f.evidence || f.description || f.rationale || '').slice(0, 800);
+    var typeName = f.type === 'SERIAL' ? (f.serialPattern || 'SERIAL_PATTERN') : (f.type || 'UNKNOWN');
+    var method = fromAi
+      ? 'AI review (Cloudflare Workers AI) over sealed engine findings'
+      : 'deterministic detector ' + typeName + ' (web engine v2.0)';
+    records.push({
+      contradiction_id: 'VO-WEB-F' + String(i + 1).padStart(3, '0'),
+      type: typeName,
+      severity: VO_SEV_ORDINAL[f.severity] || 'LOW',
+      confidence: fromAi ? 'MODERATE' : 'DETERMINISTIC',
+      proposition_a_text: quote,
+      proposition_a_actor: '',
+      proposition_b_text: '',
+      proposition_b_actor: '',
+      conflict_description: quote,
+      source_document: docName,
+      source_page: voFirstPage(f.location || f.page),
+      source_line: 0,
+      sha512_anchor: String(docSha512 || '').toLowerCase(),
+      extraction_method: method,
+      temporal_analysis: null,
+      detected_fact: {
+        fact_text: quote,
+        source_document: docName,
+        source_page: voFirstPage(f.location || f.page),
+        source_line: 0,
+        sha512_hash: String(docSha512 || '').toLowerCase(),
+        extraction_method: method,
+        confidence: fromAi ? 'MODERATE' : 'DETERMINISTIC'
+      },
+      logical_pattern: {
+        pattern_type: typeName,
+        pattern_description: quote,
+        supporting_facts: [],
+        contradiction_score: null,
+        detector_version: fromAi ? 'AI-CANDIDATE (workers-ai)' : 'web-engine v2.0'
+      },
+      legal_hypothesis: null,
+      verification_status: fromAi
+        ? 'G3-RAISED CANDIDATE - PENDING VERIFICATION'
+        : 'ENGINE-VERIFIED'
+    });
+  }
+  var candidates = records.filter(function (r) {
+    return r.verification_status !== 'ENGINE-VERIFIED';
+  }).length;
+  return {
+    engine_version: '2.0',
+    findings_json_version: '1.0.0',
+    generated_utc: new Date().toISOString(),
+    source_bundle: docName,
+    case_id: (caseInfo && caseInfo.caseName) || '',
+    case_ids: (caseInfo && caseInfo.caseRefs) ? [caseInfo.caseRefs] : [],
+    corpus_sha512: String(docSha512 || '').toLowerCase(),
+    engine_verified_count: records.length - candidates,
+    g3_candidate_count: candidates,
+    integrity_findings: (result && result.extractionNotes) ? [String(result.extractionNotes)] : [],
+    contradictions: records
+  };
+}
+
 function buildLocalNarrative(findings, score, verdict) {
   var list = Array.isArray(findings) ? findings.filter(Boolean) : [];
   var band = (verdict || '').toString().toUpperCase() || 'REVIEW';
@@ -6233,6 +6354,12 @@ async function aiNarrateReport(findings, score, verdict) {
       id: 'F' + (i + 1),
       type: f.type || 'unknown',
       severity: f.severity,
+      // Two-tier rule (1verum GHRP): deterministic engine findings are
+      // ENGINE-VERIFIED; findings the AI review raised are candidates pending
+      // verification. The narrator must keep the tiers apart, so each finding
+      // carries its tier and its ordinal severity (never a bare number alone).
+      severityOrdinal: VO_SEV_ORDINAL[f.severity] || 'LOW',
+      status: (f.source === 'ai') ? 'AI-RAISED CANDIDATE - PENDING VERIFICATION' : 'ENGINE-VERIFIED',
       location: f.location || (f.page ? 'Page ' + f.page : ''),
       evidence: (f.evidence || f.description || '').toString()
     };
@@ -6248,6 +6375,13 @@ async function aiNarrateReport(findings, score, verdict) {
   };
   if (gpsCoords) { metadata.gps = gpsCoords.lat + ',' + gpsCoords.lng; if (gpsCoords.accuracy) metadata.gpsAccuracy = Math.round(gpsCoords.accuracy) + 'm'; }
   if (deviceInfo) { metadata.device = deviceInfo; }
+  // User-entered case details are authoritative context for the narrator —
+  // real case name, references, parties and jurisdiction, sent only when the
+  // user typed them (they are already destined for the report cover).
+  var caseInfo = voCaseDetails();
+  if (caseInfo.caseName || caseInfo.caseRefs || caseInfo.parties || caseInfo.jurisdiction) {
+    metadata.caseContext = caseInfo;
+  }
   // Give the narrator the document's own words so it can name the real parties,
   // dates and amounts instead of writing from bare finding codes. Bounded and
   // sent only because the user consented to AI review (text -> their own
@@ -6580,7 +6714,19 @@ async function runSealingPipeline() {
       if (assessRes && assessRes.ran) {
         var mergedFindings = assessRes.findings.concat(assessRes.added);
         reportFraudResult = Object.assign({}, fraudResult, { findings: mergedFindings, totalFindings: mergedFindings.length });
-        aiReviewInfo = { applied: true, retained: assessRes.findings.length, original: originalCount, added: assessRes.added.length };
+        // `assessed` is what the report trailer prints ("X of Y engine findings
+        // retained") -- it was dropped here once and the report read "19 of 0".
+        // `attempted` covers the >200-findings cap where assess sees a subset.
+        var assessedCount = (assessRes.assessed != null ? assessRes.assessed : originalCount) | 0;
+        aiReviewInfo = {
+          applied: true,
+          retained: assessRes.findings.length,
+          assessed: assessedCount,
+          attempted: originalCount,
+          dropped: Math.max(0, assessedCount - assessRes.findings.length),
+          original: originalCount,
+          added: assessRes.added.length
+        };
         _pipelineAiAddedFindings = assessRes.added;
         updateStep(7, 'processing', 'AI review applied -- ' + assessRes.findings.length + ' of ' + originalCount + ' retained' + (assessRes.added.length ? ', +' + assessRes.added.length + ' AI-identified' : ''));
       }
@@ -6725,9 +6871,16 @@ async function runSealingPipeline() {
           sealId: sealId,
           bytes: fileBytes ? (fileBytes.byteLength || fileBytes.length) : null
         }],
-        identity: {
-          fullName: document.getElementById('clientName') ? (document.getElementById('clientName').value || '') : ''
-        },
+        identity: (function () {
+          var ci = voCaseDetails();
+          return {
+            fullName: document.getElementById('clientName') ? (document.getElementById('clientName').value || '') : '',
+            caseName: ci.caseName || undefined,
+            caseRefs: ci.caseRefs || undefined,
+            parties: ci.parties || undefined,
+            jurisdiction: ci.jurisdiction || undefined
+          };
+        })(),
         engineVersion: '2.0',
         extractionNotes: fraudResult && fraudResult.extractionNotes ? fraudResult.extractionNotes : null,
         aiReview: aiReviewInfo,
@@ -6780,6 +6933,16 @@ async function runSealingPipeline() {
 
       reportPack = { bytes: rSealedBytes, sealId: rSealId, sha512: rSha512, ots: rOts };
       window._voReportPack = reportPack;
+
+      // Findings JSON (1verum GHRP contract v1.0.0) — the machine-readable
+      // twin of the report, offered as its own download. Never blocks the seal.
+      window._voFindingsJson = null;
+      try {
+        window._voFindingsJson = buildFindingsJson(
+          reportFraudResult, selectedFile.name, sha512, _pipelinePageCount || 0, voCaseDetails());
+      } catch (fjErr) {
+        console.warn('Findings JSON generation failed (report unaffected):', fjErr);
+      }
       console.log('[VO-REPORT-DEBUG] Report pack created and stored');
       updateStep(7, 'complete');
     } else {
@@ -7018,6 +7181,24 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     dg.parentNode.insertBefore(rNote, dg.nextSibling);
   } else if (sealMode === 'forensic') {
     console.warn('Forensic report unavailable for this seal (generation skipped or failed); document seal is unaffected.');
+  }
+
+  // Findings JSON download (1verum GHRP contract v1.0.0) -- the machine-readable
+  // twin of the forensic report, consumable by the Verum Omnis app / G3 narrator.
+  var oldFindingsBtn = document.getElementById('downloadFindingsJson');
+  if (oldFindingsBtn) oldFindingsBtn.remove();
+  if (window._voFindingsJson) {
+    var fjU = URL.createObjectURL(new Blob(
+      [JSON.stringify(window._voFindingsJson, null, 2)], { type: 'application/json' }));
+    var fjL = document.createElement('a');
+    fjL.href = fjU;
+    fjL.download = base + '-findings.json';
+    fjL.className = 'download-btn';
+    fjL.id = 'downloadFindingsJson';
+    fjL.innerHTML = '&#11015; Download Findings JSON (machine-readable)';
+    var dgF = document.getElementById('downloadGrid');
+    var after = document.getElementById('downloadForensicReport');
+    if (after && after.nextSibling) dgF.insertBefore(fjL, after.nextSibling); else dgF.appendChild(fjL);
   }
 
   // Seal Certificate download (Seal Only mode) -- clean one-page certificate

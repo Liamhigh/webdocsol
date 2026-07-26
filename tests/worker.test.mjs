@@ -115,7 +115,8 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     documentName: 'demo.pdf', pageCount: 3, score: 62, confidence: 'HIGH',
     findingsPruned: 0, generatedUtc: '2026-07-26T00:00:00Z',
     documentExcerpt: 'On 3 March 2026 Acme Ltd transferred R2,000,000 to a shell account.',
-    findingsKept: [{ id: 'F1', type: 'CT02', severity: 4, location: 'Page 2', evidence: 'signature mismatch' }]
+    findingsKept: [{ id: 'F1', type: 'CT02', severity: 4, severityOrdinal: 'HIGH', status: 'ENGINE-VERIFIED', location: 'Page 2', evidence: 'signature mismatch' }],
+    caseContext: { caseName: 'Acme v Shell', caseRefs: 'CAS 1/2/2026', parties: 'Acme Ltd vs Shell Co', jurisdiction: 'South Africa' }
   };
   r = await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify(good)), env, {});
   ok(r.status === 200, 'narrate accepts the documented payload shape (' + r.status + ')');
@@ -130,9 +131,10 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
 
   // The documented {summary, findings, ...} reply passes through as format:plain,
   // and the model MUST receive the Constitution + the sealed case file text.
-  let capturedUser = '';
+  let capturedUser = '', capturedSystem = '';
   const AIenv = { ...env, AI: { run: async (_model, opts) => {
     capturedUser = (opts.messages.find(m => m.role === 'user') || {}).content || '';
+    capturedSystem = (opts.messages.find(m => m.role === 'system') || {}).content || '';
     return { response: JSON.stringify({
       summary: 'Acme Ltd moved R2m to a shell account. Constitutional confidence: HIGH.',
       findings: 'The document shows a transfer flagged as a signature mismatch [F1].',
@@ -148,6 +150,20 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'the Constitution is loaded into the narrator context');
   ok(/Acme Ltd transferred R2,000,000/.test(capturedUser),
     'the sealed case file text reaches the narrator');
+  // 1verum GHRP alignment: the per-finding verification tier + ordinal severity
+  // and the user's case context must all reach the model, and the system prompt
+  // must carry the two-tier rule so candidates are never presented as verified.
+  ok(/ENGINE-VERIFIED/.test(capturedUser) && /"severityOrdinal":"HIGH"/.test(capturedUser),
+    'finding tier and ordinal severity reach the narrator');
+  ok(/Acme v Shell/.test(capturedUser) && /CAS 1\/2\/2026/.test(capturedUser),
+    'the user\'s case context reaches the narrator');
+  ok(/TWO-TIER RULE/.test(capturedSystem) && /CONTRADICTION SHAPE/.test(capturedSystem),
+    'the system prompt carries the two-tier rule and the contradiction shape');
+  ok(/DECLARATIVE FINDINGS RULE/.test(capturedSystem) && /hallmarks of fraud/.test(capturedSystem),
+    'the system prompt makes anchored facts declarative (forensic-instrument voice)');
+  ok(/EVENT-LEVEL DETERMINATION/.test(capturedSystem) && /the documents evidence fraud/.test(capturedSystem)
+    && /Person-level guilt is never declared/.test(capturedSystem),
+    'the system prompt certifies corroborated events (pathologist standard) but never person-level guilt');
   ok(capturedUser.indexOf('SEALED CASE FILE') >= 0,
     'the case file is clearly labelled for the narrator');
 }
