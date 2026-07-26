@@ -122,15 +122,29 @@ var CT_DETECTOR = {
   CT32: 'D36', CT43: 'D37'
 };
 var CATEGORY_ORDER = ['STATEMENTAL', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL'];
+// Plain-English section names lead; the engine's technical category name is
+// kept in the explainer line below each heading so nothing is lost for experts.
 var CATEGORY_LABEL = {
-  STATEMENTAL: 'Statemental Contradictions',
-  IDENTITY: 'Identity Contradictions',
-  FINANCIAL: 'Financial Contradictions',
-  INTEGRITY: 'Document Integrity Contradictions',
-  CROSS_REF: 'Cross-Reference Contradictions',
-  CONTACT: 'Contact & Location Contradictions',
-  EVIDENCE: 'Evidence & Witness Contradictions',
-  DIGITAL: 'Digital Contradictions'
+  STATEMENTAL: 'Conflicting Statements & Figures',
+  IDENTITY: 'Identity & Role Conflicts',
+  FINANCIAL: 'Financial Conflicts',
+  INTEGRITY: 'Document Structure & Integrity',
+  CROSS_REF: 'Cross-Reference Checks',
+  CONTACT: 'Address & Location Conflicts',
+  EVIDENCE: 'Evidence & Witness Conflicts',
+  DIGITAL: 'Digital Consistency'
+};
+// One plain sentence under each category heading: what this group of findings
+// means to a reader who has never seen a forensic report.
+var CATEGORY_EXPLAIN = {
+  STATEMENTAL: 'The document says two different things about the same fact or figure in different places.',
+  IDENTITY: 'Names, roles, titles or company statuses in the document do not line up with each other.',
+  FINANCIAL: 'Amounts, bank details, VAT/registration numbers or currencies conflict with each other.',
+  INTEGRITY: 'The structure of the file (layout, page order, signatures, versions) shows irregularities worth checking.',
+  CROSS_REF: 'The document refers to annexures, sources or procedures that could not be found where expected.',
+  CONTACT: 'Addresses or contact details conflict, or place a party in two places at once.',
+  EVIDENCE: 'Witness statements conflict, or the chain of custody shows a gap.',
+  DIGITAL: 'The file\'s digital traces (metadata, internal references) are inconsistent.'
 };
 
 // ---------------- text utils ----------------
@@ -229,9 +243,40 @@ function pageNumbers(location) {
   while ((m = re.exec(String(location))) !== null) out.push(parseInt(m[1], 10));
   return out;
 }
+// A finding the engine demoted because the analysed file is a compiled bundle
+// of many documents (repeated page numbers, annexures living elsewhere in the
+// file, mixed earlier/later language). These are expected housekeeping notes
+// for bundles, not tampering signals -- the report aggregates them so they
+// stop drowning the substantive findings.
+var DEMOTED_TAG_RE = /\[bundle context:[^\]]*\]/i;
+function isDemoted(f) { return DEMOTED_TAG_RE.test(String((f && f.evidence) || '')); }
+function stripDemotedTag(ev) { return String(ev || '').replace(DEMOTED_TAG_RE, '').replace(/\s{2,}/g, ' ').trim(); }
+
+// Anchor-quote hygiene. When the analysed document is itself a sealed bundle,
+// raw engine quotes drag in seal-footer debris ("verum omnis sha-512 (partial):
+// ...", "verify seal", "clean bundle page X of Y") and can run to whole pages.
+// Strip the artefacts and cap the length so a quote reads as a quote.
+var QUOTE_MAX = 300;
+function cleanQuote(ev) {
+  ev = String(ev === null || ev === undefined ? '' : ev);
+  ev = ev
+    .replace(/verum omnis sha-512 \(partial\):\s*[0-9a-f]{6,}/gi, ' ')
+    .replace(/verum omnis sealed (evidence|document)\s*(source:)?[^"]{0,80}?page \d+ of \d+/gi, ' ')
+    .replace(/\b\d+\s*\/\s*\d+\s*verify seal\b/gi, ' ')
+    .replace(/\bverify seal\b/gi, ' ')
+    .replace(/\bclean bundle page \d+ of \d+\b/gi, ' ')
+    .replace(/\s{2,}/g, ' ')
+    .trim();
+  if (ev.length > QUOTE_MAX) {
+    var cut = ev.lastIndexOf(' ', QUOTE_MAX - 3);
+    ev = ev.substring(0, cut > QUOTE_MAX / 2 ? cut : QUOTE_MAX - 3) + '...';
+  }
+  return ev;
+}
+
 // wrap engine evidence in quotes unless it already carries its own quotes
 function quoteEvidence(ev) {
-  ev = ev || '';
+  ev = cleanQuote(ev);
   if (ev.indexOf('"') !== -1) return ev;
   return '"' + ev + '"';
 }
@@ -560,6 +605,32 @@ function secExecSummary(ctx, data) {
   var band = fr.confidence || 'CLEAN';
   var bandLabel = { CLEAN: 'CLEAN', LOW: 'LOW', MODERATE: 'MODERATE', HIGH: 'HIGH', VERY_HIGH: 'VERY HIGH' }[band] || band;
 
+  // ---- plain-language lead ----------------------------------------------
+  // The first thing a reader meets is a paragraph a non-specialist can
+  // follow: what was read, what actually matters, and what the score means.
+  // Everything it states is computed from the same findings as the tables.
+  var plAll = fr.findings || [];
+  var plDemoted = 0, plSerial = 0, plSubstantive = 0, plSerious = 0;
+  for (var pl = 0; pl < plAll.length; pl++) {
+    var plf = plAll[pl];
+    if (plf.type === 'SERIAL') { plSerial++; continue; }
+    if (isDemoted(plf)) { plDemoted++; continue; }
+    plSubstantive++;
+    if ((plf.severity || 0) >= 4) plSerious++;
+  }
+  if (plAll.length > 0 && !fr.scanFailed && !fr.unreadable) {
+    var plLines = [];
+    plLines.push('The engine read "' + (data.docName || 'this document') + '" (' + (data.pageCount || 'n/a') + ' page' + (data.pageCount === 1 ? '' : 's') + ') and flagged ' + plAll.length + ' indicator' + (plAll.length === 1 ? '' : 's') + ' in total.');
+    if (plDemoted > 0) {
+      plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
+    }
+    plLines.push('That leaves ' + plSubstantive + ' substantive indicator' + (plSubstantive === 1 ? '' : 's') + (plSerious > 0 ? ', of which ' + plSerious + ' ' + (plSerious === 1 ? 'is' : 'are') + ' rated critical or high. Start there: they appear under "Top findings" below and in full in the findings matrix.' : '. None reached the critical or high band.'));
+    if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern indicator' + (plSerial === 1 ? '' : 's') + ' also matched - see the Serial Pattern Analysis section.');
+    plLines.push('The indicator score (' + score + '/100) measures how densely the engine found inconsistencies. It is a signpost for a human investigator - not a percentage chance of fraud, and not a verdict.');
+    ctx.box('IN PLAIN LANGUAGE', plLines, { titleColor: NAVY2 });
+    ctx.gap(4);
+  }
+
   // score box -- deliberately de-alarmed: neutral navy, "indicator" language.
   var boxH = 86;
   ctx.ensure(boxH + 8);
@@ -608,29 +679,45 @@ function secExecSummary(ctx, data) {
     ],
     { size: 9 }
   );
+  if (plDemoted > 0) {
+    ctx.para('Of the low-severity findings, ' + plDemoted + ' are structural notes expected in a compiled bundle; they are aggregated in the findings matrix rather than listed one by one.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+  }
 
-  // top 5 findings
+  // Top findings: substantive only. Structural notes never belong here, and a
+  // suppressed serial-pattern label repeated five times tells the reader
+  // nothing -- suppressed/weak serials collapse to one summary bullet instead.
   ctx.subHeading('Top findings (by severity)');
   if (all.length === 0) {
     ctx.para('No findings were produced by the deterministic engine for this document.', { size: 10 });
   } else {
-    var sorted = all.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-    var top = sorted.slice(0, 5);
+    var hiddenSerials = 0;
+    var candidates = all.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); })
+      .filter(function (f) {
+        if (isDemoted(f)) return false;
+        if (f.type === 'SERIAL') {
+          var nm0 = f.serialName || f.serialPattern || '';
+          var hid = data.serialLabels && (data.serialLabels.suppressed || (data.serialLabels.weakNames || []).indexOf(nm0) !== -1);
+          if (hid) { hiddenSerials++; return false; }
+        }
+        return true;
+      });
+    var top = candidates.slice(0, 5);
+    if (top.length === 0) {
+      ctx.para('All flagged indicators are structural notes or unlabelled pattern signals - see the findings matrix and Serial Pattern Analysis sections.', { size: 10 });
+    }
     for (var t = 0; t < top.length; t++) {
       var fnd = top[t];
       if (fnd.source === 'ai') {
         ctx.bullet('AI-identified — ' + fnd.type + (CT_NAMES[fnd.type] ? ' ' + CT_NAMES[fnd.type] : '') + ' — ' + (fnd.rationale || ''), { size: 9.5, after: 5 });
       } else if (fnd.type === 'SERIAL') {
-        // When the label is suppressed or demoted to a weak signal, the engine
-        // evidence quote embeds the pattern label too -- omit it in that case.
-        var slNm = fnd.serialName || fnd.serialPattern || '';
-        var slHidden = data.serialLabels && (data.serialLabels.suppressed || (data.serialLabels.weakNames || []).indexOf(slNm) !== -1);
-        if (slHidden) ctx.bullet(serialDisplay(fnd, data) + ' — ' + fmtLocation(fnd.location), { size: 9.5, after: 5 });
-        else ctx.bullet(serialDisplay(fnd, data) + ' — ' + fmtLocation(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
+        ctx.bullet(serialDisplay(fnd, data) + ' — ' + fmtLocation(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
       } else {
         var label = (CT_NAMES[fnd.type] || fnd.type) + ' (' + fnd.type + ')';
         ctx.bullet(label + ' — ' + fmtLocation(fnd.location) + ' — ' + quoteEvidence(fnd.evidence), { size: 9.5, after: 5 });
       }
+    }
+    if (hiddenSerials > 0) {
+      ctx.bullet(hiddenSerials + ' multi-stage pattern indicator' + (hiddenSerials === 1 ? '' : 's') + ' recorded with label' + (hiddenSerials === 1 ? '' : 's') + ' withheld — the Serial Pattern Analysis section explains why.', { size: 9.5, after: 5 });
     }
   }
 
@@ -650,6 +737,14 @@ function secExecSummary(ctx, data) {
     ],
     { size: 8.5 }
   );
+
+  // Reader's key: the four ideas someone needs to make sense of everything
+  // that follows, in one box, in plain words.
+  ctx.subHeading('How to read this report');
+  ctx.bullet('An INDICATOR is something the engine flagged for a human to check. It is a signpost, never proof of fraud or guilt.', { size: 9.5 });
+  ctx.bullet('SEVERITY runs 1 (informational) to 5 (critical). Read the critical and high findings first; low ones are context.', { size: 9.5 });
+  ctx.bullet('STRUCTURAL NOTES are low-severity quirks that naturally appear when many documents are combined into one file (repeated page numbers, annexures filed elsewhere in the bundle). They are listed separately so they never inflate the picture.', { size: 9.5 });
+  ctx.bullet('THE SEAL proves this exact file existed at the stated time and has not been altered since. It authenticates the document - it does not judge its contents.', { size: 9.5 });
 }
 
 // ================= SECTION: DOCUMENT & EVIDENCE INDEX =================
@@ -725,6 +820,7 @@ function secMatrix(ctx, data) {
   }
 
   var subNo = 0;
+  var demotedNoteDrawn = false;
   for (var c = 0; c < CATEGORY_ORDER.length; c++) {
     var cat2 = CATEGORY_ORDER[c];
     var list = byCat[cat2];
@@ -732,8 +828,17 @@ function secMatrix(ctx, data) {
     subNo++;
     list.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
     ctx.subHeading(ctx.sectionNo + '.' + subNo + ' ' + (CATEGORY_LABEL[cat2] || cat2) + '  (' + list.length + ' finding' + (list.length === 1 ? '' : 's') + ')', { toc: true });
+    if (CATEGORY_EXPLAIN[cat2]) {
+      ctx.para(CATEGORY_EXPLAIN[cat2] + '  (Engine category: ' + cat2 + ')', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    }
 
-    var shown = list.slice(0, MAX_ROWS);
+    // Substantive findings render one per row; demoted structural notes are
+    // aggregated per detector type so 25 identical bundle-housekeeping rows
+    // become one line the reader can actually absorb.
+    var subst = [], demo = [];
+    for (var sp2 = 0; sp2 < list.length; sp2++) (isDemoted(list[sp2]) ? demo : subst).push(list[sp2]);
+
+    var shown = subst.slice(0, MAX_ROWS);
     var rows = [];
     for (var r2 = 0; r2 < shown.length; r2++) {
       var g = shown[r2];
@@ -748,19 +853,70 @@ function secMatrix(ctx, data) {
         sev: (g.severity || '') + ' ' + sevLabel(g.severity || 0)
       });
     }
-    ctx.table(
-      [
-        { key: 'n', title: '#', w: 24, align: 'center' },
-        { key: 'det', title: 'Detector / Type', w: 118 },
-        { key: 'claim', title: 'Claim (anchor quote)', w: 262 },
-        { key: 'page', title: 'Page', w: 52, align: 'center' },
-        { key: 'sev', title: 'Severity', w: 48 }
-      ],
-      rows,
-      { size: 7.5 }
-    );
-    if (list.length > shown.length) {
-      ctx.para('Showing ' + shown.length + ' of ' + list.length + ' findings in this category (highest severity first). All ' + list.length + ' findings were included in the deterministic scoring and counts; the print layout is truncated for readability.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+    if (rows.length > 0) {
+      ctx.table(
+        [
+          { key: 'n', title: '#', w: 24, align: 'center' },
+          { key: 'det', title: 'Detector / Type', w: 118 },
+          { key: 'claim', title: 'Claim (anchor quote)', w: 262 },
+          { key: 'page', title: 'Page', w: 52, align: 'center' },
+          { key: 'sev', title: 'Severity', w: 48 }
+        ],
+        rows,
+        { size: 7.5 }
+      );
+    }
+    if (subst.length > shown.length) {
+      ctx.para('Showing ' + shown.length + ' of ' + subst.length + ' substantive findings in this category (highest severity first). All findings were included in the deterministic scoring and counts; the print layout is truncated for readability.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+    }
+
+    if (demo.length > 0) {
+      if (!demotedNoteDrawn) {
+        demotedNoteDrawn = true;
+        ctx.para('Structural notes: the aggregated rows below are expected when many separate documents are compiled into a single bundle - repeated page numbers, annexures filed in another part of the file, mixed "earlier/later" language across sub-documents. They are recorded for completeness at low severity and are not, by themselves, signs of tampering.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+      }
+      // aggregate by detector type
+      var demoByType = {}, demoOrder = [];
+      for (var dm = 0; dm < demo.length; dm++) {
+        var dt = demo[dm].type || 'OTHER';
+        if (!demoByType[dt]) { demoByType[dt] = []; demoOrder.push(dt); }
+        demoByType[dt].push(demo[dm]);
+      }
+      var demoRows = [];
+      for (var doI = 0; doI < demoOrder.length; doI++) {
+        var dKey = demoOrder[doI];
+        var dList = demoByType[dKey];
+        var dPages = {};
+        for (var dp = 0; dp < dList.length; dp++) {
+          var pns = pageNumbers(dList[dp].location);
+          for (var pq = 0; pq < pns.length; pq++) dPages[pns[pq]] = true;
+        }
+        var pageKeys = Object.keys(dPages).map(Number).sort(function (a, b) { return a - b; });
+        var pageTxt = pageKeys.length === 0 ? '—'
+          : pageKeys.length === 1 ? String(pageKeys[0])
+          : pageKeys.length <= 4 ? pageKeys.join(', ')
+          : pageKeys[0] + '–' + pageKeys[pageKeys.length - 1] + ' (' + pageKeys.length + ' pages)';
+        var sample = cleanQuote(stripDemotedTag(dList[0].evidence));
+        demoRows.push({
+          n: String(doI + 1),
+          det: (CT_NAMES[dKey] || dKey) + '  (' + (CT_DETECTOR[dKey] || '—') + '·' + dKey + ')',
+          claim: dList.length + ' structural note' + (dList.length === 1 ? '' : 's') + (sample ? ' - e.g. "' + (sample.length > 120 ? sample.substring(0, 117) + '...' : sample) + '"' : ''),
+          page: pageTxt,
+          sev: '2 LOW'
+        });
+      }
+      ctx.subHeading('Structural notes in this category (aggregated - ' + demo.length + ' finding' + (demo.length === 1 ? '' : 's') + ')');
+      ctx.table(
+        [
+          { key: 'n', title: '#', w: 24, align: 'center' },
+          { key: 'det', title: 'Detector / Type', w: 118 },
+          { key: 'claim', title: 'Aggregated note', w: 262 },
+          { key: 'page', title: 'Pages', w: 52, align: 'center' },
+          { key: 'sev', title: 'Severity', w: 48 }
+        ],
+        demoRows,
+        { size: 7.5 }
+      );
     }
   }
 
