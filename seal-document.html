@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.8.1-20260726-case-file-serial-label-suppression">
+<meta name="vo-seal-build" content="1.9.0-20260726-bundle-mode-and-ocr-rescue">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Seal Document -- Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
@@ -3664,6 +3664,24 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     textBlocks = [allTexts.join(' ')];
   }
 
+  // OCR rescue hook (optional). A page whose text layer is empty is invisible
+  // to every detector -- exactly where scanned exhibits hide. When the hosting
+  // page provides window.voOcrRescuePages (on-device tesseract.js, vendored),
+  // it may recover text for image-only pages. Inert when absent; a failure is
+  // disclosed in the extraction notes, never fatal (Prime Directive 6).
+  try {
+    var _g = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+    if (_g && typeof _g.voOcrRescuePages === 'function' && textBlocks.length > 1) {
+      var _ocr = await _g.voOcrRescuePages(pdfBytes, textBlocks, onProgress);
+      if (_ocr && Array.isArray(_ocr.textBlocks) && _ocr.textBlocks.length === textBlocks.length) {
+        textBlocks = _ocr.textBlocks;
+        if (_ocr.note) extractionNote += ' ' + _ocr.note;
+      }
+    }
+  } catch (ocrErr) {
+    extractionNote += ' OCR rescue attempted but failed (' + (ocrErr && ocrErr.message ? ocrErr.message : 'unknown') + '); image-only pages remain unread.';
+  }
+
   // Run all 37 detectors
   var detectors = [
     DETECTORS.D01_DETECT_DIRECT_CONTRADICTION,
@@ -5880,6 +5898,10 @@ async function startSealing() {
         forensicResult = { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], scanFailed: true, scanError: (e && e.message ? e.message : 'unknown'), extractionNotes: 'Forensic engine error: ' + (e && e.message ? e.message : 'unknown') + '. The scan could not complete; absence of findings here is NOT a clean result.', summary: 'Forensic scan could not complete' };
       }
       if (classifyPromise) { try { _pipelineClassification = await classifyPromise; } catch (e) { _pipelineClassification = null; } }
+      // Bundle mode: on a legal case file (case details supplied), demote the
+      // single-document structural indicators and recompute the score BEFORE
+      // anything downstream reads it (status line, AI review, report, JSON).
+      try { forensicResult = applyBundleMode(forensicResult); } catch (bmErr) { console.warn('Bundle mode skipped:', bmErr); }
       // A scan that crashed is NOT a clean scan. The catch above sets clean:true
       // purely so the seal can still complete, so rendering that as a green tick
       // told the user "no indicators found" when the engine had in fact never
@@ -6498,6 +6520,135 @@ function serialNameOf(f) { return (f && (f.serialName || f.serialPattern)) || 'S
 function voIsLegalCaseFile() {
   var ci = voCaseDetails();
   return !!(ci.caseName || ci.caseRefs || ci.parties || ci.jurisdiction);
+}
+
+// ==================== BUNDLE MODE (legal case files) ====================
+// A compiled court bundle is many documents bound as one PDF. Detectors that
+// assume ONE homogeneous document then misfire by design: internal page
+// numbers repeat (CT27), common terms appear "defined" twice (CT08), both
+// halves of every temporal word-pair occur somewhere in 500 pages (CT04),
+// hundreds of addresses are normal (CT36), and per-document formalities /
+// annexure references (CT35, CT31) span documents. Bundle mode demotes those
+// STRUCTURAL indicators to severity 2 (Low) and recomputes the indicator
+// score, so the report leads with the real contradictions (numerical, date,
+// identity, financial) instead of 30 page-numbering notes. Nothing is
+// removed: every finding stays in the report, marked as demoted, and the
+// demotion itself is disclosed in the extraction notes (Prime Directive 6).
+var VO_BUNDLE_STRUCTURAL = { CT04: 1, CT08: 1, CT27: 1, CT31: 1, CT35: 1, CT36: 1 };
+
+function applyBundleMode(result) {
+  if (!result || result.scanFailed || !Array.isArray(result.findings)) return result;
+  if (!voIsLegalCaseFile()) return result;
+  var demoted = 0;
+  var findings = result.findings.map(function (f) {
+    if (!f || f.type === 'SERIAL' || !VO_BUNDLE_STRUCTURAL[f.type]) return f;
+    if ((f.severity | 0) <= 2) return f;
+    var c = Object.assign({}, f);
+    c.severity = 2;
+    c.bundleDemoted = true;
+    c.evidence = (c.evidence || '') + ' [bundle context: structural indicator demoted -- expected in a compiled multi-document case file]';
+    demoted++;
+    return c;
+  });
+  if (!demoted) return result;
+  var total = 0;
+  for (var i = 0; i < findings.length; i++) total += (findings[i].severity | 0);
+  var score = findings.length ? Math.round((total / (findings.length * 5)) * 100) : 0;
+  var confidence = score >= 80 ? 'VERY_HIGH' : score >= 60 ? 'HIGH' :
+                   score >= 40 ? 'MODERATE' : score >= 20 ? 'LOW' : 'CLEAN';
+  return Object.assign({}, result, {
+    findings: findings,
+    overallScore: score,
+    confidence: confidence,
+    clean: score < 20,
+    bundleMode: { applied: true, demoted: demoted },
+    summary: (typeof generateSummary === 'function') ? generateSummary(findings, score) : result.summary,
+    extractionNotes: (((result.extractionNotes || '') + ' Bundle mode: this is a compiled multi-document case file (case details supplied), so ' + demoted +
+      ' structural indicator' + (demoted === 1 ? '' : 's') + ' (repeated internal page numbers, term/temporal-language repetition, address counts, per-document formalities and annexure references) ' +
+      (demoted === 1 ? 'was' : 'were') + ' demoted to Low and the indicator score recomputed. Contradiction, date, identity and financial findings are unaffected.').trim())
+  });
+}
+
+// ==================== OCR RESCUE (image-only pages) ====================
+// Pages with no text layer (scanned exhibits, photographed emails) are
+// invisible to every detector -- and they are often the critical evidence.
+// This helper OCRs the worst offenders ON-DEVICE with vendored tesseract.js:
+// no cloud call, nothing leaves the browser, consistent with the privacy
+// model. Called by runForensicEngine via the voOcrRescuePages hook; any
+// failure is disclosed in the extraction notes and the scan continues.
+var VO_OCR_MAX_PAGES = 15;      // cap: OCR is seconds per page
+var VO_OCR_EMPTY_CHARS = 30;    // a page this thin is treated as image-only
+var VO_OCR_MIN_AVG = 150;       // only rescue when the rest of the doc has real text
+
+function voLoadScriptOnce(src, globalCheck) {
+  return new Promise(function (resolve, reject) {
+    try { if (globalCheck()) { resolve(); return; } } catch (e) {}
+    var s = document.createElement('script');
+    s.src = src;
+    s.onload = function () { resolve(); };
+    s.onerror = function () { reject(new Error('failed to load ' + src)); };
+    document.head.appendChild(s);
+  });
+}
+
+async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
+  var lens = textBlocks.map(function (t) { return (t || '').replace(/\s+/g, '').length; });
+  var nonEmpty = lens.filter(function (n) { return n > VO_OCR_EMPTY_CHARS; });
+  if (!nonEmpty.length) return null; // whole doc image-only: full OCR would take far too long
+  var avg = nonEmpty.reduce(function (a, b) { return a + b; }, 0) / nonEmpty.length;
+  if (avg < VO_OCR_MIN_AVG) return null;
+  var candidates = [];
+  for (var i = 0; i < lens.length; i++) {
+    if (lens[i] <= VO_OCR_EMPTY_CHARS) candidates.push(i);
+  }
+  if (!candidates.length) return null;
+  var skipped = Math.max(0, candidates.length - VO_OCR_MAX_PAGES);
+  candidates = candidates.slice(0, VO_OCR_MAX_PAGES);
+
+  updateStep('Fraud', 'processing', 'OCR on ' + candidates.length + ' image-only page' + (candidates.length === 1 ? '' : 's') + ' (on-device)...');
+  await voLoadScriptOnce('/vendor/pdf.min.js', function () { return typeof pdfjsLib !== 'undefined'; });
+  if (typeof pdfjsLib === 'undefined') throw new Error('pdf.js unavailable for page rendering');
+  try { pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.js'; } catch (e) {}
+  await voLoadScriptOnce('/vendor/tesseract.min.js', function () { return typeof Tesseract !== 'undefined'; });
+  if (typeof Tesseract === 'undefined') throw new Error('tesseract.js unavailable');
+
+  var pdf = await pdfjsLib.getDocument({ data: pdfBytes.slice ? pdfBytes.slice(0) : pdfBytes }).promise;
+  var worker = await Tesseract.createWorker('eng', 1, {
+    workerPath: '/vendor/tesseract-worker.min.js',
+    corePath: '/vendor',
+    langPath: '/vendor'
+  });
+  var rescued = [], out = textBlocks.slice();
+  try {
+    for (var c = 0; c < candidates.length; c++) {
+      var pageIdx = candidates[c];
+      updateStep('Fraud', 'processing', 'OCR page ' + (pageIdx + 1) + ' (' + (c + 1) + '/' + candidates.length + ', on-device)...');
+      try {
+        var page = await pdf.getPage(pageIdx + 1);
+        var viewport = page.getViewport({ scale: 2.0 });
+        var canvas = document.createElement('canvas');
+        canvas.width = Math.ceil(viewport.width);
+        canvas.height = Math.ceil(viewport.height);
+        await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+        var res = await worker.recognize(canvas);
+        var text = (res && res.data && res.data.text ? res.data.text : '').replace(/\s+/g, ' ').trim();
+        if (text.length > VO_OCR_EMPTY_CHARS) {
+          out[pageIdx] = '[OCR] ' + text;
+          rescued.push(pageIdx + 1);
+        }
+      } catch (pageErr) { /* per-page failure: leave the page as-is, keep going */ }
+    }
+  } finally {
+    try { await worker.terminate(); } catch (e) {}
+    try { await pdf.destroy(); } catch (e) {}
+  }
+  if (!rescued.length) {
+    return { textBlocks: textBlocks, note: 'OCR rescue ran on ' + candidates.length + ' image-only page(s) but recovered no legible text; those pages remain unread.' };
+  }
+  var note = 'OCR rescue: recovered text on-device (tesseract.js, eng) for ' + rescued.length +
+    ' image-only page(s): ' + rescued.join(', ') + '.' +
+    (skipped > 0 ? ' A further ' + skipped + ' image-only page(s) exceeded the OCR cap (' + VO_OCR_MAX_PAGES + ') and remain unread.' : '');
+  return { textBlocks: out, note: note };
 }
 
 // ==================== ANONYMOUS PATTERN SHARING (OPT-IN) ====================
