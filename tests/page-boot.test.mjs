@@ -184,6 +184,21 @@ for (const page of PAGES) {
   ok(/secLegalAnalysis\(ctx, data\)/.test(html), 'secLegalAnalysis is wired into build()');
 }
 
+// AI endpoints must be called SAME-ORIGIN. A hardcoded apex host made every AI
+// call cross-origin from the www site, so the CORS preflight hit the apex<->www
+// redirect and failed -- classify/assess/narrate/gatekeep all fell back
+// silently. aiApiPost must fetch a relative path, never an absolute host.
+{
+  const html = readFileSync('seal-document.html', 'utf8');
+  const m = html.match(/async function aiApiPost\([\s\S]*?\n}/);
+  ok(Boolean(m), 'aiApiPost is present');
+  if (m) {
+    ok(!/fetch\(\s*['"]https?:\/\//.test(m[0]) && !/https:\/\/verumglobal\.foundation/.test(m[0]),
+      'aiApiPost does NOT fetch a hardcoded absolute host (regression guard)');
+    ok(/fetch\(\s*path\b/.test(m[0]), 'aiApiPost fetches the relative path (same-origin)');
+  }
+}
+
 // Bundle mode: on a legal case file the single-document structural detectors
 // (CT27 duplicate page numbers, CT08 term repetition, CT04 temporal word
 // pairs, CT36 address counts, CT35 formalities, CT31 annexure references)

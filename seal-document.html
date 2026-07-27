@@ -6559,12 +6559,23 @@ function isAiReviewEnabled() {
   return !!(cb && cb.checked);
 }
 
+// Last AI transport failure, surfaced in the report methodology so a fallback
+// is self-diagnosing instead of a silent "service unavailable".
+window._voLastAiError = null;
+
 async function aiApiPost(path, payload, timeoutMs) {
   var ctrl = new AbortController();
   var timer = setTimeout(function() { ctrl.abort(); }, timeoutMs || 10000);
   try {
-    var url = 'https://verumglobal.foundation' + path;
-    var res = await fetch(url, {
+    // SAME-ORIGIN, relative URL -- never a hardcoded host. The page is served on
+    // www.verumglobal.foundation but this used to POST to the apex
+    // verumglobal.foundation, making every AI call cross-origin. A cross-origin
+    // JSON POST triggers a CORS preflight, and the apex<->www canonical redirect
+    // is not followed on preflight requests -- so classify, assess, narrate and
+    // gatekeep ALL failed silently and the report fell back to the on-device
+    // narrative every time. A relative path hits whatever host actually served
+    // the page: no cross-origin, no preflight, no redirect.
+    var res = await fetch(path, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload),
@@ -6572,6 +6583,12 @@ async function aiApiPost(path, payload, timeoutMs) {
     });
     if (!res.ok) throw new Error('AI endpoint ' + path + ' returned HTTP ' + res.status);
     return await res.json();
+  } catch (e) {
+    var reason = (e && e.name === 'AbortError')
+      ? ('timed out after ' + (timeoutMs || 10000) + 'ms')
+      : (e && e.message ? e.message : 'network/CORS error');
+    window._voLastAiError = path + ': ' + reason;
+    throw e;
   } finally {
     clearTimeout(timer);
   }
@@ -7609,7 +7626,7 @@ async function runSealingPipeline() {
       catch (assessErr) { console.warn('[VO-AI] assess failed:', assessErr && assessErr.message ? assessErr.message : assessErr); assessRes = null; }
       if (!assessRes || !assessRes.ran) {
         // Honest antithesis marker: review was enabled but did not run.
-        aiReviewInfo = { applied: false, reason: 'service unavailable' };
+        aiReviewInfo = { applied: false, reason: window._voLastAiError || 'service unavailable' };
         updateStep(7, 'processing', 'AI review unavailable -- findings are engine output, unreviewed');
       }
       if (assessRes && assessRes.ran) {
@@ -7668,7 +7685,7 @@ async function runSealingPipeline() {
     console.warn('AI review skipped (sealing unaffected):', aiErr && aiErr.message ? aiErr.message : aiErr);
     reportFraudResult = fraudResult;
     aiReviewInfo = (isAiReviewEnabled() && fraudResult && !fraudResult.scanFailed && fraudResult.findings && fraudResult.findings.length > 0)
-      ? { applied: false, reason: 'service unavailable' } : null;
+      ? { applied: false, reason: window._voLastAiError || 'service unavailable' } : null;
     aiNarrativeText = null;
     _pipelineAiAddedFindings = [];
   }
