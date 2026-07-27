@@ -572,6 +572,149 @@ if (!window._cdrReady.pdfLib) {
 }
 </script>
 <script>
+/* VO-INLINE:seal-guard.js:START */
+/*!
+ * Verum Omnis Seal Guard (VO-SG) — the enforced exit.
+ *
+ * Invariant:
+ *   "The only genuine Verum output is a sealed output.
+ *    No seal = Verum Omnis never issued it."
+ *
+ * Every PDF that LEAVES the system — a download link, a Web Share payload, an
+ * email attachment — must carry a Verum seal marker. This module refuses to
+ * release an unsealed PDF, closing the gap where build() and seal() are
+ * separate calls, or a seal fallback silently produced an unmarked file. It is
+ * the single sanctioned exit; route deliveries through it.
+ *
+ * Detection is byte-identical to the verify.html scanner: it recognises the
+ * seal Subject in both plain-ASCII Info dicts and pdf-lib's UTF-16BE-hex form,
+ * across the VO-SEAL2 (self-verifying original), VO-SEAL (legacy) and SEAL-CERT
+ * (detached certificate) schemes.
+ *
+ * Note on encryption: an AES-encrypted sealed PDF is still a sealed document —
+ * its plaintext was sealed before encryption, but the marker is (correctly) no
+ * longer readable in the ciphertext. Guard the PLAINTEXT sealed bytes at the
+ * point of sealing; never run isSealed() against ciphertext.
+ *
+ * Browser + Node (CommonJS). Zero dependencies.
+ */
+(function (global) {
+  'use strict';
+
+  // UTF-16BE hex, 4-digit uppercase — matches how pdf-lib stores Info-dict
+  // strings and how the verify page scans for them (see voUtf16Hex there).
+  function utf16Hex(str) {
+    var out = '';
+    for (var i = 0; i < str.length; i++) {
+      var h = str.charCodeAt(i).toString(16).toUpperCase();
+      while (h.length < 4) h = '0' + h;
+      out += h;
+    }
+    return out;
+  }
+
+  // Build a scannable latin1 string from raw bytes without a call-stack blowout
+  // on large files (String.fromCharCode.apply has an argument-count ceiling).
+  function bytesToStr(bytes) {
+    if (typeof bytes === 'string') return bytes;
+    var CHUNK = 0x8000, parts = [];
+    for (var i = 0; i < bytes.length; i += CHUNK) {
+      var slice = bytes.subarray ? bytes.subarray(i, i + CHUNK) : bytes.slice(i, i + CHUNK);
+      parts.push(String.fromCharCode.apply(null, slice));
+    }
+    return parts.join('');
+  }
+
+  // Seal Subject prefixes that constitute a genuine Verum seal.
+  var SEAL_SCHEMES = ['VO-SEAL2|', 'VO-SEAL|', 'SEAL-CERT|'];
+
+  /**
+   * True iff the bytes/string carry a recognised Verum seal marker.
+   * @param {Uint8Array|string} bytesOrStr
+   * @returns {boolean}
+   */
+  function isSealed(bytesOrStr) {
+    if (!bytesOrStr || !bytesOrStr.length) return false;
+    var text = bytesToStr(bytesOrStr);
+    var upper = text.toUpperCase();
+    for (var i = 0; i < SEAL_SCHEMES.length; i++) {
+      var prefix = SEAL_SCHEMES[i];
+      // plain-ASCII Info dict, e.g. "/Subject (VO-SEAL2|<hash>|VO-XXXX)"
+      if (text.indexOf(prefix) !== -1) return true;
+      // pdf-lib UTF-16BE-hex Info dict (hex may be written upper- or lower-case)
+      if (upper.indexOf(utf16Hex(prefix)) !== -1) return true;
+    }
+    return false;
+  }
+
+  /**
+   * True iff the bytes look like a PDF ("%PDF-" magic).
+   * @param {Uint8Array|string} bytes
+   * @returns {boolean}
+   */
+  function isPdf(bytes) {
+    if (!bytes) return false;
+    if (typeof bytes === 'string') return bytes.indexOf('%PDF-') === 0;
+    return bytes.length >= 5 &&
+      bytes[0] === 0x25 && bytes[1] === 0x50 && bytes[2] === 0x44 &&
+      bytes[3] === 0x46 && bytes[4] === 0x2D;
+  }
+
+  /**
+   * Throw unless the bytes are a sealed Verum PDF. Returns true on success.
+   * @param {Uint8Array|string} bytes
+   * @param {string} [context] label included in the error for diagnostics
+   */
+  function assertSealed(bytes, context) {
+    if (!isSealed(bytes)) {
+      var err = new Error(
+        'VerumSealGuard: refusing to release an UNSEALED document' +
+        (context ? ' [' + context + ']' : '') +
+        '. No seal = Verum Omnis never issued it.');
+      err.code = 'VO_UNSEALED';
+      throw err;
+    }
+    return true;
+  }
+
+  /**
+   * The single sanctioned exit for browser delivery. Creates an object URL for
+   * the bytes only after confirming a PDF is sealed. Non-PDF artefacts (e.g.
+   * .ots receipts) pass through unchecked. Ciphertext should be delivered by
+   * passing opts.preSealed=true (the plaintext was already asserted at sealing).
+   *
+   * @param {Uint8Array} bytes
+   * @param {{filename?:string, mime?:string, preSealed?:boolean}} [opts]
+   * @returns {{url:string, revoke:function}}
+   */
+  function sealedObjectURL(bytes, opts) {
+    opts = opts || {};
+    var looksPdf = isPdf(bytes) || /\.pdf$/i.test(opts.filename || '');
+    if (looksPdf && !opts.preSealed) assertSealed(bytes, opts.filename || 'download');
+    if (typeof Blob === 'undefined' || typeof URL === 'undefined' || !URL.createObjectURL) {
+      throw new Error('VerumSealGuard.sealedObjectURL requires a browser environment.');
+    }
+    var blob = new Blob([bytes], {
+      type: opts.mime || (looksPdf ? 'application/pdf' : 'application/octet-stream')
+    });
+    var url = URL.createObjectURL(blob);
+    return { url: url, revoke: function () { try { URL.revokeObjectURL(url); } catch (e) {} } };
+  }
+
+  var api = {
+    isSealed: isSealed,
+    isPdf: isPdf,
+    assertSealed: assertSealed,
+    sealedObjectURL: sealedObjectURL,
+    SEAL_SCHEMES: SEAL_SCHEMES,
+    _utf16Hex: utf16Hex
+  };
+
+  global.VoSealGuard = api;
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+
+})(typeof window !== 'undefined' ? window : (typeof globalThis !== 'undefined' ? globalThis : this));
+/* VO-INLINE:seal-guard.js:END */
 /* VO-INLINE:forensic-report.js:START */
 /* ========================================================================
    VERUM OMNIS FORENSIC REPORT BUILDER v1.3.1 (VO-SEAL2 + optional AI review layer)
@@ -8104,8 +8247,27 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
 
   const base = selectedFile.name.replace(/\.pdf$/i, '');
   const suffix = password ? '-protected' : '';
-  const sU = URL.createObjectURL(new Blob([sealedBytes], {type: 'application/pdf'}));
-  const sL = document.getElementById('downloadSealedPdf'); sL.href = sU; sL.download = base + suffix + '-sealed.pdf';
+  // SEAL GUARD (VO-SG): the enforced exit. A document may only leave Verum if
+  // it carries a real seal marker -- "no seal = Verum Omnis never issued it".
+  // This blocks the case where buildSealedPDF() hit its fallback and produced an
+  // unmarked file: rather than hand the user a forgeable "-sealed.pdf" with no
+  // seal, we refuse and make the failure loud. (Encrypted variants derive from
+  // these same bytes, which are asserted here before any encryption ran.)
+  const sL = document.getElementById('downloadSealedPdf');
+  try {
+    window.VoSealGuard.assertSealed(sealedBytes, base + '-sealed.pdf');
+    const sU = URL.createObjectURL(new Blob([sealedBytes], {type: 'application/pdf'}));
+    sL.href = sU; sL.download = base + suffix + '-sealed.pdf';
+  } catch (guardErr) {
+    console.error('[SEAL-GUARD] Refused to release an unsealed document:', guardErr && guardErr.message);
+    sL.removeAttribute('href');
+    sL.removeAttribute('download');
+    sL.setAttribute('aria-disabled', 'true');
+    sL.style.opacity = '0.5';
+    sL.style.pointerEvents = 'none';
+    sL.innerHTML = '&#9888; Sealing failed &mdash; download blocked (unsealed)';
+    sL.onclick = function (e) { e.preventDefault(); return false; };
+  }
 
   // Sealed forensic report download -- only when generation succeeded
   var oldReportBtn = document.getElementById('downloadForensicReport');
@@ -8114,7 +8276,9 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   if (oldReportNote) oldReportNote.remove();
   var oldShareNote = document.getElementById('patternShareNote');
   if (oldShareNote) oldShareNote.remove();
-  if (window._voReportPack && window._voReportPack.bytes) {
+  if (window._voReportPack && window._voReportPack.bytes && window.VoSealGuard.isSealed(window._voReportPack.bytes)) {
+    // SEAL GUARD (VO-SG): only offer the forensic report if it actually carries
+    // a seal. An unsealed report is suppressed, never handed over.
     var rp = window._voReportPack;
     var rU = URL.createObjectURL(new Blob([rp.bytes], {type: 'application/pdf'}));
     var rL = document.createElement('a');
@@ -8177,7 +8341,10 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     dg2.parentNode.insertBefore(cNote, dg2.nextSibling);
   }
 
-  if (password && encryptedBytes) {
+  if (password && encryptedBytes && window.VoSealGuard.isSealed(sealedBytes)) {
+    // SEAL GUARD (VO-SG): the encrypted file's own marker is (correctly) sealed
+    // inside the ciphertext, so we gate on the plaintext sealedBytes it derives
+    // from -- an unsealed original is never released, protected or not.
     var isPdfEnc = window._voEncFormat === 'pdf';
     if (isPdfEnc) {
       // The protected PDF is the prominent download -- it is the copy you send.
@@ -8228,8 +8395,9 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
         '<strong>Your password:</strong> <span style="color:#D4A843;font-family:monospace;">' + password + '</span><br>' +
         '<strong style="color:#ef4444;">Send the password separately from the document.</strong>';
     el.parentNode.insertBefore(banner, el.nextSibling);
-  } else {
-    // No password: the sealed PDF itself is the thing to share.
+  } else if (window.VoSealGuard.isSealed(sealedBytes)) {
+    // No password: the sealed PDF itself is the thing to share. SEAL GUARD
+    // (VO-SG): only ever share a genuinely sealed document.
     window._voShareBytes = sealedBytes;
     window._voShareName = base + '-sealed.pdf';
     window._voShareType = 'application/pdf';
@@ -8244,7 +8412,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   if (window._voShareBytes) {
     window._voShareFiles.push({ bytes: window._voShareBytes, name: window._voShareName, type: window._voShareType });
   }
-  if (window._voReportPack && window._voReportPack.bytes) {
+  if (window._voReportPack && window._voReportPack.bytes && window.VoSealGuard.isSealed(window._voReportPack.bytes)) {
     window._voShareFiles.push({ bytes: window._voReportPack.bytes, name: base + '-forensic-report-sealed.pdf', type: 'application/pdf' });
   }
   if (window._voFindingsJson) {

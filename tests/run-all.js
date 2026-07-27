@@ -15,6 +15,7 @@ const suites = [
   'voice-crypto.test.mjs',
   'pdf-encrypt.test.mjs',
   'find-seal.test.mjs',
+  'seal-guard.test.mjs',
   'home-verify.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',

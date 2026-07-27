@@ -114,6 +114,21 @@ for (const page of PAGES) {
   ok(/await voEnsureForensicScripts\(/.test(html), 'the scan awaits the script-recovery loader');
 }
 
+// SEAL GUARD (VO-SG): the enforced exit. Nothing may be handed to the user as a
+// PDF unless it carries a real seal marker ("no seal = Verum never issued it").
+// These assertions lock the wiring so a future edit cannot quietly reopen the
+// gap where an unsealed/fallback PDF is offered for download or share.
+{
+  const html = readFileSync('seal-document.html', 'utf8');
+  ok(html.includes('global.VoSealGuard = api'), 'seal guard module is inlined into the page');
+  ok(/VoSealGuard\.assertSealed\(sealedBytes/.test(html),
+    'the sealed-PDF download asserts the bytes are sealed before releasing them');
+  ok(/password && encryptedBytes && window\.VoSealGuard\.isSealed\(sealedBytes\)/.test(html),
+    'the encrypted delivery is gated on the plaintext original being sealed');
+  ok(/else if \(window\.VoSealGuard\.isSealed\(sealedBytes\)\)/.test(html),
+    'the plaintext share is gated on the document being sealed');
+}
+
 // index.html is the home page. It was overwritten with a copy of the sealing
 // app in 4cb88ff to paper over a blank screen, which silently deleted the
 // site's front door -- `/` and `/seal-document` served the same thing.
