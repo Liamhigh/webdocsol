@@ -97,7 +97,8 @@ var CT_NAMES = {
   CT34: 'Precedent Violation', CT35: 'Procedure Breach', CT36: 'Address Contradiction',
   CT37: 'Contact Detail Mismatch', CT38: 'Jurisdictional Impossibility', CT39: 'Chain of Custody Break',
   CT40: 'Witness Statement Conflict', CT41: 'Evidence Tampering Indicator', CT42: 'Digital Footprint Mismatch',
-  CT43: 'Document Internal Conflict'
+  CT43: 'Document Internal Conflict',
+  CT44: 'Conditional Clause Misinvoked (Lessee/Owner Trap)', CT45: 'Asset Value Recognised Then Denied (Goodwill)'
 };
 var CT_CATEGORY = {
   CT01: 'STATEMENTAL', CT02: 'STATEMENTAL', CT03: 'STATEMENTAL', CT04: 'STATEMENTAL',
@@ -110,7 +111,8 @@ var CT_CATEGORY = {
   CT31: 'CROSS_REF', CT32: 'CROSS_REF', CT33: 'CROSS_REF', CT34: 'CROSS_REF', CT35: 'CROSS_REF',
   CT36: 'CONTACT', CT37: 'CONTACT', CT38: 'CONTACT',
   CT39: 'EVIDENCE', CT40: 'EVIDENCE', CT41: 'EVIDENCE',
-  CT42: 'DIGITAL', CT43: 'DIGITAL'
+  CT42: 'DIGITAL', CT43: 'DIGITAL',
+  CT44: 'FRANCHISE_LEASE', CT45: 'FRANCHISE_LEASE'
 };
 // detector id responsible for each CT type (derived from forensic-engine.js source)
 var CT_DETECTOR = {
@@ -132,7 +134,8 @@ var CATEGORY_LABEL = {
   CROSS_REF: 'Cross-Reference Checks',
   CONTACT: 'Address & Location Conflicts',
   EVIDENCE: 'Evidence & Witness Conflicts',
-  DIGITAL: 'Digital Consistency'
+  DIGITAL: 'Digital Consistency',
+  FRANCHISE_LEASE: 'Franchise / Lease & Goodwill'
 };
 // One plain sentence under each category heading: what this group of findings
 // means to a reader who has never seen a forensic report.
@@ -144,7 +147,8 @@ var CATEGORY_EXPLAIN = {
   CROSS_REF: 'The document refers to annexures, sources or procedures that could not be found where expected.',
   CONTACT: 'Addresses or contact details conflict, or place a party in two places at once.',
   EVIDENCE: 'Witness statements conflict, or the chain of custody shows a gap.',
-  DIGITAL: 'The file\'s digital traces (metadata, internal references) are inconsistent.'
+  DIGITAL: 'The file\'s digital traces (metadata, internal references) are inconsistent.',
+  FRANCHISE_LEASE: 'A contractual right (e.g. termination) rests on a condition the record contradicts, or goodwill/value recognised in one document is denied in another.'
 };
 
 // ==================== LEGAL ANALYSIS LAYER ====================

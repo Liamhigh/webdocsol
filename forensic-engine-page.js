@@ -305,6 +305,23 @@ var CONTRADICTION_TYPES = {
     desc: 'Catch-all: any other internal contradiction not covered above',
     severity: 3, category: 'DIGITAL',
     example: 'Multiple anomalies detected that suggest systematic document fraud'
+  },
+
+  // === CATEGORY 9: FRANCHISE / LEASE CONTRADICTIONS (44-45) ===
+  // Conditional-right and asset-value contradictions surfaced by the AllFuels
+  // case, where the lease agreement had to be read against the ownership record.
+
+  CT44_CONDITIONAL_CLAUSE_MISINVOKED: {
+    id: 'CT44', name: 'Conditional Clause Misinvoked (Lessee/Owner Trap)',
+    desc: 'A termination or expiry rests on a clause conditioned on the party being the lessee (not the owner) under a head lease, but the record shows that party had become the owner of the premises — the triggering event never occurred, so the termination may be void.',
+    severity: 5, category: 'FRANCHISE_LEASE',
+    example: 'Franchise deemed "expired by effluxion" under cl. 3.2.3 (lessee-only), but the franchisor had purchased the site and was the registered owner.'
+  },
+  CT45_ASSET_VALUE_DENIAL: {
+    id: 'CT45', name: 'Asset Value Recognised Then Denied (Goodwill)',
+    desc: 'Goodwill or value of the business is recognised or quantified in one document but denied or said to have no compensable value in another — a forfeiture or clawback is itself an admission that the asset exists.',
+    severity: 5, category: 'FRANCHISE_LEASE',
+    example: 'The clawback table quantifies the Value of the Business, yet a later submission argues "goodwill has no compensable value".'
   }
 };
 
@@ -1229,6 +1246,47 @@ var DETECTORS = {
     return findings;
   },
 
+  // D38: Conditional-clause trap (Caltex Franchise Agreement cl. 3.2.3). A
+  // termination/expiry rests on a clause whose precondition is that the party is
+  // the LESSEE (not the owner) under a head lease, but the record shows that
+  // party had become the OWNER. The clause's trigger never occurred. This is the
+  // evidence the engine missed: the lease clause must be read against ownership.
+  // Requires an ownership-ACQUISITION phrase (not just the word "owner", which a
+  // franchise agreement uses generically in its definitions), so clean
+  // agreements that merely define "lessee"/"owner" do not trip it.
+  D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED: function(textBlocks) {
+    var findings = [];
+    var t = textBlocks.join(' ').toLowerCase();
+    var hasLesseeCondition = /not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/.test(t);
+    var invokesTermination = /(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(t);
+    var ownershipAcquired = /(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/.test(t);
+    if (hasLesseeCondition && invokesTermination && ownershipAcquired) {
+      findings.push({ type: 'CT44', severity: 5,
+        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner), but the record shows the party had become the owner of the premises — the clause\'s precondition never occurred. HYPOTHESIS: requires legal review.',
+        location: 'Franchise/lease agreement vs ownership record' });
+    }
+    return findings;
+  },
+
+  // D39: Goodwill / value of the business recognised or quantified in one place
+  // but denied or said to have no compensable value in another. "You only take
+  // away what exists": a forfeiture or clawback of goodwill is an admission it
+  // exists. The denial must be goodwill/value-specific to avoid tripping on an
+  // ordinary "no compensation for improvements on termination" clause.
+  D39_DETECT_ASSET_VALUE_DENIAL: function(textBlocks) {
+    var findings = [];
+    var t = textBlocks.join(' ').toLowerCase();
+    var recognisesGoodwill = /(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis)/.test(t) ||
+      /(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/.test(t);
+    var deniesGoodwillValue = /goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)/.test(t);
+    if (recognisesGoodwill && deniesGoodwillValue) {
+      findings.push({ type: 'CT45', severity: 5,
+        evidence: 'Goodwill / value of the business is recognised or quantified in one document but denied or said to have no compensable value in another — the forfeiture/clawback is itself an admission the asset exists. HYPOTHESIS: requires legal review.',
+        location: 'Franchise agreement vs later submission' });
+    }
+    return findings;
+  },
+
   D37_DETECT_INTERNAL_CONFLICT_CATCHALL: function(textBlocks, otherFindings) {
     var findings = [];
     // If multiple different contradiction types found, flag as systematic fraud
@@ -1834,7 +1892,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     DETECTORS.D33_DETECT_IMAGE_MANIPULATION,
     DETECTORS.D34_DETECT_CURRENCY_FRAUD,
     DETECTORS.D35_DETECT_VERSION_ANOMALY,
-    DETECTORS.D36_DETECT_SOURCE_FAILURE
+    DETECTORS.D36_DETECT_SOURCE_FAILURE,
+    DETECTORS.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED,
+    DETECTORS.D39_DETECT_ASSET_VALUE_DENIAL
   ];
 
   for (var d = 0; d < detectors.length; d++) {
