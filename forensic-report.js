@@ -147,6 +147,99 @@ var CATEGORY_EXPLAIN = {
   DIGITAL: 'The file\'s digital traces (metadata, internal references) are inconsistent.'
 };
 
+// ==================== LEGAL ANALYSIS LAYER ====================
+// Turns the engine's mechanical findings into the Verum Omnis "gold standard"
+// institutional-review structure (template v5.1.1): legal subjects, a dishonesty
+// matrix, a per-actor scorecard and actionable output. This is a deterministic
+// RE-PRESENTATION of the same findings -- it invents no facts, cites no statute
+// the engine cannot support, and keeps every finding an INDICATOR, never a
+// determination of guilt (Prime Directive 4).
+
+// Each contradiction type maps to the legal subject it most speaks to. A finding
+// is counted under exactly one subject so the picture is not double-inflated.
+var LEGAL_SUBJECT_OF = {
+  CT15: 'FINANCIAL', CT16: 'FINANCIAL', CT17: 'FINANCIAL', CT18: 'FINANCIAL', CT19: 'FINANCIAL', CT20: 'FINANCIAL', CT21: 'FINANCIAL', CT22: 'FINANCIAL',
+  CT09: 'MISREP', CT10: 'MISREP', CT11: 'MISREP', CT12: 'MISREP', CT13: 'MISREP', CT14: 'MISREP',
+  CT01: 'CONTRADICTION', CT02: 'CONTRADICTION', CT03: 'CONTRADICTION', CT04: 'CONTRADICTION', CT05: 'CONTRADICTION', CT06: 'CONTRADICTION', CT07: 'CONTRADICTION', CT08: 'CONTRADICTION', CT43: 'CONTRADICTION',
+  CT23: 'TAMPERING', CT24: 'TAMPERING', CT25: 'TAMPERING', CT26: 'TAMPERING', CT27: 'TAMPERING', CT28: 'TAMPERING', CT29: 'TAMPERING', CT30: 'TAMPERING', CT41: 'TAMPERING', CT42: 'TAMPERING',
+  CT31: 'PROCEDURAL', CT32: 'PROCEDURAL', CT33: 'PROCEDURAL', CT34: 'PROCEDURAL', CT35: 'PROCEDURAL',
+  CT36: 'LOCATION', CT37: 'LOCATION', CT38: 'LOCATION',
+  CT39: 'WITNESS', CT40: 'WITNESS'
+};
+var LEGAL_SUBJECT_ORDER = ['CONTRADICTION', 'FINANCIAL', 'MISREP', 'TAMPERING', 'WITNESS', 'PROCEDURAL', 'LOCATION'];
+var LEGAL_SUBJECT_LABEL = {
+  CONTRADICTION: 'Contradictory Statements & Figures',
+  FINANCIAL: 'Financial Irregularities',
+  MISREP: 'Misrepresentation & Identity',
+  TAMPERING: 'Document Integrity & Tampering',
+  WITNESS: 'Evidence Handling & Witnesses',
+  PROCEDURAL: 'Procedural & Legal-Reference Gaps',
+  LOCATION: 'Location & Contact Conflicts'
+};
+var LEGAL_SUBJECT_KEYPOINTS = {
+  CONTRADICTION: 'The document asserts opposing facts, figures or dates in different places - the signature of a claim that cannot all be true.',
+  FINANCIAL: 'Amounts, bank details, VAT/registration numbers or currencies conflict - the pattern that accompanies invoice fraud, diversion or fabricated accounts.',
+  MISREP: 'Names, roles, authority or company status do not line up - a common marker of misrepresentation or acting beyond mandate.',
+  TAMPERING: 'The file\'s structure (signatures, versions, layout, timestamps) shows irregularities consistent with alteration of an original.',
+  WITNESS: 'Witness statements conflict or the chain of custody shows a gap - directly relevant to the weight evidence can carry.',
+  PROCEDURAL: 'Referenced annexures, sources, precedents or required procedures do not resolve when checked.',
+  LOCATION: 'Addresses or contact details conflict, or place a party where they could not consistently be.'
+};
+
+// The template's five "Dishonesty Detection" red-flag lenses. Each CT maps to
+// exactly one lens; SERIAL patterns fall under Patterns of Concealment.
+var DISHONESTY_OF = {
+  CT01: 'CONTRADICTIONS', CT02: 'CONTRADICTIONS', CT03: 'CONTRADICTIONS', CT04: 'CONTRADICTIONS', CT06: 'CONTRADICTIONS', CT14: 'CONTRADICTIONS', CT43: 'CONTRADICTIONS',
+  CT15: 'FINANCIAL', CT16: 'FINANCIAL', CT17: 'FINANCIAL', CT18: 'FINANCIAL', CT19: 'FINANCIAL', CT20: 'FINANCIAL', CT21: 'FINANCIAL', CT22: 'FINANCIAL',
+  CT23: 'CONCEALMENT', CT24: 'CONCEALMENT', CT25: 'CONCEALMENT', CT26: 'CONCEALMENT', CT27: 'CONCEALMENT', CT28: 'CONCEALMENT', CT29: 'CONCEALMENT', CT30: 'CONCEALMENT', CT41: 'CONCEALMENT', CT42: 'CONCEALMENT',
+  CT31: 'OMISSIONS', CT32: 'OMISSIONS', CT33: 'OMISSIONS', CT34: 'OMISSIONS',
+  CT05: 'EVASION', CT07: 'EVASION', CT08: 'EVASION', CT35: 'EVASION', CT36: 'EVASION', CT37: 'EVASION', CT38: 'EVASION',
+  CT09: 'CONTRADICTIONS', CT10: 'CONTRADICTIONS', CT11: 'CONTRADICTIONS', CT12: 'CONTRADICTIONS', CT13: 'CONTRADICTIONS',
+  CT39: 'CONCEALMENT', CT40: 'OMISSIONS'
+};
+var DISHONESTY_ORDER = ['CONTRADICTIONS', 'OMISSIONS', 'EVASION', 'CONCEALMENT', 'FINANCIAL'];
+var DISHONESTY_LABEL = {
+  CONTRADICTIONS: 'Contradictions',
+  OMISSIONS: 'Selective Omissions',
+  EVASION: 'Evasion / Deflection',
+  CONCEALMENT: 'Patterns of Concealment',
+  FINANCIAL: 'Financial Irregularities'
+};
+var DISHONESTY_MEAN = {
+  CONTRADICTIONS: 'Opposing statements that conflict with the evidence or with each other.',
+  OMISSIONS: 'Referenced material, sources or details that are missing where they should appear.',
+  EVASION: 'Scope, procedure or definitional gaps consistent with deflection or non-answer.',
+  CONCEALMENT: 'Signs of alteration, versioning, timestamp or chain-of-custody irregularity.',
+  FINANCIAL: 'Amount, account, currency or registration conflicts.'
+};
+
+// severity -> template dot rating
+function sevDots(s) { return s >= 5 ? '●●●' : s >= 4 ? '●●●' : s >= 3 ? '●●' : '●'; }
+
+// Extract candidate person/party names from the user-supplied "parties" field.
+// Deterministic and conservative: split on separators and role labels, keep
+// multi-word Capitalised names. Never guesses names from the document body.
+function extractParties(partiesStr) {
+  if (!partiesStr) return [];
+  var cleaned = String(partiesStr)
+    .replace(/\b(complainant|respondents?|applicant|defendant|plaintiff|accused|first|second|third|and others|others)\b\s*:?/gi, ',')
+    .replace(/\bvs?\.?\b|\bv\.\b|&|\/|\band\b|\|/gi, ',');
+  var parts = cleaned.split(',');
+  var names = [], seen = {};
+  for (var i = 0; i < parts.length; i++) {
+    var p = parts[i].replace(/[^A-Za-z .'-]/g, ' ').replace(/\s+/g, ' ').trim();
+    if (!p) continue;
+    // keep tokens that look like a name: >=2 chars, has an uppercase letter
+    if (!/[A-Z]/.test(p) || p.length < 2) continue;
+    var key = p.toLowerCase();
+    if (seen[key]) continue;
+    seen[key] = true;
+    names.push(p);
+    if (names.length >= 12) break;
+  }
+  return names;
+}
+
 // ---------------- text utils ----------------
 // pdf-lib standard fonts use WinAnsi (CP1252). Anything outside must be replaced
 // or drawText throws. Keep CP1252 extras, normalize the rest.
@@ -1210,6 +1303,138 @@ function secMethodology(ctx, data) {
   ctx.para('Verum Omnis  |  verumglobal.foundation  |  Verify this report at verumglobal.foundation/verify.html', { size: 8.5, color: GRAY });
 }
 
+// ================= SECTION: LEGAL ANALYSIS (template v5.1.1) =================
+// Re-presents the engine's findings as the institutional-review "gold standard":
+// legal subjects, dishonesty matrix, per-actor scorecard, actionable output.
+// Deterministic; invents nothing; every line is an indicator for human review.
+function secLegalAnalysis(ctx, data) {
+  var fr = data.findings || {};
+  var all = (fr.findings || []).filter(function (f) { return f && !isDemoted(f); });
+  var substantive = all.filter(function (f) { return f.type !== 'SERIAL'; });
+  if (substantive.length === 0) return; // nothing to narrate legally
+
+  ctx.newBodyPage();
+  ctx.heading('LEGAL ANALYSIS');
+  ctx.para('This section re-presents the findings above by legal subject and dishonesty pattern, following the Verum Omnis institutional-review standard. Every entry is an investigative indicator anchored to quoted text - not a determination of fraud, dishonesty or guilt, which is for an investigator or court to decide.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 12 });
+
+  // ---- 1. Critical Legal Subjects -------------------------------------
+  ctx.subHeading('Critical Legal Subjects', { toc: true });
+  var bySubject = {};
+  for (var i = 0; i < substantive.length; i++) {
+    var subj = LEGAL_SUBJECT_OF[substantive[i].type] || 'CONTRADICTION';
+    (bySubject[subj] = bySubject[subj] || []).push(substantive[i]);
+  }
+  var subjRows = [];
+  for (var so = 0; so < LEGAL_SUBJECT_ORDER.length; so++) {
+    var sk = LEGAL_SUBJECT_ORDER[so];
+    var list = bySubject[sk];
+    if (!list || !list.length) continue;
+    list.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+    var ex = quoteEvidence(list[0].evidence);
+    if (ex.length > 150) ex = ex.substring(0, 147) + '...';
+    subjRows.push({
+      subject: LEGAL_SUBJECT_LABEL[sk],
+      points: LEGAL_SUBJECT_KEYPOINTS[sk],
+      example: ex + '  (' + fmtLocation(list[0].location) + ', severity ' + (list[0].severity || 0) + ')'
+    });
+  }
+  ctx.table(
+    [
+      { key: 'subject', title: 'Legal subject', w: 120 },
+      { key: 'points', title: 'What it means', w: 200 },
+      { key: 'example', title: 'Strongest example (anchored)', w: 184 }
+    ],
+    subjRows,
+    { size: 8 }
+  );
+
+  // ---- 2. Dishonesty Detection Matrix ---------------------------------
+  ctx.subHeading('Dishonesty Detection Matrix', { toc: true });
+  ctx.para('The same findings, grouped by the pattern of dishonesty each is consistent with. Dots indicate the highest severity in that lens (' + '●●●' + ' = critical/high).', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  var byLens = {};
+  for (var d2 = 0; d2 < substantive.length; d2++) {
+    var lens = DISHONESTY_OF[substantive[d2].type] || 'CONTRADICTIONS';
+    (byLens[lens] = byLens[lens] || []).push(substantive[d2]);
+  }
+  // serial patterns are concealment signals
+  var serials = (fr.findings || []).filter(function (f) { return f && f.type === 'SERIAL'; });
+  if (serials.length) byLens['CONCEALMENT'] = (byLens['CONCEALMENT'] || []).concat(serials);
+  var lensRows = [];
+  for (var lo = 0; lo < DISHONESTY_ORDER.length; lo++) {
+    var lk = DISHONESTY_ORDER[lo];
+    var ll = byLens[lk];
+    if (!ll || !ll.length) continue;
+    ll.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+    var maxSev = ll[0].severity || 0;
+    var lex = quoteEvidence(ll[0].evidence);
+    if (lex.length > 160) lex = lex.substring(0, 157) + '...';
+    lensRows.push({
+      flag: sevDots(maxSev) + ' ' + DISHONESTY_LABEL[lk],
+      look: DISHONESTY_MEAN[lk],
+      example: ll.length + ' finding' + (ll.length === 1 ? '' : 's') + ' - e.g. ' + lex
+    });
+  }
+  ctx.table(
+    [
+      { key: 'flag', title: 'Red flag', w: 120 },
+      { key: 'look', title: 'What it looks for', w: 170 },
+      { key: 'example', title: 'In this document', w: 214 }
+    ],
+    lensRows,
+    { size: 8 }
+  );
+
+  // ---- 3. Per-actor scorecard -----------------------------------------
+  ctx.subHeading('Behavioural Scorecard (by party)', { toc: true });
+  var parties = extractParties(data.identity && data.identity.parties);
+  if (parties.length === 0) {
+    ctx.para('No parties were supplied in the case details, so findings could not be attributed to named individuals. To generate a per-party scorecard, enter the parties (e.g. "Complainant: L. Highcock | Respondents: M. Nortje, K. Lappeman") in the case details before sealing.', { size: 9, color: GRAY, after: 6 });
+  } else {
+    var actorRows = [];
+    for (var pa = 0; pa < parties.length; pa++) {
+      var nm = parties[pa];
+      var re = new RegExp('\\b' + nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').split(/\s+/)[0] + '\\b', 'i');
+      var hits = 0, maxS = 0;
+      for (var fi = 0; fi < substantive.length; fi++) {
+        if (re.test(String(substantive[fi].evidence || ''))) { hits++; if ((substantive[fi].severity || 0) > maxS) maxS = substantive[fi].severity || 0; }
+      }
+      actorRows.push({ party: nm, flags: String(hits), sev: hits ? (maxS + ' ' + sevLabel(maxS)) : '-' });
+    }
+    actorRows.sort(function (a, b) { return parseInt(b.flags, 10) - parseInt(a.flags, 10); });
+    ctx.table(
+      [
+        { key: 'party', title: 'Party', w: 220 },
+        { key: 'flags', title: 'Findings naming them', w: 160, align: 'center' },
+        { key: 'sev', title: 'Highest severity', w: 124 }
+      ],
+      actorRows,
+      { size: 8.5 }
+    );
+    ctx.para('Attribution is by name appearing in the flagged text - an indicator of relevance, not a finding of individual wrongdoing.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
+
+  // ---- 4. Actionable Output -------------------------------------------
+  ctx.subHeading('Actionable Output', { toc: true });
+  var ranked = substantive.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+  ctx.para('Top liabilities (highest-severity indicators):', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
+  var topN = ranked.slice(0, 3);
+  for (var t2 = 0; t2 < topN.length; t2++) {
+    var tf = topN[t2];
+    var tq = quoteEvidence(tf.evidence); if (tq.length > 150) tq = tq.substring(0, 147) + '...';
+    ctx.bullet((CT_NAMES[tf.type] || tf.type) + ' (' + sevLabel(tf.severity || 0) + ') - ' + fmtLocation(tf.location) + ': ' + tq, { size: 9 });
+  }
+  ctx.gap(4);
+  var jur = (data.identity && data.identity.jurisdiction) ? data.identity.jurisdiction : null;
+  ctx.para('Dishonesty indicator score: ' + (fr.overallScore || 0) + '/100 (' + (fr.confidence || 'n/a') + '). This measures the density and severity of the indicators above; it is not a probability of fraud.', { size: 9, after: 6 });
+  ctx.para('Recommended next steps' + (jur ? ' (jurisdiction: ' + jur + ')' : '') + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
+  ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Specific statutes are for counsel to confirm - this report does not assert them.', { size: 9 });
+  ctx.bullet('Preserve the sealed original and this report unaltered; both are SHA-512 anchored and independently verifiable at verumglobal.foundation/verify.html.', { size: 9 });
+  if (Object.keys(bySubject).indexOf('FINANCIAL') !== -1) ctx.bullet('Financial irregularities are present - consider a forensic-accounting trace of the flagged amounts and accounts.', { size: 9 });
+  if (Object.keys(bySubject).indexOf('TAMPERING') !== -1) ctx.bullet('Document-integrity indicators are present - consider requesting native/original files and metadata for the affected pages.', { size: 9 });
+  ctx.gap(4);
+  ctx.para('These recommendations are procedural suggestions for human decision-makers, not legal advice or a determination of liability.', { size: 8, font: ctx.f.timesItalic, color: GRAY });
+}
+
 // ================= SECTION: AI REVIEW (optional cloud layer) =================
 function secAiReview(ctx, data) {
   var ar = (data.aiReview && data.aiReview.applied) ? data.aiReview : null;
@@ -1349,6 +1574,7 @@ async function build(opts) {
   // 3-10. sections
   secExecSummary(ctx, data);
   secAiReview(ctx, data);        // narrative story leads (no-op when AI review off)
+  secLegalAnalysis(ctx, data);   // template v5.1.1 structured legal layer
   secEvidenceIndex(ctx, data);
   secMatrix(ctx, data);
   secSerial(ctx, data);
@@ -1524,7 +1750,8 @@ async function seal(reportBytes, sealOpts) {
 }
 
 // ================= exports =================
-var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote };
+var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
+  _extractParties: extractParties, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF };
 global.VerumReport = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
