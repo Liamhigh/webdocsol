@@ -17,6 +17,7 @@ const suites = [
   'find-seal.test.mjs',
   'home-verify.test.mjs',
   'inline-scripts.test.mjs',
+  'legal-analysis.test.js',
 ];
 
 let failed = 0;

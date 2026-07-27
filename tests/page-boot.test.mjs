@@ -173,6 +173,17 @@ for (const page of PAGES) {
     'serial-pattern label suppression also triggers on user-entered case details');
 }
 
+// The template v5.1.1 Legal Analysis layer must be present in the inlined
+// report builder (drift guard: it must not silently vanish from the page).
+{
+  const html = readFileSync('seal-document.html', 'utf8');
+  ok(html.includes('function secLegalAnalysis'), 'inlined report includes the Legal Analysis section');
+  ok(html.includes('Critical Legal Subjects') && html.includes('Dishonesty Detection Matrix') &&
+     html.includes('Behavioural Scorecard') && html.includes('Actionable Output'),
+    'Legal Analysis renders all four template blocks');
+  ok(/secLegalAnalysis\(ctx, data\)/.test(html), 'secLegalAnalysis is wired into build()');
+}
+
 // Bundle mode: on a legal case file the single-document structural detectors
 // (CT27 duplicate page numbers, CT08 term repetition, CT04 temporal word
 // pairs, CT36 address counts, CT35 formalities, CT31 annexure references)
