@@ -5988,7 +5988,7 @@ function showPaymentGate(price, detectionResult) {
     (isFree ? '<strong style="color:#22c55e;">✓ Law Enforcement Exemption Applied</strong><br>' : '') +
     '<strong style="color:#F8F9FA;">Detected indicators:</strong> ' + (detectionResult.count > 0 ? keywordList : 'Document context suggests commercial use') + '<br>' +
     (detectionResult.score ? '<strong style="color:#F8F9FA;">Commercial score:</strong> ' + detectionResult.score + '/40<br>' : '') +
-    '<strong style="color:#F8F9FA;">Location:</strong> ' + (gpsCoords ? gpsCoords.lat.toFixed(2) + ',' + gpsCoords.lng.toFixed(2) : 'GPS not available') + '<br>' +
+    '<strong style="color:#F8F9FA;">Location:</strong> ' + (gpsCoords ? parseFloat(gpsCoords.lat).toFixed(2) + ',' + parseFloat(gpsCoords.lng).toFixed(2) : 'GPS not available') + '<br>' +
     '<strong style="color:#F8F9FA;">Pricing:</strong> ' + price.label + (isFree ? ' (FREE)' : ' (' + price.symbol + price.amount + ' ' + price.currency + ')') + '<br>' +
     '</div>' +
     commercialNote +

@@ -129,6 +129,17 @@ for (const page of PAGES) {
     'the plaintext share is gated on the document being sealed');
 }
 
+// GPS coords are stored as fixed-precision STRINGS (latitude.toFixed(6)), so
+// calling .toFixed() again on them throws "gpsCoords.lat.toFixed is not a
+// function" and aborts the whole seal — it hit real users on a commercial
+// bundle with location granted. Coordinates must be parseFloat'd before any
+// numeric formatting.
+{
+  const html = readFileSync('seal-document.html', 'utf8');
+  ok(!/gpsCoords\.(lat|lng)\.toFixed/.test(html),
+    'never calls .toFixed() directly on the string gpsCoords.lat/.lng (parseFloat first)');
+}
+
 // index.html is the home page. It was overwritten with a copy of the sealing
 // app in 4cb88ff to paper over a blank screen, which silently deleted the
 // site's front door -- `/` and `/seal-document` served the same thing.
