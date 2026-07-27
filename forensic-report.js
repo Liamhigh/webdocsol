@@ -213,12 +213,13 @@ var DISHONESTY_MEAN = {
   FINANCIAL: 'Amount, account, currency or registration conflicts.'
 };
 
-// severity -> template dot rating
-function sevDots(s) { return s >= 5 ? '●●●' : s >= 4 ? '●●●' : s >= 3 ? '●●' : '●'; }
+// severity -> template dot rating (critical/high = ●●●, medium = ●●, else ●)
+function sevDots(s) { return s >= 4 ? '●●●' : s >= 3 ? '●●' : '●'; }
 
 // Extract candidate person/party names from the user-supplied "parties" field.
-// Deterministic and conservative: split on separators and role labels, keep
-// multi-word Capitalised names. Never guesses names from the document body.
+// Deterministic and conservative: split on separators and role labels, then keep
+// each remaining fragment that contains a capital letter (a party may be one
+// name or several words). Never guesses names from the document body.
 function extractParties(partiesStr) {
   if (!partiesStr) return [];
   var cleaned = String(partiesStr)

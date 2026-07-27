@@ -788,12 +788,13 @@ var DISHONESTY_MEAN = {
   FINANCIAL: 'Amount, account, currency or registration conflicts.'
 };
 
-// severity -> template dot rating
-function sevDots(s) { return s >= 5 ? '●●●' : s >= 4 ? '●●●' : s >= 3 ? '●●' : '●'; }
+// severity -> template dot rating (critical/high = ●●●, medium = ●●, else ●)
+function sevDots(s) { return s >= 4 ? '●●●' : s >= 3 ? '●●' : '●'; }
 
 // Extract candidate person/party names from the user-supplied "parties" field.
-// Deterministic and conservative: split on separators and role labels, keep
-// multi-word Capitalised names. Never guesses names from the document body.
+// Deterministic and conservative: split on separators and role labels, then keep
+// each remaining fragment that contains a capital letter (a party may be one
+// name or several words). Never guesses names from the document body.
 function extractParties(partiesStr) {
   if (!partiesStr) return [];
   var cleaned = String(partiesStr)
@@ -6984,8 +6985,62 @@ function buildLocalNarrative(findings, score, verdict) {
     '. The critical and high indicators ' +
     'are the ones an investigator should examine first; the medium and low ones add corroborating context.';
 
+  // ---------- WHAT HAPPENED (the story) ----------
+  // A flowing, plain-English account woven from the strongest substantive
+  // findings, the legal themes present, and the named parties from the case
+  // details. Deterministic and anchored -- it asserts nothing beyond the
+  // findings, names no guilt, and reads like a case account rather than a list.
+  var ci = (typeof voCaseDetails === 'function') ? (voCaseDetails() || {}) : {};
+  var firstWord = function (n) { return String(n || '').trim().split(/\s+/)[0] || ''; };
+  var actors = [];
+  if (ci.parties) {
+    String(ci.parties)
+      .replace(/\b(complainant|respondents?|applicant|defendant|plaintiff|accused|first|second|third|others?)\b\s*:?/gi, ',')
+      .replace(/\bvs?\.?\b|\bv\.\b|&|\/|\band\b|\|/gi, ',')
+      .split(',').forEach(function (raw) {
+        var p = raw.replace(/[^A-Za-z .'-]/g, ' ').replace(/\s+/g, ' ').trim();
+        if (p && /[A-Z]/.test(p) && p.length >= 2 && actors.indexOf(p) < 0) actors.push(p);
+      });
+  }
+  var strongest = list.filter(function (f) { return f.type !== 'SERIAL' && !isDem(f); })
+    .slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+  var whatHappened = '';
+  if (strongest.length) {
+    var opener = 'Reading only the sealed document';
+    if (ci.caseName) opener += ' in the matter of ' + clean(ci.caseName);
+    if (ci.parties) opener += ' (' + clean(ci.parties) + ')';
+    opener += ', the following account emerges for human review. ';
+    whatHappened += opener;
+    var s0 = strongest[0], n0 = nameOf(s0.type).toLowerCase();
+    whatHappened += 'The central thread is ' + art(n0) + ' ' + n0 + ' ' + atWhere(s0) + ' - "' + quoteOf(s0) + '".';
+    var who0 = actors.filter(function (a) { return firstWord(a) && new RegExp('\\b' + firstWord(a).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i').test(quoteOf(s0)); });
+    if (who0.length) whatHappened += ' This directly concerns ' + joinList(who0) + '.';
+    if (strongest[1]) {
+      var n1 = nameOf(strongest[1].type).toLowerCase();
+      whatHappened += ' It does not stand alone: ' + art(n1) + ' ' + n1 + ' ' + atWhere(strongest[1]) + ' - "' + quoteOf(strongest[1]) + '"';
+      if (strongest[2]) whatHappened += ', with ' + art(nameOf(strongest[2].type).toLowerCase()) + ' ' + nameOf(strongest[2].type).toLowerCase() + ' ' + atWhere(strongest[2]) + ' alongside it';
+      whatHappened += '.';
+    }
+    if (counts.length) {
+      var themes = counts.slice(0, 3).map(function (x) { return (CATLAB[x.cat] || x.cat).toLowerCase(); });
+      whatHappened += ' Taken together, the document\'s problems fall under ' + joinList(themes) + '.';
+    }
+    if (actors.length) {
+      var scored = actors.map(function (a) {
+        var re = new RegExp('\\b' + firstWord(a).replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+        var n = list.filter(function (f) { return f.type !== 'SERIAL' && !isDem(f) && re.test(String(f.evidence || '')); }).length;
+        return { name: a, n: n };
+      }).filter(function (s) { return s.n > 0; }).sort(function (a, b) { return b.n - a.n; });
+      if (scored.length) whatHappened += ' By party, the flagged material most often names ' +
+        joinList(scored.slice(0, 3).map(function (s) { return s.name + ' (' + s.n + ' finding' + (s.n === 1 ? '' : 's') + ')'; })) + '.';
+    }
+    whatHappened += ' This account is reconstructed only from the indicators the engine could read; it is for an investigator or court to weigh, not a determination of guilt, and nothing here is asserted beyond what the sealed document itself contains.';
+  }
+
   // ---------- assemble ----------
-  var out = 'SUMMARY\n\n' + summary;
+  var out = '';
+  if (whatHappened) out += 'WHAT HAPPENED\n\n' + whatHappened + SEP;
+  out += 'SUMMARY\n\n' + summary;
   if (keyParts.length) out += SEP + 'KEY CONTRADICTIONS\n\n' + keyParts.join('\n\n');
   out += SEP + 'WHAT THE EVIDENCE SHOWS\n\n' + evidence;
   if (patterns) out += SEP + 'PATTERNS OF CONCERN\n\n' + patterns;
