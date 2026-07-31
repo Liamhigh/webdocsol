@@ -76,6 +76,22 @@ ok(fires(DET.D07_DETECT_ROLE_CONTRADICTION, ['The purported trustee acted withou
   ok(f.length === 1, 'D03 reports a repeated conflicting date once, not duplicated (got ' + f.length + ')');
 }
 
+// A generic label carrying MANY distinct values is a line-item list (a bill of
+// costs, or a bundle of separately-dated letters), NOT one figure/date restated.
+// The Louw v Moolla full-OCR scan produced 19 false CT02 + 10 false CT03 from
+// exactly this. Lists must be skipped; genuine 2-value restatements still fire.
+ok(!fires(DET.D02_DETECT_NUMERICAL_DISCREPANCY, ['amount R225.00 amount R15,000 amount R50,000 amount R225,000 amount R275,000 amount R550,000']),
+  'D02 skips a many-valued "amount" line-item list (no false restatement)');
+ok(fires(DET.D02_DETECT_NUMERICAL_DISCREPANCY, ['Invoice total: R450,000 here. Invoice total: R470,000 there.']),
+  'D02 still flags a genuine two-value total restatement');
+ok(!fires(DET.D03_DETECT_DATE_INCONSISTENCY, ['dated 8 February 2015 dated 10 February 2015 dated 16 March 2015 dated 29 May 2016 dated 4 November 2016']),
+  'D03 skips a many-valued "dated" list (index of separately-dated letters)');
+ok(fires(DET.D03_DETECT_DATE_INCONSISTENCY, ['Effective Date: January 15, 2023.', 'Effective Date: March 1, 2023.']),
+  'D03 still flags a genuine two-value labelled-date restatement');
+// CT36 must not report an implausible OCR-noise address count.
+ok(!fires(DET.D24_DETECT_ADDRESS_CONFLICT, [Array.from({length: 60}, (_, i) => (i + 1) + ' Fake Street').join(' ')]),
+  'D24 suppresses an implausibly high (OCR-noise) address count');
+
 // Repeated internal page numbers in a compiled bundle must collapse to ONE
 // summary, not 25 near-identical findings that drown the substantive ones
 // (the Louw v Moolla scan produced 25). One or two duplicates still list individually.
