@@ -129,6 +129,18 @@ for (const page of PAGES) {
     'the plaintext share is gated on the document being sealed');
 }
 
+// Multi-document bundles: the upload must accept several PDFs and merge them
+// into one bundle at seal time, so the seal covers the whole set and the engine
+// reads them as one corpus (cross-document contradictions only surface then).
+{
+  const html = readFileSync('seal-document.html', 'utf8');
+  ok(/<input[^>]*id="fileInput"[^>]*\bmultiple\b/.test(html), 'file input accepts multiple files');
+  ok(html.includes('async function voMergeBundle'), 'a bundle-merge function exists');
+  ok(html.includes('copyPages'), 'merge uses pdf-lib copyPages to combine documents');
+  ok(/selectedFiles\.length > 1/.test(html), 'startSealing merges only when more than one document is selected');
+  ok(html.includes('function voRenderFiles'), 'the selected-file list is rendered');
+}
+
 // GPS coords are stored as fixed-precision STRINGS (latitude.toFixed(6)), so
 // calling .toFixed() again on them throws "gpsCoords.lat.toFixed is not a
 // function" and aborts the whole seal — it hit real users on a commercial
