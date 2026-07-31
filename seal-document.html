@@ -2359,6 +2359,103 @@ function secStatutoryAnchoring(ctx, data) {
   }
 }
 
+// ================= SECTION: FINDINGS IN DETAIL =================
+// One expanded entry per substantive indicator: party -> page -> plain meaning
+// -> verbatim quoted record -> candidate law. Pure re-presentation of the same
+// findings (no engine change); this is where the report gains depth.
+function secFindingDetails(ctx, data) {
+  var fr = data.findings || {};
+  var subst = (fr.findings || []).filter(function (f) { return f && !isDemoted(f) && f.type !== 'SERIAL'; })
+    .sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+  if (subst.length === 0) return;
+
+  var jur = detectJurisdictions(data);
+  var parties = extractParties(data.identity && data.identity.parties);
+
+  ctx.newBodyPage();
+  ctx.heading('FINDINGS IN DETAIL');
+  ctx.para('One entry per substantive indicator, ranked by severity: the party it names, its page, what it means in plain words, the verbatim quoted record, and the candidate law for counsel. Structural notes and multi-stage pattern signals are covered in their own sections. Every entry is an investigative indicator, not a determination of guilt.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+
+  var CAP = 40;
+  var shown = subst.slice(0, CAP);
+  for (var i = 0; i < shown.length; i++) {
+    var f = shown[i];
+    var name = CT_NAMES[f.type] || (f.source === 'ai' ? 'AI-identified concern' : (f.type || 'Contradiction'));
+    ctx.ensure(96); // keep the header + fact rows together where possible
+    ctx.subHeading('F' + (i + 1) + '.  ' + name + '  (' + (f.type || 'AI') + ')');
+    var who = attributeParty(f, parties);
+    var subj = subjectOf(f);
+    var factLines = [
+      'Severity: ' + (f.severity || 0) + ' ' + sevLabel(f.severity || 0) + '   ' + sevDots(f.severity || 0),
+      'Party implicated: ' + (who || 'not attributed to a named party'),
+      'Location: ' + fmtLocation(f.location),
+      'Legal subject: ' + (LEGAL_SUBJECT_LABEL[subj] || subj) + (CT_DETECTOR[f.type] ? '    |    Detector: ' + CT_DETECTOR[f.type] : '')
+    ];
+    for (var k = 0; k < factLines.length; k++) ctx.para(factLines[k], { size: 9, color: NAVY2, after: 1 });
+    ctx.gap(3);
+    ctx.para('What it means: ' + narrativeMeaning(f) + '.', { size: 10, after: 4 });
+    if (f.source === 'ai' && f.rationale) ctx.para('AI rationale: ' + san(f.rationale), { size: 9.5, after: 4 });
+    ctx.para('Quoted record:', { size: 9, font: ctx.f.timesBold, color: NAVY2, after: 2 });
+    ctx.box('', [cleanQuote(f.evidence) || '(no verbatim text captured)'], { titleColor: NAVY2, size: 9 });
+    var stat = statutesForSubject(subj, jur);
+    if (stat.length) {
+      ctx.para('Candidate law (for counsel to confirm):', { size: 9, font: ctx.f.timesBold, color: NAVY2, after: 2 });
+      for (var s = 0; s < stat.length; s++) {
+        ctx.bullet((JURIS_LABEL[stat[s].jur] || stat[s].jur) + ': ' + stat[s].provisions.join('; '), { size: 8.5 });
+      }
+    }
+    ctx.gap(8);
+  }
+  if (subst.length > CAP) {
+    ctx.para('Showing the ' + CAP + ' highest-severity indicators in detail; the remaining ' + (subst.length - CAP) + ' appear in the findings matrix and the evidence appendix.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
+}
+
+// ================= SECTION: EVIDENCE APPENDIX =================
+// Every flagged passage reproduced verbatim in one place, numbered, with its
+// indicator type and page - the complete quoted-evidence record behind the
+// report, so a reader can check each against the sealed original.
+function secEvidenceAppendix(ctx, data) {
+  var fr = data.findings || {};
+  var all = (fr.findings || []).slice();
+  if (all.length === 0) return;
+  // Substantive first (by severity), then structural notes, then serials -- a
+  // stable, reviewer-friendly order.
+  all.sort(function (a, b) {
+    var ra = a.type === 'SERIAL' ? 2 : (isDemoted(a) ? 1 : 0);
+    var rb = b.type === 'SERIAL' ? 2 : (isDemoted(b) ? 1 : 0);
+    if (ra !== rb) return ra - rb;
+    return (b.severity || 0) - (a.severity || 0);
+  });
+
+  ctx.newBodyPage();
+  ctx.heading('EVIDENCE APPENDIX (VERBATIM QUOTES)');
+  ctx.para('Every flagged passage, reproduced verbatim and numbered, with its indicator type and page. This is the complete quoted-evidence record behind the report; each entry can be checked against the sealed original at the cited page.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+
+  var CAP = 200;
+  var rows = [];
+  for (var i = 0; i < Math.min(all.length, CAP); i++) {
+    var f = all[i];
+    var typ = f.type === 'SERIAL' ? 'SERIAL' : (f.type || (f.source === 'ai' ? 'AI' : '—'));
+    var q = cleanQuote(f.evidence) || '(no verbatim text captured)';
+    if (q.length > 600) q = q.substring(0, 597) + '…';
+    rows.push({ n: 'E' + (i + 1), typ: typ, page: fmtLocation(f.location), quote: q });
+  }
+  ctx.table(
+    [
+      { key: 'n', title: '#', w: 34 },
+      { key: 'typ', title: 'Type', w: 54 },
+      { key: 'page', title: 'Page', w: 60 },
+      { key: 'quote', title: 'Verbatim quoted record', w: 356 }
+    ],
+    rows,
+    { size: 7.5 }
+  );
+  if (all.length > CAP) {
+    ctx.para('Showing the first ' + CAP + ' of ' + all.length + ' quoted passages; the remainder are in the machine-readable findings JSON.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
+}
+
 // ================= SECTION: PLAIN-LANGUAGE NARRATIVE =================
 // The human "story" of the report, built deterministically from the SAME
 // findings as the tables -- it invents no facts and works with or without the
@@ -2625,8 +2722,10 @@ async function build(opts) {
   secStatutoryAnchoring(ctx, data); // person -> contradiction -> page -> law (+ cross-border)
   secEvidenceIndex(ctx, data);
   secMatrix(ctx, data);
+  secFindingDetails(ctx, data);  // one expanded page-block per substantive finding
   secSerial(ctx, data);
   secTimeline(ctx, data);
+  secEvidenceAppendix(ctx, data); // every quoted passage, verbatim, in one place
   secDeclaration(ctx, data);
   secConstitution(ctx, data);
   secMethodology(ctx, data);
