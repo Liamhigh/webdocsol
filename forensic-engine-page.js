@@ -369,35 +369,38 @@ var DETECTORS = {
 
     // Generic same-token assertion-vs-negation. The fixed pairs above only know
     // a hard-coded vocabulary ("paid"/"not paid"), so "payment was made ... no
-    // payment" or "the debt is owed ... denied ... debt" slipped through. This
-    // keys on the IDENTICAL content word appearing both asserted and negated
-    // within one passage -- high precision, and it cannot fire on clean text
-    // because clean text contains no negators.
-    var STOP01 = { that:1,this:1,been:1,have:1,with:1,from:1,such:1,they:1,will:1,would:1,could:1,should:1,there:1,their:1,were:1,when:1,then:1,only:1,also:1,ever:1,more:1,some:1,into:1,upon:1,said:1,same:1,other:1,which:1,about:1,being:1,shall:1,does:1,done:1,made:1,make:1 };
-    var NEG_RE = /\b(?:no longer|not|never|without|refus(?:ed|es) to|fail(?:ed|s) to|denie[ds]|no)\b/g;
-    var negatedWords = {};
-    var nm;
-    while ((nm = NEG_RE.exec(fullText)) !== null) {
-      var tail = fullText.slice(nm.index + nm[0].length, nm.index + nm[0].length + 40);
-      var tw = tail.match(/[a-z]{4,}/g) || [];
-      for (var wi = 0; wi < Math.min(tw.length, 3); wi++) {
-        if (!STOP01[tw[wi]]) { if (negatedWords[tw[wi]] === undefined) negatedWords[tw[wi]] = nm.index; break; }
+    // payment" or "the debt is owed ... denied ... debt" slipped through.
+    //
+    // It is restricted to a CURATED set of claim words. An earlier version keyed
+    // on any 4+ letter word near a negator, which on a real 341-page bundle
+    // over-fired (25 findings) and even grabbed PDF-extraction fragments -- "V
+    // alue" split across a line break was reported as negating "alue". Keying on
+    // whole known claim words kills both problems, and the finding now quotes
+    // BOTH the affirming and the negating passage so it is self-explanatory.
+    var CLAIM_WORDS = ['paid','payment','owed','signed','countersigned','witnessed','notarised','notarized','valid','agreed','consented','authorised','authorized','received','delivered','renewed','terminated','expired','entitled','breached','disclosed','refunded','cancelled','approved','accepted'];
+    var NEG_BEFORE = /\b(?:no longer|not|never|without|denied|denies|refused to|refuses to|failed to|no)\b(?:\s+\w+){0,5}\s*$/;
+    var mkSnip = function (idx) { return fullText.slice(Math.max(0, idx - 30), idx + 45).replace(/\s+/g, ' ').trim(); };
+    for (var ci = 0; ci < CLAIM_WORDS.length; ci++) {
+      var cw = CLAIM_WORDS[ci];
+      var occRe = new RegExp('\\b' + cw + '\\b', 'g');
+      var occ, asserts = [], negs = [];
+      while ((occ = occRe.exec(fullText)) !== null) {
+        var pre = fullText.slice(Math.max(0, occ.index - 45), occ.index);
+        if (NEG_BEFORE.test(pre)) negs.push(occ.index); else asserts.push(occ.index);
       }
-    }
-    var NEG_PRE = /\b(?:no longer|not|never|without|refused to|refuses to|failed to|denied|denies|no)\s+(?:the |any |a |an |that |ever )?$/;
-    for (var nw in negatedWords) {
-      if (!Object.prototype.hasOwnProperty.call(negatedWords, nw)) continue;
-      var negAt = negatedWords[nw];
-      var re01 = new RegExp('\\b' + nw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
-      var om;
-      while ((om = re01.exec(fullText)) !== null) {
-        if (Math.abs(om.index - negAt) > 160) continue;
-        if (NEG_PRE.test(fullText.slice(Math.max(0, om.index - 14), om.index))) continue; // this occurrence is itself negated
-        findings.push({ type: 'CT01', severity: 4,
-          evidence: 'The document both asserts and negates "' + nw + '" within the same passage',
-          location: 'Same passage' });
-        break;
+      if (!asserts.length || !negs.length) continue;
+      // Require an affirmed and a negated occurrence of the SAME word inside one
+      // passage (240 chars) -- a document-wide coincidence is not a contradiction.
+      var pair = null;
+      for (var ai = 0; ai < asserts.length && !pair; ai++) {
+        for (var ni = 0; ni < negs.length; ni++) {
+          if (Math.abs(asserts[ai] - negs[ni]) <= 240) { pair = [asserts[ai], negs[ni]]; break; }
+        }
       }
+      if (!pair) continue;
+      findings.push({ type: 'CT01', severity: 4,
+        evidence: 'The document both affirms and negates "' + cw + '": "…' + mkSnip(pair[0]) + '…" vs "…' + mkSnip(pair[1]) + '…"',
+        location: 'Same passage' });
     }
     return findings;
   },

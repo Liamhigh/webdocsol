@@ -23,6 +23,18 @@ ok(fires(DET.D01_DETECT_DIRECT_CONTRADICTION, ['The payment was made in full. He
   'D01 catches "payment ... no payment" (not in the fixed pair list)');
 ok(fires(DET.D01_DETECT_DIRECT_CONTRADICTION, ['The company acknowledged the debt is owed. In its plea it denied that any debt is owed.']),
   'D01 catches "debt owed ... denied ... debt"');
+// D01 must quote BOTH the affirming and negating passage (not a one-sided word)
+{
+  const f = DET.D01_DETECT_DIRECT_CONTRADICTION(['The deed was signed by both parties. The respondent says it was never signed.']);
+  ok(f.length > 0 && /vs/.test(f[0].evidence), 'D01 finding quotes both sides (affirm vs negate), not a bare word');
+}
+// D01 must NOT fire on incidental words or on PDF-extraction fragments. The real
+// 341-page scan produced "asserts and negates \"alue\"" because "V alue" was
+// split across a line break; keying on curated whole claim words prevents this.
+ok(!fires(DET.D01_DETECT_DIRECT_CONTRADICTION, ['There is no V alue in the goodwill clause. The value was recorded elsewhere.']),
+  'D01 does NOT fire on a PDF-split fragment ("alue") or the incidental word "value"');
+ok(!fires(DET.D01_DETECT_DIRECT_CONTRADICTION, ['AllFuels did not attend. AllFuels later confirmed the position of AllFuels.']),
+  'D01 does NOT fire on an incidental proper noun near a negator ("allfuels")');
 
 // D02 — same-label restatement below the old 10% gate
 ok(fires(DET.D02_DETECT_NUMERICAL_DISCREPANCY, ['Invoice total: R450,000 shown here. Invoice total: R470,000 shown there.']),
