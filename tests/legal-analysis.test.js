@@ -53,6 +53,41 @@ ok(R._narrativeMeaning({ type: 'CT36' }).length > 0, 'narrativeMeaning: falls ba
 // Fully unknown type still yields a safe generic clause (never throws/empty).
 ok(R._narrativeMeaning({ type: 'ZZ99' }).length > 0, 'narrativeMeaning: generic fallback for unknown type');
 
+// ---- cross-border jurisdiction detection ----
+{
+  const cb = R._detectJurisdictions({ identity: { jurisdiction: 'South Africa / UAE' }, findings: { findings: [] } });
+  ok(cb.isCrossBorder === true, 'detectJurisdictions: SA + UAE is cross-border');
+  ok(cb.foreign.indexOf('AE') !== -1, 'detectJurisdictions: UAE detected as foreign leg');
+  const home = R._detectJurisdictions({ identity: { jurisdiction: 'South Africa' }, findings: { findings: [] } });
+  ok(home.isCrossBorder === false, 'detectJurisdictions: SA only is not cross-border');
+  // Currency corroboration: AED in evidence pulls in the UAE leg even if the field is blank.
+  const byCurrency = R._detectJurisdictions({ identity: {}, findings: { findings: [{ evidence: 'paid AED 1,200,000 to the account' }] } });
+  ok(byCurrency.isCrossBorder === true && byCurrency.foreign.indexOf('AE') !== -1, 'detectJurisdictions: AED currency signals UAE');
+}
+
+// ---- subject mapping incl. franchise/lease ----
+ok(R._subjectOf({ type: 'CT44' }) === 'CONTRACT', 'subjectOf: CT44 -> CONTRACT');
+ok(R._subjectOf({ type: 'CT45' }) === 'CONTRACT', 'subjectOf: CT45 -> CONTRACT');
+ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL');
+
+// ---- statute mapping across jurisdictions ----
+{
+  const jur = { home: 'ZA', foreign: ['AE'], isCrossBorder: true };
+  const fin = R._statutesForSubject('FINANCIAL', jur);
+  ok(fin.length === 2, 'statutesForSubject: FINANCIAL returns ZA + AE');
+  ok(fin[0].jur === 'ZA' && /Organised Crime Act 121 of 1998/.test(fin[0].provisions.join(' ')), 'statutesForSubject: ZA cites POCA');
+  ok(fin[1].jur === 'AE' && /Anti-Money Laundering Law \(Federal Decree-Law 20 of 2018\)/.test(fin[1].provisions.join(' ')), 'statutesForSubject: AE cites AML Law 20/2018');
+  const homeOnly = R._statutesForSubject('TAMPERING', { home: 'ZA', foreign: [], isCrossBorder: false });
+  ok(homeOnly.length === 1 && homeOnly[0].jur === 'ZA', 'statutesForSubject: home-only when not cross-border');
+}
+
+// ---- party attribution ----
+{
+  const parties = ['Marius Nortje', 'Kevin Lappeman'];
+  ok(R._attributeParty({ evidence: 'Nortje signed the amended clause' }, parties) === 'Marius Nortje', 'attributeParty: matches by surname/first token');
+  ok(R._attributeParty({ evidence: 'no party named here' }, parties) === null, 'attributeParty: null when unattributed');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);
