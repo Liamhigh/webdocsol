@@ -6301,6 +6301,23 @@ function initiateStripePayment() {
 
 // ==================== PIPELINE STATE ====================
 
+// Object-URL registry. Every download/share URL for a seal run is registered
+// here so we can revoke them all before the next run. Without this, each seal
+// (and each retry) leaked its blob: URLs -- for a large sealed PDF that is tens
+// of MB per attempt, which accumulates until the browser can no longer hand the
+// big file to a download or the share sheet while the small files still work.
+window._voObjectUrls = window._voObjectUrls || [];
+function voMakeObjectURL(blob) {
+  var u = URL.createObjectURL(blob);
+  try { window._voObjectUrls.push(u); } catch (e) {}
+  return u;
+}
+function voRevokeAllObjectURLs() {
+  var arr = window._voObjectUrls || [];
+  for (var i = 0; i < arr.length; i++) { try { URL.revokeObjectURL(arr[i]); } catch (e) {} }
+  window._voObjectUrls = [];
+}
+
 let _pipelineFileBytes = null;
 let _pipelineSha256 = '';
 let _pipelineSha512 = '';
@@ -6819,6 +6836,11 @@ async function buildAnchorCertificate(opts) {
 
 async function startSealing() {
   if (!selectedFile && selectedFiles.length === 0) return;
+
+  // Free any blob: URLs from a previous seal/retry before we build a large new
+  // one -- otherwise each attempt on a big document piles tens of MB of
+  // un-revoked object URLs onto the tab until downloads/share start failing.
+  voRevokeAllObjectURLs();
 
   // Multi-document bundle: merge the selected PDFs into one so the seal covers
   // the whole set and the forensic engine analyses them as a single corpus
@@ -8440,7 +8462,7 @@ function addShareButton() {
   function fallbackDownload(msg) {
     try {
       var a = document.createElement('a');
-      a.href = URL.createObjectURL(new Blob([new Uint8Array(window._voShareBytes)], { type: window._voShareType }));
+      a.href = voMakeObjectURL(new Blob([new Uint8Array(window._voShareBytes)], { type: window._voShareType }));
       a.download = window._voShareName;
       document.body.appendChild(a); a.click(); a.remove();
     } catch (e) {}
@@ -8584,7 +8606,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   const sL = document.getElementById('downloadSealedPdf');
   try {
     window.VoSealGuard.assertSealed(sealedBytes, base + '-sealed.pdf');
-    const sU = URL.createObjectURL(new Blob([sealedBytes], {type: 'application/pdf'}));
+    const sU = voMakeObjectURL(new Blob([sealedBytes], {type: 'application/pdf'}));
     sL.href = sU; sL.download = base + suffix + '-sealed.pdf';
   } catch (guardErr) {
     console.error('[SEAL-GUARD] Refused to release an unsealed document:', guardErr && guardErr.message);
@@ -8608,7 +8630,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     // SEAL GUARD (VO-SG): only offer the forensic report if it actually carries
     // a seal. An unsealed report is suppressed, never handed over.
     var rp = window._voReportPack;
-    var rU = URL.createObjectURL(new Blob([rp.bytes], {type: 'application/pdf'}));
+    var rU = voMakeObjectURL(new Blob([rp.bytes], {type: 'application/pdf'}));
     var rL = document.createElement('a');
     rL.href = rU;
     rL.download = base + '-forensic-report-sealed.pdf';
@@ -8633,7 +8655,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   var oldFindingsBtn = document.getElementById('downloadFindingsJson');
   if (oldFindingsBtn) oldFindingsBtn.remove();
   if (window._voFindingsJson) {
-    var fjU = URL.createObjectURL(new Blob(
+    var fjU = voMakeObjectURL(new Blob(
       [JSON.stringify(window._voFindingsJson, null, 2)], { type: 'application/json' }));
     var fjL = document.createElement('a');
     fjL.href = fjU;
@@ -8653,7 +8675,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   if (oldCertNote) oldCertNote.remove();
   if (window._voSealCert && window._voSealCert.bytes) {
     var cp = window._voSealCert;
-    var cU = URL.createObjectURL(new Blob([cp.bytes], {type: 'application/pdf'}));
+    var cU = voMakeObjectURL(new Blob([cp.bytes], {type: 'application/pdf'}));
     var cL = document.createElement('a');
     cL.href = cU;
     cL.download = base + '-seal-certificate.pdf';
@@ -8683,7 +8705,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       sL.innerHTML = '&#11015; Sealed PDF — your copy (keep for verification)';
       var protL = document.createElement('a');
       protL.className = 'download-btn primary';
-      protL.href = URL.createObjectURL(new Blob([encryptedBytes], { type: 'application/pdf' }));
+      protL.href = voMakeObjectURL(new Blob([encryptedBytes], { type: 'application/pdf' }));
       protL.download = base + '-sealed-protected.pdf';
       protL.setAttribute('download', base + '-sealed-protected.pdf');
       protL.innerHTML = '&#128274; Download Password-Protected PDF (send this)';
@@ -8695,7 +8717,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       // Legacy .voice fallback (standard encryption unavailable).
       const downloadGrid = document.getElementById('downloadGrid');
       const encL = document.createElement('a');
-      encL.href = URL.createObjectURL(new Blob([encryptedBytes], { type: 'application/octet-stream' }));
+      encL.href = voMakeObjectURL(new Blob([encryptedBytes], { type: 'application/octet-stream' }));
       encL.download = base + suffix + '-sealed.voice';
       encL.className = 'download-btn';
       encL.innerHTML = '&#11015; Download .VOICE (Encrypted)';
@@ -8781,7 +8803,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       catch (pendErr) { receiptBytes = null; }
     }
     if (receiptBytes) {
-      const oU = URL.createObjectURL(new Blob([receiptBytes], {type: 'application/vnd.opentimestamps.v1'}));
+      const oU = voMakeObjectURL(new Blob([receiptBytes], {type: 'application/vnd.opentimestamps.v1'}));
       otsBtn.href = oU; otsBtn.download = base + '-' + sealId + '.ots'; otsBtn.style.display = 'block';
       if (otsNote) otsNote.style.display = 'block';
     } else {
@@ -8794,7 +8816,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   }
   if (anchorBtn) {
     if (window._voAnchorCert && window._voAnchorCert.bytes) {
-      const aU = URL.createObjectURL(new Blob([window._voAnchorCert.bytes], {type: 'application/pdf'}));
+      const aU = voMakeObjectURL(new Blob([window._voAnchorCert.bytes], {type: 'application/pdf'}));
       anchorBtn.href = aU; anchorBtn.download = base + '-' + sealId + '-anchor-certificate.pdf'; anchorBtn.style.display = 'block';
     } else {
       anchorBtn.style.display = 'none';
