@@ -938,20 +938,34 @@ var DETECTORS = {
 
   D18_DETECT_PAGE_MANIPULATION: function(textBlocks) {
     var findings = [];
-    // Check for page number gaps or duplicates
+    // Check for repeated internal page numbers. A couple of duplicates is worth
+    // flagging individually; MANY repeats just means a compiled bundle (each
+    // document restarts at page 1), so we collapse those into ONE summary rather
+    // than emitting 25 near-identical findings that drown the substantive ones.
     var pageNumRe = /\b(page|p\.?|pg)\s*(\d+)\s*(?:of|\/)\s*(\d+)\b/gi;
-    var seenNumbers = {};
+    var seenNumbers = {}, repeated = {};
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
       while ((match = pageNumRe.exec(textBlocks[i])) !== null) {
         var num = parseInt(match[2]);
-        if (seenNumbers[num] !== undefined && seenNumbers[num] !== i) {
-          findings.push({ type: 'CT27', severity: 4,
-            evidence: 'Page number ' + num + ' appears on multiple pages (potential duplicate or insertion)',
-            location: 'Page ' + (i+1) + ' and Page ' + (seenNumbers[num]+1) });
-        }
+        if (seenNumbers[num] !== undefined && seenNumbers[num] !== i) repeated[num] = true;
         seenNumbers[num] = i;
       }
+    }
+    var nums = Object.keys(repeated).map(Number).sort(function (a, b) { return a - b; });
+    if (nums.length === 0) return findings;
+    if (nums.length <= 2) {
+      for (var n = 0; n < nums.length; n++) {
+        findings.push({ type: 'CT27', severity: 4,
+          evidence: 'Page number ' + nums[n] + ' appears on multiple pages (potential duplicate or insertion)',
+          location: 'Multiple pages' });
+      }
+    } else {
+      findings.push({ type: 'CT27', severity: 4,
+        evidence: nums.length + ' internal page numbers repeat across the document (' +
+          nums.slice(0, 10).join(', ') + (nums.length > 10 ? ', …' : '') +
+          ') — typical of a compiled multi-document bundle; check the page order if this is meant to be one document',
+        location: 'Whole document' });
     }
     return findings;
   },

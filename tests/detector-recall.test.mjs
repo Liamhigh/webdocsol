@@ -76,6 +76,20 @@ ok(fires(DET.D07_DETECT_ROLE_CONTRADICTION, ['The purported trustee acted withou
   ok(f.length === 1, 'D03 reports a repeated conflicting date once, not duplicated (got ' + f.length + ')');
 }
 
+// Repeated internal page numbers in a compiled bundle must collapse to ONE
+// summary, not 25 near-identical findings that drown the substantive ones
+// (the Louw v Moolla scan produced 25). One or two duplicates still list individually.
+{
+  const bundle = [];
+  for (let i = 1; i <= 23; i++) bundle.push('page ' + i + ' of 23');
+  for (let i = 1; i <= 23; i++) bundle.push('page ' + i + ' of 23');
+  const f = DET.D18_DETECT_PAGE_MANIPULATION(bundle);
+  ok(f.length === 1 && /internal page numbers repeat/.test(f[0].evidence),
+    'D18 collapses many repeated page numbers into one bundle summary (got ' + f.length + ')');
+}
+ok(DET.D18_DETECT_PAGE_MANIPULATION(['page 5 of 10', 'page 5 of 10']).length === 1,
+  'D18 still reports a single genuine duplicate individually');
+
 // The load-bearing guarantee: a clean document produces ZERO findings across
 // all text detectors (this is what regressed into 2 false CT35 findings before).
 const skip = new Set(['D15_DETECT_METADATA_FRAUD','D20_DETECT_DIGITAL_FOOTPRINT_MISMATCH','D16_DETECT_FONT_ANOMALY','D37_DETECT_INTERNAL_CONFLICT_CATCHALL']);

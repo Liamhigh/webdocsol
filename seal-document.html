@@ -354,7 +354,7 @@
   <div class="upload-zone" id="uploadZone">
     <div class="icon">&#128196;</div>
     <h3>Upload PDF Document(s)</h3>
-    <p>Drag and drop one or more PDFs here, or click to browse. Add several and they are sealed and analysed together as one bundle. Max 50MB total.</p>
+    <p>Drag and drop one or more PDFs here, or click to browse. Add several and they are sealed and analysed together as one bundle. Max 150MB total.</p>
     <input type="file" id="fileInput" accept=".pdf,application/pdf" multiple>
   </div>
 
@@ -1890,6 +1890,11 @@ function secSerial(ctx, data) {
       rows,
       { size: 8 }
     );
+    // Pattern & racketeering consideration. A corroborated multi-stage pattern is
+    // the kind of conduct organised-crime law addresses; surfaced as a hypothesis
+    // only, never a determination (Prime Directive 4).
+    ctx.gap(6);
+    ctx.para('Pattern & racketeering consideration (HYPOTHESIS — requires legal review): a corroborated multi-stage pattern of this kind is the type of conduct that racketeering / organised-crime provisions address. In South Africa the relevant framework is the Prevention of Organised Crime Act 121 of 1998 (POCA) — s2 (racketeering) and the definition of a "pattern of racketeering activity". Where the same pattern recurs across more than one matter or against more than one party, that cross-matter recurrence is precisely what a POCA enquiry examines. This is a signpost for a human investigator, not a finding that any offence was committed.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   } else {
     ctx.para('No serial pattern reached the corroboration threshold for labelling.', { size: 10.5, after: 6 });
   }
@@ -3424,20 +3429,34 @@ var DETECTORS = {
 
   D18_DETECT_PAGE_MANIPULATION: function(textBlocks) {
     var findings = [];
-    // Check for page number gaps or duplicates
+    // Check for repeated internal page numbers. A couple of duplicates is worth
+    // flagging individually; MANY repeats just means a compiled bundle (each
+    // document restarts at page 1), so we collapse those into ONE summary rather
+    // than emitting 25 near-identical findings that drown the substantive ones.
     var pageNumRe = /\b(page|p\.?|pg)\s*(\d+)\s*(?:of|\/)\s*(\d+)\b/gi;
-    var seenNumbers = {};
+    var seenNumbers = {}, repeated = {};
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
       while ((match = pageNumRe.exec(textBlocks[i])) !== null) {
         var num = parseInt(match[2]);
-        if (seenNumbers[num] !== undefined && seenNumbers[num] !== i) {
-          findings.push({ type: 'CT27', severity: 4,
-            evidence: 'Page number ' + num + ' appears on multiple pages (potential duplicate or insertion)',
-            location: 'Page ' + (i+1) + ' and Page ' + (seenNumbers[num]+1) });
-        }
+        if (seenNumbers[num] !== undefined && seenNumbers[num] !== i) repeated[num] = true;
         seenNumbers[num] = i;
       }
+    }
+    var nums = Object.keys(repeated).map(Number).sort(function (a, b) { return a - b; });
+    if (nums.length === 0) return findings;
+    if (nums.length <= 2) {
+      for (var n = 0; n < nums.length; n++) {
+        findings.push({ type: 'CT27', severity: 4,
+          evidence: 'Page number ' + nums[n] + ' appears on multiple pages (potential duplicate or insertion)',
+          location: 'Multiple pages' });
+      }
+    } else {
+      findings.push({ type: 'CT27', severity: 4,
+        evidence: nums.length + ' internal page numbers repeat across the document (' +
+          nums.slice(0, 10).join(', ') + (nums.length > 10 ? ', …' : '') +
+          ') — typical of a compiled multi-document bundle; check the page order if this is meant to be one document',
+        location: 'Whole document' });
     }
     return findings;
   },
@@ -5542,7 +5561,7 @@ let selectedFile = null, sealType = 'private', otsProof = null, watermarkBytes =
 // engine reads them as one corpus (cross-document contradictions only surface
 // when every document is analysed together). Single-file behaviour is unchanged.
 let selectedFiles = [];
-var VO_BUNDLE_MAX_BYTES = 50 * 1024 * 1024; // total across all selected files
+var VO_BUNDLE_MAX_BYTES = 150 * 1024 * 1024; // total across all selected files
 let gpsCoords = null, deviceInfo = null;
 
 function toggleSection(id) {
@@ -7675,7 +7694,11 @@ function applyBundleMode(result) {
 // no cloud call, nothing leaves the browser, consistent with the privacy
 // model. Called by runForensicEngine via the voOcrRescuePages hook; any
 // failure is disclosed in the extraction notes and the scan continues.
-var VO_OCR_MAX_PAGES = 15;      // cap: OCR is seconds per page
+var VO_OCR_MAX_PAGES = 200;     // cap: OCR is ~seconds/page on-device. Raised from
+                                // 15 so scanned legal bundles (e.g. 171 image-only
+                                // pages) are actually read; the progress UI shows
+                                // per-page status, and anything beyond the cap is
+                                // still disclosed in the extraction notes.
 var VO_OCR_EMPTY_CHARS = 30;    // a page this thin is treated as image-only
 var VO_OCR_MIN_AVG = 150;       // only rescue when the rest of the doc has real text
 

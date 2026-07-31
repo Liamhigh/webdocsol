@@ -1171,6 +1171,11 @@ function secSerial(ctx, data) {
       rows,
       { size: 8 }
     );
+    // Pattern & racketeering consideration. A corroborated multi-stage pattern is
+    // the kind of conduct organised-crime law addresses; surfaced as a hypothesis
+    // only, never a determination (Prime Directive 4).
+    ctx.gap(6);
+    ctx.para('Pattern & racketeering consideration (HYPOTHESIS — requires legal review): a corroborated multi-stage pattern of this kind is the type of conduct that racketeering / organised-crime provisions address. In South Africa the relevant framework is the Prevention of Organised Crime Act 121 of 1998 (POCA) — s2 (racketeering) and the definition of a "pattern of racketeering activity". Where the same pattern recurs across more than one matter or against more than one party, that cross-matter recurrence is precisely what a POCA enquiry examines. This is a signpost for a human investigator, not a finding that any offence was committed.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   } else {
     ctx.para('No serial pattern reached the corroboration threshold for labelling.', { size: 10.5, after: 6 });
   }
