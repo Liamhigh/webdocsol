@@ -2954,20 +2954,32 @@ var DETECTORS = {
       var entries = byLabel[label];
       if (entries.length < 2) continue;
 
+      // A generic label ("amount", "total") that carries MANY different values is
+      // a line-item list -- e.g. a bill of costs where every row is an "amount",
+      // or a 180-page bundle of separate invoices -- NOT one figure restated. On
+      // the Louw v Moolla scan this produced 19 false "amount is R225 vs
+      // R275,000" findings. A genuine restatement is one labelled total stated
+      // at two (occasionally three) values; more distinct values than that means
+      // it is a list, so we skip the whole group rather than compare a min
+      // against everything.
+      var distinct = {};
+      for (var e = 0; e < entries.length; e++) distinct[entries[e].value] = true;
+      if (Object.keys(distinct).length > 3) continue;
+
       // Compare each distinct stated value against the lowest one, rather than
       // every pair, so N statements yield at most N-1 findings.
       var sorted = entries.slice().sort(function(x, y) { return x.value - y.value; });
       var base = sorted[0];
+      var seenVals = {};
       for (var k = 1; k < sorted.length; k++) {
         var cur = sorted[k];
+        if (seenVals[cur.value]) continue; // a repeated value is one discrepancy
+        seenVals[cur.value] = true;
         var diff = cur.value - base.value;
         var avg = (cur.value + base.value) / 2;
-        // The old gate (>10% AND >R1000) missed real discrepancies like a
-        // "Total" stated as R450,000 and R470,000 (only 4.3%). For the SAME
-        // label restated at two values, any material difference is a genuine
-        // contradiction -- the like-with-like grouping already prevents the old
-        // 739-false-positive problem -- so we drop the 10% gate to a 1% floor
-        // (ignores rounding on very large sums) while keeping the R1000 floor.
+        // For the SAME label restated at two/three values, any material
+        // difference is a genuine contradiction: >R1000 and >1% (the 1% floor
+        // ignores rounding on very large sums).
         if (diff > 1000 && diff / avg > 0.01) {
           findings.push({ type: 'CT02', severity: 4,
             evidence: '"' + label + '" is stated as ' + base.raw + ' and as ' + cur.raw +
@@ -3063,6 +3075,14 @@ var DETECTORS = {
     for (var lab2 in byDateLabel) {
       if (!Object.prototype.hasOwnProperty.call(byDateLabel, lab2)) continue;
       var st = byDateLabel[lab2].slice().sort(function (x, y) { return x.key - y.key; });
+      // A generic date label ("dated") carrying MANY distinct dates is an index
+      // of separately-dated documents in a bundle, not one date restated -- on
+      // the Louw v Moolla scan "dated" alone produced 10 false findings. A
+      // genuine restatement is one labelled date given as two (occasionally
+      // three) values; more than that means it is a list, so skip the group.
+      var distinctD = {};
+      for (var di = 0; di < st.length; di++) distinctD[st[di].key] = true;
+      if (Object.keys(distinctD).length > 3) continue;
       var base2 = st[0];
       var seenKeys2 = {};
       for (var q = 1; q < st.length; q++) {
@@ -3564,21 +3584,22 @@ var DETECTORS = {
   // D24-D28: Contact/location detectors
   D24_DETECT_ADDRESS_CONFLICT: function(textBlocks) {
     var findings = [];
-    var addressRe = /\b\d+\s+[A-Za-z\s]+(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Way|Boulevard|Blvd)/gi;
-    var addresses = [];
+    // Street name bounded to letters/spaces on one line (no newlines, max ~30
+    // chars) so it cannot swallow OCR blobs. The old greedy [A-Za-z\s]+ matched
+    // across lines and produced 276 phantom "addresses" on a scanned bundle.
+    var addressRe = /\b\d{1,4}\s+[A-Za-z][A-Za-z ]{2,30}?\b(?:Street|St|Avenue|Ave|Road|Rd|Lane|Ln|Drive|Dr|Way|Boulevard|Blvd)\b/gi;
+    var unique = {};
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
       while ((match = addressRe.exec(textBlocks[i])) !== null) {
-        addresses.push({ value: match[0].toLowerCase().replace(/\s+/g,' '), page: i });
+        unique[match[0].toLowerCase().replace(/\s+/g, ' ').trim()] = true;
       }
     }
-    // Check for different addresses
-    var unique = {};
-    for (var j = 0; j < addresses.length; j++) {
-      unique[addresses[j].value] = true;
-    }
     var addrList = Object.keys(unique);
-    if (addrList.length >= 2) {
+    // 2-40 distinct addresses can be a genuine multi-address / service-evasion
+    // signal; an implausibly high count is OCR/regex noise, not evidence, so it
+    // is suppressed rather than reported as "276 different addresses".
+    if (addrList.length >= 2 && addrList.length <= 40) {
       findings.push({ type: 'CT36', severity: 2,
         evidence: addrList.length + ' different addresses found',
         location: 'Multiple pages' });
