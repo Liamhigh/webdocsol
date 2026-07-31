@@ -39,6 +39,20 @@ ok(R._dishonestyOf.CT31 === 'OMISSIONS', 'CT31 (cross-ref failure) -> Selective 
 // ---- cleanQuote still stable (regression) ----
 ok(!/verum omnis seal/i.test(R._cleanQuote('text verum omnis seal case-ab12cd34 more')), 'cleanQuote still strips seal debris');
 
+// ---- plain-language narrative helpers ----
+ok(R._listPhrase(['A']) === 'A', 'listPhrase: single');
+ok(R._listPhrase(['A', 'B']) === 'A and B', 'listPhrase: pair uses "and"');
+ok(R._listPhrase(['A', 'B', 'C']) === 'A, B and C', 'listPhrase: oxford-style with final "and"');
+ok(R._listPhrase([]) === '', 'listPhrase: empty');
+// Curated meanings for the high-value families read as lay clauses.
+ok(/Lessee\/Owner trap/i.test(R._narrativeMeaning({ type: 'CT44' })), 'narrativeMeaning: CT44 clause-precondition trap');
+ok(/goodwill/i.test(R._narrativeMeaning({ type: 'CT45' })), 'narrativeMeaning: CT45 goodwill denial');
+ok(/two different numbers/i.test(R._narrativeMeaning({ type: 'CT02' })), 'narrativeMeaning: CT02 numeric');
+// Unmapped type falls back to the category explainer, not an empty string.
+ok(R._narrativeMeaning({ type: 'CT36' }).length > 0, 'narrativeMeaning: falls back to category explainer');
+// Fully unknown type still yields a safe generic clause (never throws/empty).
+ok(R._narrativeMeaning({ type: 'ZZ99' }).length > 0, 'narrativeMeaning: generic fallback for unknown type');
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);
