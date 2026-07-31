@@ -5791,23 +5791,43 @@ function voRenderFiles() {
 // OS handle went stale after the reference was picked. We retry once via the
 // older FileReader API (a different code path that often succeeds where the
 // Blob promise API failed) before giving up with an actionable message.
+// Only these failures are worth a second attempt via FileReader — they are the
+// transient / large-file read errors where the Blob promise API and the older
+// FileReader API can disagree. A genuinely unexpected error (e.g. a TypeError
+// from a bad argument) is surfaced immediately rather than silently retried.
+function voIsTransientReadError(err) {
+  if (!err) return false;
+  if (typeof DOMException !== 'undefined' && err instanceof DOMException) return true;
+  var name = err.name || '';
+  return name === 'NotReadableError' || name === 'NotFoundError' || name === 'SecurityError';
+}
+
 async function voReadFileBytes(file) {
+  var e1;
   try {
     return new Uint8Array(await file.arrayBuffer());
-  } catch (e1) {
-    try {
-      var buf = await new Promise(function (resolve, reject) {
-        var fr = new FileReader();
-        fr.onload = function () { resolve(fr.result); };
-        fr.onerror = function () { reject(fr.error || new Error('read error')); };
-        fr.onabort = function () { reject(new Error('read aborted')); };
-        fr.readAsArrayBuffer(file);
-      });
-      return new Uint8Array(buf);
-    } catch (e2) {
-      var mb = (file.size / (1024 * 1024)).toFixed(1);
-      throw new Error('Could not read "' + file.name + '" (' + mb + ' MB). The file may have been moved or renamed since you selected it, or it is too large for your browser to hold in memory alongside the others. Re-select it fresh, close other tabs, or seal it on its own.');
+  } catch (err) {
+    e1 = err;
+    if (!voIsTransientReadError(e1)) {
+      // Unexpected failure: don't mask it behind the FileReader path.
+      throw new Error('Could not read "' + file.name + '": ' + ((e1 && e1.message) || e1), { cause: e1 });
     }
+  }
+  try {
+    var buf = await new Promise(function (resolve, reject) {
+      var fr = new FileReader();
+      fr.onload = function () { resolve(fr.result); };
+      fr.onerror = function () { reject(fr.error || new Error('read error')); };
+      fr.onabort = function () { reject(new Error('read aborted')); };
+      fr.readAsArrayBuffer(file);
+    });
+    return new Uint8Array(buf);
+  } catch (e2) {
+    var mb = (file.size / (1024 * 1024)).toFixed(1);
+    // Keep the low-level names in the message and the errors as `cause`, so the
+    // friendly text stays readable while logs retain the underlying failure.
+    var codes = [e1 && e1.name, e2 && e2.name].filter(Boolean).join('/');
+    throw new Error('Could not read "' + file.name + '" (' + mb + ' MB). The file may have been moved or renamed since you selected it, or it is too large for your browser to hold in memory alongside the others. Re-select it fresh, close other tabs, or seal it on its own.' + (codes ? ' [' + codes + ']' : ''), { cause: e2 });
   }
 }
 
