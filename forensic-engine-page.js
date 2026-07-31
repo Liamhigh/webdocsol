@@ -305,6 +305,23 @@ var CONTRADICTION_TYPES = {
     desc: 'Catch-all: any other internal contradiction not covered above',
     severity: 3, category: 'DIGITAL',
     example: 'Multiple anomalies detected that suggest systematic document fraud'
+  },
+
+  // === CATEGORY 9: FRANCHISE / LEASE CONTRADICTIONS (44-45) ===
+  // Conditional-right and asset-value contradictions surfaced by the AllFuels
+  // case, where the lease agreement had to be read against the ownership record.
+
+  CT44_CONDITIONAL_CLAUSE_MISINVOKED: {
+    id: 'CT44', name: 'Conditional Clause Misinvoked (Lessee/Owner Trap)',
+    desc: 'A termination or expiry rests on a clause conditioned on the party being the lessee (not the owner) under a head lease, but the record shows that party had become the owner of the premises — the triggering event never occurred, so the termination may be void.',
+    severity: 5, category: 'FRANCHISE_LEASE',
+    example: 'Franchise deemed "expired by effluxion" under cl. 3.2.3 (lessee-only), but the franchisor had purchased the site and was the registered owner.'
+  },
+  CT45_ASSET_VALUE_DENIAL: {
+    id: 'CT45', name: 'Asset Value Recognised Then Denied (Goodwill)',
+    desc: 'Goodwill or value of the business is recognised or quantified in one document but denied or said to have no compensable value in another — a forfeiture or clawback is itself an admission that the asset exists.',
+    severity: 5, category: 'FRANCHISE_LEASE',
+    example: 'The clawback table quantifies the Value of the Business, yet a later submission argues "goodwill has no compensable value".'
   }
 };
 
@@ -347,6 +364,39 @@ var DETECTORS = {
         findings.push({ type: 'CT01', severity: 4,
           evidence: 'Opposing statements "' + a + '" and "' + b + '" appear in the same passage',
           location: 'Same passage' });
+      }
+    }
+
+    // Generic same-token assertion-vs-negation. The fixed pairs above only know
+    // a hard-coded vocabulary ("paid"/"not paid"), so "payment was made ... no
+    // payment" or "the debt is owed ... denied ... debt" slipped through. This
+    // keys on the IDENTICAL content word appearing both asserted and negated
+    // within one passage -- high precision, and it cannot fire on clean text
+    // because clean text contains no negators.
+    var STOP01 = { that:1,this:1,been:1,have:1,with:1,from:1,such:1,they:1,will:1,would:1,could:1,should:1,there:1,their:1,were:1,when:1,then:1,only:1,also:1,ever:1,more:1,some:1,into:1,upon:1,said:1,same:1,other:1,which:1,about:1,being:1,shall:1,does:1,done:1,made:1,make:1 };
+    var NEG_RE = /\b(?:no longer|not|never|without|refus(?:ed|es) to|fail(?:ed|s) to|denie[ds]|no)\b/g;
+    var negatedWords = {};
+    var nm;
+    while ((nm = NEG_RE.exec(fullText)) !== null) {
+      var tail = fullText.slice(nm.index + nm[0].length, nm.index + nm[0].length + 40);
+      var tw = tail.match(/[a-z]{4,}/g) || [];
+      for (var wi = 0; wi < Math.min(tw.length, 3); wi++) {
+        if (!STOP01[tw[wi]]) { if (negatedWords[tw[wi]] === undefined) negatedWords[tw[wi]] = nm.index; break; }
+      }
+    }
+    var NEG_PRE = /\b(?:no longer|not|never|without|refused to|refuses to|failed to|denied|denies|no)\s+(?:the |any |a |an |that |ever )?$/;
+    for (var nw in negatedWords) {
+      if (!Object.prototype.hasOwnProperty.call(negatedWords, nw)) continue;
+      var negAt = negatedWords[nw];
+      var re01 = new RegExp('\\b' + nw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+      var om;
+      while ((om = re01.exec(fullText)) !== null) {
+        if (Math.abs(om.index - negAt) > 160) continue;
+        if (NEG_PRE.test(fullText.slice(Math.max(0, om.index - 14), om.index))) continue; // this occurrence is itself negated
+        findings.push({ type: 'CT01', severity: 4,
+          evidence: 'The document both asserts and negates "' + nw + '" within the same passage',
+          location: 'Same passage' });
+        break;
       }
     }
     return findings;
@@ -418,7 +468,13 @@ var DETECTORS = {
         var cur = sorted[k];
         var diff = cur.value - base.value;
         var avg = (cur.value + base.value) / 2;
-        if (diff / avg > 0.1 && diff > 1000) {
+        // The old gate (>10% AND >R1000) missed real discrepancies like a
+        // "Total" stated as R450,000 and R470,000 (only 4.3%). For the SAME
+        // label restated at two values, any material difference is a genuine
+        // contradiction -- the like-with-like grouping already prevents the old
+        // 739-false-positive problem -- so we drop the 10% gate to a 1% floor
+        // (ignores rounding on very large sums) while keeping the R1000 floor.
+        if (diff > 1000 && diff / avg > 0.01) {
           findings.push({ type: 'CT02', severity: 4,
             evidence: '"' + label + '" is stated as ' + base.raw + ' and as ' + cur.raw +
               ' (variance: ' + Math.round(diff / avg * 100) + '%)',
@@ -472,17 +528,19 @@ var DETECTORS = {
     // this detector only checked for impossible calendar dates. Same window
     // discipline as D02: a date belongs to a label only if it appears before
     // the next label, so a label with no date cannot borrow a neighbour's.
-    var DATE_LABEL_RE = /\b(effective date|execution date|date signed|date of signature|signature date|commencement date|termination date|expiry date|expiration date|invoice date|due date|closing date|date of birth)\b/gi;
+    var DATE_LABEL_RE = /\b(effective date|execution date|date signed|signed on|dated|date of signature|signature date|commencement date|termination date|expiry date|expiration date|invoice date|due date|closing date|notice date|meeting date|date of birth)\b/gi;
     var MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
-    // Month-name formats only: numeric dates are ambiguous (US vs rest of
-    // world day/month order), and a false "restated date" is a fabricated
-    // allegation. Better to miss than to invent.
-    var LABELLED_DATE_RE = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4}))\b/;
+    // Month-name formats plus ISO (YYYY-MM-DD). Ambiguous day/month numeric
+    // formats (DD/MM vs MM/DD) are still excluded because a false "restated
+    // date" is a fabricated allegation -- but ISO is unambiguous, so a labelled
+    // ISO date restated at two values is safe to flag.
+    var LABELLED_DATE_RE = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})|(\d{4})-(\d{2})-(\d{2}))\b/;
     function normDate(m) {
       var day, mon, year;
       if (m[1]) { day = +m[1]; mon = MONTHS[m[2].slice(0, 3).toLowerCase()]; year = +m[3]; }
-      else { mon = MONTHS[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
-      if (!mon || day < 1 || day > 31) return null;
+      else if (m[4]) { mon = MONTHS[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
+      else { year = +m[7]; mon = +m[8]; day = +m[9]; }
+      if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
       return { key: year * 10000 + mon * 100 + day, raw: m[0] };
     }
     var byDateLabel = {};
@@ -966,19 +1024,23 @@ var DETECTORS = {
   D23_DETECT_PROCEDURE_BREACH: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var procedureReqs = [
-      { req: 'witness', context: 'signature|signed|contract|agreement' },
-      { req: 'notar', context: 'affidavit|oath|sworn|certified' },
-      { req: 'resolution', context: 'board|director|shareholder' },
-      { req: 'stamp duty', context: 'lease|agreement|transfer' }
+    // Only flag an EXPLICIT statement that a required procedure was NOT followed.
+    // The previous version flagged "may require witness but none found" whenever
+    // the word "agreement" appeared without "witness" -- absence of a keyword is
+    // not evidence of a breach, and it fired on clean documents. Inventing a
+    // procedural breach is a fabricated allegation, the worst thing a forensic
+    // detector can do, so this now keys on the breach being stated in the text.
+    var breaches = [
+      { re: /\b(?:not witnessed|without (?:a |any )?witness(?:es)?|no witness(?:es)?)\b/, msg: 'Document indicates it was executed without a witness' },
+      { re: /\b(?:not notaris(?:ed|zed)|without notaris(?:ation|ing)|un-?notaris(?:ed|zed)|not certified)\b/, msg: 'Document indicates it was not notarised/certified' },
+      { re: /\b(?:no board resolution|without (?:a )?(?:board |shareholder )?resolution|no resolution was (?:passed|taken|adopted))\b/, msg: 'Document indicates no board/shareholder resolution authorised the act' },
+      { re: /\b(?:unstamped|not stamped|without stamp duty|no stamp duty (?:paid|was paid))\b/, msg: 'Document indicates stamp duty was not paid' },
+      { re: /\b(?:not countersigned|never countersigned|without (?:a )?countersignature|uncountersigned)\b/, msg: 'Document indicates it was never countersigned' }
     ];
-    for (var i = 0; i < procedureReqs.length; i++) {
-      var contextRe = new RegExp(procedureReqs[i].context, 'i');
-      var reqRe = new RegExp('\\b' + procedureReqs[i].req + '\\b', 'i');
-      if (contextRe.test(fullText) && !reqRe.test(fullText)) {
+    for (var i = 0; i < breaches.length; i++) {
+      if (breaches[i].re.test(fullText)) {
         findings.push({ type: 'CT35', severity: 4,
-          evidence: 'Document type may require "' + procedureReqs[i].req + '" but none found',
-          location: 'Full document' });
+          evidence: breaches[i].msg, location: 'Full document' });
       }
     }
     return findings;
@@ -1225,6 +1287,47 @@ var DETECTORS = {
           evidence: 'Unverified source cited: "' + match[2] + '"',
           location: 'References section' });
       }
+    }
+    return findings;
+  },
+
+  // D38: Conditional-clause trap (Caltex Franchise Agreement cl. 3.2.3). A
+  // termination/expiry rests on a clause whose precondition is that the party is
+  // the LESSEE (not the owner) under a head lease, but the record shows that
+  // party had become the OWNER. The clause's trigger never occurred. This is the
+  // evidence the engine missed: the lease clause must be read against ownership.
+  // Requires an ownership-ACQUISITION phrase (not just the word "owner", which a
+  // franchise agreement uses generically in its definitions), so clean
+  // agreements that merely define "lessee"/"owner" do not trip it.
+  D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED: function(textBlocks) {
+    var findings = [];
+    var t = textBlocks.join(' ').toLowerCase();
+    var hasLesseeCondition = /not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/.test(t);
+    var invokesTermination = /(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(t);
+    var ownershipAcquired = /(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/.test(t);
+    if (hasLesseeCondition && invokesTermination && ownershipAcquired) {
+      findings.push({ type: 'CT44', severity: 5,
+        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner), but the record shows the party had become the owner of the premises — the clause\'s precondition never occurred. HYPOTHESIS: requires legal review.',
+        location: 'Franchise/lease agreement vs ownership record' });
+    }
+    return findings;
+  },
+
+  // D39: Goodwill / value of the business recognised or quantified in one place
+  // but denied or said to have no compensable value in another. "You only take
+  // away what exists": a forfeiture or clawback of goodwill is an admission it
+  // exists. The denial must be goodwill/value-specific to avoid tripping on an
+  // ordinary "no compensation for improvements on termination" clause.
+  D39_DETECT_ASSET_VALUE_DENIAL: function(textBlocks) {
+    var findings = [];
+    var t = textBlocks.join(' ').toLowerCase();
+    var recognisesGoodwill = /(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis)/.test(t) ||
+      /(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/.test(t);
+    var deniesGoodwillValue = /goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)/.test(t);
+    if (recognisesGoodwill && deniesGoodwillValue) {
+      findings.push({ type: 'CT45', severity: 5,
+        evidence: 'Goodwill / value of the business is recognised or quantified in one document but denied or said to have no compensable value in another — the forfeiture/clawback is itself an admission the asset exists. HYPOTHESIS: requires legal review.',
+        location: 'Franchise agreement vs later submission' });
     }
     return findings;
   },
@@ -1834,7 +1937,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     DETECTORS.D33_DETECT_IMAGE_MANIPULATION,
     DETECTORS.D34_DETECT_CURRENCY_FRAUD,
     DETECTORS.D35_DETECT_VERSION_ANOMALY,
-    DETECTORS.D36_DETECT_SOURCE_FAILURE
+    DETECTORS.D36_DETECT_SOURCE_FAILURE,
+    DETECTORS.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED,
+    DETECTORS.D39_DETECT_ASSET_VALUE_DENIAL
   ];
 
   for (var d = 0; d < detectors.length; d++) {

@@ -13,8 +13,9 @@
     "test:voice-crypto": "node tests/voice-crypto.test.mjs",
     "test:pdf-encrypt": "node tests/pdf-encrypt.test.mjs",
     "test:find-seal": "node tests/find-seal.test.mjs",
+    "test:seal-guard": "node tests/seal-guard.test.mjs",
     "test:home-verify": "node tests/home-verify.test.mjs",
     "test:inline-scripts": "node tests/inline-scripts.test.mjs",
-    "check": "node --check forensic-engine-page.js && node --check forensic-report.js && node --check ots-proof.js && node --check pdf-encrypt.js && node --check worker/verum-rules.js && node --check worker/verumglobal-static.js"
+    "check": "node --check seal-guard.js && node --check forensic-engine-page.js && node --check forensic-report.js && node --check ots-proof.js && node --check pdf-encrypt.js && node --check worker/verum-rules.js && node --check worker/verumglobal-static.js"
   }
 }

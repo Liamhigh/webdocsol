@@ -16,7 +16,7 @@ console.log('RUN  inline-scripts.test.mjs');
 console.log('======================================================\n');
 
 const html = readFileSync('seal-document.html', 'utf8');
-const FILES = ['forensic-report.js', 'forensic-engine-page.js', 'ots-proof.js', 'pdf-encrypt.js'];
+const FILES = ['seal-guard.js', 'forensic-report.js', 'forensic-engine-page.js', 'ots-proof.js', 'pdf-encrypt.js'];
 
 // No external root-.js <script src> tags may remain in the seal page.
 for (const f of FILES) {
