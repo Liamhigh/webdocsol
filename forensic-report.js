@@ -217,6 +217,134 @@ var DISHONESTY_MEAN = {
   FINANCIAL: 'Amount, account, currency or registration conflicts.'
 };
 
+// ==================== STATUTORY / CROSS-BORDER KNOWLEDGE ====================
+// Candidate statutory provisions per legal subject, by jurisdiction. These are
+// STARTING POINTS for a legal practitioner, never determinations: naming a
+// statute here does not assert that any offence was committed (Prime Directive
+// 4). ZA = South Africa (home base of Verum Omnis); AE = United Arab Emirates.
+// Add a jurisdiction by adding its two-letter key to each subject.
+var STATUTES = {
+  CONTRADICTION: {
+    ZA: ['Common-law fraud (a misrepresentation causing actual or potential prejudice)',
+         'Companies Act 71 of 2008 - s76 (directors\' good-faith duty); s214/s215 (false or misleading statements)'],
+    AE: ['Penal Code (Federal Decree-Law 31 of 2021) - fraud / breach of trust',
+         'Civil Transactions Law (Federal Law 5 of 1985) - Art 246 (performance in good faith); misrepresentation']
+  },
+  FINANCIAL: {
+    ZA: ['Prevention of Organised Crime Act 121 of 1998 - ss 4-6 (money laundering); Ch 3 (proceeds of crime)',
+         'Financial Intelligence Centre Act 38 of 2001 - suspicious & unusual transaction reporting',
+         'Prevention and Combating of Corrupt Activities Act 12 of 2004 (corruption)'],
+    AE: ['Anti-Money Laundering Law (Federal Decree-Law 20 of 2018)',
+         'Combating Commercial Fraud Law (Federal Law 19 of 2016)',
+         'Penal Code (Federal Decree-Law 31 of 2021) - embezzlement / breach of trust']
+  },
+  MISREP: {
+    ZA: ['Common-law fraud (misrepresentation)',
+         'Prevention and Combating of Corrupt Activities Act 12 of 2004',
+         'Consumer Protection Act 68 of 2008 - s41 (false, misleading or deceptive representations, where in trade)'],
+    AE: ['Penal Code (Federal Decree-Law 31 of 2021) - cheating / fraud',
+         'Combating Commercial Fraud Law (Federal Law 19 of 2016)']
+  },
+  TAMPERING: {
+    ZA: ['Cybercrimes Act 19 of 2020 - ss 8-9 (forgery & uttering of a data message)',
+         'Electronic Communications and Transactions Act 25 of 2002 - s15 (integrity & admissibility of data messages)',
+         'Common-law forgery and uttering'],
+    AE: ['Cybercrimes Law (Federal Decree-Law 34 of 2021) - electronic forgery',
+         'Evidence Law (Federal Decree-Law 35 of 2022) - electronic evidence & document integrity']
+  },
+  WITNESS: {
+    ZA: ['Law of Evidence Amendment Act 45 of 1988 (hearsay)',
+         'Common-law perjury; defeating or obstructing the course of justice'],
+    AE: ['Evidence Law (Federal Decree-Law 35 of 2022)',
+         'Penal Code (Federal Decree-Law 31 of 2021) - perjury / false testimony']
+  },
+  PROCEDURAL: {
+    ZA: ['Applicable procedural & regulatory statutes; common-law defeating the administration of justice'],
+    AE: ['Civil Procedure Law (Federal Decree-Law 42 of 2022); applicable regulatory statutes']
+  },
+  LOCATION: {
+    ZA: ['Evidentiary - corroborate against independent records (no specific statute asserted)'],
+    AE: ['Evidentiary - corroborate against independent records (no specific statute asserted)']
+  },
+  CONTRACT: {
+    ZA: ['Common law of contract (misrepresentation, breach, rectification)',
+         'For leases: common-law lease principles; Rental Housing Act 50 of 1999 (residential tenancies)'],
+    AE: ['Civil Transactions Law (Federal Law 5 of 1985) - contract formation & good faith (Art 246)',
+         'Commercial Transactions Law (Federal Decree-Law 50 of 2022)']
+  }
+};
+
+// Cross-border legal framework (home ZA <-> foreign leg). Real instruments; each
+// is a candidate consideration for counsel, never a determination.
+var CROSS_BORDER = [
+  { area: 'Governing law (choice of law)', note: 'Settle the proper law of the contract/conduct first. SA courts apply the proper law of the contract; where the documents themselves conflict on governing law, that must be resolved before liability.' },
+  { area: 'Jurisdiction over foreign parties', note: 'SA: attachment to found or confirm jurisdiction over a foreign peregrinus. UAE: jurisdiction under the Civil Procedure Law (Federal Decree-Law 42 of 2022); the DIFC Courts may apply where a DIFC nexus exists.' },
+  { area: 'Mutual legal assistance (criminal)', note: 'SA: International Co-operation in Criminal Matters Act 75 of 1996. SA-UAE bilateral treaties on mutual legal assistance and extradition (signed 2018), routed through the central authorities.' },
+  { area: 'Recognition & enforcement (civil)', note: 'SA: Enforcement of Foreign Civil Judgments Act 32 of 1988 (and common-law enforcement). UAE: enforcement of foreign judgments under the Civil Procedure Law (Federal Decree-Law 42 of 2022), subject to reciprocity.' },
+  { area: 'Asset tracing & recovery', note: 'SA: POCA 121 of 1998 (preservation & forfeiture). UAE: AML Law (Federal Decree-Law 20 of 2018) freezing powers. Cross-border cooperation via FATF/Egmont and INTERPOL channels.' },
+  { area: 'Extradition', note: 'SA: Extradition Act 67 of 1962 with the SA-UAE extradition treaty (2018), where criminal conduct is alleged and a person is in the other state.' }
+];
+
+var JURIS_LABEL = { ZA: 'South Africa', AE: 'United Arab Emirates', GB: 'United Kingdom', US: 'United States' };
+
+// Which legal subject a finding speaks to (adds CONTRACT for the franchise/lease
+// detectors CT44/CT45, which LEGAL_SUBJECT_OF does not itself carry).
+function subjectOf(f) {
+  if (!f) return 'CONTRADICTION';
+  if (f.type === 'CT44' || f.type === 'CT45') return 'CONTRACT';
+  return LEGAL_SUBJECT_OF[f.type] || 'CONTRADICTION';
+}
+
+// Detect the jurisdictions in play from the case's jurisdiction field, then
+// corroborate with currency signals in the flagged evidence. Home defaults to
+// South Africa (VO's base); a second jurisdiction makes the matter cross-border.
+function detectJurisdictions(data) {
+  var out = { home: 'ZA', foreign: [], isCrossBorder: false };
+  var text = String((data.identity && data.identity.jurisdiction) || '').toLowerCase();
+  var found = {};
+  if (/south africa|\brsa\b|\bza\b/.test(text)) found.ZA = true;
+  if (/emirates|\buae\b|dubai|abu dhabi|difc|sharjah/.test(text)) found.AE = true;
+  if (/united kingdom|\buk\b|england|wales|scotland/.test(text)) found.GB = true;
+  if (/united states|\busa\b|\bu\.s\.|america/.test(text)) found.US = true;
+  var evAll = (((data.findings && data.findings.findings) || []).map(function (f) { return String(f.evidence || ''); }).join(' '));
+  if (/\bAED\b|dirham/i.test(evAll)) found.AE = true;
+  if (/\bZAR\b|\bR\s?\d/.test(evAll)) found.ZA = true;
+  out.foreign = Object.keys(found).filter(function (k) { return k !== 'ZA'; });
+  out.isCrossBorder = out.foreign.length > 0;
+  return out;
+}
+
+// Candidate provisions for a finding's legal subject across the active
+// jurisdictions (home first, then each foreign leg).
+function statutesForSubject(subject, jur) {
+  var s = STATUTES[subject] || STATUTES.CONTRADICTION;
+  var codes = ['ZA'].concat(jur.foreign);
+  var out = [];
+  for (var i = 0; i < codes.length; i++) {
+    if (s[codes[i]] && s[codes[i]].length) out.push({ jur: codes[i], provisions: s[codes[i]] });
+  }
+  return out;
+}
+
+// Attribute a finding to a named party by first-name match in the quoted text.
+// Returns the party string, or null when no named party appears - an indicator
+// of relevance, never a finding of individual wrongdoing.
+function attributeParty(finding, parties) {
+  var ev = String((finding && finding.evidence) || '');
+  for (var i = 0; i < parties.length; i++) {
+    // Match on ANY significant token of the name (first OR surname): legal text
+    // usually refers to a person by surname, so first-name-only would miss most.
+    // Tokens shorter than 3 letters (initials, "de", "van") are skipped to
+    // avoid false hits.
+    var toks = parties[i].split(/\s+/).filter(function (t) { return t.replace(/[^A-Za-z]/g, '').length >= 3; });
+    for (var j = 0; j < toks.length; j++) {
+      var re = new RegExp('\\b' + toks[j].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
+      if (re.test(ev)) return parties[i];
+    }
+  }
+  return null;
+}
+
 // severity -> template dot rating (critical/high = ●●●, medium = ●●, else ●)
 function sevDots(s) { return s >= 4 ? '●●●' : s >= 3 ? '●●' : '●'; }
 
@@ -1437,12 +1565,79 @@ function secLegalAnalysis(ctx, data) {
   var jur = (data.identity && data.identity.jurisdiction) ? data.identity.jurisdiction : null;
   ctx.para('Dishonesty indicator score: ' + (fr.overallScore || 0) + '/100 (' + (fr.confidence || 'n/a') + '). This measures the density and severity of the indicators above; it is not a probability of fraud.', { size: 9, after: 6 });
   ctx.para('Recommended next steps' + (jur ? ' (jurisdiction: ' + jur + ')' : '') + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
-  ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Specific statutes are for counsel to confirm - this report does not assert them.', { size: 9 });
+  ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Candidate statutory provisions are set out in the Statutory Anchoring section that follows - they are starting points for counsel to confirm, not a legal conclusion.', { size: 9 });
   ctx.bullet('Preserve the sealed original and this report unaltered; both are SHA-512 anchored and independently verifiable at verumglobal.foundation/verify.html.', { size: 9 });
   if (Object.keys(bySubject).indexOf('FINANCIAL') !== -1) ctx.bullet('Financial irregularities are present - consider a forensic-accounting trace of the flagged amounts and accounts.', { size: 9 });
   if (Object.keys(bySubject).indexOf('TAMPERING') !== -1) ctx.bullet('Document-integrity indicators are present - consider requesting native/original files and metadata for the affected pages.', { size: 9 });
   ctx.gap(4);
   ctx.para('These recommendations are procedural suggestions for human decision-makers, not legal advice or a determination of liability.', { size: 8, font: ctx.f.timesItalic, color: GRAY });
+}
+
+// ================= SECTION: STATUTORY ANCHORING =================
+// The explicit chain the founder asked for: person -> contradiction -> page ->
+// candidate local law. Deterministic; every provision is a candidate for
+// counsel, never a determination. When the matter is cross-border, the foreign
+// leg's provisions and the cross-border framework are added.
+function secStatutoryAnchoring(ctx, data) {
+  var fr = data.findings || {};
+  var substantive = (fr.findings || []).filter(function (f) { return f && !isDemoted(f) && f.type !== 'SERIAL'; });
+  if (substantive.length === 0) return;
+
+  var jur = detectJurisdictions(data);
+  var parties = extractParties(data.identity && data.identity.parties);
+  var activeCodes = ['ZA'].concat(jur.foreign);
+
+  ctx.newBodyPage();
+  ctx.heading('STATUTORY ANCHORING');
+  ctx.para('Each substantive contradiction is anchored to the party it names, the page it appears on, and the candidate law that a practitioner should consider — for ' + listPhrase(activeCodes.map(function (c) { return JURIS_LABEL[c] || c; })) + '. Naming a statute here is a starting point for legal review, not an assertion that any offence was committed (Prime Directive 4).', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+
+  // ---- Person -> Contradiction -> Page -> Candidate provisions ----------
+  ctx.subHeading('Person → Contradiction → Page → Candidate law', { toc: true });
+  var ranked = substantive.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+  var CAP = 12;
+  var rows = [];
+  for (var i = 0; i < Math.min(ranked.length, CAP); i++) {
+    var f = ranked[i];
+    var who = attributeParty(f, parties) || '(unattributed)';
+    var name = CT_NAMES[f.type] || (f.source === 'ai' ? 'AI-identified' : (f.type || 'Contradiction'));
+    var stat = statutesForSubject(subjectOf(f), jur);
+    var lawCell = stat.map(function (s) { return (JURIS_LABEL[s.jur] || s.jur) + ': ' + s.provisions.join('; '); }).join('\n');
+    rows.push({
+      party: who,
+      finding: name + '  (' + sevLabel(f.severity || 0) + ')',
+      page: fmtLocation(f.location),
+      law: lawCell
+    });
+  }
+  ctx.table(
+    [
+      { key: 'party', title: 'Party', w: 92 },
+      { key: 'finding', title: 'Contradiction', w: 120 },
+      { key: 'page', title: 'Page', w: 44 },
+      { key: 'law', title: 'Candidate provisions (for counsel to confirm)', w: 248 }
+    ],
+    rows,
+    { size: 7.5 }
+  );
+  if (ranked.length > CAP) {
+    ctx.para('Showing the ' + CAP + ' highest-severity indicators; the remaining ' + (ranked.length - CAP) + ' appear in the findings matrix and can be anchored the same way.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
+  ctx.para('Attribution is by a named party appearing in the flagged text — an indicator of relevance, not a finding of individual wrongdoing.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+
+  // ---- Cross-border framework (only when the matter spans jurisdictions) --
+  if (jur.isCrossBorder) {
+    ctx.subHeading('Cross-Border Legal Considerations', { toc: true });
+    ctx.para('This matter spans ' + listPhrase(activeCodes.map(function (c) { return JURIS_LABEL[c] || c; })) + '. Beyond the substantive law above, a cross-border matter engages the following — each a candidate consideration for counsel, not a determination:', { size: 9, after: 6 });
+    ctx.table(
+      [
+        { key: 'area', title: 'Area', w: 150 },
+        { key: 'note', title: 'Candidate instruments & principles', w: 354 }
+      ],
+      CROSS_BORDER.map(function (c) { return { area: c.area, note: c.note }; }),
+      { size: 7.5 }
+    );
+    ctx.para('Cross-border enforcement turns on reciprocity, the proper law of the contract, and the central-authority channels between the states. Confirm current treaty status and procedure with local counsel in each jurisdiction.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
 }
 
 // ================= SECTION: PLAIN-LANGUAGE NARRATIVE =================
@@ -1529,21 +1724,34 @@ function secNarrative(ctx, data) {
   lead += serious.length ? ', ' + serious.length + ' of them serious. Taken in turn:' : '. Taken in turn:';
   ctx.para(lead, { size: 10.5, after: 8 });
 
-  // The story, finding by finding. Capped so the narrative stays readable; the
-  // findings matrix carries the complete list.
+  // The story, finding by finding, anchored: party -> contradiction -> page ->
+  // candidate law. Capped so the narrative stays readable; the findings matrix
+  // and the Statutory Anchoring section carry the complete detail.
+  var jur = detectJurisdictions(data);
+  if (jur.isCrossBorder) {
+    ctx.para('This is a cross-border matter (' + listPhrase([JURIS_LABEL[jur.home]].concat(jur.foreign.map(function (c) { return JURIS_LABEL[c] || c; }))) + '). Each contradiction is anchored below to the party it names, its page, and the candidate law of each jurisdiction; the fuller statutory mapping and the cross-border framework follow in the Statutory Anchoring section.', { size: 10, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+  }
   var CAP = 10;
   var shown = subst.slice(0, CAP);
   for (var i = 0; i < shown.length; i++) {
     var f = shown[i];
     var name = CT_NAMES[f.type] || (f.source === 'ai' ? 'AI-identified concern' : (f.type || 'Contradiction'));
     var sevWord = (f.severity || 0) >= 4 ? 'A serious issue' : ((f.severity || 0) >= 3 ? 'A moderate issue' : 'A lesser issue');
-    ctx.para((i + 1) + '. ' + sevWord + ' — ' + name + '. In plain terms, ' + narrativeMeaning(f) + '.', { size: 10.5, font: ctx.f.timesBold, color: NAVY2, after: 2 });
+    var who = attributeParty(f, parties);
+    var whoClause = who ? ' It concerns ' + who + '.' : '';
+    ctx.para((i + 1) + '. ' + sevWord + ' — ' + name + '. In plain terms, ' + narrativeMeaning(f) + '.' + whoClause, { size: 10.5, font: ctx.f.timesBold, color: NAVY2, after: 2 });
     var where = fmtLocation(f.location);
     var loc = (where && where !== '—') ? ' (' + where + ')' : '';
     if (f.source === 'ai' && f.rationale) {
-      ctx.para('The AI review noted: ' + san(f.rationale) + loc + '.', { size: 10, indent: 14, after: 8 });
+      ctx.para('The AI review noted: ' + san(f.rationale) + loc + '.', { size: 10, indent: 14, after: 3 });
     } else {
-      ctx.para('The record shows: ' + quoteEvidence(f.evidence) + loc + '.', { size: 10, indent: 14, after: 8 });
+      ctx.para('The record shows: ' + quoteEvidence(f.evidence) + loc + '.', { size: 10, indent: 14, after: 3 });
+    }
+    // Candidate law: the single most relevant provision per active jurisdiction.
+    var stat = statutesForSubject(subjectOf(f), jur);
+    if (stat.length) {
+      var lawBits = stat.map(function (s) { return (JURIS_LABEL[s.jur] || s.jur) + ' — ' + s.provisions[0]; });
+      ctx.para('Candidate law (for counsel to confirm): ' + lawBits.join('; ') + '.', { size: 9, font: ctx.f.timesItalic, color: GRAY, indent: 14, after: 8 });
     }
   }
   if (subst.length > CAP) {
@@ -1695,6 +1903,7 @@ async function build(opts) {
   secNarrative(ctx, data);       // deterministic human "story" (always present)
   secAiReview(ctx, data);        // optional AI narrative/review (no-op when off)
   secLegalAnalysis(ctx, data);   // template v5.1.1 structured legal layer
+  secStatutoryAnchoring(ctx, data); // person -> contradiction -> page -> law (+ cross-border)
   secEvidenceIndex(ctx, data);
   secMatrix(ctx, data);
   secSerial(ctx, data);
@@ -1872,7 +2081,9 @@ async function seal(reportBytes, sealOpts) {
 // ================= exports =================
 var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
   _extractParties: extractParties, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
-  _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning };
+  _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,
+  _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
+  _subjectOf: subjectOf, _attributeParty: attributeParty };
 global.VerumReport = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
