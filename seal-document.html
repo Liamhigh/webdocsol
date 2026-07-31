@@ -5786,12 +5786,37 @@ function voRenderFiles() {
 // Merge selected PDFs into one bundle (pdf-lib). Returns Uint8Array bytes.
 // Throws with a clear message if a file is encrypted (cannot be merged) or
 // otherwise unreadable, so the pipeline surfaces it instead of failing opaquely.
+// Read a File to a Uint8Array robustly. Browsers can throw NotReadableError on
+// File.arrayBuffer() for large files (memory pressure) or when the underlying
+// OS handle went stale after the reference was picked. We retry once via the
+// older FileReader API (a different code path that often succeeds where the
+// Blob promise API failed) before giving up with an actionable message.
+async function voReadFileBytes(file) {
+  try {
+    return new Uint8Array(await file.arrayBuffer());
+  } catch (e1) {
+    try {
+      var buf = await new Promise(function (resolve, reject) {
+        var fr = new FileReader();
+        fr.onload = function () { resolve(fr.result); };
+        fr.onerror = function () { reject(fr.error || new Error('read error')); };
+        fr.onabort = function () { reject(new Error('read aborted')); };
+        fr.readAsArrayBuffer(file);
+      });
+      return new Uint8Array(buf);
+    } catch (e2) {
+      var mb = (file.size / (1024 * 1024)).toFixed(1);
+      throw new Error('Could not read "' + file.name + '" (' + mb + ' MB). The file may have been moved or renamed since you selected it, or it is too large for your browser to hold in memory alongside the others. Re-select it fresh, close other tabs, or seal it on its own.');
+    }
+  }
+}
+
 async function voMergeBundle(files) {
   var PDFLibRef = window.PDFLib;
   if (!PDFLibRef || !PDFLibRef.PDFDocument) throw new Error('PDF engine not loaded; cannot merge the bundle.');
   var out = await PDFLibRef.PDFDocument.create();
   for (var i = 0; i < files.length; i++) {
-    var bytes = new Uint8Array(await files[i].arrayBuffer());
+    var bytes = await voReadFileBytes(files[i]);
     var src;
     try {
       src = await PDFLibRef.PDFDocument.load(bytes, { ignoreEncryption: false });
@@ -5800,9 +5825,14 @@ async function voMergeBundle(files) {
     }
     var pages = await out.copyPages(src, src.getPageIndices());
     for (var p = 0; p < pages.length; p++) out.addPage(pages[p]);
+    // Release the source document + raw bytes before reading the next file so
+    // peak memory stays near one source doc, not the whole bundle at once.
+    src = null; bytes = null; pages = null;
   }
   try { out.setTitle('Verum Omnis Evidence Bundle (' + files.length + ' documents)'); } catch (e) {}
-  return await out.save();
+  // Object streams pack the merged PDF far more compactly, keeping the sealed
+  // bundle small enough to hold, encrypt, and download on memory-tight devices.
+  return await out.save({ useObjectStreams: true });
 }
 
 document.getElementById('uploadZone').addEventListener('click', () => document.getElementById('fileInput').click());
@@ -6804,7 +6834,9 @@ async function startSealing() {
   try {
     // Step 1: Read file + GPS
     updateStep(1, 'processing');
-    fileBytes = await selectedFile.arrayBuffer();
+    // Robust read: large files can throw NotReadableError on .arrayBuffer();
+    // fall back to FileReader before failing with an actionable message.
+    fileBytes = (await voReadFileBytes(selectedFile)).buffer;
     var gpsPromise = captureGPS();
     deviceInfo = captureDevice();
     gpsCoords = await gpsPromise;
