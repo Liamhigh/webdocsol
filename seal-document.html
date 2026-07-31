@@ -2164,6 +2164,115 @@ function secLegalAnalysis(ctx, data) {
   ctx.para('These recommendations are procedural suggestions for human decision-makers, not legal advice or a determination of liability.', { size: 8, font: ctx.f.timesItalic, color: GRAY });
 }
 
+// ================= SECTION: PLAIN-LANGUAGE NARRATIVE =================
+// The human "story" of the report, built deterministically from the SAME
+// findings as the tables -- it invents no facts and works with or without the
+// optional AI layer. Prime Directive 4: every item stays an INDICATOR, never a
+// determination of guilt.
+
+// Join a list into readable prose: "A", "A and B", "A, B and C".
+function listPhrase(arr) {
+  arr = (arr || []).filter(Boolean);
+  if (arr.length === 0) return '';
+  if (arr.length === 1) return arr[0];
+  if (arr.length === 2) return arr[0] + ' and ' + arr[1];
+  return arr.slice(0, -1).join(', ') + ' and ' + arr[arr.length - 1];
+}
+
+// One lay clause per contradiction family, for the high-value types; anything
+// else falls back to the category explainer so every finding gets plain words.
+var NARRATIVE_MEANING = {
+  CT01: 'the record states one thing in one place and the opposite in another',
+  CT02: 'the same quantity is given two different numbers',
+  CT03: 'the same event is dated differently in different places',
+  CT04: 'events are placed in an order that could not have happened',
+  CT05: 'one stated fact makes another stated fact impossible',
+  CT06: 'the statements cannot all be logically true at once',
+  CT09: 'the same party is identified inconsistently',
+  CT10: 'the same person is given conflicting roles',
+  CT11: 'someone is shown acting with an authority the record does not support',
+  CT15: 'the same amount is stated as two different figures',
+  CT18: 'the banking details do not match across the documents',
+  CT22: 'the figures do not add up',
+  CT23: 'a signature does not match across the documents',
+  CT41: 'the file shows signs the original may have been altered',
+  CT44: 'a right was exercised on a condition the record itself contradicts (the "Lessee/Owner trap")',
+  CT45: 'value or goodwill recognised in one document is denied in another'
+};
+
+function narrativeMeaning(f) {
+  if (f && f.type && NARRATIVE_MEANING[f.type]) return NARRATIVE_MEANING[f.type];
+  var cat = f && CT_CATEGORY[f.type];
+  if (cat && CATEGORY_EXPLAIN[cat]) {
+    var s = CATEGORY_EXPLAIN[cat];
+    return s.charAt(0).toLowerCase() + s.slice(1).replace(/\.$/, '');
+  }
+  return 'the documents are inconsistent on this point';
+}
+
+function secNarrative(ctx, data) {
+  var fr = data.findings || {};
+  var all = fr.findings || [];
+
+  ctx.newBodyPage();
+  ctx.heading('PLAIN-LANGUAGE NARRATIVE');
+  ctx.para('This section tells the story of what the documents show, in ordinary words, for a reader who is not a forensic specialist. Every statement below is drawn from the same findings set out in the tables that follow; it adds no new facts. These are indicators for a human to weigh — not verdicts of fraud or guilt.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+
+  // Opening: parties, documents, scale.
+  var idn = data.identity || {};
+  var parties = extractParties(idn.parties || '');
+  var docCount = (data.documents && data.documents.length) || 1;
+  var opening = 'Verum Omnis read ' + (docCount === 1 ? '"' + (data.docName || 'the document') + '"' : docCount + ' documents, analysed together as one bundle') + ' (' + (data.pageCount || 'n/a') + ' page' + (data.pageCount === 1 ? '' : 's') + ')';
+  opening += (idn.caseName ? ', in the matter of ' + idn.caseName : '') + '.';
+  if (parties.length) opening += ' The parties named are ' + listPhrase(parties) + '.';
+  ctx.para(opening, { size: 10.5, after: 8 });
+
+  // Unreadable document: an honest non-result, never a clean bill of health.
+  if (fr.unreadable) {
+    ctx.para('The document could not be read as machine text, so no contradiction narrative can be written. The absence of findings here means nothing was examined — it does not mean the document is consistent.', { size: 10.5, color: RED, after: 8 });
+    return;
+  }
+
+  // Substantive, human-facing findings only: no structural notes, no raw serial
+  // pattern rows (those have their own section). Most serious first.
+  var subst = all.filter(function (f) { return f && f.type !== 'SERIAL' && !isDemoted(f); })
+    .sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+
+  if (subst.length === 0) {
+    ctx.para('Reading these documents together, the engine found no substantive contradictions to narrate. Any items in the tables that follow are routine structural notes, or multi-stage pattern signals covered in their own section.', { size: 10.5, after: 8 });
+    return;
+  }
+
+  var serious = subst.filter(function (f) { return (f.severity || 0) >= 4; });
+  var lead = 'Reading the ' + (docCount === 1 ? 'document' : 'documents together') + ', ' + subst.length + ' substantive contradiction' + (subst.length === 1 ? '' : 's') + ' stand' + (subst.length === 1 ? 's' : '') + ' out';
+  lead += serious.length ? ', ' + serious.length + ' of them serious. Taken in turn:' : '. Taken in turn:';
+  ctx.para(lead, { size: 10.5, after: 8 });
+
+  // The story, finding by finding. Capped so the narrative stays readable; the
+  // findings matrix carries the complete list.
+  var CAP = 10;
+  var shown = subst.slice(0, CAP);
+  for (var i = 0; i < shown.length; i++) {
+    var f = shown[i];
+    var name = CT_NAMES[f.type] || (f.source === 'ai' ? 'AI-identified concern' : (f.type || 'Contradiction'));
+    var sevWord = (f.severity || 0) >= 4 ? 'A serious issue' : ((f.severity || 0) >= 3 ? 'A moderate issue' : 'A lesser issue');
+    ctx.para((i + 1) + '. ' + sevWord + ' — ' + name + '. In plain terms, ' + narrativeMeaning(f) + '.', { size: 10.5, font: ctx.f.timesBold, color: NAVY2, after: 2 });
+    var where = fmtLocation(f.location);
+    var loc = (where && where !== '—') ? ' (' + where + ')' : '';
+    if (f.source === 'ai' && f.rationale) {
+      ctx.para('The AI review noted: ' + san(f.rationale) + loc + '.', { size: 10, indent: 14, after: 8 });
+    } else {
+      ctx.para('The record shows: ' + quoteEvidence(f.evidence) + loc + '.', { size: 10, indent: 14, after: 8 });
+    }
+  }
+  if (subst.length > CAP) {
+    var rest = subst.length - CAP;
+    ctx.para('A further ' + rest + ' substantive finding' + (rest === 1 ? '' : 's') + ' ' + (rest === 1 ? 'is' : 'are') + ' set out in full in the findings matrix that follows.', { size: 10, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+  }
+
+  ctx.para('In short, the documents cannot all be true at the same time on the points above. Each contradiction is anchored to the quoted text and its page location, so it can be checked directly against the originals. What these inconsistencies mean in law is for a legal practitioner to determine — this report identifies them; it does not decide their consequences.', { size: 10.5, after: 6 });
+}
+
 // ================= SECTION: AI REVIEW (optional cloud layer) =================
 function secAiReview(ctx, data) {
   var ar = (data.aiReview && data.aiReview.applied) ? data.aiReview : null;
@@ -2302,7 +2411,8 @@ async function build(opts) {
   ctx.drawHeader(tocPage);
   // 3-10. sections
   secExecSummary(ctx, data);
-  secAiReview(ctx, data);        // narrative story leads (no-op when AI review off)
+  secNarrative(ctx, data);       // deterministic human "story" (always present)
+  secAiReview(ctx, data);        // optional AI narrative/review (no-op when off)
   secLegalAnalysis(ctx, data);   // template v5.1.1 structured legal layer
   secEvidenceIndex(ctx, data);
   secMatrix(ctx, data);
@@ -2480,7 +2590,8 @@ async function seal(reportBytes, sealOpts) {
 
 // ================= exports =================
 var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
-  _extractParties: extractParties, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF };
+  _extractParties: extractParties, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
+  _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning };
 global.VerumReport = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
