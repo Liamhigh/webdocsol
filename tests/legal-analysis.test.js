@@ -88,6 +88,17 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(R._attributeParty({ evidence: 'no party named here' }, parties) === null, 'attributeParty: null when unattributed');
 }
 
+// ---- monetary figure extraction (extraction only, de-duplicated) ----
+{
+  const m = R._extractMoney('paid AED 1,200,000 then only AED 1,020,000; also R 250 000 demanded');
+  ok(m.some((x) => /AED 1,200,000/.test(x)), 'extractMoney: finds AED amount');
+  ok(m.some((x) => /R 250 000/.test(x)), 'extractMoney: finds ZAR "R" amount with spaces');
+  ok(R._extractMoney('$11,000 deal').some((x) => /\$11,000/.test(x)), 'extractMoney: finds USD $ amount');
+  const dup = R._extractMoney('USD 500 and USD 500 again');
+  ok(dup.filter((x) => /USD 500/.test(x)).length === 1, 'extractMoney: de-duplicates identical figures');
+  ok(R._extractMoney('no money here, just words').length === 0, 'extractMoney: empty when no figures');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);

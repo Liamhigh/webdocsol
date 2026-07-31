@@ -2468,6 +2468,186 @@ function secEvidenceAppendix(ctx, data) {
   }
 }
 
+// ================= SECTION: CANDIDATE OFFENCE MATRIX =================
+// Consolidates the substantive findings into one candidate-offence table by
+// legal subject and jurisdiction. Deterministic re-presentation: it counts and
+// maps, it does not conclude that any offence was committed (Prime Directive 4).
+function secOffenceMatrix(ctx, data) {
+  var fr = data.findings || {};
+  var subst = (fr.findings || []).filter(function (f) { return f && !isDemoted(f) && f.type !== 'SERIAL'; });
+  if (subst.length === 0) return;
+  var jur = detectJurisdictions(data);
+
+  ctx.newBodyPage();
+  ctx.heading('CANDIDATE OFFENCE MATRIX');
+  ctx.para('The substantive indicators grouped by legal subject, with the candidate statutory provisions a practitioner should consider in ' + listPhrase(['ZA'].concat(jur.foreign).map(function (c) { return JURIS_LABEL[c] || c; })) + '. Counts are of anchored indicators, not proven offences; naming a provision is a starting point for legal review, never a determination.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+
+  var bySubject = {};
+  for (var i = 0; i < subst.length; i++) {
+    var s = subjectOf(subst[i]);
+    (bySubject[s] = bySubject[s] || []).push(subst[i]);
+  }
+  var subjOrder = LEGAL_SUBJECT_ORDER.concat(['CONTRACT']);
+  var rows = [];
+  for (var o = 0; o < subjOrder.length; o++) {
+    var sk = subjOrder[o];
+    var list = bySubject[sk];
+    if (!list || !list.length) continue;
+    list.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+    var maxSev = list[0].severity || 0;
+    var stat = statutesForSubject(sk, jur);
+    var prov = stat.map(function (x) { return (JURIS_LABEL[x.jur] || x.jur) + ': ' + x.provisions.join('; '); }).join('\n');
+    rows.push({
+      subject: (LEGAL_SUBJECT_LABEL[sk] || sk),
+      n: String(list.length) + '  (max ' + sevLabel(maxSev) + ')',
+      prov: prov
+    });
+  }
+  ctx.table(
+    [
+      { key: 'subject', title: 'Legal subject', w: 110 },
+      { key: 'n', title: 'Indicators', w: 96 },
+      { key: 'prov', title: 'Candidate provisions (for counsel to confirm)', w: 298 }
+    ],
+    rows,
+    { size: 7.5 }
+  );
+}
+
+// ================= SECTION: RECOMMENDED ACTIONS (TIMEFRAMED) =================
+// Procedural next steps in 0-14 / 14-90 / 90+ day bands, selected from which
+// subjects actually appear. Templated suggestions for human decision-makers -
+// not legal advice, not a determination of liability.
+function secActions(ctx, data) {
+  var fr = data.findings || {};
+  var subst = (fr.findings || []).filter(function (f) { return f && !isDemoted(f) && f.type !== 'SERIAL'; });
+  if (subst.length === 0) return;
+  var serials = (fr.findings || []).filter(function (f) { return f && f.type === 'SERIAL'; });
+  var jur = detectJurisdictions(data);
+
+  var subjects = {};
+  for (var i = 0; i < subst.length; i++) subjects[subjectOf(subst[i])] = true;
+  var has = function (k) { return !!subjects[k]; };
+
+  ctx.newBodyPage();
+  ctx.heading('RECOMMENDED ACTIONS');
+  ctx.para('Procedural next steps for human decision-makers, banded by urgency. These are suggestions, not legal advice or a determination of liability.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+
+  ctx.subHeading('0 – 14 days (immediate)', { toc: true });
+  ctx.bullet('Preserve the sealed original and this report unaltered; both are SHA-512 anchored and independently verifiable at verumglobal.foundation/verify.html.', { size: 9 });
+  if (has('TAMPERING')) ctx.bullet('Request the native/original files and their metadata for the pages flagged under Document Integrity & Tampering, before they can be re-saved.', { size: 9 });
+  if (has('FINANCIAL')) ctx.bullet('Ring-fence the flagged amounts and accounts; consider a hold on further transfers pending a forensic-accounting trace.', { size: 9 });
+  if (jur.isCrossBorder) ctx.bullet('Put counsel in ' + listPhrase(['ZA'].concat(jur.foreign).map(function (c) { return JURIS_LABEL[c] || c; })) + ' on notice, so cross-border preservation and assistance requests can start in time.', { size: 9 });
+
+  ctx.subHeading('14 – 90 days (investigative)', { toc: true });
+  ctx.bullet('Have a legal practitioner review the Candidate Offence Matrix against the applicable law and confirm the provisions.', { size: 9 });
+  if (has('WITNESS')) ctx.bullet('Obtain sworn statements from the witnesses whose accounts conflict, and reconcile the chain of custody.', { size: 9 });
+  if (has('PROCEDURAL')) ctx.bullet('Subpoena or formally request the source records, annexures and precedents that could not be resolved when cross-referenced.', { size: 9 });
+  if (has('MISREP') || has('CONTRADICTION')) ctx.bullet('Put the conflicting statements to their authors for explanation on the record (a formal hearing or request for reply).', { size: 9 });
+
+  ctx.subHeading('90+ days (resolution)', { toc: true });
+  ctx.bullet('Decide, with counsel, on civil and/or criminal referral based on the confirmed provisions.', { size: 9 });
+  if (serials.length) ctx.bullet('Where the same pattern recurs across matters or parties, consider whether an organised-crime / racketeering enquiry is warranted (in South Africa, POCA 121 of 1998) — a hypothesis for investigators, not a finding.', { size: 9 });
+  ctx.bullet('Retain the sealed bundle and report as the permanent, tamper-evident record for any proceeding.', { size: 9 });
+}
+
+// ================= SECTION: MONETARY FIGURES =================
+// Currency amounts appearing in the flagged text, surfaced verbatim with their
+// page. Extraction only - no figure is characterised as a loss or a gain (that
+// is interpretive and left to counsel / the AI layer).
+var VO_MONEY_RE = /(?:ZAR|USD|AED|EUR|GBP|R|US\$|\$|€|£)\s?\d[\d ,.]*\d|\bdirhams?\b[^.\n]{0,24}\d[\d ,.]*/gi;
+// Currency amounts in a string, de-duplicated, whitespace-normalised. Extraction
+// only — the caller never labels a figure a loss/gain.
+function extractMoney(text) {
+  var m = String(text === null || text === undefined ? '' : text).match(VO_MONEY_RE);
+  if (!m) return [];
+  var out = [], seen = {};
+  for (var i = 0; i < m.length; i++) {
+    var f = m[i].replace(/\s{2,}/g, ' ').trim();
+    var k = f.toLowerCase();
+    if (!f || seen[k]) continue;
+    seen[k] = true;
+    out.push(f);
+  }
+  return out;
+}
+function secMonetaryFigures(ctx, data) {
+  var fr = data.findings || {};
+  var all = (fr.findings || []);
+  var rows = [], seen = {};
+  for (var i = 0; i < all.length; i++) {
+    var f = all[i];
+    var figs = extractMoney(cleanQuote(f.evidence));
+    for (var j = 0; j < figs.length; j++) {
+      var key = figs[j].toLowerCase() + '|' + fmtLocation(f.location);
+      if (seen[key]) continue;
+      seen[key] = true;
+      rows.push({ fig: figs[j], page: fmtLocation(f.location) });
+      if (rows.length >= 60) break;
+    }
+    if (rows.length >= 60) break;
+  }
+  if (rows.length === 0) return;
+
+  ctx.newBodyPage();
+  ctx.heading('MONETARY FIGURES REFERENCED');
+  ctx.para('Currency amounts appearing in the flagged text, with their page. These are extracted verbatim for the investigator’s convenience; none is characterised here as a loss, gain or amount owed — that is for counsel to determine.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.table(
+    [
+      { key: 'fig', title: 'Amount (verbatim)', w: 260 },
+      { key: 'page', title: 'Page', w: 244 }
+    ],
+    rows,
+    { size: 8.5 }
+  );
+}
+
+// ================= ANNEXURE A: EVIDENCE MAP (BY PAGE) =================
+// Every flagged indicator ordered by the page it appears on, so a reviewer can
+// walk the source document top to bottom. Complements the severity-ordered
+// evidence appendix.
+function secEvidenceMap(ctx, data) {
+  var fr = data.findings || {};
+  var all = (fr.findings || []).slice();
+  if (all.length === 0) return;
+  function firstPage(f) {
+    var p = pageNumbers(f.location);
+    return p.length ? p[0] : 100000; // undated/whole-doc items sort to the end
+  }
+  all.sort(function (a, b) {
+    var pa = firstPage(a), pb = firstPage(b);
+    if (pa !== pb) return pa - pb;
+    return (b.severity || 0) - (a.severity || 0);
+  });
+
+  ctx.newBodyPage();
+  ctx.heading('ANNEXURE A — EVIDENCE MAP (BY PAGE)');
+  ctx.para('Every flagged indicator in page order, so the source document can be walked top to bottom. The Evidence Appendix lists the same items with full verbatim quotes, ordered by severity.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+
+  var CAP = 250;
+  var rows = [];
+  for (var i = 0; i < Math.min(all.length, CAP); i++) {
+    var f = all[i];
+    var typ = f.type === 'SERIAL' ? 'SERIAL' : (f.type || (f.source === 'ai' ? 'AI' : '—'));
+    var name = f.type === 'SERIAL' ? 'Serial pattern' : (CT_NAMES[f.type] || typ);
+    var q = cleanQuote(f.evidence);
+    if (q.length > 140) q = q.substring(0, 137) + '…';
+    rows.push({ page: fmtLocation(f.location), ind: name + ' (' + sevLabel(f.severity || 0) + ')', ev: q });
+  }
+  ctx.table(
+    [
+      { key: 'page', title: 'Page', w: 74 },
+      { key: 'ind', title: 'Indicator', w: 150 },
+      { key: 'ev', title: 'Flagged text', w: 280 }
+    ],
+    rows,
+    { size: 7.5 }
+  );
+  if (all.length > CAP) {
+    ctx.para('Showing the first ' + CAP + ' of ' + all.length + ' items; the remainder are in the machine-readable findings JSON.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
+}
+
 // ================= SECTION: PLAIN-LANGUAGE NARRATIVE =================
 // The human "story" of the report, built deterministically from the SAME
 // findings as the tables -- it invents no facts and works with or without the
@@ -2732,12 +2912,16 @@ async function build(opts) {
   secAiReview(ctx, data);        // optional AI narrative/review (no-op when off)
   secLegalAnalysis(ctx, data);   // template v5.1.1 structured legal layer
   secStatutoryAnchoring(ctx, data); // person -> contradiction -> page -> law (+ cross-border)
+  secOffenceMatrix(ctx, data);   // candidate offences by subject x jurisdiction
+  secActions(ctx, data);         // timeframed recommended actions (0-14 / 14-90 / 90+)
+  secMonetaryFigures(ctx, data); // currency amounts found in flagged text (extraction only)
   secEvidenceIndex(ctx, data);
   secMatrix(ctx, data);
   secFindingDetails(ctx, data);  // one expanded page-block per substantive finding
   secSerial(ctx, data);
   secTimeline(ctx, data);
   secEvidenceAppendix(ctx, data); // every quoted passage, verbatim, in one place
+  secEvidenceMap(ctx, data);     // Annexure A: every indicator ordered by page
   secDeclaration(ctx, data);
   secConstitution(ctx, data);
   secMethodology(ctx, data);
@@ -2913,7 +3097,7 @@ var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
   _extractParties: extractParties, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
   _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
-  _subjectOf: subjectOf, _attributeParty: attributeParty };
+  _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
