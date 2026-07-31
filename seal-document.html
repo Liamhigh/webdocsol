@@ -353,15 +353,16 @@
   <!-- Upload Area -->
   <div class="upload-zone" id="uploadZone">
     <div class="icon">&#128196;</div>
-    <h3>Upload PDF Document</h3>
-    <p>Drag and drop your PDF here, or click to browse. Max 50MB.</p>
-    <input type="file" id="fileInput" accept=".pdf,application/pdf">
+    <h3>Upload PDF Document(s)</h3>
+    <p>Drag and drop one or more PDFs here, or click to browse. Add several and they are sealed and analysed together as one bundle. Max 50MB total.</p>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf" multiple>
   </div>
 
   <!-- File Info -->
   <div class="file-info" id="fileInfo">
     <span style="color:#D4A843;">&#128206;</span> <span id="fileName" style="color:#F8F9FA;"></span>
     <span id="fileSize" style="color:#4A7EC7; margin-left:10px;"></span>
+    <div id="fileList" style="margin-top:10px;font-size:13px;color:#D5D8DD;line-height:1.7;"></div>
   </div>
   <div id="protectedNote" style="display:none;margin:0 0 20px;background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:10px;padding:14px;font-size:13px;color:#D4A843;line-height:1.6;">&#128274; <strong>This PDF is password-protected.</strong> It can still be sealed — the seal (SHA-512 fingerprint + blockchain timestamp) will cover these exact bytes, and remains fully verifiable. But the watermark, QR code and footer cannot be stamped inside a locked file, so they will appear on your Seal Certificate instead of on the document pages. If you want a stamped copy, remove the password first (e.g. print the PDF to a new PDF), then seal that.</div>
 
@@ -5518,6 +5519,12 @@ async function voEnsureForensicScripts(onStatus) {
 }
 
 let selectedFile = null, sealType = 'private', otsProof = null, watermarkBytes = null;
+// Multi-document bundles: the user can add several PDFs; at seal time they are
+// merged into one bundle so the seal covers the whole set AND the forensic
+// engine reads them as one corpus (cross-document contradictions only surface
+// when every document is analysed together). Single-file behaviour is unchanged.
+let selectedFiles = [];
+var VO_BUNDLE_MAX_BYTES = 50 * 1024 * 1024; // total across all selected files
 let gpsCoords = null, deviceInfo = null;
 
 function toggleSection(id) {
@@ -5648,34 +5655,108 @@ async function voCheckProtectedOnSelect(file) {
   } catch (e) { /* detection is best-effort; the pipeline has its own fallback */ }
 }
 
+// Add PDFs to the bundle (deduped by name+size), enforcing a total-size cap.
+// A single file behaves exactly as before; two or more are merged at seal time.
+function voAddFiles(fileList) {
+  var added = 0, rejected = [];
+  for (var i = 0; i < fileList.length; i++) {
+    var f = fileList[i];
+    var isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
+    if (!isPdf) { rejected.push(f.name + ' (not a PDF)'); continue; }
+    if (selectedFiles.some(function (x) { return x.name === f.name && x.size === f.size; })) continue; // dedupe
+    selectedFiles.push(f);
+    added++;
+  }
+  var total = selectedFiles.reduce(function (s, x) { return s + x.size; }, 0);
+  if (total > VO_BUNDLE_MAX_BYTES) {
+    // Roll back the just-added files that pushed it over, newest first.
+    while (selectedFiles.length && selectedFiles.reduce(function (s, x) { return s + x.size; }, 0) > VO_BUNDLE_MAX_BYTES) {
+      selectedFiles.pop();
+    }
+    alert('Bundle exceeds the 50MB total limit. Some files were not added — remove one, or seal in smaller bundles.');
+  }
+  if (rejected.length) alert('Skipped: ' + rejected.join(', '));
+  voRenderFiles();
+}
+
+function voRemoveFile(idx) {
+  selectedFiles.splice(idx, 1);
+  window._voSelectedIsProtected = false;
+  document.getElementById('protectedNote').style.display = 'none';
+  voRenderFiles();
+  // Re-check the single remaining file for password protection.
+  if (selectedFiles.length === 1) voCheckProtectedOnSelect(selectedFiles[0]);
+}
+window.voRemoveFile = voRemoveFile;
+
+// Render the current bundle and keep `selectedFile` pointing at the first file
+// (naming/preview) until the merge at seal time replaces it with the bundle.
+function voRenderFiles() {
+  var info = document.getElementById('fileInfo');
+  var list = document.getElementById('fileList');
+  var total = selectedFiles.reduce(function (s, x) { return s + x.size; }, 0);
+  if (selectedFiles.length === 0) {
+    selectedFile = null;
+    info.classList.remove('visible');
+    list.innerHTML = '';
+    document.getElementById('fileName').textContent = '';
+    document.getElementById('fileSize').textContent = '';
+    document.getElementById('sealBtn').disabled = true;
+    return;
+  }
+  selectedFile = selectedFiles[0];
+  info.classList.add('visible');
+  document.getElementById('sealBtn').disabled = false;
+  if (selectedFiles.length === 1) {
+    document.getElementById('fileName').textContent = selectedFiles[0].name;
+    document.getElementById('fileSize').textContent = (total / 1024 / 1024).toFixed(2) + ' MB';
+    list.innerHTML = '';
+  } else {
+    document.getElementById('fileName').textContent = selectedFiles.length + ' documents — sealed & analysed as one bundle';
+    document.getElementById('fileSize').textContent = (total / 1024 / 1024).toFixed(2) + ' MB total';
+    var rows = selectedFiles.map(function (f, i) {
+      return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;">' +
+        '<span>' + (i + 1) + '. ' + escapeHtml(f.name) + ' <span style="color:#4A7EC7;">(' + (f.size / 1024 / 1024).toFixed(2) + ' MB)</span></span>' +
+        '<button type="button" onclick="voRemoveFile(' + i + ')" style="background:none;border:none;color:#ef4444;cursor:pointer;font-size:14px;line-height:1;">&#10005;</button>' +
+        '</div>';
+    }).join('');
+    list.innerHTML = rows +
+      '<div style="margin-top:8px;color:#8ea3b5;font-size:12px;">Documents are merged in this order into one sealed bundle. Password-protected files cannot be merged — seal those individually.</div>';
+  }
+}
+
+// Merge selected PDFs into one bundle (pdf-lib). Returns Uint8Array bytes.
+// Throws with a clear message if a file is encrypted (cannot be merged) or
+// otherwise unreadable, so the pipeline surfaces it instead of failing opaquely.
+async function voMergeBundle(files) {
+  var PDFLibRef = window.PDFLib;
+  if (!PDFLibRef || !PDFLibRef.PDFDocument) throw new Error('PDF engine not loaded; cannot merge the bundle.');
+  var out = await PDFLibRef.PDFDocument.create();
+  for (var i = 0; i < files.length; i++) {
+    var bytes = new Uint8Array(await files[i].arrayBuffer());
+    var src;
+    try {
+      src = await PDFLibRef.PDFDocument.load(bytes, { ignoreEncryption: false });
+    } catch (e) {
+      throw new Error('Could not merge "' + files[i].name + '" — it may be password-protected or damaged. Remove the password (print it to a new PDF) or seal it on its own.');
+    }
+    var pages = await out.copyPages(src, src.getPageIndices());
+    for (var p = 0; p < pages.length; p++) out.addPage(pages[p]);
+  }
+  try { out.setTitle('Verum Omnis Evidence Bundle (' + files.length + ' documents)'); } catch (e) {}
+  return await out.save();
+}
+
 document.getElementById('uploadZone').addEventListener('click', () => document.getElementById('fileInput').click());
 document.getElementById('fileInput').addEventListener('change', (e) => {
-  if (e.target.files.length > 0) {
-    selectedFile = e.target.files[0];
-    if (selectedFile.size > 50 * 1024 * 1024) { alert('File too large. Max 50MB.'); selectedFile = null; return; }
-    document.getElementById('fileName').textContent = selectedFile.name;
-    document.getElementById('fileSize').textContent = (selectedFile.size / 1024 / 1024).toFixed(2) + ' MB';
-    document.getElementById('fileInfo').classList.add('visible');
-    document.getElementById('sealBtn').disabled = false;
-    voCheckProtectedOnSelect(selectedFile);
-  }
+  if (e.target.files.length > 0) voAddFiles(e.target.files);
+  e.target.value = ''; // allow re-selecting the same file after a remove
 });
 ['dragover','dragleave','drop'].forEach(evt => {
   document.getElementById('uploadZone').addEventListener(evt, (e) => {
     e.preventDefault();
     e.currentTarget.classList.toggle('dragover', evt === 'dragover');
-    if (evt === 'drop' && e.dataTransfer.files.length > 0) {
-      const f = e.dataTransfer.files[0];
-      if (f.type === 'application/pdf' || f.name.endsWith('.pdf')) {
-        if (f.size > 50 * 1024 * 1024) { alert('File too large. Max 50MB.'); return; }
-        selectedFile = f;
-        document.getElementById('fileName').textContent = f.name;
-        document.getElementById('fileSize').textContent = (f.size / 1024 / 1024).toFixed(2) + ' MB';
-        document.getElementById('fileInfo').classList.add('visible');
-        document.getElementById('sealBtn').disabled = false;
-        voCheckProtectedOnSelect(f);
-      }
-    }
+    if (evt === 'drop' && e.dataTransfer.files.length > 0) voAddFiles(e.dataTransfer.files);
   });
 });
 
@@ -6629,7 +6710,25 @@ async function buildAnchorCertificate(opts) {
 // ==================== SEALING FLOW v1.2.6 ====================
 
 async function startSealing() {
+  if (!selectedFile && selectedFiles.length === 0) return;
+
+  // Multi-document bundle: merge the selected PDFs into one so the seal covers
+  // the whole set and the forensic engine analyses them as a single corpus
+  // (cross-document contradictions only surface when read together). A single
+  // file is left exactly as-is, preserving password-protected handling.
+  if (selectedFiles.length > 1) {
+    try {
+      var _bundleBytes = await voMergeBundle(selectedFiles);
+      selectedFile = new File([_bundleBytes], 'evidence-bundle-' + selectedFiles.length + '-docs.pdf', { type: 'application/pdf' });
+    } catch (mergeErr) {
+      alert(mergeErr && mergeErr.message ? mergeErr.message : 'Could not merge the selected documents.');
+      return;
+    }
+  } else if (selectedFiles.length === 1) {
+    selectedFile = selectedFiles[0];
+  }
   if (!selectedFile) return;
+
   maybeRunGatekeep(); // advisory only -- NEVER blocks sealing
   document.getElementById('sealBtn').disabled = true;
   document.getElementById('pipeline').classList.add('visible');
