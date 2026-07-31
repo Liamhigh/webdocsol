@@ -573,8 +573,11 @@ var DETECTORS = {
       if (!Object.prototype.hasOwnProperty.call(byDateLabel, lab2)) continue;
       var st = byDateLabel[lab2].slice().sort(function (x, y) { return x.key - y.key; });
       var base2 = st[0];
+      var seenKeys2 = {};
       for (var q = 1; q < st.length; q++) {
         if (st[q].key === base2.key) continue;
+        if (seenKeys2[st[q].key]) continue; // a repeated value is one discrepancy, not many
+        seenKeys2[st[q].key] = true;
         findings.push({ type: 'CT03', severity: 4,
           evidence: '"' + lab2 + '" is stated as ' + base2.raw + ' and as ' + st[q].raw,
           location: 'Page ' + (base2.page + 1) + ' vs Page ' + (st[q].page + 1) });
@@ -655,20 +658,24 @@ var DETECTORS = {
   D07_DETECT_ROLE_CONTRADICTION: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var roleClaims = [
-      { role: 'managing director', check: 'board resolution' },
-      { role: 'company secretary', check: 'appointment letter' },
-      { role: 'authorized signatory', check: 'power of attorney' },
-      { role: 'executor', check: 'letters of executorship' },
-      { role: 'trustee', check: 'trust deed' },
-      { role: 'liquidator', check: 'court order' }
-    ];
-    for (var i = 0; i < roleClaims.length; i++) {
-      if (fullText.indexOf(roleClaims[i].role) !== -1 &&
-          fullText.indexOf(roleClaims[i].check) === -1) {
-        findings.push({ type: 'CT10', severity: 3,
-          evidence: 'Role "' + roleClaims[i].role + '" claimed without supporting "' + roleClaims[i].check + '"',
-          location: 'Full document' });
+    // Only flag a role when the text EXPLICITLY challenges its authority. The old
+    // version flagged a role whenever a supporting-document phrase ("power of
+    // attorney", "trust deed", ...) was merely absent from the document -- but
+    // absence is not a contradiction, and it fired on ordinary documents that
+    // simply named an "authorized signatory" or "trustee".
+    var roles = ['managing director','company secretary','authorized signatory','executor','trustee','liquidator'];
+    var challenge = /(?:without (?:the )?authority|no authority|not authoris|not authorized|unauthoris|unauthorized|lacked (?:the )?authority|purport(?:ed|s|ing)?|falsely (?:claim|represent)|had no (?:power|right|mandate))/;
+    for (var i = 0; i < roles.length; i++) {
+      var idx = fullText.indexOf(roles[i]);
+      while (idx !== -1) {
+        var windowText = fullText.slice(Math.max(0, idx - 90), idx + roles[i].length + 90);
+        if (challenge.test(windowText)) {
+          findings.push({ type: 'CT10', severity: 3,
+            evidence: 'Role "' + roles[i] + '" is expressly challenged as lacking authority',
+            location: 'Full document' });
+          break;
+        }
+        idx = fullText.indexOf(roles[i], idx + 1);
       }
     }
     return findings;
@@ -1224,11 +1231,19 @@ var DETECTORS = {
   D33_DETECT_IMAGE_MANIPULATION: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var imageTerms = ['compressed','resized','cropped','filtered','edited image'];
-    for (var i = 0; i < imageTerms.length; i++) {
-      if (fullText.indexOf(imageTerms[i]) !== -1) {
+    // Only flag when a manipulation verb sits NEXT TO an actual image reference.
+    // The old version flagged the bare word "compressed" anywhere -- including
+    // the file name -- so a document a user had to compress to upload was
+    // accused of "image manipulation". "compressed" is dropped entirely (file
+    // compression is benign and ubiquitous); the rest must be near an image noun.
+    var imageNoun = '(?:image|images|photo|photos|photograph|picture|screenshot|figure|exhibit|scan|jpeg|jpg|png)';
+    var manipTerms = ['resized','cropped','filtered','retouched','photoshopped','edited image','doctored'];
+    for (var i = 0; i < manipTerms.length; i++) {
+      var term = manipTerms[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      var re = new RegExp('(?:' + imageNoun + '[^.]{0,40}' + term + '|' + term + '[^.]{0,40}' + imageNoun + ')');
+      if (re.test(fullText)) {
         findings.push({ type: 'CT28', severity: 3,
-          evidence: 'Image manipulation reference: "' + imageTerms[i] + '"',
+          evidence: 'Possible image manipulation: "' + manipTerms[i] + '" referenced next to an image',
           location: 'Image sections' });
       }
     }
@@ -1258,7 +1273,10 @@ var DETECTORS = {
 
   D35_DETECT_VERSION_ANOMALY: function(textBlocks) {
     var findings = [];
-    var versionRe = /\b(version|v|rev|revision)\s*[:=.]?\s*(\d+\.?\d*)\b/gi;
+    // Require the full word "version"/"revision" -- the old pattern matched bare
+    // "v" and "rev", so "v9" and "v3" anywhere (or in a file name) were read as
+    // a version going backwards, which produced false anomalies.
+    var versionRe = /\b(version|revision)\s*[:=.]?\s*(\d+\.?\d*)\b/gi;
     var versions = [];
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
