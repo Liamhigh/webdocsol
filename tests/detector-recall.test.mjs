@@ -52,6 +52,30 @@ ok(fires(DET.D23_DETECT_PROCEDURE_BREACH, ['The forfeiture clause was never coun
 ok(!fires(DET.D23_DETECT_PROCEDURE_BREACH, ['The parties entered a valid agreement and contract, duly signed.']),
   'D23 does NOT fabricate a breach from the mere absence of "witness"/"resolution"');
 
+// Real-bundle false positives surfaced by the Greensky scan (all must be quiet
+// on the benign case and still fire on the genuine one).
+// CT28 image manipulation must not fire on the ubiquitous word "compressed"
+// (users compress files just to upload them) or on "cropped" with no image.
+ok(!fires(DET.D33_DETECT_IMAGE_MANIPULATION, ['greensky_compressed_compressed(1)-sealed.pdf — the timeline was compressed and the section cropped.']),
+  'D33 does NOT flag "compressed"/"cropped" without an image (was a false tampering allegation)');
+ok(fires(DET.D33_DETECT_IMAGE_MANIPULATION, ['The photograph exhibit was clearly cropped to hide the date stamp.']),
+  'D33 still flags a manipulation verb next to an actual image');
+// CT30 version must require the full word, not bare "v9"/"v3".
+ok(!fires(DET.D35_DETECT_VERSION_ANOMALY, ['file v9 and later v3 appear in the name']),
+  'D35 does NOT read bare "v9"/"v3" as a version going backwards');
+ok(fires(DET.D35_DETECT_VERSION_ANOMALY, ['Version 9 of the deed. Later filed as Version 3.']),
+  'D35 still flags a real labelled version decrease');
+// CT10 role must require an explicit authority challenge, not mere absence.
+ok(!fires(DET.D07_DETECT_ROLE_CONTRADICTION, ['The trustee signed and the authorized signatory approved it.']),
+  'D07 does NOT flag a role merely because a supporting document is not mentioned');
+ok(fires(DET.D07_DETECT_ROLE_CONTRADICTION, ['The purported trustee acted without the authority to bind the trust.']),
+  'D07 flags a role only when its authority is expressly challenged');
+// CT03 must report a repeated date value once, not once per repeat.
+{
+  const f = DET.D03_DETECT_DATE_INCONSISTENCY(['termination date: 7 March 2025', 'termination date: 13 March 2025', 'termination date: 13 March 2025']);
+  ok(f.length === 1, 'D03 reports a repeated conflicting date once, not duplicated (got ' + f.length + ')');
+}
+
 // The load-bearing guarantee: a clean document produces ZERO findings across
 // all text detectors (this is what regressed into 2 false CT35 findings before).
 const skip = new Set(['D15_DETECT_METADATA_FRAUD','D20_DETECT_DIGITAL_FOOTPRINT_MISMATCH','D16_DETECT_FONT_ANOMALY','D37_DETECT_INTERNAL_CONFLICT_CATCHALL']);
