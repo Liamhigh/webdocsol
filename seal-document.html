@@ -1202,6 +1202,12 @@ function stripDemotedTag(ev) { return String(ev || '').replace(DEMOTED_TAG_RE, '
 // ...", "verify seal", "clean bundle page X of Y") and can run to whole pages.
 // Strip the artefacts and cap the length so a quote reads as a quote.
 var QUOTE_MAX = 300;
+// How many findings each expanded section lists in full (the rest are pointed to
+// in the matrix / findings JSON). Named so the depth is tunable in one place.
+var DETAIL_CAP = 40;     // FINDINGS IN DETAIL: expanded per-finding blocks
+var APPENDIX_CAP = 200;  // EVIDENCE APPENDIX: verbatim quote rows
+var ANCHOR_CAP = 12;     // STATUTORY ANCHORING: person->contradiction->page->law rows
+var NARRATIVE_CAP = 10;  // PLAIN-LANGUAGE NARRATIVE: story items
 function cleanQuote(ev) {
   ev = String(ev === null || ev === undefined ? '' : ev);
   ev = ev
@@ -1230,6 +1236,13 @@ function quoteEvidence(ev) {
   ev = cleanQuote(ev);
   if (ev.indexOf('"') !== -1) return ev;
   return '"' + ev + '"';
+}
+
+// Append a full stop only when the clause does not already end in sentence
+// punctuation, so composed lines never double up ("...trap)." not "...trap)..").
+function withPeriod(s) {
+  s = String(s === null || s === undefined ? '' : s).trim();
+  return (!s || /[.!?]$/.test(s)) ? s : s + '.';
 }
 
 // fetch an image; validate it is actually a PNG before returning bytes (site hosts
@@ -2313,7 +2326,7 @@ function secStatutoryAnchoring(ctx, data) {
   // ---- Person -> Contradiction -> Page -> Candidate provisions ----------
   ctx.subHeading('Person → Contradiction → Page → Candidate law', { toc: true });
   var ranked = substantive.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-  var CAP = 12;
+  var CAP = ANCHOR_CAP;
   var rows = [];
   for (var i = 0; i < Math.min(ranked.length, CAP); i++) {
     var f = ranked[i];
@@ -2376,7 +2389,7 @@ function secFindingDetails(ctx, data) {
   ctx.heading('FINDINGS IN DETAIL');
   ctx.para('One entry per substantive indicator, ranked by severity: the party it names, its page, what it means in plain words, the verbatim quoted record, and the candidate law for counsel. Structural notes and multi-stage pattern signals are covered in their own sections. Every entry is an investigative indicator, not a determination of guilt.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
-  var CAP = 40;
+  var CAP = DETAIL_CAP;
   var shown = subst.slice(0, CAP);
   for (var i = 0; i < shown.length; i++) {
     var f = shown[i];
@@ -2393,7 +2406,7 @@ function secFindingDetails(ctx, data) {
     ];
     for (var k = 0; k < factLines.length; k++) ctx.para(factLines[k], { size: 9, color: NAVY2, after: 1 });
     ctx.gap(3);
-    ctx.para('What it means: ' + narrativeMeaning(f) + '.', { size: 10, after: 4 });
+    ctx.para('What it means: ' + withPeriod(narrativeMeaning(f)), { size: 10, after: 4 });
     if (f.source === 'ai' && f.rationale) ctx.para('AI rationale: ' + san(f.rationale), { size: 9.5, after: 4 });
     ctx.para('Quoted record:', { size: 9, font: ctx.f.timesBold, color: NAVY2, after: 2 });
     ctx.box('', [cleanQuote(f.evidence) || '(no verbatim text captured)'], { titleColor: NAVY2, size: 9 });
@@ -2432,13 +2445,12 @@ function secEvidenceAppendix(ctx, data) {
   ctx.heading('EVIDENCE APPENDIX (VERBATIM QUOTES)');
   ctx.para('Every flagged passage, reproduced verbatim and numbered, with its indicator type and page. This is the complete quoted-evidence record behind the report; each entry can be checked against the sealed original at the cited page.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
-  var CAP = 200;
+  var CAP = APPENDIX_CAP;
   var rows = [];
   for (var i = 0; i < Math.min(all.length, CAP); i++) {
     var f = all[i];
     var typ = f.type === 'SERIAL' ? 'SERIAL' : (f.type || (f.source === 'ai' ? 'AI' : '—'));
-    var q = cleanQuote(f.evidence) || '(no verbatim text captured)';
-    if (q.length > 600) q = q.substring(0, 597) + '…';
+    var q = cleanQuote(f.evidence) || '(no verbatim text captured)'; // cleanQuote already caps at QUOTE_MAX with a word-boundary cut
     rows.push({ n: 'E' + (i + 1), typ: typ, page: fmtLocation(f.location), quote: q });
   }
   ctx.table(
@@ -2547,7 +2559,7 @@ function secNarrative(ctx, data) {
   if (jur.isCrossBorder) {
     ctx.para('This is a cross-border matter (' + listPhrase([JURIS_LABEL[jur.home]].concat(jur.foreign.map(function (c) { return JURIS_LABEL[c] || c; }))) + '). Each contradiction is anchored below to the party it names, its page, and the candidate law of each jurisdiction; the fuller statutory mapping and the cross-border framework follow in the Statutory Anchoring section.', { size: 10, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   }
-  var CAP = 10;
+  var CAP = NARRATIVE_CAP;
   var shown = subst.slice(0, CAP);
   for (var i = 0; i < shown.length; i++) {
     var f = shown[i];
@@ -2555,7 +2567,7 @@ function secNarrative(ctx, data) {
     var sevWord = (f.severity || 0) >= 4 ? 'A serious issue' : ((f.severity || 0) >= 3 ? 'A moderate issue' : 'A lesser issue');
     var who = attributeParty(f, parties);
     var whoClause = who ? ' It concerns ' + who + '.' : '';
-    ctx.para((i + 1) + '. ' + sevWord + ' — ' + name + '. In plain terms, ' + narrativeMeaning(f) + '.' + whoClause, { size: 10.5, font: ctx.f.timesBold, color: NAVY2, after: 2 });
+    ctx.para((i + 1) + '. ' + sevWord + ' — ' + name + '. In plain terms, ' + withPeriod(narrativeMeaning(f)) + whoClause, { size: 10.5, font: ctx.f.timesBold, color: NAVY2, after: 2 });
     var where = fmtLocation(f.location);
     var loc = (where && where !== '—') ? ' (' + where + ')' : '';
     if (f.source === 'ai' && f.rationale) {
