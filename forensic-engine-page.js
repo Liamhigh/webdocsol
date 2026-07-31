@@ -366,6 +366,39 @@ var DETECTORS = {
           location: 'Same passage' });
       }
     }
+
+    // Generic same-token assertion-vs-negation. The fixed pairs above only know
+    // a hard-coded vocabulary ("paid"/"not paid"), so "payment was made ... no
+    // payment" or "the debt is owed ... denied ... debt" slipped through. This
+    // keys on the IDENTICAL content word appearing both asserted and negated
+    // within one passage -- high precision, and it cannot fire on clean text
+    // because clean text contains no negators.
+    var STOP01 = { that:1,this:1,been:1,have:1,with:1,from:1,such:1,they:1,will:1,would:1,could:1,should:1,there:1,their:1,were:1,when:1,then:1,only:1,also:1,ever:1,more:1,some:1,into:1,upon:1,said:1,same:1,other:1,which:1,about:1,being:1,shall:1,does:1,done:1,made:1,make:1 };
+    var NEG_RE = /\b(?:no longer|not|never|without|refus(?:ed|es) to|fail(?:ed|s) to|denie[ds]|no)\b/g;
+    var negatedWords = {};
+    var nm;
+    while ((nm = NEG_RE.exec(fullText)) !== null) {
+      var tail = fullText.slice(nm.index + nm[0].length, nm.index + nm[0].length + 40);
+      var tw = tail.match(/[a-z]{4,}/g) || [];
+      for (var wi = 0; wi < Math.min(tw.length, 3); wi++) {
+        if (!STOP01[tw[wi]]) { if (negatedWords[tw[wi]] === undefined) negatedWords[tw[wi]] = nm.index; break; }
+      }
+    }
+    var NEG_PRE = /\b(?:no longer|not|never|without|refused to|refuses to|failed to|denied|denies|no)\s+(?:the |any |a |an |that |ever )?$/;
+    for (var nw in negatedWords) {
+      if (!Object.prototype.hasOwnProperty.call(negatedWords, nw)) continue;
+      var negAt = negatedWords[nw];
+      var re01 = new RegExp('\\b' + nw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+      var om;
+      while ((om = re01.exec(fullText)) !== null) {
+        if (Math.abs(om.index - negAt) > 160) continue;
+        if (NEG_PRE.test(fullText.slice(Math.max(0, om.index - 14), om.index))) continue; // this occurrence is itself negated
+        findings.push({ type: 'CT01', severity: 4,
+          evidence: 'The document both asserts and negates "' + nw + '" within the same passage',
+          location: 'Same passage' });
+        break;
+      }
+    }
     return findings;
   },
 
@@ -435,7 +468,13 @@ var DETECTORS = {
         var cur = sorted[k];
         var diff = cur.value - base.value;
         var avg = (cur.value + base.value) / 2;
-        if (diff / avg > 0.1 && diff > 1000) {
+        // The old gate (>10% AND >R1000) missed real discrepancies like a
+        // "Total" stated as R450,000 and R470,000 (only 4.3%). For the SAME
+        // label restated at two values, any material difference is a genuine
+        // contradiction -- the like-with-like grouping already prevents the old
+        // 739-false-positive problem -- so we drop the 10% gate to a 1% floor
+        // (ignores rounding on very large sums) while keeping the R1000 floor.
+        if (diff > 1000 && diff / avg > 0.01) {
           findings.push({ type: 'CT02', severity: 4,
             evidence: '"' + label + '" is stated as ' + base.raw + ' and as ' + cur.raw +
               ' (variance: ' + Math.round(diff / avg * 100) + '%)',
@@ -489,17 +528,19 @@ var DETECTORS = {
     // this detector only checked for impossible calendar dates. Same window
     // discipline as D02: a date belongs to a label only if it appears before
     // the next label, so a label with no date cannot borrow a neighbour's.
-    var DATE_LABEL_RE = /\b(effective date|execution date|date signed|date of signature|signature date|commencement date|termination date|expiry date|expiration date|invoice date|due date|closing date|date of birth)\b/gi;
+    var DATE_LABEL_RE = /\b(effective date|execution date|date signed|signed on|dated|date of signature|signature date|commencement date|termination date|expiry date|expiration date|invoice date|due date|closing date|notice date|meeting date|date of birth)\b/gi;
     var MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
-    // Month-name formats only: numeric dates are ambiguous (US vs rest of
-    // world day/month order), and a false "restated date" is a fabricated
-    // allegation. Better to miss than to invent.
-    var LABELLED_DATE_RE = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4}))\b/;
+    // Month-name formats plus ISO (YYYY-MM-DD). Ambiguous day/month numeric
+    // formats (DD/MM vs MM/DD) are still excluded because a false "restated
+    // date" is a fabricated allegation -- but ISO is unambiguous, so a labelled
+    // ISO date restated at two values is safe to flag.
+    var LABELLED_DATE_RE = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})|(\d{4})-(\d{2})-(\d{2}))\b/;
     function normDate(m) {
       var day, mon, year;
       if (m[1]) { day = +m[1]; mon = MONTHS[m[2].slice(0, 3).toLowerCase()]; year = +m[3]; }
-      else { mon = MONTHS[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
-      if (!mon || day < 1 || day > 31) return null;
+      else if (m[4]) { mon = MONTHS[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
+      else { year = +m[7]; mon = +m[8]; day = +m[9]; }
+      if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
       return { key: year * 10000 + mon * 100 + day, raw: m[0] };
     }
     var byDateLabel = {};
@@ -983,19 +1024,23 @@ var DETECTORS = {
   D23_DETECT_PROCEDURE_BREACH: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
-    var procedureReqs = [
-      { req: 'witness', context: 'signature|signed|contract|agreement' },
-      { req: 'notar', context: 'affidavit|oath|sworn|certified' },
-      { req: 'resolution', context: 'board|director|shareholder' },
-      { req: 'stamp duty', context: 'lease|agreement|transfer' }
+    // Only flag an EXPLICIT statement that a required procedure was NOT followed.
+    // The previous version flagged "may require witness but none found" whenever
+    // the word "agreement" appeared without "witness" -- absence of a keyword is
+    // not evidence of a breach, and it fired on clean documents. Inventing a
+    // procedural breach is a fabricated allegation, the worst thing a forensic
+    // detector can do, so this now keys on the breach being stated in the text.
+    var breaches = [
+      { re: /\b(?:not witnessed|without (?:a |any )?witness(?:es)?|no witness(?:es)?)\b/, msg: 'Document indicates it was executed without a witness' },
+      { re: /\b(?:not notaris(?:ed|zed)|without notaris(?:ation|ing)|un-?notaris(?:ed|zed)|not certified)\b/, msg: 'Document indicates it was not notarised/certified' },
+      { re: /\b(?:no board resolution|without (?:a )?(?:board |shareholder )?resolution|no resolution was (?:passed|taken|adopted))\b/, msg: 'Document indicates no board/shareholder resolution authorised the act' },
+      { re: /\b(?:unstamped|not stamped|without stamp duty|no stamp duty (?:paid|was paid))\b/, msg: 'Document indicates stamp duty was not paid' },
+      { re: /\b(?:not countersigned|never countersigned|without (?:a )?countersignature|uncountersigned)\b/, msg: 'Document indicates it was never countersigned' }
     ];
-    for (var i = 0; i < procedureReqs.length; i++) {
-      var contextRe = new RegExp(procedureReqs[i].context, 'i');
-      var reqRe = new RegExp('\\b' + procedureReqs[i].req + '\\b', 'i');
-      if (contextRe.test(fullText) && !reqRe.test(fullText)) {
+    for (var i = 0; i < breaches.length; i++) {
+      if (breaches[i].re.test(fullText)) {
         findings.push({ type: 'CT35', severity: 4,
-          evidence: 'Document type may require "' + procedureReqs[i].req + '" but none found',
-          location: 'Full document' });
+          evidence: breaches[i].msg, location: 'Full document' });
       }
     }
     return findings;
