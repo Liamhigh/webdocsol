@@ -176,12 +176,14 @@ ok(DET.D08_DETECT_AUTHORITY_EXCEEDED(['this was signed by john on behalf of acme
 ok(DET.D08_DETECT_AUTHORITY_EXCEEDED(['signed by john. ' + 'filler '.repeat(60) + 'on behalf of acme']).length === 0,
   'CT11 does not stretch across a large gap (no sprawling seal-debris blob)');
 
-// CT43 (D37): breadth note is neutral, low-severity, and only at >=8 types.
+// CT43 (D37): breadth note is neutral, contextOnly (never a counted finding),
+// and only at >=8 types. An external reviewer flagged that a meta-observation
+// about the engine's own output was being counted as finding #12.
 {
   const many = Array.from({ length: 8 }, (_, i) => ({ type: 'CT' + (10 + i) }));
   const f = DET.D37_DETECT_INTERNAL_CONFLICT_CATCHALL([''], many);
-  ok(f.length === 1 && f[0].severity <= 2 && !/fraud/i.test(f[0].evidence),
-    'CT43 breadth note is neutral and low-severity (no "systematic fraud" label)');
+  ok(f.length === 1 && f[0].contextOnly === true && (f[0].severity | 0) === 0 && !/fraud/i.test(f[0].evidence),
+    'CT43 breadth note is neutral, unscored and contextOnly (routed to notes, not findings)');
   ok(DET.D37_DETECT_INTERNAL_CONFLICT_CATCHALL([''], Array.from({ length: 5 }, (_, i) => ({ type: 'CT' + i }))).length === 0,
     'CT43 does not fire at only 5 indicator types');
 }
@@ -262,6 +264,125 @@ const BF = require('../forensic-engine-page.js').voBackfillPageAnchors;
     'sent by registered mail to the registered office at the registered address'
   ]);
   ok(f.length === 0, 'CT14 ignores registered mail/office/address entirely');
+}
+
+// ===== External review of the Greensky sealed report (1 Aug 2026) =====
+// CT14: "registered RECORDED DELIVERY letters" (the MOA notices clause) slipped
+// the strict mail/letter list via the intervening word and became a CRITICAL
+// false positive paired with the MOA's dissolution PROVISION.
+{
+  const f = DET.D09_DETECT_ENTITY_STATUS_FAKE([
+    'NOTICES 41. Notices sent by the Company to the Shareholders shall be in the form of registered recorded delivery letters to the address of each Shareholder.',
+    'In the event that the Company is dissolved, each Shareholder holds in the Capital a proportionate share.'
+  ]);
+  ok(f.length === 0, 'CT14 ignores "registered recorded delivery letters" (delivery-method, not status)');
+}
+// CT14: a status word inside a PROVISION ("shall be dissolved", "in the event
+// of liquidation") is hypothetical, not a claim about current status.
+{
+  const f = DET.D09_DETECT_ENTITY_STATUS_FAKE([
+    'Palmbili Property Investments is a duly registered company with number 2013/199336/07.',
+    'The company shall be dissolved by special resolution should the members so resolve.'
+  ]);
+  ok(f.length === 0, 'CT14 does not read a dissolution PROVISION ("shall be dissolved") as current status');
+}
+{
+  const f = DET.D09_DETECT_ENTITY_STATUS_FAKE([
+    'The trust deed provides that upon dissolution of the entity the assets vest; the company is registered.',
+    'in the event of liquidation of the company, creditors rank first'
+  ]);
+  ok(f.length === 0, 'CT14 does not pair a status with "in the event of liquidation" boilerplate');
+}
+
+// CT38 (D26): naming two jurisdictions is cross-border reality, not an
+// impossibility — emitted as an UNSCORED contextOnly note, never a finding.
+{
+  const f = DET.D26_DETECT_JURISDICTIONAL_ISSUE(['the parties operate in south africa and the uae under one agreement']);
+  ok(f.length === 1 && f[0].contextOnly === true && (f[0].severity | 0) === 0,
+    'CT38 multi-jurisdiction reference is contextOnly and unscored');
+  ok(/expected in a cross-border matter/i.test(f[0].evidence),
+    'CT38 note says plainly that cross-border references are expected');
+}
+
+// CT39 (D27): silent unless the document itself claims chain-of-custody
+// procedures; a compiled bundle of emails/screenshots gets no custody finding.
+ok(DET.D27_DETECT_CUSTODY_GAP(['the parcel was received by the clerk and handed to the manager']).length === 0,
+  'CT39 stays silent when no custody documentation is claimed (bundle false positive)');
+{
+  const f = DET.D27_DETECT_CUSTODY_GAP([
+    'intro page',
+    'the chain of custody register for exhibit A was maintained; the item was received by Sgt Dlamini'
+  ]);
+  ok(f.length === 1 && /Page 2/.test(f[0].location) && /chain of custody/i.test(f[0].evidence),
+    'CT39 fires with a quoted custody claim and its page when steps are missing');
+}
+ok(DET.D27_DETECT_CUSTODY_GAP([
+    'the chain of custody log: received by A, handed to B, transferred to C, logged by D'
+  ]).length === 0,
+  'CT39 stays silent when custody documentation is claimed AND the steps are present');
+
+// CT05 (D31): the impossible ordering must sit INSIDE ONE SENTENCE and the
+// finding must quote it with a page — no more unanchored "possible causal
+// impossibility" from three words scattered across 353 pages.
+ok(DET.D31_DETECT_CAUSAL_IMPOSSIBILITY([
+    'the notice was served before the hearing.',
+    'the reply was received by the clerk.',
+    'the letter was sent to the respondent.'
+  ]).length === 0,
+  'CT05 does NOT fire on before/received/sent scattered across separate sentences/pages');
+{
+  const f = DET.D31_DETECT_CAUSAL_IMPOSSIBILITY([
+    'cover page',
+    'The reply was received on 3 March, two days before the original letter was sent on 5 March.'
+  ]);
+  ok(f.length === 1 && /Page 2/.test(f[0].location) && /"/.test(f[0].evidence),
+    'CT05 fires on a single-sentence impossibility, quoting the sentence with its page');
+}
+
+// Template boilerplate placeholder: the neutral text the engine substitutes
+// for analysis-template pages must trigger ZERO findings in any text detector.
+{
+  const placeholder = new Array(11).join('analysis template boilerplate excluded. ');
+  let tf = [];
+  for (const [k, fn] of Object.entries(DET)) {
+    if (typeof fn !== 'function' || skip.has(k)) continue;
+    try { tf = tf.concat(fn([placeholder, placeholder, placeholder]) || []); } catch (e) {}
+  }
+  ok(tf.length === 0, 'template-page placeholder text triggers zero findings: got ' + tf.map(x => x.type).join(','));
+}
+
+// ===== Template-page exclusion helper (voExcludeTemplatePages) =====
+const XT = require('../forensic-engine-page.js').voExcludeTemplatePages;
+{
+  const blocks = [
+    'real evidence page one with an email',
+    'DEEPSEEK VERUM OMNIS: INSTITUTIONAL REVIEW TEMPLATE Gold Standard for Forensic Chat Log Analysis — cropped WhatsApp logs, forged messages, jurisdictional compliance UAE/SA/EU',
+    'real evidence page three'
+  ];
+  const note = XT(blocks);
+  ok(note !== null && /Template boilerplate: 1 page/.test(note) && /\(2\)/.test(note),
+    'template masthead page is excluded and disclosed with its page number');
+  ok(!/cropped|forged|uae/i.test(blocks[1]), 'template page text is replaced by the neutral placeholder');
+  ok(blocks[0].indexOf('email') !== -1 && blocks[2].indexOf('three') !== -1, 'evidence pages are untouched');
+  ok(XT(['normal page', 'another normal page']) === null, 'no note when no template pages exist');
+  ok(XT(['INSTITUTIONAL REVIEW TEMPLATE alone']) === null, 'single-block fallback documents are never template-filtered');
+}
+
+// ===== No anchor, no weight (voDemoteUnanchored) =====
+const DM = require('../forensic-engine-page.js').voDemoteUnanchored;
+{
+  const fs2 = [
+    { type: 'CT28', severity: 3, evidence: 'Possible image manipulation: "cropped" referenced next to an image', location: '' },
+    { type: 'CT03', severity: 5, evidence: 'date conflict', location: 'Page 16' },
+    { type: 'CT24', severity: 4, evidence: 'image tool', location: 'PDF metadata' },
+    { type: 'SERIAL', severity: 5, evidence: 'pattern', location: 'Full document' },
+    { type: 'CT26', severity: 1, evidence: 'blank run', location: 'Pages 18-353' }
+  ];
+  const n = DM(fs2);
+  ok(n === 1 && fs2[0].severity === 2 && fs2[0].unanchored === true && /unanchored/.test(fs2[0].evidence),
+    'a MEDIUM+ content finding with no page anchor is demoted to LOW and tagged');
+  ok(fs2[1].severity === 5 && fs2[2].severity === 4 && fs2[3].severity === 5 && fs2[4].severity === 1,
+    'anchored, metadata, serial and already-low findings are untouched');
 }
 
 console.log(`\n[detector-recall] PASS=${pass} FAIL=${fail}`);

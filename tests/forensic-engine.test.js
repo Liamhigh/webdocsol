@@ -192,5 +192,17 @@ global.extractPdfText = async () => ([
   t.ok(typeof res.overallScore === 'number', 'result has numeric overallScore');
   t.ok(res.findings.length > 0, 'crafted contradictions produce findings (' + res.findings.length + ')');
 
+  // contextOnly routing: a multi-jurisdiction reference must land in the
+  // extraction notes as context, never in the findings (it is cross-border
+  // reality, not a contradiction — external-review fix, 1 Aug 2026).
+  global.extractPdfText = async () => ([
+    'the parties operate in south africa and the uae under the same agreement',
+  ]);
+  const res2 = await runForensicEngine(new Uint8Array([1, 2, 3]), mockDoc);
+  t.ok(!res2.findings.some(f => f.type === 'CT38'),
+    'CT38 multi-jurisdiction note is NOT a scored finding');
+  t.ok(/multiple jurisdictions/i.test(res2.extractionNotes || '') && /cross-border/i.test(res2.extractionNotes || ''),
+    'CT38 context is disclosed in the extraction notes instead');
+
   t.done('forensic-engine');
 })();

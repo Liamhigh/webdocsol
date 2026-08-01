@@ -1,0 +1,57 @@
+/**
+ * Constitution drift lock. The ratified constitution is v6.0 FINAL (sealed,
+ * immutable, supersedes v5.2.7 and earlier). Sibling repos drifted after
+ * ratification — the firewall's bare loadConstitution() default sat at 5.2.7
+ * while seals were stamped 6.0.0 — so this site pins its own copy: the machine
+ * copy (constitution.json), the human copy (constitution.html) and the pages
+ * that cite a version must all agree, and no LIVE page text may claim a
+ * superseded version. HTML comments (which record past corrections) are
+ * stripped before checking, so the historical notes stay allowed.
+ */
+import { readFileSync } from 'node:fs';
+
+let pass = 0, fail = 0;
+const ok = (c, n) => { if (c) pass++; else { fail++; console.error('  FAIL: ' + n); } };
+
+console.log('======================================================');
+console.log('RUN  constitution-lock.test.mjs');
+console.log('======================================================\n');
+
+const CURRENT = '6.0 FINAL';
+const SUPERSEDED = ['5.2.7', '5.1.1'];
+
+const json = JSON.parse(readFileSync('constitution.json', 'utf8'));
+ok(json.version === CURRENT, `constitution.json version is "${CURRENT}" (got "${json.version}")`);
+ok(/sealed/i.test(json.status || '') && /immutable/i.test(json.status || ''),
+  'constitution.json status remains Sealed - Immutable');
+ok(/5\.2\.7/.test(json.supersedes || ''), 'constitution.json records that it supersedes v5.2.7');
+ok(json.humanFounder === 'Liam Anthony Highcock', 'constitution.json names the human founder');
+
+const stripComments = (html) => html.replace(/<!--[\s\S]*?-->/g, '');
+
+const conHtml = stripComments(readFileSync('constitution.html', 'utf8'));
+ok(conHtml.includes('Constitution v6.0 FINAL'), 'constitution.html displays Constitution v6.0 FINAL');
+
+// No live page may present a superseded version as the current constitution.
+// "supersedes ... v5.2.7" phrasing is allowed; "Constitution v5.2.7" as a
+// standalone current-version claim is not.
+for (const page of ['index.html', 'constitution.html', 'documents-resources.html', 'seal-document.html', 'verify.html', 'dashboard.html']) {
+  let live;
+  try { live = stripComments(readFileSync(page, 'utf8')); } catch { continue; }
+  const staleClaims = [];
+  for (const v of SUPERSEDED) {
+    const re = new RegExp('Constitution v' + v.replace(/\./g, '\\.') + '(?![^<]*(?:and earlier|supersede))', 'g');
+    let m;
+    while ((m = re.exec(live)) !== null) {
+      const ctx = live.slice(Math.max(0, m.index - 120), m.index + 60);
+      // Allowed: history/supersession phrasing around the mention.
+      if (/supersed|previous version|and earlier|was\s*["“]/i.test(ctx)) continue;
+      staleClaims.push(v + ' @ ' + page);
+    }
+  }
+  ok(staleClaims.length === 0, `${page} live text never claims a superseded constitution (${staleClaims.join('; ') || 'clean'})`);
+}
+
+console.log(`\n[constitution-lock] PASS=${pass} FAIL=${fail}`);
+if (fail > 0) { console.log('[constitution-lock] FAILURES'); process.exit(1); }
+console.log('[constitution-lock] ALL GREEN');
