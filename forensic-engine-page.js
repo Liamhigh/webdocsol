@@ -726,21 +726,50 @@ var DETECTORS = {
 
   D09_DETECT_ENTITY_STATUS_FAKE: function(textBlocks) {
     var findings = [];
-    var fullText = textBlocks.join(' ').toLowerCase();
+    // A status word only counts when it is used ABOUT AN ENTITY. The old check
+    // paired any "registered" with any "liquidated" across the whole corpus, so
+    // "utilities is to be registered" (a lease clause) + a case-law mention of
+    // liquidation 200 pages away produced a CRITICAL "conflicting status"
+    // with no quotes — unverifiable, and read by reviewers as fabrication.
+    // Now: each status word must appear near an entity noun, common non-status
+    // uses of "registered" are excluded, and the finding quotes BOTH passages
+    // with their pages so it can be checked against the source in seconds.
+    var ENTITY_NEAR = /\b(compan(?:y|ies)|close corporation|\bcc\b|pty|ltd|limited|corporation|entity|entities|enterprise|business|firm|trust|incorporated)\b/i;
+    var NOT_STATUS_REGISTERED = /\bregistered\s+(?:mail|post|letter|office|address|owner)\b|\bto\s+be\s+registered\b|\bregistered\s+in\s+whose\s+name\b|\bregistered\s+against\b|\bis\s+to\s+be\s+registered\b/i;
     var statusClaims = [
       ['registered','deregistered','dissolved','liquidated'],
       ['active','suspended','under administration'],
       ['compliant','non-compliant','delinquent']
     ];
-    for (var i = 0; i < statusClaims.length; i++) {
-      var found = [];
-      for (var j = 0; j < statusClaims[i].length; j++) {
-        if (fullText.indexOf(statusClaims[i][j]) !== -1) found.push(statusClaims[i][j]);
+    function findStatusUse(word) {
+      // First occurrence of `word` used as an entity status; returns
+      // { page, snippet } or null.
+      var re = new RegExp('\\b' + word.replace(/ /g, '\\s+') + '\\b', 'gi');
+      for (var b = 0; b < textBlocks.length; b++) {
+        var t = textBlocks[b] || '';
+        var m;
+        re.lastIndex = 0;
+        while ((m = re.exec(t)) !== null) {
+          var win = t.substring(Math.max(0, m.index - 90), Math.min(t.length, m.index + m[0].length + 90));
+          var excluded = (word === 'registered') && NOT_STATUS_REGISTERED.test(win);
+          if (!excluded && ENTITY_NEAR.test(win)) {
+            return { page: b + 1, snippet: win.replace(/\s+/g, ' ').trim() };
+          }
+        }
       }
-      if (found.length > 1) {
+      return null;
+    }
+    for (var i = 0; i < statusClaims.length; i++) {
+      var uses = [];
+      for (var j = 0; j < statusClaims[i].length; j++) {
+        var u = findStatusUse(statusClaims[i][j]);
+        if (u) uses.push({ word: statusClaims[i][j], page: u.page, snippet: u.snippet });
+      }
+      if (uses.length > 1) {
+        var a = uses[0], c = uses[1];
         findings.push({ type: 'CT14', severity: 5,
-          evidence: 'Conflicting status claims: ' + found.join(', '),
-          location: 'Full document' });
+          evidence: 'Conflicting entity-status claims: "…' + a.snippet + '…" (' + a.word + ', page ' + a.page + ') vs "…' + c.snippet + '…" (' + c.word + ', page ' + c.page + ')',
+          location: a.page === c.page ? 'Page ' + a.page : 'Page ' + a.page + ' and Page ' + c.page });
       }
     }
     return findings;
