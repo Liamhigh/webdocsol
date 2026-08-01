@@ -67,7 +67,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.3.4-web';
+var ENGINE_VERSION = '5.3.5-web';
 var CONSTITUTION_VERSION = '6.0';
 var DETECTOR_COUNT = 37, CT_COUNT = 43, SP_COUNT = 17;
 
