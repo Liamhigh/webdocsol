@@ -1,10 +1,10 @@
-// ============== FORENSIC CONTRADICTION ENGINE v5.3.4-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.3.5-web ================
 // 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.3.4-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.3.5-web
 // 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
 // ========================================================================
 // This engine analyzes documents for internal contradictions, fraudulent
@@ -25,7 +25,7 @@
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.3.4-web';
+var VO_ENGINE_VERSION = '5.3.5-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
