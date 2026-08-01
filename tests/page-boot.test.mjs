@@ -260,10 +260,10 @@ for (const page of PAGES) {
     vm.runInContext(structural[0] + '\n' + fnLooks + '\n' + fnBundle, sandbox);
     const result = {
       findings: [
-        { type: 'CT27', severity: 4, evidence: 'dup page' },
-        { type: 'CT02', severity: 4, evidence: 'totals differ' },
-        { type: 'SERIAL', severity: 5, evidence: 'pattern' },
-        { type: 'CT08', severity: 3, evidence: 'term twice' }
+        { type: 'CT27', severity: 4, evidence: 'dup page', confidence: 0.6 },
+        { type: 'CT02', severity: 4, evidence: 'totals differ', confidence: 0.9 },
+        { type: 'SERIAL', severity: 5, evidence: 'pattern', confidence: 0.7 },
+        { type: 'CT08', severity: 3, evidence: 'term twice', confidence: 0.7 }
       ],
       overallScore: 80, confidence: 'VERY_HIGH', clean: false, extractionNotes: 'note.'
     };
@@ -273,8 +273,11 @@ for (const page of PAGES) {
     ok(out.findings[3].severity === 2, 'CT08 demotes to Low in bundle mode');
     ok(out.findings[1].severity === 4 && out.findings[2].severity === 5,
       'CT02 and SERIAL findings are untouched by bundle mode');
-    ok(out.overallScore === Math.round(((2 + 4 + 5 + 2) / 20) * 100),
-      'indicator score is recomputed from demoted severities');
+    // The recompute is confidence-weighted, matching the engine's calibrated
+    // scoring (severity × per-finding confidence over max severity at full
+    // confidence) — an unweighted recompute would undo the calibration.
+    ok(out.overallScore === Math.round(((2 * 0.6 + 4 * 0.9 + 5 * 0.7 + 2 * 0.7) / 20) * 100),
+      'indicator score is recomputed confidence-weighted from demoted severities');
     ok(/Bundle mode/.test(out.extractionNotes), 'demotion is disclosed in extraction notes');
 
     // No case details AND a small document => ordinary document, no-op.

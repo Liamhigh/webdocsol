@@ -351,6 +351,41 @@ ok(DET.D31_DETECT_CAUSAL_IMPOSSIBILITY([
   ok(tf.length === 0, 'template-page placeholder text triggers zero findings: got ' + tf.map(x => x.type).join(','));
 }
 
+// ===== Subject alignment (v5.2.9 lineage): opposing statements must be =====
+// ===== about the SAME THING, and requirement clauses are not negations =====
+// The Greensky CT01 false positive: "shall not be valid unless it is approved
+// by ras al khaimah" paired with "unless it is approved by 75% majority" —
+// two requirement clauses from the same MOA, neither affirming nor denying
+// that anything WAS approved.
+ok(!fires(DET.D01_DETECT_DIRECT_CONTRADICTION, [
+    'no amendment shall be made in the company unless it is approved by 75% majority nor shall it be permitted.',
+    'a reduction of capital shall not be valid unless it is approved by ras al khaimah economic zone authority.'
+  ]),
+  'D01 does NOT read two "not valid unless approved by X" requirement clauses as a contradiction');
+ok(fires(DET.D01_DETECT_DIRECT_CONTRADICTION, [
+    'the resolution was approved by the board on 3 May. the directors later denied that the resolution was approved.'
+  ]),
+  'D01 still fires when an actual approval is both affirmed and denied');
+// Fixed-pair path: different subjects are two facts, not one contradiction.
+ok(!fires(DET.D01_DETECT_DIRECT_CONTRADICTION, [
+    'the invoice was paid on monday and the deposit was not paid'
+  ]),
+  'D01 fixed pairs do NOT pair different subjects (invoice paid / deposit unpaid)');
+ok(fires(DET.D01_DETECT_DIRECT_CONTRADICTION, [
+    'the invoice was paid on monday yet the invoice was not paid according to the ledger'
+  ]),
+  'D01 fixed pairs still fire on the SAME subject affirmed and negated');
+
+// ===== D02 subject alignment: differently-qualified labels never compare =====
+ok(!fires(DET.D02_DETECT_NUMERICAL_DISCREPANCY, [
+    'Invoice INV-001 Total: R450,000 for the first shipment. Invoice INV-002 Total: R470,000 for the second.'
+  ]),
+  'D02 does NOT compare totals of two different invoices (INV-001 vs INV-002)');
+ok(fires(DET.D02_DETECT_NUMERICAL_DISCREPANCY, [
+    'Invoice INV-001 Total: R450,000 as issued. Invoice INV-001 Total: R470,000 as re-issued.'
+  ]),
+  'D02 still flags the SAME invoice restated at two values');
+
 // ===== Template-page exclusion helper (voExcludeTemplatePages) =====
 const XT = require('../forensic-engine-page.js').voExcludeTemplatePages;
 {
