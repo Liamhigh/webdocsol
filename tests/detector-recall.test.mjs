@@ -403,21 +403,33 @@ const XT = require('../forensic-engine-page.js').voExcludeTemplatePages;
   ok(XT(['INSTITUTIONAL REVIEW TEMPLATE alone']) === null, 'single-block fallback documents are never template-filtered');
 }
 
-// ===== No anchor, no weight (voDemoteUnanchored) =====
-const DM = require('../forensic-engine-page.js').voDemoteUnanchored;
+// ===== The anchor rule in full (voEnforceAnchorRule) =====
+// v5.3.2-web only demoted unanchorable findings; the Greensky rerun still
+// sealed a report with source_page 0 findings ("by proxy" at MODERATE via the
+// old "Signature block" exemption, the currency note at LOW). Constitution
+// v6.0: "If a sentence cannot cite anchors, it cannot exist" — so an
+// unanchorable CONTENT finding now leaves the findings entirely and is
+// disclosed in the engine notes instead.
+const AR = require('../forensic-engine-page.js').voEnforceAnchorRule;
 {
   const fs2 = [
     { type: 'CT28', severity: 3, evidence: 'Possible image manipulation: "cropped" referenced next to an image', location: '' },
     { type: 'CT03', severity: 5, evidence: 'date conflict', location: 'Page 16' },
     { type: 'CT24', severity: 4, evidence: 'image tool', location: 'PDF metadata' },
-    { type: 'SERIAL', severity: 5, evidence: 'pattern', location: 'Full document' },
+    { type: 'CT23', severity: 3, evidence: 'Non-standard signature method: "by proxy"', location: 'Signature block' },
+    { type: 'CT16', severity: 2, evidence: 'Multiple currencies without conversion: $, R', location: 'Full document' },
+    { type: 'SERIAL', severity: 5, evidence: 'pattern', location: 'Pages 12-18' },
     { type: 'CT26', severity: 1, evidence: 'blank run', location: 'Pages 18-353' }
   ];
-  const n = DM(fs2);
-  ok(n === 1 && fs2[0].severity === 2 && fs2[0].unanchored === true && /unanchored/.test(fs2[0].evidence),
-    'a MEDIUM+ content finding with no page anchor is demoted to LOW and tagged');
-  ok(fs2[1].severity === 5 && fs2[2].severity === 4 && fs2[3].severity === 5 && fs2[4].severity === 1,
-    'anchored, metadata, serial and already-low findings are untouched');
+  const r = AR(fs2);
+  ok(r.kept.length === 4 && r.unanchored.length === 3,
+    'unanchorable content findings leave the findings list (got kept=' + r.kept.length + ' unanchored=' + r.unanchored.length + ')');
+  ok(r.unanchored.every(f => f.unanchored === true) &&
+     r.unanchored.some(f => f.type === 'CT23') && r.unanchored.some(f => f.type === 'CT16') && r.unanchored.some(f => f.type === 'CT28'),
+    '"Signature block" and "Full document" are pseudo-locations, not anchors — those findings move to notes');
+  ok(r.kept.some(f => f.type === 'CT03') && r.kept.some(f => f.type === 'CT24') &&
+     r.kept.some(f => f.type === 'SERIAL') && r.kept.some(f => f.type === 'CT26'),
+    'page-anchored, metadata and page-span findings stay');
 }
 
 console.log(`\n[detector-recall] PASS=${pass} FAIL=${fail}`);

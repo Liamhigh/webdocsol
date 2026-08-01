@@ -52,7 +52,7 @@ export async function serveStatic(request) {
     ? ORIGIN + path + url.search
     : ORIGIN + path + url.search + (url.search ? '&' : '?') + '_cb=' + Date.now();
 
-  const response = await fetch(
+  let response = await fetch(
     new Request(target, {
       method: request.method,
       headers: request.headers,
@@ -70,6 +70,32 @@ export async function serveStatic(request) {
         : { cacheTtl: 0 },
     })
   );
+
+  // HTML-as-asset guard. During a Pages redeploy the origin can briefly answer
+  // an asset path with the home page as a 200 -- and a 200 is cached at the
+  // edge for the full hour, poisoning every later request. That is exactly how
+  // /vendor/tesseract.min.js was served as HTML during the Greensky rerun: the
+  // OCR loader's global check failed and 32 image-only pages went unread. A
+  // non-HTML asset that comes back text/html is retried once cache-busted; if
+  // it is STILL HTML, answer 503 no-store -- the page loaders treat that as an
+  // honest failure and retry/fall back, instead of executing a web page as JS.
+  if (isAsset && response.status >= 200 && response.status < 300 &&
+      /text\/html/i.test(response.headers.get('content-type') || '')) {
+    response = await fetch(
+      new Request(ORIGIN + path + (url.search ? url.search + '&' : '?') + '_vb=' + Date.now(), {
+        method: request.method,
+        headers: request.headers,
+        cf: { cacheTtl: 0 },
+      })
+    );
+    if (response.status >= 200 && response.status < 300 &&
+        /text\/html/i.test(response.headers.get('content-type') || '')) {
+      return new Response('asset temporarily unavailable (origin returned HTML for ' + path + ')', {
+        status: 503,
+        headers: { 'Cache-Control': 'no-store', 'Content-Type': 'text/plain' },
+      });
+    }
+  }
 
   const headers = new Headers(response.headers);
   if (isAsset && response.status >= 200 && response.status < 300) {

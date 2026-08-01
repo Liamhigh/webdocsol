@@ -71,6 +71,25 @@ if (constMatch) {
     'every engine banner carries the same version as VO_ENGINE_VERSION');
 }
 
+// Ruleset-version bond. The Seal binds a report to its RULESET VERSION
+// (Constitution v6.0) — yet the 1 Aug Greensky rerun sealed a findings JSON
+// stamped engine_version "2.0" while v5.3.2-web ran, because the emitter and
+// forensic-report.js carried hard-coded version strings the engine bump never
+// touched. Locks: no stale "2.0" stamp may exist anywhere, and every version
+// literal in the report/page layer must equal the engine's VO_ENGINE_VERSION.
+if (constMatch) {
+  const v = constMatch[1];
+  const reportSrc = readFileSync('forensic-report.js', 'utf8');
+  const pageSrc = readFileSync('seal-document.html', 'utf8');
+  ok(!/engine[ _-]?version['"]?\s*[:=]\s*['"]2\.0['"]/i.test(reportSrc + pageSrc),
+    'no hard-coded engine_version "2.0" stamp survives anywhere');
+  ok(!/web[ -]engine v2\.0/i.test(reportSrc + pageSrc),
+    'no "web engine v2.0" extraction/detector stamp survives anywhere');
+  const rv = reportSrc.match(/var ENGINE_VERSION = '([^']+)'/);
+  ok(rv !== null && rv[1] === v,
+    `forensic-report.js ENGINE_VERSION ("${rv && rv[1]}") equals the engine's VO_ENGINE_VERSION ("${v}")`);
+}
+
 console.log(`\n[constitution-lock] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[constitution-lock] FAILURES'); process.exit(1); }
 console.log('[constitution-lock] ALL GREEN');

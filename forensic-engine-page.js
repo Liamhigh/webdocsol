@@ -1,10 +1,10 @@
-// ============== FORENSIC CONTRADICTION ENGINE v5.3.2-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.3.3-web ================
 // 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.3.2-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.3.3-web
 // 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
 // ========================================================================
 // This engine analyzes documents for internal contradictions, fraudulent
@@ -18,9 +18,14 @@
 // CT05/CT39/CT43, template suppression, no-anchor-no-weight), subject
 // alignment (v5.2.9 lineage) and per-detector confidence calibration.
 // Every scan result stamps this version so a sealed report can always be
-// traced to the exact engine that produced it.
+// traced to the exact engine that produced it. v5.3.3-web enforces the
+// anchor rule in full (an unanchorable content finding is moved out of the
+// findings into the disclosed engine notes — the Constitution's "if a
+// sentence cannot cite anchors, it cannot exist", not merely demoted) and
+// threads this version into the findings JSON and report stamps, which
+// previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.3.2-web';
+var VO_ENGINE_VERSION = '5.3.3-web';
 
 // ===================== 43 CONTRADICTION TYPES =====================
 // Organized by forensic category. Each type has a detector function,
@@ -2048,29 +2053,30 @@ function voExcludeTemplatePages(textBlocks) {
     ' (worked examples, keyword checklists), not case evidence, and was excluded from contradiction scanning.';
 }
 
-// No anchor, no weight (the Constitution's "no anchor, no sentence" rule,
-// applied to the deterministic engine itself). A CONTENT finding that cannot
-// name the page it came from cannot be checked against the source, and an
-// unverifiable finding must not carry MEDIUM+ weight — reviewers read exactly
-// such findings as fabrication. Structural sources (PDF metadata, file
-// structure, serial patterns spanning the document by design) carry their own
-// anchor kind and are exempt. Nothing is removed: the finding stays, demoted
-// to LOW, tagged, and the demotion count is returned for disclosure.
-var VO_ANCHOR_EXEMPT_LOC = /metadata|structure|header\/footer|signature block|pages \d/i;
-function voDemoteUnanchored(findings) {
-  var demoted = 0;
+// The anchor rule, in full (Constitution v6.0, Prime Directives: "If a
+// sentence cannot cite anchors, it cannot exist"; Anchor = artifact hash +
+// page/line + timestamp + source path). v5.3.2-web only DEMOTED an
+// unanchorable finding to LOW — the Greensky rerun showed that still leaves
+// findings with source_page 0 inside a sealed report, which is a breach.
+// Now: a CONTENT finding that cannot cite a page after back-fill is MOVED OUT
+// of the findings entirely. It is not silently dropped (Prime Directive 6):
+// its full text goes into the engine notes as an unanchored observation for a
+// human to chase. Artifact-level findings (PDF metadata / PDF structure) are
+// anchored by the artifact itself and stay; page-span locations ("Pages
+// 12-14") are anchored. Pseudo-locations ("Signature block", "Image
+// sections", "Full document") are NOT anchors and no longer exempt anything.
+var VO_ANCHOR_EXEMPT_LOC = /metadata|pdf structure|pages \d/i;
+function voEnforceAnchorRule(findings) {
+  var kept = [], unanchored = [];
   for (var ua = 0; ua < findings.length; ua++) {
     var uf = findings[ua];
-    if (!uf || uf.type === 'SERIAL') continue;
+    if (!uf) continue;
     var uloc = String(uf.location || '');
-    if (/page\s*\d/i.test(uloc) || VO_ANCHOR_EXEMPT_LOC.test(uloc)) continue;
-    if ((uf.severity | 0) <= 2) continue;
-    uf.severity = 2;
+    if (/page\s*\d/i.test(uloc) || VO_ANCHOR_EXEMPT_LOC.test(uloc)) { kept.push(uf); continue; }
     uf.unanchored = true;
-    uf.evidence = (uf.evidence || '') + ' [unanchored: no single page could be pinned for this indicator — verify against the full document before relying on it]';
-    demoted++;
+    unanchored.push(uf);
   }
-  return demoted;
+  return { kept: kept, unanchored: unanchored };
 }
 
 function detectSerialPatterns(textBlocks) {
@@ -2542,12 +2548,23 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   // Pin findings to a real page where their evidence resolves to exactly one.
   allFindings = voBackfillPageAnchors(allFindings, textBlocks);
 
-  // No anchor, no weight (see voDemoteUnanchored). Skipped when the whole
-  // document is one raw-fallback block: page anchors are impossible there and
-  // that degradation is already disclosed above.
-  var unanchoredDemoted = textBlocks.length > 1 ? voDemoteUnanchored(allFindings) : 0;
-  if (unanchoredDemoted) {
-    extractionNote += ' ' + unanchoredDemoted + ' indicator(s) demoted to LOW because no page anchor could be pinned (no anchor, no weight).';
+  // The anchor rule (see voEnforceAnchorRule): unanchorable content findings
+  // move out of the findings into the disclosed engine notes. Skipped when
+  // the whole document is one raw-fallback block: page anchors are impossible
+  // there and that degradation is already disclosed above.
+  if (textBlocks.length > 1) {
+    var anchored = voEnforceAnchorRule(allFindings);
+    allFindings = anchored.kept;
+    if (anchored.unanchored.length) {
+      var uaTexts = [];
+      for (var un = 0; un < anchored.unanchored.length; un++) {
+        var uif = anchored.unanchored[un];
+        uaTexts.push('[' + uif.type + '] ' + (uif.evidence || ''));
+      }
+      extractionNote += ' Anchor rule: ' + anchored.unanchored.length +
+        ' indicator(s) could not be pinned to a page and are recorded here as unanchored observations, NOT as findings' +
+        ' (no anchor, no sentence): ' + uaTexts.join(' | ');
+    }
   }
 
   // Disclose the context notes (multi-jurisdiction, breadth) gathered earlier.
@@ -2670,6 +2687,6 @@ if (typeof module !== 'undefined' && module.exports) {
     voPageForEvidence: voPageForEvidence,
     voDigitalForensicsScan: voDigitalForensicsScan,
     voExcludeTemplatePages: voExcludeTemplatePages,
-    voDemoteUnanchored: voDemoteUnanchored
+    voEnforceAnchorRule: voEnforceAnchorRule
   };
 }
