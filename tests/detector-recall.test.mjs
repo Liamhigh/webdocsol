@@ -217,6 +217,14 @@ const BF = require('../forensic-engine-page.js').voBackfillPageAnchors;
   ok(f[0].location === 'Full document', 'back-fill does nothing with a single text block');
 }
 
+// back-fill keeps accented / non-Latin letters (normalization is not lossy).
+{
+  const blocks = ['nothing here', 'the respondent Nortjé confirmed the amended clause was never signed back', 'other page'];
+  const f = [{ type: 'CT01', evidence: '"the respondent Nortjé confirmed the amended clause was never signed back"', location: 'Full document' }];
+  BF(f, blocks);
+  ok(f[0].location === 'Page 2', 'back-fill anchors an accented-name passage ("Nortjé" preserved): got ' + f[0].location);
+}
+
 console.log(`\n[detector-recall] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[detector-recall] FAILURES'); process.exit(1); }
 console.log('[detector-recall] ALL GREEN');
