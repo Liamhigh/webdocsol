@@ -1,10 +1,10 @@
-// ============== FORENSIC CONTRADICTION ENGINE v5.3.3-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.3.4-web ================
 // 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.3.3-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.3.4-web
 // 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
 // ========================================================================
 // This engine analyzes documents for internal contradictions, fraudulent
@@ -25,7 +25,33 @@
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.3.3-web';
+var VO_ENGINE_VERSION = '5.3.4-web';
+
+// Content mass: how much DISTINCT content a page carries, for page-emptiness
+// statistics only (never for the detectors, which see the full text). Raw
+// character counts are defeated by the engine's own seal footers: a bundle
+// sealed N times carries N identical footer layers per page, so an image-only
+// page in an 8x-sealed Greensky bundle measured 1,000+ chars, looked like a
+// text page, silently skipped OCR, and lost the "unread pages" disclosure.
+// Here: known Verum Omnis boilerplate, emails, phones, hashes and digits are
+// stripped, then each distinct word counts ONCE — identical footer layers
+// collapse to nothing while real prose keeps its mass.
+var VO_SEAL_BOILERPLATE_RE = /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL|PRIVATE\s+SEAL(?:\s*[-\u2013\u2014]+\s*FREE\s+TIER)?|VERIFY\s+SEAL|verumglobal\.foundation|OpenTimestamps|Patent\s+Pending|Africa\/Johannesburg|AI\s+FORENSICS\s+FOR\s+TRUTH|Founder,?\s+Verum\s+Omnis|\bVerum\s+Omnis\b|\bSeal:\s*|\bUTC\b|\bFREE\s+TIER\b/gi;
+function voContentMass(t) {
+  var s = String(t || '').toLowerCase()
+    .replace(VO_SEAL_BOILERPLATE_RE, ' ')
+    .replace(/\S+@\S+/g, ' ')
+    .replace(/\+?\d[\d\s()\/-]{6,}\d/g, ' ')
+    .replace(/[0-9a-f]{10,}/g, ' ')
+    .replace(/\d/g, ' ');
+  var words = s.split(/[^a-z]+/);
+  var seen = {}, mass = 0;
+  for (var i = 0; i < words.length; i++) {
+    var w = words[i];
+    if (w.length > 2 && !seen[w]) { seen[w] = 1; mass += w.length + 1; }
+  }
+  return mass;
+}
 
 // ===================== 43 CONTRADICTION TYPES =====================
 // Organized by forensic category. Each type has a detector function,
@@ -1044,10 +1070,15 @@ var DETECTORS = {
     // this with real signal is a NEAR-BLANK page sitting among full ones, which
     // can mark an inserted or removed page. Only that is flagged, at low
     // severity.
-    var lens = textBlocks.map(function(t){ return t.length; });
+    // Content mass, not raw length: seal-footer layers on a re-sealed scan
+    // otherwise make an image-only page look like a text page (see voContentMass).
+    var lens = textBlocks.map(function(t){ return voContentMass(t); });
     if (lens.length >= 4) {
       var avg = lens.reduce(function(a,b){ return a+b; }, 0) / lens.length;
-      if (avg > 300) {
+      // Distinct-word mass runs roughly half of raw character length on real
+      // prose (repeated words count once), so the old raw-length gate of 300
+      // rescales to ~180 here.
+      if (avg > 180) {
         var blanks = [];
         for (var i = 0; i < lens.length; i++) {
           if (lens[i] < 40 && lens[i] < avg * 0.1) blanks.push(i);
@@ -2622,7 +2653,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   // zero findings came out of a multi-page document averaging under 200
   // non-space chars per page, the honest verdict is UNREADABLE, not clean.
   var _contentChars = 0;
-  for (var _tb = 0; _tb < textBlocks.length; _tb++) _contentChars += (textBlocks[_tb] || '').replace(/\s+/g, '').length;
+  for (var _tb = 0; _tb < textBlocks.length; _tb++) _contentChars += voContentMass(textBlocks[_tb]);
   var unreadable = allFindings.length === 0 && textBlocks.length >= 3 &&
                    (_contentChars / textBlocks.length) < 200;
   if (unreadable) {
@@ -2655,6 +2686,16 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
 }
 
 function generateSummary(findings, score) {
+  // A density score over a tiny finding set reads as a sweeping verdict —
+  // 2 findings on a 451-page bundle scored "70/100 HIGH ... suggests fraud
+  // or tampering", HIGHER than the old 12-finding report, purely because the
+  // per-finding average rose. With few findings the honest story is "a
+  // couple of specific, checkable issues", so say exactly that.
+  if (findings.length > 0 && findings.length <= 3) {
+    return 'FOCUSED: ' + findings.length + ' page-anchored indicator' + (findings.length === 1 ? '' : 's') +
+      ' found. Per-indicator severity is ' + (score >= 60 ? 'high' : 'moderate') +
+      ', but the indicator COUNT is low for the document — read each finding on its cited page; the density score is not an overall verdict on the document.';
+  }
   if (score >= 80) {
     return 'CRITICAL: ' + findings.length + ' contradictions detected across ' +
       'multiple categories. Document shows strong indicators of systematic fraud. ' +
@@ -2687,6 +2728,7 @@ if (typeof module !== 'undefined' && module.exports) {
     voPageForEvidence: voPageForEvidence,
     voDigitalForensicsScan: voDigitalForensicsScan,
     voExcludeTemplatePages: voExcludeTemplatePages,
-    voEnforceAnchorRule: voEnforceAnchorRule
+    voEnforceAnchorRule: voEnforceAnchorRule,
+    voContentMass: voContentMass
   };
 }

@@ -432,6 +432,25 @@ const AR = require('../forensic-engine-page.js').voEnforceAnchorRule;
     'page-anchored, metadata and page-span findings stay');
 }
 
+// ===== Content mass: seal-footer layers must not disguise image pages =====
+// The 8x-sealed Greensky bundle carried ~1,000 chars of stacked seal footers
+// on every page, so image-only pages sailed past raw-length thresholds: OCR
+// never triggered and the "unread pages" disclosure vanished silently.
+const MASS = require('../forensic-engine-page.js').voContentMass;
+{
+  const footer = 'VERUM OMNIS SEALED ORIGINAL | VO-E88F2FD522BF | e88f2fd522bf7fcb1234567890abcdef | 2026-08-01 09:27:28 UTC | verumglobal.foundation | OpenTimestamps | Patent Pending | 12/451 PRIVATE SEAL -- FREE TIER Liam Highcock | liamhigh78@gmail.com | +27 82 445 4787 | Founder, Verum Omnis ';
+  const eightSealedImagePage = footer.repeat(8);
+  ok(MASS(eightSealedImagePage) < 40,
+    '8 stacked seal-footer layers collapse to near-zero content mass (got ' + MASS(eightSealedImagePage) + ')');
+  const prose = 'The parties concluded the agreement on the fifth day and the shipment was delivered to the harbour, where the consignee inspected every container before payment was released under protest.';
+  ok(MASS(prose) > 120, 'real prose keeps its content mass (got ' + MASS(prose) + ')');
+  // D17 must now flag the sealed image pages as near-empty among sealed text pages.
+  const sealedText = prose + ' Further correspondence between the shareholders addressed outstanding invoices, registry filings, board minutes, director resolutions, audit queries, banking mandates, customs declarations, freight manifests and the disputed termination schedule across numerous consecutive paragraphs, together with annexed exhibits, sworn statements, courier receipts, valuation certificates and reconciliations prepared by independent accountants. ' + footer;
+  const f = DET.D17_DETECT_FORMAT_ANOMALY([sealedText, sealedText, sealedText, eightSealedImagePage, eightSealedImagePage, eightSealedImagePage, eightSealedImagePage, sealedText, sealedText]);
+  ok(f.length === 1 && /image-only|OCR/i.test(f[0].evidence),
+    'D17 detects a run of 8x-sealed image-only pages as an OCR gap (got ' + f.length + ')');
+}
+
 console.log(`\n[detector-recall] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[detector-recall] FAILURES'); process.exit(1); }
 console.log('[detector-recall] ALL GREEN');

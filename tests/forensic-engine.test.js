@@ -208,5 +208,17 @@ global.extractPdfText = async () => ([
   t.ok(/multiple jurisdictions/i.test(res2.extractionNotes || '') && /cross-border/i.test(res2.extractionNotes || ''),
     'CT38 context is disclosed in the extraction notes instead');
 
+  // Low-count summary: two strong findings must read as "FOCUSED: check these
+  // pages", not "HIGH ... suggests fraud or tampering" — the density score
+  // rose ABOVE the old 12-finding report's precisely because noise was removed.
+  global.extractPdfText = async () => ([
+    'Effective Date: January 15, 2023.', 'Effective Date: March 1, 2023.',
+  ]);
+  const res3 = await runForensicEngine(new Uint8Array([1, 2, 3]), mockDoc);
+  t.ok(res3.findings.length >= 1 && res3.findings.length <= 3,
+    'low-count fixture yields 1-3 findings (' + res3.findings.length + ')');
+  t.ok(/^FOCUSED:/.test(res3.summary || '') && /COUNT is low/.test(res3.summary || ''),
+    'summary for a tiny finding set is FOCUSED, not a sweeping fraud verdict (got "' + String(res3.summary).slice(0, 60) + '...")');
+
   t.done('forensic-engine');
 })();
