@@ -101,6 +101,8 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   // in a real Greensky report's Monetary Figures table.
   ok(R._extractMoney('stated as 7 Mar 2025 and as 13 Mar 2025').length === 0, 'extractMoney: does not read "Mar 2025" as an R amount');
   ok(R._extractMoney('a fee of R 2025 was charged').some((x) => /R 2025/.test(x)), 'extractMoney: still finds a genuine standalone R amount');
+  ok(R._extractMoney('at the Bár 2025 gathering').length === 0, 'extractMoney: accented word ending in r does not leak an R amount');
+  ok(R._extractMoney('var VAR_R 2025 in the code sample').length === 0, 'extractMoney: underscore identifier does not leak an R amount');
 }
 
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
