@@ -786,7 +786,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.3.3-web';
+var ENGINE_VERSION = '5.3.4-web';
 var CONSTITUTION_VERSION = '6.0';
 var DETECTOR_COUNT = 37, CT_COUNT = 43, SP_COUNT = 17;
 
@@ -823,6 +823,21 @@ var CT_NAMES = {
   CT43: 'Document Internal Conflict',
   CT44: 'Conditional Clause Misinvoked (Lessee/Owner Trap)', CT45: 'Asset Value Recognised Then Denied (Goodwill)'
 };
+// Concrete next step for a human, by engine category (rendered per finding in
+// the plain-language narrative).
+var VO_CHECK_HINTS = {
+  STATEMENTAL: 'Open the cited page(s) and compare the conflicting statements against an independent source (the original agreement, the correspondence, or a registry record) to establish which one is correct.',
+  IDENTITY: 'Verify the identity details on the cited page against official records (ID document, company registry extract) — a genuine mismatch means misidentification, two different people, or impersonation.',
+  FINANCIAL: 'Reconcile the figures on the cited pages against bank statements or source invoices to establish the true amount.',
+  INTEGRITY: 'Have the ORIGINAL digital file examined (metadata, revision history, embedded objects); do not rely on printouts or re-scans of it.',
+  CROSS_REF: 'Pull the referenced document, clause or authority and confirm it exists and says what is claimed.',
+  CONTACT: 'Verify the address or contact detail against an independent directory, registry or site visit.',
+  EVIDENCE: 'Establish this item\'s handling history with the person who collected it, and obtain the original device or source where possible.',
+  DIGITAL: 'Compare the file\'s digital traces (hashes, creating tool, timestamps) with the claimed origin of the document.',
+  FRANCHISE_LEASE: 'Check the title deed and head-lease records for the property, and the ownership sequence, against the clause being invoked.',
+  AI_IDENTIFIED: 'Treat as a lead only: verify the quoted passage on its page before relying on it — this item was raised by AI review, not the deterministic engine.'
+};
+
 var CT_CATEGORY = {
   CT01: 'STATEMENTAL', CT02: 'STATEMENTAL', CT03: 'STATEMENTAL', CT04: 'STATEMENTAL',
   CT05: 'STATEMENTAL', CT06: 'STATEMENTAL', CT07: 'STATEMENTAL', CT08: 'STATEMENTAL',
@@ -2299,7 +2314,7 @@ function secLegalAnalysis(ctx, data) {
   }
   ctx.gap(4);
   var jur = (data.identity && data.identity.jurisdiction) ? data.identity.jurisdiction : null;
-  ctx.para('Dishonesty indicator score: ' + (fr.overallScore || 0) + '/100 (' + (fr.confidence || 'n/a') + '). This measures the density and severity of the indicators above; it is not a probability of fraud.', { size: 9, after: 6 });
+  ctx.para('Dishonesty indicator score: ' + (fr.overallScore || 0) + '/100 (' + (fr.confidence || 'n/a') + ') across ' + (fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) + ' finding' + ((fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) === 1 ? '' : 's') + '. This measures the density and severity of the indicators above — NOT their volume, and not a probability of fraud: a document with two high-severity findings scores higher than one with twelve mixed findings.', { size: 9, after: 6 });
   ctx.para('Recommended next steps' + (jur ? ' (jurisdiction: ' + jur + ')' : '') + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Candidate statutory provisions are set out in the Statutory Anchoring section that follows - they are starting points for counsel to confirm, not a legal conclusion.', { size: 9 });
   ctx.bullet('Preserve the sealed original and this report unaltered; both are SHA-512 anchored and independently verifiable at verumglobal.foundation/verify.html.', { size: 9 });
@@ -2764,6 +2779,14 @@ function secNarrative(ctx, data) {
     } else {
       ctx.para('The record shows: ' + quoteEvidence(f.evidence) + loc + '.', { size: 10, indent: 14, after: 3 });
     }
+    // What a HUMAN does with this finding — a concrete verification step per
+    // engine category. The external review's core complaint was that findings
+    // told the reader nothing actionable ("the human reviewer still has to
+    // read the whole file"); every finding now carries its next step.
+    var checkHint = VO_CHECK_HINTS[(f.source === 'ai') ? 'AI_IDENTIFIED' : (CT_CATEGORY[f.type] || 'DIGITAL')];
+    if (checkHint) {
+      ctx.para('What to check next: ' + checkHint, { size: 9.5, indent: 14, after: 3 });
+    }
     // Candidate law: the single most relevant provision per active jurisdiction.
     var stat = statutesForSubject(subjectOf(f), jur);
     if (stat.length) {
@@ -2776,6 +2799,22 @@ function secNarrative(ctx, data) {
     ctx.para('A further ' + rest + ' substantive finding' + (rest === 1 ? '' : 's') + ' ' + (rest === 1 ? 'is' : 'are') + ' set out in full in the findings matrix that follows.', { size: 10, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   }
 
+  // The engine notes carry material a reader must not miss even though it is
+  // not scored: unanchored observations (the anchor rule moved them out of
+  // the findings), cross-border context, and any unread/OCR-gap disclosure.
+  var notes = String(data.extractionNotes || '');
+  var alsoBits = [];
+  var mAnchor = notes.match(/Anchor rule:[^]*?(?=(?:\s+Context:|\s+Indicator score|$))/);
+  if (mAnchor) alsoBits.push(mAnchor[0].trim());
+  var mCtx = notes.match(/Context:[^]*?(?=(?:\s+Indicator score|$))/);
+  if (mCtx) alsoBits.push(mCtx[0].trim());
+  if (/near-empty|image-only|OCR/i.test(notes)) {
+    var mOcr = notes.match(/[^.]*(?:near-empty|image-only|OCR rescue)[^.]*\./g);
+    if (mOcr) alsoBits.push(mOcr.join(' ').trim());
+  }
+  if (alsoBits.length) {
+    ctx.para('Also on the record, but NOT counted as findings: ' + alsoBits.join(' '), { size: 9.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
   ctx.para('In short, the documents cannot all be true at the same time on the points above. Each contradiction is anchored to the quoted text and its page location, so it can be checked directly against the originals. What these inconsistencies mean in law is for a legal practitioner to determine — this report identifies them; it does not decide their consequences.', { size: 10.5, after: 6 });
 }
 
@@ -3115,13 +3154,13 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 </script>
 <script>
 /* VO-INLINE:forensic-engine-page.js:START */
-// ============== FORENSIC CONTRADICTION ENGINE v5.3.3-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.3.4-web ================
 // 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.3.3-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.3.4-web
 // 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
 // ========================================================================
 // This engine analyzes documents for internal contradictions, fraudulent
@@ -3142,7 +3181,33 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.3.3-web';
+var VO_ENGINE_VERSION = '5.3.4-web';
+
+// Content mass: how much DISTINCT content a page carries, for page-emptiness
+// statistics only (never for the detectors, which see the full text). Raw
+// character counts are defeated by the engine's own seal footers: a bundle
+// sealed N times carries N identical footer layers per page, so an image-only
+// page in an 8x-sealed Greensky bundle measured 1,000+ chars, looked like a
+// text page, silently skipped OCR, and lost the "unread pages" disclosure.
+// Here: known Verum Omnis boilerplate, emails, phones, hashes and digits are
+// stripped, then each distinct word counts ONCE — identical footer layers
+// collapse to nothing while real prose keeps its mass.
+var VO_SEAL_BOILERPLATE_RE = /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL|PRIVATE\s+SEAL(?:\s*[-\u2013\u2014]+\s*FREE\s+TIER)?|VERIFY\s+SEAL|verumglobal\.foundation|OpenTimestamps|Patent\s+Pending|Africa\/Johannesburg|AI\s+FORENSICS\s+FOR\s+TRUTH|Founder,?\s+Verum\s+Omnis|\bVerum\s+Omnis\b|\bSeal:\s*|\bUTC\b|\bFREE\s+TIER\b/gi;
+function voContentMass(t) {
+  var s = String(t || '').toLowerCase()
+    .replace(VO_SEAL_BOILERPLATE_RE, ' ')
+    .replace(/\S+@\S+/g, ' ')
+    .replace(/\+?\d[\d\s()\/-]{6,}\d/g, ' ')
+    .replace(/[0-9a-f]{10,}/g, ' ')
+    .replace(/\d/g, ' ');
+  var words = s.split(/[^a-z]+/);
+  var seen = {}, mass = 0;
+  for (var i = 0; i < words.length; i++) {
+    var w = words[i];
+    if (w.length > 2 && !seen[w]) { seen[w] = 1; mass += w.length + 1; }
+  }
+  return mass;
+}
 
 // ===================== 43 CONTRADICTION TYPES =====================
 // Organized by forensic category. Each type has a detector function,
@@ -4161,10 +4226,15 @@ var DETECTORS = {
     // this with real signal is a NEAR-BLANK page sitting among full ones, which
     // can mark an inserted or removed page. Only that is flagged, at low
     // severity.
-    var lens = textBlocks.map(function(t){ return t.length; });
+    // Content mass, not raw length: seal-footer layers on a re-sealed scan
+    // otherwise make an image-only page look like a text page (see voContentMass).
+    var lens = textBlocks.map(function(t){ return voContentMass(t); });
     if (lens.length >= 4) {
       var avg = lens.reduce(function(a,b){ return a+b; }, 0) / lens.length;
-      if (avg > 300) {
+      // Distinct-word mass runs roughly half of raw character length on real
+      // prose (repeated words count once), so the old raw-length gate of 300
+      // rescales to ~180 here.
+      if (avg > 180) {
         var blanks = [];
         for (var i = 0; i < lens.length; i++) {
           if (lens[i] < 40 && lens[i] < avg * 0.1) blanks.push(i);
@@ -5739,7 +5809,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   // zero findings came out of a multi-page document averaging under 200
   // non-space chars per page, the honest verdict is UNREADABLE, not clean.
   var _contentChars = 0;
-  for (var _tb = 0; _tb < textBlocks.length; _tb++) _contentChars += (textBlocks[_tb] || '').replace(/\s+/g, '').length;
+  for (var _tb = 0; _tb < textBlocks.length; _tb++) _contentChars += voContentMass(textBlocks[_tb]);
   var unreadable = allFindings.length === 0 && textBlocks.length >= 3 &&
                    (_contentChars / textBlocks.length) < 200;
   if (unreadable) {
@@ -5772,6 +5842,16 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
 }
 
 function generateSummary(findings, score) {
+  // A density score over a tiny finding set reads as a sweeping verdict —
+  // 2 findings on a 451-page bundle scored "70/100 HIGH ... suggests fraud
+  // or tampering", HIGHER than the old 12-finding report, purely because the
+  // per-finding average rose. With few findings the honest story is "a
+  // couple of specific, checkable issues", so say exactly that.
+  if (findings.length > 0 && findings.length <= 3) {
+    return 'FOCUSED: ' + findings.length + ' page-anchored indicator' + (findings.length === 1 ? '' : 's') +
+      ' found. Per-indicator severity is ' + (score >= 60 ? 'high' : 'moderate') +
+      ', but the indicator COUNT is low for the document — read each finding on its cited page; the density score is not an overall verdict on the document.';
+  }
   if (score >= 80) {
     return 'CRITICAL: ' + findings.length + ' contradictions detected across ' +
       'multiple categories. Document shows strong indicators of systematic fraud. ' +
@@ -5804,7 +5884,8 @@ if (typeof module !== 'undefined' && module.exports) {
     voPageForEvidence: voPageForEvidence,
     voDigitalForensicsScan: voDigitalForensicsScan,
     voExcludeTemplatePages: voExcludeTemplatePages,
-    voEnforceAnchorRule: voEnforceAnchorRule
+    voEnforceAnchorRule: voEnforceAnchorRule,
+    voContentMass: voContentMass
   };
 }
 /* VO-INLINE:forensic-engine-page.js:END */
@@ -9092,11 +9173,18 @@ async function voLoadScript(sources, globalCheck) {
 }
 
 async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
-  var lens = textBlocks.map(function (t) { return (t || '').replace(/\s+/g, '').length; });
-  // A page under ~200 chars holds no real content -- a previously-sealed scan
-  // carries ~130 chars of seal-footer text per page, which must NOT count as
-  // "this page has text" (that exact case produced a false CLEAN on a
-  // 187-page image bundle).
+  // DISTINCT-content mass, not raw length. A fixed ~130-char footer allowance
+  // survived ONE sealing pass but not eight: the 8x-sealed Greensky bundle
+  // carried ~1,000 chars of stacked seal footers per page, every image-only
+  // page sailed past the raw-length threshold, OCR never triggered, and the
+  // "unread pages" disclosure silently vanished. voContentMass (engine)
+  // collapses repeated boilerplate to nothing, so N seal layers weigh the
+  // same as one and an image-only page measures near zero however many times
+  // the bundle has been sealed. (Fallback keeps this block testable stand-alone.)
+  var _mass = (typeof voContentMass === 'function') ? voContentMass
+    : function (t) { return (t || '').replace(/\s+/g, '').length; };
+  var lens = textBlocks.map(function (t) { return _mass(t); });
+  // A page under ~200 mass holds no real content.
   var THIN = 200;
   var thinCount = lens.filter(function (n) { return n < THIN; }).length;
   var candidates = [];

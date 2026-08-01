@@ -67,7 +67,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.3.3-web';
+var ENGINE_VERSION = '5.3.4-web';
 var CONSTITUTION_VERSION = '6.0';
 var DETECTOR_COUNT = 37, CT_COUNT = 43, SP_COUNT = 17;
 
@@ -104,6 +104,21 @@ var CT_NAMES = {
   CT43: 'Document Internal Conflict',
   CT44: 'Conditional Clause Misinvoked (Lessee/Owner Trap)', CT45: 'Asset Value Recognised Then Denied (Goodwill)'
 };
+// Concrete next step for a human, by engine category (rendered per finding in
+// the plain-language narrative).
+var VO_CHECK_HINTS = {
+  STATEMENTAL: 'Open the cited page(s) and compare the conflicting statements against an independent source (the original agreement, the correspondence, or a registry record) to establish which one is correct.',
+  IDENTITY: 'Verify the identity details on the cited page against official records (ID document, company registry extract) — a genuine mismatch means misidentification, two different people, or impersonation.',
+  FINANCIAL: 'Reconcile the figures on the cited pages against bank statements or source invoices to establish the true amount.',
+  INTEGRITY: 'Have the ORIGINAL digital file examined (metadata, revision history, embedded objects); do not rely on printouts or re-scans of it.',
+  CROSS_REF: 'Pull the referenced document, clause or authority and confirm it exists and says what is claimed.',
+  CONTACT: 'Verify the address or contact detail against an independent directory, registry or site visit.',
+  EVIDENCE: 'Establish this item\'s handling history with the person who collected it, and obtain the original device or source where possible.',
+  DIGITAL: 'Compare the file\'s digital traces (hashes, creating tool, timestamps) with the claimed origin of the document.',
+  FRANCHISE_LEASE: 'Check the title deed and head-lease records for the property, and the ownership sequence, against the clause being invoked.',
+  AI_IDENTIFIED: 'Treat as a lead only: verify the quoted passage on its page before relying on it — this item was raised by AI review, not the deterministic engine.'
+};
+
 var CT_CATEGORY = {
   CT01: 'STATEMENTAL', CT02: 'STATEMENTAL', CT03: 'STATEMENTAL', CT04: 'STATEMENTAL',
   CT05: 'STATEMENTAL', CT06: 'STATEMENTAL', CT07: 'STATEMENTAL', CT08: 'STATEMENTAL',
@@ -1580,7 +1595,7 @@ function secLegalAnalysis(ctx, data) {
   }
   ctx.gap(4);
   var jur = (data.identity && data.identity.jurisdiction) ? data.identity.jurisdiction : null;
-  ctx.para('Dishonesty indicator score: ' + (fr.overallScore || 0) + '/100 (' + (fr.confidence || 'n/a') + '). This measures the density and severity of the indicators above; it is not a probability of fraud.', { size: 9, after: 6 });
+  ctx.para('Dishonesty indicator score: ' + (fr.overallScore || 0) + '/100 (' + (fr.confidence || 'n/a') + ') across ' + (fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) + ' finding' + ((fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) === 1 ? '' : 's') + '. This measures the density and severity of the indicators above — NOT their volume, and not a probability of fraud: a document with two high-severity findings scores higher than one with twelve mixed findings.', { size: 9, after: 6 });
   ctx.para('Recommended next steps' + (jur ? ' (jurisdiction: ' + jur + ')' : '') + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Candidate statutory provisions are set out in the Statutory Anchoring section that follows - they are starting points for counsel to confirm, not a legal conclusion.', { size: 9 });
   ctx.bullet('Preserve the sealed original and this report unaltered; both are SHA-512 anchored and independently verifiable at verumglobal.foundation/verify.html.', { size: 9 });
@@ -2045,6 +2060,14 @@ function secNarrative(ctx, data) {
     } else {
       ctx.para('The record shows: ' + quoteEvidence(f.evidence) + loc + '.', { size: 10, indent: 14, after: 3 });
     }
+    // What a HUMAN does with this finding — a concrete verification step per
+    // engine category. The external review's core complaint was that findings
+    // told the reader nothing actionable ("the human reviewer still has to
+    // read the whole file"); every finding now carries its next step.
+    var checkHint = VO_CHECK_HINTS[(f.source === 'ai') ? 'AI_IDENTIFIED' : (CT_CATEGORY[f.type] || 'DIGITAL')];
+    if (checkHint) {
+      ctx.para('What to check next: ' + checkHint, { size: 9.5, indent: 14, after: 3 });
+    }
     // Candidate law: the single most relevant provision per active jurisdiction.
     var stat = statutesForSubject(subjectOf(f), jur);
     if (stat.length) {
@@ -2057,6 +2080,22 @@ function secNarrative(ctx, data) {
     ctx.para('A further ' + rest + ' substantive finding' + (rest === 1 ? '' : 's') + ' ' + (rest === 1 ? 'is' : 'are') + ' set out in full in the findings matrix that follows.', { size: 10, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   }
 
+  // The engine notes carry material a reader must not miss even though it is
+  // not scored: unanchored observations (the anchor rule moved them out of
+  // the findings), cross-border context, and any unread/OCR-gap disclosure.
+  var notes = String(data.extractionNotes || '');
+  var alsoBits = [];
+  var mAnchor = notes.match(/Anchor rule:[^]*?(?=(?:\s+Context:|\s+Indicator score|$))/);
+  if (mAnchor) alsoBits.push(mAnchor[0].trim());
+  var mCtx = notes.match(/Context:[^]*?(?=(?:\s+Indicator score|$))/);
+  if (mCtx) alsoBits.push(mCtx[0].trim());
+  if (/near-empty|image-only|OCR/i.test(notes)) {
+    var mOcr = notes.match(/[^.]*(?:near-empty|image-only|OCR rescue)[^.]*\./g);
+    if (mOcr) alsoBits.push(mOcr.join(' ').trim());
+  }
+  if (alsoBits.length) {
+    ctx.para('Also on the record, but NOT counted as findings: ' + alsoBits.join(' '), { size: 9.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
   ctx.para('In short, the documents cannot all be true at the same time on the points above. Each contradiction is anchored to the quoted text and its page location, so it can be checked directly against the originals. What these inconsistencies mean in law is for a legal practitioner to determine — this report identifies them; it does not decide their consequences.', { size: 10.5, after: 6 });
 }
 
