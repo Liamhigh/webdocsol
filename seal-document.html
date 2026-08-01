@@ -9396,63 +9396,110 @@ function voShareFileList() {
   return out;
 }
 
+// Pick the largest shareable subset of the bundle. Chrome/Android restricts
+// navigator.share files to an allowlist of MIME types -- application/json is
+// NOT on it, so a bundle that includes the findings JSON can fail canShare()
+// as a whole and (previously) collapsed to a single file. We instead try, in
+// order: the full bundle, then everything the device says it can share, then
+// just the sealed document -- so WhatsApp/email get the report too whenever
+// the device allows it.
+function voShareCandidates(files) {
+  var out = [];
+  if (!files.length) return out;
+  var canShare = navigator.canShare ? function (fs) {
+    try { return navigator.canShare({ files: fs }); } catch (e) { return false; }
+  } : null;
+  // 1) everything
+  out.push(files.slice());
+  // 2) drop the types the device can't share (keeps document + report, drops JSON)
+  if (canShare) {
+    var keep = files.filter(function (f) { return canShare([f]); });
+    if (keep.length && keep.length < files.length) out.push(keep);
+  }
+  // 3) last resort: the sealed document alone
+  if (files.length > 1) out.push([files[0]]);
+  return out;
+}
+
 function addShareButton() {
   var old = document.getElementById('shareSealedBtn');
   if (old) old.remove();
   var hintOld = document.getElementById('shareHint');
   if (hintOld) hintOld.remove();
-  // Show whenever the browser can share at all. We do NOT gate on
-  // canShare({files}) up front: on some Android builds it returns false even
-  // though the share sheet works, which is exactly what hid this button before.
-  if (!window._voShareBytes || !navigator.share) return;
+  // Show whenever there is anything sealed to hand over. We do NOT gate on
+  // navigator.share: in-app browsers (WhatsApp/Gmail WebViews) often lack the
+  // Web Share API entirely, which used to hide the button and make it look
+  // broken. When sharing is unavailable the button downloads the bundle
+  // instead, so there is always a working action.
+  if (!window._voShareBytes) return;
   var grid = document.getElementById('downloadGrid');
   if (!grid) return;
+  var canWebShare = typeof navigator.share === 'function';
 
   var btn = document.createElement('button');
   btn.id = 'shareSealedBtn';
   btn.type = 'button';
   btn.className = 'download-btn primary';
-  btn.innerHTML = '&#128228; Share to WhatsApp, email, …';
+  btn.innerHTML = canWebShare
+    ? '&#128228; Share to WhatsApp, email, …'
+    : '&#11015; Save files to send (WhatsApp, email, …)';
   var hint = document.createElement('div');
   hint.id = 'shareHint';
   hint.style.cssText = 'font-size:12px;color:#8ea3b5;margin:6px 0 4px;line-height:1.5;';
   var bundleN = (window._voShareFiles || []).length;
-  hint.textContent = bundleN > 1
-    ? 'Opens your phone’s share menu with the whole bundle attached (' + bundleN + ' files: sealed document, forensic report' + (bundleN > 2 ? ', findings JSON' : '') + ') — no hunting for downloads.'
-    : 'Opens your phone’s share menu so you can send the file straight to WhatsApp, email or any app — no hunting for the download.';
+  if (canWebShare) {
+    hint.textContent = bundleN > 1
+      ? 'Opens your phone’s share menu with the whole bundle attached (' + bundleN + ' files: sealed document, forensic report' + (bundleN > 2 ? ', findings JSON' : '') + ') — no hunting for downloads.'
+      : 'Opens your phone’s share menu so you can send the file straight to WhatsApp, email or any app — no hunting for the download.';
+  } else {
+    hint.textContent = bundleN > 1
+      ? 'This browser can’t open a share menu (common inside WhatsApp/Gmail). Tapping saves all ' + bundleN + ' files so you can attach them — or open this page in Chrome/Safari for one-tap sharing.'
+      : 'This browser can’t open a share menu (common inside WhatsApp/Gmail). Tapping saves the file so you can attach it — or open this page in Chrome/Safari for one-tap sharing.';
+  }
 
   btn.addEventListener('click', function () {
     // navigator.share MUST be called synchronously in the click handler to keep
     // the user-activation token; build the Files first, no await before share.
-    // The share carries the WHOLE bundle (document + report + findings JSON);
-    // devices that can only share a single file degrade to the document alone.
     var files = voShareFileList();
     if (!files.length) { fallbackDownload('Could not prepare the file to share.'); return; }
-    var data = { files: files, title: window._voShareName, text: 'Sealed with Verum Omnis' };
-    if (files.length > 1 && navigator.canShare && !navigator.canShare(data)) {
-      data = { files: [files[0]], title: window._voShareName, text: 'Sealed with Verum Omnis' };
+    if (!canWebShare) { fallbackDownload('', files); return; }
+
+    // Try progressively smaller shareable subsets; stop at the first the
+    // device accepts. If canShare is unavailable we just attempt the full set.
+    var candidates = voShareCandidates(files);
+    var chosen = null;
+    if (navigator.canShare) {
+      for (var i = 0; i < candidates.length; i++) {
+        try { if (navigator.canShare({ files: candidates[i] })) { chosen = candidates[i]; break; } } catch (e) {}
+      }
+    } else {
+      chosen = files;
     }
-    if (navigator.canShare && !navigator.canShare(data)) {
-      // This device can't share files. Best we can do is hand back the download.
-      fallbackDownload('This browser can’t share files directly — the file has downloaded instead; attach it from your Downloads.');
+    if (!chosen) {
+      fallbackDownload('This browser can’t share files directly — the files have downloaded instead; attach them from your Downloads.', files);
       return;
     }
+    var data = { files: chosen, title: window._voShareName, text: 'Sealed with Verum Omnis' };
     navigator.share(data).catch(function (err) {
-      // AbortError = the user closed the share sheet on purpose. Ignore it.
+      // AbortError / NotAllowedError = the user closed the share sheet. Ignore.
       if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
-      fallbackDownload('Sharing didn’t work on this device — the file has downloaded instead.');
+      fallbackDownload('Sharing didn’t work on this device — the files have downloaded instead.', files);
     });
   });
 
-  function fallbackDownload(msg) {
+  // Download the whole bundle (all sealed files), not just the document, so the
+  // WebView / no-share path still hands over everything.
+  function fallbackDownload(msg, files) {
+    var list = (files && files.length) ? files : voShareFileList();
     try {
-      var a = document.createElement('a');
-      a.href = voMakeObjectURL(new Blob([new Uint8Array(window._voShareBytes)], { type: window._voShareType }));
-      a.download = window._voShareName;
-      document.body.appendChild(a); a.click(); a.remove();
+      for (var i = 0; i < list.length; i++) {
+        var a = document.createElement('a');
+        a.href = voMakeObjectURL(list[i]);
+        a.download = list[i].name || window._voShareName;
+        document.body.appendChild(a); a.click(); a.remove();
+      }
     } catch (e) {}
-    hint.style.color = '#D4A843';
-    hint.textContent = msg;
+    if (msg) { hint.style.color = '#D4A843'; hint.textContent = msg; }
   }
 
   grid.insertBefore(btn, grid.firstChild);
