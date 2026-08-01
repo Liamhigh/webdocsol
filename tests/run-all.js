@@ -19,6 +19,7 @@ const suites = [
   'franchise-lease.test.mjs',
   'detector-recall.test.mjs',
   'digital-forensics.test.mjs',
+  'ocr-rescue.test.mjs',
   'home-verify.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',

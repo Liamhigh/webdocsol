@@ -8691,15 +8691,43 @@ var VO_OCR_MAX_PAGES = 200;     // cap: OCR is ~seconds/page on-device. Raised f
 var VO_OCR_EMPTY_CHARS = 30;    // a page this thin is treated as image-only
 var VO_OCR_MIN_AVG = 150;       // only rescue when the rest of the doc has real text
 
-function voLoadScriptOnce(src, globalCheck) {
+// Hardened script loader for the OCR stack. The deployment intermittently
+// serves the home-page HTML instead of the file for root-level .js paths (the
+// same quirk that forced the engine to be inlined) -- when that happens onload
+// still fires but the library's global never appears, which is exactly how the
+// "pdf.js unavailable" total-OCR-failure happened. So: after EVERY attempt the
+// global is verified; each source gets a cache-busted retry; and where a pinned
+// CDN copy is configured it is tried last (loading a library from a CDN sends
+// nothing about the document anywhere -- same trust model as the page's
+// existing pdf-lib fallback).
+function voLoadScriptAttempt(src) {
   return new Promise(function (resolve, reject) {
-    try { if (globalCheck()) { resolve(); return; } } catch (e) {}
     var s = document.createElement('script');
     s.src = src;
     s.onload = function () { resolve(); };
-    s.onerror = function () { reject(new Error('failed to load ' + src)); };
+    s.onerror = function () { s.remove(); reject(new Error('failed to load ' + src)); };
     document.head.appendChild(s);
   });
+}
+
+// sources: URLs in preference order. Returns the source that satisfied the
+// global check (so dependent paths like workerSrc can be kept consistent).
+async function voLoadScript(sources, globalCheck) {
+  try { if (globalCheck()) return sources[0]; } catch (e) {}
+  var errors = [];
+  for (var i = 0; i < sources.length; i++) {
+    for (var attempt = 0; attempt < 2; attempt++) {
+      var url = attempt === 0 ? sources[i]
+        : sources[i] + (sources[i].indexOf('?') === -1 ? '?' : '&') + 'vobust=' + Date.now();
+      try { await voLoadScriptAttempt(url); }
+      catch (e1) { errors.push(url + ': network/404'); continue; }
+      // onload fired -- but did the global appear? (An HTML-instead-of-JS
+      // response fires onload and defines nothing.)
+      try { if (globalCheck()) return sources[i]; } catch (e2) {}
+      errors.push(url + ': loaded but global missing (HTML served instead of JS?)');
+    }
+  }
+  throw new Error(errors.join(' | '));
 }
 
 async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
@@ -8735,11 +8763,23 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   if (!candidates.length) return null;
 
   updateStep('Fraud', 'processing', 'OCR on ' + candidates.length + ' image-only page' + (candidates.length === 1 ? '' : 's') + ' (on-device)...');
-  await voLoadScriptOnce('/vendor/pdf.min.js', function () { return typeof pdfjsLib !== 'undefined'; });
-  if (typeof pdfjsLib === 'undefined') throw new Error('pdf.js unavailable for page rendering');
-  try { pdfjsLib.GlobalWorkerOptions.workerSrc = '/vendor/pdf.worker.min.js'; } catch (e) {}
-  await voLoadScriptOnce('/vendor/tesseract.min.js', function () { return typeof Tesseract !== 'undefined'; });
-  if (typeof Tesseract === 'undefined') throw new Error('tesseract.js unavailable');
+  // pdf.js: vendored first (with verified-global retry), then the pinned CDN
+  // copy of the SAME version as the vendored build (3.11.174, read from the
+  // bundle's apiVersion). The worker must come from wherever the API came from
+  // or pdf.js rejects the version mismatch.
+  var VO_PDFJS_CDN = 'https://unpkg.com/pdfjs-dist@3.11.174/build/';
+  var pdfjsSrc = await voLoadScript(
+    ['/vendor/pdf.min.js', VO_PDFJS_CDN + 'pdf.min.js'],
+    function () { return typeof pdfjsLib !== 'undefined'; }
+  );
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      (pdfjsSrc.indexOf('unpkg.com') !== -1) ? (VO_PDFJS_CDN + 'pdf.worker.min.js') : '/vendor/pdf.worker.min.js';
+  } catch (e) {}
+  // tesseract: vendored only (its worker/wasm-core/language assets must match
+  // the exact vendored build, so a CDN mix would be worse than an honest
+  // failure) -- but it now gets the same verified-global cache-busted retries.
+  await voLoadScript(['/vendor/tesseract.min.js'], function () { return typeof Tesseract !== 'undefined'; });
 
   var pdf = await pdfjsLib.getDocument({ data: pdfBytes.slice ? pdfBytes.slice(0) : pdfBytes }).promise;
   var worker = await Tesseract.createWorker('eng', 1, {
@@ -8747,7 +8787,7 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
     corePath: '/vendor',
     langPath: '/vendor'
   });
-  var rescued = [], out = textBlocks.slice();
+  var rescued = [], noText = [], renderFailed = [], out = textBlocks.slice();
   try {
     for (var c = 0; c < candidates.length; c++) {
       var pageIdx = candidates[c];
@@ -8764,19 +8804,32 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
         if (text.length > VO_OCR_EMPTY_CHARS) {
           out[pageIdx] = '[OCR] ' + text;
           rescued.push(pageIdx + 1);
+        } else {
+          // Rendered fine but OCR read (almost) nothing: a blank page, a
+          // photo with no text, or print too poor to read. Named, not silent.
+          noText.push(pageIdx + 1);
         }
-      } catch (pageErr) { /* per-page failure: leave the page as-is, keep going */ }
+        canvas.width = canvas.height = 0; // release bitmap memory promptly
+      } catch (pageErr) {
+        renderFailed.push(pageIdx + 1); // named in the note, scan continues
+      }
     }
   } finally {
     try { await worker.terminate(); } catch (e) {}
     try { await pdf.destroy(); } catch (e) {}
   }
+  // Full per-page accounting: every candidate page ends up in exactly one of
+  // rescued / noText / renderFailed, so the extraction note states precisely
+  // which pages were read and why the rest were not.
+  var tail =
+    (noText.length ? ' ' + noText.length + ' page(s) rendered but held no legible text (blank, photographic, or print too poor to read): ' + noText.join(', ') + '.' : '') +
+    (renderFailed.length ? ' ' + renderFailed.length + ' page(s) could not be rendered for OCR: ' + renderFailed.join(', ') + '.' : '') +
+    (skipped > 0 ? ' A further ' + skipped + ' image-only page(s) exceeded the OCR cap (' + VO_OCR_MAX_PAGES + ') and remain unread.' : '');
   if (!rescued.length) {
-    return { textBlocks: textBlocks, note: 'OCR rescue ran on ' + candidates.length + ' image-only page(s) but recovered no legible text; those pages remain unread.' };
+    return { textBlocks: textBlocks, note: 'OCR rescue ran on ' + candidates.length + ' image-only page(s) but recovered no legible text; those pages remain unread.' + tail };
   }
   var note = 'OCR rescue: recovered text on-device (tesseract.js, eng) for ' + rescued.length +
-    ' image-only page(s): ' + rescued.join(', ') + '.' +
-    (skipped > 0 ? ' A further ' + skipped + ' image-only page(s) exceeded the OCR cap (' + VO_OCR_MAX_PAGES + ') and remain unread.' : '');
+    ' image-only page(s): ' + rescued.join(', ') + '.' + tail;
   return { textBlocks: out, note: note };
 }
 
