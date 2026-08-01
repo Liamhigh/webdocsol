@@ -186,6 +186,37 @@ ok(DET.D08_DETECT_AUTHORITY_EXCEEDED(['signed by john. ' + 'filler '.repeat(60) 
     'CT43 does not fire at only 5 indicator types');
 }
 
+// ===== Page-anchor back-fill (findings that used to report page 0) =====
+const BF = require('../forensic-engine-page.js').voBackfillPageAnchors;
+{
+  const blocks = ['cover page, nothing here', 'the operator signed the documents; all fuels never signed back then', 'unrelated page text'];
+  const f = [{ type: 'CT01', evidence: 'affirms and negates "signed": "the operator signed the documents all fuels never signed back" vs "later text"', location: 'Full document' }];
+  BF(f, blocks);
+  ok(f[0].location === 'Page 2', 'back-fill pins a quoted passage to its single page (got ' + f[0].location + ')');
+}
+{
+  const blocks = ['introduction', 'the company was registered in 2011 and later liquidated in 2020', 'other'];
+  const f = [{ type: 'CT14', evidence: 'Conflicting status claims: registered, liquidated', location: 'Full document' }];
+  BF(f, blocks);
+  ok(f[0].location === 'Page 2', 'back-fill pins co-occurring colon-tokens to their single page (got ' + f[0].location + ')');
+}
+{
+  const blocks = ['registered appears on this page only', 'liquidated appears on a different page only', 'more'];
+  const f = [{ type: 'CT14', evidence: 'Conflicting status claims: registered, liquidated', location: 'Full document' }];
+  BF(f, blocks);
+  ok(f[0].location === 'Full document', 'back-fill leaves a genuine cross-page conflict unanchored (no false precision)');
+}
+{
+  const f = [{ type: 'CT02', evidence: '"total" is stated as 1 and 2', location: 'Page 3' }];
+  BF(f, ['a', 'b', 'c']);
+  ok(f[0].location === 'Page 3', 'back-fill never overrides a page the detector already set');
+}
+{
+  const f = [{ type: 'CT01', evidence: '"the operator signed everything"', location: 'Full document' }];
+  BF(f, ['the operator signed everything here']);
+  ok(f[0].location === 'Full document', 'back-fill does nothing with a single text block');
+}
+
 console.log(`\n[detector-recall] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[detector-recall] FAILURES'); process.exit(1); }
 console.log('[detector-recall] ALL GREEN');

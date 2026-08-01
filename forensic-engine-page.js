@@ -1680,6 +1680,64 @@ function voSerialKeywordHit(windowText, kw) {
   return re.test(windowText);
 }
 
+// ===================== PAGE-ANCHOR BACK-FILL =====================
+// Most detectors scan the joined text and report location "Full document", which
+// downstream becomes page 0 — so the highest-value findings (CT01/CT14/CT35/…)
+// arrived unanchored. This pass pins a finding to a real page when its evidence
+// resolves to EXACTLY ONE page: either a verbatim quoted passage found on one
+// page, or the distinctive tokens after a colon co-occurring on one page. If the
+// evidence spans multiple pages or can't be located, the finding stays "Full
+// document" — no false precision, and a genuinely cross-page conflict is not
+// misreported as living on a single page.
+function voNormMatch(s) {
+  return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+function voPageForEvidence(ev, normBlocks) {
+  var text = String(ev == null ? '' : ev);
+  // 1. Verbatim quoted fragments (straight or curly quotes), 14+ chars.
+  var frags = [];
+  var qRe = /["“”‘’']([^"“”‘’']{14,})["“”‘’']/g, m;
+  while ((m = qRe.exec(text)) !== null) frags.push(m[1]);
+  for (var i = 0; i < frags.length; i++) {
+    var norm = voNormMatch(frags[i]);
+    if (norm.length < 12) continue;
+    // Use a solid inner window so a fragment cut at a page edge still matches.
+    var probe = norm.length > 40 ? norm.substr(Math.floor((norm.length - 30) / 2), 30) : norm;
+    var hits = [];
+    for (var b = 0; b < normBlocks.length; b++) { if (normBlocks[b].indexOf(probe) !== -1) hits.push(b + 1); }
+    if (hits.length === 1) return hits[0];
+  }
+  // 2. Distinctive tokens after a colon ("... claims: registered, liquidated").
+  var colon = text.indexOf(':');
+  if (colon !== -1) {
+    var toks = voNormMatch(text.slice(colon + 1)).split(' ').filter(function (w) { return w.length >= 5; });
+    toks = toks.slice(0, 4);
+    if (toks.length >= 2) {
+      var pages = [];
+      for (var b2 = 0; b2 < normBlocks.length; b2++) {
+        var all = true;
+        for (var t = 0; t < toks.length; t++) { if (normBlocks[b2].indexOf(toks[t]) === -1) { all = false; break; } }
+        if (all) pages.push(b2 + 1);
+      }
+      if (pages.length === 1) return pages[0];
+    }
+  }
+  return 0;
+}
+
+function voBackfillPageAnchors(findings, blocks) {
+  if (!blocks || blocks.length < 2) return findings; // one block: nothing to pin against
+  var normBlocks = blocks.map(voNormMatch);
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i];
+    if (/page\s+\d+/i.test(String(f.location || ''))) continue; // detector already anchored it
+    var pg = voPageForEvidence(f.evidence, normBlocks);
+    if (pg > 0) f.location = 'Page ' + pg;
+  }
+  return findings;
+}
+
 function detectSerialPatterns(textBlocks) {
   var findings = [];
   var blocks = (textBlocks && textBlocks.length) ? textBlocks.map(function (b) { return String(b || '').toLowerCase(); }) : [''];
@@ -2122,6 +2180,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   }
   allFindings = deduped;
 
+  // Pin findings to a real page where their evidence resolves to exactly one.
+  allFindings = voBackfillPageAnchors(allFindings, textBlocks);
+
   // Calculate overall score
   var totalScore = 0;
   var maxScore = 0;
@@ -2211,6 +2272,8 @@ if (typeof module !== 'undefined' && module.exports) {
     DETECTORS: DETECTORS,
     SERIAL_PATTERNS: SERIAL_PATTERNS,
     runForensicEngine: runForensicEngine,
-    detectSerialPatterns: detectSerialPatterns
+    detectSerialPatterns: detectSerialPatterns,
+    voBackfillPageAnchors: voBackfillPageAnchors,
+    voPageForEvidence: voPageForEvidence
   };
 }
