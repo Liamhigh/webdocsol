@@ -1690,7 +1690,11 @@ function voSerialKeywordHit(windowText, kw) {
 // document" — no false precision, and a genuinely cross-page conflict is not
 // misreported as living on a single page.
 function voNormMatch(s) {
-  return String(s == null ? '' : s).toLowerCase().replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim();
+  // Keep Unicode letters/numbers (accented names, non-Latin scripts) rather than
+  // stripping to a-z0-9, which would mangle e.g. "Nortjé"; collapse the rest to
+  // spaces. \p{L}\p{N} needs the /u flag (ES2018, supported in every browser we
+  // target and in Node).
+  return String(s == null ? '' : s).toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function voPageForEvidence(ev, normBlocks) {
@@ -1703,7 +1707,8 @@ function voPageForEvidence(ev, normBlocks) {
     var norm = voNormMatch(frags[i]);
     if (norm.length < 12) continue;
     // Use a solid inner window so a fragment cut at a page edge still matches.
-    var probe = norm.length > 40 ? norm.substr(Math.floor((norm.length - 30) / 2), 30) : norm;
+    var start = Math.floor((norm.length - 30) / 2);
+    var probe = norm.length > 40 ? norm.slice(start, start + 30) : norm;
     var hits = [];
     for (var b = 0; b < normBlocks.length; b++) { if (normBlocks[b].indexOf(probe) !== -1) hits.push(b + 1); }
     if (hits.length === 1) return hits[0];
