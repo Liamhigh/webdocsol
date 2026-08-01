@@ -21,6 +21,7 @@ const suites = [
   'digital-forensics.test.mjs',
   'ocr-rescue.test.mjs',
   'rule-classify.test.mjs',
+  'findings-json.test.mjs',
   'constitution-lock.test.mjs',
   'home-verify.test.mjs',
   'inline-scripts.test.mjs',
