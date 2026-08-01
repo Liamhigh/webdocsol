@@ -704,10 +704,14 @@ var DETECTORS = {
   D08_DETECT_AUTHORITY_EXCEEDED: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
+    // Bound the gap: an unbounded .*? with match() stretched from the first
+    // "signed by" to any later anchor, capturing hundreds of chars (including
+    // seal-footer debris) as one "finding". Cap it so only a genuinely local
+    // "approved by <junior role>" phrase matches. Dots in p.p. are escaped.
     var authorityPatterns = [
-      /approved\s+by\s+.*?(?:clerk|assistant|junior|trainee)/gi,
-      /authorized\s+by\s+.*?(?:intern|temp|contractor)/gi,
-      /signed\s+by\s+.*?(?:on behalf of|p.p.|per pro)/gi
+      /approved\s+by\s+.{0,40}?(?:clerk|assistant|junior|trainee)/gi,
+      /authorized\s+by\s+.{0,40}?(?:intern|temp|contractor)/gi,
+      /signed\s+by\s+.{0,40}?(?:on behalf of|p\.p\.|per pro)/gi
     ];
     for (var i = 0; i < authorityPatterns.length; i++) {
       var match = fullText.match(authorityPatterns[i]);
@@ -944,11 +948,30 @@ var DETECTORS = {
     if (lens.length >= 4) {
       var avg = lens.reduce(function(a,b){ return a+b; }, 0) / lens.length;
       if (avg > 300) {
+        var blanks = [];
         for (var i = 0; i < lens.length; i++) {
-          if (lens[i] < 40 && lens[i] < avg * 0.1) {
+          if (lens[i] < 40 && lens[i] < avg * 0.1) blanks.push(i);
+        }
+        // A RUN of near-empty pages (or many of them) is the signature of an
+        // image-only / scanned section that OCR could not read — NOT surgical
+        // insertion. Flagging each as "possibly inserted/removed" produced false
+        // positives on exactly those pages. Collapse that case to one honest,
+        // low-severity note. Only a SINGLE near-empty page sitting between two
+        // full pages keeps the "possible inserted/removed" reading.
+        var consecutive = blanks.length > 1 && blanks.every(function (p, k) { return k === 0 || p === blanks[k-1] + 1; });
+        if (blanks.length > 3 || consecutive) {
+          var span = (blanks[0]+1) + (blanks.length > 1 ? '-' + (blanks[blanks.length-1]+1) : '');
+          findings.push({ type: 'CT26', severity: 1,
+            evidence: blanks.length + ' near-empty pages (' + span + ') among pages averaging ' + Math.round(avg) + ' chars — most likely image-only pages not captured by OCR; re-scan with OCR enabled to read them, or confirm they are intentional dividers',
+            location: 'Pages ' + span });
+        } else {
+          for (var b = 0; b < blanks.length; b++) {
+            var pi = blanks[b];
+            var isolated = (pi > 0 && pi < lens.length - 1 && lens[pi-1] >= avg * 0.5 && lens[pi+1] >= avg * 0.5);
             findings.push({ type: 'CT26', severity: 2,
-              evidence: 'Page ' + (i+1) + ' is nearly empty (' + lens[i] + ' chars) among pages averaging ' + Math.round(avg) + ' — possible inserted or removed page',
-              location: 'Page ' + (i+1) });
+              evidence: 'Page ' + (pi+1) + ' is nearly empty (' + lens[pi] + ' chars) among pages averaging ' + Math.round(avg) +
+                (isolated ? ' — an isolated blank between two full pages; possible inserted or removed page' : ' — may be an image-only page not read by OCR, or an inserted/removed page'),
+              location: 'Page ' + (pi+1) });
           }
         }
       }
@@ -1211,12 +1234,25 @@ var DETECTORS = {
 
   D30_DETECT_TERM_DEFINITION_CONFLICT: function(textBlocks) {
     var findings = [];
-    var definitionRe = /\b("[^"]+"|\w+)\s+(?:shall mean|means|is defined as|refers to)\b/gi;
+    // A real defined term is a quoted phrase or a content word — not a function
+    // word. The old rule matched any \w+ before "means", so "by means of" and
+    // "this means that" were reported as defined terms "by" and "this". Guard
+    // with a stoplist, a length floor, and reject the "means of" grammar.
+    var TERM_STOP = { the:1, this:1, that:1, those:1, these:1, then:1, than:1,
+      by:1, of:1, to:1, in:1, on:1, at:1, for:1, and:1, nor:1, or:1, but:1,
+      any:1, all:1, such:1, each:1, both:1, either:1, it:1, its:1, is:1, are:1,
+      was:1, were:1, be:1, been:1, as:1, so:1, if:1, which:1, who:1, whom:1,
+      shall:1, will:1, may:1, must:1, agreement:1, party:1, parties:1, clause:1,
+      section:1, hereto:1, herein:1, hereof:1, thereof:1, herewith:1 };
+    var definitionRe = /("[^"]+"|\b[a-z][a-z'-]{3,})\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
     var definitions = {};
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
       while ((match = definitionRe.exec(textBlocks[i])) !== null) {
-        var term = match[1].toLowerCase().replace(/"/g,'');
+        var quoted = match[1].charAt(0) === '"';
+        var term = match[1].toLowerCase().replace(/"/g, '').trim();
+        // Bare (unquoted) words must be plausible defined terms, not boilerplate.
+        if (!quoted && (TERM_STOP[term] || term.length < 4)) continue;
         if (definitions[term] !== undefined && definitions[term] !== i) {
           findings.push({ type: 'CT08', severity: 3,
             evidence: 'Term "' + term + '" defined in multiple locations',
@@ -1396,9 +1432,13 @@ var DETECTORS = {
       uniqueTypes[otherFindings[i].type] = true;
     }
     var typeCount = Object.keys(uniqueTypes).length;
-    if (typeCount >= 5) {
-      findings.push({ type: 'CT43', severity: 4,
-        evidence: 'Systematic fraud pattern: ' + typeCount + ' different contradiction types detected',
+    // Breadth of indicator TYPES is context, not itself a contradiction, and it
+    // must never be labelled "fraud" — that is a conclusion the engine cannot
+    // draw, and it double-counts (some of those types may be low-signal). Report
+    // it neutrally, at low severity, as a pointer to review the spread.
+    if (typeCount >= 8) {
+      findings.push({ type: 'CT43', severity: 2,
+        evidence: 'Breadth note: ' + typeCount + ' different indicator types were triggered across the document — review the spread below; a high count reflects variety of checks, not a determination of wrongdoing',
         location: 'Full document' });
     }
     return findings;
@@ -1620,6 +1660,26 @@ var SERIAL_PATTERNS = {
 // collapsed block (short doc / OCR fallback) is treated as one window.
 var SERIAL_WINDOW_PAGES = 3;
 
+// A stage may only be satisfied by a DISTINCTIVE keyword: a multi-word phrase,
+// or one of these strong single words. Generic single words (pdf, signed,
+// income, urgent, compensation, confidential, amended, advised, placed,
+// template, security, obligation, …) appear innocently all over legal bundles,
+// so on their own they matched fraud "stages" and produced scary false labels
+// (Digital Signature Forgery on "pdf"; Witness Tampering on "signed"). Those
+// words still exist in the pattern definitions but no longer, alone, satisfy a
+// stage. All matching is word-boundary (so "signed" ≠ "designed"/"assigned").
+var SERIAL_DISTINCTIVE_SINGLE = {
+  racketeering: 1, embezzlement: 1, kickback: 1, laundering: 1, forgery: 1,
+  ponzi: 1, bribery: 1, affidavit: 1, deposition: 1, perjury: 1, collusion: 1
+};
+function voSerialStageStrong(kw) {
+  return kw.indexOf(' ') !== -1 || SERIAL_DISTINCTIVE_SINGLE[kw] === 1;
+}
+function voSerialKeywordHit(windowText, kw) {
+  var re = new RegExp('\\b' + kw.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b');
+  return re.test(windowText);
+}
+
 function detectSerialPatterns(textBlocks) {
   var findings = [];
   var blocks = (textBlocks && textBlocks.length) ? textBlocks.map(function (b) { return String(b || '').toLowerCase(); }) : [''];
@@ -1635,9 +1695,11 @@ function detectSerialPatterns(textBlocks) {
       for (var s = 0; s < pattern.stages.length; s++) {
         var stage = pattern.stages[s];
         for (var k = 0; k < stage.keywords.length; k++) {
-          if (windowText.indexOf(stage.keywords[k]) !== -1) {
+          var kw = stage.keywords[k];
+          if (!voSerialStageStrong(kw)) continue; // generic single word cannot alone satisfy a stage
+          if (voSerialKeywordHit(windowText, kw)) {
             matchedStages++;
-            matchedDetails.push(stage.indicator + ': "' + stage.keywords[k] + '"');
+            matchedDetails.push(stage.indicator + ': "' + kw + '"');
             break;
           }
         }

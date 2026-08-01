@@ -114,6 +114,78 @@ let cf = [];
 for (const [k, fn] of Object.entries(DET)) { if (typeof fn !== 'function' || skip.has(k)) continue; try { cf = cf.concat(fn(clean) || []); } catch (e) {} }
 ok(cf.length === 0, 'a clean document yields ZERO findings across all text detectors (was 2 false CT35): got ' + cf.map(x => x.type).join(','));
 
+// ===== Precision fixes: the false positives the AllFuels v2.0 run exposed =====
+const SERIAL = require('../forensic-engine-page.js').detectSerialPatterns;
+
+// CT08 (D30) must NOT treat function words as defined terms. The run reported
+// terms "this", "by" and "agreement" from "this means that", "by means of",
+// "agreement means the ...".
+{
+  const f = DET.D30_DETECT_TERM_DEFINITION_CONFLICT([
+    'payment shall be made by means of electronic transfer.',
+    'this means that the parties agree to proceed.',
+    'the agreement means the entire contract between them.'
+  ]);
+  ok(!f.some(x => /"(by|this|agreement)"/.test(x.evidence)),
+    'CT08 does not flag function words ("by"/"this"/"agreement") as defined terms');
+}
+// CT08 still catches a genuine quoted term redefined in two places.
+ok(DET.D30_DETECT_TERM_DEFINITION_CONFLICT([
+    '"Goodwill" means the going-concern value of the business.',
+    'Elsewhere it says "Goodwill" means nothing of compensable value.'
+  ]).length > 0,
+  'CT08 still catches a real quoted term defined in two places');
+
+// Serial patterns must NOT fire on isolated generic single words in legal text
+// (the run raised Digital Signature Forgery on "pdf", Witness Tampering on
+// "signed", Loan Fraud on "income/security/obligation").
+ok(!SERIAL([
+    'the signed pdf template was placed on file',
+    'amended and advised as per the record',
+    'income and security obligation noted'
+  ]).some(f => /Digital Signature Forgery|Witness Statement Tampering|Loan Application Fraud/.test(f.serialName || '')),
+  'serial patterns do NOT fire on generic single words (pdf/signed/template/income) in legal text');
+// Serial patterns still fire on distinctive multi-word phrases.
+ok(SERIAL([
+    'dear beneficiary, you have unclaimed funds waiting',
+    'a processing fee is required and this is time sensitive',
+    'do not disclose this; keep secret this private matter'
+  ]).length > 0,
+  'serial patterns still fire on distinctive multi-word phrases (advance-fee 419)');
+
+// CT26 (D17): a RUN of blank pages collapses to ONE image-only/OCR note
+// (the run produced 7 "possibly inserted/removed" findings on OCR-blank pages).
+{
+  const pages = ['x'.repeat(1200), 'y'.repeat(1200), '', '', '', '', 'z'.repeat(1200)];
+  const f = DET.D17_DETECT_FORMAT_ANOMALY(pages);
+  ok(f.length === 1 && /image-only|OCR/i.test(f[0].evidence),
+    'CT26 collapses a run of blank pages to one OCR-gap note (not N insertions)');
+}
+// CT26: a single isolated blank between full pages keeps the insertion reading.
+{
+  const pages = ['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)];
+  const f = DET.D17_DETECT_FORMAT_ANOMALY(pages);
+  ok(f.length === 1 && /inserted or removed/.test(f[0].evidence),
+    'CT26 still flags a single isolated blank as possible insertion');
+}
+
+// CT11 (D08): bounded match — a local "signed by X on behalf of" fires, but a
+// far-apart pair does not sprawl into a seal-debris blob.
+ok(DET.D08_DETECT_AUTHORITY_EXCEEDED(['this was signed by john on behalf of acme ltd']).length > 0,
+  'CT11 fires on a local "signed by ... on behalf of"');
+ok(DET.D08_DETECT_AUTHORITY_EXCEEDED(['signed by john. ' + 'filler '.repeat(60) + 'on behalf of acme']).length === 0,
+  'CT11 does not stretch across a large gap (no sprawling seal-debris blob)');
+
+// CT43 (D37): breadth note is neutral, low-severity, and only at >=8 types.
+{
+  const many = Array.from({ length: 8 }, (_, i) => ({ type: 'CT' + (10 + i) }));
+  const f = DET.D37_DETECT_INTERNAL_CONFLICT_CATCHALL([''], many);
+  ok(f.length === 1 && f[0].severity <= 2 && !/fraud/i.test(f[0].evidence),
+    'CT43 breadth note is neutral and low-severity (no "systematic fraud" label)');
+  ok(DET.D37_DETECT_INTERNAL_CONFLICT_CATCHALL([''], Array.from({ length: 5 }, (_, i) => ({ type: 'CT' + i }))).length === 0,
+    'CT43 does not fire at only 5 indicator types');
+}
+
 console.log(`\n[detector-recall] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[detector-recall] FAILURES'); process.exit(1); }
 console.log('[detector-recall] ALL GREEN');
