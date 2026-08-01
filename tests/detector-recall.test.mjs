@@ -225,6 +225,16 @@ const BF = require('../forensic-engine-page.js').voBackfillPageAnchors;
   ok(f[0].location === 'Page 2', 'back-fill anchors an accented-name passage ("Nortjé" preserved): got ' + f[0].location);
 }
 
+// back-fill matches across NFC/NFD accent forms (precomposed vs decomposed).
+{
+  const precomposed = 'Nortj\u00e9';    // é as one codepoint (NFC)
+  const decomposed = 'Nortje\u0301';    // e + combining acute (NFD)
+  const blocks = ['nothing here', 'the respondent ' + precomposed + ' confirmed the clause was never signed back', 'x'];
+  const f = [{ type: 'CT01', evidence: '"the respondent ' + decomposed + ' confirmed the clause was never signed back"', location: 'Full document' }];
+  BF(f, blocks);
+  ok(f[0].location === 'Page 2', 'back-fill matches across NFC/NFD accent forms: got ' + f[0].location);
+}
+
 console.log(`\n[detector-recall] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[detector-recall] FAILURES'); process.exit(1); }
 console.log('[detector-recall] ALL GREEN');

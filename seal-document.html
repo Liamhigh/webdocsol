@@ -4802,7 +4802,9 @@ function voNormMatch(s) {
   // stripping to a-z0-9, which would mangle e.g. "Nortjé"; collapse the rest to
   // spaces. \p{L}\p{N} needs the /u flag (ES2018, supported in every browser we
   // target and in Node).
-  return String(s == null ? '' : s).toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim();
+  // NFC first so a precomposed "é" and a decomposed "e"+combining-acute compare
+  // equal (the combining mark would otherwise be stripped from only one side).
+  return String(s == null ? '' : s).normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim();
 }
 
 function voPageForEvidence(ev, normBlocks) {
