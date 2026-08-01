@@ -191,6 +191,10 @@ global.extractPdfText = async () => ([
   t.ok(Array.isArray(res.findings), 'result has findings array');
   t.ok(typeof res.overallScore === 'number', 'result has numeric overallScore');
   t.ok(res.findings.length > 0, 'crafted contradictions produce findings (' + res.findings.length + ')');
+  t.ok(/^5\.\d+\.\d+-web$/.test(res.engineVersion || ''),
+    'result stamps the lineage engine version (got "' + res.engineVersion + '")');
+  t.ok(res.findings.every(f => typeof f.confidence === 'number' && f.confidence > 0 && f.confidence <= 1),
+    'every finding carries a per-detector confidence weight');
 
   // contextOnly routing: a multi-jurisdiction reference must land in the
   // extraction notes as context, never in the findings (it is cross-border

@@ -52,6 +52,25 @@ for (const page of ['index.html', 'constitution.html', 'documents-resources.html
   ok(staleClaims.length === 0, `${page} live text never claims a superseded constitution (${staleClaims.join('; ') || 'clean'})`);
 }
 
+// Engine version lineage lock. The web engine called itself "v2.0" while the
+// sealed Python lineage stood at v5.3.1c — a detached version number is its
+// own kind of drift. The constant, the banner comments and the module export
+// must all carry the same lineage version, and it may never fall behind the
+// sealed v5.3.1c baseline.
+const engineSrc = readFileSync('forensic-engine-page.js', 'utf8');
+const constMatch = engineSrc.match(/var VO_ENGINE_VERSION = '([^']+)'/);
+ok(constMatch !== null, 'VO_ENGINE_VERSION constant exists in the engine');
+if (constMatch) {
+  const v = constMatch[1];
+  ok(/^(\d+)\.(\d+)\.(\d+)-web$/.test(v), `engine version "${v}" follows the lineage format N.N.N-web`);
+  const nums = v.match(/^(\d+)\.(\d+)\.(\d+)-web$/).slice(1).map(Number);
+  ok(nums[0] > 5 || (nums[0] === 5 && (nums[1] > 3 || (nums[1] === 3 && nums[2] >= 2))),
+    `engine version "${v}" is not behind the sealed v5.3.1c lineage`);
+  const banners = engineSrc.match(/FORENSIC CONTRADICTION ENGINE v([^\s=]+)/g) || [];
+  ok(banners.length >= 2 && banners.every((b) => b.endsWith('v' + v)),
+    'every engine banner carries the same version as VO_ENGINE_VERSION');
+}
+
 console.log(`\n[constitution-lock] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[constitution-lock] FAILURES'); process.exit(1); }
 console.log('[constitution-lock] ALL GREEN');

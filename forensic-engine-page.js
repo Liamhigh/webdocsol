@@ -1,16 +1,26 @@
-// ==================== FORENSIC CONTRADICTION ENGINE v2.0 ====================
+// ============== FORENSIC CONTRADICTION ENGINE v5.3.2-web ================
 // 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v2.0
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.3.2-web
 // 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
 // ========================================================================
 // This engine analyzes documents for internal contradictions, fraudulent
 // patterns, and forensic anomalies. It is designed to detect perjury,
 // forgery, document tampering, and systemic fraud across any document.
+//
+// Lineage: port of the sealed Python engine v5.3.1c (Seal
+// VO-CE-v531c-DIGSIM-20260713, Constitution v6.0 Final) — previously
+// versioned "v2.0" here, which detached the web engine from its sealed
+// lineage. v5.3.2-web adds the 1 Aug 2026 external-review fixes (CT14/CT38/
+// CT05/CT39/CT43, template suppression, no-anchor-no-weight), subject
+// alignment (v5.2.9 lineage) and per-detector confidence calibration.
+// Every scan result stamps this version so a sealed report can always be
+// traced to the exact engine that produced it.
 // ========================================================================
+var VO_ENGINE_VERSION = '5.3.2-web';
 
 // ===================== 43 CONTRADICTION TYPES =====================
 // Organized by forensic category. Each type has a detector function,
@@ -354,12 +364,38 @@ var DETECTORS = {
       while ((m = re.exec(fullText)) !== null) out.push(m.index);
       return out;
     }
+    // Subject alignment (v5.2.9 lineage: opposing statements must be ABOUT THE
+    // SAME THING). "The invoice was paid ... the deposit was not paid" is two
+    // facts, not a contradiction. The last content word before each term is its
+    // approximate subject; pronouns (it/same/such/...) refer back and align
+    // with anything, and when no subject is visible we stay permissive.
+    var SUBJ_STOP = /^(?:the|a|an|was|were|is|are|be|been|being|has|have|had|later|also|then|and|or|nor|of|to|in|on|by|for|with|that|which|as|at|from|shall|will|may|must|not|never|no|any|all|both|each|his|her|their|our|your|s)$/;
+    var SUBJ_PRONOUN = /^(?:it|its|same|such|this|these|those|they|them|he|she|matter|latter|former|aforesaid|said)$/;
+    function subjectBefore(pos) {
+      var pre = fullText.slice(Math.max(0, pos - 48), pos);
+      var words = pre.replace(/[^a-z' -]/g, ' ').split(/\s+/).filter(Boolean);
+      for (var w = words.length - 1; w >= 0; w--) {
+        if (SUBJ_PRONOUN.test(words[w])) return '*'; // refers back: aligns with anything
+        if (!SUBJ_STOP.test(words[w]) && words[w].length > 2) return words[w];
+      }
+      return null; // no visible subject: stay permissive
+    }
+    function subjectsAligned(pa, pb) {
+      var sa = subjectBefore(pa), sb = subjectBefore(pb);
+      if (sa === null || sb === null || sa === '*' || sb === '*') return true;
+      return sa === sb;
+    }
     for (var i = 0; i < negationPairs.length; i++) {
       var a = negationPairs[i][0], b = negationPairs[i][1];
       // A positive assertion of `a` is one NOT already negated by "not ".
       var aPos = positions(a).filter(function(p) { return fullText.slice(Math.max(0, p - 4), p) !== 'not '; });
       var bPos = positions(b);
-      var hit = aPos.some(function(pa) { return bPos.some(function(pb) { return Math.abs(pa - pb) <= WINDOW; }); });
+      var hit = null;
+      for (var hp = 0; hp < aPos.length && !hit; hp++) {
+        for (var hq = 0; hq < bPos.length; hq++) {
+          if (Math.abs(aPos[hp] - bPos[hq]) <= WINDOW && subjectsAligned(aPos[hp], bPos[hq])) { hit = [aPos[hp], bPos[hq]]; break; }
+        }
+      }
       if (hit) {
         findings.push({ type: 'CT01', severity: 4,
           evidence: 'Opposing statements "' + a + '" and "' + b + '" appear in the same passage',
@@ -379,6 +415,13 @@ var DETECTORS = {
     // BOTH the affirming and the negating passage so it is self-explanatory.
     var CLAIM_WORDS = ['paid','payment','owed','signed','countersigned','witnessed','notarised','notarized','valid','agreed','consented','authorised','authorized','received','delivered','renewed','terminated','expired','entitled','breached','disclosed','refunded','cancelled','approved','accepted'];
     var NEG_BEFORE = /\b(?:no longer|not|never|without|denied|denies|refused to|refuses to|failed to|no)\b(?:\s+\w+){0,5}\s*$/;
+    // A negator whose path to the claim word passes through unless/until/
+    // except/provided is a CONDITIONAL REQUIREMENT, not a negation: "shall not
+    // be valid unless it is approved by X" states a rule about approval — it
+    // neither affirms nor denies that anything WAS approved. The Greensky MOA
+    // produced exactly this false CT01 ("approved by 75% majority" vs
+    // "approved by ras al khaimah") from two requirement clauses.
+    var REQ_BETWEEN = /\b(?:no longer|not|never|without|denied|denies|refused to|refuses to|failed to|no)\b(?:\s+\w+){0,4}?\s+(?:unless|until|except|save|provided)\b(?:\s+\w+){0,4}\s*$/;
     var mkSnip = function (idx) { return fullText.slice(Math.max(0, idx - 30), idx + 45).replace(/\s+/g, ' ').trim(); };
     for (var ci = 0; ci < CLAIM_WORDS.length; ci++) {
       var cw = CLAIM_WORDS[ci];
@@ -386,6 +429,7 @@ var DETECTORS = {
       var occ, asserts = [], negs = [];
       while ((occ = occRe.exec(fullText)) !== null) {
         var pre = fullText.slice(Math.max(0, occ.index - 45), occ.index);
+        if (REQ_BETWEEN.test(pre)) continue; // requirement clause: neither an assertion nor a negation
         if (NEG_BEFORE.test(pre)) negs.push(occ.index); else asserts.push(occ.index);
       }
       if (!asserts.length || !negs.length) continue;
@@ -394,7 +438,7 @@ var DETECTORS = {
       var pair = null;
       for (var ai = 0; ai < asserts.length && !pair; ai++) {
         for (var ni = 0; ni < negs.length; ni++) {
-          if (Math.abs(asserts[ai] - negs[ni]) <= 240) { pair = [asserts[ai], negs[ni]]; break; }
+          if (Math.abs(asserts[ai] - negs[ni]) <= 240 && subjectsAligned(asserts[ai], negs[ni])) { pair = [asserts[ai], negs[ni]]; break; }
         }
       }
       if (!pair) continue;
@@ -453,8 +497,16 @@ var DETECTORS = {
         if (isNaN(value) || value <= 100) continue;
 
         var label = marks[k].text.toLowerCase().replace(/\s+/g, ' ').replace(/^sub-total$/, 'subtotal');
+        // Subject alignment (v5.2.9 lineage): "Invoice INV-001 Total" and
+        // "Invoice INV-002 Total" are two subjects, not one figure restated.
+        // Capture an explicit qualifying identifier just before the label;
+        // entries with DIFFERENT qualifiers are never compared.
+        var qual = null;
+        var qm = block.slice(Math.max(0, marks[k].start - 40), marks[k].start)
+          .match(/(?:invoice|annexure|exhibit|order|quote|erf|case|claim|account|matter)\s*(?:no\.?|number|#)?\s*([a-z0-9][a-z0-9\/-]*)\s*[:\s]*$/i);
+        if (qm) qual = qm[1].toLowerCase();
         if (!byLabel[label]) byLabel[label] = [];
-        byLabel[label].push({ value: value, raw: am[0].trim(), page: i });
+        byLabel[label].push({ value: value, raw: am[0].trim(), page: i, qual: qual });
       }
     }
 
@@ -484,6 +536,8 @@ var DETECTORS = {
         var cur = sorted[k];
         if (seenVals[cur.value]) continue; // a repeated value is one discrepancy
         seenVals[cur.value] = true;
+        // Different explicit qualifiers = different subjects, never a restatement.
+        if (base.qual && cur.qual && base.qual !== cur.qual) continue;
         var diff = cur.value - base.value;
         var avg = (cur.value + base.value) / 2;
         // For the SAME label restated at two/three values, any material
@@ -2501,7 +2555,20 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     extractionNote += ' ' + _voContextNotes.join(' ');
   }
 
-  // Calculate overall score
+  // Calculate overall score — confidence-weighted per indicator type
+  // (v5.2.9 lineage: per-detector calibration). A written figure restated at
+  // two values (CT02) and a fuzzy image-manipulation keyword hit (CT28) are
+  // not equally reliable, and scoring them equally is how "multiple
+  // jurisdictions referenced" once outweighed real contradictions. Weights
+  // reflect each detector's observed false-positive propensity across the
+  // AllFuels, Louw v Moolla and Greensky runs; unlisted types get 0.75.
+  // Each finding carries its weight (confidence) so reports can show it.
+  var VO_DETECTOR_CONFIDENCE = {
+    CT01: 0.85, CT02: 0.9, CT03: 0.9, CT06: 0.9, CT07: 0.85, CT09: 0.85,
+    CT10: 0.8, CT13: 0.9, CT14: 0.85, CT24: 0.9, CT29: 0.9, CT42: 0.9,
+    CT35: 0.8, CT04: 0.5, CT08: 0.7, CT26: 0.7, CT27: 0.6, CT28: 0.6,
+    CT05: 0.6, CT31: 0.6, CT36: 0.6, CT39: 0.6, SERIAL: 0.7
+  };
   var totalScore = 0;
   var maxScore = 0;
   var findingsByType = {};
@@ -2509,8 +2576,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
 
   for (var f = 0; f < allFindings.length; f++) {
     var finding = allFindings[f];
-    totalScore += finding.severity;
-    maxScore += 5; // max severity per finding
+    var cw = VO_DETECTOR_CONFIDENCE[finding.type];
+    if (cw === undefined) cw = 0.75;
+    finding.confidence = cw;
+    totalScore += finding.severity * cw;
+    maxScore += 5; // max severity per finding at full confidence
 
     if (!findingsByType[finding.type]) findingsByType[finding.type] = [];
     findingsByType[finding.type].push(finding);
@@ -2519,6 +2589,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     var cat = ct ? ct.category : (finding.category || 'UNKNOWN');
     if (!findingsByCategory[cat]) findingsByCategory[cat] = [];
     findingsByCategory[cat].push(finding);
+  }
+  if (allFindings.length) {
+    extractionNote += ' Indicator score is confidence-weighted per indicator type (calibration v1): lower-precision detectors contribute less than high-precision ones.';
   }
 
   var overallScore = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
@@ -2543,6 +2616,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   }
 
   return {
+    engineVersion: VO_ENGINE_VERSION,
     clean: unreadable ? false : overallScore < 20,
     unreadable: unreadable,
     overallScore: overallScore,
@@ -2586,6 +2660,7 @@ function generateSummary(findings, score) {
 // ===================== EXPORT =====================
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    VO_ENGINE_VERSION: VO_ENGINE_VERSION,
     CONTRADICTION_TYPES: CONTRADICTION_TYPES,
     DETECTORS: DETECTORS,
     SERIAL_PATTERNS: SERIAL_PATTERNS,
