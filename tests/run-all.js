@@ -20,6 +20,8 @@ const suites = [
   'detector-recall.test.mjs',
   'digital-forensics.test.mjs',
   'ocr-rescue.test.mjs',
+  'rule-classify.test.mjs',
+  'constitution-lock.test.mjs',
   'home-verify.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',

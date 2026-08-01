@@ -735,7 +735,16 @@ var DETECTORS = {
     // uses of "registered" are excluded, and the finding quotes BOTH passages
     // with their pages so it can be checked against the source in seconds.
     var ENTITY_NEAR = /\b(compan(?:y|ies)|close corporation|\bcc\b|pty|ltd|limited|corporation|entity|entities|enterprise|business|firm|trust|incorporated)\b/i;
-    var NOT_STATUS_REGISTERED = /\bregistered\s+(?:mail|post|letter|office|address|owner)\b|\bto\s+be\s+registered\b|\bregistered\s+in\s+whose\s+name\b|\bregistered\s+against\b|\bis\s+to\s+be\s+registered\b/i;
+    // Delivery-method uses may carry intervening words ("registered RECORDED
+    // DELIVERY letters" in the Greensky MOA notices clause slipped a strict
+    // "registered mail|letter" list and produced a CRITICAL false positive).
+    var NOT_STATUS_REGISTERED = /\bregistered\s+(?:[a-z]+\s+){0,2}?(?:mail|post|letters?|office|address|owner|deliver(?:y|ies))\b|\bto\s+be\s+registered\b|\bregistered\s+in\s+whose\s+name\b|\bregistered\s+against\b|\bis\s+to\s+be\s+registered\b/i;
+    // A status word inside a PROVISION ("shall be dissolved", "in the event of
+    // liquidation", "upon winding-up") describes a hypothetical, not the
+    // entity's current status — an MOA's dissolution clause is not a claim
+    // that the company IS dissolved.
+    var NOT_STATUS_PROVISION_BEFORE = /\b(?:shall|may|must|will|would|can|could|to)\s+be\s+(?:[a-z]+\s+){0,2}?$/i;
+    var NOT_STATUS_PROVISION_NEAR = /\bin\s+the\s+event\s+(?:of|that)\b|\bupon\s+(?:the\s+)?(?:dissolution|liquidation|winding[\s-]?up|deregistration)\b|\bon\s+(?:dissolution|liquidation|winding[\s-]?up)\b/i;
     var statusClaims = [
       ['registered','deregistered','dissolved','liquidated'],
       ['active','suspended','under administration'],
@@ -751,7 +760,10 @@ var DETECTORS = {
         re.lastIndex = 0;
         while ((m = re.exec(t)) !== null) {
           var win = t.substring(Math.max(0, m.index - 90), Math.min(t.length, m.index + m[0].length + 90));
-          var excluded = (word === 'registered') && NOT_STATUS_REGISTERED.test(win);
+          var pre = t.substring(Math.max(0, m.index - 40), m.index);
+          var excluded = ((word === 'registered') && NOT_STATUS_REGISTERED.test(win)) ||
+                         NOT_STATUS_PROVISION_BEFORE.test(pre) ||
+                         NOT_STATUS_PROVISION_NEAR.test(win);
           if (!excluded && ENTITY_NEAR.test(win)) {
             return { page: b + 1, snippet: win.replace(/\s+/g, ' ').trim() };
           }
@@ -1193,6 +1205,13 @@ var DETECTORS = {
   },
 
   D26_DETECT_JURISDICTIONAL_ISSUE: function(textBlocks) {
+    // Naming more than one jurisdiction is not an impossibility — every
+    // cross-border matter (parties in two countries, agreements spanning both)
+    // does it, so scoring it as a MEDIUM finding was guaranteed noise. An
+    // external reviewer of the Greensky report called it out as "not a finding
+    // at all", and they were right. The observation is still worth recording
+    // for context, so it is emitted as an UNSCORED context note (contextOnly)
+    // that the engine routes into the extraction notes, never the findings.
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
     var jurisdictions = [
@@ -1204,8 +1223,8 @@ var DETECTORS = {
       if (fullText.indexOf(jurisdictions[0][i]) !== -1) foundJurisdictions.push(jurisdictions[0][i]);
     }
     if (foundJurisdictions.length > 1) {
-      findings.push({ type: 'CT38', severity: 3,
-        evidence: 'Multiple jurisdictions referenced: ' + foundJurisdictions.join(', '),
+      findings.push({ type: 'CT38', severity: 0, contextOnly: true,
+        evidence: 'Context: multiple jurisdictions are referenced (' + foundJurisdictions.join(', ') + ') — expected in a cross-border matter and NOT scored as a finding.',
         location: 'Full document' });
     }
     return findings;
@@ -1213,17 +1232,35 @@ var DETECTORS = {
 
   // D27-D30: Evidence/witness detectors
   D27_DETECT_CUSTODY_GAP: function(textBlocks) {
+    // A custody GAP only exists where custody documentation is EXPECTED. The
+    // old check counted five hand-over phrases across the whole document and
+    // flagged any compilation of emails/screenshots as an "incomplete chain of
+    // custody" — technically wrong for a bundle, as an external reviewer noted.
+    // Now: silent unless the document itself claims chain-of-custody
+    // procedures; and when it does, the finding quotes that claim with its page.
     var findings = [];
+    var CUSTODY_CONTEXT = /\bchain\s+of\s+custody\b|\bcustody\s+(?:log|register|record)\b|\bevidence\s+(?:register|bag|locker|log)\b|\bexhibit\s+register\b/i;
+    var ctxPage = 0, ctxSnippet = '';
+    for (var b = 0; b < textBlocks.length; b++) {
+      var m = CUSTODY_CONTEXT.exec(textBlocks[b] || '');
+      if (m) {
+        ctxPage = b + 1;
+        var t = textBlocks[b];
+        ctxSnippet = t.substring(Math.max(0, m.index - 60), Math.min(t.length, m.index + m[0].length + 60)).replace(/\s+/g, ' ').trim();
+        break;
+      }
+    }
+    if (!ctxPage) return findings;
     var fullText = textBlocks.join(' ').toLowerCase();
     var custodyTerms = ['received by','handed to','transferred to','logged by','signed for'];
     var found = [];
     for (var i = 0; i < custodyTerms.length; i++) {
       if (fullText.indexOf(custodyTerms[i]) !== -1) found.push(custodyTerms[i]);
     }
-    if (found.length >= 1 && found.length < 3) {
-      findings.push({ type: 'CT39', severity: 3,
-        evidence: 'Incomplete chain of custody: only ' + found.length + ' of ' + custodyTerms.length + ' required steps found',
-        location: 'Evidence handling section' });
+    if (found.length < 3) {
+      findings.push({ type: 'CT39', severity: 2,
+        evidence: 'Chain-of-custody documentation is claimed ("…' + ctxSnippet + '…", page ' + ctxPage + ') but only ' + found.length + ' of ' + custodyTerms.length + ' expected hand-over steps (received by / handed to / transferred to / logged by / signed for) appear in the document',
+        location: 'Page ' + ctxPage });
     }
     return findings;
   },
@@ -1295,17 +1332,30 @@ var DETECTORS = {
 
   // D31-D37: Advanced detectors
   D31_DETECT_CAUSAL_IMPOSSIBILITY: function(textBlocks) {
+    // The old check ran `before.*received.*sent` across the ENTIRE document as
+    // one string — on a 353-page file those three words appear somewhere in
+    // order almost by chance, and the resulting finding ("Possible causal
+    // impossibility in event sequence", no quote, no page) was unverifiable
+    // noise. Now the impossible ordering must occur INSIDE ONE SENTENCE, and
+    // the finding quotes that sentence with its page — or stays silent.
     var findings = [];
-    var fullText = textBlocks.join(' ').toLowerCase();
     var causalPatterns = [
-      /\bbefore\b.*\breceived\b.*\bsent\b/gi,
-      /\bafter\b.*\bsent\b.*\breceived\b/gi
+      /\breceived\b[^.!?]{0,120}\bbefore\b[^.!?]{0,120}\b(?:it\s+was\s+|being\s+|be(?:en)?\s+)?sent\b/i,
+      /\breplied\b[^.!?]{0,120}\bbefore\b[^.!?]{0,120}\breceiv(?:ed|ing)\b/i,
+      /\bdelivered\b[^.!?]{0,120}\bbefore\b[^.!?]{0,120}\b(?:it\s+was\s+|being\s+|be(?:en)?\s+)?dispatched\b/i
     ];
-    for (var i = 0; i < causalPatterns.length; i++) {
-      if (causalPatterns[i].test(fullText)) {
-        findings.push({ type: 'CT05', severity: 3,
-          evidence: 'Possible causal impossibility in event sequence',
-          location: 'Full document' });
+    for (var b = 0; b < textBlocks.length; b++) {
+      var t = textBlocks[b] || '';
+      for (var i = 0; i < causalPatterns.length; i++) {
+        var m = causalPatterns[i].exec(t);
+        if (m) {
+          var quote = m[0].replace(/\s+/g, ' ').trim();
+          if (quote.length > 220) quote = quote.substring(0, 220) + '…';
+          findings.push({ type: 'CT05', severity: 3,
+            evidence: 'Possible causal impossibility in one sentence: "' + quote + '"',
+            location: 'Page ' + (b + 1) });
+          break; // one finding per page is enough; dedup caps the rest
+        }
       }
     }
     return findings;
@@ -1463,11 +1513,13 @@ var DETECTORS = {
     var typeCount = Object.keys(uniqueTypes).length;
     // Breadth of indicator TYPES is context, not itself a contradiction, and it
     // must never be labelled "fraud" — that is a conclusion the engine cannot
-    // draw, and it double-counts (some of those types may be low-signal). Report
-    // it neutrally, at low severity, as a pointer to review the spread.
+    // draw, and it double-counts (some of those types may be low-signal). It is
+    // a meta-observation about the engine's own output, so it must not be
+    // COUNTED as a finding either (an external reviewer flagged exactly that):
+    // contextOnly routes it into the extraction notes, out of the findings.
     if (typeCount >= 8) {
-      findings.push({ type: 'CT43', severity: 2,
-        evidence: 'Breadth note: ' + typeCount + ' different indicator types were triggered across the document — review the spread below; a high count reflects variety of checks, not a determination of wrongdoing',
+      findings.push({ type: 'CT43', severity: 0, contextOnly: true,
+        evidence: 'Breadth note: ' + typeCount + ' different indicator types were triggered across the document — a high count reflects variety of checks, not a determination of wrongdoing.',
         location: 'Full document' });
     }
     return findings;
@@ -1912,6 +1964,61 @@ function voBackfillPageAnchors(findings, blocks) {
   return findings;
 }
 
+// Template/boilerplate suppression. Case bundles built on the Verum Omnis
+// analysis template embed the template's own pages, whose ILLUSTRATIVE text
+// ("cropped WhatsApp logs", "forged messages", worked contradiction examples,
+// jurisdiction checklists) uses exactly the vocabulary the detectors hunt for.
+// A keyword detector cannot tell teaching text from evidence — the Greensky
+// scan's unanchored "image manipulation" finding matched the template's own
+// example, not the screenshots. Pages carrying the template masthead are
+// excluded from evidence scanning (replaced IN PLACE with a neutral
+// placeholder so page numbering and page-count statistics survive), and the
+// exclusion is disclosed via the returned note (Prime Directive 6).
+var VO_TEMPLATE_PAGE_RE = /INSTITUTIONAL\s+REVIEW\s+TEMPLATE|GOLD\s+STANDARD\s+FOR\s+FORENSIC\s+CHAT\s+LOG\s+ANALYSIS/i;
+var VO_TEMPLATE_PLACEHOLDER = new Array(11).join('analysis template boilerplate excluded. ');
+function voExcludeTemplatePages(textBlocks) {
+  if (!textBlocks || textBlocks.length < 2) return null;
+  var templatePages = [];
+  for (var tp = 0; tp < textBlocks.length; tp++) {
+    if (VO_TEMPLATE_PAGE_RE.test(textBlocks[tp] || '')) {
+      templatePages.push(tp + 1);
+      textBlocks[tp] = VO_TEMPLATE_PLACEHOLDER;
+    }
+  }
+  if (!templatePages.length) return null;
+  var tpList = templatePages.length > 12
+    ? templatePages.slice(0, 12).join(', ') + ', … (' + templatePages.length + ' in total)'
+    : templatePages.join(', ');
+  return 'Template boilerplate: ' + templatePages.length + ' page(s) (' + tpList +
+    ') carry the Verum Omnis analysis-template masthead. Their text is instructional boilerplate' +
+    ' (worked examples, keyword checklists), not case evidence, and was excluded from contradiction scanning.';
+}
+
+// No anchor, no weight (the Constitution's "no anchor, no sentence" rule,
+// applied to the deterministic engine itself). A CONTENT finding that cannot
+// name the page it came from cannot be checked against the source, and an
+// unverifiable finding must not carry MEDIUM+ weight — reviewers read exactly
+// such findings as fabrication. Structural sources (PDF metadata, file
+// structure, serial patterns spanning the document by design) carry their own
+// anchor kind and are exempt. Nothing is removed: the finding stays, demoted
+// to LOW, tagged, and the demotion count is returned for disclosure.
+var VO_ANCHOR_EXEMPT_LOC = /metadata|structure|header\/footer|signature block|pages \d/i;
+function voDemoteUnanchored(findings) {
+  var demoted = 0;
+  for (var ua = 0; ua < findings.length; ua++) {
+    var uf = findings[ua];
+    if (!uf || uf.type === 'SERIAL') continue;
+    var uloc = String(uf.location || '');
+    if (/page\s*\d/i.test(uloc) || VO_ANCHOR_EXEMPT_LOC.test(uloc)) continue;
+    if ((uf.severity | 0) <= 2) continue;
+    uf.severity = 2;
+    uf.unanchored = true;
+    uf.evidence = (uf.evidence || '') + ' [unanchored: no single page could be pinned for this indicator — verify against the full document before relying on it]';
+    demoted++;
+  }
+  return demoted;
+}
+
 function detectSerialPatterns(textBlocks) {
   var findings = [];
   var blocks = (textBlocks && textBlocks.length) ? textBlocks.map(function (b) { return String(b || '').toLowerCase(); }) : [''];
@@ -2250,6 +2357,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     textBlocks = [allTexts.join(' ')];
   }
 
+  // Template/boilerplate suppression (see voExcludeTemplatePages).
+  var templateNote = voExcludeTemplatePages(textBlocks);
+  if (templateNote) extractionNote += ' ' + templateNote;
+
   // Run all 37 detectors
   var detectors = [
     DETECTORS.D01_DETECT_DIRECT_CONTRADICTION,
@@ -2309,9 +2420,23 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     }
   }
 
+  // Route contextOnly output (CT38 multi-jurisdiction note, CT43 breadth note)
+  // into the extraction notes: context is disclosed, but it is never scored,
+  // never counted in totalFindings, and never rendered as a contradiction.
+  var _voContextNotes = [];
+  var _voSplitContext = function (list) {
+    var kept = [];
+    for (var cn = 0; cn < list.length; cn++) {
+      if (list[cn] && list[cn].contextOnly) _voContextNotes.push(list[cn].evidence);
+      else kept.push(list[cn]);
+    }
+    return kept;
+  };
+  allFindings = _voSplitContext(allFindings);
+
   // Run catch-all detector (needs other findings)
   try {
-    var catchallFindings = DETECTORS.D37_DETECT_INTERNAL_CONFLICT_CATCHALL(textBlocks, allFindings);
+    var catchallFindings = _voSplitContext(DETECTORS.D37_DETECT_INTERNAL_CONFLICT_CATCHALL(textBlocks, allFindings));
     allFindings = allFindings.concat(catchallFindings);
   } catch(e) {}
 
@@ -2362,6 +2487,19 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
 
   // Pin findings to a real page where their evidence resolves to exactly one.
   allFindings = voBackfillPageAnchors(allFindings, textBlocks);
+
+  // No anchor, no weight (see voDemoteUnanchored). Skipped when the whole
+  // document is one raw-fallback block: page anchors are impossible there and
+  // that degradation is already disclosed above.
+  var unanchoredDemoted = textBlocks.length > 1 ? voDemoteUnanchored(allFindings) : 0;
+  if (unanchoredDemoted) {
+    extractionNote += ' ' + unanchoredDemoted + ' indicator(s) demoted to LOW because no page anchor could be pinned (no anchor, no weight).';
+  }
+
+  // Disclose the context notes (multi-jurisdiction, breadth) gathered earlier.
+  if (_voContextNotes.length) {
+    extractionNote += ' ' + _voContextNotes.join(' ');
+  }
 
   // Calculate overall score
   var totalScore = 0;
@@ -2455,6 +2593,8 @@ if (typeof module !== 'undefined' && module.exports) {
     detectSerialPatterns: detectSerialPatterns,
     voBackfillPageAnchors: voBackfillPageAnchors,
     voPageForEvidence: voPageForEvidence,
-    voDigitalForensicsScan: voDigitalForensicsScan
+    voDigitalForensicsScan: voDigitalForensicsScan,
+    voExcludeTemplatePages: voExcludeTemplatePages,
+    voDemoteUnanchored: voDemoteUnanchored
   };
 }
