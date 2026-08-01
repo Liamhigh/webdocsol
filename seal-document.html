@@ -4788,6 +4788,144 @@ function voSerialKeywordHit(windowText, kw) {
   return re.test(windowText);
 }
 
+// ===================== DIGITAL FORENSICS (raw PDF structure) =====================
+// Deterministic, on-device checks on the raw PDF bytes + Info dictionary. These
+// look at what the FILE says about its own history — revision snapshots, XMP vs
+// Info disagreement, post-signature saves, embedded active content. Every output
+// is an INDICATOR with an innocent explanation stated alongside; none is a
+// determination of tampering. Designed not to self-flag Verum's own sealed
+// outputs (pdf-lib full-save writes a single revision and no XMP).
+
+function voToU8(bytes) {
+  if (bytes instanceof Uint8Array) return bytes;
+  if (bytes && bytes.buffer instanceof ArrayBuffer) return new Uint8Array(bytes.buffer);
+  return new Uint8Array(bytes);
+}
+
+// Find an ASCII needle in a byte array (no big string materialisation).
+function voByteIndexOf(u8, needle, from) {
+  var n0 = needle.charCodeAt(0), nLen = needle.length, max = u8.length - nLen;
+  for (var i = Math.max(0, from | 0); i <= max; i++) {
+    if (u8[i] !== n0) continue;
+    var hit = true;
+    for (var j = 1; j < nLen; j++) { if (u8[i + j] !== needle.charCodeAt(j)) { hit = false; break; } }
+    if (hit) return i;
+  }
+  return -1;
+}
+
+function voByteOffsets(u8, needle, cap) {
+  var out = [], at = 0;
+  while (out.length < (cap || 1000)) {
+    var idx = voByteIndexOf(u8, needle, at);
+    if (idx === -1) break;
+    out.push(idx);
+    at = idx + needle.length;
+  }
+  return out;
+}
+
+// Slice a byte range to a latin1 string (bounded, for XMP parsing only).
+function voBytesToLatin1(u8, start, end) {
+  var s = '', e = Math.min(end, u8.length);
+  for (var i = Math.max(0, start); i < e; i++) s += String.fromCharCode(u8[i]);
+  return s;
+}
+
+// Pull the XMP packet (if any) as text, capped at 128KB.
+function voExtractXmp(u8) {
+  var a = voByteIndexOf(u8, '<x:xmpmeta', 0);
+  if (a === -1) return null;
+  var b = voByteIndexOf(u8, '</x:xmpmeta>', a);
+  if (b === -1 || b - a > 131072) b = Math.min(a + 131072, u8.length);
+  return voBytesToLatin1(u8, a, b + 12);
+}
+
+function voXmpValue(xmp, tag) {
+  // Element form <tag>value</tag> or attribute form tag="value".
+  var m = new RegExp('<' + tag + '>([^<]{1,80})</' + tag + '>').exec(xmp);
+  if (m) return m[1].trim();
+  m = new RegExp(tag + '="([^"]{1,80})"').exec(xmp);
+  return m ? m[1].trim() : null;
+}
+
+function voDigitalForensicsScan(pdfBytes, pdfDoc) {
+  var findings = [];
+  var u8;
+  try { u8 = voToU8(pdfBytes); } catch (e) { return findings; }
+  if (!u8 || u8.length < 100) return findings;
+
+  // 1. Embedded revision snapshots. Every incremental save appends a new xref +
+  // %%EOF, leaving the previous version recoverable inside the file. One EOF is
+  // a clean single save; two is common for linearized ("fast web view") files;
+  // three or more means the file carries real revision history.
+  var eofs = voByteOffsets(u8, '%%EOF', 200);
+  if (eofs.length >= 3) {
+    findings.push({ type: 'CT30', severity: 2,
+      evidence: 'The file contains ' + eofs.length + ' embedded revision snapshots (incremental saves) — earlier versions of the document may be recoverable from within this file. Common in normal editing workflows, but on a document presented as a final/original it merits review with a PDF forensic tool.',
+      location: 'PDF structure' });
+  }
+
+  // 2. Content saved AFTER a digital signature. A signature's own revision ends
+  // with one %%EOF; any %%EOF after the signature object means the file was
+  // saved again after signing. (Some later saves are benign, e.g. adding a
+  // second signature — which is why this stays an indicator.)
+  var byteRangeAt = voByteIndexOf(u8, '/ByteRange', 0);
+  if (byteRangeAt !== -1) {
+    var eofsAfterSig = 0;
+    for (var i = 0; i < eofs.length; i++) { if (eofs[i] > byteRangeAt) eofsAfterSig++; }
+    if (eofsAfterSig >= 2) {
+      findings.push({ type: 'CT41', severity: 4,
+        evidence: 'The file was saved ' + (eofsAfterSig - 1) + ' more time(s) AFTER a digital signature was applied — content may have been added or changed post-signing. (A benign cause is a second signature or form fill; verify the signed revision against the final file.)',
+        location: 'PDF structure' });
+    }
+  }
+
+  // 3. Embedded active content (JavaScript / auto-run action). Legitimate PDFs
+  // rarely need it; on evidence it deserves a look because scripts can change
+  // what a document displays.
+  if (voByteIndexOf(u8, '/JavaScript', 0) !== -1 ||
+      (voByteIndexOf(u8, '/OpenAction', 0) !== -1 && voByteIndexOf(u8, '/JS', 0) !== -1)) {
+    findings.push({ type: 'CT42', severity: 2,
+      evidence: 'The file embeds active content (JavaScript / auto-run action). Scripts can alter what a PDF displays; review with a PDF forensic tool before relying on the on-screen rendering.',
+      location: 'PDF structure' });
+  }
+
+  // 4. XMP vs Info dictionary disagreement. The two metadata stores are written
+  // together by well-behaved tools; large disagreement means the file passed
+  // through multiple tools or was edited with only one store updated.
+  try {
+    var xmp = voExtractXmp(u8);
+    if (xmp && pdfDoc) {
+      var xmpCreate = voXmpValue(xmp, 'xmp:CreateDate');
+      var infoCreate = null;
+      try { infoCreate = pdfDoc.getCreationDate(); } catch (e2) {}
+      if (xmpCreate && infoCreate) {
+        var xd = Date.parse(xmpCreate);
+        if (isFinite(xd) && Math.abs(xd - infoCreate.getTime()) > 26 * 3600 * 1000) {
+          findings.push({ type: 'CT29', severity: 3,
+            evidence: 'The file\'s two metadata stores disagree on the creation date: XMP says ' + xmpCreate + ' but the Info dictionary says ' + infoCreate.toISOString() + ' — consistent with editing that updated one store but not the other. Request the native original to establish the true date.',
+            location: 'PDF metadata' });
+        }
+      }
+      var xmpTool = voXmpValue(xmp, 'pdf:Producer') || voXmpValue(xmp, 'xmp:CreatorTool');
+      var infoProducer = '';
+      try { infoProducer = pdfDoc.getProducer() || ''; } catch (e3) {}
+      if (xmpTool && infoProducer) {
+        var a2 = xmpTool.toLowerCase().replace(/\s+/g, ' ').trim();
+        var b2 = infoProducer.toLowerCase().replace(/\s+/g, ' ').trim();
+        if (a2 && b2 && a2.indexOf(b2) === -1 && b2.indexOf(a2) === -1) {
+          findings.push({ type: 'CT24', severity: 2,
+            evidence: 'The file\'s two metadata stores name different creating tools: XMP says "' + xmpTool + '" but the Info dictionary says "' + infoProducer + '" — the file has passed through more than one tool since creation.',
+            location: 'PDF metadata' });
+        }
+      }
+    }
+  } catch (e4) {}
+
+  return findings;
+}
+
 // ===================== PAGE-ANCHOR BACK-FILL =====================
 // Most detectors scan the joined text and report location "Full document", which
 // downstream becomes page 0 — so the highest-value findings (CT01/CT14/CT35/…)
@@ -5262,6 +5400,12 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     allFindings = allFindings.concat(serialFindings);
   } catch(e) {}
 
+  // Digital forensics on the raw PDF structure (revisions, post-signature
+  // saves, active content, XMP vs Info disagreement).
+  try {
+    allFindings = allFindings.concat(voDigitalForensicsScan(pdfBytes, pdfDoc));
+  } catch(e) {}
+
   // Drop findings that repeat an earlier one verbatim, and bound how many any
   // single contradiction type may contribute. A detector that misfires
   // otherwise buries the real findings -- D02 alone once produced 739 of 742.
@@ -5389,7 +5533,8 @@ if (typeof module !== 'undefined' && module.exports) {
     runForensicEngine: runForensicEngine,
     detectSerialPatterns: detectSerialPatterns,
     voBackfillPageAnchors: voBackfillPageAnchors,
-    voPageForEvidence: voPageForEvidence
+    voPageForEvidence: voPageForEvidence,
+    voDigitalForensicsScan: voDigitalForensicsScan
   };
 }
 /* VO-INLINE:forensic-engine-page.js:END */

@@ -18,6 +18,7 @@ const suites = [
   'seal-guard.test.mjs',
   'franchise-lease.test.mjs',
   'detector-recall.test.mjs',
+  'digital-forensics.test.mjs',
   'home-verify.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',
