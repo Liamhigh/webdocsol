@@ -63,7 +63,11 @@ var CW = PW - LM - RM;            // 504 content width
 var BODY_TOP = 686;               // first baseline area under header band
 var BODY_BOTTOM = 70;             // above seal footer zone
 
-var ENGINE_VERSION = '2.0';
+// MUST equal VO_ENGINE_VERSION in forensic-engine-page.js — a report or
+// findings JSON stamped with a stale engine version breaks the Seal's bond
+// to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
+// enforces the cross-file equality.
+var ENGINE_VERSION = '5.3.3-web';
 var CONSTITUTION_VERSION = '6.0';
 var DETECTOR_COUNT = 37, CT_COUNT = 43, SP_COUNT = 17;
 

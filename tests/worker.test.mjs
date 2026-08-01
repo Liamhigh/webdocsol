@@ -98,6 +98,34 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     r = await worker.fetch(mk('/seal-document'), env, {});
     ok(/no-store/.test(r.headers.get('cache-control') || ''), 'HTML stays uncached');
     ok(seen.some(u => u.includes('_cb=')), 'HTML request is still cache-busted');
+
+    // HTML-as-asset guard. During a Pages redeploy the origin briefly answered
+    // /vendor/tesseract.min.js with the home page as a 200 -- which the edge
+    // then cached for an hour. The OCR loader's global check failed and 32
+    // image-only pages of the Greensky bundle went unread. A .js asset that
+    // comes back text/html must be retried cache-busted, and if still HTML,
+    // answered 503 no-store -- never served as if it were the script.
+    let calls = 0;
+    globalThis.fetch = async (req) => {
+      const u = typeof req === 'string' ? req : req.url;
+      calls++;
+      if (calls === 1) return new Response('<!DOCTYPE html><title>home</title>', { status: 200, headers: { 'content-type': 'text/html' } });
+      ok(u.includes('_vb='), 'HTML-as-asset retry is cache-busted');
+      return new Response('var Tesseract={};', { status: 200, headers: { 'content-type': 'application/javascript' } });
+    };
+    r = await worker.fetch(mk('/vendor/tesseract.min.js'), env, {});
+    ok(calls === 2 && (r.headers.get('content-type') || '').includes('javascript'),
+      'asset served as JS after one cache-busted retry (calls=' + calls + ')');
+
+    globalThis.fetch = async () => new Response('<!DOCTYPE html><title>home</title>', { status: 200, headers: { 'content-type': 'text/html' } });
+    r = await worker.fetch(mk('/vendor/tesseract.min.js'), env, {});
+    ok(r.status === 503 && /no-store/.test(r.headers.get('cache-control') || ''),
+      'persistent HTML-for-asset answers 503 no-store, never HTML-as-JS (' + r.status + ')');
+
+    // An HTML page returning text/html is of course NOT the guard's business.
+    globalThis.fetch = async () => new Response('<!DOCTYPE html>', { status: 200, headers: { 'content-type': 'text/html' } });
+    r = await worker.fetch(mk('/seal-document'), env, {});
+    ok(r.status === 200, 'HTML pages still serve HTML normally');
   } finally {
     globalThis.fetch = realFetch;
   }
