@@ -1551,9 +1551,16 @@ var DETECTORS = {
   D39_DETECT_ASSET_VALUE_DENIAL: function(textBlocks) {
     var findings = [];
     var t = textBlocks.join(' ').toLowerCase();
-    var recognisesGoodwill = /(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis)/.test(t) ||
+    // "forfeit" added to the recognition keywords: a goodwill FORFEITURE
+    // clause presupposes the asset exists (there would otherwise be nothing
+    // to forfeit) — the AllFuels curated database's own reasoning.
+    var recognisesGoodwill = /(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis|forfeit)/.test(t) ||
       /(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/.test(t);
-    var deniesGoodwillValue = /goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)/.test(t);
+    // Negation-BEFORE-goodwill added: the AllFuels rerun showed counsel's
+    // actual courtroom phrasing — "held no compensable goodwill" — never
+    // matched the negation-after patterns, so the engine was silent on the
+    // exact contradiction this detector was built from.
+    var deniesGoodwillValue = /goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)/.test(t);
     if (recognisesGoodwill && deniesGoodwillValue) {
       findings.push({ type: 'CT45', severity: 5,
         evidence: 'Goodwill / value of the business is recognised or quantified in one document but denied or said to have no compensable value in another — the forfeiture/clawback is itself an admission the asset exists. HYPOTHESIS: requires legal review.',

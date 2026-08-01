@@ -49,6 +49,21 @@ const gwClean = [
 ];
 ok(DET.D39_DETECT_ASSET_VALUE_DENIAL(gwClean).length === 0, 'D39 stays quiet when goodwill is never denied');
 
+// ===== AllFuels rerun regression (1 Aug 2026): the detector built FROM the
+// Goodwill Paradox was silent on the case's own courtroom phrasing — counsel
+// said "held NO COMPENSABLE GOODWILL" (negation before the word), and only
+// negation-after patterns were known. A goodwill FORFEITURE clause also now
+// counts as recognition (nothing to forfeit unless the asset exists).
+ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
+  'the agreement contained a goodwill forfeiture clause required as a condition of operating the garage.',
+  'counsel submitted that the operators held no compensable goodwill in their franchise sites.'
+]).some(f => f.type === 'CT45'),
+  'CT45 fires on the AllFuels courtroom phrasing ("held no compensable goodwill" + forfeiture clause)');
+ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
+  'on termination no compensation for improvements shall be payable to the lessee.'
+]).length === 0,
+  'CT45 stays silent on an ordinary no-compensation-for-improvements clause');
+
 console.log(`\n[franchise-lease] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[franchise-lease] FAILURES'); process.exit(1); }
 console.log('[franchise-lease] ALL GREEN');
