@@ -90,6 +90,37 @@ if (constMatch) {
     `forensic-report.js ENGINE_VERSION ("${rv && rv[1]}") equals the engine's VO_ENGINE_VERSION ("${v}")`);
 }
 
+// Taxonomy renumber lock. An external contradiction database was produced
+// with its own CT01-CT43 numbering that collides with the sealed taxonomy
+// (its "CT23 Communication Authorization" vs the engine's "CT23 Signature
+// Mismatch"). Two meanings for one code in court-facing artifacts is a
+// credibility attack waiting to happen, so the load-bearing codes are pinned
+// here by name: renumbering any of them fails the build.
+{
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const TYPES = require('../forensic-engine-page.js').CONTRADICTION_TYPES;
+  const byId = {};
+  for (const t of Object.values(TYPES)) byId[t.id] = t;
+  const PINNED = {
+    CT01: 'Direct Statement Contradiction',
+    CT03: 'Date Inconsistency',
+    CT05: 'Causal Impossibility',
+    CT09: 'Identity Contradiction',
+    CT14: 'Entity Status Contradiction',
+    CT23: 'Signature Mismatch',
+    CT28: 'Image Integrity Failure',
+    CT38: 'Jurisdictional Impossibility',
+    CT39: 'Chain of Custody Break',
+    CT42: 'Digital Footprint Mismatch',
+    CT43: 'Document Internal Conflict',
+  };
+  for (const [id, name] of Object.entries(PINNED)) {
+    ok(byId[id] && byId[id].name === name,
+      `sealed taxonomy: ${id} is "${name}" (got "${byId[id] && byId[id].name}") — codes may never be renumbered`);
+  }
+}
+
 console.log(`\n[constitution-lock] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[constitution-lock] FAILURES'); process.exit(1); }
 console.log('[constitution-lock] ALL GREEN');

@@ -8353,8 +8353,23 @@ function voFirstPage(location) {
 // findings raised by the optional AI review are candidates pending
 // verification and are labelled so — the two tiers never mix. This file is
 // what the Verum Omnis app / G3 narrator can consume directly.
+// CONTRADICTION_TYPES is keyed long-form ('CT01_DIRECT_STATEMENT'); findings
+// carry the short id ('CT01'). Index by id once so lookups actually resolve.
+function voCtById() {
+  var byId = {};
+  if (typeof CONTRADICTION_TYPES !== 'undefined') {
+    for (var tk in CONTRADICTION_TYPES) {
+      if (!Object.prototype.hasOwnProperty.call(CONTRADICTION_TYPES, tk)) continue;
+      var tt = CONTRADICTION_TYPES[tk];
+      if (tt && tt.id) byId[tt.id] = tt;
+    }
+  }
+  return byId;
+}
+
 function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
   var list = (result && Array.isArray(result.findings)) ? result.findings.filter(Boolean) : [];
+  var ctById = voCtById();
   var records = [];
   for (var i = 0; i < list.length; i++) {
     var f = list[i];
@@ -8364,9 +8379,18 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
     var method = fromAi
       ? 'AI review (Cloudflare Workers AI) over sealed engine findings'
       : 'deterministic detector ' + typeName + ' (web engine v' + VO_ENGINE_VERSION + ')';
+    // Canonical taxonomy fields, resolved from the engine's sealed
+    // CONTRADICTION_TYPES map so a downstream database can never guess (or
+    // re-invent) what a CT code means — an external database was built with
+    // its own conflicting CT01-CT43 numbering precisely because this file
+    // shipped bare codes. Serial patterns carry their pattern name instead.
+    var ctDef = (f.type !== 'SERIAL') ? (ctById[f.type] || null) : null;
     records.push({
       contradiction_id: 'VO-WEB-F' + String(i + 1).padStart(3, '0'),
       type: typeName,
+      ct_name: f.type === 'SERIAL' ? (f.serialName || 'Serial fraud pattern') : (ctDef ? ctDef.name : null),
+      ct_category: f.type === 'SERIAL' ? 'SERIAL_PATTERN' : (ctDef ? ctDef.category : null),
+      ct_definition: ctDef ? ctDef.desc : null,
       severity: VO_SEV_ORDINAL[f.severity] || 'LOW',
       confidence: fromAi ? 'MODERATE' : 'DETERMINISTIC',
       proposition_a_text: quote,
@@ -8407,9 +8431,21 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
   }).length;
   return {
     engine_version: VO_ENGINE_VERSION,
-    findings_json_version: '1.0.0',
+    findings_json_version: '1.1.0',
     generated_utc: new Date().toISOString(),
     source_bundle: docName,
+    // The canonical taxonomy, in full, from the engine's sealed
+    // CONTRADICTION_TYPES map. One numbering, one meaning — any database or
+    // report built from this file inherits the sealed taxonomy instead of
+    // inventing its own.
+    ct_taxonomy: (function () {
+      var tax = {};
+      for (var tid in ctById) {
+        if (!Object.prototype.hasOwnProperty.call(ctById, tid)) continue;
+        tax[tid] = { name: ctById[tid].name, category: ctById[tid].category, definition: ctById[tid].desc };
+      }
+      return tax;
+    })(),
     case_id: (caseInfo && caseInfo.caseName) || '',
     case_ids: (caseInfo && caseInfo.caseRefs) ? [caseInfo.caseRefs] : [],
     corpus_sha512: String(docSha512 || '').toLowerCase(),
