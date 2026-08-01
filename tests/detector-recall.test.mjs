@@ -235,6 +235,35 @@ const BF = require('../forensic-engine-page.js').voBackfillPageAnchors;
   ok(f[0].location === 'Page 2', 'back-fill matches across NFC/NFD accent forms: got ' + f[0].location);
 }
 
+// ===== CT14 (D09): entity-status words must be used ABOUT AN ENTITY =====
+// The AllFuels 320-page run paired "utilities is to be registered" (a lease
+// clause) with a case-law mention of liquidation into a CRITICAL "conflicting
+// status" with no quotes — read by an external reviewer as a fabrication.
+{
+  const f = DET.D09_DETECT_ENTITY_STATUS_FAKE([
+    'All charges shall be borne by the Lessee, in whose name ALL utilities is to be registered.',
+    'the estate was finally liquidated after the sequestration hearing concluded years later'
+  ]);
+  ok(f.length === 0, 'CT14 does NOT pair "utilities to be registered" with an unrelated liquidation mention');
+}
+{
+  const f = DET.D09_DETECT_ENTITY_STATUS_FAKE([
+    'Palmbili Property Investments is a duly registered company with registration number 2013/199336/07.',
+    'The same company was liquidated in 2019 and remains in liquidation.'
+  ]);
+  ok(f.length === 1 && /registered/.test(f[0].evidence) && /liquidated/.test(f[0].evidence),
+    'CT14 still fires when BOTH statuses are used about an entity');
+  ok(f.length === 1 && /vs/.test(f[0].evidence) && /page 1/i.test(f[0].evidence) && /page 2/i.test(f[0].evidence),
+    'CT14 evidence quotes both passages with their pages (verifiable)');
+  ok(f.length === 1 && /Page 1 and Page 2/.test(f[0].location), 'CT14 location names both pages');
+}
+{
+  const f = DET.D09_DETECT_ENTITY_STATUS_FAKE([
+    'sent by registered mail to the registered office at the registered address'
+  ]);
+  ok(f.length === 0, 'CT14 ignores registered mail/office/address entirely');
+}
+
 console.log(`\n[detector-recall] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[detector-recall] FAILURES'); process.exit(1); }
 console.log('[detector-recall] ALL GREEN');
