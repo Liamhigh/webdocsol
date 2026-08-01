@@ -97,6 +97,10 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   const dup = R._extractMoney('USD 500 and USD 500 again');
   ok(dup.filter((x) => /USD 500/.test(x)).length === 1, 'extractMoney: de-duplicates identical figures');
   ok(R._extractMoney('no money here, just words').length === 0, 'extractMoney: empty when no figures');
+  // The R token must not match inside a word: "7 Mar 2025" produced "r 2025"
+  // in a real Greensky report's Monetary Figures table.
+  ok(R._extractMoney('stated as 7 Mar 2025 and as 13 Mar 2025').length === 0, 'extractMoney: does not read "Mar 2025" as an R amount');
+  ok(R._extractMoney('a fee of R 2025 was charged').some((x) => /R 2025/.test(x)), 'extractMoney: still finds a genuine standalone R amount');
 }
 
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
