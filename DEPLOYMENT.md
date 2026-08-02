@@ -25,7 +25,7 @@ the page but the site looks the same".
    source: worker/verum-rules.js     source: worker/verumglobal-static.js
              │                                │
       wrangler deploy                  reverse-proxies to
-      --env production                       ↓
+                                             ↓
                                     https://verumglobal.pages.dev
                                     (Cloudflare Pages project)
 ```
@@ -97,7 +97,7 @@ export CLOUDFLARE_API_TOKEN=<your-token-here>
 ### Step 3: Deploy to Production
 
 ```bash
-wrangler deploy --env production
+wrangler deploy
 ```
 
 **Output**: Should show:
@@ -205,19 +205,19 @@ Used for:
 ### Check Deployment Status
 
 ```bash
-wrangler deployments list --env production
+wrangler deployments list
 ```
 
 ### View Logs
 
 ```bash
-wrangler tail --env production
+wrangler tail
 ```
 
 ### Rollback to Previous Version
 
 ```bash
-wrangler deployments rollback --env production
+wrangler deployments rollback
 ```
 
 (Select from list of previous deployments)
@@ -226,7 +226,7 @@ wrangler deployments rollback --env production
 
 ```bash
 # Start Wrangler dev server
-wrangler dev --env production
+wrangler dev
 
 # Navigate to http://localhost:8787
 # Upload a document and test sealing flow
@@ -265,7 +265,7 @@ wrangler dev --env production
 Real-time logs via Wrangler:
 
 ```bash
-wrangler tail --env production --format pretty
+wrangler tail --format pretty
 ```
 
 ## Future Improvements
@@ -280,7 +280,7 @@ wrangler tail --env production --format pretty
 
 ### Key Context
 - This site is **live at Cloudflare** using **Cloudflare Workers**
-- **Deployment method**: `wrangler deploy --env production`
+- **Deployment method**: `wrangler deploy`
 - **API token required**: Set `CLOUDFLARE_API_TOKEN` environment variable
 - **Static assets**: Served by Cloudflare CDN (no build step)
 - **Worker code**: `worker/verum-rules.js` (routes API requests)
@@ -292,15 +292,19 @@ wrangler tail --env production --format pretty
    are served from the `verumglobal.pages.dev` Pages project, which is not
    built from this repo — the update must be published to that Pages project.
 4. For API changes (`worker/verum-rules.js`): **must** run
-   `wrangler deploy --env production`. Without `--env production` the Worker
-   deploys under a default name with no routes and no KV/AI bindings, so it
-   serves no traffic.
+   `wrangler deploy` — with NO `--env` flag. `wrangler.toml` defines a single
+   top-level environment on purpose (the KV and AI bindings used to sit under
+   `[env.production]`, which meant an `--env`-less deploy shipped a Worker with
+   no bindings at all). Passing `--env production` now FAILS immediately with
+   "No environment found in configuration with name production", because no such
+   section exists. Cloudflare Workers Builds deploys without `--env`, so the
+   dashboard build/deploy command must not add one either.
 5. For proxy/routing changes (`worker/verumglobal-static.js`): must be
    deployed to the `verumglobal-static` Worker.
 
 ### Testing Deployment Locally
 ```bash
-wrangler dev --env production
+wrangler dev
 # Opens http://localhost:8787 with live reload
 ```
 
