@@ -1357,7 +1357,26 @@ function secTimeline(ctx, data) {
   for (var i = 0; i < all.length; i++) {
     if (all[i].type === 'CT03' || all[i].type === 'CT04' || all[i].type === 'CT29') dateFindings.push(all[i]);
   }
-  ctx.para('The deterministic engine (v' + ENGINE_VERSION + ') does not emit a structured event timeline. Date- and sequence-related findings are reproduced below from the contradiction matrix.', { size: 9.5, after: 8 });
+
+  // The engine now emits a chronological event timeline built from every dated
+  // finding (each anchor's WHEN). Read top to bottom it is the story the
+  // documents tell — the human-readable narrative layer over the sealed proof.
+  var tl = (data.findings && data.findings.timeline) || null;
+  var tlEvents = (tl && tl.events) || [];
+  if (tlEvents.length) {
+    ctx.para('The engine (v' + ENGINE_VERSION + ') reconstructs a chronological timeline from the dated findings. Each line names WHEN, WHO, and the page — read in order, this is the sequence the documents describe:', { size: 9.5, after: 6 });
+    for (var te = 0; te < tlEvents.length; te++) {
+      var ev = tlEvents[te];
+      var whoStr = (ev.who && ev.who.length) ? ev.who.join(', ') + ' — ' : '';
+      var pgStr = ev.page ? ' (p.' + ev.page + ')' : '';
+      var line = quoteEvidence(ev.evidence);
+      ctx.bullet('On ' + ev.date + ': ' + whoStr + line + pgStr, { size: 9.5, after: 4 });
+    }
+    ctx.para('Chronological order is derived from the dates on the page; a date read day-first where the format is ambiguous (South African convention). The sealed hash and page anchors underneath each line are the proof — this ordering is the reading of it.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+  } else {
+    ctx.para('The engine emitted no dated events for this document, so no chronological timeline could be built. Date- and sequence-related findings, if any, are reproduced below from the contradiction matrix.', { size: 9.5, after: 8 });
+  }
+
   if (dateFindings.length === 0) {
     ctx.para('No date, sequence, or timestamp inconsistencies were detected.', { size: 10, after: 6 });
   } else {
@@ -1381,7 +1400,7 @@ function secTimeline(ctx, data) {
       { size: 8 }
     );
   }
-  ctx.para('Full timeline reconstruction and event ordering require AI consensus review — pending.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
+  ctx.para('Deeper event ordering across narrative prose (beyond the dated findings above) can be extended by AI consensus review.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
 }
 
 // ================= SECTION: DECLARATION =================
@@ -1705,6 +1724,11 @@ function secFindingDetails(ctx, data) {
       'Legal subject: ' + (LEGAL_SUBJECT_LABEL[subj] || subj) + (CT_DETECTOR[f.type] ? '    |    Detector: ' + CT_DETECTOR[f.type] : '')
     ];
     for (var k = 0; k < factLines.length; k++) ctx.para(factLines[k], { size: 9, color: NAVY2, after: 1 });
+    // Provision the DOCUMENT ITSELF cites (cite-or-stay-silent), distinct from
+    // the candidate statutes for counsel further down: this is the clause on the
+    // page, quoted, not an applicable law the engine inferred.
+    var docLaw = (f.anchor && f.anchor.law) || [];
+    if (docLaw.length) ctx.para('Provision cited in the document: ' + docLaw.join(', '), { size: 9, color: NAVY2, after: 1 });
     ctx.gap(3);
     ctx.para('What it means: ' + withPeriod(narrativeMeaning(f)), { size: 10, after: 4 });
     if (f.source === 'ai' && f.rationale) ctx.para('AI rationale: ' + san(f.rationale), { size: 9.5, after: 4 });

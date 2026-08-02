@@ -34,7 +34,9 @@ const { buildFindingsJson } = new Function(
 
 const result = {
   findings: [
-    { type: 'CT03', severity: 4, evidence: '"termination date" is stated as 7 Mar 2025 and as 13 Mar 2025', location: 'Page 95' },
+    { type: 'CT03', severity: 4, evidence: '"termination date" is stated as 7 Mar 2025 and as 13 Mar 2025', location: 'Page 95',
+      anchor: { who: [{ name: 'Gary Highcock', kind: 'name' }, { name: 'Lessee', kind: 'role' }], where: [95], quote: ['termination date'], when: ['7 Mar 2025', '13 Mar 2025'], law: ['clause 4.5.2'] },
+      statement: 'Date Inconsistency (p.95): "termination date" is stated as 7 Mar 2025 and as 13 Mar 2025 Parties: Gary Highcock, Lessee.' },
     { type: 'SERIAL', serialPattern: 'SP01_ADVANCE_FEE_FRAUD', serialName: 'Advance Fee Fraud (419 Scam)', severity: 5, evidence: 'stages matched', location: 'Pages 3-9' },
     { type: 'CT28', severity: 3, evidence: 'cropped next to an image', location: 'Page 12', source: 'ai' },
   ],
@@ -42,7 +44,23 @@ const result = {
 };
 const json = buildFindingsJson(result, 'bundle.pdf', 'a'.repeat(128), 100, { caseName: 'Greensky' });
 
-ok(json.findings_json_version === '1.1.0', 'contract version bumped to 1.1.0 (additive taxonomy fields)');
+ok(json.findings_json_version === '1.2.0', 'contract version bumped to 1.2.0 (additive anchor fields)');
+
+// Anchors bound into the record: who -> actors, when -> temporal_analysis,
+// document-cited law -> document_cited_provisions (cite-or-stay-silent).
+const r0 = json.contradictions[0];
+ok(r0.proposition_a_actor === 'Gary Highcock', 'first party bound to proposition_a_actor');
+ok(r0.proposition_b_actor === 'Lessee', 'second party bound to proposition_b_actor');
+ok(r0.temporal_analysis === '7 Mar 2025, 13 Mar 2025', 'anchor dates flow into temporal_analysis');
+ok(Array.isArray(r0.document_cited_provisions) && r0.document_cited_provisions[0] === 'clause 4.5.2',
+  'document-cited provision carried (cite-or-stay-silent)');
+ok(r0.anchors && r0.anchors.where[0] === 95 && r0.anchors.law[0] === 'clause 4.5.2',
+  'full anchor block (where/law) carried on the record');
+ok(typeof r0.anchored_statement === 'string' && r0.anchored_statement.length > 0,
+  'flat anchored_statement carried on the record');
+// A finding with no anchor (serial/AI) must not crash and must state no law.
+ok(Array.isArray(json.contradictions[1].document_cited_provisions) && json.contradictions[1].document_cited_provisions.length === 0,
+  'anchorless finding yields empty provisions, not a crash');
 
 // Per-record canonical fields.
 const [f1, f2, f3] = json.contradictions;
