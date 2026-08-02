@@ -203,10 +203,22 @@ const BF = require('../forensic-engine-page.js').voBackfillPageAnchors;
   ok(f[0].location === 'Page 2', 'back-fill pins co-occurring colon-tokens to their single page (got ' + f[0].location + ')');
 }
 {
+  // A genuine CROSS-PAGE conflict must never be pinned to a SINGLE page — that
+  // was the original guard here, and it still holds. What changed (v5.4
+  // multi-page anchoring) is the alternative: instead of falling back to the
+  // pseudo-location "Full document" — which fails the anchor rule and drops the
+  // finding out of the report entirely — the conflict is now anchored to the
+  // real SET of pages its terms occupy. "Pages 1, 2" is not false precision; it
+  // is where the two halves actually sit, and a reader can check both. The
+  // precision guards live in voPagesForEvidence: probes under 4 normalised
+  // chars, and page sets larger than the cap, still anchor nothing.
   const blocks = ['registered appears on this page only', 'liquidated appears on a different page only', 'more'];
   const f = [{ type: 'CT14', evidence: 'Conflicting status claims: registered, liquidated', location: 'Full document' }];
   BF(f, blocks);
-  ok(f[0].location === 'Full document', 'back-fill leaves a genuine cross-page conflict unanchored (no false precision)');
+  ok(f[0].location !== 'Page 1' && f[0].location !== 'Page 2',
+    'back-fill never pins a cross-page conflict to a single page (got ' + f[0].location + ')');
+  ok(f[0].location === 'Pages 1, 2',
+    'back-fill anchors a cross-page conflict to the real page set instead of "Full document" (got ' + f[0].location + ')');
 }
 {
   const f = [{ type: 'CT02', evidence: '"total" is stated as 1 and 2', location: 'Page 3' }];

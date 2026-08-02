@@ -2071,6 +2071,49 @@ function voPageForEvidence(ev, normBlocks) {
   return 0;
 }
 
+// MULTI-PAGE ANCHORING. A document-wide pattern — many email domains, a bank
+// account repeated across correspondence — is NOT unanchorable; it is anchored
+// to a SET of pages. voPageForEvidence resolves a page only when a probe hits
+// EXACTLY one, so these findings ("Multiple email domains: …", location
+// "Multiple pages") failed the anchor rule and dropped out of the report as
+// unanchored observations, even though every instance sits on a known page.
+//
+// This UPHOLDS the anchor rule rather than waiving it: the finding must still
+// cite real pages, and a pattern that cannot be enumerated to a bounded page
+// set stays unanchored. Probes must be >= 4 normalised chars, so a bare "R" or
+// "$" (which appears on nearly every page) can never anchor anything.
+var VO_MULTIPAGE_CAP = 25; // hitting more pages than this is noise, not an anchor
+function voPagesForEvidence(ev, normBlocks, cap) {
+  var text = String(ev == null ? '' : ev);
+  var limit = cap || VO_MULTIPAGE_CAP;
+  var probes = [], i, m;
+  // Items enumerated after a colon: "Multiple email domains: a.com, b.org".
+  var colon = text.indexOf(':');
+  if (colon !== -1) {
+    var items = text.slice(colon + 1).split(/[,;]/);
+    for (i = 0; i < items.length; i++) {
+      var t = voNormMatch(items[i]);
+      if (t.length >= 4) probes.push(t);
+    }
+  }
+  // Verbatim quoted fragments.
+  var qRe = /["“”‘’']([^"“”‘’']{6,})["“”‘’']/g;
+  while ((m = qRe.exec(text)) !== null) {
+    var q = voNormMatch(m[1]);
+    if (q.length >= 4) probes.push(q);
+  }
+  if (!probes.length) return [];
+  var pageSet = {};
+  for (i = 0; i < probes.length; i++) {
+    for (var b = 0; b < normBlocks.length; b++) {
+      if (normBlocks[b].indexOf(probes[i]) !== -1) pageSet[b + 1] = true;
+    }
+  }
+  var pages = Object.keys(pageSet).map(Number).sort(function (x, y) { return x - y; });
+  if (pages.length < 2 || pages.length > limit) return [];
+  return pages;
+}
+
 function voBackfillPageAnchors(findings, blocks) {
   if (!blocks || blocks.length < 2) return findings; // one block: nothing to pin against
   var normBlocks = blocks.map(voNormMatch);
@@ -2078,7 +2121,10 @@ function voBackfillPageAnchors(findings, blocks) {
     var f = findings[i];
     if (/page\s+\d+/i.test(String(f.location || ''))) continue; // detector already anchored it
     var pg = voPageForEvidence(f.evidence, normBlocks);
-    if (pg > 0) f.location = 'Page ' + pg;
+    if (pg > 0) { f.location = 'Page ' + pg; continue; }
+    // Single page failed: a document-wide pattern is anchored to a page SET.
+    var multi = voPagesForEvidence(f.evidence, normBlocks);
+    if (multi.length) f.location = 'Pages ' + multi.join(', ');
   }
   return findings;
 }
@@ -3102,6 +3148,7 @@ if (typeof module !== 'undefined' && module.exports) {
     detectSerialPatterns: detectSerialPatterns,
     voBackfillPageAnchors: voBackfillPageAnchors,
     voPageForEvidence: voPageForEvidence,
+    voPagesForEvidence: voPagesForEvidence,
     voDigitalForensicsScan: voDigitalForensicsScan,
     voExcludeTemplatePages: voExcludeTemplatePages,
     voEnforceAnchorRule: voEnforceAnchorRule,
