@@ -2085,7 +2085,9 @@ function voPageForEvidence(ev, normBlocks) {
 var VO_MULTIPAGE_CAP = 25; // hitting more pages than this is noise, not an anchor
 function voPagesForEvidence(ev, normBlocks, cap) {
   var text = String(ev == null ? '' : ev);
-  var limit = cap || VO_MULTIPAGE_CAP;
+  // `cap === undefined` rather than a truthiness test, so an explicit cap of 0
+  // ("anchor nothing") is honoured instead of silently becoming the default.
+  var limit = (cap === undefined || cap === null) ? VO_MULTIPAGE_CAP : cap;
   var probes = [], i, m;
   // Items enumerated after a colon: "Multiple email domains: a.com, b.org".
   var colon = text.indexOf(':');
@@ -2103,14 +2105,21 @@ function voPagesForEvidence(ev, normBlocks, cap) {
     if (q.length >= 4) probes.push(q);
   }
   if (!probes.length) return [];
-  var pageSet = {};
+  // Short-circuit once the page set passes the cap: beyond it the answer is
+  // already "not an anchor", so scanning the rest of a 491-page bundle for every
+  // remaining probe is pure waste. This is the common case for a probe that is
+  // too generic, and it is exactly the case that was slowest.
+  var pageSet = {}, found = 0;
   for (i = 0; i < probes.length; i++) {
     for (var b = 0; b < normBlocks.length; b++) {
-      if (normBlocks[b].indexOf(probes[i]) !== -1) pageSet[b + 1] = true;
+      if (normBlocks[b].indexOf(probes[i]) === -1) continue;
+      if (pageSet[b + 1]) continue;
+      pageSet[b + 1] = true;
+      if (++found > limit) return []; // too widespread to be an anchor
     }
   }
   var pages = Object.keys(pageSet).map(Number).sort(function (x, y) { return x - y; });
-  if (pages.length < 2 || pages.length > limit) return [];
+  if (pages.length < 2) return [];
   return pages;
 }
 
