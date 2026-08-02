@@ -2117,6 +2117,199 @@ function voEnforceAnchorRule(findings) {
   return { kept: kept, unanchored: unanchored };
 }
 
+// ===================== ANCHORED STATEMENT LAYER (v5.4) =====================
+// A forensic instrument must not merely say "a contradiction exists" — it must
+// bind the finding to WHO, WHERE (page), WHAT (verbatim quote), WHEN (date),
+// and — only when the document ITSELF cites one — WHICH provision. The engine
+// never invents a statute. It quotes the citation already on the page, or it
+// stays silent on law. (The breathalyzer states its reading; it does not write
+// the charge sheet. The reading is the machine's; the charge is the court's.)
+//
+// The timeline is what turns bound findings into a story a human can read:
+// ordered by date — "on <date> <party> stated X; on <date> the same point is
+// denied" — the narrative form people understand without touching a hash.
+
+// id -> canonical type. CONTRADICTION_TYPES is keyed by long name
+// (CT01_DIRECT_STATEMENT) but each value carries .id ('CT01'); findings speak
+// in ids, so resolve through this rather than the raw map.
+var _VO_CT_BY_ID = null;
+function voCtById(id) {
+  if (!_VO_CT_BY_ID) {
+    _VO_CT_BY_ID = {};
+    for (var k in CONTRADICTION_TYPES) {
+      if (!Object.prototype.hasOwnProperty.call(CONTRADICTION_TYPES, k)) continue;
+      var t = CONTRADICTION_TYPES[k];
+      if (t && t.id) _VO_CT_BY_ID[t.id] = t;
+    }
+  }
+  return _VO_CT_BY_ID[id] || null;
+}
+
+// Party-role vocabulary for two-sided instruments. A role ("Lessee") is a more
+// durable anchor than a personal name and survives redaction.
+var VO_PARTY_ROLES = ['lessor','lessee','landlord','tenant','sublessor','sublessee','plaintiff','defendant','applicant','respondent','appellant','purchaser','seller','buyer','vendor','franchisor','franchisee','licensor','licensee','mortgagor','mortgagee','creditor','debtor','guarantor','surety','cedent','cessionary','employer','employee','grantor','grantee','transferor','transferee','assignor','assignee','trustee','beneficiary','insurer','insured'];
+
+// Statute / clause citations the document ITSELF carries. Cite-or-stay-silent:
+// law is attached ONLY where one of these literally appears — nothing here
+// derives, infers, or looks up an applicable law. It quotes what is on the page.
+function voExtractCitations(text) {
+  var s = String(text == null ? '' : text);
+  var out = [], seen = {};
+  var add = function (c) { c = c.replace(/\s+/g, ' ').trim(); var k = c.toLowerCase(); if (c && !seen[k]) { seen[k] = true; out.push(c); } };
+  var pats = [
+    /\b(?:sub-?)?clause\s+\d+(?:\.\d+)*(?:\([a-z0-9]+\))?/gi,
+    /\bparagraph\s+\d+(?:\.\d+)*(?:\([a-z0-9]+\))?/gi,
+    /\bpara\.?\s+\d+(?:\.\d+)+/gi,
+    /\bsection\s+\d+[A-Z]?(?:\([a-z0-9]+\))*/gi,
+    /\bs\.?\s?\d+[A-Z]?(?:\([a-z0-9]+\))+/g,   // s 12(1)(a) — require a bracket so bare "s 12" cannot over-fire
+    /\bregulation\s+\d+(?:\.\d+)*/gi,
+    /\barticle\s+\d+(?:\.\d+)*/gi,
+    /\b(?:[A-Z][A-Za-z'’]+\s+){0,4}Act(?:,?\s+(?:No\.?\s*)?\d+)?\s+of\s+\d{4}/g,  // Companies Act 71 of 2008 / Act No. 71 of 2008
+    /\bAct\s+(?:No\.?\s*)?\d+\s+of\s+\d{4}/gi
+  ];
+  for (var p = 0; p < pats.length; p++) { var m; pats[p].lastIndex = 0; while ((m = pats[p].exec(s)) !== null) add(m[0]); }
+  // Drop any citation wholly contained in a longer one it overlaps — "Act 71 of
+  // 2008" is not a separate provision from "Companies Act 71 of 2008".
+  return out.filter(function (c) {
+    return !out.some(function (other) {
+      return other !== c && other.toLowerCase().indexOf(c.toLowerCase()) !== -1;
+    });
+  });
+}
+
+// Parties present in a passage: explicit legal roles, plus 2–3-token proper
+// names (Gary Highcock / Norton Rose Fulbright). Conservative and deterministic
+// — a lone capitalised word (sentence start) is not a party.
+var VO_NAME_STOP = { The:1, This:1, That:1, These:1, Page:1, Total:1, Date:1, Effective:1, Signed:1, Same:1, Opposing:1, Impossible:1, Invalid:1, Company:1, Document:1, Parties:1, Provision:1, February:1, March:1, January:1 };
+function voExtractParties(text) {
+  var s = String(text == null ? '' : text);
+  var out = [], seen = {};
+  var add = function (n, kind) { var k = n.toLowerCase(); if (n && !seen[k]) { seen[k] = true; out.push({ name: n, kind: kind }); } };
+  for (var r = 0; r < VO_PARTY_ROLES.length; r++) {
+    if (new RegExp('\\b' + VO_PARTY_ROLES[r] + '\\b', 'i').test(s)) {
+      var role = VO_PARTY_ROLES[r];
+      add(role.charAt(0).toUpperCase() + role.slice(1), 'role');
+    }
+  }
+  var nameRe = /\b([A-Z][a-z]{1,}(?:\s+[A-Z][a-z'’.]+){1,2})\b/g, nm;
+  while ((nm = nameRe.exec(s)) !== null) {
+    if (VO_NAME_STOP[nm[1].split(/\s+/)[0]]) continue;
+    add(nm[1], 'name');
+  }
+  return out;
+}
+
+var VO_DATE_TOKEN_RE = /\b(?:\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/gi;
+function voExtractDates(text) {
+  var s = String(text == null ? '' : text), out = [], seen = {}, m;
+  VO_DATE_TOKEN_RE.lastIndex = 0;
+  while ((m = VO_DATE_TOKEN_RE.exec(s)) !== null) {
+    var v = m[0].replace(/\s+/g, ' ').trim(), k = v.toLowerCase();
+    if (!seen[k]) { seen[k] = true; out.push(v); }
+  }
+  return out;
+}
+
+function voExtractQuotes(text) {
+  var s = String(text == null ? '' : text), out = [], m;
+  var qRe = /["“”]([^"“”]{6,})["“”]/g;
+  while ((m = qRe.exec(s)) !== null) out.push(m[1].replace(/\s+/g, ' ').trim());
+  return out;
+}
+
+function voParsePages(loc) {
+  var s = String(loc == null ? '' : loc), out = [], m;
+  var re = /page\s+(\d+)/gi;
+  while ((m = re.exec(s)) !== null) out.push(parseInt(m[1], 10));
+  return out;
+}
+
+// A sortable calendar key (YYYYMMDD) for a date token, or null if unparseable.
+// Numeric DD/MM/YYYY is read day-first (South African convention).
+var VO_MON = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+function voDateSortKey(str) {
+  var s = String(str == null ? '' : str).toLowerCase().trim(), m;
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return (+m[1]) * 10000 + (+m[2]) * 100 + (+m[3]);
+  if ((m = s.match(/^(\d{1,2})\s+([a-z]{3,})\.?,?\s+(\d{4})$/))) { var mo = VO_MON[m[2].slice(0, 3)]; if (mo) return (+m[3]) * 10000 + mo * 100 + (+m[1]); }
+  if ((m = s.match(/^([a-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})$/))) { var mo2 = VO_MON[m[1].slice(0, 3)]; if (mo2) return (+m[3]) * 10000 + mo2 * 100 + (+m[2]); }
+  if ((m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/))) { var y = +m[3]; if (y < 100) y += 2000; return y * 10000 + (+m[2]) * 100 + (+m[1]); }
+  return null;
+}
+
+// The flat statement: the finding stated as a declarative fact, no hedge words,
+// with its anchors bound in. Legal characterisation (fraud/misrepresentation)
+// is named once as the court's, so the fact is never weakened by the caveat.
+function voStatement(f) {
+  var ct = voCtById(f.type);
+  var label = ct ? ct.name : f.type;
+  var a = f.anchor || {};
+  var where = (a.where && a.where.length) ? ' (p.' + a.where.join('/') + ')' : '';
+  var out = label + where + ': ' + String(f.evidence || '').replace(/\s+/g, ' ').trim();
+  var who = (a.who || []).map(function (x) { return x.name; });
+  if (who.length) out += ' Parties: ' + who.join(', ') + '.';
+  if (a.law && a.law.length) out += ' Provision cited in the document: ' + a.law.join(', ') + '.';
+  return out;
+}
+
+// Bind each surviving finding to who/where/quote/when/law. Evidence prose (which
+// the detectors curated) is the primary source; the cited page text is a
+// fallback for context that the evidence string did not carry.
+function voAnchorEnrich(findings, textBlocks) {
+  var blocks = textBlocks || [];
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i];
+    if (!f) continue;
+    var ev = String(f.evidence || '');
+    var pages = voParsePages(f.location);
+    var ctx = ev;
+    for (var p = 0; p < pages.length; p++) { var b = blocks[pages[p] - 1]; if (b) ctx += ' ' + b; }
+    var dates = voExtractDates(ev);
+    if (!dates.length) dates = voExtractDates(ctx).slice(0, 2);
+    var law = voExtractCitations(ev);
+    if (!law.length) law = voExtractCitations(ctx);
+    f.anchor = {
+      who: voExtractParties(ev.length > 20 ? ev : ctx),
+      where: pages.length ? pages : null,
+      quote: voExtractQuotes(ev),
+      when: dates,
+      law: law // cite-or-stay-silent: [] means the engine asserts no provision
+    };
+    f.statement = voStatement(f);
+  }
+  return findings;
+}
+
+// The timeline narrative: every dated finding becomes one chronological line a
+// human can read top to bottom. This is the story layer — the sealed proof
+// stays underneath; this is what a person actually reads.
+function voBuildTimeline(findings) {
+  var events = [];
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i];
+    if (!f || !f.anchor) continue;
+    var dates = f.anchor.when || [];
+    for (var d = 0; d < dates.length; d++) {
+      var key = voDateSortKey(dates[d]);
+      if (key === null) continue;
+      events.push({
+        key: key, date: dates[d], type: f.type,
+        page: (f.anchor.where && f.anchor.where[0]) || null,
+        who: (f.anchor.who || []).map(function (x) { return x.name; }),
+        evidence: String(f.evidence || '').replace(/\s+/g, ' ').trim()
+      });
+    }
+  }
+  events.sort(function (a, b) { return (a.key - b.key) || ((a.page || 0) - (b.page || 0)); });
+  var lines = [];
+  for (var e = 0; e < events.length; e++) {
+    var ev = events[e];
+    var whoStr = ev.who.length ? ev.who.join(', ') + ' — ' : '';
+    var pgStr = ev.page ? ' (p.' + ev.page + ')' : '';
+    lines.push('On ' + ev.date + ': ' + whoStr + ev.evidence + pgStr);
+  }
+  return { events: events, narrative: lines.join('\n') };
+}
+
 function detectSerialPatterns(textBlocks) {
   var findings = [];
   var blocks = (textBlocks && textBlocks.length) ? textBlocks.map(function (b) { return String(b || '').toLowerCase(); }) : [''];
@@ -2605,6 +2798,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     }
   }
 
+  // Bind each surviving finding to its anchors (who/where/quote/when/law) so
+  // every finding names WHO, WHERE, WHAT and — where the document itself cites
+  // one — WHICH provision. Runs on the kept, page-anchored findings only.
+  voAnchorEnrich(allFindings, textBlocks);
+
   // Disclose the context notes (multi-jurisdiction, breadth) gathered earlier.
   if (_voContextNotes.length) {
     extractionNote += ' ' + _voContextNotes.join(' ');
@@ -2679,6 +2877,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     confidence: confidence,
     totalFindings: allFindings.length,
     findings: allFindings,
+    timeline: voBuildTimeline(allFindings),
     findingsByType: findingsByType,
     findingsByCategory: findingsByCategory,
     contradictionTypesUsed: Object.keys(findingsByType).length,
@@ -2736,6 +2935,16 @@ if (typeof module !== 'undefined' && module.exports) {
     voDigitalForensicsScan: voDigitalForensicsScan,
     voExcludeTemplatePages: voExcludeTemplatePages,
     voEnforceAnchorRule: voEnforceAnchorRule,
-    voContentMass: voContentMass
+    voContentMass: voContentMass,
+    voCtById: voCtById,
+    voExtractCitations: voExtractCitations,
+    voExtractParties: voExtractParties,
+    voExtractDates: voExtractDates,
+    voExtractQuotes: voExtractQuotes,
+    voParsePages: voParsePages,
+    voDateSortKey: voDateSortKey,
+    voStatement: voStatement,
+    voAnchorEnrich: voAnchorEnrich,
+    voBuildTimeline: voBuildTimeline
   };
 }
