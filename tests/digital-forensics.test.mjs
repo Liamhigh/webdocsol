@@ -90,6 +90,37 @@ const fakeDoc = (over = {}) => ({
   ok(!f.some(x => x.type === 'CT24'), 'XMP producer that is a substring of Info producer stays quiet');
 }
 
+// SELF-SEAL GUARD. Verum's sealing pass sets Producer='Verum Omnis …' and
+// CreationDate=now, so on any sealed file that carried pre-existing XMP the
+// Info dictionary describes OUR SEAL while the XMP still describes the original
+// — and CT29/CT24 fired every time. The AllFuels rerun reported "Timestamp
+// Manipulation" whose real cause was the user's own seal; presenting that as
+// tampering would get the bundle impeached. Both comparisons must be suppressed
+// when the file is Verum-sealed, and the suppression must be disclosed.
+{
+  const xmp = '<x:xmpmeta xmlns:x="adobe:ns:meta/"><xmp:CreateDate>2026-01-07T10:08:41Z</xmp:CreateDate>' +
+              '<pdf:Producer>Microsoft Word 2016</pdf:Producer></x:xmpmeta>';
+  const sealed = fakeDoc({
+    producer: 'Verum Omnis Document Sealing Service v1.3.0',
+    creationDate: new Date('2026-08-02T14:22:53Z'),
+  });
+  const f = SCAN(bytes('%PDF-1.7\n' + xmp + '\n' + pad + '%%EOF\n'), sealed);
+  ok(!f.some(x => x.type === 'CT29'),
+    'a Verum-sealed file does NOT self-flag CT29 timestamp manipulation');
+  ok(!f.some(x => x.type === 'CT24'),
+    'a Verum-sealed file does NOT self-flag CT24 producer mismatch');
+  ok(typeof f.voSelfSealNote === 'string' && /sealed by Verum Omnis/.test(f.voSelfSealNote),
+    'the suppression is disclosed via voSelfSealNote, never silent');
+}
+// A non-Verum producer is unaffected — real disagreements still flag.
+{
+  const xmp = '<x:xmpmeta xmlns:x="adobe:ns:meta/"><xmp:CreateDate>2018-05-01T09:00:00Z</xmp:CreateDate></x:xmpmeta>';
+  const f = SCAN(bytes('%PDF-1.7\n' + xmp + '\n' + pad + '%%EOF\n'),
+    fakeDoc({ producer: 'Adobe Acrobat Pro DC', creationDate: new Date('2026-01-10T10:00:00Z') }));
+  ok(f.some(x => x.type === 'CT29'), 'an unsealed third-party file still flags a genuine date disagreement');
+  ok(!f.voSelfSealNote, 'no self-seal note on a file Verum did not seal');
+}
+
 // Defensive: no doc / tiny input never throws.
 {
   ok(SCAN(bytes('%PDF'), null).length === 0, 'tiny input + null doc yields no findings and no throw');

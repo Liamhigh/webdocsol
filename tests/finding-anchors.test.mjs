@@ -116,6 +116,38 @@ ok(pidx.some(p => p.name === 'Lessee' && p.kind === 'role'), 'a legal role is in
 ok(!pidx.some(p => p.name === ''), 'anchorless finding contributes no empty party');
 ok(E.voBuildPersonIndex([]).length === 0, 'empty findings yield an empty index (no crash)');
 
+// ---- Parties from the CITED PAGE (the empty-person-index regression) --------
+// The AllFuels rerun recovered pages 316-318 by OCR — full of names — yet the
+// person index was EMPTY, because voAnchorEnrich only ever searched the short
+// evidence snippet (`ev.length > 20 ? ev : ctx` is always the ev branch).
+const emailPage =
+  'FW: RENTAL ESCALATION - JANUARY 2026\n' +
+  'From: Gary Highcock\nTo: Rabia Seedat\n' +
+  'Cc: Amrit Singh, Mohamed Ally\n' +
+  'The MOU has expired. How can the rent be increased?\nRegards Gary Highcock';
+const ctxPeople = E.voExtractPersonsFromContext(emailPage, 8).map(p => p.name);
+ok(ctxPeople.includes('Gary Highcock'), 'From: header yields Gary Highcock');
+ok(ctxPeople.includes('Rabia Seedat'), 'To: header yields Rabia Seedat');
+ok(ctxPeople.includes('Amrit Singh') && ctxPeople.includes('Mohamed Ally'),
+  'a comma-separated Cc: list yields every named person');
+ok(!ctxPeople.includes('Rental Escalation'),
+  'document furniture ("RENTAL ESCALATION") is not indexed as a person');
+ok(E.voExtractPersonsFromContext('Adv E de Waal appeared', 8).some(p => /de Waal/.test(p.name)),
+  'a courtesy title (Adv) yields the person');
+
+// End-to-end: a finding whose evidence names nobody must still bind the people
+// the cited page names — this is the exact empty-index bug.
+const pageFindings = [{ type: 'CT02', severity: 4,
+  evidence: '"total" is stated as 26,009.43 and as R87,121.86 (variance: 108%)',
+  location: 'Page 3' }];
+const pageBlocks = ['', '', emailPage];
+E.voAnchorEnrich(pageFindings, pageBlocks);
+const boundNames = (pageFindings[0].anchor.who || []).map(p => p.name);
+ok(boundNames.includes('Gary Highcock'),
+  'REGRESSION: a finding whose evidence names nobody still binds parties from the cited page');
+ok(E.voBuildPersonIndex(pageFindings).length > 0,
+  'REGRESSION: the person index is no longer empty for a page that names people');
+
 console.log(`\n[finding-anchors] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[finding-anchors] FAILURES'); process.exit(1); }
 console.log('[finding-anchors] ALL GREEN');
