@@ -2076,7 +2076,26 @@ function secTimeline(ctx, data) {
   for (var i = 0; i < all.length; i++) {
     if (all[i].type === 'CT03' || all[i].type === 'CT04' || all[i].type === 'CT29') dateFindings.push(all[i]);
   }
-  ctx.para('The deterministic engine (v' + ENGINE_VERSION + ') does not emit a structured event timeline. Date- and sequence-related findings are reproduced below from the contradiction matrix.', { size: 9.5, after: 8 });
+
+  // The engine now emits a chronological event timeline built from every dated
+  // finding (each anchor's WHEN). Read top to bottom it is the story the
+  // documents tell — the human-readable narrative layer over the sealed proof.
+  var tl = (data.findings && data.findings.timeline) || null;
+  var tlEvents = (tl && tl.events) || [];
+  if (tlEvents.length) {
+    ctx.para('The engine (v' + ENGINE_VERSION + ') reconstructs a chronological timeline from the dated findings. Each line names WHEN, WHO, and the page — read in order, this is the sequence the documents describe:', { size: 9.5, after: 6 });
+    for (var te = 0; te < tlEvents.length; te++) {
+      var ev = tlEvents[te];
+      var whoStr = (ev.who && ev.who.length) ? ev.who.join(', ') + ' — ' : '';
+      var pgStr = ev.page ? ' (p.' + ev.page + ')' : '';
+      var line = quoteEvidence(ev.evidence);
+      ctx.bullet('On ' + ev.date + ': ' + whoStr + line + pgStr, { size: 9.5, after: 4 });
+    }
+    ctx.para('Chronological order is derived from the dates on the page; a date read day-first where the format is ambiguous (South African convention). The sealed hash and page anchors underneath each line are the proof — this ordering is the reading of it.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+  } else {
+    ctx.para('The engine emitted no dated events for this document, so no chronological timeline could be built. Date- and sequence-related findings, if any, are reproduced below from the contradiction matrix.', { size: 9.5, after: 8 });
+  }
+
   if (dateFindings.length === 0) {
     ctx.para('No date, sequence, or timestamp inconsistencies were detected.', { size: 10, after: 6 });
   } else {
@@ -2100,7 +2119,7 @@ function secTimeline(ctx, data) {
       { size: 8 }
     );
   }
-  ctx.para('Full timeline reconstruction and event ordering require AI consensus review — pending.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
+  ctx.para('Deeper event ordering across narrative prose (beyond the dated findings above) can be extended by AI consensus review.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
 }
 
 // ================= SECTION: DECLARATION =================
@@ -2424,6 +2443,11 @@ function secFindingDetails(ctx, data) {
       'Legal subject: ' + (LEGAL_SUBJECT_LABEL[subj] || subj) + (CT_DETECTOR[f.type] ? '    |    Detector: ' + CT_DETECTOR[f.type] : '')
     ];
     for (var k = 0; k < factLines.length; k++) ctx.para(factLines[k], { size: 9, color: NAVY2, after: 1 });
+    // Provision the DOCUMENT ITSELF cites (cite-or-stay-silent), distinct from
+    // the candidate statutes for counsel further down: this is the clause on the
+    // page, quoted, not an applicable law the engine inferred.
+    var docLaw = (f.anchor && f.anchor.law) || [];
+    if (docLaw.length) ctx.para('Provision cited in the document: ' + docLaw.join(', '), { size: 9, color: NAVY2, after: 1 });
     ctx.gap(3);
     ctx.para('What it means: ' + withPeriod(narrativeMeaning(f)), { size: 10, after: 4 });
     if (f.source === 'ai' && f.rationale) ctx.para('AI rationale: ' + san(f.rationale), { size: 9.5, after: 4 });
@@ -5273,6 +5297,204 @@ function voEnforceAnchorRule(findings) {
   return { kept: kept, unanchored: unanchored };
 }
 
+// ===================== ANCHORED STATEMENT LAYER (v5.4) =====================
+// A forensic instrument must not merely say "a contradiction exists" — it must
+// bind the finding to WHO, WHERE (page), WHAT (verbatim quote), WHEN (date),
+// and — only when the document ITSELF cites one — WHICH provision. The engine
+// never invents a statute. It quotes the citation already on the page, or it
+// stays silent on law. (The breathalyzer states its reading; it does not write
+// the charge sheet. The reading is the machine's; the charge is the court's.)
+//
+// The timeline is what turns bound findings into a story a human can read:
+// ordered by date — "on <date> <party> stated X; on <date> the same point is
+// denied" — the narrative form people understand without touching a hash.
+
+// id -> canonical type. CONTRADICTION_TYPES is keyed by long name
+// (CT01_DIRECT_STATEMENT) but each value carries .id ('CT01'); findings speak
+// in ids, so resolve through this rather than the raw map.
+var _VO_CT_BY_ID = null;
+function voCtById(id) {
+  if (!_VO_CT_BY_ID) {
+    _VO_CT_BY_ID = {};
+    for (var k in CONTRADICTION_TYPES) {
+      if (!Object.prototype.hasOwnProperty.call(CONTRADICTION_TYPES, k)) continue;
+      var t = CONTRADICTION_TYPES[k];
+      if (t && t.id) _VO_CT_BY_ID[t.id] = t;
+    }
+  }
+  return _VO_CT_BY_ID[id] || null;
+}
+
+// Party-role vocabulary for two-sided instruments. A role ("Lessee") is a more
+// durable anchor than a personal name and survives redaction.
+var VO_PARTY_ROLES = ['lessor','lessee','landlord','tenant','sublessor','sublessee','plaintiff','defendant','applicant','respondent','appellant','purchaser','seller','buyer','vendor','franchisor','franchisee','licensor','licensee','mortgagor','mortgagee','creditor','debtor','guarantor','surety','cedent','cessionary','employer','employee','grantor','grantee','transferor','transferee','assignor','assignee','trustee','beneficiary','insurer','insured'];
+
+// Statute / clause citations the document ITSELF carries. Cite-or-stay-silent:
+// law is attached ONLY where one of these literally appears — nothing here
+// derives, infers, or looks up an applicable law. It quotes what is on the page.
+function voExtractCitations(text) {
+  var s = String(text == null ? '' : text);
+  var out = [], seen = {};
+  var add = function (c) { c = c.replace(/\s+/g, ' ').trim(); var k = c.toLowerCase(); if (c && !seen[k]) { seen[k] = true; out.push(c); } };
+  var pats = [
+    /\b(?:sub-?)?clause\s+\d+(?:\.\d+)*(?:\([a-z0-9]+\))?/gi,
+    /\bparagraph\s+\d+(?:\.\d+)*(?:\([a-z0-9]+\))?/gi,
+    /\bpara\.?\s+\d+(?:\.\d+)+/gi,
+    /\bsection\s+\d+[A-Z]?(?:\([a-z0-9]+\))*/gi,
+    /\bs\.?\s?\d+[A-Z]?(?:\([a-z0-9]+\))+/g,   // s 12(1)(a) — require a bracket so bare "s 12" cannot over-fire
+    /\bregulation\s+\d+(?:\.\d+)*/gi,
+    /\barticle\s+\d+(?:\.\d+)*(?:\([a-z0-9]+\))*/gi,   // Article 110(2)
+    // Abbreviated provision references the Greensky template itself uses:
+    // "Art. 110(2)", "Sec. 86(1)", "reg. 4", "cl. 4.5.2". A digit must follow,
+    // so a name like "Art Vandelay" or the word "section" cannot trip it.
+    /\b(?:art|sec|reg|cl)\.?\s+\d+[A-Z]?(?:\.\d+)*(?:\([a-z0-9]+\))*/gi,
+    /\b(?:[A-Z][A-Za-z'’]+\s+){0,4}Act(?:,?\s+(?:No\.?\s*)?\d+)?\s+of\s+\d{4}/g,  // Companies Act 71 of 2008 / Act No. 71 of 2008
+    /\bAct\s+(?:No\.?\s*)?\d+\s+of\s+\d{4}/gi,
+    /\b(?:Federal\s+)?Law\s+(?:No\.?\s*)?\d+(?:\/\d+)*\/\d{4}/gi   // Federal Law 32/2021
+  ];
+  for (var p = 0; p < pats.length; p++) { var m; pats[p].lastIndex = 0; while ((m = pats[p].exec(s)) !== null) add(m[0]); }
+  // Drop any citation wholly contained in a longer one it overlaps — "Act 71 of
+  // 2008" is not a separate provision from "Companies Act 71 of 2008".
+  return out.filter(function (c) {
+    return !out.some(function (other) {
+      return other !== c && other.toLowerCase().indexOf(c.toLowerCase()) !== -1;
+    });
+  });
+}
+
+// Parties present in a passage: explicit legal roles, plus 2–3-token proper
+// names (Gary Highcock / Norton Rose Fulbright). Conservative and deterministic
+// — a lone capitalised word (sentence start) is not a party.
+var VO_NAME_STOP = { The:1, This:1, That:1, These:1, Page:1, Total:1, Date:1, Effective:1, Signed:1, Same:1, Opposing:1, Impossible:1, Invalid:1, Company:1, Document:1, Parties:1, Provision:1, February:1, March:1, January:1 };
+function voExtractParties(text) {
+  var s = String(text == null ? '' : text);
+  var out = [], seen = {};
+  var add = function (n, kind) { var k = n.toLowerCase(); if (n && !seen[k]) { seen[k] = true; out.push({ name: n, kind: kind }); } };
+  for (var r = 0; r < VO_PARTY_ROLES.length; r++) {
+    if (new RegExp('\\b' + VO_PARTY_ROLES[r] + '\\b', 'i').test(s)) {
+      var role = VO_PARTY_ROLES[r];
+      add(role.charAt(0).toUpperCase() + role.slice(1), 'role');
+    }
+  }
+  var nameRe = /\b([A-Z][a-z]{1,}(?:\s+[A-Z][a-z'’.]+){1,2})\b/g, nm;
+  while ((nm = nameRe.exec(s)) !== null) {
+    if (VO_NAME_STOP[nm[1].split(/\s+/)[0]]) continue;
+    add(nm[1], 'name');
+  }
+  return out;
+}
+
+var VO_DATE_TOKEN_RE = /\b(?:\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/gi;
+function voExtractDates(text) {
+  var s = String(text == null ? '' : text), out = [], seen = {}, m;
+  VO_DATE_TOKEN_RE.lastIndex = 0;
+  while ((m = VO_DATE_TOKEN_RE.exec(s)) !== null) {
+    var v = m[0].replace(/\s+/g, ' ').trim(), k = v.toLowerCase();
+    if (!seen[k]) { seen[k] = true; out.push(v); }
+  }
+  return out;
+}
+
+function voExtractQuotes(text) {
+  var s = String(text == null ? '' : text), out = [], m;
+  var qRe = /["“”]([^"“”]{6,})["“”]/g;
+  while ((m = qRe.exec(s)) !== null) out.push(m[1].replace(/\s+/g, ' ').trim());
+  return out;
+}
+
+function voParsePages(loc) {
+  var s = String(loc == null ? '' : loc), out = [], m;
+  var re = /page\s+(\d+)/gi;
+  while ((m = re.exec(s)) !== null) out.push(parseInt(m[1], 10));
+  return out;
+}
+
+// A sortable calendar key (YYYYMMDD) for a date token, or null if unparseable.
+// Numeric DD/MM/YYYY is read day-first (South African convention).
+var VO_MON = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+function voDateSortKey(str) {
+  var s = String(str == null ? '' : str).toLowerCase().trim(), m;
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return (+m[1]) * 10000 + (+m[2]) * 100 + (+m[3]);
+  if ((m = s.match(/^(\d{1,2})\s+([a-z]{3,})\.?,?\s+(\d{4})$/))) { var mo = VO_MON[m[2].slice(0, 3)]; if (mo) return (+m[3]) * 10000 + mo * 100 + (+m[1]); }
+  if ((m = s.match(/^([a-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})$/))) { var mo2 = VO_MON[m[1].slice(0, 3)]; if (mo2) return (+m[3]) * 10000 + mo2 * 100 + (+m[2]); }
+  if ((m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/))) { var y = +m[3]; if (y < 100) y += 2000; return y * 10000 + (+m[2]) * 100 + (+m[1]); }
+  return null;
+}
+
+// The flat statement: the finding stated as a declarative fact, no hedge words,
+// with its anchors bound in. Legal characterisation (fraud/misrepresentation)
+// is named once as the court's, so the fact is never weakened by the caveat.
+function voStatement(f) {
+  var ct = voCtById(f.type);
+  var label = ct ? ct.name : f.type;
+  var a = f.anchor || {};
+  var where = (a.where && a.where.length) ? ' (p.' + a.where.join('/') + ')' : '';
+  var out = label + where + ': ' + String(f.evidence || '').replace(/\s+/g, ' ').trim();
+  var who = (a.who || []).map(function (x) { return x.name; });
+  if (who.length) out += ' Parties: ' + who.join(', ') + '.';
+  if (a.law && a.law.length) out += ' Provision cited in the document: ' + a.law.join(', ') + '.';
+  return out;
+}
+
+// Bind each surviving finding to who/where/quote/when/law. Evidence prose (which
+// the detectors curated) is the primary source; the cited page text is a
+// fallback for context that the evidence string did not carry.
+function voAnchorEnrich(findings, textBlocks) {
+  var blocks = textBlocks || [];
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i];
+    if (!f) continue;
+    var ev = String(f.evidence || '');
+    var pages = voParsePages(f.location);
+    var ctx = ev;
+    for (var p = 0; p < pages.length; p++) { var b = blocks[pages[p] - 1]; if (b) ctx += ' ' + b; }
+    var dates = voExtractDates(ev);
+    if (!dates.length) dates = voExtractDates(ctx).slice(0, 2);
+    var law = voExtractCitations(ev);
+    if (!law.length) law = voExtractCitations(ctx);
+    f.anchor = {
+      who: voExtractParties(ev.length > 20 ? ev : ctx),
+      where: pages.length ? pages : null,
+      quote: voExtractQuotes(ev),
+      when: dates,
+      law: law // cite-or-stay-silent: [] means the engine asserts no provision
+    };
+    f.statement = voStatement(f);
+  }
+  return findings;
+}
+
+// The timeline narrative: every dated finding becomes one chronological line a
+// human can read top to bottom. This is the story layer — the sealed proof
+// stays underneath; this is what a person actually reads.
+function voBuildTimeline(findings) {
+  var events = [];
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i];
+    if (!f || !f.anchor) continue;
+    var dates = f.anchor.when || [];
+    for (var d = 0; d < dates.length; d++) {
+      var key = voDateSortKey(dates[d]);
+      if (key === null) continue;
+      events.push({
+        key: key, date: dates[d], type: f.type,
+        page: (f.anchor.where && f.anchor.where[0]) || null,
+        who: (f.anchor.who || []).map(function (x) { return x.name; }),
+        evidence: String(f.evidence || '').replace(/\s+/g, ' ').trim()
+      });
+    }
+  }
+  events.sort(function (a, b) { return (a.key - b.key) || ((a.page || 0) - (b.page || 0)); });
+  var lines = [];
+  for (var e = 0; e < events.length; e++) {
+    var ev = events[e];
+    var whoStr = ev.who.length ? ev.who.join(', ') + ' — ' : '';
+    var pgStr = ev.page ? ' (p.' + ev.page + ')' : '';
+    lines.push('On ' + ev.date + ': ' + whoStr + ev.evidence + pgStr);
+  }
+  return { events: events, narrative: lines.join('\n') };
+}
+
 function detectSerialPatterns(textBlocks) {
   var findings = [];
   var blocks = (textBlocks && textBlocks.length) ? textBlocks.map(function (b) { return String(b || '').toLowerCase(); }) : [''];
@@ -5761,6 +5983,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     }
   }
 
+  // Bind each surviving finding to its anchors (who/where/quote/when/law) so
+  // every finding names WHO, WHERE, WHAT and — where the document itself cites
+  // one — WHICH provision. Runs on the kept, page-anchored findings only.
+  voAnchorEnrich(allFindings, textBlocks);
+
   // Disclose the context notes (multi-jurisdiction, breadth) gathered earlier.
   if (_voContextNotes.length) {
     extractionNote += ' ' + _voContextNotes.join(' ');
@@ -5835,6 +6062,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     confidence: confidence,
     totalFindings: allFindings.length,
     findings: allFindings,
+    timeline: voBuildTimeline(allFindings),
     findingsByType: findingsByType,
     findingsByCategory: findingsByCategory,
     contradictionTypesUsed: Object.keys(findingsByType).length,
@@ -5892,7 +6120,17 @@ if (typeof module !== 'undefined' && module.exports) {
     voDigitalForensicsScan: voDigitalForensicsScan,
     voExcludeTemplatePages: voExcludeTemplatePages,
     voEnforceAnchorRule: voEnforceAnchorRule,
-    voContentMass: voContentMass
+    voContentMass: voContentMass,
+    voCtById: voCtById,
+    voExtractCitations: voExtractCitations,
+    voExtractParties: voExtractParties,
+    voExtractDates: voExtractDates,
+    voExtractQuotes: voExtractQuotes,
+    voParsePages: voParsePages,
+    voDateSortKey: voDateSortKey,
+    voStatement: voStatement,
+    voAnchorEnrich: voAnchorEnrich,
+    voBuildTimeline: voBuildTimeline
   };
 }
 /* VO-INLINE:forensic-engine-page.js:END */
@@ -6939,10 +7177,25 @@ voEnsureWatermark();
 function voPdfIsEncrypted(bytes) {
   try {
     var b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-    // "/Encrypt" = 2F 45 6E 63 72 79 70 74 (appears in the trailer dictionary)
-    for (var i = 0, n = b.length - 8; i < n; i++) {
+    var len = b.length;
+    var isWs = function (c) { return c === 0x20 || c === 0x0A || c === 0x0D || c === 0x09; };
+    // "/Encrypt" = 2F 45 6E 63 72 79 70 74. But the bare token can also occur in
+    // ordinary content (a report that discusses encryption, an embedded JSON, a
+    // font/stream), and treating THAT as an encrypted file silently drops a
+    // password the user asked for. The trailer key is an INDIRECT REFERENCE:
+    // "/Encrypt <objNum> <gen> R". Require that exact shape, so only a genuinely
+    // encrypted PDF is detected — never a report that merely mentions the word.
+    for (var i = 0, n = len - 8; i < n; i++) {
       if (b[i] === 0x2F && b[i + 1] === 0x45 && b[i + 2] === 0x6E && b[i + 3] === 0x63 &&
-          b[i + 4] === 0x72 && b[i + 5] === 0x79 && b[i + 6] === 0x70 && b[i + 7] === 0x74) return true;
+          b[i + 4] === 0x72 && b[i + 5] === 0x79 && b[i + 6] === 0x70 && b[i + 7] === 0x74) {
+        var k = i + 8, m;
+        m = k; while (k < len && isWs(b[k])) k++; if (k === m) continue;        // ws
+        m = k; while (k < len && b[k] >= 0x30 && b[k] <= 0x39) k++; if (k === m) continue; // obj num
+        m = k; while (k < len && isWs(b[k])) k++; if (k === m) continue;        // ws
+        m = k; while (k < len && b[k] >= 0x30 && b[k] <= 0x39) k++; if (k === m) continue; // gen
+        m = k; while (k < len && isWs(b[k])) k++; if (k === m) continue;        // ws
+        if (b[k] === 0x52) return true;                                        // 'R'
+      }
     }
     return false;
   } catch (e) { return false; }
@@ -8473,6 +8726,13 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
     // its own conflicting CT01-CT43 numbering precisely because this file
     // shipped bare codes. Serial patterns carry their pattern name instead.
     var ctDef = (f.type !== 'SERIAL') ? (ctById[f.type] || null) : null;
+    // Structured anchors bound by the engine (voAnchorEnrich): WHO / WHERE /
+    // WHAT (quote) / WHEN / WHICH-provision. Provisions are cite-or-stay-silent
+    // — present only where the DOCUMENT ITSELF names the law, never inferred.
+    var anc = f.anchor || {};
+    var ancWho = (anc.who || []).map(function (x) { return x.name; });
+    var ancWhen = anc.when || [];
+    var ancLaw = anc.law || [];
     records.push({
       contradiction_id: 'VO-WEB-F' + String(i + 1).padStart(3, '0'),
       type: typeName,
@@ -8482,16 +8742,28 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
       severity: VO_SEV_ORDINAL[f.severity] || 'LOW',
       confidence: fromAi ? 'MODERATE' : 'DETERMINISTIC',
       proposition_a_text: quote,
-      proposition_a_actor: '',
+      proposition_a_actor: ancWho[0] || '',
       proposition_b_text: '',
-      proposition_b_actor: '',
+      proposition_b_actor: ancWho[1] || '',
       conflict_description: quote,
+      // Anchors — the finding bound to who/where/quote/when/provision, plus the
+      // flat declarative statement. document_cited_provisions carries only the
+      // laws the document itself quotes ([] means the engine asserts none).
+      anchored_statement: f.statement || null,
+      anchors: {
+        who: (anc.who || []),
+        where: anc.where || null,
+        quote: anc.quote || [],
+        when: ancWhen,
+        law: ancLaw
+      },
+      document_cited_provisions: ancLaw,
       source_document: docName,
       source_page: voFirstPage(f.location || f.page),
       source_line: 0,
       sha512_anchor: String(docSha512 || '').toLowerCase(),
       extraction_method: method,
-      temporal_analysis: null,
+      temporal_analysis: ancWhen.length ? ancWhen.join(', ') : null,
       detected_fact: {
         fact_text: quote,
         source_document: docName,
@@ -8519,7 +8791,7 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
   }).length;
   return {
     engine_version: VO_ENGINE_VERSION,
-    findings_json_version: '1.1.0',
+    findings_json_version: '1.2.0',
     generated_utc: new Date().toISOString(),
     source_bundle: docName,
     // The canonical taxonomy, in full, from the engine's sealed
@@ -9149,7 +9421,7 @@ var VO_OCR_MIN_AVG = 150;       // only rescue when the rest of the doc has real
 // CDN copy is configured it is tried last (loading a library from a CDN sends
 // nothing about the document anywhere -- same trust model as the page's
 // existing pdf-lib fallback).
-function voLoadScriptAttempt(src) {
+function voOcrLoadScriptAttempt(src) {
   return new Promise(function (resolve, reject) {
     var s = document.createElement('script');
     s.src = src;
@@ -9161,14 +9433,16 @@ function voLoadScriptAttempt(src) {
 
 // sources: URLs in preference order. Returns the source that satisfied the
 // global check (so dependent paths like workerSrc can be kept consistent).
-async function voLoadScript(sources, globalCheck) {
+// Named voOcrLoadScript so it never shadows the same-origin self-healing
+// voLoadScript used for the forensic scripts (different signature).
+async function voOcrLoadScript(sources, globalCheck) {
   try { if (globalCheck()) return sources[0]; } catch (e) {}
   var errors = [];
   for (var i = 0; i < sources.length; i++) {
     for (var attempt = 0; attempt < 2; attempt++) {
       var url = attempt === 0 ? sources[i]
         : sources[i] + (sources[i].indexOf('?') === -1 ? '?' : '&') + 'vobust=' + Date.now();
-      try { await voLoadScriptAttempt(url); }
+      try { await voOcrLoadScriptAttempt(url); }
       catch (e1) { errors.push(url + ': network/404'); continue; }
       // onload fired -- but did the global appear? (An HTML-instead-of-JS
       // response fires onload and defines nothing.)
@@ -9224,7 +9498,7 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   // bundle's apiVersion). The worker must come from wherever the API came from
   // or pdf.js rejects the version mismatch.
   var VO_PDFJS_CDN = 'https://unpkg.com/pdfjs-dist@3.11.174/build/';
-  var pdfjsSrc = await voLoadScript(
+  var pdfjsSrc = await voOcrLoadScript(
     ['/vendor/pdf.min.js', VO_PDFJS_CDN + 'pdf.min.js'],
     function () { return typeof pdfjsLib !== 'undefined'; }
   );
@@ -9232,17 +9506,43 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       (pdfjsSrc.indexOf('unpkg.com') !== -1) ? (VO_PDFJS_CDN + 'pdf.worker.min.js') : '/vendor/pdf.worker.min.js';
   } catch (e) {}
-  // tesseract: vendored only (its worker/wasm-core/language assets must match
-  // the exact vendored build, so a CDN mix would be worse than an honest
-  // failure) -- but it now gets the same verified-global cache-busted retries.
-  await voLoadScript(['/vendor/tesseract.min.js'], function () { return typeof Tesseract !== 'undefined'; });
+  // tesseract: vendored first, then a VERSION-MATCHED CDN fallback. The vendored
+  // build is 5.1.1; the fallback pins tesseract.js@5.1.1 (main + worker) so the
+  // worker/API versions cannot mismatch, with tesseract.js-core@5 and the
+  // standard tessdata for the wasm core and English language data. This is the
+  // OCR blackout fix: when the Pages deploy does not serve /vendor/ (the origin
+  // answers the asset path with HTML, which the worker guard now turns into a
+  // 503), OCR previously had nowhere else to go and 32+ image-only pages went
+  // unread. A CDN library download sends nothing about the document anywhere --
+  // same trust model as the pdf-lib and pdf.js fallbacks already in this page.
+  var VO_TESS_VENDOR = { worker: '/vendor/tesseract-worker.min.js', core: '/vendor', lang: '/vendor' };
+  var VO_TESS_CDN = {
+    worker: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+    core: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/',
+    lang: 'https://tessdata.projectnaptha.com/4.0.0'
+  };
+  var tessMainSrc = await voOcrLoadScript(
+    ['/vendor/tesseract.min.js', 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'],
+    function () { return typeof Tesseract !== 'undefined'; }
+  );
+  var tessFromCdn = tessMainSrc.indexOf('jsdelivr') !== -1;
 
   var pdf = await pdfjsLib.getDocument({ data: pdfBytes.slice ? pdfBytes.slice(0) : pdfBytes }).promise;
-  var worker = await Tesseract.createWorker('eng', 1, {
-    workerPath: '/vendor/tesseract-worker.min.js',
-    corePath: '/vendor',
-    langPath: '/vendor'
-  });
+  // Try the asset base that matches wherever the main script came from first,
+  // then the other base -- so a vendored main script with missing /vendor/
+  // worker or core assets still recovers via the CDN, and vice versa.
+  var _tessBases = tessFromCdn ? [VO_TESS_CDN, VO_TESS_VENDOR] : [VO_TESS_VENDOR, VO_TESS_CDN];
+  var worker = null, _tessErr = null;
+  for (var _tb = 0; _tb < _tessBases.length && !worker; _tb++) {
+    try {
+      worker = await Tesseract.createWorker('eng', 1, {
+        workerPath: _tessBases[_tb].worker,
+        corePath: _tessBases[_tb].core,
+        langPath: _tessBases[_tb].lang
+      });
+    } catch (e) { _tessErr = e; }
+  }
+  if (!worker) throw (_tessErr || new Error('tesseract worker init failed on all asset bases'));
   var rescued = [], noText = [], renderFailed = [], out = textBlocks.slice();
   try {
     for (var c = 0; c < candidates.length; c++) {
@@ -9385,6 +9685,24 @@ async function runSealingPipeline() {
   var password = null, senderEmail = '';
   var sealedBytes = null, encryptedBytes = null, meta = null;
 
+  // Password protection is validated UP FRONT — before any analysis — so a
+  // mismatch, a too-short password, or an empty box fails fast with a clear
+  // reason. Previously this was checked at the compositing step and, if it
+  // failed the ">=8 && matches" test, the password was silently dropped and the
+  // file came out UNPROTECTED even though the user switched protection on. A
+  // sensitive report must never leave unprotected when a password was requested.
+  if (document.getElementById('passwordToggle') && document.getElementById('passwordToggle').checked) {
+    var _pw1 = (document.getElementById('docPassword') && document.getElementById('docPassword').value) || '';
+    var _pw2 = (document.getElementById('docPasswordConfirm') && document.getElementById('docPasswordConfirm').value) || '';
+    if (!_pw1 || !_pw2)
+      throw new Error('Password protection is switched ON, but a password box is empty. Type the same password (at least 8 characters) into BOTH boxes, or switch password protection off.');
+    if (_pw1.length < 8)
+      throw new Error('Password protection is switched ON, but the password is too short. Use at least 8 characters, or switch password protection off.');
+    if (_pw1 !== _pw2)
+      throw new Error('Password protection is switched ON, but the two password boxes do not match. Re-type the SAME password in both boxes.');
+    password = _pw1;
+  }
+
   // Step 3: OpenTimestamps
   updateStep(3, 'processing', 'Contacting a.pool.opentimestamps.org...');
   otsResult = await submitToOTS(otsDigestHex);
@@ -9439,13 +9757,8 @@ async function runSealingPipeline() {
     updateStep(5, 'complete');
   }
 
-  // Step 6: Seal Footer
+  // Step 6: Seal Footer  (password already validated and set up front)
   updateStep(6, 'processing', 'Compositing ' + selectedFile.name + '...');
-  if (document.getElementById('passwordToggle')?.checked) {
-    var p1 = document.getElementById('docPassword')?.value;
-    var p2 = document.getElementById('docPasswordConfirm')?.value;
-    if (p1 && p1 === p2 && p1.length >= 8) password = p1;
-  }
   senderEmail = document.getElementById('senderEmail')?.value?.trim() || '';
   await voEnsureWatermark(); // retry the watermark if the boot-time fetch dropped
   sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain, fraudResult);

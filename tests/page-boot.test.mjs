@@ -307,9 +307,13 @@ for (const page of PAGES) {
 }
 
 // OCR rescue: image-only pages must be recoverable on-device. The vendored
-// tesseract assets must exist (CDNs are blocked by the network policy), the
-// seal page must define the hook, and the engine must call it guarded so the
-// scan never dies when OCR is unavailable.
+// tesseract assets are the PRIMARY source (same-origin, fast, private), but a
+// version-matched CDN fallback is required: when the Pages deploy does not
+// serve /vendor/ (the origin answers the asset path with HTML), vendored-only
+// meant zero OCR and image-only pages went silently unread. The user's browser
+// can reach a CDN even though this build session's egress proxy cannot, so the
+// fallback is a real recovery path. pdf.js in the same helper already falls
+// back to a pinned CDN — tesseract now matches that trust model.
 {
   for (const f of [
     'vendor/tesseract.min.js',
@@ -322,8 +326,12 @@ for (const page of PAGES) {
   }
   const html = readFileSync('seal-document.html', 'utf8');
   ok(html.includes('async function voOcrRescuePages'), 'seal page defines the OCR rescue helper');
-  ok(/workerPath:\s*'\/vendor\/tesseract-worker\.min\.js'/.test(html),
-    'OCR worker loads from /vendor (same-origin, no CDN)');
+  ok(/worker:\s*'\/vendor\/tesseract-worker\.min\.js'/.test(html),
+    'OCR worker PRIMARY source is /vendor (same-origin)');
+  ok(/tesseract\.js@5\.1\.1\/dist\/worker\.min\.js/.test(html),
+    'OCR has a version-matched CDN fallback (5.1.1) so a missing /vendor/ no longer blacks out OCR');
+  ok(/'\/vendor\/tesseract\.min\.js',\s*'https:\/\/cdn\.jsdelivr\.net\/npm\/tesseract\.js@5\.1\.1/.test(html.replace(/\s+/g, ' ')),
+    'tesseract main script tries /vendor first, CDN second');
   const engine = readFileSync('forensic-engine-page.js', 'utf8');
   ok(/voOcrRescuePages/.test(engine), 'engine calls the OCR rescue hook');
   ok(/OCR rescue attempted but failed/.test(engine), 'engine discloses OCR failure instead of dying');

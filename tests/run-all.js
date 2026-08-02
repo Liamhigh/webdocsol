@@ -22,6 +22,8 @@ const suites = [
   'ocr-rescue.test.mjs',
   'rule-classify.test.mjs',
   'findings-json.test.mjs',
+  'finding-anchors.test.mjs',
+  'encrypt-detect.test.mjs',
   'constitution-lock.test.mjs',
   'home-verify.test.mjs',
   'inline-scripts.test.mjs',
