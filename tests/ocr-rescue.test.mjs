@@ -30,14 +30,18 @@ ok(!/voLoadScriptOnce/.test(src), 'old un-verified voLoadScriptOnce is gone');
 // "near-empty ... most likely image-only pages not captured by OCR". They were
 // 30 and 40, so pages carrying 30-39 chars were reported as unread-by-OCR while
 // OCR never attempted them. Whichever way either threshold moves, this fails.
+// The engine side is an exported constant (VO_NEAR_EMPTY_CHARS), so only the
+// page-native VO_OCR_EMPTY_CHARS still has to be read out of source.
 {
-  const engineSrc = readFileSync('forensic-engine-page.js', 'utf8');
-  const ct26 = engineSrc.match(/lens\[i\]\s*<\s*(\d+)\s*&&\s*lens\[i\]\s*<\s*avg\s*\*\s*0\.1/);
+  const { createRequire } = await import('node:module');
+  const ENGINE = createRequire(import.meta.url)('../forensic-engine-page.js');
+  const nearEmpty = ENGINE.VO_NEAR_EMPTY_CHARS;
   const ocr = src.match(/var VO_OCR_EMPTY_CHARS\s*=\s*(\d+)/);
-  ok(!!ct26 && !!ocr, 'both the CT26 near-empty and OCR-candidate thresholds are locatable');
-  if (ct26 && ocr) {
-    ok(Number(ocr[1]) >= Number(ct26[1]),
-      `OCR candidate threshold (${ocr[1]}) covers the CT26 near-empty threshold (${ct26[1]})`);
+  ok(typeof nearEmpty === 'number', 'engine exports VO_NEAR_EMPTY_CHARS (CT26 near-empty threshold)');
+  ok(!!ocr, 'page-native VO_OCR_EMPTY_CHARS is locatable');
+  if (typeof nearEmpty === 'number' && ocr) {
+    ok(Number(ocr[1]) >= nearEmpty,
+      `OCR candidate threshold (${ocr[1]}) covers the CT26 near-empty threshold (${nearEmpty})`);
   }
 }
 ok(/pdfjs-dist@3\.11\.174/.test(src), 'CDN fallback pinned to the vendored pdf.js version (3.11.174)');
