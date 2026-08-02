@@ -23,6 +23,7 @@ const suites = [
   'rule-classify.test.mjs',
   'findings-json.test.mjs',
   'finding-anchors.test.mjs',
+  'wrangler-config.test.mjs',
   'encrypt-detect.test.mjs',
   'constitution-lock.test.mjs',
   'home-verify.test.mjs',

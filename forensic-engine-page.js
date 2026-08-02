@@ -2375,13 +2375,16 @@ function voExtractPersonsFromContext(text, cap) {
 // roster is built once per document and reused for every finding.
 var VO_ROSTER_MAX = 40;        // most-mentioned names kept
 var VO_ROSTER_PER_FINDING = 4; // roster names attachable to any one finding
+// Built once at load rather than per call (the roster runs over every page of a
+// 491-page bundle, so the object churn is pointless).
+var VO_ROSTER_NAME_RE = new RegExp("\\b([A-Z][A-Za-z'\u2019-]{1,}(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
 function voBuildNameRoster(blocks, minMentions) {
   var list = blocks || [];
   // A long bundle repeats a real party many times; a short one may name them
   // only twice, so the bar scales rather than silently excluding short documents.
   var min = minMentions || (list.length >= 10 ? 3 : 2);
   var counts = {}, display = {};
-  var re = new RegExp("\\b([A-Z][A-Za-z'\u2019-]{1,}(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
+  var re = VO_ROSTER_NAME_RE;
   for (var b = 0; b < list.length; b++) {
     var s = String(list[b] || '').replace(VO_SEAL_BOILERPLATE_RE, ' ');
     var m; re.lastIndex = 0;
