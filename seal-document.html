@@ -5343,9 +5343,14 @@ function voExtractCitations(text) {
     /\bsection\s+\d+[A-Z]?(?:\([a-z0-9]+\))*/gi,
     /\bs\.?\s?\d+[A-Z]?(?:\([a-z0-9]+\))+/g,   // s 12(1)(a) — require a bracket so bare "s 12" cannot over-fire
     /\bregulation\s+\d+(?:\.\d+)*/gi,
-    /\barticle\s+\d+(?:\.\d+)*/gi,
+    /\barticle\s+\d+(?:\.\d+)*(?:\([a-z0-9]+\))*/gi,   // Article 110(2)
+    // Abbreviated provision references the Greensky template itself uses:
+    // "Art. 110(2)", "Sec. 86(1)", "reg. 4", "cl. 4.5.2". A digit must follow,
+    // so a name like "Art Vandelay" or the word "section" cannot trip it.
+    /\b(?:art|sec|reg|cl)\.?\s+\d+[A-Z]?(?:\.\d+)*(?:\([a-z0-9]+\))*/gi,
     /\b(?:[A-Z][A-Za-z'’]+\s+){0,4}Act(?:,?\s+(?:No\.?\s*)?\d+)?\s+of\s+\d{4}/g,  // Companies Act 71 of 2008 / Act No. 71 of 2008
-    /\bAct\s+(?:No\.?\s*)?\d+\s+of\s+\d{4}/gi
+    /\bAct\s+(?:No\.?\s*)?\d+\s+of\s+\d{4}/gi,
+    /\b(?:Federal\s+)?Law\s+(?:No\.?\s*)?\d+(?:\/\d+)*\/\d{4}/gi   // Federal Law 32/2021
   ];
   for (var p = 0; p < pats.length; p++) { var m; pats[p].lastIndex = 0; while ((m = pats[p].exec(s)) !== null) add(m[0]); }
   // Drop any citation wholly contained in a longer one it overlaps — "Act 71 of
@@ -9401,7 +9406,7 @@ var VO_OCR_MIN_AVG = 150;       // only rescue when the rest of the doc has real
 // CDN copy is configured it is tried last (loading a library from a CDN sends
 // nothing about the document anywhere -- same trust model as the page's
 // existing pdf-lib fallback).
-function voLoadScriptAttempt(src) {
+function voOcrLoadScriptAttempt(src) {
   return new Promise(function (resolve, reject) {
     var s = document.createElement('script');
     s.src = src;
@@ -9413,14 +9418,16 @@ function voLoadScriptAttempt(src) {
 
 // sources: URLs in preference order. Returns the source that satisfied the
 // global check (so dependent paths like workerSrc can be kept consistent).
-async function voLoadScript(sources, globalCheck) {
+// Named voOcrLoadScript so it never shadows the same-origin self-healing
+// voLoadScript used for the forensic scripts (different signature).
+async function voOcrLoadScript(sources, globalCheck) {
   try { if (globalCheck()) return sources[0]; } catch (e) {}
   var errors = [];
   for (var i = 0; i < sources.length; i++) {
     for (var attempt = 0; attempt < 2; attempt++) {
       var url = attempt === 0 ? sources[i]
         : sources[i] + (sources[i].indexOf('?') === -1 ? '?' : '&') + 'vobust=' + Date.now();
-      try { await voLoadScriptAttempt(url); }
+      try { await voOcrLoadScriptAttempt(url); }
       catch (e1) { errors.push(url + ': network/404'); continue; }
       // onload fired -- but did the global appear? (An HTML-instead-of-JS
       // response fires onload and defines nothing.)
@@ -9476,7 +9483,7 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   // bundle's apiVersion). The worker must come from wherever the API came from
   // or pdf.js rejects the version mismatch.
   var VO_PDFJS_CDN = 'https://unpkg.com/pdfjs-dist@3.11.174/build/';
-  var pdfjsSrc = await voLoadScript(
+  var pdfjsSrc = await voOcrLoadScript(
     ['/vendor/pdf.min.js', VO_PDFJS_CDN + 'pdf.min.js'],
     function () { return typeof pdfjsLib !== 'undefined'; }
   );
@@ -9484,17 +9491,43 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
     pdfjsLib.GlobalWorkerOptions.workerSrc =
       (pdfjsSrc.indexOf('unpkg.com') !== -1) ? (VO_PDFJS_CDN + 'pdf.worker.min.js') : '/vendor/pdf.worker.min.js';
   } catch (e) {}
-  // tesseract: vendored only (its worker/wasm-core/language assets must match
-  // the exact vendored build, so a CDN mix would be worse than an honest
-  // failure) -- but it now gets the same verified-global cache-busted retries.
-  await voLoadScript(['/vendor/tesseract.min.js'], function () { return typeof Tesseract !== 'undefined'; });
+  // tesseract: vendored first, then a VERSION-MATCHED CDN fallback. The vendored
+  // build is 5.1.1; the fallback pins tesseract.js@5.1.1 (main + worker) so the
+  // worker/API versions cannot mismatch, with tesseract.js-core@5 and the
+  // standard tessdata for the wasm core and English language data. This is the
+  // OCR blackout fix: when the Pages deploy does not serve /vendor/ (the origin
+  // answers the asset path with HTML, which the worker guard now turns into a
+  // 503), OCR previously had nowhere else to go and 32+ image-only pages went
+  // unread. A CDN library download sends nothing about the document anywhere --
+  // same trust model as the pdf-lib and pdf.js fallbacks already in this page.
+  var VO_TESS_VENDOR = { worker: '/vendor/tesseract-worker.min.js', core: '/vendor', lang: '/vendor' };
+  var VO_TESS_CDN = {
+    worker: 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/worker.min.js',
+    core: 'https://cdn.jsdelivr.net/npm/tesseract.js-core@5/',
+    lang: 'https://tessdata.projectnaptha.com/4.0.0'
+  };
+  var tessMainSrc = await voOcrLoadScript(
+    ['/vendor/tesseract.min.js', 'https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js'],
+    function () { return typeof Tesseract !== 'undefined'; }
+  );
+  var tessFromCdn = tessMainSrc.indexOf('jsdelivr') !== -1;
 
   var pdf = await pdfjsLib.getDocument({ data: pdfBytes.slice ? pdfBytes.slice(0) : pdfBytes }).promise;
-  var worker = await Tesseract.createWorker('eng', 1, {
-    workerPath: '/vendor/tesseract-worker.min.js',
-    corePath: '/vendor',
-    langPath: '/vendor'
-  });
+  // Try the asset base that matches wherever the main script came from first,
+  // then the other base -- so a vendored main script with missing /vendor/
+  // worker or core assets still recovers via the CDN, and vice versa.
+  var _tessBases = tessFromCdn ? [VO_TESS_CDN, VO_TESS_VENDOR] : [VO_TESS_VENDOR, VO_TESS_CDN];
+  var worker = null, _tessErr = null;
+  for (var _tb = 0; _tb < _tessBases.length && !worker; _tb++) {
+    try {
+      worker = await Tesseract.createWorker('eng', 1, {
+        workerPath: _tessBases[_tb].worker,
+        corePath: _tessBases[_tb].core,
+        langPath: _tessBases[_tb].lang
+      });
+    } catch (e) { _tessErr = e; }
+  }
+  if (!worker) throw (_tessErr || new Error('tesseract worker init failed on all asset bases'));
   var rescued = [], noText = [], renderFailed = [], out = textBlocks.slice();
   try {
     for (var c = 0; c < candidates.length; c++) {

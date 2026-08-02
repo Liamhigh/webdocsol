@@ -27,10 +27,24 @@ const src = html.slice(start, end);
 ok(!/voLoadScriptOnce/.test(src), 'old un-verified voLoadScriptOnce is gone');
 ok(/pdfjs-dist@3\.11\.174/.test(src), 'CDN fallback pinned to the vendored pdf.js version (3.11.174)');
 
+// OCR blackout fix: tesseract must have a version-matched CDN fallback so a
+// missing /vendor/ on the Pages deploy no longer means zero OCR. The vendored
+// build is 5.1.1; the fallback (main + worker) must pin that exact version so
+// the worker/API versions cannot mismatch.
+ok(/tesseract\.js@5\.1\.1\/dist\/tesseract\.min\.js/.test(src), 'tesseract main CDN fallback pinned to vendored 5.1.1');
+ok(/tesseract\.js@5\.1\.1\/dist\/worker\.min\.js/.test(src), 'tesseract worker CDN fallback version-matched to 5.1.1');
+{
+  const flat = src.replace(/\s+/g, ' ');
+  ok(/\['\/vendor\/tesseract\.min\.js', 'https:\/\/cdn\.jsdelivr\.net\/npm\/tesseract\.js@5\.1\.1/.test(flat),
+    'tesseract tries vendored first, then the CDN (order preserved)');
+  ok(/createWorker.*_tessBases/.test(flat) || /_tessBases/.test(flat),
+    'createWorker retries across asset bases (vendored <-> CDN)');
+}
+
 function build(env) {
   const fn = new Function(
     'document', 'updateStep', 'pdfjsLib', 'Tesseract', 'window',
-    '"use strict";' + src + '\nreturn { voLoadScript, voOcrRescuePages };'
+    '"use strict";' + src + '\nreturn { voOcrLoadScript, voOcrRescuePages };'
   );
   return fn(env.document, env.updateStep || (() => {}), env.pdfjsLib, env.Tesseract, env.window || {});
 }
@@ -62,8 +76,8 @@ function fakeDom(behaviours, state) {
 {
   const state = { attempts: [], globalPresent: false };
   const dom = fakeDom({ '/vendor/pdf.min.js': 'html', 'https://unpkg.com': 'ok' }, state);
-  const { voLoadScript } = build({ document: dom });
-  const winner = await voLoadScript(
+  const { voOcrLoadScript } = build({ document: dom });
+  const winner = await voOcrLoadScript(
     ['/vendor/pdf.min.js', 'https://unpkg.com/pdfjs-dist@3.11.174/build/pdf.min.js'],
     () => state.globalPresent
   );
@@ -77,8 +91,8 @@ function fakeDom(behaviours, state) {
 {
   const state = { attempts: [], globalPresent: true };
   const dom = fakeDom({}, state);
-  const { voLoadScript } = build({ document: dom });
-  await voLoadScript(['/vendor/x.js'], () => true);
+  const { voOcrLoadScript } = build({ document: dom });
+  await voOcrLoadScript(['/vendor/x.js'], () => true);
   ok(state.attempts.length === 0, 'loader short-circuits when the global already exists');
 }
 
@@ -86,9 +100,9 @@ function fakeDom(behaviours, state) {
 {
   const state = { attempts: [], globalPresent: false };
   const dom = fakeDom({ '/vendor/t.js': 'html' }, state);
-  const { voLoadScript } = build({ document: dom });
+  const { voOcrLoadScript } = build({ document: dom });
   let threw = null;
-  try { await voLoadScript(['/vendor/t.js'], () => state.globalPresent); }
+  try { await voOcrLoadScript(['/vendor/t.js'], () => state.globalPresent); }
   catch (e) { threw = e; }
   ok(threw && /global missing/.test(threw.message), 'total failure throws with the HTML-served diagnosis in the message');
 }

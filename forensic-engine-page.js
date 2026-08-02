@@ -2163,9 +2163,14 @@ function voExtractCitations(text) {
     /\bsection\s+\d+[A-Z]?(?:\([a-z0-9]+\))*/gi,
     /\bs\.?\s?\d+[A-Z]?(?:\([a-z0-9]+\))+/g,   // s 12(1)(a) — require a bracket so bare "s 12" cannot over-fire
     /\bregulation\s+\d+(?:\.\d+)*/gi,
-    /\barticle\s+\d+(?:\.\d+)*/gi,
+    /\barticle\s+\d+(?:\.\d+)*(?:\([a-z0-9]+\))*/gi,   // Article 110(2)
+    // Abbreviated provision references the Greensky template itself uses:
+    // "Art. 110(2)", "Sec. 86(1)", "reg. 4", "cl. 4.5.2". A digit must follow,
+    // so a name like "Art Vandelay" or the word "section" cannot trip it.
+    /\b(?:art|sec|reg|cl)\.?\s+\d+[A-Z]?(?:\.\d+)*(?:\([a-z0-9]+\))*/gi,
     /\b(?:[A-Z][A-Za-z'’]+\s+){0,4}Act(?:,?\s+(?:No\.?\s*)?\d+)?\s+of\s+\d{4}/g,  // Companies Act 71 of 2008 / Act No. 71 of 2008
-    /\bAct\s+(?:No\.?\s*)?\d+\s+of\s+\d{4}/gi
+    /\bAct\s+(?:No\.?\s*)?\d+\s+of\s+\d{4}/gi,
+    /\b(?:Federal\s+)?Law\s+(?:No\.?\s*)?\d+(?:\/\d+)*\/\d{4}/gi   // Federal Law 32/2021
   ];
   for (var p = 0; p < pats.length; p++) { var m; pats[p].lastIndex = 0; while ((m = pats[p].exec(s)) !== null) add(m[0]); }
   // Drop any citation wholly contained in a longer one it overlaps — "Act 71 of

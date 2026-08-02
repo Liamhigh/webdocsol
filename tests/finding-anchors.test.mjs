@@ -32,6 +32,19 @@ ok(E.voExtractCitations('the parties met and shook hands over coffee').length ==
 ok(E.voExtractCitations('he was section head and paid s 50').length === 0,
   'bare "s 50" / "section head" do not fabricate a statute reference');
 
+// The exact citation shapes the Greensky Institutional Review Template uses:
+// "Art. 110(2)", "SA ECT Act Sec. 86(1)", "Federal Law 32/2021", "Article 84".
+ok(E.voExtractCitations('breach of UAE Art. 110(2) on oppression').some(c => /Art\. 110\(2\)/.test(c)),
+  'abbreviated "Art. 110(2)" extracted (template form)');
+ok(E.voExtractCitations('under SA ECT Act Sec. 86(1) unauthorised access').some(c => /Sec\. 86\(1\)/.test(c)),
+  'abbreviated "Sec. 86(1)" extracted (template form)');
+ok(E.voExtractCitations('violating Federal Law 32/2021 of the UAE').some(c => /Law 32\/2021/.test(c)),
+  'slash-form "Federal Law 32/2021" extracted (template form)');
+ok(E.voExtractCitations('Article 84 (fiduciary duty) and Article 257 (forgery)').length === 2,
+  'full "Article 84 / Article 257" both extracted');
+ok(E.voExtractCitations('Art Vandelay signed for the seller').length === 0,
+  'a name "Art Vandelay" (no number) is not mistaken for Article citation');
+
 // ---- voExtractParties: roles + proper names --------------------------------
 const parties = E.voExtractParties('Gary Highcock paid R3,800,000 to the Lessee, and Wayne Nel signed for Norton Rose Fulbright');
 const pnames = parties.map(p => p.name);
