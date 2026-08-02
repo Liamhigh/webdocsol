@@ -5455,6 +5455,39 @@ function voExtractCitations(text) {
 // names (Gary Highcock / Norton Rose Fulbright). Conservative and deterministic
 // — a lone capitalised word (sentence start) is not a party.
 var VO_NAME_STOP = { The:1, This:1, That:1, These:1, Page:1, Total:1, Date:1, Effective:1, Signed:1, Same:1, Opposing:1, Impossible:1, Invalid:1, Company:1, Document:1, Parties:1, Provision:1, February:1, March:1, January:1 };
+
+// Tokens that mean "this capitalised run is not a person". The Greensky rerun
+// indexed "PRIVATE SEAL" (Verum's own seal footer), "Gooale Drive" (an OCR
+// mangling of Google Drive) and "Kevin. Late Mares The" as parties — a person
+// index that names the seal itself is worse than an empty one, because a
+// reviewer may act on it. Checked case-insensitively against EVERY token, so a
+// stop word anywhere in the run rejects it, not just in first position.
+var VO_NON_PERSON_TOK = (function () {
+  var m = {}, words = ('the this that these those page total date effective signed same opposing impossible ' +
+    'invalid company document documents parties provision clause section article annexure annexures exhibit ' +
+    'agreement contract invoice tax rental escalation notice report summary appendix schedule attachment ' +
+    'seal sealed private public original certificate verify verification timestamps opentimestamps patent ' +
+    'pending free tier verum omnis foundation drive folder file scan copy version draft final ' +
+    'january february march april may june july august september october november december ' +
+    'monday tuesday wednesday thursday friday saturday sunday').split(' ');
+  for (var i = 0; i < words.length; i++) m[words[i]] = 1;
+  return m;
+})();
+
+// A candidate run is a person/party name only if it is 2-4 tokens, carries no
+// stop token, and does not run through a sentence end (a word ending in "." that
+// is not an initial) — which is how "Kevin." glued itself to "Late Mares The".
+function voLooksLikePerson(name) {
+  var toks = String(name == null ? '' : name).split(/\s+/).filter(Boolean);
+  if (toks.length < 2 || toks.length > 4) return false;
+  for (var i = 0; i < toks.length; i++) {
+    var bare = toks[i].replace(/[.'’-]+$/, '');
+    if (!bare) return false;
+    if (VO_NON_PERSON_TOK[bare.toLowerCase()]) return false;
+    if (i < toks.length - 1 && /\.$/.test(toks[i]) && bare.length > 1) return false; // sentence end mid-run
+  }
+  return true;
+}
 function voExtractParties(text) {
   var s = String(text == null ? '' : text);
   var out = [], seen = {};
@@ -5468,6 +5501,7 @@ function voExtractParties(text) {
   var nameRe = /\b([A-Z][a-z]{1,}(?:\s+[A-Z][a-z'’.]+){1,2})\b/g, nm;
   while ((nm = nameRe.exec(s)) !== null) {
     if (VO_NAME_STOP[nm[1].split(/\s+/)[0]]) continue;
+    if (!voLooksLikePerson(nm[1])) continue; // seal boilerplate / OCR garbage
     add(nm[1], 'name');
   }
   return out;
@@ -5495,6 +5529,7 @@ function voExtractPersonsFromContext(text, cap) {
     n = String(n || '').replace(/\s+/g, ' ').trim();
     if (!n) return;
     if (VO_NAME_STOP[n.split(' ')[0]]) return;
+    if (!voLooksLikePerson(n)) return; // seal boilerplate / OCR garbage
     var k = n.toLowerCase();
     if (!seen[k] && out.length < lim) { seen[k] = true; out.push({ name: n, kind: 'name' }); }
   };
@@ -5583,6 +5618,10 @@ function voAnchorEnrich(findings, textBlocks) {
     var pages = voParsePages(f.location);
     var ctx = ev;
     for (var p = 0; p < pages.length; p++) { var b = blocks[pages[p] - 1]; if (b) ctx += ' ' + b; }
+    // Verum's own seal footer repeats on every sealed page ("PRIVATE SEAL",
+    // "VERUM OMNIS SEALED ORIGINAL", "OpenTimestamps"). Left in, it gets indexed
+    // as a party. Strip it before any party scan — the seal is not a person.
+    var ctxParties = ctx.replace(VO_SEAL_BOILERPLATE_RE, ' ');
     var dates = voExtractDates(ev);
     if (!dates.length) dates = voExtractDates(ctx).slice(0, 2);
     var law = voExtractCitations(ev);
@@ -5597,7 +5636,7 @@ function voAnchorEnrich(findings, textBlocks) {
     var _who = voExtractParties(ev);
     var _seenWho = {};
     for (var _w = 0; _w < _who.length; _w++) _seenWho[_who[_w].name.toLowerCase()] = true;
-    var _ctxWho = voExtractPersonsFromContext(ctx, 6);
+    var _ctxWho = voExtractPersonsFromContext(ctxParties, 6);
     for (var _c = 0; _c < _ctxWho.length && _who.length < 10; _c++) {
       if (!_seenWho[_ctxWho[_c].name.toLowerCase()]) { _seenWho[_ctxWho[_c].name.toLowerCase()] = true; _who.push(_ctxWho[_c]); }
     }
@@ -6318,6 +6357,7 @@ if (typeof module !== 'undefined' && module.exports) {
     voExtractCitations: voExtractCitations,
     voExtractParties: voExtractParties,
     voExtractPersonsFromContext: voExtractPersonsFromContext,
+    voLooksLikePerson: voLooksLikePerson,
     voExtractDates: voExtractDates,
     voExtractQuotes: voExtractQuotes,
     voParsePages: voParsePages,
@@ -9604,7 +9644,15 @@ var VO_OCR_MAX_PAGES = 200;     // cap: OCR is ~seconds/page on-device. Raised f
                                 // pages) are actually read; the progress UI shows
                                 // per-page status, and anything beyond the cap is
                                 // still disclosed in the extraction notes.
-var VO_OCR_EMPTY_CHARS = 30;    // a page this thin is treated as image-only
+// DRIFT-LOCK: this must stay >= the CT26 near-empty threshold in
+// forensic-engine-page.js (lens[i] < 40). It was 30 while CT26 flagged < 40, so
+// pages carrying 30-39 chars were reported as "near-empty ... most likely
+// image-only pages not captured by OCR" while OCR never even attempted them —
+// the engine named a gap it had chosen not to close. The Greensky rerun
+// recovered 36 pages and still declared 29 near-empty. Raising this to 40 makes
+// every page CT26 calls near-empty an OCR candidate. If CT26's threshold moves,
+// move this with it.
+var VO_OCR_EMPTY_CHARS = 40;    // a page this thin is treated as image-only
 var VO_OCR_MIN_AVG = 150;       // only rescue when the rest of the doc has real text
 
 // Hardened script loader for the OCR stack. The deployment intermittently

@@ -148,6 +148,31 @@ ok(boundNames.includes('Gary Highcock'),
 ok(E.voBuildPersonIndex(pageFindings).length > 0,
   'REGRESSION: the person index is no longer empty for a page that names people');
 
+// ---- Person-index QUALITY (the Greensky rerun garbage) ---------------------
+// The Greensky rerun bound: "Greensky Ornamentals FZ-LLC, Kevin. Late Mares The,
+// Gooale Drive. PRIVATE SEAL" — one real party and three artefacts, including
+// Verum's OWN seal footer. A person index that names the seal is worse than an
+// empty one, because a reviewer may act on it.
+ok(E.voLooksLikePerson('Gary Highcock'), 'a real two-token name is a person');
+ok(E.voLooksLikePerson('E de Waal'), 'initial + particle + surname is a person');
+ok(!E.voLooksLikePerson('PRIVATE SEAL'), 'REGRESSION: "PRIVATE SEAL" (seal footer) is not a person');
+ok(!E.voLooksLikePerson('Gooale Drive'), 'REGRESSION: "Gooale Drive" (OCR of Google Drive) is not a person');
+ok(!E.voLooksLikePerson('Kevin. Late Mares The'), 'REGRESSION: a run through a sentence end / stop word is not a person');
+ok(!E.voLooksLikePerson('Tax Invoice'), 'document furniture ("Tax Invoice") is not a person');
+ok(!E.voLooksLikePerson('Kevin'), 'a single token is not a person');
+
+// Seal boilerplate on the cited page must never reach the index.
+const sealedPage = 'VERUM OMNIS SEALED ORIGINAL — PRIVATE SEAL — FREE TIER\n' +
+  'verumglobal.foundation | OpenTimestamps | Patent Pending\n' +
+  'From: Marius Nortje\nTo: Kevin Lappeman\n';
+const sealedFindings = [{ type: 'CT03', severity: 4, evidence: '"dated" is stated as 6 April 2025 and as 30 April 2025', location: 'Page 1' }];
+E.voAnchorEnrich(sealedFindings, [sealedPage]);
+const sealedWho = (sealedFindings[0].anchor.who || []).map(p => p.name.toLowerCase());
+ok(!sealedWho.some(n => /seal|verum|omnis|timestamps/.test(n)),
+  'REGRESSION: Verum seal-footer text is stripped before party extraction');
+ok(sealedWho.some(n => /marius nortje|kevin lappeman/.test(n)),
+  'real people on a sealed page are still bound');
+
 console.log(`\n[finding-anchors] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[finding-anchors] FAILURES'); process.exit(1); }
 console.log('[finding-anchors] ALL GREEN');
