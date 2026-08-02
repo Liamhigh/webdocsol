@@ -1765,6 +1765,57 @@ function secFindingDetails(ctx, data) {
   }
 }
 
+// ================= SECTION: PERSON-MENTION INDEX =================
+// For every party the engine bound to a finding, the pages and findings where
+// they appear. DESCRIPTIVE, never accusatory: it maps who the document NAMES to
+// where, so a reviewer can pull everything about one person fast. Being named in
+// or near a contradiction is not wrongdoing — role and culpability are for
+// counsel and the court, never asserted here.
+function secPersonIndex(ctx, data) {
+  var idx = (data.findings && data.findings.personIndex) || [];
+  var PERSON_CAP = 25, MENTION_CAP = 8;
+  ctx.newBodyPage();
+  ctx.heading('PERSON-MENTION INDEX');
+  ctx.para('This index maps every person and role the documents NAME to the pages and findings where they appear. It is descriptive: being named in or near a contradiction is not an allegation of wrongdoing — role and culpability are for counsel and the court to determine. Its purpose is to let a reviewer pull everything about one person quickly.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  if (!idx.length) {
+    ctx.para('The engine could not bind a named party or role to any anchored finding in this document. Parties are drawn from the text around each finding, so a scanned or image-only bundle whose OCR did not run will carry none — re-submit a text-layer copy to populate this index.', { size: 10, after: 6 });
+    return;
+  }
+  for (var i = 0; i < idx.length && i < PERSON_CAP; i++) {
+    var p = idx[i];
+    var roleTag = p.kind === 'role' ? ' (role)' : '';
+    var pageStr = p.pages.length ? p.pages.map(function (n) { return 'p.' + n; }).join(', ') : 'unpinned';
+    ctx.ensure(64);
+    ctx.subHeading(p.name + roleTag + ' — ' + p.mentionCount + ' mention' + (p.mentionCount === 1 ? '' : 's') + '  (' + pageStr + ')');
+    var rows = [];
+    for (var m = 0; m < p.mentions.length && m < MENTION_CAP; m++) {
+      var mn = p.mentions[m];
+      rows.push({
+        n: String(m + 1),
+        typ: (CT_NAMES[mn.type] || mn.type),
+        page: (mn.pages && mn.pages.length) ? mn.pages.join(', ') : '-',
+        quote: quoteEvidence(mn.evidence)
+      });
+    }
+    ctx.table(
+      [
+        { key: 'n', title: '#', w: 22, align: 'center' },
+        { key: 'typ', title: 'Finding', w: 120 },
+        { key: 'page', title: 'Page', w: 44, align: 'center' },
+        { key: 'quote', title: 'What the document says', w: 318 }
+      ],
+      rows, { size: 8 }
+    );
+    if (p.mentions.length > MENTION_CAP) {
+      ctx.para('… and ' + (p.mentions.length - MENTION_CAP) + ' further mention(s) for this party; see the full findings above.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    }
+    ctx.gap(4);
+  }
+  if (idx.length > PERSON_CAP) {
+    ctx.para('Showing the ' + PERSON_CAP + ' most-mentioned of ' + idx.length + ' named parties.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY });
+  }
+}
+
 // ================= SECTION: EVIDENCE APPENDIX =================
 // Every flagged passage reproduced verbatim in one place, numbered, with its
 // indicator type and page - the complete quoted-evidence record behind the
@@ -2288,6 +2339,7 @@ async function build(opts) {
   secEvidenceIndex(ctx, data);
   secMatrix(ctx, data);
   secFindingDetails(ctx, data);  // one expanded page-block per substantive finding
+  secPersonIndex(ctx, data);     // who the document names -> pages/findings (descriptive)
   secSerial(ctx, data);
   secTimeline(ctx, data);
   secEvidenceAppendix(ctx, data); // every quoted passage, verbatim, in one place

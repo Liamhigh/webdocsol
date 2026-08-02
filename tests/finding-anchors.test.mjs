@@ -96,6 +96,26 @@ const idx2026 = tl.narrative.indexOf('2026');
 ok(idx2018 !== -1 && (idx2026 === -1 || idx2018 < idx2026), 'timeline narrative is chronological (2018 before 2026)');
 ok(/^On /m.test(tl.narrative), 'each timeline line reads "On <date>: …"');
 
+// ---- voBuildPersonIndex: descriptive who->pages/findings aggregation --------
+const pidxFindings = [
+  { type: 'CT01', severity: 5, location: 'Page 78',
+    anchor: { who: [{ name: 'Gary Highcock', kind: 'name' }, { name: 'Lessee', kind: 'role' }], where: [78], quote: [], when: [], law: [] } },
+  { type: 'CT02', severity: 4, location: 'Page 140',
+    anchor: { who: [{ name: 'Gary Highcock', kind: 'name' }], where: [140], quote: [], when: [], law: [] } },
+  { type: 'CT45', severity: 5, location: 'Page 176',
+    anchor: { who: [{ name: 'Wayne Nel', kind: 'name' }], where: [176], quote: [], when: [], law: [] } },
+  { type: 'CT03', severity: 3, location: 'Page 12',
+    anchor: { who: [], where: [12], quote: [], when: [], law: [] } }, // no party
+];
+const pidx = E.voBuildPersonIndex(pidxFindings);
+const gary = pidx.find(p => p.name === 'Gary Highcock');
+ok(gary && gary.mentionCount === 2, 'Gary Highcock aggregated across both his findings');
+ok(gary && gary.pages.join(',') === '78,140', 'person carries the sorted set of pages they appear on');
+ok(pidx[0].name === 'Gary Highcock', 'most-mentioned party sorts first');
+ok(pidx.some(p => p.name === 'Lessee' && p.kind === 'role'), 'a legal role is indexed and tagged kind=role');
+ok(!pidx.some(p => p.name === ''), 'anchorless finding contributes no empty party');
+ok(E.voBuildPersonIndex([]).length === 0, 'empty findings yield an empty index (no crash)');
+
 console.log(`\n[finding-anchors] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[finding-anchors] FAILURES'); process.exit(1); }
 console.log('[finding-anchors] ALL GREEN');

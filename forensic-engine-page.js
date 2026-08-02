@@ -2315,6 +2315,46 @@ function voBuildTimeline(findings) {
   return { events: events, narrative: lines.join('\n') };
 }
 
+// The person-mention index: for every party the engine bound to a finding
+// (anchor.who), the pages where they appear and the findings on those pages.
+// This is DESCRIPTIVE — it maps who the DOCUMENT names to where, so a human can
+// pull everything about a person quickly. It asserts NO culpability: being named
+// near a contradiction is not being guilty of it. That determination is the
+// court's; this index only says "here is where this name appears."
+function voBuildPersonIndex(findings) {
+  var byName = {};
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i];
+    if (!f || !f.anchor || !f.anchor.who) continue;
+    var pages = f.anchor.where || [];
+    for (var w = 0; w < f.anchor.who.length; w++) {
+      var person = f.anchor.who[w];
+      if (!person || !person.name) continue;
+      var key = person.name.toLowerCase();
+      if (!byName[key]) byName[key] = { name: person.name, kind: person.kind, pages: {}, mentions: [] };
+      // A personal name is a stronger label than a bare role if both are seen.
+      if (byName[key].kind === 'role' && person.kind === 'name') { byName[key].kind = 'name'; byName[key].name = person.name; }
+      for (var p = 0; p < pages.length; p++) byName[key].pages[pages[p]] = true;
+      byName[key].mentions.push({
+        type: f.type,
+        pages: pages.slice(),
+        severity: f.severity || 0,
+        evidence: String(f.evidence || '').replace(/\s+/g, ' ').trim()
+      });
+    }
+  }
+  var out = [];
+  for (var k in byName) {
+    if (!Object.prototype.hasOwnProperty.call(byName, k)) continue;
+    var e = byName[k];
+    var pageList = Object.keys(e.pages).map(Number).sort(function (a, b) { return a - b; });
+    out.push({ name: e.name, kind: e.kind, pages: pageList, mentionCount: e.mentions.length, mentions: e.mentions });
+  }
+  // Most-mentioned first (the names a reviewer should look at soonest), then A→Z.
+  out.sort(function (a, b) { return (b.mentionCount - a.mentionCount) || a.name.localeCompare(b.name); });
+  return out;
+}
+
 function detectSerialPatterns(textBlocks) {
   var findings = [];
   var blocks = (textBlocks && textBlocks.length) ? textBlocks.map(function (b) { return String(b || '').toLowerCase(); }) : [''];
@@ -2883,6 +2923,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     totalFindings: allFindings.length,
     findings: allFindings,
     timeline: voBuildTimeline(allFindings),
+    personIndex: voBuildPersonIndex(allFindings),
     findingsByType: findingsByType,
     findingsByCategory: findingsByCategory,
     contradictionTypesUsed: Object.keys(findingsByType).length,
@@ -2950,6 +2991,7 @@ if (typeof module !== 'undefined' && module.exports) {
     voDateSortKey: voDateSortKey,
     voStatement: voStatement,
     voAnchorEnrich: voAnchorEnrich,
-    voBuildTimeline: voBuildTimeline
+    voBuildTimeline: voBuildTimeline,
+    voBuildPersonIndex: voBuildPersonIndex
   };
 }
