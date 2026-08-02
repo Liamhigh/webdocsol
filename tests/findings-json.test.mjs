@@ -46,6 +46,13 @@ const json = buildFindingsJson(result, 'bundle.pdf', 'a'.repeat(128), 100, { cas
 
 ok(json.findings_json_version === '1.2.0', 'contract version bumped to 1.2.0 (additive anchor fields)');
 
+// The page block must not redeclare the engine's voCtById(id): two same-named
+// declarations share one global, the later (no-arg) one won, voStatement got a
+// map instead of a type, and every finding label rendered "undefined".
+ok((html.match(/function voCtById\b/g) || []).length === 1,
+  'exactly one voCtById declaration in seal-document.html (the inlined engine copy)');
+ok(/function voCtMapById\(\)/.test(html), 'page-native map helper renamed to voCtMapById');
+
 // Anchors bound into the record: who -> actors, when -> temporal_analysis,
 // document-cited law -> document_cited_provisions (cite-or-stay-silent).
 const r0 = json.contradictions[0];
