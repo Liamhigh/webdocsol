@@ -36,6 +36,12 @@ var VO_ENGINE_VERSION = '5.3.5-web';
 // Here: known Verum Omnis boilerplate, emails, phones, hashes and digits are
 // stripped, then each distinct word counts ONCE — identical footer layers
 // collapse to nothing while real prose keeps its mass.
+// A page carrying less distinct-content mass than this is "near-empty" —
+// CT26 reports such pages as most likely image-only and not captured by OCR.
+// The OCR candidate threshold (VO_OCR_EMPTY_CHARS, page-native in
+// seal-document.html) must stay >= this value, or the engine names a gap it
+// never tried to close. Exported and drift-locked by tests/ocr-rescue.
+var VO_NEAR_EMPTY_CHARS = 40;
 var VO_SEAL_BOILERPLATE_RE = /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL|PRIVATE\s+SEAL(?:\s*[-\u2013\u2014]+\s*FREE\s+TIER)?|VERIFY\s+SEAL|verumglobal\.foundation|OpenTimestamps|Patent\s+Pending|Africa\/Johannesburg|AI\s+FORENSICS\s+FOR\s+TRUTH|Founder,?\s+Verum\s+Omnis|\bVerum\s+Omnis\b|\bSeal:\s*|\bUTC\b|\bFREE\s+TIER\b/gi;
 function voContentMass(t) {
   var s = String(t || '').toLowerCase()
@@ -1081,7 +1087,7 @@ var DETECTORS = {
       if (avg > 180) {
         var blanks = [];
         for (var i = 0; i < lens.length; i++) {
-          if (lens[i] < 40 && lens[i] < avg * 0.1) blanks.push(i);
+          if (lens[i] < VO_NEAR_EMPTY_CHARS && lens[i] < avg * 0.1) blanks.push(i);
         }
         // A RUN of near-empty pages (or many of them) is the signature of an
         // image-only / scanned section that OCR could not read — NOT surgical
@@ -2202,6 +2208,39 @@ function voExtractCitations(text) {
 // names (Gary Highcock / Norton Rose Fulbright). Conservative and deterministic
 // — a lone capitalised word (sentence start) is not a party.
 var VO_NAME_STOP = { The:1, This:1, That:1, These:1, Page:1, Total:1, Date:1, Effective:1, Signed:1, Same:1, Opposing:1, Impossible:1, Invalid:1, Company:1, Document:1, Parties:1, Provision:1, February:1, March:1, January:1 };
+
+// Tokens that mean "this capitalised run is not a person". The Greensky rerun
+// indexed "PRIVATE SEAL" (Verum's own seal footer), "Gooale Drive" (an OCR
+// mangling of Google Drive) and "Kevin. Late Mares The" as parties — a person
+// index that names the seal itself is worse than an empty one, because a
+// reviewer may act on it. Checked case-insensitively against EVERY token, so a
+// stop word anywhere in the run rejects it, not just in first position.
+var VO_NON_PERSON_TOK = (function () {
+  var m = {}, words = ('the this that these those page total date effective signed same opposing impossible ' +
+    'invalid company document documents parties provision clause section article annexure annexures exhibit ' +
+    'agreement contract invoice tax rental escalation notice report summary appendix schedule attachment ' +
+    'seal sealed private public original certificate verify verification timestamps opentimestamps patent ' +
+    'pending free tier verum omnis foundation drive folder file scan copy version draft final ' +
+    'january february march april may june july august september october november december ' +
+    'monday tuesday wednesday thursday friday saturday sunday').split(' ');
+  for (var i = 0; i < words.length; i++) m[words[i]] = 1;
+  return m;
+})();
+
+// A candidate run is a person/party name only if it is 2-4 tokens, carries no
+// stop token, and does not run through a sentence end (a word ending in "." that
+// is not an initial) — which is how "Kevin." glued itself to "Late Mares The".
+function voLooksLikePerson(name) {
+  var toks = String(name == null ? '' : name).split(/\s+/).filter(Boolean);
+  if (toks.length < 2 || toks.length > 4) return false;
+  for (var i = 0; i < toks.length; i++) {
+    var bare = toks[i].replace(/[.'’-]+$/, '');
+    if (!bare) return false;
+    if (VO_NON_PERSON_TOK[bare.toLowerCase()]) return false;
+    if (i < toks.length - 1 && /\.$/.test(toks[i]) && bare.length > 1) return false; // sentence end mid-run
+  }
+  return true;
+}
 function voExtractParties(text) {
   var s = String(text == null ? '' : text);
   var out = [], seen = {};
@@ -2215,6 +2254,7 @@ function voExtractParties(text) {
   var nameRe = /\b([A-Z][a-z]{1,}(?:\s+[A-Z][a-z'’.]+){1,2})\b/g, nm;
   while ((nm = nameRe.exec(s)) !== null) {
     if (VO_NAME_STOP[nm[1].split(/\s+/)[0]]) continue;
+    if (!voLooksLikePerson(nm[1])) continue; // seal boilerplate / OCR garbage
     add(nm[1], 'name');
   }
   return out;
@@ -2242,6 +2282,7 @@ function voExtractPersonsFromContext(text, cap) {
     n = String(n || '').replace(/\s+/g, ' ').trim();
     if (!n) return;
     if (VO_NAME_STOP[n.split(' ')[0]]) return;
+    if (!voLooksLikePerson(n)) return; // seal boilerplate / OCR garbage
     var k = n.toLowerCase();
     if (!seen[k] && out.length < lim) { seen[k] = true; out.push({ name: n, kind: 'name' }); }
   };
@@ -2330,6 +2371,10 @@ function voAnchorEnrich(findings, textBlocks) {
     var pages = voParsePages(f.location);
     var ctx = ev;
     for (var p = 0; p < pages.length; p++) { var b = blocks[pages[p] - 1]; if (b) ctx += ' ' + b; }
+    // Verum's own seal footer repeats on every sealed page ("PRIVATE SEAL",
+    // "VERUM OMNIS SEALED ORIGINAL", "OpenTimestamps"). Left in, it gets indexed
+    // as a party. Strip it before any party scan — the seal is not a person.
+    var ctxParties = ctx.replace(VO_SEAL_BOILERPLATE_RE, ' ');
     var dates = voExtractDates(ev);
     if (!dates.length) dates = voExtractDates(ctx).slice(0, 2);
     var law = voExtractCitations(ev);
@@ -2344,7 +2389,7 @@ function voAnchorEnrich(findings, textBlocks) {
     var _who = voExtractParties(ev);
     var _seenWho = {};
     for (var _w = 0; _w < _who.length; _w++) _seenWho[_who[_w].name.toLowerCase()] = true;
-    var _ctxWho = voExtractPersonsFromContext(ctx, 6);
+    var _ctxWho = voExtractPersonsFromContext(ctxParties, 6);
     for (var _c = 0; _c < _ctxWho.length && _who.length < 10; _c++) {
       if (!_seenWho[_ctxWho[_c].name.toLowerCase()]) { _seenWho[_ctxWho[_c].name.toLowerCase()] = true; _who.push(_ctxWho[_c]); }
     }
@@ -3061,10 +3106,12 @@ if (typeof module !== 'undefined' && module.exports) {
     voExcludeTemplatePages: voExcludeTemplatePages,
     voEnforceAnchorRule: voEnforceAnchorRule,
     voContentMass: voContentMass,
+    VO_NEAR_EMPTY_CHARS: VO_NEAR_EMPTY_CHARS,
     voCtById: voCtById,
     voExtractCitations: voExtractCitations,
     voExtractParties: voExtractParties,
     voExtractPersonsFromContext: voExtractPersonsFromContext,
+    voLooksLikePerson: voLooksLikePerson,
     voExtractDates: voExtractDates,
     voExtractQuotes: voExtractQuotes,
     voParsePages: voParsePages,

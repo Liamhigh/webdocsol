@@ -25,6 +25,25 @@ const src = html.slice(start, end);
 
 // The block must no longer use the old un-verified loader.
 ok(!/voLoadScriptOnce/.test(src), 'old un-verified voLoadScriptOnce is gone');
+
+// DRIFT-LOCK: the OCR candidate threshold must cover every page CT26 calls
+// "near-empty ... most likely image-only pages not captured by OCR". They were
+// 30 and 40, so pages carrying 30-39 chars were reported as unread-by-OCR while
+// OCR never attempted them. Whichever way either threshold moves, this fails.
+// The engine side is an exported constant (VO_NEAR_EMPTY_CHARS), so only the
+// page-native VO_OCR_EMPTY_CHARS still has to be read out of source.
+{
+  const { createRequire } = await import('node:module');
+  const ENGINE = createRequire(import.meta.url)('../forensic-engine-page.js');
+  const nearEmpty = ENGINE.VO_NEAR_EMPTY_CHARS;
+  const ocr = src.match(/var VO_OCR_EMPTY_CHARS\s*=\s*(\d+)/);
+  ok(typeof nearEmpty === 'number', 'engine exports VO_NEAR_EMPTY_CHARS (CT26 near-empty threshold)');
+  ok(!!ocr, 'page-native VO_OCR_EMPTY_CHARS is locatable');
+  if (typeof nearEmpty === 'number' && ocr) {
+    ok(Number(ocr[1]) >= nearEmpty,
+      `OCR candidate threshold (${ocr[1]}) covers the CT26 near-empty threshold (${nearEmpty})`);
+  }
+}
 ok(/pdfjs-dist@3\.11\.174/.test(src), 'CDN fallback pinned to the vendored pdf.js version (3.11.174)');
 
 // OCR blackout fix: tesseract must have a version-matched CDN fallback so a
