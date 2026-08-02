@@ -2362,6 +2362,49 @@ function voExtractPersonsFromContext(text, cap) {
   return out;
 }
 
+// DOCUMENT-LEVEL PARTY ROSTER. Marker-anchored extraction (From:/To:/Cc:,
+// salutations, titles) catches people named in email headers, but the commonest
+// case in a case bundle is a name in ORDINARY PROSE — "Kevin Lappeman operates
+// the registered entity …" on the very page a finding cites. Those were never
+// bound, so a finding read "not attributed to a named party" beside a page that
+// names the person twice.
+//
+// Scanning prose for any capitalised pair would flood the index with noise, so
+// the signal is RECURRENCE: a name that appears repeatedly across the bundle is
+// a party to the matter; a capitalised pair that appears once is furniture. The
+// roster is built once per document and reused for every finding.
+var VO_ROSTER_MAX = 40;        // most-mentioned names kept
+var VO_ROSTER_PER_FINDING = 4; // roster names attachable to any one finding
+// Built once at load rather than per call (the roster runs over every page of a
+// 491-page bundle, so the object churn is pointless).
+var VO_ROSTER_NAME_RE = new RegExp("\\b([A-Z][A-Za-z'\u2019-]{1,}(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
+function voBuildNameRoster(blocks, minMentions) {
+  var list = blocks || [];
+  // A long bundle repeats a real party many times; a short one may name them
+  // only twice, so the bar scales rather than silently excluding short documents.
+  var min = minMentions || (list.length >= 10 ? 3 : 2);
+  var counts = {}, display = {};
+  var re = VO_ROSTER_NAME_RE;
+  for (var b = 0; b < list.length; b++) {
+    var s = String(list[b] || '').replace(VO_SEAL_BOILERPLATE_RE, ' ');
+    var m; re.lastIndex = 0;
+    while ((m = re.exec(s)) !== null) {
+      var n = m[1].replace(/\s+/g, ' ').trim();
+      if (!voLooksLikePerson(n)) continue;
+      var k = n.toLowerCase();
+      counts[k] = (counts[k] || 0) + 1;
+      if (!display[k]) display[k] = n;
+    }
+  }
+  var out = [];
+  for (var k2 in counts) {
+    if (!Object.prototype.hasOwnProperty.call(counts, k2)) continue;
+    if (counts[k2] >= min) out.push({ name: display[k2], count: counts[k2] });
+  }
+  out.sort(function (a, b) { return (b.count - a.count) || a.name.localeCompare(b.name); });
+  return out.slice(0, VO_ROSTER_MAX);
+}
+
 var VO_DATE_TOKEN_RE = /\b(?:\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/gi;
 function voExtractDates(text) {
   var s = String(text == null ? '' : text), out = [], seen = {}, m;
@@ -2419,6 +2462,8 @@ function voStatement(f) {
 // fallback for context that the evidence string did not carry.
 function voAnchorEnrich(findings, textBlocks) {
   var blocks = textBlocks || [];
+  // Built once per document, then reused for every finding (see voBuildNameRoster).
+  var roster = voBuildNameRoster(blocks);
   for (var i = 0; i < findings.length; i++) {
     var f = findings[i];
     if (!f) continue;
@@ -2447,6 +2492,17 @@ function voAnchorEnrich(findings, textBlocks) {
     var _ctxWho = voExtractPersonsFromContext(ctxParties, 6);
     for (var _c = 0; _c < _ctxWho.length && _who.length < 10; _c++) {
       if (!_seenWho[_ctxWho[_c].name.toLowerCase()]) { _seenWho[_ctxWho[_c].name.toLowerCase()] = true; _who.push(_ctxWho[_c]); }
+    }
+    // Recurring document parties named in ordinary prose on the cited page.
+    var _ctxLower = ctxParties.toLowerCase();
+    var _fromRoster = 0;
+    for (var _r = 0; _r < roster.length && _who.length < 10 && _fromRoster < VO_ROSTER_PER_FINDING; _r++) {
+      var _rk = roster[_r].name.toLowerCase();
+      if (_seenWho[_rk]) continue;
+      if (_ctxLower.indexOf(_rk) === -1) continue; // must appear on the cited page
+      _seenWho[_rk] = true;
+      _who.push({ name: roster[_r].name, kind: 'name' });
+      _fromRoster++;
     }
     f.anchor = {
       who: _who,
@@ -3168,6 +3224,7 @@ if (typeof module !== 'undefined' && module.exports) {
     voExtractParties: voExtractParties,
     voExtractPersonsFromContext: voExtractPersonsFromContext,
     voLooksLikePerson: voLooksLikePerson,
+    voBuildNameRoster: voBuildNameRoster,
     voExtractDates: voExtractDates,
     voExtractQuotes: voExtractQuotes,
     voParsePages: voParsePages,

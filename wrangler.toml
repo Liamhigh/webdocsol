@@ -31,6 +31,37 @@ SERVICE_VERSION = "1.5.1-20260721-mistral-enhanced"
 [observability]
 enabled = true
 
+# Named "production" environment, mirroring the top level EXACTLY.
+#
+# The comment above is still the rule: one set of bindings, no divergence. This
+# section exists because the two deploy commands must both work. Workers Builds
+# runs `wrangler deploy` (no --env) -- that is the top level. But DEPLOYMENT.md
+# instructed `wrangler deploy --env production` for years, and a build/deploy
+# command set from those instructions aborts INSTANTLY against a config with no
+# such environment ("No environment found in configuration with name
+# production"). Workers Builds has failed on every push for that reason while
+# Cloudflare Pages kept deploying the site, so the breakage was invisible from
+# the front end and no Worker/API change has shipped since.
+#
+# Declaring it makes either command deploy the same Worker with the same
+# bindings. tests/wrangler-config.test.mjs asserts this block stays byte-equal
+# to the top-level bindings, so "cannot diverge" is enforced, not just intended.
+[env.production]
+
+[[env.production.kv_namespaces]]
+binding = "RULES_KV"
+id = "3e032b900b5344bd8785371cd1fd1810"
+
+[env.production.ai]
+binding = "AI"
+
+[env.production.vars]
+ENVIRONMENT = "production"
+SERVICE_VERSION = "1.5.1-20260721-mistral-enhanced"
+
+[env.production.observability]
+enabled = true
+
 # Routes are deliberately NOT declared here. They are attached to the Worker
 # in the Cloudflare dashboard; declaring them would let any deploy from this
 # repo re-point live production traffic.
