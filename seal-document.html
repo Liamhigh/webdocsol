@@ -7177,10 +7177,25 @@ voEnsureWatermark();
 function voPdfIsEncrypted(bytes) {
   try {
     var b = bytes instanceof Uint8Array ? bytes : new Uint8Array(bytes);
-    // "/Encrypt" = 2F 45 6E 63 72 79 70 74 (appears in the trailer dictionary)
-    for (var i = 0, n = b.length - 8; i < n; i++) {
+    var len = b.length;
+    var isWs = function (c) { return c === 0x20 || c === 0x0A || c === 0x0D || c === 0x09; };
+    // "/Encrypt" = 2F 45 6E 63 72 79 70 74. But the bare token can also occur in
+    // ordinary content (a report that discusses encryption, an embedded JSON, a
+    // font/stream), and treating THAT as an encrypted file silently drops a
+    // password the user asked for. The trailer key is an INDIRECT REFERENCE:
+    // "/Encrypt <objNum> <gen> R". Require that exact shape, so only a genuinely
+    // encrypted PDF is detected — never a report that merely mentions the word.
+    for (var i = 0, n = len - 8; i < n; i++) {
       if (b[i] === 0x2F && b[i + 1] === 0x45 && b[i + 2] === 0x6E && b[i + 3] === 0x63 &&
-          b[i + 4] === 0x72 && b[i + 5] === 0x79 && b[i + 6] === 0x70 && b[i + 7] === 0x74) return true;
+          b[i + 4] === 0x72 && b[i + 5] === 0x79 && b[i + 6] === 0x70 && b[i + 7] === 0x74) {
+        var k = i + 8, m;
+        m = k; while (k < len && isWs(b[k])) k++; if (k === m) continue;        // ws
+        m = k; while (k < len && b[k] >= 0x30 && b[k] <= 0x39) k++; if (k === m) continue; // obj num
+        m = k; while (k < len && isWs(b[k])) k++; if (k === m) continue;        // ws
+        m = k; while (k < len && b[k] >= 0x30 && b[k] <= 0x39) k++; if (k === m) continue; // gen
+        m = k; while (k < len && isWs(b[k])) k++; if (k === m) continue;        // ws
+        if (b[k] === 0x52) return true;                                        // 'R'
+      }
     }
     return false;
   } catch (e) { return false; }
@@ -9670,6 +9685,24 @@ async function runSealingPipeline() {
   var password = null, senderEmail = '';
   var sealedBytes = null, encryptedBytes = null, meta = null;
 
+  // Password protection is validated UP FRONT — before any analysis — so a
+  // mismatch, a too-short password, or an empty box fails fast with a clear
+  // reason. Previously this was checked at the compositing step and, if it
+  // failed the ">=8 && matches" test, the password was silently dropped and the
+  // file came out UNPROTECTED even though the user switched protection on. A
+  // sensitive report must never leave unprotected when a password was requested.
+  if (document.getElementById('passwordToggle') && document.getElementById('passwordToggle').checked) {
+    var _pw1 = (document.getElementById('docPassword') && document.getElementById('docPassword').value) || '';
+    var _pw2 = (document.getElementById('docPasswordConfirm') && document.getElementById('docPasswordConfirm').value) || '';
+    if (!_pw1 || !_pw2)
+      throw new Error('Password protection is switched ON, but a password box is empty. Type the same password (at least 8 characters) into BOTH boxes, or switch password protection off.');
+    if (_pw1.length < 8)
+      throw new Error('Password protection is switched ON, but the password is too short. Use at least 8 characters, or switch password protection off.');
+    if (_pw1 !== _pw2)
+      throw new Error('Password protection is switched ON, but the two password boxes do not match. Re-type the SAME password in both boxes.');
+    password = _pw1;
+  }
+
   // Step 3: OpenTimestamps
   updateStep(3, 'processing', 'Contacting a.pool.opentimestamps.org...');
   otsResult = await submitToOTS(otsDigestHex);
@@ -9724,13 +9757,8 @@ async function runSealingPipeline() {
     updateStep(5, 'complete');
   }
 
-  // Step 6: Seal Footer
+  // Step 6: Seal Footer  (password already validated and set up front)
   updateStep(6, 'processing', 'Compositing ' + selectedFile.name + '...');
-  if (document.getElementById('passwordToggle')?.checked) {
-    var p1 = document.getElementById('docPassword')?.value;
-    var p2 = document.getElementById('docPasswordConfirm')?.value;
-    if (p1 && p1 === p2 && p1.length >= 8) password = p1;
-  }
   senderEmail = document.getElementById('senderEmail')?.value?.trim() || '';
   await voEnsureWatermark(); // retry the watermark if the boot-time fetch dropped
   sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain, fraudResult);
