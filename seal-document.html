@@ -2452,7 +2452,7 @@ function secFindingDetails(ctx, data) {
     if (who) {
       partyLine = 'Party implicated: ' + who;
     } else if (anchorNames.length) {
-      partyLine = 'Parties named in the passage: ' + anchorNames.join(', ') +
+      partyLine = 'Parties named on the cited page(s): ' + anchorNames.join(', ') +
         ' (named in the document; role/attribution for counsel to determine)';
     } else {
       partyLine = 'Party implicated: not attributed to a named party';
@@ -5219,7 +5219,23 @@ function voDigitalForensicsScan(pdfBytes, pdfDoc) {
   // through multiple tools or was edited with only one store updated.
   try {
     var xmp = voExtractXmp(u8);
-    if (xmp && pdfDoc) {
+    // SELF-SEAL GUARD. Verum's own sealing pass calls setProducer('Verum Omnis
+    // …') and setCreationDate(now) on the output. So on any sealed file that
+    // carried pre-existing XMP, the Info dictionary describes OUR SEAL (today's
+    // date, our tool) while the XMP still describes the original document —
+    // and both the creation-date and producer comparisons below fire every
+    // single time. On the AllFuels rerun that produced a "Timestamp
+    // Manipulation" finding whose real cause was the user's own seal, which is
+    // exactly the kind of allegation that gets a bundle impeached. When the
+    // Info dictionary is ours, these two comparisons say nothing about the
+    // document's history and are suppressed — disclosed, never silent.
+    var _selfProducer = '';
+    try { _selfProducer = pdfDoc ? (pdfDoc.getProducer() || '') : ''; } catch (eSp) {}
+    var _isVerumSealed = /verum\s*omnis/i.test(_selfProducer);
+    if (_isVerumSealed && xmp) {
+      findings.voSelfSealNote = 'Metadata comparison suppressed: this file was sealed by Verum Omnis, so its Info dictionary carries the SEAL\'s tool and timestamp, not the source document\'s. The XMP-vs-Info creation-date and producer differences that follow from that are artefacts of sealing, not evidence about the document, and were NOT reported as findings. To test the original document\'s metadata, scan the unsealed original.';
+    }
+    if (xmp && pdfDoc && !_isVerumSealed) {
       var xmpCreate = voXmpValue(xmp, 'xmp:CreateDate');
       var infoCreate = null;
       try { infoCreate = pdfDoc.getCreationDate(); } catch (e2) {}
@@ -5457,6 +5473,52 @@ function voExtractParties(text) {
   return out;
 }
 
+// Parties named on the CITED PAGE rather than inside the short evidence
+// snippet. Scanning raw page text for any capitalised pair would pull document
+// furniture ("Rental Escalation", "Tax Invoice") into a person index, so the
+// scan is anchored to the places documents actually name people: email headers
+// (From/To/Cc), salutations and sign-offs, signature and attestation lines, and
+// courtesy titles. On the AllFuels bundle these are precisely where the OCR'd
+// email chain names Gary Highcock, Rabia Seedat, Amrit Singh and Mohamed Ally.
+var VO_PERSON_MARKER_RE = /(?:^|[\s>|;])(?:from|to|cc|bcc|dear|regards|sincerely|attention|attn|signed\s+by|per|deponent|witnessed\s+by|witness)\s*:?\s+/gi;
+// A name token is a capitalised word/initial, or a surname particle (de, van
+// der, du …) so "E de Waal" survives. Separators are spaces/tabs ONLY — using
+// \s let a name run across a line break and swallow the next email header
+// label, producing "Rabia Seedat Cc" instead of "Rabia Seedat".
+var VO_NAME_TOK = "(?:[A-Z][A-Za-z'\u2019.-]*|de|van|der|den|du|le|la|von|bin|al)";
+var VO_TITLE_NAME_RE = new RegExp("\\b(?:Mr|Mrs|Ms|Miss|Dr|Prof|Adv|Advocate|Judge|Justice)\\.?[ \\t]+([A-Z][A-Za-z'\u2019.-]*(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
+var VO_NAME_SEQ_RE = new RegExp("^([A-Z][A-Za-z'\u2019.-]*(?:[ \\t]+" + VO_NAME_TOK + "){1,3})");
+function voExtractPersonsFromContext(text, cap) {
+  var s = String(text == null ? '' : text);
+  var out = [], seen = {}, lim = cap || 8, m;
+  var add = function (n) {
+    n = String(n || '').replace(/\s+/g, ' ').trim();
+    if (!n) return;
+    if (VO_NAME_STOP[n.split(' ')[0]]) return;
+    var k = n.toLowerCase();
+    if (!seen[k] && out.length < lim) { seen[k] = true; out.push({ name: n, kind: 'name' }); }
+  };
+  VO_PERSON_MARKER_RE.lastIndex = 0;
+  while ((m = VO_PERSON_MARKER_RE.exec(s)) !== null) {
+    // A header may list several people ("Cc: A Singh, M Ally"); walk the
+    // comma-separated run and stop at the first fragment that is not a name.
+    // Stop the run at a line break or the next header's colon, so one header's
+    // value can never absorb the label that follows it.
+    var raw = s.slice(m.index + m[0].length, m.index + m[0].length + 120);
+    var cut = raw.search(/[\n\r:]/);
+    if (cut !== -1) raw = raw.slice(0, cut);
+    var tail = raw.split(/[,;]/);
+    for (var t = 0; t < tail.length && t < 5; t++) {
+      var nm = tail[t].trim().match(VO_NAME_SEQ_RE);
+      if (!nm) break;
+      add(nm[1]);
+    }
+  }
+  VO_TITLE_NAME_RE.lastIndex = 0;
+  while ((m = VO_TITLE_NAME_RE.exec(s)) !== null) add(m[1]);
+  return out;
+}
+
 var VO_DATE_TOKEN_RE = /\b(?:\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/gi;
 function voExtractDates(text) {
   var s = String(text == null ? '' : text), out = [], seen = {}, m;
@@ -5525,8 +5587,22 @@ function voAnchorEnrich(findings, textBlocks) {
     if (!dates.length) dates = voExtractDates(ctx).slice(0, 2);
     var law = voExtractCitations(ev);
     if (!law.length) law = voExtractCitations(ctx);
+    // Parties: the evidence snippet first (tightest link to the contradiction),
+    // then the people the CITED PAGE names via email headers / signature lines.
+    // The old form was `ev.length > 20 ? ev : ctx`, and detector evidence is
+    // essentially always longer than 20 chars — so the page text was never
+    // searched and the person index came back empty on a bundle whose OCR'd
+    // pages were full of names. Dates and law already fell back to ctx; parties
+    // now do too.
+    var _who = voExtractParties(ev);
+    var _seenWho = {};
+    for (var _w = 0; _w < _who.length; _w++) _seenWho[_who[_w].name.toLowerCase()] = true;
+    var _ctxWho = voExtractPersonsFromContext(ctx, 6);
+    for (var _c = 0; _c < _ctxWho.length && _who.length < 10; _c++) {
+      if (!_seenWho[_ctxWho[_c].name.toLowerCase()]) { _seenWho[_ctxWho[_c].name.toLowerCase()] = true; _who.push(_ctxWho[_c]); }
+    }
     f.anchor = {
-      who: voExtractParties(ev.length > 20 ? ev : ctx),
+      who: _who,
       where: pages.length ? pages : null,
       quote: voExtractQuotes(ev),
       when: dates,
@@ -6038,7 +6114,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   // Digital forensics on the raw PDF structure (revisions, post-signature
   // saves, active content, XMP vs Info disagreement).
   try {
-    allFindings = allFindings.concat(voDigitalForensicsScan(pdfBytes, pdfDoc));
+    var _dfFindings = voDigitalForensicsScan(pdfBytes, pdfDoc);
+    // Disclose any self-seal metadata suppression (Prime Directive 6).
+    if (_dfFindings && _dfFindings.voSelfSealNote) _voContextNotes.push(_dfFindings.voSelfSealNote);
+    allFindings = allFindings.concat(_dfFindings);
   } catch(e) {}
 
   // Drop findings that repeat an earlier one verbatim, and bound how many any
@@ -6238,6 +6317,7 @@ if (typeof module !== 'undefined' && module.exports) {
     voCtById: voCtById,
     voExtractCitations: voExtractCitations,
     voExtractParties: voExtractParties,
+    voExtractPersonsFromContext: voExtractPersonsFromContext,
     voExtractDates: voExtractDates,
     voExtractQuotes: voExtractQuotes,
     voParsePages: voParsePages,

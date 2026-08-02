@@ -1733,7 +1733,7 @@ function secFindingDetails(ctx, data) {
     if (who) {
       partyLine = 'Party implicated: ' + who;
     } else if (anchorNames.length) {
-      partyLine = 'Parties named in the passage: ' + anchorNames.join(', ') +
+      partyLine = 'Parties named on the cited page(s): ' + anchorNames.join(', ') +
         ' (named in the document; role/attribution for counsel to determine)';
     } else {
       partyLine = 'Party implicated: not attributed to a named party';
