@@ -5530,7 +5530,11 @@ var VO_NON_PERSON_TOK = (function () {
     'seal sealed private public original certificate verify verification timestamps opentimestamps patent ' +
     'pending free tier verum omnis foundation drive folder file scan copy version draft final ' +
     'january february march april may june july august september october november december ' +
-    'monday tuesday wednesday thursday friday saturday sunday').split(' ');
+    'monday tuesday wednesday thursday friday saturday sunday ' +
+    // Furniture the Greensky rerun bound as parties: 'Confidential RAKEZ
+    // Case', 'Legal Relevance', 'Hong Kong Legal Relevance'. 'Case' can be a
+    // rare surname; losing it is the safe direction for a forensic index.
+    'confidential case legal relevance matter notice correspondence whatsapp screenshot screenshots email emails').split(' ');
   for (var i = 0; i < words.length; i++) m[words[i]] = 1;
   return m;
 })();
@@ -5559,7 +5563,9 @@ function voExtractParties(text) {
       add(role.charAt(0).toUpperCase() + role.slice(1), 'role');
     }
   }
-  var nameRe = /\b([A-Z][a-z]{1,}(?:\s+[A-Z][a-z'’.]+){1,2})\b/g, nm;
+  // ASCII \b treats accented letters as non-word, so a trailing \b let the
+  // match end before the accent ("Marius Nortj"). Unicode-aware lookarounds.
+  var nameRe = new RegExp("(?<![" + VO_NAME_ANY + "])([" + VO_NAME_UC + "][a-z\u00DF-\u024F]{1,}(?:\\s+[" + VO_NAME_UC + "][a-z\u00DF-\u024F'\u2019.]+){1,2})(?![" + VO_NAME_ANY + "])", "g"), nm;
   while ((nm = nameRe.exec(s)) !== null) {
     if (VO_NAME_STOP[nm[1].split(/\s+/)[0]]) continue;
     if (!voLooksLikePerson(nm[1])) continue; // seal boilerplate / OCR garbage
@@ -5580,9 +5586,13 @@ var VO_PERSON_MARKER_RE = /(?:^|[\s>|;])(?:from|to|cc|bcc|dear|regards|sincerely
 // der, du …) so "E de Waal" survives. Separators are spaces/tabs ONLY — using
 // \s let a name run across a line break and swallow the next email header
 // label, producing "Rabia Seedat Cc" instead of "Rabia Seedat".
-var VO_NAME_TOK = "(?:[A-Z][A-Za-z'\u2019.-]*|de|van|der|den|du|le|la|von|bin|al)";
-var VO_TITLE_NAME_RE = new RegExp("\\b(?:Mr|Mrs|Ms|Miss|Dr|Prof|Adv|Advocate|Judge|Justice)\\.?[ \\t]+([A-Z][A-Za-z'\u2019.-]*(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
-var VO_NAME_SEQ_RE = new RegExp("^([A-Z][A-Za-z'\u2019.-]*(?:[ \\t]+" + VO_NAME_TOK + "){1,3})");
+// \u00C0-\u024F covers Latin-1 Supplement + Extended-A/B, so "Nortjé" is one
+// token instead of truncating at the accent ("Marius Nortj" in the Greensky run).
+var VO_NAME_UC = "A-Z\u00C0-\u00DE";
+var VO_NAME_ANY = "A-Za-z\u00C0-\u024F";
+var VO_NAME_TOK = "(?:[" + VO_NAME_UC + "][" + VO_NAME_ANY + "'\u2019.-]*|de|van|der|den|du|le|la|von|bin|al)";
+var VO_TITLE_NAME_RE = new RegExp("\\b(?:Mr|Mrs|Ms|Miss|Dr|Prof|Adv|Advocate|Judge|Justice)\\.?[ \\t]+([" + VO_NAME_UC + "][" + VO_NAME_ANY + "'\u2019.-]*(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
+var VO_NAME_SEQ_RE = new RegExp("^([" + VO_NAME_UC + "][" + VO_NAME_ANY + "'\u2019.-]*(?:[ \\t]+" + VO_NAME_TOK + "){1,3})");
 function voExtractPersonsFromContext(text, cap) {
   var s = String(text == null ? '' : text);
   var out = [], seen = {}, lim = cap || 8, m;
@@ -5630,7 +5640,7 @@ var VO_ROSTER_MAX = 40;        // most-mentioned names kept
 var VO_ROSTER_PER_FINDING = 4; // roster names attachable to any one finding
 // Built once at load rather than per call (the roster runs over every page of a
 // 491-page bundle, so the object churn is pointless).
-var VO_ROSTER_NAME_RE = new RegExp("\\b([A-Z][A-Za-z'\u2019-]{1,}(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
+var VO_ROSTER_NAME_RE = new RegExp("(?<![" + VO_NAME_ANY + "])([" + VO_NAME_UC + "][" + VO_NAME_ANY + "'\u2019-]{1,}(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
 function voBuildNameRoster(blocks, minMentions) {
   var list = blocks || [];
   // A long bundle repeats a real party many times; a short one may name them
@@ -5677,9 +5687,19 @@ function voExtractQuotes(text) {
 }
 
 function voParsePages(loc) {
-  var s = String(loc == null ? '' : loc), out = [], m;
-  var re = /page\s+(\d+)/gi;
-  while ((m = re.exec(s)) !== null) out.push(parseInt(m[1], 10));
+  // Reads "Page 88", "Page 15 vs Page 85", AND the plural set form this engine
+  // itself writes since multi-page anchoring — "Pages 1, 3, 4" / "Pages 12-14".
+  // The old /page\s+\d+/ missed the plural entirely (anchor.where came back
+  // null on set-anchored findings) and kept duplicates ("p.88/88").
+  var s = String(loc == null ? '' : loc), out = [], seen = {}, m;
+  var re = /pages?\s+((?:\d+)(?:\s*[,\-&]\s*\d+)*)/gi;
+  while ((m = re.exec(s)) !== null) {
+    var nums = m[1].match(/\d+/g) || [];
+    for (var i = 0; i < nums.length; i++) {
+      var n = parseInt(nums[i], 10);
+      if (n > 0 && !seen[n]) { seen[n] = true; out.push(n); }
+    }
+  }
   return out;
 }
 
@@ -9051,7 +9071,11 @@ function voFirstPage(location) {
 // what the Verum Omnis app / G3 narrator can consume directly.
 // CONTRADICTION_TYPES is keyed long-form ('CT01_DIRECT_STATEMENT'); findings
 // carry the short id ('CT01'). Index by id once so lookups actually resolve.
-function voCtById() {
+// Renamed from voCtById: the inlined engine also declares voCtById(id), and
+// two same-named declarations across script blocks share one global — the later
+// one won, voStatement got a map instead of a type, and every finding label
+// rendered as "undefined" in the findings JSON (seen on the Greensky rerun).
+function voCtMapById() {
   var byId = {};
   if (typeof CONTRADICTION_TYPES !== 'undefined') {
     for (var tk in CONTRADICTION_TYPES) {
@@ -9065,7 +9089,7 @@ function voCtById() {
 
 function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
   var list = (result && Array.isArray(result.findings)) ? result.findings.filter(Boolean) : [];
-  var ctById = voCtById();
+  var ctById = voCtMapById();
   var records = [];
   for (var i = 0; i < list.length; i++) {
     var f = list[i];

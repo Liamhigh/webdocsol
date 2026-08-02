@@ -266,6 +266,32 @@ ok(sealedWho.some(n => /marius nortje|kevin lappeman/.test(n)),
     'an explicit cap of 1 rejects a 2-page spread');
 }
 
+// ---- Greensky real-run regressions (from the shipped findings JSON) ---------
+// The 2026-08-02 Greensky JSON carried: labels of "undefined", parties
+// "Marius Nortj" / "Confidential RAKEZ Case" / "Legal Relevance", where:[88,88],
+// and set-anchored findings whose anchor.where came back null.
+ok(E.voParsePages('Pages 1, 3, 4').join(',') === '1,3,4',
+  'REGRESSION: plural "Pages 1, 3, 4" (the form this engine writes) parses');
+ok(E.voParsePages('Pages 12-14').join(',') === '12,14', 'page spans yield their endpoints');
+ok(E.voParsePages('Page 88 vs Page 88').join(',') === '88',
+  'REGRESSION: duplicate page references dedupe (no more p.88/88)');
+ok(E.voExtractParties('agreement between Marius Nortjé and Kevin Lappeman').some(p => p.name === 'Marius Nortjé'),
+  'REGRESSION: accented surname survives whole ("Nortjé", not "Nortj")');
+ok(E.voBuildNameRoster(['Marius Nortjé wrote', 'Marius Nortjé again', 'Marius Nortjé signed'])
+    .some(r => r.name === 'Marius Nortjé'),
+  'roster keeps the accent too');
+ok(!E.voLooksLikePerson('Confidential RAKEZ Case'), 'REGRESSION: "Confidential RAKEZ Case" is not a person');
+ok(!E.voLooksLikePerson('Legal Relevance'), 'REGRESSION: "Legal Relevance" is not a person');
+ok(!E.voLooksLikePerson('Hong Kong Legal Relevance'), 'REGRESSION: "Hong Kong Legal Relevance" is not a person');
+{
+  // voStatement must label with the CT name, never "undefined".
+  const f = { type: 'CT03', severity: 4, evidence: 'x', location: 'Page 15',
+    anchor: { who: [], where: [15, 85], quote: [], when: [], law: [] } };
+  const st = E.voStatement(f);
+  ok(/^Date Inconsistency/.test(st), 'statement labels with the CT name');
+  ok(!/undefined/.test(st), 'REGRESSION: no "undefined" in the anchored statement');
+}
+
 console.log(`\n[finding-anchors] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[finding-anchors] FAILURES'); process.exit(1); }
 console.log('[finding-anchors] ALL GREEN');
