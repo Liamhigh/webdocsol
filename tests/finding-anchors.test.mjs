@@ -173,6 +173,50 @@ ok(!sealedWho.some(n => /seal|verum|omnis|timestamps/.test(n)),
 ok(sealedWho.some(n => /marius nortje|kevin lappeman/.test(n)),
   'real people on a sealed page are still bound');
 
+// ---- DOCUMENT PARTY ROSTER (names in ordinary prose) ----------------------
+// The Greensky/Louw runs reported "not attributed to a named party" on a finding
+// whose cited page names the person twice in plain prose ("Kevin Lappeman
+// operates the registered entity …"). Marker-anchored extraction only saw email
+// headers. Recurrence across the bundle is the signal that a name is a party.
+{
+  const bundle = [
+    'Kevin Lappeman operates the registered entity South Coast Aquaculture',
+    'correspondence from Kevin Lappeman about the export order',
+    'the entity of Kevin Lappeman is recorded as deregistered as of March',
+    'a Passing Mention appears exactly once here',
+  ];
+  const roster = E.voBuildNameRoster(bundle).map(r => r.name);
+  ok(roster.includes('Kevin Lappeman'), 'a recurring prose name enters the party roster');
+  ok(!roster.includes('Passing Mention'), 'a one-off capitalised pair does NOT enter the roster');
+
+  const f = [{ type: 'CT14', severity: 4,
+    evidence: 'Conflicting status claims: registered, deregistered', location: 'Full document' }];
+  E.voBackfillPageAnchors(f, bundle);
+  E.voAnchorEnrich(f, bundle);
+  const who = (f[0].anchor.who || []).map(x => x.name);
+  ok(who.includes('Kevin Lappeman'),
+    'REGRESSION: a finding is attributed to the party its cited page names in prose');
+}
+{
+  // The roster must not enrol the seal footer, and must not attach a roster name
+  // to a finding whose cited page does not mention them.
+  const bundle = [
+    'VERUM OMNIS SEALED ORIGINAL PRIVATE SEAL verumglobal.foundation OpenTimestamps',
+    'VERUM OMNIS SEALED ORIGINAL PRIVATE SEAL verumglobal.foundation OpenTimestamps',
+    'VERUM OMNIS SEALED ORIGINAL PRIVATE SEAL Marius Nortje wrote to the board',
+    'Marius Nortje replied again; Marius Nortje confirmed receipt',
+  ];
+  const roster = E.voBuildNameRoster(bundle).map(r => r.name.toLowerCase());
+  ok(!roster.some(n => /seal|verum|omnis|timestamps/.test(n)), 'seal boilerplate never enters the roster');
+  ok(roster.includes('marius nortje'), 'a real recurring party still enters the roster');
+
+  const f = [{ type: 'CT03', severity: 3, evidence: '"dated" differs', location: 'Page 1' }];
+  E.voAnchorEnrich(f, bundle);
+  const who = (f[0].anchor.who || []).map(x => x.name);
+  ok(!who.includes('Marius Nortje'),
+    'a roster party is NOT attached to a page that does not name them');
+}
+
 // ---- MULTI-PAGE ANCHORING (the "anchor rule override" request) ------------
 // A document-wide pattern ("Multiple email domains: …", location "Multiple
 // pages") failed the anchor rule and dropped out of the report, even though
