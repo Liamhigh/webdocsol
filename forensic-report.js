@@ -287,7 +287,9 @@ var STATUTES = {
   },
   CONTRACT: {
     ZA: ['Common law of contract (misrepresentation, breach, rectification)',
-         'For leases: common-law lease principles; Rental Housing Act 50 of 1999 (residential tenancies)'],
+         'For leases: common-law lease principles; Rental Housing Act 50 of 1999 (residential tenancies)',
+         'Petroleum Products Act 120 of 1977 - s12B (unfair or unreasonable contractual practices in petroleum retail; referral to arbitration by the Controller)',
+         'Prevention of Organised Crime Act 121 of 1998 - s1 (a "pattern of racketeering activity" where 2+ related offences recur across operators)'],
     AE: ['Civil Transactions Law (Federal Law 5 of 1985) - contract formation & good faith (Art 246)',
          'Commercial Transactions Law (Federal Decree-Law 50 of 2022)']
   }
@@ -1717,9 +1719,24 @@ function secFindingDetails(ctx, data) {
     ctx.subHeading('F' + (i + 1) + '.  ' + name + '  (' + (f.type || 'AI') + ')');
     var who = attributeParty(f, parties);
     var subj = subjectOf(f);
+    // Attribution line. First choice: a declared case party the finding's
+    // evidence actually names. Fallback: the parties the ENGINE bound to this
+    // finding's passage (anchor.who) — stated DESCRIPTIVELY ("named in the
+    // passage"), never as an accusation. Naming who a document names is evidence;
+    // asserting who is guilty is the court's, not the engine's.
+    var partyLine;
+    if (who) {
+      partyLine = 'Party implicated: ' + who;
+    } else if (f.anchor && f.anchor.who && f.anchor.who.length) {
+      partyLine = 'Parties named in the passage: ' +
+        f.anchor.who.map(function (x) { return x.name; }).join(', ') +
+        ' (named in the document; role/attribution for counsel to determine)';
+    } else {
+      partyLine = 'Party implicated: not attributed to a named party';
+    }
     var factLines = [
       'Severity: ' + (f.severity || 0) + ' ' + sevLabel(f.severity || 0) + '   ' + sevDots(f.severity || 0),
-      'Party implicated: ' + (who || 'not attributed to a named party'),
+      partyLine,
       'Location: ' + fmtLocation(f.location),
       'Legal subject: ' + (LEGAL_SUBJECT_LABEL[subj] || subj) + (CT_DETECTOR[f.type] ? '    |    Detector: ' + CT_DETECTOR[f.type] : '')
     ];
