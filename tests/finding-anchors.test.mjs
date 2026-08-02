@@ -173,6 +173,44 @@ ok(!sealedWho.some(n => /seal|verum|omnis|timestamps/.test(n)),
 ok(sealedWho.some(n => /marius nortje|kevin lappeman/.test(n)),
   'real people on a sealed page are still bound');
 
+// ---- MULTI-PAGE ANCHORING (the "anchor rule override" request) ------------
+// A document-wide pattern ("Multiple email domains: …", location "Multiple
+// pages") failed the anchor rule and dropped out of the report, even though
+// every instance sits on a known page. It is anchored to a page SET. This
+// UPHOLDS the rule — a pattern that cannot be enumerated to a bounded set of
+// real pages still stays unanchored.
+{
+  const blocks = [
+    'correspondence from admin@lpc.org.za regarding the complaint',
+    'nothing relevant on this page at all',
+    'reply sent to admin@lpc.org.za and copied to clerk@capebar.co.za',
+    'further mail from clerk@capebar.co.za about the same matter',
+  ];
+  // Same normalisation voBackfillPageAnchors applies (voNormMatch): strips @ and
+  // dots, so a probe and a page compare on equal terms.
+  const vnorm = (b) => b.normalize('NFC').toLowerCase().replace(/[^\p{L}\p{N} ]+/gu, ' ').replace(/\s+/g, ' ').trim();
+  const norm = blocks.map(vnorm);
+  const pages = E.voPagesForEvidence('Multiple email domains: lpc.org.za, capebar.co.za', norm);
+  ok(pages.join(',') === '1,3,4', 'a document-wide pattern resolves to its full page set (1,3,4)');
+
+  const f = [{ type: 'CT37', severity: 2,
+    evidence: 'Multiple email domains: lpc.org.za, capebar.co.za',
+    location: 'Multiple pages' }];
+  E.voBackfillPageAnchors(f, blocks);
+  ok(/^Pages 1, 3, 4$/.test(f[0].location), 'backfill rewrites "Multiple pages" to the real page set');
+  ok(E.voEnforceAnchorRule(f).kept.length === 1,
+    'the multi-page finding now SURVIVES the anchor rule instead of being dropped');
+}
+// Precision held: a probe too short or too widespread anchors nothing.
+{
+  const many = Array.from({ length: 40 }, () => 'amount R 500 stated here');
+  const norm = many.map(b => b.toLowerCase());
+  ok(E.voPagesForEvidence('Multiple currencies without conversion: R, $', norm).length === 0,
+    'single-character currency probes never anchor (would match every page)');
+  ok(E.voPagesForEvidence('Multiple values: amount', norm).length === 0,
+    'a probe hitting more pages than the cap is noise, not an anchor');
+}
+
 console.log(`\n[finding-anchors] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[finding-anchors] FAILURES'); process.exit(1); }
 console.log('[finding-anchors] ALL GREEN');
