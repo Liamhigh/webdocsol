@@ -2444,11 +2444,15 @@ function secFindingDetails(ctx, data) {
     // passage"), never as an accusation. Naming who a document names is evidence;
     // asserting who is guilty is the court's, not the engine's.
     var partyLine;
+    // Defensive: drop any anchor.who entry without a real name so a malformed
+    // upstream entry can never render the literal string "undefined".
+    var anchorNames = ((f.anchor && f.anchor.who) || [])
+      .map(function (x) { return x && x.name; })
+      .filter(Boolean);
     if (who) {
       partyLine = 'Party implicated: ' + who;
-    } else if (f.anchor && f.anchor.who && f.anchor.who.length) {
-      partyLine = 'Parties named in the passage: ' +
-        f.anchor.who.map(function (x) { return x.name; }).join(', ') +
+    } else if (anchorNames.length) {
+      partyLine = 'Parties named in the passage: ' + anchorNames.join(', ') +
         ' (named in the document; role/attribution for counsel to determine)';
     } else {
       partyLine = 'Party implicated: not attributed to a named party';
