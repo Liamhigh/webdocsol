@@ -210,6 +210,17 @@ ok(sealedWho.some(n => /marius nortje|kevin lappeman/.test(n)),
   ok(E.voPagesForEvidence('Multiple values: amount', norm).length === 0,
     'a probe hitting more pages than the cap is noise, not an anchor');
 }
+{
+  // An explicit cap must be honoured, including 0 ("anchor nothing"). A
+  // truthiness test would silently turn 0 into the default cap of 25.
+  const small = ['alpha beta lpc org za', 'gamma lpc org za'];
+  ok(E.voPagesForEvidence('Domains: lpc.org.za', small).join(',') === '1,2',
+    'default cap resolves the page set');
+  ok(E.voPagesForEvidence('Domains: lpc.org.za', small, 0).length === 0,
+    'an explicit cap of 0 anchors nothing (not silently replaced by the default)');
+  ok(E.voPagesForEvidence('Domains: lpc.org.za', small, 1).length === 0,
+    'an explicit cap of 1 rejects a 2-page spread');
+}
 
 console.log(`\n[finding-anchors] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[finding-anchors] FAILURES'); process.exit(1); }
