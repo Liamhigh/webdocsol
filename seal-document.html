@@ -5475,6 +5475,24 @@ function voCtById(id) {
   return _VO_CT_BY_ID[id] || null;
 }
 
+// Pre-seal page normalisation decision. A PDF CropBox smaller than its MediaBox
+// HIDES part of the page from every viewer — the Wallers Garage franchise
+// agreement arrived with 58 pages cropped to a landscape slice, so a reader (and
+// the sealed copy) saw only ~half of each page though the whole page was in the
+// file. Given the MediaBox and CropBox as [x0,y0,x1,y1] arrays, returns true
+// when the crop insets any edge beyond a 1pt tolerance (i.e. hides content). A
+// CropBox equal to, or larger than, the MediaBox is not a hide and is left
+// alone. Deterministic and side-effect-free so the seal pipeline can decide
+// per page whether to restore the full page before stamping.
+function voCropHidesContent(media, crop) {
+  if (!media || !crop || media.length < 4 || crop.length < 4) return false;
+  var m = [Number(media[0]), Number(media[1]), Number(media[2]), Number(media[3])];
+  var c = [Number(crop[0]), Number(crop[1]), Number(crop[2]), Number(crop[3])];
+  for (var i = 0; i < 4; i++) { if (isNaN(m[i]) || isNaN(c[i])) return false; }
+  var tol = 1; // sub-point differences are rounding, not a crop
+  return (c[0] > m[0] + tol) || (c[1] > m[1] + tol) || (c[2] < m[2] - tol) || (c[3] < m[3] - tol);
+}
+
 // Party-role vocabulary for two-sided instruments. A role ("Lessee") is a more
 // durable anchor than a personal name and survives redaction.
 var VO_PARTY_ROLES = ['lessor','lessee','landlord','tenant','sublessor','sublessee','plaintiff','defendant','applicant','respondent','appellant','purchaser','seller','buyer','vendor','franchisor','franchisee','licensor','licensee','mortgagor','mortgagee','creditor','debtor','guarantor','surety','cedent','cessionary','employer','employee','grantor','grantee','transferor','transferee','assignor','assignee','trustee','beneficiary','insurer','insured'];
@@ -6502,6 +6520,7 @@ if (typeof module !== 'undefined' && module.exports) {
     voContentMass: voContentMass,
     VO_NEAR_EMPTY_CHARS: VO_NEAR_EMPTY_CHARS,
     voCtById: voCtById,
+    voCropHidesContent: voCropHidesContent,
     voExtractCitations: voExtractCitations,
     voExtractParties: voExtractParties,
     voExtractPersonsFromContext: voExtractPersonsFromContext,
@@ -8285,6 +8304,44 @@ async function voEmbedSealedFileHash(savedBytes) {
   return hash;
 }
 
+// Pre-seal page normalisation. Reveal any page whose CropBox hides part of its
+// MediaBox, so the sealed copy shows the WHOLE page. A source PDF arrived with
+// 58 pages cropped to a landscape slice and the seal was faithfully preserving
+// that -- half of each page was invisible in the sealed output, and manually
+// un-cropping the source before sealing did not survive because pdf-lib carried
+// the CropBox straight through. Resetting CropBox to MediaBox restores the full
+// page; no content is touched, only the visible window. Runs BEFORE the overlay
+// is drawn so the seal furniture sits on the full page. Defensive throughout:
+// any per-page failure is skipped, never crashing the seal. Returns the count
+// of pages restored, for disclosure.
+function voNormalizeSealPageBoxes(pdf) {
+  var P = (typeof window !== 'undefined' && window.PDFLib) ? window.PDFLib : {};
+  if (!P.PDFArray || !P.PDFNumber || !P.PDFName) return 0;
+  var pages = pdf.getPages();
+  var fixed = 0;
+  var toArr = function (box) {
+    var out = [];
+    for (var k = 0; k < 4; k++) { var v = box.get(k); out.push(v && v.asNumber ? v.asNumber() : Number(v)); }
+    return out;
+  };
+  for (var i = 0; i < pages.length; i++) {
+    try {
+      var node = pages[i].node;
+      var mb = node.MediaBox ? node.MediaBox() : null;
+      var cb = node.CropBox ? node.CropBox() : null;
+      if (!mb || !cb) continue;
+      var ma = toArr(mb), ca = toArr(cb);
+      if (voCropHidesContent(ma, ca)) {
+        var arr = P.PDFArray.withContext(node.context);
+        for (var k2 = 0; k2 < 4; k2++) arr.push(P.PDFNumber.of(ma[k2]));
+        node.set(P.PDFName.of('CropBox'), arr);
+        fixed++;
+      }
+    } catch (e) { /* one page failing must never break the seal */ }
+  }
+  return fixed;
+}
+
 async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain, fraudResult) {
   // Password-protected input: the overlay (watermark/QR/footer) cannot be
   // stamped inside a locked file, and force-loading would corrupt it. The
@@ -8320,6 +8377,11 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
   const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
   const ts = now.toLocaleString('en-GB', { timeZone: tz, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: false }).replace(',', '') + ' ' + tz;
   const short = sha512.substring(0,16);
+
+  // Reveal any hidden (cropped) content BEFORE stamping and saving, so the
+  // sealed copy shows whole pages and the seal furniture sits on the full page.
+  window._voCropNormalizedPages = 0;
+  try { window._voCropNormalizedPages = voNormalizeSealPageBoxes(pdf); } catch (e) {}
 
   const pages = pdf.getPages();
 
@@ -10161,6 +10223,9 @@ async function runSealingPipeline() {
   sealedBytes = await buildSealedPDF(fileBytes, qrDataURL, sealId, sha512, sha256, document.getElementById('clientName').value || '', password, senderEmail, chain, fraudResult);
   if (window._voSealedAsIs) {
     updateStep(6, 'complete', 'Protected PDF — sealed as-is; seal record lives on the Seal Certificate');
+  } else if (window._voCropNormalizedPages > 0) {
+    updateStep(6, 'complete', 'Restored full page on ' + window._voCropNormalizedPages +
+      ' cropped page(s) so the sealed copy shows the whole document');
   }
 
   window._voNewPasswordSkipped = false;

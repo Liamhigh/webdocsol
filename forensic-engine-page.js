@@ -2222,6 +2222,24 @@ function voCtById(id) {
   return _VO_CT_BY_ID[id] || null;
 }
 
+// Pre-seal page normalisation decision. A PDF CropBox smaller than its MediaBox
+// HIDES part of the page from every viewer — the Wallers Garage franchise
+// agreement arrived with 58 pages cropped to a landscape slice, so a reader (and
+// the sealed copy) saw only ~half of each page though the whole page was in the
+// file. Given the MediaBox and CropBox as [x0,y0,x1,y1] arrays, returns true
+// when the crop insets any edge beyond a 1pt tolerance (i.e. hides content). A
+// CropBox equal to, or larger than, the MediaBox is not a hide and is left
+// alone. Deterministic and side-effect-free so the seal pipeline can decide
+// per page whether to restore the full page before stamping.
+function voCropHidesContent(media, crop) {
+  if (!media || !crop || media.length < 4 || crop.length < 4) return false;
+  var m = [Number(media[0]), Number(media[1]), Number(media[2]), Number(media[3])];
+  var c = [Number(crop[0]), Number(crop[1]), Number(crop[2]), Number(crop[3])];
+  for (var i = 0; i < 4; i++) { if (isNaN(m[i]) || isNaN(c[i])) return false; }
+  var tol = 1; // sub-point differences are rounding, not a crop
+  return (c[0] > m[0] + tol) || (c[1] > m[1] + tol) || (c[2] < m[2] - tol) || (c[3] < m[3] - tol);
+}
+
 // Party-role vocabulary for two-sided instruments. A role ("Lessee") is a more
 // durable anchor than a personal name and survives redaction.
 var VO_PARTY_ROLES = ['lessor','lessee','landlord','tenant','sublessor','sublessee','plaintiff','defendant','applicant','respondent','appellant','purchaser','seller','buyer','vendor','franchisor','franchisee','licensor','licensee','mortgagor','mortgagee','creditor','debtor','guarantor','surety','cedent','cessionary','employer','employee','grantor','grantee','transferor','transferee','assignor','assignee','trustee','beneficiary','insurer','insured'];
@@ -3249,6 +3267,7 @@ if (typeof module !== 'undefined' && module.exports) {
     voContentMass: voContentMass,
     VO_NEAR_EMPTY_CHARS: VO_NEAR_EMPTY_CHARS,
     voCtById: voCtById,
+    voCropHidesContent: voCropHidesContent,
     voExtractCitations: voExtractCitations,
     voExtractParties: voExtractParties,
     voExtractPersonsFromContext: voExtractPersonsFromContext,
