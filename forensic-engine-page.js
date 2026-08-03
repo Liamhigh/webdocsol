@@ -2281,7 +2281,11 @@ var VO_NON_PERSON_TOK = (function () {
     // Furniture the Greensky rerun bound as parties: 'Confidential RAKEZ
     // Case', 'Legal Relevance', 'Hong Kong Legal Relevance'. 'Case' can be a
     // rare surname; losing it is the safe direction for a forensic index.
-    'confidential case legal relevance matter notice correspondence whatsapp screenshot screenshots email emails').split(' ');
+    'confidential case legal relevance matter notice correspondence whatsapp screenshot screenshots email emails ' +
+    // From the 3 Aug Greensky rerun: hash fragments ('BCFF SHA-', 'EC SHA-'),
+    // 'Evidence Analyzed', and the SAPS case-number label ('SAPS CAS') were
+    // bound as parties. 'Cas' can be a given name; safe direction is exclusion.
+    'sha cas evidence analyzed analysis').split(' ');
   for (var i = 0; i < words.length; i++) m[words[i]] = 1;
   return m;
 })();
@@ -2289,6 +2293,11 @@ var VO_NON_PERSON_TOK = (function () {
 // A candidate run is a person/party name only if it is 2-4 tokens, carries no
 // stop token, and does not run through a sentence end (a word ending in "." that
 // is not an initial) — which is how "Kevin." glued itself to "Late Mares The".
+// "Kevin Lappeman\u2019s" and "Kevin Lappeman" are one party: strip a trailing
+// possessive before validity checks and dedupe, so both forms collapse.
+function voCleanPersonName(n) {
+  return String(n == null ? '' : n).replace(/[\u2019']s$/i, '').replace(/[\s.,;:]+$/, '').trim();
+}
 function voLooksLikePerson(name) {
   var toks = String(name == null ? '' : name).split(/\s+/).filter(Boolean);
   if (toks.length < 2 || toks.length > 4) return false;
@@ -2303,7 +2312,7 @@ function voLooksLikePerson(name) {
 function voExtractParties(text) {
   var s = String(text == null ? '' : text);
   var out = [], seen = {};
-  var add = function (n, kind) { var k = n.toLowerCase(); if (n && !seen[k]) { seen[k] = true; out.push({ name: n, kind: kind }); } };
+  var add = function (n, kind) { n = voCleanPersonName(n); var k = n.toLowerCase(); if (n && !seen[k]) { seen[k] = true; out.push({ name: n, kind: kind }); } };
   for (var r = 0; r < VO_PARTY_ROLES.length; r++) {
     if (new RegExp('\\b' + VO_PARTY_ROLES[r] + '\\b', 'i').test(s)) {
       var role = VO_PARTY_ROLES[r];
@@ -2344,7 +2353,7 @@ function voExtractPersonsFromContext(text, cap) {
   var s = String(text == null ? '' : text);
   var out = [], seen = {}, lim = cap || 8, m;
   var add = function (n) {
-    n = String(n || '').replace(/\s+/g, ' ').trim();
+    n = voCleanPersonName(String(n || '').replace(/\s+/g, ' '));
     if (!n) return;
     if (VO_NAME_STOP[n.split(' ')[0]]) return;
     if (!voLooksLikePerson(n)) return; // seal boilerplate / OCR garbage
@@ -2399,7 +2408,7 @@ function voBuildNameRoster(blocks, minMentions) {
     var s = String(list[b] || '').replace(VO_SEAL_BOILERPLATE_RE, ' ');
     var m; re.lastIndex = 0;
     while ((m = re.exec(s)) !== null) {
-      var n = m[1].replace(/\s+/g, ' ').trim();
+      var n = voCleanPersonName(m[1].replace(/\s+/g, ' '));
       if (!voLooksLikePerson(n)) continue;
       var k = n.toLowerCase();
       counts[k] = (counts[k] || 0) + 1;
@@ -3244,6 +3253,7 @@ if (typeof module !== 'undefined' && module.exports) {
     voExtractParties: voExtractParties,
     voExtractPersonsFromContext: voExtractPersonsFromContext,
     voLooksLikePerson: voLooksLikePerson,
+    voCleanPersonName: voCleanPersonName,
     voBuildNameRoster: voBuildNameRoster,
     voExtractDates: voExtractDates,
     voExtractQuotes: voExtractQuotes,

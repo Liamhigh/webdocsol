@@ -292,6 +292,20 @@ ok(!E.voLooksLikePerson('Hong Kong Legal Relevance'), 'REGRESSION: "Hong Kong Le
   ok(!/undefined/.test(st), 'REGRESSION: no "undefined" in the anchored statement');
 }
 
+// ---- 3 Aug Greensky rerun residuals ----------------------------------------
+// That run bound "BCFF SHA-" / "EC SHA-" (hash fragments), "Evidence Analyzed",
+// "SAPS CAS" as parties, and listed "Kevin Lappeman\u2019s" beside "Kevin Lappeman".
+ok(!E.voLooksLikePerson('BCFF SHA-'), 'REGRESSION: hash fragment "BCFF SHA-" is not a person');
+ok(!E.voLooksLikePerson('EC SHA-'), 'REGRESSION: hash fragment "EC SHA-" is not a person');
+ok(!E.voLooksLikePerson('Evidence Analyzed'), 'REGRESSION: "Evidence Analyzed" is not a person');
+ok(!E.voLooksLikePerson('SAPS CAS'), 'REGRESSION: "SAPS CAS" (case-number label) is not a person');
+ok(E.voCleanPersonName('Kevin Lappeman\u2019s') === 'Kevin Lappeman', 'trailing possessive stripped');
+{
+  const who = E.voExtractParties("link to Kevin Lappeman\u2019s registered entity and Kevin Lappeman signed").map(p => p.name);
+  ok(who.filter(n => /Kevin Lappeman/.test(n)).length === 1,
+    'REGRESSION: possessive and plain forms collapse to ONE party');
+}
+
 console.log(`\n[finding-anchors] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[finding-anchors] FAILURES'); process.exit(1); }
 console.log('[finding-anchors] ALL GREEN');
