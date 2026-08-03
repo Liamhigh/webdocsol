@@ -135,6 +135,19 @@ ok(!fires(DET.D32_DETECT_SIGNATURE_ANOMALY, ['A power of attorney was granted to
     'D06 CT09 cites the actual identity-shaped values (cite-or-stay-silent)');
 }
 
+// ===== CT20 registration false positive (Geraldine run) =====
+// A 14-digit bank reference with NO "registration" label must not be called a
+// fake company registration, and a VALID reg number that recurs must not fire.
+ok(!fires(DET.D11_DETECT_REGISTRATION_FAKE, ['Self Service Terminal 33348381876106 DebiCheck Debit Order 33348381876106']),
+  'D11 does NOT flag a bare 14-digit bank reference (no "registration" label)');
+ok(!fires(DET.D11_DETECT_REGISTRATION_FAKE, ['Registration number 2013/199336/07 on page one.', 'Registration number 2013/199336/07 again on page two.']),
+  'D11 does NOT flag a VALID SA registration number just because it recurs');
+{
+  const f = DET.D11_DETECT_REGISTRATION_FAKE(['The entity gives its registration number 33348381876106 in the letter.']);
+  ok(f.length === 1 && f[0].type === 'CT20' && /33348381876106/.test(f[0].evidence),
+    'D11 flags a number LABELLED as a registration that is not a valid SA format, and quotes it');
+}
+
 // Repeated internal page numbers in a compiled bundle must collapse to ONE
 // summary, not 25 near-identical findings that drown the substantive ones
 // (the Louw v Moolla scan produced 25). One or two duplicates still list individually.
