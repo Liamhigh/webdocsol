@@ -24,6 +24,7 @@ const suites = [
   'findings-json.test.mjs',
   'finding-anchors.test.mjs',
   'wrangler-config.test.mjs',
+  'crop-normalize.test.mjs',
   'encrypt-detect.test.mjs',
   'constitution-lock.test.mjs',
   'home-verify.test.mjs',
