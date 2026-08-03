@@ -3862,23 +3862,45 @@ var DETECTORS = {
         }
       }
     }
-    // Check for impossible dates (e.g., 31/02/2024)
+    // A slash/dash/dot date is only "impossible" when it is invalid read BOTH
+    // ways -- as day/month/year AND as month/day/year. A South African bundle
+    // routinely mixes DD/MM (local) and MM/DD (US) conventions, so 10/18/2024
+    // is a perfectly valid US date (18 October) even though it is not a valid
+    // DD/MM date. Flagging it as an "invalid month" was a false positive: the
+    // engine must not manufacture an impossibility out of an ambiguous format.
+    // 31/02/2021 stays flagged because NEITHER reading is a real calendar date.
     var months31 = [1,3,5,7,8,10,12];
+    function voDaysInMonth(m, y) {
+      if (m === 2) return ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0) ? 29 : 28;
+      return months31.indexOf(m) !== -1 ? 31 : (m >= 1 && m <= 12 ? 30 : 0);
+    }
+    function voValidMD(mo, dy, yr) {
+      return mo >= 1 && mo <= 12 && dy >= 1 && dy <= voDaysInMonth(mo, yr);
+    }
+    var voSawDMY = null, voSawMDY = null; // a clearly-DD/MM and a clearly-MM/DD example
     for (var d = 0; d < dates.length; d++) {
       var dd = dates[d].raw.match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\b/);
-      if (dd) {
-        var day = parseInt(dd[1]), month = parseInt(dd[2]), year = parseInt(dd[3]);
-        if (month === 2 && day > 29) {
-          findings.push({ type: 'CT03', severity: 5,
-            evidence: 'Impossible date: ' + dates[d].raw + ' (February cannot have ' + day + ' days)',
-            location: 'Page ' + (dates[d].page + 1) });
-        }
-        if (month > 12) {
-          findings.push({ type: 'CT03', severity: 5,
-            evidence: 'Invalid month in date: ' + dates[d].raw,
-            location: 'Page ' + (dates[d].page + 1) });
-        }
+      if (!dd) continue;
+      var a = parseInt(dd[1]), b = parseInt(dd[2]), year = parseInt(dd[3]);
+      var okDMY = voValidMD(b, a, year); // day=a, month=b  (DD/MM/YYYY)
+      var okMDY = voValidMD(a, b, year); // month=a, day=b  (MM/DD/YYYY)
+      if (!okDMY && !okMDY) {
+        var why = (a === 2 || b === 2) ? 'February cannot have that many days' : 'not a real calendar date';
+        findings.push({ type: 'CT03', severity: 5,
+          evidence: 'Impossible date: ' + dates[d].raw + ' (' + why + ' read as day/month/year or month/day/year)',
+          location: 'Page ' + (dates[d].page + 1) });
+      } else {
+        // Only one reading is valid -- record which convention it forces, so a
+        // bundle that genuinely mixes BOTH can be noted once (below).
+        if (okDMY && !okMDY && a > 12) voSawDMY = voSawDMY || dates[d]; // first field >12 -> must be DD/MM
+        if (okMDY && !okDMY && b > 12) voSawMDY = voSawMDY || dates[d]; // second field >12 -> must be MM/DD
       }
+    }
+    // A single anchored, non-overclaiming note when the bundle mixes conventions.
+    if (voSawDMY && voSawMDY) {
+      findings.push({ type: 'CT03', severity: 2,
+        evidence: 'Document mixes date formats: "' + voSawDMY.raw + '" reads as day/month/year while "' + voSawMDY.raw + '" reads as month/day/year -- numeric dates in this bundle are ambiguous; confirm the intended reading before relying on any date',
+        location: 'Page ' + (voSawDMY.page + 1) + ' vs Page ' + (voSawMDY.page + 1) });
     }
 
     // A *labelled* date stated at two different values -- "Effective Date:
@@ -4011,10 +4033,22 @@ var DETECTORS = {
         names.push({ value: nm[1], page: j });
       }
     }
-    if (ids.length >= 2) {
+    // Count DISTINCT values, not raw matches: on a bank statement the same
+    // reference code repeats on every line, which made the old count report
+    // "3 different ID numbers" when it was one code seen three times. And a
+    // finding that cannot say WHICH numbers is not actionable -- cite-or-stay-
+    // silent -- so name the values and stay honest that they are ID-*shaped*
+    // strings (a Capitec client reference matches the same pattern as an ID).
+    var idVals = ids.map(function(x){ return x.value; });
+    var idUniq = idVals.filter(function(v, ix){ return idVals.indexOf(v) === ix; });
+    if (idUniq.length >= 2) {
+      var idPages = ids.map(function(x){ return x.page + 1; })
+        .filter(function(v, ix, arr){ return arr.indexOf(v) === ix; });
       findings.push({ type: 'CT09', severity: 4,
-        evidence: ids.length + ' different ID numbers found in document',
-        location: 'Pages ' + ids.map(function(x){return x.page+1;}).join(', ') });
+        evidence: idUniq.length + ' different identity-shaped numbers appear: ' +
+          idUniq.slice(0, 6).join(', ') + (idUniq.length > 6 ? ' …' : '') +
+          ' — confirm which are ID numbers and whose (reference/account codes share the same shape)',
+        location: 'Pages ' + idPages.join(', ') });
     }
     return findings;
   },
@@ -4712,16 +4746,25 @@ var DETECTORS = {
 
   D32_DETECT_SIGNATURE_ANOMALY: function(textBlocks) {
     var findings = [];
-    var fullText = textBlocks.join(' ').toLowerCase();
-    var sigPatterns = [
-      'electronic signature','digital signature','/s/','signed per pro',
-      'power of attorney','authorized representative','by proxy'
-    ];
-    for (var i = 0; i < sigPatterns.length; i++) {
-      if (fullText.indexOf(sigPatterns[i]) !== -1) {
+    // A signature-METHOD anomaly means the document was executed by an unusual
+    // mechanism -- a conformed "/s/" mark, a per-procurationem (p.p.) surrogate
+    // signing, an "on behalf of" execution. It does NOT mean the phrase "power
+    // of attorney" appears somewhere in the bundle: a power of attorney is a
+    // legal INSTRUMENT, not a way of signing, and treating it as one (reported
+    // at a fictional "Signature block") was a false positive that fired on any
+    // correspondence that merely discussed a POA. "electronic/digital
+    // signature" is dropped too -- it is the ordinary modern method, not an
+    // anomaly. Each surviving hit is anchored to its real page with the quote.
+    var sigPatterns = ['/s/', 'signed per pro', 'per procurationem', 'signed on behalf of', 'signed by proxy'];
+    for (var i = 0; i < textBlocks.length; i++) {
+      var low = (textBlocks[i] || '').toLowerCase();
+      for (var p = 0; p < sigPatterns.length; p++) {
+        var idx = low.indexOf(sigPatterns[p]);
+        if (idx === -1) continue;
+        var quote = textBlocks[i].substring(Math.max(0, idx - 20), idx + sigPatterns[p].length + 20).replace(/\s+/g, ' ').trim();
         findings.push({ type: 'CT23', severity: 3,
-          evidence: 'Non-standard signature method: "' + sigPatterns[i] + '"',
-          location: 'Signature block' });
+          evidence: 'Non-standard signature method "' + sigPatterns[p] + '": "' + quote + '"',
+          location: 'Page ' + (i + 1) });
       }
     }
     return findings;

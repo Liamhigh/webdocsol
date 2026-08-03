@@ -92,6 +92,49 @@ ok(fires(DET.D03_DETECT_DATE_INCONSISTENCY, ['Effective Date: January 15, 2023.'
 ok(!fires(DET.D24_DETECT_ADDRESS_CONFLICT, [Array.from({length: 60}, (_, i) => (i + 1) + ' Fake Street').join(' ')]),
   'D24 suppresses an implausibly high (OCR-noise) address count');
 
+// ===== CT03 date-format false positive (Geraldine run) =====
+// 10/18/2024 is a valid US date (18 Oct); flagging it "invalid month" was a
+// false positive. 31/02/2021 is impossible read EITHER way and must still fire.
+{
+  const f = DET.D03_DETECT_DATE_INCONSISTENCY(['Payment received on 10/18/2024 for the account.']);
+  ok(!f.some(x => /Impossible date|Invalid month/i.test(x.evidence)),
+    'D03 does NOT flag 10/18/2024 as impossible/invalid — it is a valid US-format date');
+}
+ok(DET.D03_DETECT_DATE_INCONSISTENCY(['The affidavit was signed 31/02/2021 before me.'])
+   .some(x => /Impossible date/i.test(x.evidence)),
+  'D03 still flags 31/02/2021 — impossible read as day/month OR month/day');
+{
+  // A bundle mixing conventions gets ONE anchored, non-overclaiming note.
+  const f = DET.D03_DETECT_DATE_INCONSISTENCY(['Dated 18/10/2024 by the lessor.', 'Countersigned 10/18/2024 by the lessee.']);
+  const mix = f.filter(x => /mixes date formats/i.test(x.evidence));
+  ok(mix.length === 1 && /Page 1 vs Page 2/.test(mix[0].location),
+    'D03 emits exactly one anchored "mixes date formats" note for a mixed bundle');
+}
+
+// ===== CT23 signature-method false positive (Geraldine run) =====
+// "power of attorney" is a legal instrument, not a signing method.
+ok(!fires(DET.D32_DETECT_SIGNATURE_ANOMALY, ['A power of attorney was granted to the authorized representative.']),
+  'D32 does NOT flag "power of attorney" as a non-standard signature method');
+{
+  const f = DET.D32_DETECT_SIGNATURE_ANOMALY(['ok', 'The lease was signed per pro by the agent.']);
+  ok(f.length === 1 && f[0].type === 'CT23' && /^Page 2$/.test(f[0].location) && /signed per pro/i.test(f[0].evidence),
+    'D32 flags a real surrogate signing ("signed per pro") anchored to its actual page with a quote');
+}
+
+// ===== CT09 identity numbers must be distinct + cited (Geraldine run) =====
+{
+  // The same reference code repeated is ONE value, not "3 different ID numbers".
+  const f = DET.D06_DETECT_IDENTITY_CONFLICT(['Ref AB1234567 on this line. Ref AB1234567 again. Ref AB1234567 once more.']);
+  ok(!f.some(x => x.type === 'CT09'),
+    'D06 does NOT report a single repeated reference code as multiple ID numbers');
+}
+{
+  const f = DET.D06_DETECT_IDENTITY_CONFLICT(['Holder AB1234567 noted.', 'Other CD7654321 recorded.']);
+  const ct09 = f.find(x => x.type === 'CT09');
+  ok(ct09 && /AB1234567/.test(ct09.evidence) && /CD7654321/.test(ct09.evidence),
+    'D06 CT09 cites the actual identity-shaped values (cite-or-stay-silent)');
+}
+
 // Repeated internal page numbers in a compiled bundle must collapse to ONE
 // summary, not 25 near-identical findings that drown the substantive ones
 // (the Louw v Moolla scan produced 25). One or two duplicates still list individually.
