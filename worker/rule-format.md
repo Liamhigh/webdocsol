@@ -46,7 +46,7 @@ SHA-512 — JCA name `SHA512withRSA`) over the **canonical JSON** of `package`.
 }
 ```
 
-- `contradiction_patterns`: the engine's 43 contradiction types (CT01–CT43).
+- `contradiction_patterns`: the engine's 45 contradiction types (CT01–CT45).
   `detectors` lists the automated detector ids (D01–D37) that can produce each
   type; an empty array means the type is defined for manual/other analysis.
 - `fraud_keywords`: keyword sets extracted verbatim from detector source
