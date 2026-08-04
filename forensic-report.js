@@ -2064,23 +2064,55 @@ function listPhrase(arr) {
   return arr.slice(0, -1).join(', ') + ' and ' + arr[arr.length - 1];
 }
 
-// One lay clause per contradiction family, for the high-value types; anything
-// else falls back to the category explainer so every finding gets plain words.
+// One lay clause per contradiction family. Every CT type carries its own plain
+// sentence so an everyday reader gets specific words for each finding, never a
+// generic fallback. Each phrase is written to slot into "In plain terms, ..."
+// and stays NEUTRAL — it describes what was found, never asserts fraud or guilt.
+// (A guard test asserts every CT in CT_NAMES has an entry here.)
 var NARRATIVE_MEANING = {
   CT01: 'the record states one thing in one place and the opposite in another',
   CT02: 'the same quantity is given two different numbers',
-  CT03: 'the same event is dated differently in different places',
+  CT03: 'a date does not add up — either it cannot exist on a calendar, or the same event is dated differently in different places',
   CT04: 'events are placed in an order that could not have happened',
   CT05: 'one stated fact makes another stated fact impossible',
   CT06: 'the statements cannot all be logically true at once',
+  CT07: 'the document quietly widens its own scope beyond what was first set out',
+  CT08: 'a key word is defined one way in one place and differently in another',
   CT09: 'the same party is identified inconsistently',
   CT10: 'the same person is given conflicting roles',
   CT11: 'someone is shown acting with an authority the record does not support',
+  CT12: 'the same name is spelled differently in different places',
+  CT13: 'the same person is given different titles or positions',
+  CT14: 'a company is described as active in one place and closed (or the reverse) in another',
   CT15: 'the same amount is stated as two different figures',
+  CT16: 'amounts are given in different currencies without being converted, so the real value is unclear',
+  CT17: 'a bank account number is not in a valid form',
   CT18: 'the banking details do not match across the documents',
+  CT19: 'a VAT number is not in a valid South African form',
+  CT20: 'a number labelled as a company registration is not in a valid registration format',
+  CT21: 'a passage is quoted differently from the source it claims to copy',
   CT22: 'the figures do not add up',
-  CT23: 'a signature does not match across the documents',
+  CT23: 'the document was signed in an unusual way that is worth checking',
+  CT24: "the file's hidden properties show it passed through more tools than a plain original would",
+  CT25: 'the typeface changes in a way that can mean text was inserted later',
+  CT26: 'the layout or page make-up is irregular for a document of this kind',
+  CT27: 'the page layout shows signs of rearrangement',
+  CT28: 'an image in the document shows signs of editing',
+  CT29: 'a date or time stamp appears to have been changed',
+  CT30: 'the version history runs backwards or skips, which a clean document would not',
+  CT31: 'the document points to an annexure or section that cannot be found where it says',
+  CT32: 'a claim is attributed to a source that does not actually support it',
+  CT33: 'a law, case or section cited does not check out as stated',
+  CT34: 'the document relies on a precedent that does not say what is claimed',
+  CT35: 'a required step — such as a signature or a notice — appears to have been skipped',
+  CT36: 'the same party is given conflicting addresses',
+  CT37: 'contact details conflict across the documents',
+  CT38: 'a party is placed in two places at once, or outside where the events could occur',
+  CT39: 'there is a gap in who held the evidence and when',
+  CT40: 'two witness accounts of the same thing disagree',
   CT41: 'the file shows signs the original may have been altered',
+  CT42: "the file's digital traces do not match the origin the document claims",
+  CT43: 'the document contradicts itself within its own pages',
   CT44: 'a right was exercised on a condition the record itself contradicts (the "Lessee/Owner trap")',
   CT45: 'value or goodwill recognised in one document is denied in another'
 };
@@ -2522,6 +2554,7 @@ async function seal(reportBytes, sealOpts) {
 var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
   _extractParties: extractParties, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
   _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,
+  _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;

@@ -105,6 +105,24 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(R._extractMoney('var VAR_R 2025 in the code sample').length === 0, 'extractMoney: underscore identifier does not leak an R amount');
 }
 
+// ---- plain-language: EVERY finding type must carry everyday wording ----
+// The website report's "In plain terms, ..." line is what an ordinary reader
+// relies on. If a CT type has no lay clause it silently drops to a generic
+// category sentence — understandable, but not specific. This guard makes plain
+// wording a shipping requirement: add a CT type, add its plain sentence.
+{
+  const names = R._ctNames;
+  const meaning = R._narrativeMeaningMap;
+  const missing = Object.keys(names).filter((ct) => !meaning[ct] || !String(meaning[ct]).trim());
+  ok(missing.length === 0, 'every CT type in CT_NAMES has a plain-language NARRATIVE_MEANING (missing: ' + (missing.join(', ') || 'none') + ')');
+  // The plain wording must actually be plain: no CT codes, no "shall", no latin.
+  const jargon = Object.keys(meaning).filter((ct) => /\bCT\d|\bshall\b|\bprima facie\b|\binter alia\b/i.test(meaning[ct]));
+  ok(jargon.length === 0, 'plain-language clauses contain no codes or legalese (offenders: ' + (jargon.join(', ') || 'none') + ')');
+  // narrativeMeaning() returns the specific clause, not the generic fallback.
+  ok(R._narrativeMeaning({ type: 'CT20' }) === meaning.CT20 && !/inconsistent on this point/.test(R._narrativeMeaning({ type: 'CT20' })),
+    'narrativeMeaning() returns the finding-specific plain clause (CT20), not the generic fallback');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);
