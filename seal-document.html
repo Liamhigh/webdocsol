@@ -1569,6 +1569,63 @@ function drawToc(ctx, tocPage) {
   }
 }
 
+// The plain-language "bottom line" that opens the report, built as an array of
+// sentences (no rendering) so it is unit-testable. It states, in ordinary
+// words: what was read, how much matters, THE SERIOUS FINDINGS NAMED IN PLAIN
+// WORDS, and what the score means. Everything is computed from the same
+// findings as the tables and stays neutral — indicators, never verdicts.
+// Returns [] when the document was unreadable or the scan failed (a plain-
+// language "all clear" must never be printed over an absence of analysis).
+function plainLeadLines(fr, data) {
+  fr = fr || {};
+  var plAll = fr.findings || [];
+  if (!(plAll.length > 0 && !fr.scanFailed && !fr.unreadable)) return [];
+  var plDemoted = 0, plSerial = 0, plSubstantive = 0, plSerious = 0;
+  for (var pl = 0; pl < plAll.length; pl++) {
+    var plf = plAll[pl];
+    if (plf.type === 'SERIAL') { plSerial++; continue; }
+    if (isDemoted(plf)) { plDemoted++; continue; }
+    plSubstantive++;
+    if ((plf.severity || 0) >= 4) plSerious++;
+  }
+  var score = fr.overallScore || 0;
+  var docName = (data && data.docName) || 'this document';
+  var pageCount = (data && data.pageCount) || 'n/a';
+  var plLines = [];
+  plLines.push('The engine read "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') and flagged ' + plAll.length + ' indicator' + (plAll.length === 1 ? '' : 's') + ' in total.');
+  if (plDemoted > 0) {
+    plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
+  }
+  var substLead = (plDemoted > 0)
+    ? 'That leaves ' + plSubstantive + ' substantive indicator' + (plSubstantive === 1 ? '' : 's')
+    : (plSerial > 0
+        ? 'Of these, ' + plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's') + ' (the rest are multi-stage pattern matches, described below)'
+        : plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's'));
+  plLines.push(substLead + (plSerious > 0 ? ', of which ' + plSerious + ' ' + (plSerious === 1 ? 'is' : 'are') + ' rated critical or high.' : '. None reached the critical or high band.'));
+  // Name the serious findings in plain words, right here at the top, so the
+  // reader gets the whole picture before any table. Same lay clause the
+  // narrative uses; capped so the lead stays short; anchored to the page.
+  var plSeriousList = plAll.filter(function (f) {
+    return f && f.type !== 'SERIAL' && !isDemoted(f) && (f.severity || 0) >= 4;
+  }).sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+  if (plSeriousList.length > 0) {
+    plLines.push(plSeriousList.length === 1 ? 'The serious one, in plain words:' : 'The serious ones, in plain words:');
+    var plSerCap = Math.min(4, plSeriousList.length);
+    for (var ps = 0; ps < plSerCap; ps++) {
+      var psf = plSeriousList[ps];
+      var psLoc = fmtLocation(psf.location);
+      var psWhere = (psLoc && psLoc !== '—') ? 'On ' + psLoc + ', ' : '';
+      plLines.push('•  ' + psWhere + withPeriod(narrativeMeaning(psf)));
+    }
+    if (plSeriousList.length > plSerCap) {
+      plLines.push('•  …and ' + (plSeriousList.length - plSerCap) + ' more serious item' + (plSeriousList.length - plSerCap === 1 ? '' : 's') + ', set out in full below.');
+    }
+  }
+  if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern indicator' + (plSerial === 1 ? '' : 's') + ' also matched - see the Serial Pattern Analysis section.');
+  plLines.push('The indicator score (' + score + '/100) measures how densely the engine found inconsistencies. It is a signpost for a human investigator - not a percentage chance of fraud, and not a verdict.');
+  return plLines;
+}
+
 // ================= SECTION: EXECUTIVE SUMMARY =================
 function secExecSummary(ctx, data) {
   ctx.newBodyPage();
@@ -1591,34 +1648,18 @@ function secExecSummary(ctx, data) {
   var bandLabel = { CLEAN: 'CLEAN', LOW: 'LOW', MODERATE: 'MODERATE', HIGH: 'HIGH', VERY_HIGH: 'VERY HIGH' }[band] || band;
 
   // ---- plain-language lead ----------------------------------------------
-  // The first thing a reader meets is a paragraph a non-specialist can
-  // follow: what was read, what actually matters, and what the score means.
-  // Everything it states is computed from the same findings as the tables.
+  // The first thing a reader meets is a plain-English "bottom line": what was
+  // read, what actually matters, the serious findings NAMED in ordinary words,
+  // and what the score means. Built by plainLeadLines() so it is unit-testable.
+  // plDemoted is also needed further down (severity note), so it is counted
+  // here independently of the lead builder.
   var plAll = fr.findings || [];
-  var plDemoted = 0, plSerial = 0, plSubstantive = 0, plSerious = 0;
+  var plDemoted = 0;
   for (var pl = 0; pl < plAll.length; pl++) {
-    var plf = plAll[pl];
-    if (plf.type === 'SERIAL') { plSerial++; continue; }
-    if (isDemoted(plf)) { plDemoted++; continue; }
-    plSubstantive++;
-    if ((plf.severity || 0) >= 4) plSerious++;
+    if (plAll[pl].type !== 'SERIAL' && isDemoted(plAll[pl])) plDemoted++;
   }
-  if (plAll.length > 0 && !fr.scanFailed && !fr.unreadable) {
-    var plLines = [];
-    plLines.push('The engine read "' + (data.docName || 'this document') + '" (' + (data.pageCount || 'n/a') + ' page' + (data.pageCount === 1 ? '' : 's') + ') and flagged ' + plAll.length + ' indicator' + (plAll.length === 1 ? '' : 's') + ' in total.');
-    if (plDemoted > 0) {
-      plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
-    }
-    // "That leaves" only reads correctly after something was subtracted; when
-    // nothing was demoted, lead with the substantive count directly.
-    var substLead = (plDemoted > 0)
-      ? 'That leaves ' + plSubstantive + ' substantive indicator' + (plSubstantive === 1 ? '' : 's')
-      : (plSerial > 0
-          ? 'Of these, ' + plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's') + ' (the rest are multi-stage pattern matches, described below)'
-          : plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's'));
-    plLines.push(substLead + (plSerious > 0 ? ', of which ' + plSerious + ' ' + (plSerious === 1 ? 'is' : 'are') + ' rated critical or high. Start there: they appear under "Top findings" below and in full in the findings matrix.' : '. None reached the critical or high band.'));
-    if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern indicator' + (plSerial === 1 ? '' : 's') + ' also matched - see the Serial Pattern Analysis section.');
-    plLines.push('The indicator score (' + score + '/100) measures how densely the engine found inconsistencies. It is a signpost for a human investigator - not a percentage chance of fraud, and not a verdict.');
+  var plLines = plainLeadLines(fr, data);
+  if (plLines.length) {
     ctx.box('IN PLAIN LANGUAGE', plLines, { titleColor: NAVY2 });
     ctx.gap(4);
   }
@@ -2783,23 +2824,55 @@ function listPhrase(arr) {
   return arr.slice(0, -1).join(', ') + ' and ' + arr[arr.length - 1];
 }
 
-// One lay clause per contradiction family, for the high-value types; anything
-// else falls back to the category explainer so every finding gets plain words.
+// One lay clause per contradiction family. Every CT type carries its own plain
+// sentence so an everyday reader gets specific words for each finding, never a
+// generic fallback. Each phrase is written to slot into "In plain terms, ..."
+// and stays NEUTRAL — it describes what was found, never asserts fraud or guilt.
+// (A guard test asserts every CT in CT_NAMES has an entry here.)
 var NARRATIVE_MEANING = {
   CT01: 'the record states one thing in one place and the opposite in another',
   CT02: 'the same quantity is given two different numbers',
-  CT03: 'the same event is dated differently in different places',
+  CT03: 'a date does not add up — either it cannot exist on a calendar, or the same event is dated differently in different places',
   CT04: 'events are placed in an order that could not have happened',
   CT05: 'one stated fact makes another stated fact impossible',
   CT06: 'the statements cannot all be logically true at once',
+  CT07: 'the document quietly widens its own scope beyond what was first set out',
+  CT08: 'a key word is defined one way in one place and differently in another',
   CT09: 'the same party is identified inconsistently',
   CT10: 'the same person is given conflicting roles',
   CT11: 'someone is shown acting with an authority the record does not support',
+  CT12: 'the same name is spelled differently in different places',
+  CT13: 'the same person is given different titles or positions',
+  CT14: 'a company is described as active in one place and closed (or the reverse) in another',
   CT15: 'the same amount is stated as two different figures',
+  CT16: 'amounts are given in different currencies without being converted, so the real value is unclear',
+  CT17: 'a bank account number is not in a valid form',
   CT18: 'the banking details do not match across the documents',
+  CT19: 'a VAT number is not in a valid South African form',
+  CT20: 'a number labelled as a company registration is not in a valid registration format',
+  CT21: 'a passage is quoted differently from the source it claims to copy',
   CT22: 'the figures do not add up',
-  CT23: 'a signature does not match across the documents',
+  CT23: 'the document was signed in an unusual way that is worth checking',
+  CT24: "the file's hidden properties show it passed through more tools than a plain original would",
+  CT25: 'the typeface changes in a way that can mean text was inserted later',
+  CT26: 'the layout or page make-up is irregular for a document of this kind',
+  CT27: 'the page layout shows signs of rearrangement',
+  CT28: 'an image in the document shows signs of editing',
+  CT29: 'a date or time stamp appears to have been changed',
+  CT30: 'the version history runs backwards or skips, which a clean document would not',
+  CT31: 'the document points to an annexure or section that cannot be found where it says',
+  CT32: 'a claim is attributed to a source that does not actually support it',
+  CT33: 'a law, case or section cited does not check out as stated',
+  CT34: 'the document relies on a precedent that does not say what is claimed',
+  CT35: 'a required step — such as a signature or a notice — appears to have been skipped',
+  CT36: 'the same party is given conflicting addresses',
+  CT37: 'contact details conflict across the documents',
+  CT38: 'a party is placed in two places at once, or outside where the events could occur',
+  CT39: 'there is a gap in who held the evidence and when',
+  CT40: 'two witness accounts of the same thing disagree',
   CT41: 'the file shows signs the original may have been altered',
+  CT42: "the file's digital traces do not match the origin the document claims",
+  CT43: 'the document contradicts itself within its own pages',
   CT44: 'a right was exercised on a condition the record itself contradicts (the "Lessee/Owner trap")',
   CT45: 'value or goodwill recognised in one document is denied in another'
 };
@@ -3241,6 +3314,7 @@ async function seal(reportBytes, sealOpts) {
 var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
   _extractParties: extractParties, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
   _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,
+  _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;
@@ -3862,23 +3936,45 @@ var DETECTORS = {
         }
       }
     }
-    // Check for impossible dates (e.g., 31/02/2024)
+    // A slash/dash/dot date is only "impossible" when it is invalid read BOTH
+    // ways -- as day/month/year AND as month/day/year. A South African bundle
+    // routinely mixes DD/MM (local) and MM/DD (US) conventions, so 10/18/2024
+    // is a perfectly valid US date (18 October) even though it is not a valid
+    // DD/MM date. Flagging it as an "invalid month" was a false positive: the
+    // engine must not manufacture an impossibility out of an ambiguous format.
+    // 31/02/2021 stays flagged because NEITHER reading is a real calendar date.
     var months31 = [1,3,5,7,8,10,12];
+    function voDaysInMonth(m, y) {
+      if (m === 2) return ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0) ? 29 : 28;
+      return months31.indexOf(m) !== -1 ? 31 : (m >= 1 && m <= 12 ? 30 : 0);
+    }
+    function voValidMD(mo, dy, yr) {
+      return mo >= 1 && mo <= 12 && dy >= 1 && dy <= voDaysInMonth(mo, yr);
+    }
+    var voSawDMY = null, voSawMDY = null; // a clearly-DD/MM and a clearly-MM/DD example
     for (var d = 0; d < dates.length; d++) {
       var dd = dates[d].raw.match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\b/);
-      if (dd) {
-        var day = parseInt(dd[1]), month = parseInt(dd[2]), year = parseInt(dd[3]);
-        if (month === 2 && day > 29) {
-          findings.push({ type: 'CT03', severity: 5,
-            evidence: 'Impossible date: ' + dates[d].raw + ' (February cannot have ' + day + ' days)',
-            location: 'Page ' + (dates[d].page + 1) });
-        }
-        if (month > 12) {
-          findings.push({ type: 'CT03', severity: 5,
-            evidence: 'Invalid month in date: ' + dates[d].raw,
-            location: 'Page ' + (dates[d].page + 1) });
-        }
+      if (!dd) continue;
+      var a = parseInt(dd[1]), b = parseInt(dd[2]), year = parseInt(dd[3]);
+      var okDMY = voValidMD(b, a, year); // day=a, month=b  (DD/MM/YYYY)
+      var okMDY = voValidMD(a, b, year); // month=a, day=b  (MM/DD/YYYY)
+      if (!okDMY && !okMDY) {
+        var why = (a === 2 || b === 2) ? 'February cannot have that many days' : 'not a real calendar date';
+        findings.push({ type: 'CT03', severity: 5,
+          evidence: 'Impossible date: ' + dates[d].raw + ' (' + why + ' read as day/month/year or month/day/year)',
+          location: 'Page ' + (dates[d].page + 1) });
+      } else {
+        // Only one reading is valid -- record which convention it forces, so a
+        // bundle that genuinely mixes BOTH can be noted once (below).
+        if (okDMY && !okMDY && a > 12) voSawDMY = voSawDMY || dates[d]; // first field >12 -> must be DD/MM
+        if (okMDY && !okDMY && b > 12) voSawMDY = voSawMDY || dates[d]; // second field >12 -> must be MM/DD
       }
+    }
+    // A single anchored, non-overclaiming note when the bundle mixes conventions.
+    if (voSawDMY && voSawMDY) {
+      findings.push({ type: 'CT03', severity: 2,
+        evidence: 'Document mixes date formats: "' + voSawDMY.raw + '" reads as day/month/year while "' + voSawMDY.raw + '" reads as month/day/year -- numeric dates in this bundle are ambiguous; confirm the intended reading before relying on any date',
+        location: 'Page ' + (voSawDMY.page + 1) + ' vs Page ' + (voSawMDY.page + 1) });
     }
 
     // A *labelled* date stated at two different values -- "Effective Date:
@@ -4011,10 +4107,22 @@ var DETECTORS = {
         names.push({ value: nm[1], page: j });
       }
     }
-    if (ids.length >= 2) {
+    // Count DISTINCT values, not raw matches: on a bank statement the same
+    // reference code repeats on every line, which made the old count report
+    // "3 different ID numbers" when it was one code seen three times. And a
+    // finding that cannot say WHICH numbers is not actionable -- cite-or-stay-
+    // silent -- so name the values and stay honest that they are ID-*shaped*
+    // strings (a Capitec client reference matches the same pattern as an ID).
+    var idVals = ids.map(function(x){ return x.value; });
+    var idUniq = idVals.filter(function(v, ix){ return idVals.indexOf(v) === ix; });
+    if (idUniq.length >= 2) {
+      var idPages = ids.map(function(x){ return x.page + 1; })
+        .filter(function(v, ix, arr){ return arr.indexOf(v) === ix; });
       findings.push({ type: 'CT09', severity: 4,
-        evidence: ids.length + ' different ID numbers found in document',
-        location: 'Pages ' + ids.map(function(x){return x.page+1;}).join(', ') });
+        evidence: idUniq.length + ' different identity-shaped numbers appear: ' +
+          idUniq.slice(0, 6).join(', ') + (idUniq.length > 6 ? ' …' : '') +
+          ' — confirm which are ID numbers and whose (reference/account codes share the same shape)',
+        location: 'Pages ' + idPages.join(', ') });
     }
     return findings;
   },
@@ -4152,18 +4260,40 @@ var DETECTORS = {
 
   D11_DETECT_REGISTRATION_FAKE: function(textBlocks) {
     var findings = [];
-    var regRe = /\b(CK\d{7}|\d{14})\b/g;
-    var seen = {};
+    // A "registration number" is only what the document LABELS as one. The old
+    // detector matched any bare 14-digit run and flagged it "fake" merely
+    // because it recurred -- but a bank-statement reference (a Capitec client
+    // code is 14 digits) is not a registration number, and a genuine company
+    // registration number is SUPPOSED to recur across a document. Now: read the
+    // token sitting after an explicit registration cue, and flag it only when it
+    // is NOT a valid SA registration format. A number with no "registration"
+    // label (the bank reference) never fires; a valid one that recurs never
+    // fires. Each malformed value is reported once, anchored to its pages.
+    var cueRe = /(?:company\s+)?registration\s+(?:number|no\.?|nr\.?)|reg(?:istration)?\.?\s*(?:number|no\.?|nr\.?)|CIPC/gi;
+    var SA_REG = /^(?:\d{4}\/\d{6}\/\d{2}|CK\d{2}\/\d{5,6}|CK\d{7})$/;
+    var bad = {};
     for (var i = 0; i < textBlocks.length; i++) {
-      var match;
-      while ((match = regRe.exec(textBlocks[i])) !== null) {
-        if (seen[match[0]] && seen[match[0]] !== i) {
-          findings.push({ type: 'CT20', severity: 4,
-            evidence: 'Registration number ' + match[0] + ' appears on multiple pages with different context',
-            location: 'Page ' + (i + 1) });
+      var block = textBlocks[i] || '';
+      cueRe.lastIndex = 0;
+      var cm;
+      while ((cm = cueRe.exec(block)) !== null) {
+        var after = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 40);
+        var tok = after.match(/[A-Z]{0,2}\d[\d\/]{5,19}/);
+        if (!tok) continue;
+        var val = tok[0].replace(/\s+/g, '');
+        if (SA_REG.test(val)) continue; // a valid registration format is not "fake"
+        if (!bad[val]) {
+          var quote = block.substring(cm.index, cm.index + cm[0].length + 30).replace(/\s+/g, ' ').trim();
+          bad[val] = { pages: [], quote: quote };
         }
-        seen[match[0]] = i;
+        if (bad[val].pages.indexOf(i + 1) === -1) bad[val].pages.push(i + 1);
       }
+    }
+    for (var v in bad) {
+      if (!Object.prototype.hasOwnProperty.call(bad, v)) continue;
+      findings.push({ type: 'CT20', severity: 4,
+        evidence: 'A number labelled as a registration is not a valid SA registration format (expected YYYY/NNNNNN/NN or CK…): "' + bad[v].quote + '"',
+        location: 'Page ' + bad[v].pages.join(', ') });
     }
     return findings;
   },
@@ -4712,16 +4842,25 @@ var DETECTORS = {
 
   D32_DETECT_SIGNATURE_ANOMALY: function(textBlocks) {
     var findings = [];
-    var fullText = textBlocks.join(' ').toLowerCase();
-    var sigPatterns = [
-      'electronic signature','digital signature','/s/','signed per pro',
-      'power of attorney','authorized representative','by proxy'
-    ];
-    for (var i = 0; i < sigPatterns.length; i++) {
-      if (fullText.indexOf(sigPatterns[i]) !== -1) {
+    // A signature-METHOD anomaly means the document was executed by an unusual
+    // mechanism -- a conformed "/s/" mark, a per-procurationem (p.p.) surrogate
+    // signing, an "on behalf of" execution. It does NOT mean the phrase "power
+    // of attorney" appears somewhere in the bundle: a power of attorney is a
+    // legal INSTRUMENT, not a way of signing, and treating it as one (reported
+    // at a fictional "Signature block") was a false positive that fired on any
+    // correspondence that merely discussed a POA. "electronic/digital
+    // signature" is dropped too -- it is the ordinary modern method, not an
+    // anomaly. Each surviving hit is anchored to its real page with the quote.
+    var sigPatterns = ['/s/', 'signed per pro', 'per procurationem', 'signed on behalf of', 'signed by proxy'];
+    for (var i = 0; i < textBlocks.length; i++) {
+      var low = (textBlocks[i] || '').toLowerCase();
+      for (var p = 0; p < sigPatterns.length; p++) {
+        var idx = low.indexOf(sigPatterns[p]);
+        if (idx === -1) continue;
+        var quote = textBlocks[i].substring(Math.max(0, idx - 20), idx + sigPatterns[p].length + 20).replace(/\s+/g, ' ').trim();
         findings.push({ type: 'CT23', severity: 3,
-          evidence: 'Non-standard signature method: "' + sigPatterns[i] + '"',
-          location: 'Signature block' });
+          evidence: 'Non-standard signature method "' + sigPatterns[p] + '": "' + quote + '"',
+          location: 'Page ' + (i + 1) });
       }
     }
     return findings;
@@ -4821,14 +4960,31 @@ var DETECTORS = {
   // agreements that merely define "lessee"/"owner" do not trip it.
   D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED: function(textBlocks) {
     var findings = [];
-    var t = textBlocks.join(' ').toLowerCase();
-    var hasLesseeCondition = /not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/.test(t);
-    var invokesTermination = /(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(t);
-    var ownershipAcquired = /(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/.test(t);
-    if (hasLesseeCondition && invokesTermination && ownershipAcquired) {
+    var blocks = textBlocks || [];
+    // Anchor to the PAGE + quote where each half sits, so the finding names a
+    // real WHERE (page) instead of a pseudo-location the anchor rule demotes.
+    // Matching is case-insensitive; the quote is taken from the original text.
+    function pageOf(re) {
+      for (var i = 0; i < blocks.length; i++) {
+        var raw = String(blocks[i] || '');
+        var m = re.exec(raw.toLowerCase());
+        if (m) {
+          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          return { page: i + 1, quote: q };
+        }
+      }
+      return null;
+    }
+    var lessee = pageOf(/not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/);
+    var owner = pageOf(/(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/);
+    var invokesTermination = false;
+    for (var b = 0; b < blocks.length; b++) {
+      if (/(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(String(blocks[b]).toLowerCase())) { invokesTermination = true; break; }
+    }
+    if (lessee && owner && invokesTermination) {
       findings.push({ type: 'CT44', severity: 5,
-        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner), but the record shows the party had become the owner of the premises — the clause\'s precondition never occurred. HYPOTHESIS: requires legal review.',
-        location: 'Franchise/lease agreement vs ownership record' });
+        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner): "' + lessee.quote + '" — yet the record shows the party had become the owner of the premises: "' + owner.quote + '". The clause\'s precondition never occurred. HYPOTHESIS: requires legal review.',
+        location: (lessee.page === owner.page) ? 'Page ' + lessee.page : 'Page ' + lessee.page + ' vs Page ' + owner.page });
     }
     return findings;
   },
@@ -4840,21 +4996,46 @@ var DETECTORS = {
   // ordinary "no compensation for improvements on termination" clause.
   D39_DETECT_ASSET_VALUE_DENIAL: function(textBlocks) {
     var findings = [];
-    var t = textBlocks.join(' ').toLowerCase();
-    // "forfeit" added to the recognition keywords: a goodwill FORFEITURE
-    // clause presupposes the asset exists (there would otherwise be nothing
-    // to forfeit) — the AllFuels curated database's own reasoning.
-    var recognisesGoodwill = /(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis|forfeit)/.test(t) ||
-      /(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/.test(t);
-    // Negation-BEFORE-goodwill added: the AllFuels rerun showed counsel's
-    // actual courtroom phrasing — "held no compensable goodwill" — never
-    // matched the negation-after patterns, so the engine was silent on the
-    // exact contradiction this detector was built from.
-    var deniesGoodwillValue = /goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)/.test(t);
-    if (recognisesGoodwill && deniesGoodwillValue) {
+    var blocks = textBlocks || [];
+    // Anchor to the PAGE + quote of each half (recognition, denial), so the
+    // finding names a real WHERE instead of a pseudo-location the anchor rule
+    // demotes. Case-insensitive match; quote from the original text.
+    function pageOf(re) {
+      for (var i = 0; i < blocks.length; i++) {
+        var raw = String(blocks[i] || '');
+        var m = re.exec(raw.toLowerCase());
+        if (m) {
+          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          return { page: i + 1, quote: q };
+        }
+      }
+      return null;
+    }
+    var loc = function (a, c) { return a.page === c.page ? 'Page ' + a.page : 'Page ' + a.page + ' vs Page ' + c.page; };
+    // Path A — explicit goodwill recognised then denied. "forfeit" counts as
+    // recognition (nothing to forfeit unless the asset exists); the denial may
+    // be phrased negation-before ("held no compensable goodwill") or -after.
+    var recog = pageOf(/(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis|forfeit)/) ||
+                pageOf(/(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/);
+    var denies = pageOf(/goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)/);
+    if (recog && denies) {
       findings.push({ type: 'CT45', severity: 5,
-        evidence: 'Goodwill / value of the business is recognised or quantified in one document but denied or said to have no compensable value in another — the forfeiture/clawback is itself an admission the asset exists. HYPOTHESIS: requires legal review.',
-        location: 'Franchise agreement vs later submission' });
+        evidence: 'Goodwill / value of the business is recognised: "' + recog.quote + '" — yet denied or said to have no compensable value: "' + denies.quote + '". The forfeiture/clawback is itself an admission the asset exists. HYPOTHESIS: requires legal review.',
+        location: loc(recog, denies) });
+    }
+    // Path B — the Caltex/AllFuels clause-11 trap: the franchisee gets NO
+    // compensation for its OWN improvements to the premises, while the
+    // franchisor is entitled to acquire the property itself at (fair market)
+    // value. Value denied to the party who built it, realised by the other —
+    // the same recognised-then-denied principle in one clause. Requires BOTH
+    // halves, so an ordinary no-compensation-for-improvements clause stays
+    // silent (that clause alone is not a contradiction).
+    var noComp = pageOf(/not\s+(?:be\s+)?entitled\s+to\s+(?:any\s+)?(?:compensation|repayment)[^.]{0,140}(?:structural|addition|alteration|improvement)/);
+    var acquires = pageOf(/entitled[^.]{0,60}(?:purchase|acquire|buy)[^.]{0,70}(?:property|premises|site)[^.]{0,70}(?:fair market value|market value|value)/);
+    if (noComp && acquires) {
+      findings.push({ type: 'CT45', severity: 5,
+        evidence: 'The franchisee is denied any compensation for its own improvements to the premises: "' + noComp.quote + '" — while the franchisor is entitled to acquire the property itself at value: "' + acquires.quote + '". Value denied to the party who built it, yet realised by the other. HYPOTHESIS: requires legal review.',
+        location: loc(noComp, acquires) });
     }
     return findings;
   },

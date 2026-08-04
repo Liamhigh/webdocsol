@@ -609,23 +609,45 @@ var DETECTORS = {
         }
       }
     }
-    // Check for impossible dates (e.g., 31/02/2024)
+    // A slash/dash/dot date is only "impossible" when it is invalid read BOTH
+    // ways -- as day/month/year AND as month/day/year. A South African bundle
+    // routinely mixes DD/MM (local) and MM/DD (US) conventions, so 10/18/2024
+    // is a perfectly valid US date (18 October) even though it is not a valid
+    // DD/MM date. Flagging it as an "invalid month" was a false positive: the
+    // engine must not manufacture an impossibility out of an ambiguous format.
+    // 31/02/2021 stays flagged because NEITHER reading is a real calendar date.
     var months31 = [1,3,5,7,8,10,12];
+    function voDaysInMonth(m, y) {
+      if (m === 2) return ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0) ? 29 : 28;
+      return months31.indexOf(m) !== -1 ? 31 : (m >= 1 && m <= 12 ? 30 : 0);
+    }
+    function voValidMD(mo, dy, yr) {
+      return mo >= 1 && mo <= 12 && dy >= 1 && dy <= voDaysInMonth(mo, yr);
+    }
+    var voSawDMY = null, voSawMDY = null; // a clearly-DD/MM and a clearly-MM/DD example
     for (var d = 0; d < dates.length; d++) {
       var dd = dates[d].raw.match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\b/);
-      if (dd) {
-        var day = parseInt(dd[1]), month = parseInt(dd[2]), year = parseInt(dd[3]);
-        if (month === 2 && day > 29) {
-          findings.push({ type: 'CT03', severity: 5,
-            evidence: 'Impossible date: ' + dates[d].raw + ' (February cannot have ' + day + ' days)',
-            location: 'Page ' + (dates[d].page + 1) });
-        }
-        if (month > 12) {
-          findings.push({ type: 'CT03', severity: 5,
-            evidence: 'Invalid month in date: ' + dates[d].raw,
-            location: 'Page ' + (dates[d].page + 1) });
-        }
+      if (!dd) continue;
+      var a = parseInt(dd[1]), b = parseInt(dd[2]), year = parseInt(dd[3]);
+      var okDMY = voValidMD(b, a, year); // day=a, month=b  (DD/MM/YYYY)
+      var okMDY = voValidMD(a, b, year); // month=a, day=b  (MM/DD/YYYY)
+      if (!okDMY && !okMDY) {
+        var why = (a === 2 || b === 2) ? 'February cannot have that many days' : 'not a real calendar date';
+        findings.push({ type: 'CT03', severity: 5,
+          evidence: 'Impossible date: ' + dates[d].raw + ' (' + why + ' read as day/month/year or month/day/year)',
+          location: 'Page ' + (dates[d].page + 1) });
+      } else {
+        // Only one reading is valid -- record which convention it forces, so a
+        // bundle that genuinely mixes BOTH can be noted once (below).
+        if (okDMY && !okMDY && a > 12) voSawDMY = voSawDMY || dates[d]; // first field >12 -> must be DD/MM
+        if (okMDY && !okDMY && b > 12) voSawMDY = voSawMDY || dates[d]; // second field >12 -> must be MM/DD
       }
+    }
+    // A single anchored, non-overclaiming note when the bundle mixes conventions.
+    if (voSawDMY && voSawMDY) {
+      findings.push({ type: 'CT03', severity: 2,
+        evidence: 'Document mixes date formats: "' + voSawDMY.raw + '" reads as day/month/year while "' + voSawMDY.raw + '" reads as month/day/year -- numeric dates in this bundle are ambiguous; confirm the intended reading before relying on any date',
+        location: 'Page ' + (voSawDMY.page + 1) + ' vs Page ' + (voSawMDY.page + 1) });
     }
 
     // A *labelled* date stated at two different values -- "Effective Date:
@@ -758,10 +780,22 @@ var DETECTORS = {
         names.push({ value: nm[1], page: j });
       }
     }
-    if (ids.length >= 2) {
+    // Count DISTINCT values, not raw matches: on a bank statement the same
+    // reference code repeats on every line, which made the old count report
+    // "3 different ID numbers" when it was one code seen three times. And a
+    // finding that cannot say WHICH numbers is not actionable -- cite-or-stay-
+    // silent -- so name the values and stay honest that they are ID-*shaped*
+    // strings (a Capitec client reference matches the same pattern as an ID).
+    var idVals = ids.map(function(x){ return x.value; });
+    var idUniq = idVals.filter(function(v, ix){ return idVals.indexOf(v) === ix; });
+    if (idUniq.length >= 2) {
+      var idPages = ids.map(function(x){ return x.page + 1; })
+        .filter(function(v, ix, arr){ return arr.indexOf(v) === ix; });
       findings.push({ type: 'CT09', severity: 4,
-        evidence: ids.length + ' different ID numbers found in document',
-        location: 'Pages ' + ids.map(function(x){return x.page+1;}).join(', ') });
+        evidence: idUniq.length + ' different identity-shaped numbers appear: ' +
+          idUniq.slice(0, 6).join(', ') + (idUniq.length > 6 ? ' …' : '') +
+          ' — confirm which are ID numbers and whose (reference/account codes share the same shape)',
+        location: 'Pages ' + idPages.join(', ') });
     }
     return findings;
   },
@@ -899,18 +933,40 @@ var DETECTORS = {
 
   D11_DETECT_REGISTRATION_FAKE: function(textBlocks) {
     var findings = [];
-    var regRe = /\b(CK\d{7}|\d{14})\b/g;
-    var seen = {};
+    // A "registration number" is only what the document LABELS as one. The old
+    // detector matched any bare 14-digit run and flagged it "fake" merely
+    // because it recurred -- but a bank-statement reference (a Capitec client
+    // code is 14 digits) is not a registration number, and a genuine company
+    // registration number is SUPPOSED to recur across a document. Now: read the
+    // token sitting after an explicit registration cue, and flag it only when it
+    // is NOT a valid SA registration format. A number with no "registration"
+    // label (the bank reference) never fires; a valid one that recurs never
+    // fires. Each malformed value is reported once, anchored to its pages.
+    var cueRe = /(?:company\s+)?registration\s+(?:number|no\.?|nr\.?)|reg(?:istration)?\.?\s*(?:number|no\.?|nr\.?)|CIPC/gi;
+    var SA_REG = /^(?:\d{4}\/\d{6}\/\d{2}|CK\d{2}\/\d{5,6}|CK\d{7})$/;
+    var bad = {};
     for (var i = 0; i < textBlocks.length; i++) {
-      var match;
-      while ((match = regRe.exec(textBlocks[i])) !== null) {
-        if (seen[match[0]] && seen[match[0]] !== i) {
-          findings.push({ type: 'CT20', severity: 4,
-            evidence: 'Registration number ' + match[0] + ' appears on multiple pages with different context',
-            location: 'Page ' + (i + 1) });
+      var block = textBlocks[i] || '';
+      cueRe.lastIndex = 0;
+      var cm;
+      while ((cm = cueRe.exec(block)) !== null) {
+        var after = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 40);
+        var tok = after.match(/[A-Z]{0,2}\d[\d\/]{5,19}/);
+        if (!tok) continue;
+        var val = tok[0].replace(/\s+/g, '');
+        if (SA_REG.test(val)) continue; // a valid registration format is not "fake"
+        if (!bad[val]) {
+          var quote = block.substring(cm.index, cm.index + cm[0].length + 30).replace(/\s+/g, ' ').trim();
+          bad[val] = { pages: [], quote: quote };
         }
-        seen[match[0]] = i;
+        if (bad[val].pages.indexOf(i + 1) === -1) bad[val].pages.push(i + 1);
       }
+    }
+    for (var v in bad) {
+      if (!Object.prototype.hasOwnProperty.call(bad, v)) continue;
+      findings.push({ type: 'CT20', severity: 4,
+        evidence: 'A number labelled as a registration is not a valid SA registration format (expected YYYY/NNNNNN/NN or CK…): "' + bad[v].quote + '"',
+        location: 'Page ' + bad[v].pages.join(', ') });
     }
     return findings;
   },
@@ -1459,16 +1515,25 @@ var DETECTORS = {
 
   D32_DETECT_SIGNATURE_ANOMALY: function(textBlocks) {
     var findings = [];
-    var fullText = textBlocks.join(' ').toLowerCase();
-    var sigPatterns = [
-      'electronic signature','digital signature','/s/','signed per pro',
-      'power of attorney','authorized representative','by proxy'
-    ];
-    for (var i = 0; i < sigPatterns.length; i++) {
-      if (fullText.indexOf(sigPatterns[i]) !== -1) {
+    // A signature-METHOD anomaly means the document was executed by an unusual
+    // mechanism -- a conformed "/s/" mark, a per-procurationem (p.p.) surrogate
+    // signing, an "on behalf of" execution. It does NOT mean the phrase "power
+    // of attorney" appears somewhere in the bundle: a power of attorney is a
+    // legal INSTRUMENT, not a way of signing, and treating it as one (reported
+    // at a fictional "Signature block") was a false positive that fired on any
+    // correspondence that merely discussed a POA. "electronic/digital
+    // signature" is dropped too -- it is the ordinary modern method, not an
+    // anomaly. Each surviving hit is anchored to its real page with the quote.
+    var sigPatterns = ['/s/', 'signed per pro', 'per procurationem', 'signed on behalf of', 'signed by proxy'];
+    for (var i = 0; i < textBlocks.length; i++) {
+      var low = (textBlocks[i] || '').toLowerCase();
+      for (var p = 0; p < sigPatterns.length; p++) {
+        var idx = low.indexOf(sigPatterns[p]);
+        if (idx === -1) continue;
+        var quote = textBlocks[i].substring(Math.max(0, idx - 20), idx + sigPatterns[p].length + 20).replace(/\s+/g, ' ').trim();
         findings.push({ type: 'CT23', severity: 3,
-          evidence: 'Non-standard signature method: "' + sigPatterns[i] + '"',
-          location: 'Signature block' });
+          evidence: 'Non-standard signature method "' + sigPatterns[p] + '": "' + quote + '"',
+          location: 'Page ' + (i + 1) });
       }
     }
     return findings;
@@ -1568,14 +1633,31 @@ var DETECTORS = {
   // agreements that merely define "lessee"/"owner" do not trip it.
   D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED: function(textBlocks) {
     var findings = [];
-    var t = textBlocks.join(' ').toLowerCase();
-    var hasLesseeCondition = /not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/.test(t);
-    var invokesTermination = /(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(t);
-    var ownershipAcquired = /(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/.test(t);
-    if (hasLesseeCondition && invokesTermination && ownershipAcquired) {
+    var blocks = textBlocks || [];
+    // Anchor to the PAGE + quote where each half sits, so the finding names a
+    // real WHERE (page) instead of a pseudo-location the anchor rule demotes.
+    // Matching is case-insensitive; the quote is taken from the original text.
+    function pageOf(re) {
+      for (var i = 0; i < blocks.length; i++) {
+        var raw = String(blocks[i] || '');
+        var m = re.exec(raw.toLowerCase());
+        if (m) {
+          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          return { page: i + 1, quote: q };
+        }
+      }
+      return null;
+    }
+    var lessee = pageOf(/not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/);
+    var owner = pageOf(/(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/);
+    var invokesTermination = false;
+    for (var b = 0; b < blocks.length; b++) {
+      if (/(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(String(blocks[b]).toLowerCase())) { invokesTermination = true; break; }
+    }
+    if (lessee && owner && invokesTermination) {
       findings.push({ type: 'CT44', severity: 5,
-        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner), but the record shows the party had become the owner of the premises — the clause\'s precondition never occurred. HYPOTHESIS: requires legal review.',
-        location: 'Franchise/lease agreement vs ownership record' });
+        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner): "' + lessee.quote + '" — yet the record shows the party had become the owner of the premises: "' + owner.quote + '". The clause\'s precondition never occurred. HYPOTHESIS: requires legal review.',
+        location: (lessee.page === owner.page) ? 'Page ' + lessee.page : 'Page ' + lessee.page + ' vs Page ' + owner.page });
     }
     return findings;
   },
@@ -1587,21 +1669,46 @@ var DETECTORS = {
   // ordinary "no compensation for improvements on termination" clause.
   D39_DETECT_ASSET_VALUE_DENIAL: function(textBlocks) {
     var findings = [];
-    var t = textBlocks.join(' ').toLowerCase();
-    // "forfeit" added to the recognition keywords: a goodwill FORFEITURE
-    // clause presupposes the asset exists (there would otherwise be nothing
-    // to forfeit) — the AllFuels curated database's own reasoning.
-    var recognisesGoodwill = /(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis|forfeit)/.test(t) ||
-      /(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/.test(t);
-    // Negation-BEFORE-goodwill added: the AllFuels rerun showed counsel's
-    // actual courtroom phrasing — "held no compensable goodwill" — never
-    // matched the negation-after patterns, so the engine was silent on the
-    // exact contradiction this detector was built from.
-    var deniesGoodwillValue = /goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)/.test(t);
-    if (recognisesGoodwill && deniesGoodwillValue) {
+    var blocks = textBlocks || [];
+    // Anchor to the PAGE + quote of each half (recognition, denial), so the
+    // finding names a real WHERE instead of a pseudo-location the anchor rule
+    // demotes. Case-insensitive match; quote from the original text.
+    function pageOf(re) {
+      for (var i = 0; i < blocks.length; i++) {
+        var raw = String(blocks[i] || '');
+        var m = re.exec(raw.toLowerCase());
+        if (m) {
+          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          return { page: i + 1, quote: q };
+        }
+      }
+      return null;
+    }
+    var loc = function (a, c) { return a.page === c.page ? 'Page ' + a.page : 'Page ' + a.page + ' vs Page ' + c.page; };
+    // Path A — explicit goodwill recognised then denied. "forfeit" counts as
+    // recognition (nothing to forfeit unless the asset exists); the denial may
+    // be phrased negation-before ("held no compensable goodwill") or -after.
+    var recog = pageOf(/(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis|forfeit)/) ||
+                pageOf(/(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/);
+    var denies = pageOf(/goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)/);
+    if (recog && denies) {
       findings.push({ type: 'CT45', severity: 5,
-        evidence: 'Goodwill / value of the business is recognised or quantified in one document but denied or said to have no compensable value in another — the forfeiture/clawback is itself an admission the asset exists. HYPOTHESIS: requires legal review.',
-        location: 'Franchise agreement vs later submission' });
+        evidence: 'Goodwill / value of the business is recognised: "' + recog.quote + '" — yet denied or said to have no compensable value: "' + denies.quote + '". The forfeiture/clawback is itself an admission the asset exists. HYPOTHESIS: requires legal review.',
+        location: loc(recog, denies) });
+    }
+    // Path B — the Caltex/AllFuels clause-11 trap: the franchisee gets NO
+    // compensation for its OWN improvements to the premises, while the
+    // franchisor is entitled to acquire the property itself at (fair market)
+    // value. Value denied to the party who built it, realised by the other —
+    // the same recognised-then-denied principle in one clause. Requires BOTH
+    // halves, so an ordinary no-compensation-for-improvements clause stays
+    // silent (that clause alone is not a contradiction).
+    var noComp = pageOf(/not\s+(?:be\s+)?entitled\s+to\s+(?:any\s+)?(?:compensation|repayment)[^.]{0,140}(?:structural|addition|alteration|improvement)/);
+    var acquires = pageOf(/entitled[^.]{0,60}(?:purchase|acquire|buy)[^.]{0,70}(?:property|premises|site)[^.]{0,70}(?:fair market value|market value|value)/);
+    if (noComp && acquires) {
+      findings.push({ type: 'CT45', severity: 5,
+        evidence: 'The franchisee is denied any compensation for its own improvements to the premises: "' + noComp.quote + '" — while the franchisor is entitled to acquire the property itself at value: "' + acquires.quote + '". Value denied to the party who built it, yet realised by the other. HYPOTHESIS: requires legal review.',
+        location: loc(noComp, acquires) });
     }
     return findings;
   },

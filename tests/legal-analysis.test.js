@@ -105,6 +105,52 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(R._extractMoney('var VAR_R 2025 in the code sample').length === 0, 'extractMoney: underscore identifier does not leak an R amount');
 }
 
+// ---- plain-language: EVERY finding type must carry everyday wording ----
+// The website report's "In plain terms, ..." line is what an ordinary reader
+// relies on. If a CT type has no lay clause it silently drops to a generic
+// category sentence — understandable, but not specific. This guard makes plain
+// wording a shipping requirement: add a CT type, add its plain sentence.
+{
+  const names = R._ctNames;
+  const meaning = R._narrativeMeaningMap;
+  const missing = Object.keys(names).filter((ct) => !meaning[ct] || !String(meaning[ct]).trim());
+  ok(missing.length === 0, 'every CT type in CT_NAMES has a plain-language NARRATIVE_MEANING (missing: ' + (missing.join(', ') || 'none') + ')');
+  // The plain wording must actually be plain: no CT codes, no "shall", no latin.
+  const jargon = Object.keys(meaning).filter((ct) => /\bCT\d|\bshall\b|\bprima facie\b|\binter alia\b/i.test(meaning[ct]));
+  ok(jargon.length === 0, 'plain-language clauses contain no codes or legalese (offenders: ' + (jargon.join(', ') || 'none') + ')');
+  // narrativeMeaning() returns the specific clause, not the generic fallback.
+  ok(R._narrativeMeaning({ type: 'CT20' }) === meaning.CT20 && !/inconsistent on this point/.test(R._narrativeMeaning({ type: 'CT20' })),
+    'narrativeMeaning() returns the finding-specific plain clause (CT20), not the generic fallback');
+}
+
+// ---- plain-language "bottom line" opens the report and NAMES the serious ones ----
+{
+  const data = { docName: 'Wallers Agreement', pageCount: 20 };
+  const fr = {
+    overallScore: 62,
+    findings: [
+      { type: 'CT45', severity: 5, location: 'Page 11', evidence: 'goodwill recognised then denied' },
+      { type: 'CT03', severity: 4, location: 'Page 3', evidence: 'Impossible date: 31/02/2021' },
+      { type: 'CT26', severity: 1, location: 'Page 2', evidence: 'near-empty pages' },
+      { type: 'CT31', severity: 2, evidence: 'annexure not found [bundle context: repeated page]' }
+    ]
+  };
+  const lines = R._plainLeadLines(fr, data);
+  const joined = lines.join('\n');
+  ok(lines.length > 0, 'plain lead is produced when there are findings');
+  ok(/read "Wallers Agreement" \(20 pages\)/.test(joined), 'plain lead opens with the document name and page count');
+  ok(/The serious ones, in plain words:/.test(joined), 'plain lead announces the serious findings');
+  ok(/On p\. 11, .*goodwill/i.test(joined), 'plain lead NAMES the CT45 serious finding in plain words, anchored to its page');
+  ok(/date does not add up/.test(joined), 'plain lead NAMES the CT03 serious finding in plain words');
+  ok(!/CT45|CT03/.test(joined), 'plain lead contains no CT codes (everyday language only)');
+  ok(/not a percentage chance of fraud, and not a verdict/.test(joined), 'plain lead keeps the score neutral (indicator, not verdict)');
+  // Unreadable / failed scans must NOT produce a plain "all clear".
+  ok(R._plainLeadLines({ unreadable: true, findings: [{ type: 'CT01', severity: 5 }] }, data).length === 0,
+    'plain lead is empty on an unreadable document (no false all-clear)');
+  ok(R._plainLeadLines({ scanFailed: true, findings: [{ type: 'CT01', severity: 5 }] }, data).length === 0,
+    'plain lead is empty when the scan failed');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);
