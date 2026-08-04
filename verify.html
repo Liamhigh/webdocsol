@@ -1798,6 +1798,10 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         requested: gpsRequested,
         captured: !!gpsField,
         gps: gpsField ? gpsField.lat6 + ',' + gpsField.lon6 : null,
+        // A ready-to-click Google Maps link so a reader of the receipt (or law
+        // enforcement) can see exactly where the verification happened, and the
+        // raw lat,lon is copy-pasteable into Google Earth.
+        mapsUrl: gpsField ? 'https://www.google.com/maps?q=' + gpsField.lat6 + ',' + gpsField.lon6 : null,
         accuracyM: gpsField ? gpsField.accuracyM : null,
         note: gpsField
           ? 'Captured by the browser at verification time; included in the anchored custody record only -- not uploaded anywhere else.'
@@ -1874,8 +1878,32 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     if (gpsRow && gpsEl) {
       if (loc && loc.captured && loc.gps) {
         gpsRow.style.display = '';
-        gpsEl.textContent = loc.gps.replace(',', ', ') + (loc.accuracyM != null ? ' (±' + loc.accuracyM + 'm)' : '');
+        var gpsParts = loc.gps.split(',');
+        var latS = (gpsParts[0] || '').trim(), lonS = (gpsParts[1] || '').trim();
+        var mapsUrl = loc.mapsUrl || ('https://www.google.com/maps?q=' + encodeURIComponent(latS + ',' + lonS));
+        var accTxt = (loc.accuracyM != null ? ' (±' + loc.accuracyM + 'm)' : '');
+        // Coordinates + a clickable Google Maps link (opens the exact spot) + a
+        // copy button that puts "lat, lon" on the clipboard for Google Earth.
+        gpsEl.innerHTML =
+          '<span id="custodyGpsCoords">' + latS + ', ' + lonS + '</span>' + accTxt +
+          ' &nbsp;<a href="' + mapsUrl + '" target="_blank" rel="noopener noreferrer" style="color:#4A7EC7;text-decoration:underline;">Open in Google Maps ↗</a>' +
+          ' &nbsp;<button type="button" id="custodyGpsCopy" style="background:none;border:1px solid #1A2E52;color:#8ea3b5;border-radius:6px;padding:2px 8px;font-size:11px;cursor:pointer;">Copy for Google Earth</button>';
         gpsEl.title = 'Browser geolocation fix at verification time; included in the anchored custody digest.';
+        (function () {
+          var copyBtn = document.getElementById('custodyGpsCopy');
+          if (!copyBtn) return;
+          var coords = latS + ', ' + lonS;
+          copyBtn.addEventListener('click', function () {
+            try {
+              if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(coords).then(
+                  function () { copyBtn.textContent = 'Copied ✓'; },
+                  function () { copyBtn.textContent = coords; }
+                );
+              } else { copyBtn.textContent = coords; }
+            } catch (e) { copyBtn.textContent = coords; }
+          });
+        })();
       } else if (loc && loc.requested) {
         gpsRow.style.display = '';
         gpsEl.textContent = loc.note || 'location not captured';
