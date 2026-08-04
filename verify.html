@@ -1250,21 +1250,35 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     }
     document.getElementById('timestamp').textContent = 'Sealed: ' + (meta.timestamp ? new Date(meta.timestamp).toLocaleString() : 'Unknown');
 
+    // A seal field stored as UTF-16 can leak through as raw bytes — a "þÿ" BOM
+    // plus interleaved NULs — which renders as foreign-looking gibberish (users
+    // asked "is that Russian?"). Repair it, strip control chars, and HTML-escape
+    // (these values also flow into innerHTML, so escaping is a safety fix too).
+    var voSafeMeta = function (s) {
+      s = String(s == null ? '' : s);
+      // Repair UTF-16 text that leaked through as raw bytes: a BOM plus the
+      // interleaved NUL bytes render as foreign-looking gibberish ("is that
+      // Russian?"). Strip the BOM / NULs / control chars, then HTML-escape
+      // (these values also flow into innerHTML, so escaping is a safety fix).
+      s = s.replace(/\uFEFF/g, '').replace(/\u00EF\u00BB\u00BF/g, '').replace(/^\u00FE\u00FF/, '').replace(/^\u00FF\u00FE/, '').replace(/\u0000/g, '');
+      s = s.replace(/[\u0000-\u001F\u007F]/g, '').trim();
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    };
     var metaHtml = (scheme === 'v2') ? sealIdentityCardHtml(meta, 'v2') : '';
     metaHtml += '<div class="meta-grid">';
-    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (voSafeMeta(meta.sealId) || 'N/A') + '</p></div>';
     if (scheme === 'v2') {
-      metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (verified)</h4><p>' + hashHex + '</p></div>';
-      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + meta.originalHash + '</p></div>';
+      metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (verified)</h4><p>' + voSafeMeta(hashHex) + '</p></div>';
+      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + voSafeMeta(meta.originalHash) + '</p></div>';
     } else {
-      metaHtml += '<div class="meta-card"><h4>Document SHA-512</h4><p>' + hashHex + '</p></div>';
-      if (originalHashHex) metaHtml += '<div class="meta-card"><h4>Original Content Hash</h4><p>' + originalHashHex + '</p></div>';
+      metaHtml += '<div class="meta-card"><h4>Document SHA-512</h4><p>' + voSafeMeta(hashHex) + '</p></div>';
+      if (originalHashHex) metaHtml += '<div class="meta-card"><h4>Original Content Hash</h4><p>' + voSafeMeta(originalHashHex) + '</p></div>';
     }
-    metaHtml += '<div class="meta-card"><h4>OTS Digest (Bitcoin)</h4><p>' + (meta.otsDigest || 'N/A') + '</p></div>';
-    metaHtml += '<div class="meta-card"><h4>Sender Identity</h4><p>' + (meta.sender || meta.identity || 'N/A') + '</p></div>';
-    if (meta.gps) metaHtml += '<div class="meta-card"><h4>GPS Location</h4><p>' + meta.gps + '</p></div>';
-    if (meta.device) metaHtml += '<div class="meta-card"><h4>Device</h4><p>' + meta.device + '</p></div>';
-    metaHtml += '<div class="meta-card"><h4>Version</h4><p>' + (meta.version || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>OTS Digest (Bitcoin)</h4><p>' + (voSafeMeta(meta.otsDigest) || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Sender Identity</h4><p>' + (voSafeMeta(meta.sender || meta.identity) || 'N/A') + '</p></div>';
+    if (meta.gps) metaHtml += '<div class="meta-card"><h4>GPS Location</h4><p>' + voSafeMeta(meta.gps) + '</p></div>';
+    if (meta.device) metaHtml += '<div class="meta-card"><h4>Device</h4><p>' + voSafeMeta(meta.device) + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Version</h4><p>' + (voSafeMeta(meta.version) || 'N/A') + '</p></div>';
     metaHtml += '</div>';
     metaSection.innerHTML = metaHtml;
 
