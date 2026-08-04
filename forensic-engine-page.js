@@ -2410,8 +2410,31 @@ var VO_NON_PERSON_TOK = (function () {
     // From the 3 Aug Greensky rerun: hash fragments ('BCFF SHA-', 'EC SHA-'),
     // 'Evidence Analyzed', and the SAPS case-number label ('SAPS CAS') were
     // bound as parties. 'Cas' can be a given name; safe direction is exclusion.
-    'sha cas evidence analyzed analysis').split(' ');
+    'sha cas evidence analyzed analysis ' +
+    // From the AllFuels/Des Caltex franchise-agreement OCR: a scanned contract's
+    // "Yes/No" schedule cells were bound as a party ("Yes No"). "Yes"/"No" are
+    // never person names; losing them is costless.
+    'yes no').split(' ');
   for (var i = 0; i < words.length; i++) m[words[i]] = 1;
+  return m;
+})();
+
+// WHOLE-PHRASE furniture. A scanned contract is full of capitalised DEFINED
+// TERMS ("Business System", "Trade Marks", "Intellectual Property") and schedule
+// headings that recur enough to clear the roster's recurrence bar and masquerade
+// as parties. Blocking them per-token would also drop real surnames that happen
+// to be common words ("Marks", "Business"), so they are blocked as whole phrases
+// only — the exact string must match, so a person merely sharing one word is safe.
+var VO_NON_PERSON_PHRASE = (function () {
+  var m = {}, phrases = ('business system|trade marks|trade mark|intellectual property|' +
+    'franchised business|franchise agreement|value of the business|retail outlet|' +
+    'retail outlet standards manual|motor fuel|petroleum products|convenience area|' +
+    'designated area|food area|confidential information|commencement date|force majeure|' +
+    'electronic tag|resolution of disputes|conditions precedent|books of account|' +
+    'minimum sales|agreement schedule|table of contents|business day|' +
+    'yes no|no yes|yes yes|no no|caltex card|caltex facilities|caltex outlets|' +
+    'caltex franchisees|caltex operated outlets|starmart franchise system').split('|');
+  for (var i = 0; i < phrases.length; i++) m[phrases[i]] = 1;
   return m;
 })();
 
@@ -2426,6 +2449,8 @@ function voCleanPersonName(n) {
 function voLooksLikePerson(name) {
   var toks = String(name == null ? '' : name).split(/\s+/).filter(Boolean);
   if (toks.length < 2 || toks.length > 4) return false;
+  // Whole-phrase furniture (a scanned contract's defined terms / schedule cells).
+  if (VO_NON_PERSON_PHRASE[toks.join(' ').toLowerCase()]) return false;
   for (var i = 0; i < toks.length; i++) {
     var bare = toks[i].replace(/[.'’-]+$/, '');
     if (!bare) return false;
