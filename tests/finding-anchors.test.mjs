@@ -160,6 +160,17 @@ ok(!E.voLooksLikePerson('Gooale Drive'), 'REGRESSION: "Gooale Drive" (OCR of Goo
 ok(!E.voLooksLikePerson('Kevin. Late Mares The'), 'REGRESSION: a run through a sentence end / stop word is not a person');
 ok(!E.voLooksLikePerson('Tax Invoice'), 'document furniture ("Tax Invoice") is not a person');
 ok(!E.voLooksLikePerson('Kevin'), 'a single token is not a person');
+// Scanned-contract furniture (AllFuels/Des Caltex agreement): the "Yes/No"
+// schedule cells and capitalised DEFINED TERMS recurred enough to be bound as
+// parties in the person index. Blocked as whole phrases + Yes/No tokens.
+ok(!E.voLooksLikePerson('Yes No'), 'REGRESSION: a scanned schedule "Yes No" cell is not a person');
+ok(!E.voLooksLikePerson('Business System'), 'REGRESSION: the defined term "Business System" is not a person');
+ok(!E.voLooksLikePerson('Intellectual Property'), 'REGRESSION: "Intellectual Property" is not a person');
+ok(!E.voLooksLikePerson('Value of the Business'), 'REGRESSION: "Value of the Business" is not a person');
+// ...but a real surname that happens to be a common word survives (phrase-level
+// block, not per-token), so "John Marks" / "Ann Property" are not lost.
+ok(E.voLooksLikePerson('John Marks'), 'the surname "Marks" survives (blocked only as the phrase "Trade Marks")');
+ok(E.voLooksLikePerson('Desmond Smith'), 'a real franchisee name still passes');
 
 // Seal boilerplate on the cited page must never reach the index.
 const sealedPage = 'VERUM OMNIS SEALED ORIGINAL — PRIVATE SEAL — FREE TIER\n' +
