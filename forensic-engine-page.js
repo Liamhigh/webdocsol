@@ -1633,14 +1633,31 @@ var DETECTORS = {
   // agreements that merely define "lessee"/"owner" do not trip it.
   D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED: function(textBlocks) {
     var findings = [];
-    var t = textBlocks.join(' ').toLowerCase();
-    var hasLesseeCondition = /not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/.test(t);
-    var invokesTermination = /(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(t);
-    var ownershipAcquired = /(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/.test(t);
-    if (hasLesseeCondition && invokesTermination && ownershipAcquired) {
+    var blocks = textBlocks || [];
+    // Anchor to the PAGE + quote where each half sits, so the finding names a
+    // real WHERE (page) instead of a pseudo-location the anchor rule demotes.
+    // Matching is case-insensitive; the quote is taken from the original text.
+    function pageOf(re) {
+      for (var i = 0; i < blocks.length; i++) {
+        var raw = String(blocks[i] || '');
+        var m = re.exec(raw.toLowerCase());
+        if (m) {
+          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          return { page: i + 1, quote: q };
+        }
+      }
+      return null;
+    }
+    var lessee = pageOf(/not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/);
+    var owner = pageOf(/(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/);
+    var invokesTermination = false;
+    for (var b = 0; b < blocks.length; b++) {
+      if (/(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(String(blocks[b]).toLowerCase())) { invokesTermination = true; break; }
+    }
+    if (lessee && owner && invokesTermination) {
       findings.push({ type: 'CT44', severity: 5,
-        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner), but the record shows the party had become the owner of the premises — the clause\'s precondition never occurred. HYPOTHESIS: requires legal review.',
-        location: 'Franchise/lease agreement vs ownership record' });
+        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner): "' + lessee.quote + '" — yet the record shows the party had become the owner of the premises: "' + owner.quote + '". The clause\'s precondition never occurred. HYPOTHESIS: requires legal review.',
+        location: (lessee.page === owner.page) ? 'Page ' + lessee.page : 'Page ' + lessee.page + ' vs Page ' + owner.page });
     }
     return findings;
   },
@@ -1652,21 +1669,46 @@ var DETECTORS = {
   // ordinary "no compensation for improvements on termination" clause.
   D39_DETECT_ASSET_VALUE_DENIAL: function(textBlocks) {
     var findings = [];
-    var t = textBlocks.join(' ').toLowerCase();
-    // "forfeit" added to the recognition keywords: a goodwill FORFEITURE
-    // clause presupposes the asset exists (there would otherwise be nothing
-    // to forfeit) — the AllFuels curated database's own reasoning.
-    var recognisesGoodwill = /(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis|forfeit)/.test(t) ||
-      /(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/.test(t);
-    // Negation-BEFORE-goodwill added: the AllFuels rerun showed counsel's
-    // actual courtroom phrasing — "held no compensable goodwill" — never
-    // matched the negation-after patterns, so the engine was silent on the
-    // exact contradiction this detector was built from.
-    var deniesGoodwillValue = /goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)/.test(t);
-    if (recognisesGoodwill && deniesGoodwillValue) {
+    var blocks = textBlocks || [];
+    // Anchor to the PAGE + quote of each half (recognition, denial), so the
+    // finding names a real WHERE instead of a pseudo-location the anchor rule
+    // demotes. Case-insensitive match; quote from the original text.
+    function pageOf(re) {
+      for (var i = 0; i < blocks.length; i++) {
+        var raw = String(blocks[i] || '');
+        var m = re.exec(raw.toLowerCase());
+        if (m) {
+          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          return { page: i + 1, quote: q };
+        }
+      }
+      return null;
+    }
+    var loc = function (a, c) { return a.page === c.page ? 'Page ' + a.page : 'Page ' + a.page + ' vs Page ' + c.page; };
+    // Path A — explicit goodwill recognised then denied. "forfeit" counts as
+    // recognition (nothing to forfeit unless the asset exists); the denial may
+    // be phrased negation-before ("held no compensable goodwill") or -after.
+    var recog = pageOf(/(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis|forfeit)/) ||
+                pageOf(/(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/);
+    var denies = pageOf(/goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)/);
+    if (recog && denies) {
       findings.push({ type: 'CT45', severity: 5,
-        evidence: 'Goodwill / value of the business is recognised or quantified in one document but denied or said to have no compensable value in another — the forfeiture/clawback is itself an admission the asset exists. HYPOTHESIS: requires legal review.',
-        location: 'Franchise agreement vs later submission' });
+        evidence: 'Goodwill / value of the business is recognised: "' + recog.quote + '" — yet denied or said to have no compensable value: "' + denies.quote + '". The forfeiture/clawback is itself an admission the asset exists. HYPOTHESIS: requires legal review.',
+        location: loc(recog, denies) });
+    }
+    // Path B — the Caltex/AllFuels clause-11 trap: the franchisee gets NO
+    // compensation for its OWN improvements to the premises, while the
+    // franchisor is entitled to acquire the property itself at (fair market)
+    // value. Value denied to the party who built it, realised by the other —
+    // the same recognised-then-denied principle in one clause. Requires BOTH
+    // halves, so an ordinary no-compensation-for-improvements clause stays
+    // silent (that clause alone is not a contradiction).
+    var noComp = pageOf(/not\s+(?:be\s+)?entitled\s+to\s+(?:any\s+)?(?:compensation|repayment)[^.]{0,140}(?:structural|addition|alteration|improvement)/);
+    var acquires = pageOf(/entitled[^.]{0,60}(?:purchase|acquire|buy)[^.]{0,70}(?:property|premises|site)[^.]{0,70}(?:fair market value|market value|value)/);
+    if (noComp && acquires) {
+      findings.push({ type: 'CT45', severity: 5,
+        evidence: 'The franchisee is denied any compensation for its own improvements to the premises: "' + noComp.quote + '" — while the franchisor is entitled to acquire the property itself at value: "' + acquires.quote + '". Value denied to the party who built it, yet realised by the other. HYPOTHESIS: requires legal review.',
+        location: loc(noComp, acquires) });
     }
     return findings;
   },

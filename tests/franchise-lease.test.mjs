@@ -27,6 +27,13 @@ const bundle = [
 ];
 let f = DET.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED(bundle);
 ok(f.length > 0 && f[0].type === 'CT44', 'D38 flags CT44 on the lessee-clause-vs-owner bundle');
+// ANCHORING: CT44 must now name real pages (was a pseudo-location that the
+// anchor rule demoted to an unanchored note — so the AllFuels report never
+// headlined the lessee/owner trap).
+ok(f[0] && /Page \d/.test(f[0].location) && f[0].location.indexOf('agreement vs ownership') === -1,
+  'CT44 anchors to a real page (Page 1 vs Page 3), not a pseudo-location');
+ok(f[0] && f[0].evidence.indexOf('lessee') !== -1 && f[0].evidence.indexOf('owner') !== -1 && /"/.test(f[0].evidence),
+  'CT44 evidence quotes both the lessee clause and the ownership record');
 
 // A clean franchise doc (defines lessee/owner generically, no acquisition, no misinvoked termination) stays quiet.
 const clean = [
@@ -63,6 +70,30 @@ ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
   'on termination no compensation for improvements shall be payable to the lessee.'
 ]).length === 0,
   'CT45 stays silent on an ordinary no-compensation-for-improvements clause');
+
+// ANCHORING: the goodwill CT45 must now name a real page too.
+ok(g[0] && /Page \d/.test(g[0].location) && g[0].location.indexOf('later submission') === -1,
+  'CT45 anchors to a real page (Page 1 vs Page 2), not a pseudo-location');
+
+// ===== The Des / Caltex clause-11 trap the engine was missing =====
+// Clause 11.1.3 (franchisee "shall not be entitled to any compensation or
+// repayment ... in respect of any structural additions, alterations or
+// improvements") sits with clause 11.2 (franchisor "entitled to purchase the
+// property itself at fair market value"). Value denied to the party who built
+// it, realised by the other — caught only when BOTH halves are present.
+const clause11 = [
+  'The FRANCHISEE acknowledges that it shall not be entitled to any compensation or repayment of any manner in respect of any structural additions, alterations or improvements to the Premises, whether necessary, luxurious or otherwise.',
+  'The FRANCHISOR shall be entitled to purchase the property itself at fair market value and the products at cost.',
+];
+const c11 = DET.D39_DETECT_ASSET_VALUE_DENIAL(clause11);
+ok(c11.some(x => x.type === 'CT45'), 'CT45 now catches the Caltex clause-11 trap (no compensation for improvements + franchisor buys the property at value)');
+ok(c11.some(x => x.type === 'CT45' && /Page 1 vs Page 2/.test(x.location)), 'the clause-11 CT45 anchors to the two clause pages');
+ok(c11.some(x => x.type === 'CT45' && /improvements/.test(x.evidence) && /fair market value/.test(x.evidence)), 'the clause-11 CT45 quotes both halves of the trap');
+// The franchisor-buys-at-value clause ALONE is not a contradiction — needs the paired denial.
+ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
+  'The FRANCHISOR shall be entitled to purchase the property itself at fair market value.'
+]).length === 0,
+  'CT45 stays silent on a lone purchase-at-value clause (needs the paired no-compensation clause)');
 
 console.log(`\n[franchise-lease] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[franchise-lease] FAILURES'); process.exit(1); }
