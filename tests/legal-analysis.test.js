@@ -63,6 +63,17 @@ ok(R._narrativeMeaning({ type: 'ZZ99' }).length > 0, 'narrativeMeaning: generic 
   // Currency corroboration: AED in evidence pulls in the UAE leg even if the field is blank.
   const byCurrency = R._detectJurisdictions({ identity: {}, findings: { findings: [{ evidence: 'paid AED 1,200,000 to the account' }] } });
   ok(byCurrency.isCrossBorder === true && byCurrency.foreign.indexOf('AE') !== -1, 'detectJurisdictions: AED currency signals UAE');
+  // Jurisdiction read from the DOCUMENT TEXT even when the field is blank
+  // (Des/AllFuels: KwaZulu-Natal + Companies Act 71 of 2008 place it in ZA).
+  const byText = R._detectJurisdictions({ identity: {}, findings: { findings: [
+    { evidence: 'Premises at Umtentweni, KwaZulu-Natal; the FRANCHISOR is a company under the Companies Act 71 of 2008.' }
+  ] } });
+  ok(byText.home === 'ZA' && byText.isCrossBorder === false, 'detectJurisdictions: SA cues in the document text place the matter in ZA with the field blank');
+  // A UAE nexus named only in the document makes it cross-border on its own.
+  const dubaiText = R._detectJurisdictions({ identity: {}, findings: { findings: [
+    { evidence: 'the RAKEZ free-zone entity in Dubai, DIFC courts nexus' }
+  ] } });
+  ok(dubaiText.foreign.indexOf('AE') !== -1, 'detectJurisdictions: a Dubai/DIFC/RAKEZ nexus in the text is detected as a foreign leg');
 }
 
 // ---- subject mapping incl. franchise/lease ----
