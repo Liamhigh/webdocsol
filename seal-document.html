@@ -4053,15 +4053,33 @@ var DETECTORS = {
   D04_DETECT_TEMPORAL_IMPOSSIBILITY: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
+    // A temporal conflict requires the two opposing markers to describe the SAME
+    // event, so they must sit close together (one clause/sentence). The old
+    // version flagged the pair if each word merely appeared SOMEWHERE in the
+    // document -- on a long legal bundle "preceding"/"following" and
+    // "earlier"/"later" are ordinary relational words that co-occur by default,
+    // so it fired on essentially every multi-page file (a confirmed false
+    // positive on the 148-page scanned bundle). The bare relational pairs are
+    // dropped entirely (no forensic signal); the phrase pairs are kept but only
+    // when they appear within a short window of each other.
+    var PROXIMITY = 140;
     var impossibleSequences = [
-      ['before the incident','after the incident'],['prior to','subsequent to'],
-      ['preceding','following'],['earlier','later']
+      ['before the incident','after the incident'],
+      ['prior to','subsequent to']
     ];
     for (var i = 0; i < impossibleSequences.length; i++) {
-      if (fullText.indexOf(impossibleSequences[i][0]) !== -1 &&
-          fullText.indexOf(impossibleSequences[i][1]) !== -1) {
+      var a = impossibleSequences[i][0], b = impossibleSequences[i][1];
+      var near = false, from = 0, ai;
+      while ((ai = fullText.indexOf(a, from)) !== -1) {
+        // b within PROXIMITY chars on either side of this occurrence of a.
+        var windowStart = Math.max(0, ai - PROXIMITY);
+        var windowEnd = ai + a.length + PROXIMITY;
+        if (fullText.substring(windowStart, windowEnd).indexOf(b) !== -1) { near = true; break; }
+        from = ai + a.length;
+      }
+      if (near) {
         findings.push({ type: 'CT04', severity: 3,
-          evidence: 'Temporal language conflict: "' + impossibleSequences[i][0] + '" and "' + impossibleSequences[i][1] + '" both present',
+          evidence: 'Temporal language conflict: "' + a + '" and "' + b + '" describe the same event',
           location: 'Full document' });
       }
     }
@@ -4575,18 +4593,39 @@ var DETECTORS = {
   D21_DETECT_MISSING_APPENDIX: function(textBlocks) {
     var findings = [];
     var appendixRefs = [];
-    var appendixRe = /(?:see|refer to|as per|in)\s+(appendix|annex|schedule|exhibit)\s*([A-Z\d]+)/gi;
+    // "see Annexure A", "refer to Appendix 12", "as per Schedule B2". The LABEL
+    // must be a genuine annexure label: an uppercase letter / short code (A, B2)
+    // or a number (1, 12). OCR routinely splits the word itself --
+    // "annexure" -> "annex ure", "annexures" -> "annex ure", "schedules" ->
+    // "schedule s" -- and the lowercase tail ("ure", "ee", "s") was being
+    // captured as a label, then reported as a phantom missing annexure (9 such
+    // false positives on the 148-page scanned bundle). Requiring an
+    // uppercase/numeric label rejects those OCR fragments. match[2] preserves
+    // original case, so the case-sensitive test below is what does the filtering
+    // (the /i regex alone would still accept "ure").
+    var appendixRe = /(?:see|refer(?:red|ring)?\s+to|as\s+per|per|under|in)\s+(appendix|annexures?|annex|schedules?|exhibits?)\s*([A-Za-z]{1,3}\d{0,3}|\d{1,3})\b/gi;
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
       while ((match = appendixRe.exec(textBlocks[i])) !== null) {
-        appendixRefs.push({ ref: (match[1] + ' ' + match[2]).toLowerCase(), page: i });
+        var label = match[2];
+        // Genuine label: uppercase letters (<=3) optionally trailed by digits, or
+        // a bare number. Lowercase fragments (OCR word-splits) are rejected.
+        if (!/^[A-Z]{1,3}\d{0,3}$/.test(label) && !/^\d{1,3}$/.test(label)) continue;
+        appendixRefs.push({ label: label.toLowerCase(), ref: (match[1] + ' ' + label).toLowerCase(), page: i });
       }
     }
-    // Check if referenced appendices exist
+    // The reference is satisfied if the SAME label appears as a heading anywhere
+    // beside any annexure-kind word (annexure/annex/appendix/schedule/exhibit) --
+    // tolerant of the keyword variant so "refer to Annex A" is not reported
+    // missing merely because the heading reads "Annexure A".
     var fullText = textBlocks.join(' ').toLowerCase();
     for (var j = 0; j < appendixRefs.length; j++) {
-      var appendixTitle = new RegExp('\\b' + appendixRefs[j].ref.replace(/\s+/g,'\\s+') + '\\b', 'i');
-      if (!appendixTitle.test(fullText)) {
+      var lbl = appendixRefs[j].label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      var headingRe = new RegExp('(?:appendix|annexures?|annex|schedules?|exhibits?)\\s*' + lbl + '\\b', 'g');
+      var occurrences = (fullText.match(headingRe) || []).length;
+      // >=2 occurrences means the label appears somewhere beyond the reference
+      // itself (i.e. it resolves). Only 1 occurrence => referenced but absent.
+      if (occurrences < 2) {
         findings.push({ type: 'CT31', severity: 3,
           evidence: 'Referenced "' + appendixRefs[j].ref + '" not found in document',
           location: 'Page ' + (appendixRefs[j].page + 1) });

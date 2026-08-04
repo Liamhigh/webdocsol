@@ -88,6 +88,35 @@ const clean = ['This is a normal letter. Everything is consistent. Thank you for
 t.ok(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(clean).length === 0, 'D01 no false-positive on clean text');
 t.ok(DETECTORS.D03_DETECT_DATE_INCONSISTENCY(['Dated 15 March 2024']).length === 0, 'D03 no false-positive on valid date');
 t.ok(DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(clean).length === 0, 'D04 no false-positive on clean text');
+// D04 regression (ritzadvocat 148-page bundle): "preceding" and "following"
+// are ordinary relational words that co-occur in any long legal document. The
+// old detector flagged the pair whenever both appeared ANYWHERE, so it fired on
+// essentially every multi-page file. They are no longer a tracked pair, and the
+// kept phrase pairs must be close together to count.
+t.ok(DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(
+  ['The preceding clause governs.', 'x'.repeat(400), 'See the following schedule.']).length === 0,
+  'D04 no longer fires on preceding/following scattered through a bundle');
+t.ok(DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(
+  ['Payment prior to delivery is required.', 'y'.repeat(400), 'A report subsequent to the audit follows.']).length === 0,
+  'D04 does not fire on prior-to / subsequent-to that are pages apart');
+t.ok(DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(
+  ['It was due prior to signing yet also subsequent to signing.']).some(f => f.type === 'CT04'),
+  'D04 still fires when opposing phrases describe the same event nearby');
+
+// D21 regression (ritzadvocat): OCR splits the word "annexure" into "annex ure"
+// (and "annexures"->"annex ure", "schedules"->"schedule s"). The lowercase tail
+// was captured as a label and reported as a phantom missing annexure -- 9 such
+// false positives on the scanned bundle. A real label is an uppercase letter /
+// short code or a number; lowercase word-tails are rejected.
+t.ok(DETECTORS.D21_DETECT_MISSING_APPENDIX(
+  ['Please refer to annex ure for the schedule s and see annex ee below.']).length === 0,
+  'D21 no false-positive on OCR-split annexure/schedule fragments (ure/ee/s)');
+t.ok(DETECTORS.D21_DETECT_MISSING_APPENDIX(
+  ['As per Annexure D the parties agree.']).some(f => f.type === 'CT31'),
+  'D21 still flags a genuine uppercase label reference that has no matching heading');
+t.ok(DETECTORS.D21_DETECT_MISSING_APPENDIX(
+  ['Refer to Annexure D for particulars.', 'ANNEXURE D', 'Signed at Cape Town.']).length === 0,
+  'D21 quiet when the referenced annexure heading is present in the document');
 
 // D01 must not fire on opposing words that merely both appear somewhere. It
 // used to flag any document containing both "true" and "false" (or paid/not
