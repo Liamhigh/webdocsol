@@ -1,5 +1,12 @@
 # WebDocSol -- Verum Omnis Document Sealing & Verification Standard
 
+> **System context (read [`ARCHITECTURE.md`](./ARCHITECTURE.md) first).** This repo is the
+> **website hub** of the Verum Omnis system — one of three surfaces (**website + Android `1verum`
+> + Guardian firewall `firebase`**) that share one forensic engine. Two hard rules: the system is
+> **stateless / serverless — no servers, no central user-data database** (state lives in the sealed
+> PDF, the Bitcoin anchor, and the user's device), and **all verification happens at the website**
+> (`verify.html`, via SHA-512 + OpenTimestamps/Bitcoin — not a server lookup).
+
 **Repository:** `Liamhigh/webdocsol`  
 **Version:** VO-DSS-1.2 (Verum Omnis Document Sealing Standard v1.2)  
 **Constitution:** v6.0 Final  
