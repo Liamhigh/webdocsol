@@ -850,6 +850,63 @@ function drawToc(ctx, tocPage) {
   }
 }
 
+// The plain-language "bottom line" that opens the report, built as an array of
+// sentences (no rendering) so it is unit-testable. It states, in ordinary
+// words: what was read, how much matters, THE SERIOUS FINDINGS NAMED IN PLAIN
+// WORDS, and what the score means. Everything is computed from the same
+// findings as the tables and stays neutral — indicators, never verdicts.
+// Returns [] when the document was unreadable or the scan failed (a plain-
+// language "all clear" must never be printed over an absence of analysis).
+function plainLeadLines(fr, data) {
+  fr = fr || {};
+  var plAll = fr.findings || [];
+  if (!(plAll.length > 0 && !fr.scanFailed && !fr.unreadable)) return [];
+  var plDemoted = 0, plSerial = 0, plSubstantive = 0, plSerious = 0;
+  for (var pl = 0; pl < plAll.length; pl++) {
+    var plf = plAll[pl];
+    if (plf.type === 'SERIAL') { plSerial++; continue; }
+    if (isDemoted(plf)) { plDemoted++; continue; }
+    plSubstantive++;
+    if ((plf.severity || 0) >= 4) plSerious++;
+  }
+  var score = fr.overallScore || 0;
+  var docName = (data && data.docName) || 'this document';
+  var pageCount = (data && data.pageCount) || 'n/a';
+  var plLines = [];
+  plLines.push('The engine read "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') and flagged ' + plAll.length + ' indicator' + (plAll.length === 1 ? '' : 's') + ' in total.');
+  if (plDemoted > 0) {
+    plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
+  }
+  var substLead = (plDemoted > 0)
+    ? 'That leaves ' + plSubstantive + ' substantive indicator' + (plSubstantive === 1 ? '' : 's')
+    : (plSerial > 0
+        ? 'Of these, ' + plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's') + ' (the rest are multi-stage pattern matches, described below)'
+        : plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's'));
+  plLines.push(substLead + (plSerious > 0 ? ', of which ' + plSerious + ' ' + (plSerious === 1 ? 'is' : 'are') + ' rated critical or high.' : '. None reached the critical or high band.'));
+  // Name the serious findings in plain words, right here at the top, so the
+  // reader gets the whole picture before any table. Same lay clause the
+  // narrative uses; capped so the lead stays short; anchored to the page.
+  var plSeriousList = plAll.filter(function (f) {
+    return f && f.type !== 'SERIAL' && !isDemoted(f) && (f.severity || 0) >= 4;
+  }).sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+  if (plSeriousList.length > 0) {
+    plLines.push(plSeriousList.length === 1 ? 'The serious one, in plain words:' : 'The serious ones, in plain words:');
+    var plSerCap = Math.min(4, plSeriousList.length);
+    for (var ps = 0; ps < plSerCap; ps++) {
+      var psf = plSeriousList[ps];
+      var psLoc = fmtLocation(psf.location);
+      var psWhere = (psLoc && psLoc !== '—') ? 'On ' + psLoc + ', ' : '';
+      plLines.push('•  ' + psWhere + withPeriod(narrativeMeaning(psf)));
+    }
+    if (plSeriousList.length > plSerCap) {
+      plLines.push('•  …and ' + (plSeriousList.length - plSerCap) + ' more serious item' + (plSeriousList.length - plSerCap === 1 ? '' : 's') + ', set out in full below.');
+    }
+  }
+  if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern indicator' + (plSerial === 1 ? '' : 's') + ' also matched - see the Serial Pattern Analysis section.');
+  plLines.push('The indicator score (' + score + '/100) measures how densely the engine found inconsistencies. It is a signpost for a human investigator - not a percentage chance of fraud, and not a verdict.');
+  return plLines;
+}
+
 // ================= SECTION: EXECUTIVE SUMMARY =================
 function secExecSummary(ctx, data) {
   ctx.newBodyPage();
@@ -872,34 +929,18 @@ function secExecSummary(ctx, data) {
   var bandLabel = { CLEAN: 'CLEAN', LOW: 'LOW', MODERATE: 'MODERATE', HIGH: 'HIGH', VERY_HIGH: 'VERY HIGH' }[band] || band;
 
   // ---- plain-language lead ----------------------------------------------
-  // The first thing a reader meets is a paragraph a non-specialist can
-  // follow: what was read, what actually matters, and what the score means.
-  // Everything it states is computed from the same findings as the tables.
+  // The first thing a reader meets is a plain-English "bottom line": what was
+  // read, what actually matters, the serious findings NAMED in ordinary words,
+  // and what the score means. Built by plainLeadLines() so it is unit-testable.
+  // plDemoted is also needed further down (severity note), so it is counted
+  // here independently of the lead builder.
   var plAll = fr.findings || [];
-  var plDemoted = 0, plSerial = 0, plSubstantive = 0, plSerious = 0;
+  var plDemoted = 0;
   for (var pl = 0; pl < plAll.length; pl++) {
-    var plf = plAll[pl];
-    if (plf.type === 'SERIAL') { plSerial++; continue; }
-    if (isDemoted(plf)) { plDemoted++; continue; }
-    plSubstantive++;
-    if ((plf.severity || 0) >= 4) plSerious++;
+    if (plAll[pl].type !== 'SERIAL' && isDemoted(plAll[pl])) plDemoted++;
   }
-  if (plAll.length > 0 && !fr.scanFailed && !fr.unreadable) {
-    var plLines = [];
-    plLines.push('The engine read "' + (data.docName || 'this document') + '" (' + (data.pageCount || 'n/a') + ' page' + (data.pageCount === 1 ? '' : 's') + ') and flagged ' + plAll.length + ' indicator' + (plAll.length === 1 ? '' : 's') + ' in total.');
-    if (plDemoted > 0) {
-      plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
-    }
-    // "That leaves" only reads correctly after something was subtracted; when
-    // nothing was demoted, lead with the substantive count directly.
-    var substLead = (plDemoted > 0)
-      ? 'That leaves ' + plSubstantive + ' substantive indicator' + (plSubstantive === 1 ? '' : 's')
-      : (plSerial > 0
-          ? 'Of these, ' + plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's') + ' (the rest are multi-stage pattern matches, described below)'
-          : plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's'));
-    plLines.push(substLead + (plSerious > 0 ? ', of which ' + plSerious + ' ' + (plSerious === 1 ? 'is' : 'are') + ' rated critical or high. Start there: they appear under "Top findings" below and in full in the findings matrix.' : '. None reached the critical or high band.'));
-    if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern indicator' + (plSerial === 1 ? '' : 's') + ' also matched - see the Serial Pattern Analysis section.');
-    plLines.push('The indicator score (' + score + '/100) measures how densely the engine found inconsistencies. It is a signpost for a human investigator - not a percentage chance of fraud, and not a verdict.');
+  var plLines = plainLeadLines(fr, data);
+  if (plLines.length) {
     ctx.box('IN PLAIN LANGUAGE', plLines, { titleColor: NAVY2 });
     ctx.gap(4);
   }
@@ -2554,7 +2595,7 @@ async function seal(reportBytes, sealOpts) {
 var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
   _extractParties: extractParties, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
   _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,
-  _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING,
+  _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;

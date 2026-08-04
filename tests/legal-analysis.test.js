@@ -123,6 +123,34 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'narrativeMeaning() returns the finding-specific plain clause (CT20), not the generic fallback');
 }
 
+// ---- plain-language "bottom line" opens the report and NAMES the serious ones ----
+{
+  const data = { docName: 'Wallers Agreement', pageCount: 20 };
+  const fr = {
+    overallScore: 62,
+    findings: [
+      { type: 'CT45', severity: 5, location: 'Page 11', evidence: 'goodwill recognised then denied' },
+      { type: 'CT03', severity: 4, location: 'Page 3', evidence: 'Impossible date: 31/02/2021' },
+      { type: 'CT26', severity: 1, location: 'Page 2', evidence: 'near-empty pages' },
+      { type: 'CT31', severity: 2, evidence: 'annexure not found [bundle context: repeated page]' }
+    ]
+  };
+  const lines = R._plainLeadLines(fr, data);
+  const joined = lines.join('\n');
+  ok(lines.length > 0, 'plain lead is produced when there are findings');
+  ok(/read "Wallers Agreement" \(20 pages\)/.test(joined), 'plain lead opens with the document name and page count');
+  ok(/The serious ones, in plain words:/.test(joined), 'plain lead announces the serious findings');
+  ok(/On p\. 11, .*goodwill/i.test(joined), 'plain lead NAMES the CT45 serious finding in plain words, anchored to its page');
+  ok(/date does not add up/.test(joined), 'plain lead NAMES the CT03 serious finding in plain words');
+  ok(!/CT45|CT03/.test(joined), 'plain lead contains no CT codes (everyday language only)');
+  ok(/not a percentage chance of fraud, and not a verdict/.test(joined), 'plain lead keeps the score neutral (indicator, not verdict)');
+  // Unreadable / failed scans must NOT produce a plain "all clear".
+  ok(R._plainLeadLines({ unreadable: true, findings: [{ type: 'CT01', severity: 5 }] }, data).length === 0,
+    'plain lead is empty on an unreadable document (no false all-clear)');
+  ok(R._plainLeadLines({ scanFailed: true, findings: [{ type: 'CT01', severity: 5 }] }, data).length === 0,
+    'plain lead is empty when the scan failed');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);
