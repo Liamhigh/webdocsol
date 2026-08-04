@@ -942,47 +942,29 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
         Client-Side — Nothing Leaves Your Device
       </span>
       <p class="eyebrow">Document Verifier</p>
-      <h2 class="sec-title">Drop. Verify. Done.</h2>
-      <p class="sec-intro" style="margin:0 auto">Upload any PDF. We extract metadata, decompress streams, find the seal, and check for tampering.</p>
+      <h2 class="sec-title">Verify a sealed document</h2>
+      <p class="sec-intro" style="margin:0 auto">Open the Document Verifier to check any sealed PDF — it decompresses the file, finds the seal, and checks for tampering (green tick if genuine, red tick if altered). Runs entirely in your browser; nothing leaves your device.</p>
     </div>
 
-    <div id="dzIdle" class="reveal-item">
-      <a class="dropzone" id="dropzone" href="verify.html" aria-label="Open the full Document Verifier" style="display:block;text-decoration:none">
-        <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L8 8m4-4l4 4"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/></svg>
-        <p class="dz-title" id="dzTitle">Open the full Document Verifier &rarr;</p>
-        <p class="dz-sub">Decompresses PDF streams, finds the seal, checks for tampering, and anchors a verification receipt</p>
-        <input type="file" id="fileInput" accept=".pdf" hidden aria-hidden="true">
+    <div class="reveal-item" style="text-align:center;margin-top:2rem">
+      <a class="btn-gold" href="verify.html" style="display:inline-flex;align-items:center;gap:8px;text-decoration:none">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+        Open the Document Verifier
       </a>
-      <div class="v-features">
+      <div class="v-features" style="margin-top:2.5rem">
         <div class="v-feat">
           <h4>Metadata Check</h4>
           <p>Extracts Creator, Producer, dates, and flags suspicious origins.</p>
         </div>
         <div class="v-feat">
           <h4>Seal Verify</h4>
-          <p>Decompresses PDF streams to find and verify the VERUM OMNIS SEAL.</p>
+          <p>Decompresses PDF streams to find and verify the VERUM OMNIS SEAL (green tick / red tick).</p>
         </div>
         <div class="v-feat">
           <h4>Tamper Detect</h4>
           <p>Hash mismatch = tampered. No seal = unverified. Blockchain = anchored.</p>
         </div>
       </div>
-    </div>
-
-    <div id="dzProcessing" class="v-processing" hidden>
-      <div class="spinner" aria-hidden="true"></div>
-      <p class="status-line" id="statusLine" role="status" aria-live="polite">Reading file...</p>
-      <p class="proc-note">Client-side — nothing leaves your device</p>
-      <p class="debug-label">Debug log:</p>
-      <div class="debug-log" id="procLog"></div>
-    </div>
-
-    <div id="dzResult" hidden>
-      <div class="result-panel" id="resultPanel"></div>
-      <p class="debug-label">Debug log:</p>
-      <div class="debug-log" id="resultLog"></div>
-      <p class="result-file" id="resultFile"></p>
-      <div class="result-actions"><button class="btn-gold" id="resetBtn" type="button">Verify Another</button></div>
     </div>
   </div>
 </section>
@@ -1138,7 +1120,7 @@ function initNav(){
   });
   if(logo) logo.addEventListener('click',function(){ window.scrollTo({top:0,behavior:REDUCED?'auto':'smooth'}); });
   var cta=$('ctaVerify');
-  if(cta) cta.addEventListener('click',function(){ var t=$('verify'); if(t) t.scrollIntoView({behavior:REDUCED?'auto':'smooth'}); });
+  if(cta) cta.addEventListener('click',function(){ window.location.href='verify.html'; });
   var chev=$('chevron');
   if(chev) chev.addEventListener('click',function(){ var t=$('mission'); if(t) t.scrollIntoView({behavior:REDUCED?'auto':'smooth'}); });
 }
