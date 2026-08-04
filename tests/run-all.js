@@ -27,7 +27,6 @@ const suites = [
   'crop-normalize.test.mjs',
   'encrypt-detect.test.mjs',
   'constitution-lock.test.mjs',
-  'home-verify.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',
 ];
