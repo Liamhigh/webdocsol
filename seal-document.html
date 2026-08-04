@@ -1040,15 +1040,19 @@ function subjectOf(f) {
 // South Africa (VO's base); a second jurisdiction makes the matter cross-border.
 function detectJurisdictions(data) {
   var out = { home: 'ZA', foreign: [], isCrossBorder: false };
-  var text = String((data.identity && data.identity.jurisdiction) || '').toLowerCase();
-  var found = {};
-  if (/south africa|\brsa\b|\bza\b/.test(text)) found.ZA = true;
-  if (/emirates|\buae\b|dubai|abu dhabi|difc|sharjah/.test(text)) found.AE = true;
-  if (/united kingdom|\buk\b|england|wales|scotland/.test(text)) found.GB = true;
-  if (/united states|\busa\b|\bu\.s\.|america/.test(text)) found.US = true;
+  // Read jurisdiction from BOTH the (optional) user-entered field AND the
+  // document itself (the flagged evidence text) — place names, courts, statutes,
+  // domains and currencies — so a matter is correctly placed even when the
+  // jurisdiction field is left blank. Home is ZA (VO's base); any other
+  // jurisdiction named in the document makes the matter cross-border.
+  var idText = String((data.identity && data.identity.jurisdiction) || '');
   var evAll = (((data.findings && data.findings.findings) || []).map(function (f) { return String(f.evidence || ''); }).join(' '));
-  if (/\bAED\b|dirham/i.test(evAll)) found.AE = true;
-  if (/\bZAR\b|\bR\s?\d/.test(evAll)) found.ZA = true;
+  var hay = idText + ' ' + evAll;
+  var found = {};
+  if (/south africa|\brsa\b|\bza\b|kwazulu|gauteng|western cape|eastern cape|free state|mpumalanga|limpopo|companies act 71 of 2008|constitutional court|high court of south africa|magistrate|\bsars\b|\bcipc\b|\.co\.za|\bZAR\b|\bR\s?\d/i.test(hay)) found.ZA = true;
+  if (/emirates|\buae\b|dubai|abu dhabi|difc|sharjah|ajman|ras al khaimah|rakez|\bAED\b|dirham/i.test(hay)) found.AE = true;
+  if (/united kingdom|\buk\b|england|wales|scotland|\bGBP\b/i.test(hay)) found.GB = true;
+  if (/united states|\busa\b|\bu\.s\.|america|\bUSD\b/i.test(hay)) found.US = true;
   out.foreign = Object.keys(found).filter(function (k) { return k !== 'ZA'; });
   out.isCrossBorder = out.foreign.length > 0;
   return out;
@@ -8967,15 +8971,37 @@ async function buildAnchorCertificate(opts) {
   var pendLines = wrap('Digest accepted by the calendar(s) above. Bitcoin blockchain confirmation pending (typically 1-2 hours); until then this certificate and the .ots receipt are marked PENDING.', helv, 8.5, rowMaxW);
   row('ANCHOR STATUS', pendLines, helv, 8.5);
 
-  // Canonical statement box
-  var boxTop = 240, boxH = 74;
-  page.drawRectangle({ x: 70, y: boxTop - boxH, width: PW - 140, height: boxH, borderColor: GOLD, borderWidth: 1, color: rgb(1, 1, 1), opacity: 0.04 });
-  var canonical = 'This certificate records submission of the document digest to the OpenTimestamps calendars. The seal proves two things only — integrity and time.';
-  var cLines = wrap(canonical, timesItalic, 11.5, PW - 140 - 32);
-  var cy = boxTop - 28;
-  for (var ci = 0; ci < cLines.length && ci < 3; ci++) {
-    page.drawText(cLines[ci], { x: cx(cLines[ci], timesItalic, 11.5), y: cy, size: 11.5, font: timesItalic, color: WHITE });
-    cy -= 17;
+  // Plain-language explanation for a non-technical recipient: what the seal
+  // proves and how, in ordinary words. Fills the certificate body so the
+  // reader understands tamper-evidence, SHA-512, the permanent blockchain
+  // record and how to verify — without needing any technical background.
+  y -= 6;
+  page.drawText(safe('WHAT THIS CERTIFICATE PROVES'), { x: lx, y: y, size: 9.5, font: helvBold, color: GOLD });
+  y -= 17;
+  var explain = [
+    ['This document cannot be tampered with without it being obvious.',
+     'The SHA-512 fingerprint above is a unique signature of these exact bytes. Change a single character, comma or pixel and the fingerprint changes completely — so any later alteration of the document is immediately provable by anyone.'],
+    ['What SHA-512 is.',
+     'SHA-512 is a one-way cryptographic hash. It turns the entire document into a fixed 128-character fingerprint that cannot be reversed back into the document and cannot be forged. The same document always produces the same fingerprint; a different document never will.'],
+    ['A permanent record on the blockchain.',
+     'The fingerprint is anchored to the Bitcoin blockchain through OpenTimestamps — a public ledger that no one can edit or delete. Once confirmed, this is a permanent, worldwide record that this exact document existed at this date and time. No one, not even Verum Omnis, can change it or remove it.'],
+    ['Anyone can verify it, independently.',
+     'Confirm the seal yourself at verumglobal.foundation/verify.html — no account, no software, and no need to trust Verum Omnis. The fingerprint is checked directly against the blockchain by the person verifying it.']
+  ];
+  for (var ei = 0; ei < explain.length; ei++) {
+    page.drawText(safe('•  ' + explain[ei][0]), { x: lx, y: y, size: 8.5, font: helvBold, color: LIGHT });
+    y -= 12.5;
+    var elines = wrap(explain[ei][1], helv, 8, PW - 150);
+    for (var el = 0; el < elines.length; el++) { page.drawText(safe(elines[el]), { x: lx + 12, y: y, size: 8, font: helv, color: MUTE }); y -= 10.5; }
+    y -= 7;
+  }
+  // Canonical governance statement (kept verbatim) closes the body.
+  y -= 2;
+  var canonical = 'The seal proves two things only — integrity and time. Findings, if any, are the investigator’s assessment; the Court remains the arbiter of what the documents establish.';
+  var cLines = wrap(canonical, timesItalic, 9.5, PW - 150);
+  for (var ci = 0; ci < cLines.length; ci++) {
+    page.drawText(cLines[ci], { x: cx(cLines[ci], timesItalic, 9.5), y: y, size: 9.5, font: timesItalic, color: WHITE });
+    y -= 14;
   }
 
   // Footer
@@ -10878,7 +10904,7 @@ function addShareButton() {
       fallbackDownload('This browser can’t share files directly — the files have downloaded instead; attach them from your Downloads.', files);
       return;
     }
-    var data = { files: chosen, title: window._voShareName, text: 'Sealed with Verum Omnis' };
+    var data = { files: chosen, title: window._voShareName, text: window._voShareText || 'This document is sealed with Verum Omnis. Verify it at https://verumglobal.foundation/verify.html' };
     navigator.share(data).catch(function (err) {
       // AbortError / NotAllowedError = the user closed the share sheet. Ignore.
       if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
@@ -11144,6 +11170,12 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       window._voShareBytes = encryptedBytes;
       window._voShareName = base + '-sealed-protected.pdf';
       window._voShareType = 'application/pdf';
+      // Message that travels WITH the file (WhatsApp/email/etc.) so the
+      // RECIPIENT is told what it is and — critically — how to get the password.
+      window._voShareText =
+        'This document is sealed with Verum Omnis — a SHA-512 fingerprint anchored to the Bitcoin blockchain, so it cannot be altered without detection. Verify it free (no account) at https://verumglobal.foundation/verify.html\n\n' +
+        '🔒 This copy is password-protected. To open it, please request the password from the sender' +
+        (senderEmail ? ' by emailing ' + senderEmail : '') + ' — the password is sent separately, never with the document.';
     } else {
       // Legacy .voice fallback (standard encryption unavailable).
       const downloadGrid = document.getElementById('downloadGrid');
@@ -11156,6 +11188,10 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       window._voShareBytes = encryptedBytes;
       window._voShareName = base + suffix + '-sealed.voice';
       window._voShareType = 'application/octet-stream';
+      window._voShareText =
+        'This document is sealed with Verum Omnis (SHA-512 fingerprint + Bitcoin blockchain timestamp) and cannot be altered without detection.\n\n' +
+        '🔒 It is password-protected. Open it at https://verumglobal.foundation/verify.html and enter the password — please request the password from the sender' +
+        (senderEmail ? ' by emailing ' + senderEmail : '') + '.';
     }
 
     var banner = document.createElement('div');
@@ -11182,6 +11218,8 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     window._voShareBytes = sealedBytes;
     window._voShareName = base + '-sealed.pdf';
     window._voShareType = 'application/pdf';
+    window._voShareText =
+      'This document is cryptographically sealed with Verum Omnis — a SHA-512 fingerprint anchored to the Bitcoin blockchain. It cannot be altered without detection, and there is a permanent public record that it existed at the sealed date and time. Anyone can verify it free, no account needed, at https://verumglobal.foundation/verify.html';
   }
 
   // The whole bundle in one share. A password-protected forensic seal used to

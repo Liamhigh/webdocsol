@@ -321,15 +321,19 @@ function subjectOf(f) {
 // South Africa (VO's base); a second jurisdiction makes the matter cross-border.
 function detectJurisdictions(data) {
   var out = { home: 'ZA', foreign: [], isCrossBorder: false };
-  var text = String((data.identity && data.identity.jurisdiction) || '').toLowerCase();
-  var found = {};
-  if (/south africa|\brsa\b|\bza\b/.test(text)) found.ZA = true;
-  if (/emirates|\buae\b|dubai|abu dhabi|difc|sharjah/.test(text)) found.AE = true;
-  if (/united kingdom|\buk\b|england|wales|scotland/.test(text)) found.GB = true;
-  if (/united states|\busa\b|\bu\.s\.|america/.test(text)) found.US = true;
+  // Read jurisdiction from BOTH the (optional) user-entered field AND the
+  // document itself (the flagged evidence text) — place names, courts, statutes,
+  // domains and currencies — so a matter is correctly placed even when the
+  // jurisdiction field is left blank. Home is ZA (VO's base); any other
+  // jurisdiction named in the document makes the matter cross-border.
+  var idText = String((data.identity && data.identity.jurisdiction) || '');
   var evAll = (((data.findings && data.findings.findings) || []).map(function (f) { return String(f.evidence || ''); }).join(' '));
-  if (/\bAED\b|dirham/i.test(evAll)) found.AE = true;
-  if (/\bZAR\b|\bR\s?\d/.test(evAll)) found.ZA = true;
+  var hay = idText + ' ' + evAll;
+  var found = {};
+  if (/south africa|\brsa\b|\bza\b|kwazulu|gauteng|western cape|eastern cape|free state|mpumalanga|limpopo|companies act 71 of 2008|constitutional court|high court of south africa|magistrate|\bsars\b|\bcipc\b|\.co\.za|\bZAR\b|\bR\s?\d/i.test(hay)) found.ZA = true;
+  if (/emirates|\buae\b|dubai|abu dhabi|difc|sharjah|ajman|ras al khaimah|rakez|\bAED\b|dirham/i.test(hay)) found.AE = true;
+  if (/united kingdom|\buk\b|england|wales|scotland|\bGBP\b/i.test(hay)) found.GB = true;
+  if (/united states|\busa\b|\bu\.s\.|america|\bUSD\b/i.test(hay)) found.US = true;
   out.foreign = Object.keys(found).filter(function (k) { return k !== 'ZA'; });
   out.isCrossBorder = out.foreign.length > 0;
   return out;
