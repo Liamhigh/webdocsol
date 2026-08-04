@@ -393,7 +393,7 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
       <a href="#impact" data-spy="impact">Impact</a>
       <a href="#standards" data-spy="standards">Standards</a>
       <a href="#firewall" data-spy="firewall">Firewall</a>
-      <a href="#verify" data-spy="verify">Verify</a>
+      <a href="verify.html" data-spy="verify">Verify</a>
       <a href="#coming-soon" data-spy="coming-soon">Coming Soon</a>
     </div>
     <div class="nav-cta">
@@ -420,7 +420,7 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
   <a class="m-link" href="#impact">Impact</a>
   <a class="m-link" href="#standards">Standards</a>
   <a class="m-link" href="#firewall">Firewall</a>
-  <a class="m-link" href="#verify">Verify</a>
+  <a class="m-link" href="verify.html">Verify</a>
   <a class="m-link" href="#coming-soon">Coming Soon</a>
   <a class="m-link m-constitution" href="/constitution.html">Constitution</a>
   <div class="mobile-cta">
@@ -947,12 +947,12 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
     </div>
 
     <div id="dzIdle" class="reveal-item">
-      <div class="dropzone" id="dropzone" role="button" tabindex="0" aria-label="Upload a PDF for verification">
+      <a class="dropzone" id="dropzone" href="verify.html" aria-label="Open the full Document Verifier" style="display:block;text-decoration:none">
         <svg class="dz-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 16V4m0 0L8 8m4-4l4 4"/><path d="M4 16v3a1 1 0 001 1h14a1 1 0 001-1v-3"/></svg>
-        <p class="dz-title" id="dzTitle">Upload a PDF</p>
-        <p class="dz-sub">Extracts metadata, decompresses streams, verifies seal</p>
+        <p class="dz-title" id="dzTitle">Open the full Document Verifier &rarr;</p>
+        <p class="dz-sub">Decompresses PDF streams, finds the seal, checks for tampering, and anchors a verification receipt</p>
         <input type="file" id="fileInput" accept=".pdf" hidden aria-hidden="true">
-      </div>
+      </a>
       <div class="v-features">
         <div class="v-feat">
           <h4>Metadata Check</h4>

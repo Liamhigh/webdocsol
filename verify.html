@@ -439,7 +439,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       <p class="custody-caption">This anchors the verification EVENT, not the document. The original seal timestamp remains the authoritative proof of sealing time.</p>
       <div style="text-align:center;margin-top:14px">
         <button class="btn btn-outline" id="custodyReceiptBtn" onclick="downloadCustodyReceipt()">Download Custody Receipt (JSON)</button>
+        <button class="btn" id="requestPwdBtn" style="display:none" onclick="requestPasswordFromSender()">Request password from sender</button>
       </div>
+      <p class="custody-caption" id="requestPwdNote" style="display:none">Turns this anchored, timestamped (and, if enabled, location-stamped) verification into a read-receipt you send the sender to request the password — instead of a plain email.</p>
     </div>
 
     <div class="document-preview" id="previewBox">
@@ -1248,21 +1250,35 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     }
     document.getElementById('timestamp').textContent = 'Sealed: ' + (meta.timestamp ? new Date(meta.timestamp).toLocaleString() : 'Unknown');
 
+    // A seal field stored as UTF-16 can leak through as raw bytes — a "þÿ" BOM
+    // plus interleaved NULs — which renders as foreign-looking gibberish (users
+    // asked "is that Russian?"). Repair it, strip control chars, and HTML-escape
+    // (these values also flow into innerHTML, so escaping is a safety fix too).
+    var voSafeMeta = function (s) {
+      s = String(s == null ? '' : s);
+      // Repair UTF-16 text that leaked through as raw bytes: a BOM plus the
+      // interleaved NUL bytes render as foreign-looking gibberish ("is that
+      // Russian?"). Strip the BOM / NULs / control chars, then HTML-escape
+      // (these values also flow into innerHTML, so escaping is a safety fix).
+      s = s.replace(/\uFEFF/g, '').replace(/\u00EF\u00BB\u00BF/g, '').replace(/^\u00FE\u00FF/, '').replace(/^\u00FF\u00FE/, '').replace(/\u0000/g, '');
+      s = s.replace(/[\u0000-\u001F\u007F]/g, '').trim();
+      return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+    };
     var metaHtml = (scheme === 'v2') ? sealIdentityCardHtml(meta, 'v2') : '';
     metaHtml += '<div class="meta-grid">';
-    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (voSafeMeta(meta.sealId) || 'N/A') + '</p></div>';
     if (scheme === 'v2') {
-      metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (verified)</h4><p>' + hashHex + '</p></div>';
-      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + meta.originalHash + '</p></div>';
+      metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (verified)</h4><p>' + voSafeMeta(hashHex) + '</p></div>';
+      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + voSafeMeta(meta.originalHash) + '</p></div>';
     } else {
-      metaHtml += '<div class="meta-card"><h4>Document SHA-512</h4><p>' + hashHex + '</p></div>';
-      if (originalHashHex) metaHtml += '<div class="meta-card"><h4>Original Content Hash</h4><p>' + originalHashHex + '</p></div>';
+      metaHtml += '<div class="meta-card"><h4>Document SHA-512</h4><p>' + voSafeMeta(hashHex) + '</p></div>';
+      if (originalHashHex) metaHtml += '<div class="meta-card"><h4>Original Content Hash</h4><p>' + voSafeMeta(originalHashHex) + '</p></div>';
     }
-    metaHtml += '<div class="meta-card"><h4>OTS Digest (Bitcoin)</h4><p>' + (meta.otsDigest || 'N/A') + '</p></div>';
-    metaHtml += '<div class="meta-card"><h4>Sender Identity</h4><p>' + (meta.sender || meta.identity || 'N/A') + '</p></div>';
-    if (meta.gps) metaHtml += '<div class="meta-card"><h4>GPS Location</h4><p>' + meta.gps + '</p></div>';
-    if (meta.device) metaHtml += '<div class="meta-card"><h4>Device</h4><p>' + meta.device + '</p></div>';
-    metaHtml += '<div class="meta-card"><h4>Version</h4><p>' + (meta.version || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>OTS Digest (Bitcoin)</h4><p>' + (voSafeMeta(meta.otsDigest) || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Sender Identity</h4><p>' + (voSafeMeta(meta.sender || meta.identity) || 'N/A') + '</p></div>';
+    if (meta.gps) metaHtml += '<div class="meta-card"><h4>GPS Location</h4><p>' + voSafeMeta(meta.gps) + '</p></div>';
+    if (meta.device) metaHtml += '<div class="meta-card"><h4>Device</h4><p>' + voSafeMeta(meta.device) + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Version</h4><p>' + (voSafeMeta(meta.version) || 'N/A') + '</p></div>';
     metaHtml += '</div>';
     metaSection.innerHTML = metaHtml;
 
@@ -1914,7 +1930,53 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         gpsEl.title = '';
       }
     }
+    // The password-request action reuses this anchored receipt as the read-receipt.
+    var rpb = document.getElementById('requestPwdBtn');
+    var rpn = document.getElementById('requestPwdNote');
+    if (rpb) rpb.style.display = '';
+    if (rpn) rpn.style.display = '';
     custodyBox.style.display = 'block';
+  }
+
+  // Turn the anchored custody record into a "please send me the password"
+  // read-receipt the recipient sends the sender — the password request becomes
+  // a blockchain-anchored, timestamped (and optionally location-stamped) event
+  // instead of a plain email. Stateless: the recipient sends it themselves
+  // (share sheet / email); nothing is logged on a server.
+  function requestPasswordFromSender() {
+    try {
+      var r = currentCustodyReceipt;
+      if (!r) {
+        alert('Load the sealed document above first — verifying it creates the anchored read-receipt to send with your password request.');
+        return;
+      }
+      var loc = r.location || {};
+      var gpsLine = (loc.captured && loc.gps)
+        ? ('\nVerified at (location): ' + loc.gps + (loc.mapsUrl ? '  ' + loc.mapsUrl : ''))
+        : '';
+      var sealLine = (r.sealId && r.sealId !== 'NONE') ? ('Seal ID: ' + r.sealId + '\n') : '';
+      var shortHash = r.docSha512 ? (r.docSha512.substring(0, 16) + '…') : 'n/a';
+      var otsLine = (r.ots && r.ots.status === 'PENDING')
+        ? ' (submitted to Bitcoin, confirmation pending)' : '';
+      var msg =
+        'PASSWORD REQUEST — Verum Omnis anchored read-receipt\n\n' +
+        'I have received your password-protected sealed document and am requesting the password to open it.\n\n' +
+        sealLine +
+        'Document fingerprint (SHA-512): ' + shortHash + '\n' +
+        'Received / verified (UTC): ' + r.verifiedAtUtc + gpsLine + '\n' +
+        'Read-receipt custody digest (SHA-256' + otsLine + '): ' + r.custodyDigest + '\n\n' +
+        'This request is itself a blockchain-anchored, timestamped read-receipt — proof I received the document at the time' +
+        (loc.captured ? ' and place' : '') + ' above. The full receipt (JSON) is attached, and anyone can verify it at https://verumglobal.foundation/verify.html\n\n' +
+        'Please reply with the password.';
+      // Download the receipt so the user can attach it to the email/message.
+      try { downloadCustodyReceipt(); } catch (e) {}
+      var subject = 'Password request + read-receipt' + ((r.sealId && r.sealId !== 'NONE') ? ' — ' + r.sealId : '');
+      if (typeof navigator !== 'undefined' && navigator.share) {
+        navigator.share({ title: subject, text: msg }).catch(function () {});
+      } else {
+        window.location.href = 'mailto:?subject=' + encodeURIComponent(subject) + '&body=' + encodeURIComponent(msg);
+      }
+    } catch (e) { console.warn('Password request failed:', e); }
   }
 
   function downloadCustodyReceipt() {
