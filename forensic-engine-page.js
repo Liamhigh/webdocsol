@@ -1028,7 +1028,11 @@ var DETECTORS = {
       }
       return false;
     }
-    var numRe = /\b\d{9,12}\b/g;
+    // The jurisdictional length assumption lives in these two constants only
+    // (SA accounts run 9-11 digits; 12 is headroom for other formats). Adjust
+    // here — the matching regex is built from them.
+    var VO_ACCOUNT_MIN_DIGITS = 9, VO_ACCOUNT_MAX_DIGITS = 12;
+    var numRe = new RegExp('\\b\\d{' + VO_ACCOUNT_MIN_DIGITS + ',' + VO_ACCOUNT_MAX_DIGITS + '}\\b', 'g');
     var uniqueAccounts = {};
     for (var i = 0; i < textBlocks.length; i++) {
       var text = textBlocks[i], match;
