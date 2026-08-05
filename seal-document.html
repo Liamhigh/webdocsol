@@ -10003,9 +10003,27 @@ function voBuildNarrateExcerpt(textBlocks, findings, maxChars) {
   var anchored = Object.keys(want).map(Number);
   for (var a = 0; a < anchored.length; a++) { addPage(anchored[a] - 1); addPage(anchored[a] + 1); }
   addPage(1);  // document identity
+  // Also pull in pages carrying a role/capacity claim or an account instruction,
+  // even when no finding anchors to them. These are the two halves of a
+  // role/capacity contradiction (e.g. "in my capacity as a director of X" deep in
+  // an affidavit vs a payment routed to a differently-named account) -- a finding
+  // rarely anchors to the capacity page, so without this the narrator only ever
+  // sees one half and cannot reason the contradiction. Strong capacity claims are
+  // preferred and the count is capped so a bundle that says "trust account" on
+  // many pages cannot flood the excerpt.
+  var VO_CAPACITY_RE = /in (?:my|his|her) capacity as|capacity as (?:a |an )?(?:director|member|trustee|representative|agent)|on behalf of [A-Z]|personal (?:bank |trust )?account|trust account|nominated (?:bank )?account/i;
+  var VO_CAPACITY_STRONG = /in (?:my|his|her) capacity as|capacity as (?:a |an )?(?:director|member|trustee)/i;
+  var markerPages = [];
+  for (var mp = 0; mp < nPages; mp++) {
+    if (want[mp + 1]) continue;
+    var mt = String(textBlocks[mp] || '');
+    if (VO_CAPACITY_RE.test(mt)) markerPages.push({ page: mp + 1, strong: VO_CAPACITY_STRONG.test(mt) ? 1 : 0 });
+  }
+  markerPages.sort(function (x, y) { return (y.strong - x.strong) || (x.page - y.page); });
+  for (var mq = 0; mq < markerPages.length && mq < 5; mq++) addPage(markerPages[mq].page);
   var ordered = Object.keys(want).map(Number).sort(function (x, y) { return x - y; });
-  // No finding named a page -> fall back to the document head, page-tagged.
-  if (!anchored.length) {
+  // Nothing useful selected (no finding page, no capacity/account marker) -> head.
+  if (ordered.length <= 1) {
     var head = '';
     for (var h = 0; h < nPages && head.length < maxChars; h++) {
       head += (head ? '\n\n' : '') + '[Page ' + (h + 1) + '] ' + String(textBlocks[h] || '').replace(/\s+/g, ' ').trim();
