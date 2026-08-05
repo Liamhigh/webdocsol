@@ -149,13 +149,16 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   const lines = R._plainLeadLines(fr, data);
   const joined = lines.join('\n');
   ok(lines.length > 0, 'plain lead is produced when there are findings');
-  ok(/read "Wallers Agreement" \(20 pages\)/.test(joined), 'plain lead opens with the document name and page count');
+  ok(/sealed record of "Wallers Agreement" \(20 pages\) contains 4 findings\. The following are established\./.test(joined),
+    'plain lead opens with the sealed record, document name, page count and finding count stated as fact');
   ok(/The serious ones, in plain words:/.test(joined), 'plain lead announces the serious findings');
   ok(/On p\. 11, .*goodwill/i.test(joined), 'plain lead NAMES the CT45 serious finding in plain words, anchored to its page');
   ok(/date does not add up/.test(joined), 'plain lead NAMES the CT03 serious finding in plain words');
   ok(!/CT45|CT03/.test(joined), 'plain lead contains no CT codes (everyday language only)');
-  ok(/not a probability of fraud/.test(joined) && /verdict on any named person is for the court/.test(joined),
-    'plain lead states the score as a measurement of the record and reserves the verdict for the court (PD16)');
+  ok(/sealed under SHA-512/.test(joined) && /cannot be changed, altered, or deleted/.test(joined) && /verdict on any named person is for the court/.test(joined),
+    'plain lead states the seal certainty and reserves the verdict for the court (PD16) - no score language');
+  ok(!/\/100/.test(joined) && !/[Cc]onfidence band/.test(joined),
+    'plain lead carries NO 0-100 score and NO confidence band (Ordinal Confidence: never percentages)');
   // Unreadable / failed scans must NOT produce a plain "all clear".
   ok(R._plainLeadLines({ unreadable: true, findings: [{ type: 'CT01', severity: 5 }] }, data).length === 0,
     'plain lead is empty on an unreadable document (no false all-clear)');

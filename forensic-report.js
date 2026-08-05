@@ -881,7 +881,7 @@ function plainLeadLines(fr, data) {
   var docName = (data && data.docName) || 'this document';
   var pageCount = (data && data.pageCount) || 'n/a';
   var plLines = [];
-  plLines.push('The engine read "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') and identified ' + plAll.length + ' finding' + (plAll.length === 1 ? '' : 's') + ' in total.');
+  plLines.push('The sealed record of "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') contains ' + plAll.length + ' finding' + (plAll.length === 1 ? '' : 's') + '. The following are established.');
   if (plDemoted > 0) {
     plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
   }
@@ -911,7 +911,7 @@ function plainLeadLines(fr, data) {
     }
   }
   if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern match' + (plSerial === 1 ? '' : 'es') + ' also recorded - see the Serial Pattern Analysis section.');
-  plLines.push('The score (' + score + '/100) measures the density and severity of the verified findings - a measurement of the record, not a probability of fraud. The verdict on any named person is for the court.');
+  plLines.push('These findings are sealed under SHA-512 and anchored to the Bitcoin blockchain: they cannot be changed, altered, or deleted. The verdict on any named person is for the court.');
   return plLines;
 }
 
@@ -953,15 +953,19 @@ function secExecSummary(ctx, data) {
     ctx.gap(4);
   }
 
-  // score box -- deliberately de-alarmed: neutral navy, "indicator" language.
+  // Fact box — counts only. The Constitution's Ordinal Confidence definition
+  // ("never expressed as percentages ... no false precision") bars a 0-100
+  // score from the narrative. Counts of verified findings are facts.
+  var fbCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
+  var fbAll = fr.findings || [];
+  for (var fb = 0; fb < fbAll.length; fb++) { var fbs = Math.max(1, Math.min(5, fbAll[fb].severity || 1)); fbCounts[fbs]++; }
   var boxH = 86;
   ctx.ensure(boxH + 8);
   ctx.page.drawRectangle({ x: LM, y: ctx.y - boxH, width: CW, height: boxH, color: BOXBG, borderColor: GOLD, borderWidth: 1 });
-  var scoreStr = score + ' / 100';
-  ctx.page.drawText(scoreStr, { x: LM + 18, y: ctx.y - 44, size: 26, font: ctx.f.timesBold, color: NAVY2 });
-  ctx.page.drawText('Finding score', { x: LM + 18, y: ctx.y - 60, size: 9, font: ctx.f.times, color: GRAY });
-  ctx.page.drawText('Confidence band: ' + bandLabel, { x: LM + 200, y: ctx.y - 34, size: 11, font: ctx.f.timesBold, color: NAVY2 });
-  ctx.page.drawText('Total findings: ' + (fr.totalFindings || 0), { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
+  ctx.page.drawText(String(fr.totalFindings || 0), { x: LM + 18, y: ctx.y - 44, size: 26, font: ctx.f.timesBold, color: NAVY2 });
+  ctx.page.drawText('Verified findings', { x: LM + 18, y: ctx.y - 60, size: 9, font: ctx.f.times, color: GRAY });
+  ctx.page.drawText('Critical: ' + fbCounts[5] + '     High: ' + fbCounts[4], { x: LM + 200, y: ctx.y - 34, size: 11, font: ctx.f.timesBold, color: NAVY2 });
+  ctx.page.drawText('Medium: ' + fbCounts[3] + '     Low/Info: ' + (fbCounts[2] + fbCounts[1]), { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
   ctx.page.drawText('Contradiction types triggered: ' + (fr.contradictionTypesUsed || 0) + ' / ' + CT_COUNT, { x: LM + 200, y: ctx.y - 64, size: 10, font: ctx.f.times, color: INK });
   ctx.y -= boxH + 12;
 
@@ -972,7 +976,7 @@ function secExecSummary(ctx, data) {
   }
 
   // engine's own summary sentence (honest, engine-generated)
-  if (fr.scanFailed) ctx.para('NOTE: the deterministic scan could not complete on this file. Scores shown are not meaningful; the seal itself is unaffected.', { size: 9.5, font: ctx.f.timesBold, color: RED, after: 8 });
+  if (fr.scanFailed) ctx.para('NOTE: the deterministic scan could not complete on this file. Counts shown are not meaningful; the seal itself is unaffected.', { size: 9.5, font: ctx.f.timesBold, color: RED, after: 8 });
   if (fr.summary) ctx.para(fr.summary, { size: 10, after: 10 });
   if (!fr.clean) {
     ctx.para((fr.totalFindings || 0) + ' findings are recorded below. Each is a fact anchored to the sealed record — a contradiction, anomaly, or integrity signal the engine measured. What the facts establish in law, and any verdict on a named person, is for the court.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 12 });
@@ -989,7 +993,7 @@ function secExecSummary(ctx, data) {
   ctx.table(
     [
       { key: 'sev', title: 'Severity', w: 130 },
-      { key: 'meaning', title: 'Band', w: 220 },
+      { key: 'meaning', title: 'Meaning', w: 220 },
       { key: 'count', title: 'Count', w: 154, align: 'right' }
     ],
     [
@@ -1062,12 +1066,6 @@ function secExecSummary(ctx, data) {
 
   // Reader's key: the four ideas someone needs to make sense of everything
   // that follows, in one box, in plain words.
-  ctx.subHeading('How to read this report');
-  ctx.bullet('A FINDING is a fact the engine measured in the record — a contradiction, tampering, or anomaly, anchored to its page. It stands on the record; the verdict on any person is for the court.', { size: 9.5 });
-  ctx.bullet('SEVERITY runs 1 (informational) to 5 (critical). Read the critical and high findings first; low ones are context.', { size: 9.5 });
-  ctx.bullet('STRUCTURAL NOTES are low-severity quirks that naturally appear when many documents are combined into one file (repeated page numbers, annexures filed elsewhere in the bundle). They are listed separately so they never inflate the picture.', { size: 9.5 });
-  ctx.bullet('THE SEAL proves this exact file existed at the stated time and has not been altered since. It authenticates the document - it does not judge its contents.', { size: 9.5 });
-  ctx.bullet('SHA-512 is the document\'s digital fingerprint. Change a single letter anywhere in the file and the fingerprint changes completely - that is how tampering is caught.', { size: 9.5 });
 }
 
 // ================= SECTION: DOCUMENT & EVIDENCE INDEX =================
@@ -1559,8 +1557,8 @@ function secMethodology(ctx, data) {
   ctx.bullet('Text extraction: ' + (data.extractionNotes || 'per-page PDF content-stream decoding with ToUnicode CMaps.'), { size: 9.5 });
   ctx.gap(4);
 
-  ctx.subHeading('Scoring');
-  ctx.para('Each finding carries a severity weight of 1–5. The overall score is severity-weighted and normalised to 0–100: sum(severity) / (5 × findings) × 100. Confidence bands: <20 CLEAN, 20–39 LOW, 40–59 MODERATE, 60–79 HIGH, ≥80 VERY HIGH. The band reflects the density and severity of internal inconsistencies, not a probability of fraud.', { size: 9.5, after: 10 });
+  ctx.subHeading('Severity');
+  ctx.para('Each finding carries an ordinal severity of 1–5, stated on the finding itself. The report totals findings per severity; it states no overall score and no percentage — the Constitution requires ordinal confidence only, never percentages (no false precision). A single verified contradiction can be decisive; the counts describe the record, they do not grade it.', { size: 9.5, after: 10 });
 
   ctx.subHeading('Authentication');
   var rows = [];
@@ -1722,7 +1720,7 @@ function secLegalAnalysis(ctx, data) {
   }
   ctx.gap(4);
   var jur = (data.identity && data.identity.jurisdiction) ? data.identity.jurisdiction : null;
-  ctx.para('Dishonesty score: ' + (fr.overallScore || 0) + '/100 (' + (fr.confidence || 'n/a') + ') across ' + (fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) + ' finding' + ((fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) === 1 ? '' : 's') + '. This measures the density and severity of the findings above — NOT their volume, and not a probability of fraud: a document with two high-severity findings scores higher than one with twelve mixed findings.', { size: 9, after: 6 });
+  ctx.para((fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) + ' finding' + ((fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) === 1 ? '' : 's') + ' stand on the record above, each anchored to its page. A single verified contradiction can be decisive.', { size: 9, after: 6 });
   ctx.para('Recommended next steps' + (jur ? ' (jurisdiction: ' + jur + ')' : '') + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Candidate statutory provisions are set out in the Statutory Anchoring section that follows - they are starting points for counsel to confirm, not a legal conclusion.', { size: 9 });
   ctx.bullet('Preserve the sealed original and this report unaltered; both are SHA-512 anchored and independently verifiable at verumglobal.foundation/verify.html.', { size: 9 });
@@ -2289,13 +2287,13 @@ var NARRATIVE_MEANING = {
   CT26: 'the layout or page make-up is irregular for a document of this kind',
   CT27: 'the page layout shows signs of rearrangement',
   CT28: 'an image in the document shows signs of editing',
-  CT29: 'a date or time stamp appears to have been changed',
+  CT29: 'the file\'s own timestamps disagree — a date was changed after creation',
   CT30: 'the version history runs backwards or skips, which a clean document would not',
   CT31: 'the document points to an annexure or section that cannot be found where it says',
   CT32: 'a claim is attributed to a source that does not actually support it',
   CT33: 'a law, case or section cited does not check out as stated',
   CT34: 'the document relies on a precedent that does not say what is claimed',
-  CT35: 'a required step — such as a signature or a notice — appears to have been skipped',
+  CT35: 'a required step — such as a signature or a notice — was skipped',
   CT36: 'the same party is given conflicting addresses',
   CT37: 'contact details conflict across the documents',
   CT38: 'a party is placed in two places at once, or outside where the events could occur',

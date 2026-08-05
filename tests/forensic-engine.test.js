@@ -262,8 +262,8 @@ global.extractPdfText = async () => ([
   const res3 = await runForensicEngine(new Uint8Array([1, 2, 3]), mockDoc);
   t.ok(res3.findings.length >= 1 && res3.findings.length <= 3,
     'low-count fixture yields 1-3 findings (' + res3.findings.length + ')');
-  t.ok(/^FOCUSED:/.test(res3.summary || '') && /COUNT is low/.test(res3.summary || ''),
-    'summary for a tiny finding set is FOCUSED, not a sweeping fraud verdict (got "' + String(res3.summary).slice(0, 60) + '...")');
+  t.ok(/page-anchored finding/.test(res3.summary || '') && /finding count is low/.test(res3.summary || '') && !/systematic fraud/.test(res3.summary || ''),
+    'summary for a tiny finding set stays focused, not a sweeping fraud verdict (got "' + String(res3.summary).slice(0, 60) + '...")');
 
   t.done('forensic-engine');
 })();
