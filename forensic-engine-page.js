@@ -1706,7 +1706,7 @@ var DETECTORS = {
     }
     if (lessee && owner && invokesTermination) {
       findings.push({ type: 'CT44', severity: 5,
-        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner): "' + lessee.quote + '" — yet the record shows the party had become the owner of the premises: "' + owner.quote + '". The clause\'s precondition never occurred. HYPOTHESIS: requires legal review.',
+        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner): "' + lessee.quote + '" — yet the record shows the party had become the owner of the premises: "' + owner.quote + '". The clause\'s precondition never occurred. Its legal characterisation is for the court.',
         location: (lessee.page === owner.page) ? 'Page ' + lessee.page : 'Page ' + lessee.page + ' vs Page ' + owner.page });
     }
     return findings;
@@ -1743,7 +1743,7 @@ var DETECTORS = {
     var denies = pageOf(/goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)/);
     if (recog && denies) {
       findings.push({ type: 'CT45', severity: 5,
-        evidence: 'Goodwill / value of the business is recognised: "' + recog.quote + '" — yet denied or said to have no compensable value: "' + denies.quote + '". The forfeiture/clawback is itself an admission the asset exists. HYPOTHESIS: requires legal review.',
+        evidence: 'Goodwill / value of the business is recognised: "' + recog.quote + '" — yet denied or said to have no compensable value: "' + denies.quote + '". The forfeiture/clawback is itself an admission the asset exists. Its legal characterisation is for the court.',
         location: loc(recog, denies) });
     }
     // Path B — the Caltex/AllFuels clause-11 trap: the franchisee gets NO
@@ -1757,7 +1757,7 @@ var DETECTORS = {
     var acquires = pageOf(/entitled[^.]{0,60}(?:purchase|acquire|buy)[^.]{0,70}(?:property|premises|site)[^.]{0,70}(?:fair market value|market value|value)/);
     if (noComp && acquires) {
       findings.push({ type: 'CT45', severity: 5,
-        evidence: 'The franchisee is denied any compensation for its own improvements to the premises: "' + noComp.quote + '" — while the franchisor is entitled to acquire the property itself at value: "' + acquires.quote + '". Value denied to the party who built it, yet realised by the other. HYPOTHESIS: requires legal review.',
+        evidence: 'The franchisee is denied any compensation for its own improvements to the premises: "' + noComp.quote + '" — while the franchisor is entitled to acquire the property itself at value: "' + acquires.quote + '". Value denied to the party who built it, yet realised by the other. Its legal characterisation is for the court.',
         location: loc(noComp, acquires) });
     }
     return findings;
@@ -1800,7 +1800,7 @@ var DETECTORS = {
     var personalPay = pageOf(/(?:pay|payment|deposit|remit|transfer|paid|funds?)[^.]{0,80}personal (?:bank |trust )?account|personal (?:bank |trust )?account[^.]{0,80}(?:pay|deposit|remit|transfer|paid)/);
     if (corpClaim && personalPay) {
       findings.push({ type: 'CT46', severity: 4,
-        evidence: 'A corporate capacity is claimed: "' + corpClaim.quote + '" — yet payment is routed to an account labelled personal: "' + personalPay.quote + '". Acting for a company while banking through a personal account is inconsistent on its face. HYPOTHESIS: requires legal review.',
+        evidence: 'A corporate capacity is claimed: "' + corpClaim.quote + '" — yet payment is routed to an account labelled personal: "' + personalPay.quote + '". Acting for a company while banking through a personal account is inconsistent on its face. Its legal characterisation is for the court.',
         location: loc(corpClaim, personalPay) });
     }
 
@@ -1810,7 +1810,7 @@ var DETECTORS = {
     var breach = pageOf(/(?:accepted|took|received|was briefed with|acting on)[^.]{0,40}(?:a |an |the )?(?:brief|instruction)[^.]{0,40}(?:from|by)[^.]{0,30}(?:member of the public|the public|a client)/);
     if (restriction && breach) {
       findings.push({ type: 'CT46', severity: 4,
-        evidence: 'The record states a restriction on the actor\'s capacity: "' + restriction.quote + '" — yet also records conduct that breaches it: "' + breach.quote + '". HYPOTHESIS: requires legal review.',
+        evidence: 'The record states a restriction on the actor\'s capacity: "' + restriction.quote + '" — yet also records conduct that breaches it: "' + breach.quote + '". Its legal characterisation is for the court.',
         location: loc(restriction, breach) });
     }
     return findings;

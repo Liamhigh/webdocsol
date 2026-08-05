@@ -35,7 +35,7 @@ ok(a.length > 0 && a[0].severity === 4, 'CT46 is severity 4 (HIGH indicator, not
 ok(a.length > 0 && /Page 1 vs Page 2/.test(a[0].location), 'CT46 anchors to the real pages of each half');
 ok(a.length > 0 && /personal trust account/i.test(a[0].evidence) && /Feike \(Pty\) Ltd/i.test(a[0].evidence),
   'CT46 evidence quotes both the corporate claim and the personal-account instruction');
-ok(a.length > 0 && /HYPOTHESIS: requires legal review/.test(a[0].evidence), 'CT46 is framed as a hypothesis for legal review');
+ok(a.length > 0 && /legal characterisation is for the court/.test(a[0].evidence), 'CT46 states the finding as fact and reserves the legal characterisation to the court (PD16)');
 
 // --- Path B: stated restriction vs stated breach ---
 const pathB = [
