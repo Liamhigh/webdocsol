@@ -169,9 +169,25 @@ Every output (report, warning, prevention notice) is sealed with:
 5. Seal footer on every page: `VERUM OMNIS SEAL | seal-{id} | {hash} | Page X of Y`
 
 `webdocsol` is the **master implementation**. All other repositories copy its sealing
-functions, verification logic, and seal generation/validation flows. Whatever is
-uploaded to any platform must be **sealed, forensically analyzed (Triple Verification),
-synchronized, and never wiped**. Everything that leaves any platform must be sealed.
+functions and seal generation flows. Whatever is uploaded to any platform must be
+**sealed, forensically analyzed (Triple Verification), synchronized, and never
+wiped**. Everything that leaves any platform must be sealed.
+
+**Sealing/verification/forensics split (binding on every surface):**
+1. **Sealing parity** — every repository ships the SAME document sealing as
+   `webdocsol` (SHA-512 → OpenTimestamps → OTS receipt → QR → per-page seal footer,
+   byte-identical seal format `VO-SEAL2`). A document sealed on any surface verifies
+   on any other.
+2. **Verification happens at the website, only.** Apps do NOT re-implement
+   verification UI. The verify action / QR on every surface opens
+   `verumglobal.foundation/verify.html` — the single public verification hub. This is
+   what keeps the system stateless: the seal + Bitcoin anchor are the record, and one
+   canonical verifier reads them.
+3. **Forensics run on-device.** The apps (Android, Windows, Windows Lite) run their
+   own **hybrid engines** (Gemma 3 + Phi 3, Gemma 4 where available) for reports —
+   contextual narrative, role/capacity reasoning, cross-page synthesis — richer than
+   the website's deterministic-only engine. The website remains the deterministic
+   master (CT01–CT46) and the source of signed rule packages the apps sync.
 
 ---
 
@@ -323,6 +339,9 @@ silently:
    (§12.2/12.3) added at the founder's instruction (5 August 2026).
 5. Engine facts updated to current: contradiction types **CT01–CT46**, 40 detectors,
    Constitution **v6.1** (operative seal `VO-9E51D3F507E6`).
+6. **§7 sealing/verification/forensics split** added at the founder's instruction
+   (5 August 2026): identical sealing on every surface; verification only at the
+   website hub (`verify.html`); forensics on-device via each app's hybrid engine.
 
 *Where this document and the sealed Constitution v6.1 disagree, the Constitution
 governs.*
