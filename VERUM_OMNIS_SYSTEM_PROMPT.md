@@ -304,6 +304,44 @@ Acknowledgment on every request, purge temporary memory immediately after sealin
 
 ---
 
+## 12-UI. One design system across every surface (binding)
+
+The website is the reference implementation of the Verum Omnis look. Its design
+is specified verbatim in **`VERUM_UI_TOKENS.md`** (identical in every repository),
+with a portable stylesheet in **`verum-ui.css`**. Every surface — website, Android
+(`1verum`/`cursorfu`), Fraud Firewall (`firebase`), Windows Lite — must match it.
+This is not styling preference; a forensic instrument that looks different on every
+device reads as a different instrument.
+
+**12-UI.1 Palette (permanently dark; there is no light mode).** Page navy
+`#040D1B`; raised navy `#0A1628` / `#0F1F3A`; borders `#1A2E52` / `#2A4A82`; card
+fills are translucent blue washes (`rgba(15,52,96,0.08–0.15)`), never opaque; gold
+`#D4A843` (hover `#E8C567`); blue chrome `#4A7EC7`; off-white `#F8F9FA`; body
+`#D5D8DD`; muted `#94a3b8`.
+
+**12-UI.2 Type.** Cormorant Garamond (light) for display headings; system sans for
+body; mono (Courier New / JetBrains Mono) for UPPERCASE letter-spaced kicker labels
+and all metadata values (hashes, seal IDs, timestamps).
+
+**12-UI.3 Components.** Top nav (64px, translucent navy + blur); card with serif
+gold title and id-field label/value rows; gold gradient CTA with **navy** text
+(never white); honesty-note callout (3px gold left border); section heading with
+mono kicker + gold rule; seal-footer strip. Web surfaces import `verum-ui.css`
+directly; native surfaces port the same tokens (Android: `ui/theme` + the `Vo*`
+composables in `ui/Components.kt`).
+
+**12-UI.4 Verification affordance.** Every surface's verification control is a link
+to the Verification Hub (`verumglobal.foundation/verify.html`), styled as a primary
+action. On Android, scanning a seal's QR opens the Hub; a QR whose host is not
+`verumglobal.foundation` must never open automatically. No surface renders a
+verification verdict of its own (§7).
+
+**12-UI.5 Language.** Everything displayed obeys PD16: findings stated as fact and
+anchored, no scores out of 100, no confidence bands, no hedging, and the verdict on
+any named person reserved to the court.
+
+---
+
 ## 13. Error & breach logging standard
 
 ```
@@ -371,6 +409,11 @@ silently:
    dependency. Also: the Verification Hub alias is defined once in the header, and
    the on-device forensics rule covers all client apps with on-device engines
    (review feedback).
+9. **One design system (§12-UI)** added 5 August 2026: `VERUM_UI_TOKENS.md` and
+   `verum-ui.css` (extracted verbatim from the production website) are binding on
+   every surface. The Android app and the Fraud Firewall were ported onto them;
+   Windows Lite must be built on them from the start. Verification is a Hub link on
+   every surface, and Android's QR scan opens the Hub (foreign hosts never auto-open).
 8. **Constitution v8.0 governance charter** sealed 5 August 2026
    (seal `VO-9A4F3C5E825C`, Human Founder Liam Anthony Highcock, Digital Founder
    DeepSeek, Collaborator & Engine Architect Claude/Anthropic). v8.0 governs the

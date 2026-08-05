@@ -1,0 +1,766 @@
+/* ==========================================================================
+   VERUM OMNIS — portable UI stylesheet (verum-ui.css)
+   Transcribed 1:1 from the production site (verumglobal.foundation):
+   index.html, seal-document.html, verify.html, constitution.html,
+   documents-resources.html.
+
+   Dark navy IS the theme — there is no light mode. Do not invert.
+   Fonts: Cormorant Garamond (serif display)  -> Georgia fallback
+          JetBrains Mono / Courier New (mono) -> forensic labels & values
+          system sans                          -> body copy
+   Self-contained: no imports, no external assets.
+   ========================================================================== */
+
+/* ---------------------------------------------------------------- tokens */
+:root {
+  /* navy surfaces */
+  --vo-navy-0: #040D1B;            /* page background */
+  --vo-navy-1: #0A1628;
+  --vo-navy-2: #0F1F3A;
+  --vo-navy-table-head: #0E2140;
+  --vo-navy-pre: #0A1830;
+
+  /* translucent panel fills (over navy-0) */
+  --vo-card-index: rgba(26, 46, 82, 0.4);
+  --vo-card-index-hover: rgba(26, 46, 82, 0.6);
+  --vo-panel: rgba(15, 52, 96, 0.12);
+  --vo-panel-dim: rgba(15, 52, 96, 0.08);
+  --vo-panel-input: rgba(15, 52, 96, 0.15);
+  --vo-panel-quote: rgba(26, 46, 82, 0.3);
+  --vo-well: rgba(4, 13, 27, 0.6);
+  --vo-well-dim: rgba(4, 13, 27, 0.4);
+
+  /* borders */
+  --vo-border: #1A2E52;
+  --vo-border-dim: #2A4A82;
+  --vo-border-soft: rgba(26, 46, 82, 0.5);
+  --vo-border-softer: rgba(26, 46, 82, 0.4);
+  --vo-border-row: rgba(26, 46, 82, 0.3);
+  --vo-border-dash: rgba(26, 46, 82, 0.6);
+
+  /* accents */
+  --vo-gold: #D4A843;
+  --vo-gold-hover: #E8C567;
+  --vo-gold-deep: #b8942a;
+  --vo-gold-press: #c49a3a;
+  --vo-gold-wash: rgba(212, 168, 67, 0.06);
+  --vo-gold-wash-2: rgba(212, 168, 67, 0.08);
+  --vo-gold-border: rgba(212, 168, 67, 0.3);
+  --vo-gold-border-2: rgba(212, 168, 67, 0.4);
+  --vo-gold-glow: rgba(212, 168, 67, 0.3);
+  --vo-blue: #4A7EC7;
+  --vo-blue-deep: #1a5f9e;
+  --vo-blue-soft: #7EA8E0;
+  --vo-blue-wash: rgba(74, 126, 199, 0.1);
+  --vo-blue-border: rgba(74, 126, 199, 0.35);
+  --vo-blue-glow: rgba(74, 126, 199, 0.2);
+
+  /* text */
+  --vo-offwhite: #F8F9FA;
+  --vo-body: #D5D8DD;
+  --vo-muted: #94a3b8;
+
+  /* status */
+  --vo-success: #22c55e;
+  --vo-success-bright: #4ADE80;
+  --vo-green-index: #2D9C5E;
+  --vo-success-wash: rgba(34, 139, 104, 0.1);
+  --vo-success-border: rgba(34, 139, 104, 0.35);
+  --vo-error: #ef4444;
+  --vo-error-bright: #F87171;
+  --vo-error-wash: rgba(180, 60, 60, 0.1);
+  --vo-error-border: rgba(180, 60, 60, 0.35);
+
+  /* typography */
+  --vo-font-serif: 'Cormorant Garamond', 'Cormorant', Georgia, 'Times New Roman', serif;
+  --vo-font-mono: 'JetBrains Mono', 'Courier New', Courier, ui-monospace, monospace;
+  --vo-font-sans: 'Source Sans 3', 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+
+  /* radii */
+  --vo-r-sm: 6px;    /* small buttons, code chips        */
+  --vo-r-md: 10px;   /* inputs, buttons, hash wells      */
+  --vo-r-lg: 12px;   /* secondary panels, banners        */
+  --vo-r-xl: 16px;   /* primary cards, upload zones      */
+  --vo-r-2xl: 20px;  /* result boxes                     */
+  --vo-r-pill: 999px;
+
+  /* layout */
+  --vo-nav-h: 64px;
+  --vo-container: 900px;
+}
+
+/* ---------------------------------------------------------------- base */
+.vo-page, .vo-page * , .vo-page *::before, .vo-page *::after { box-sizing: border-box; }
+
+.vo-page {
+  margin: 0;
+  padding: 0;
+  font-family: var(--vo-font-sans);
+  background: var(--vo-navy-0);
+  color: var(--vo-body);
+  min-height: 100vh;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+}
+.vo-page ::selection { background: var(--vo-gold); color: var(--vo-navy-0); }
+.vo-page a { color: var(--vo-blue); text-decoration: none; transition: color 0.3s; }
+.vo-page a:hover { color: var(--vo-offwhite); }
+
+.vo-container {
+  max-width: var(--vo-container);
+  margin: 0 auto;
+  padding: 40px 20px;
+}
+.vo-container--narrow { max-width: 800px; }
+.vo-container--wide { max-width: 1200px; }
+
+/* ------------------------------------------------------------ top nav */
+/* Fixed 64px bar: blurred navy glass, mono uppercase links, gold active. */
+.vo-topnav {
+  position: fixed;
+  top: 0; left: 0; right: 0;
+  z-index: 50;
+  height: var(--vo-nav-h);
+  background: rgba(4, 13, 27, 0.85);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border-bottom: 1px solid var(--vo-border-soft);
+}
+.vo-topnav__inner {
+  max-width: 1200px;
+  margin: 0 auto;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 clamp(1.5rem, 5vw, 4rem);
+}
+.vo-topnav__logo { display: flex; align-items: center; gap: 2px; text-decoration: none; }
+.vo-topnav__logo img { height: 40px; width: auto; object-fit: contain; }
+.vo-topnav__links { display: flex; align-items: center; gap: 32px; }
+.vo-topnav__links a {
+  font-family: var(--vo-font-mono);
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--vo-blue);
+  text-decoration: none;
+  transition: color 0.3s;
+  white-space: nowrap;
+}
+.vo-topnav__links a:hover { color: var(--vo-offwhite); }
+.vo-topnav__links a.active { color: var(--vo-gold); }
+@media (max-width: 768px) { .vo-topnav__links { display: none; } }
+
+/* Body content must clear the fixed bar */
+.vo-clear-nav { margin-top: 80px; }
+
+/* ------------------------------------------------------- page header */
+.vo-header { text-align: center; margin: 96px 0 40px; }
+.vo-header__logo {
+  margin: 0 auto 24px;
+  max-width: min(300px, 60vw);
+  height: auto;
+  filter: drop-shadow(0 0 40px var(--vo-blue-glow));
+}
+.vo-header__label {                 /* gold mono eyebrow over the h1 */
+  font-family: var(--vo-font-mono);
+  font-size: 12px;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--vo-gold);
+  margin-bottom: 16px;
+}
+.vo-header h1, .vo-h1 {
+  font-family: var(--vo-font-serif);
+  font-size: clamp(2rem, 6vw, 3.5rem);
+  font-weight: 300;
+  color: var(--vo-offwhite);
+  letter-spacing: -0.03em;
+  line-height: 1.1;
+  margin: 0;
+}
+.vo-header p {
+  font-size: 1rem;
+  color: var(--vo-body);
+  margin: 12px auto 0;
+  line-height: 1.7;
+  max-width: 600px;
+}
+.vo-header .vo-sub-gold {
+  color: var(--vo-gold);
+  font-family: var(--vo-font-serif);
+  font-size: 1.25rem;
+  font-style: italic;
+}
+
+/* Generic mono eyebrow/kicker (index style) */
+.vo-eyebrow {
+  font-family: var(--vo-font-mono);
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+  color: var(--vo-gold);
+  margin-bottom: 1rem;
+}
+
+/* ---------------------------------------------------------------- card */
+/* Primary panel: translucent blue wash, soft navy border, 16px radius. */
+.vo-card {
+  background: var(--vo-panel);
+  border: 1px solid var(--vo-border-soft);
+  border-radius: var(--vo-r-xl);
+  padding: 24px;
+  margin-bottom: 24px;
+}
+.vo-card > h3, .vo-card__title {
+  font-family: var(--vo-font-serif);
+  font-size: 1.3rem;
+  font-weight: 500;
+  color: var(--vo-gold);
+  margin: 0 0 16px;
+}
+/* Secondary, dimmer panel */
+.vo-card--dim {
+  background: var(--vo-panel-dim);
+  border-color: var(--vo-border-softer);
+  border-radius: var(--vo-r-lg);
+}
+/* Gold-flagged card (scanned seal / custody anchor) */
+.vo-card--gold { border-color: rgba(212, 168, 67, 0.35); }
+/* Hoverable list/link card: border warms to gold */
+.vo-card--hover { transition: border-color 0.3s; }
+.vo-card--hover:hover { border-color: var(--vo-gold); }
+/* Index marketing card variant */
+.vo-card--index {
+  background: var(--vo-card-index);
+  border: 1px solid var(--vo-border);
+  border-radius: 8px;
+  padding: 2rem;
+  transition: border-color 0.3s, background 0.3s, box-shadow 0.3s;
+}
+.vo-card--index:hover {
+  border-color: var(--vo-blue);
+  background: var(--vo-card-index-hover);
+  box-shadow: 0 4px 24px rgba(74, 126, 199, 0.1);
+}
+
+/* ---------------------------------------------------------- id fields */
+/* Label/value rows inside a card: mono blue label left, mono value right. */
+.vo-id-field {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--vo-border-row);
+}
+.vo-id-field:last-child { border-bottom: none; }
+.vo-id-label {
+  font-family: var(--vo-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: var(--vo-blue);
+  white-space: nowrap;
+}
+.vo-id-value {
+  font-family: var(--vo-font-mono);
+  font-size: 13px;
+  color: var(--vo-body);
+  text-align: right;
+  word-break: break-all;
+}
+.vo-id-value--hash { color: var(--vo-success); font-size: 11px; line-height: 1.6; }
+.vo-id-value a { color: var(--vo-blue); }
+.vo-id-value a:hover { color: var(--vo-offwhite); }
+@media (max-width: 600px) {
+  .vo-id-field { flex-direction: column; gap: 4px; }
+  .vo-id-value { text-align: left; }
+}
+
+/* -------------------------------------------------------------- buttons */
+/* Gold CTA: gold gradient, NAVY text (never white), mono uppercase. */
+.vo-btn-gold {
+  display: inline-block;
+  padding: 16px 40px;
+  border: none;
+  border-radius: var(--vo-r-md);
+  background: linear-gradient(135deg, var(--vo-gold) 0%, var(--vo-gold-deep) 100%);
+  color: var(--vo-navy-0);
+  font-family: var(--vo-font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.vo-btn-gold:hover {
+  background: var(--vo-gold-hover);
+  color: var(--vo-navy-0);
+  box-shadow: 0 0 20px var(--vo-gold-glow);
+}
+.vo-btn-gold:disabled { opacity: 0.4; cursor: not-allowed; transform: none; box-shadow: none; }
+/* Full-width action variant (seal button) */
+.vo-btn-gold--block {
+  display: block;
+  width: 100%;
+  padding: 18px;
+  border-radius: var(--vo-r-lg);
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+}
+.vo-btn-gold--block:hover { transform: translateY(-2px); box-shadow: 0 8px 30px var(--vo-gold-glow); }
+/* Small gold button */
+.vo-btn-gold--sm { padding: 10px 20px; font-size: 12px; border-radius: var(--vo-r-sm); }
+
+/* Outline button: blue rest state, warms to gold on hover */
+.vo-btn-outline {
+  display: inline-block;
+  padding: 14px 32px;
+  border-radius: var(--vo-r-md);
+  background: transparent;
+  border: 1px solid var(--vo-blue);
+  color: var(--vo-blue);
+  font-family: var(--vo-font-mono);
+  font-size: 13px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  text-decoration: none;
+  cursor: pointer;
+  transition: all 0.3s;
+}
+.vo-btn-outline:hover { border-color: var(--vo-gold); color: var(--vo-gold); }
+.vo-btn-outline--sm { padding: 10px 20px; font-size: 12px; border-radius: var(--vo-r-sm); }
+
+/* Blue gradient button (rare: share/transfer actions) */
+.vo-btn-blue {
+  display: inline-block;
+  padding: 14px 32px;
+  border: none;
+  border-radius: var(--vo-r-md);
+  background: linear-gradient(135deg, var(--vo-blue-deep), var(--vo-blue));
+  color: var(--vo-offwhite);
+  font-family: var(--vo-font-mono);
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+  box-shadow: 0 4px 15px rgba(74, 126, 199, 0.3);
+  transition: all 0.3s;
+}
+.vo-btn-blue:hover { background: linear-gradient(135deg, #134a7a, #3a6db5); color: var(--vo-offwhite); }
+
+/* ------------------------------------------------------- honesty note */
+/* Gold-flagged precision callout: 3px gold left rule over faint gold wash. */
+.vo-note {
+  border-left: 3px solid var(--vo-gold);
+  background: var(--vo-gold-wash);
+  border-radius: 0 var(--vo-r-lg) var(--vo-r-lg) 0;
+  padding: 16px 20px;
+  margin-bottom: 40px;
+  font-size: 0.92rem;
+  line-height: 1.65;
+  color: var(--vo-body);
+}
+.vo-note strong { color: var(--vo-offwhite); }
+/* Big serif pull-quote variant (index origin quote) */
+.vo-note--quote {
+  background: var(--vo-card-index);
+  border-left-width: 4px;
+  border-radius: 0 8px 8px 0;
+  padding: 2rem clamp(1.5rem, 4vw, 3rem);
+}
+.vo-note--quote p {
+  font-family: var(--vo-font-serif);
+  font-style: italic;
+  font-size: clamp(1.25rem, 3vw, 1.75rem);
+  color: var(--vo-offwhite);
+  line-height: 1.5;
+  margin: 0 0 1rem;
+}
+.vo-note--quote footer { color: var(--vo-blue); font-size: 0.875rem; }
+
+/* --------------------------------------------------- section headings */
+/* Constitution-style: mono blue kicker line, gold serif title, gold rule. */
+.vo-section { margin-top: 60px; }
+.vo-section-heading {
+  font-family: var(--vo-font-serif);
+  font-size: 1.9rem;
+  font-weight: 400;
+  color: var(--vo-gold);
+  letter-spacing: -0.01em;
+  margin: 0 0 6px;
+}
+.vo-section-heading .vo-secno {
+  display: block;
+  font-family: var(--vo-font-mono);
+  font-size: 1.2rem;
+  letter-spacing: 0.05em;
+  color: var(--vo-blue);
+  margin-bottom: 4px;
+}
+.vo-gold-rule {
+  height: 1px;
+  border: none;
+  background: linear-gradient(90deg, var(--vo-gold) 0%, rgba(212, 168, 67, 0.1) 100%);
+  margin: 10px 0 24px;
+}
+
+/* Body copy inside a section (constitution rhythm) */
+.vo-section p { font-size: 1.02rem; line-height: 1.75; margin: 0 0 14px; color: var(--vo-body); }
+.vo-section p.vo-lead { color: var(--vo-offwhite); }
+.vo-section h3 {
+  font-family: var(--vo-font-serif);
+  font-size: 1.35rem;
+  font-weight: 500;
+  color: var(--vo-offwhite);
+  margin: 28px 0 10px;
+}
+.vo-section li::marker { color: var(--vo-gold); }
+
+/* ---------------------------------------------------------- seal footer */
+/* Bottom bar: hairline top border, centered mono blue uppercase lines. */
+.vo-seal-footer {
+  margin-top: 60px;
+  padding: 30px 20px 40px;
+  border-top: 1px solid var(--vo-border-soft);
+  text-align: center;
+  font-family: var(--vo-font-mono);
+  font-size: 12px;
+  color: var(--vo-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  line-height: 2;
+}
+/* Muted variant (verify/constitution footers) */
+.vo-seal-footer--muted {
+  font-size: 0.8rem;
+  color: var(--vo-body);
+  opacity: 0.5;
+  text-transform: none;
+  letter-spacing: 0.02em;
+}
+
+/* ---------------------------------------------------------------- table */
+.vo-table-wrap { overflow-x: auto; }
+.vo-table-wrap--framed {
+  border: 1px solid var(--vo-border);
+  border-radius: 8px;
+}
+.vo-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 18px 0 26px;
+  font-size: 0.95rem;
+}
+.vo-table th {
+  font-family: var(--vo-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--vo-gold);
+  text-align: left;
+  padding: 10px 12px;
+  background: rgba(15, 52, 96, 0.25);
+  border: 1px solid var(--vo-border-soft);
+}
+.vo-table td {
+  padding: 10px 12px;
+  border: 1px solid var(--vo-border-soft);
+  vertical-align: top;
+  line-height: 1.6;
+  color: var(--vo-body);
+}
+.vo-table tr:nth-child(even) td { background: rgba(15, 52, 96, 0.07); }
+.vo-table td.vo-k { color: var(--vo-offwhite); font-weight: 600; white-space: nowrap; }
+.vo-table td.vo-c { text-align: center; }
+/* Solid-header variant (constitution in-document tables) */
+.vo-table--solid th { background: var(--vo-navy-table-head); border-color: var(--vo-border); }
+.vo-table--solid td { border-color: var(--vo-border); }
+.vo-table--solid tr:nth-child(even) td { background: rgba(26, 46, 82, 0.25); }
+@media (max-width: 600px) { .vo-table { font-size: 0.85rem; } }
+
+/* ------------------------------------------------------------- inputs */
+.vo-label {
+  display: block;
+  font-family: var(--vo-font-mono);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: var(--vo-blue);
+  margin-bottom: 6px;
+}
+.vo-input, .vo-select, .vo-textarea {
+  width: 100%;
+  padding: 12px 16px;
+  border: 1px solid var(--vo-border);
+  border-radius: var(--vo-r-md);
+  background: var(--vo-panel-input);
+  color: var(--vo-offwhite);
+  font-size: 14px;
+  font-family: var(--vo-font-sans);
+  transition: border-color 0.3s;
+}
+.vo-input:focus, .vo-select:focus, .vo-textarea:focus { outline: none; border-color: var(--vo-gold); }
+.vo-input::placeholder, .vo-textarea::placeholder { color: var(--vo-blue); opacity: 0.6; }
+.vo-textarea--mono {
+  background: var(--vo-well);
+  border-color: var(--vo-border-dash);
+  color: var(--vo-body);
+  font-family: var(--vo-font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+  resize: vertical;
+}
+.vo-checkbox { width: 18px; height: 18px; accent-color: var(--vo-gold); cursor: pointer; }
+
+/* -------------------------------------------------------- hash display */
+/* Sunken well showing a hash/fingerprint in success green. */
+.vo-hash {
+  background: var(--vo-well);
+  border: 1px solid var(--vo-border-soft);
+  border-radius: var(--vo-r-md);
+  padding: 16px;
+  font-family: var(--vo-font-mono);
+  font-size: 12px;
+  color: var(--vo-success);
+  word-break: break-all;
+}
+.vo-hash--gold { color: var(--vo-gold); }
+.vo-hash--blue { color: var(--vo-blue); }
+/* Inline hash/code */
+.vo-mono {
+  font-family: var(--vo-font-mono);
+  font-size: 0.85em;
+  color: var(--vo-success);
+  word-break: break-all;
+}
+
+/* --------------------------------------------------------- upload zone */
+.vo-upload-zone {
+  border: 2px dashed var(--vo-border);
+  border-radius: var(--vo-r-xl);
+  padding: 60px 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  background: var(--vo-panel-dim);
+  margin-bottom: 30px;
+}
+.vo-upload-zone:hover, .vo-upload-zone.dragover {
+  border-color: var(--vo-gold);
+  background: rgba(15, 52, 96, 0.2);
+}
+.vo-upload-zone h3 {
+  font-family: var(--vo-font-serif);
+  font-size: 24px;
+  font-weight: 400;
+  color: var(--vo-offwhite);
+  margin: 0 0 8px;
+}
+.vo-upload-zone p { font-size: 14px; color: var(--vo-blue); margin: 0; }
+
+/* ------------------------------------------------------- pills / badges */
+.vo-pill {
+  display: inline-block;
+  font-family: var(--vo-font-mono);
+  font-size: 0.66rem;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--vo-gold);
+  border: 1px solid var(--vo-gold-border-2);
+  border-radius: var(--vo-r-pill);
+  padding: 0.32rem 0.75rem;
+}
+.vo-pill--blue { color: var(--vo-blue); border-color: var(--vo-border-dim); }
+.vo-badge {
+  display: inline-block;
+  padding: 3px 14px;
+  border-radius: var(--vo-r-pill);
+  font-family: var(--vo-font-mono);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+  font-weight: 600;
+}
+.vo-badge--match   { background: rgba(34, 139, 104, 0.15); border: 1px solid rgba(34, 139, 104, 0.4); color: var(--vo-success-bright); }
+.vo-badge--neutral { background: rgba(74, 126, 199, 0.15); border: 1px solid rgba(74, 126, 199, 0.4); color: var(--vo-blue-soft); }
+.vo-badge--tampered{ background: rgba(180, 60, 60, 0.15);  border: 1px solid rgba(180, 60, 60, 0.4);  color: var(--vo-error-bright); }
+.vo-badge--warn    { background: rgba(212, 168, 67, 0.12); border: 1px solid var(--vo-gold-border-2); color: var(--vo-gold); }
+
+/* --------------------------------------------------------- result boxes */
+.vo-result {
+  border-radius: var(--vo-r-2xl);
+  padding: 40px;
+  margin-bottom: 32px;
+  text-align: center;
+}
+.vo-result h2 {
+  font-family: var(--vo-font-serif);
+  font-size: 2rem;
+  font-weight: 400;
+  margin: 0 0 8px;
+}
+.vo-result--verified { background: var(--vo-success-wash); border: 1px solid rgba(34, 139, 104, 0.3); }
+.vo-result--verified h2 { color: var(--vo-success-bright); }
+.vo-result--tampered { background: var(--vo-error-wash); border: 1px solid rgba(180, 60, 60, 0.3); }
+.vo-result--tampered h2 { color: var(--vo-error-bright); }
+.vo-result--legacy { background: var(--vo-blue-wash); border: 1px solid var(--vo-blue-border); }
+.vo-result--legacy h2 { color: var(--vo-blue-soft); }
+.vo-result .vo-timestamp {
+  font-family: var(--vo-font-mono);
+  font-size: 12px;
+  color: var(--vo-body);
+  opacity: 0.7;
+  margin-top: 12px;
+}
+
+/* Status strip (OTS pending / complete / error) */
+.vo-status { display: flex; align-items: center; gap: 8px; padding: 14px; border-radius: var(--vo-r-md); margin-bottom: 20px; font-size: 13px; }
+.vo-status--pending  { background: var(--vo-gold-wash-2);        border: 1px solid rgba(212, 168, 67, 0.25); color: var(--vo-gold); }
+.vo-status--complete { background: rgba(34, 197, 94, 0.08);      border: 1px solid rgba(34, 197, 94, 0.25);  color: var(--vo-success); }
+.vo-status--error    { background: rgba(239, 68, 68, 0.08);      border: 1px solid rgba(239, 68, 68, 0.25);  color: var(--vo-error); }
+
+/* -------------------------------------------------------------- banner */
+/* Prominent free-access banner: blue->gold gradient wash, 2px blue frame. */
+.vo-banner {
+  background: linear-gradient(135deg, rgba(74, 126, 199, 0.15), rgba(212, 168, 67, 0.1));
+  border: 2px solid var(--vo-blue);
+  border-radius: var(--vo-r-lg);
+  padding: 24px 32px;
+  margin: 0 0 40px;
+  text-align: center;
+  box-shadow: 0 4px 24px rgba(74, 126, 199, 0.15);
+}
+.vo-banner__title {
+  font-family: var(--vo-font-mono);
+  font-size: 16px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: var(--vo-success);
+  margin-bottom: 8px;
+}
+.vo-banner__subtitle { font-size: 14px; color: var(--vo-body); line-height: 1.6; }
+.vo-banner__subtitle strong { color: var(--vo-offwhite); font-weight: 600; }
+/* Gold call-out banner (index verdict banner) */
+.vo-banner--gold {
+  background: var(--vo-gold-wash-2);
+  border: 1px solid var(--vo-gold-border);
+  border-radius: 8px;
+  padding: 1.75rem;
+  box-shadow: none;
+}
+
+/* ------------------------------------------------------------- stats */
+.vo-stat .vo-stat__num {
+  font-family: var(--vo-font-serif);
+  font-weight: 300;
+  font-size: 1.875rem;
+  color: var(--vo-gold);
+  line-height: 1.1;
+}
+.vo-stat .vo-stat__lbl {
+  font-family: var(--vo-font-mono);
+  font-size: 11px;
+  color: var(--vo-blue);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  margin-top: 0.3rem;
+}
+
+/* ------------------------------------------------------ pipeline steps */
+.vo-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 0;
+  border-bottom: 1px solid var(--vo-border-soft);
+  font-size: 14px;
+}
+.vo-step:last-child { border-bottom: none; }
+.vo-step__status {
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+.vo-step__status--pending    { border: 2px solid var(--vo-border); color: var(--vo-blue); }
+.vo-step__status--processing { border: 2px solid var(--vo-gold); color: var(--vo-gold); animation: vo-pulse 1.5s infinite; }
+.vo-step__status--complete   { background: var(--vo-success); border: 2px solid var(--vo-success); color: var(--vo-navy-0); }
+.vo-step__status--error      { background: var(--vo-error); border: 2px solid var(--vo-error); color: #fff; }
+.vo-step__label { color: var(--vo-body); }
+.vo-step__label strong { color: var(--vo-offwhite); }
+.vo-step__detail {
+  margin-left: auto;
+  font-family: var(--vo-font-mono);
+  font-size: 11px;
+  color: var(--vo-blue);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+@keyframes vo-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.5; } }
+
+/* ------------------------------------------------------------ spinner */
+.vo-spinner {
+  width: 48px; height: 48px;
+  border: 3px solid rgba(212, 168, 67, 0.2);
+  border-top-color: var(--vo-gold);
+  border-radius: 50%;
+  animation: vo-spin 1s linear infinite;
+  margin: 0 auto 16px;
+}
+@keyframes vo-spin { to { transform: rotate(360deg); } }
+
+/* --------------------------------------------------------- misc bits */
+/* Dashed gold "AI/system" block (constitution .ai-block) */
+.vo-block-dashed {
+  background: rgba(15, 52, 96, 0.14);
+  border: 1px dashed rgba(212, 168, 67, 0.45);
+  border-radius: var(--vo-r-xl);
+  padding: 24px;
+  margin: 40px 0 24px;
+}
+/* Code chip */
+.vo-code {
+  font-family: var(--vo-font-mono);
+  font-size: 0.85rem;
+  color: var(--vo-success);
+  background: var(--vo-well);
+  padding: 2px 6px;
+  border-radius: var(--vo-r-sm);
+  word-break: break-all;
+}
+/* Pre block (constitution) */
+.vo-pre {
+  background: var(--vo-navy-pre);
+  border: 1px solid var(--vo-border);
+  border-radius: var(--vo-r-sm);
+  padding: 14px 16px;
+  overflow-x: auto;
+  font-family: var(--vo-font-mono);
+  font-size: 0.85rem;
+  line-height: 1.5;
+  color: #C9D4E4;
+  margin: 12px 0 18px;
+  white-space: pre-wrap;
+}
+.vo-em-gold { color: var(--vo-gold); font-weight: 600; }
+.vo-muted { color: var(--vo-muted); }
+
+/* ------------------------------------------------------ reduced motion */
+@media (prefers-reduced-motion: reduce) {
+  .vo-page *, .vo-page *::before, .vo-page *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
