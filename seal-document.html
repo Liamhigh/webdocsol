@@ -2751,6 +2751,7 @@ function secOffenceMatrix(ctx, data) {
       { el: 'Intent to permanently deprive', court: true }
     ] }
   ];
+  var anyElementsBlock = false;
   for (var oe = 0; oe < OFFENCE_ELEMENTS.length; oe++) {
     var off = OFFENCE_ELEMENTS[oe];
     var evidencedAll = true, anyEvidenced = false, elLines = [];
@@ -2770,6 +2771,7 @@ function secOffenceMatrix(ctx, data) {
       }
     }
     if (!anyEvidenced) continue;   // nothing in the record speaks to this offence — stay silent
+    anyElementsBlock = true;
     ctx.ensure(84);
     ctx.subHeading('Elements of ' + off.offence + ' — what the record evidences');
     for (var ll = 0; ll < elLines.length; ll++) ctx.bullet(elLines[ll], { size: 9, after: 3 });
@@ -2778,6 +2780,11 @@ function secOffenceMatrix(ctx, data) {
     } else {
       ctx.para('Not every element of ' + off.offence + ' is evidenced in the flagged text: the elements marked EVIDENCED stand on the record; the missing ones do not. The verdict on any named person is for the court.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
     }
+  }
+  // A sealed finding is a record, not an accusation. Saying so here matters:
+  // the seal is what makes the measurement permanent and party-proof.
+  if (anyElementsBlock) {
+    ctx.para('These findings are sealed under SHA-512 and anchored to the Bitcoin blockchain via OpenTimestamps: a permanent, tamper-evident record of what the documents evidence, fixed at the moment of sealing. No party — including the person who sealed it — can alter it afterwards. A sealed finding is a record, not an accusation: it asserts nothing about guilt; it preserves, forever, what the documents show.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   }
 }
 
