@@ -154,7 +154,8 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(/On p\. 11, .*goodwill/i.test(joined), 'plain lead NAMES the CT45 serious finding in plain words, anchored to its page');
   ok(/date does not add up/.test(joined), 'plain lead NAMES the CT03 serious finding in plain words');
   ok(!/CT45|CT03/.test(joined), 'plain lead contains no CT codes (everyday language only)');
-  ok(/not a percentage chance of fraud, and not a verdict/.test(joined), 'plain lead keeps the score neutral (indicator, not verdict)');
+  ok(/not a probability of fraud/.test(joined) && /verdict on any named person is for the court/.test(joined),
+    'plain lead states the score as a measurement of the record and reserves the verdict for the court (PD16)');
   // Unreadable / failed scans must NOT produce a plain "all clear".
   ok(R._plainLeadLines({ unreadable: true, findings: [{ type: 'CT01', severity: 5 }] }, data).length === 0,
     'plain lead is empty on an unreadable document (no false all-clear)');

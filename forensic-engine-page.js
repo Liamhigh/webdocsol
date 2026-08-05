@@ -1201,7 +1201,7 @@ var DETECTORS = {
             var isolated = (pi > 0 && pi < lens.length - 1 && lens[pi-1] >= avg * 0.5 && lens[pi+1] >= avg * 0.5);
             findings.push({ type: 'CT26', severity: 2,
               evidence: 'Page ' + (pi+1) + ' is nearly empty (' + lens[pi] + ' chars) among pages averaging ' + Math.round(avg) +
-                (isolated ? ' — an isolated blank between two full pages; possible inserted or removed page' : ' — may be an image-only page not read by OCR, or an inserted/removed page'),
+                (isolated ? ' — an isolated blank between two full pages. Whether a page was inserted or removed there is for the investigator to establish against the original' : ' — the page yielded almost no machine-readable text: either an image-only page OCR could not read, or a genuinely blank page. Establish which from the original'),
               location: 'Page ' + (pi+1) });
           }
         }
