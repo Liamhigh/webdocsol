@@ -7,7 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="vo-seal-build" content="1.10.0-20260726-false-clean-guard-investigator-narrator">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Seal Document -- Verum Omnis</title>
+<title>Seal Document — Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
   * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -339,7 +339,7 @@
   <!-- Header with logo -->
   <div class="header">
     <img src="/images/logo-full.png" alt="Verum Omnis" class="logo-main">
-    <div class="label">AI FORENSICS FOR TRUTH -- CLIENT-SIDE -- NOTHING LEAVES YOUR DEVICE</div>
+    <div class="label">AI FORENSICS FOR TRUTH — CLIENT-SIDE — NOTHING LEAVES YOUR DEVICE</div>
     <h1>Document Sealing Service</h1>
     <p>Apply a forensic-grade cryptographic seal with A4 watermark, clean QR code, SHA-512 fingerprint, identity verification, GPS/device tracking, optional password protection, and Bitcoin blockchain anchoring via OpenTimestamps.</p>
   </div>
@@ -377,19 +377,19 @@
     <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Sealing Mode</label>
     <div class="mode-grid">
       <button type="button" class="mode-card active" id="modeSealOnly" onclick="setSealMode('seal-only')">
-        <strong>&#128737; Seal Only -- Tamper Protection <span style="font-size:10px;color:#4A7EC7;font-weight:400;">(default)</span></strong>
+        <strong>&#128737; Seal Only — Tamper Protection <span style="font-size:10px;color:#4A7EC7;font-weight:400;">(default)</span></strong>
         <span>Cryptographic seal + blockchain timestamp only. No content is analysed and nothing leaves this device. You receive the sealed PDF and a one-page Seal Certificate.</span>
       </button>
       <button type="button" class="mode-card" id="modeForensic" onclick="setSealMode('forensic')">
         <strong>&#128270; Seal + Forensic Analysis</strong>
-        <span>Everything in Seal Only, plus an on-device forensic scan (indicator score + findings for human review), optional AI review, and a sealed forensic report.</span>
+        <span>Everything in Seal Only, plus an on-device forensic scan (finding score + anchored findings), optional AI review, and a sealed forensic report.</span>
       </button>
     </div>
   </div>
 
   <!-- Sender Identity (optional, for affidavit pre-fill) -->
   <div style="margin-bottom:24px;">
-    <button type="button" onclick="toggleSection('identitySection')" style="background:none;border:none;color:#4A7EC7;font-family:'Courier New',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;padding:0;">&#128100; + Add Sender Identity (optional -- for affidavit pre-fill, chain of custody)</button>
+    <button type="button" onclick="toggleSection('identitySection')" style="background:none;border:none;color:#4A7EC7;font-family:'Courier New',monospace;font-size:11px;text-transform:uppercase;letter-spacing:0.08em;cursor:pointer;padding:0;">&#128100; + Add Sender Identity (optional — for affidavit pre-fill, chain of custody)</button>
     <div id="identitySection" style="display:none;margin-top:16px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;">
       <p style="font-size:12px;color:#94a3b8;margin:0 0 14px;line-height:1.6;">Identity details appear only in your private Seal Certificate — never in the public QR code.</p>
       <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">Full Name</label>
@@ -435,7 +435,7 @@
     <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">On-device analysis, optional AI review.</strong> Your document is analysed entirely on this device, in your browser. An optional AI review (Cloudflare Workers AI) can classify the document, assess the forensic findings and draft the report narrative. When enabled, only finding metadata — the type, severity and a short quote for each finding — plus a short text excerpt (maximum 4,000 characters from the document's first pages, sent for classification) leave this device for that review. The document itself is never uploaded.</p>
     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;margin-bottom:14px;">
       <input type="checkbox" id="aiReviewEnabled" checked style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
-      <span>Enable AI review (recommended) — a short excerpt is classified for context, findings are assessed by AI before the report is built, and an AI narrative summary is added to the report. Advisory only: findings are forensic indicators, not determinations of fraud.</span>
+      <span>Enable AI review (recommended) — a short excerpt is classified for context, findings are assessed by AI before the report is built, and an AI narrative summary is added to the report. Advisory only: findings are stated as fact; the verdict on any person is for the court.</span>
     </label>
     <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">I am sealing as (optional)</label>
     <select id="tierSelector" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
@@ -477,15 +477,15 @@
   <!-- Pipeline -->
   <div class="pipeline" id="pipeline">
     <h3>Sealing Pipeline</h3>
-    <div class="step" id="step1"><div class="status pending">&#9675;</div><div class="label"><strong>GPS + Device</strong> -- Capturing location &amp; device fingerprint</div><div class="detail" id="detail1"></div></div>
-    <div class="step" id="step2"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-256</strong> -- Computing hash for OpenTimestamps</div><div class="detail" id="detail2"></div></div>
-    <div class="step" id="stepFraud"><div class="status pending">&#9675;</div><div class="label"><strong>Forensic Scan</strong> -- Flagging contradiction indicators for review</div><div class="detail" id="detailFraud"></div></div>
-    <div class="step" id="step3"><div class="status pending">&#9675;</div><div class="label"><strong>OpenTimestamps</strong> -- Submitting to calendar servers</div><div class="detail" id="detail3"></div></div>
-    <div class="step" id="step4"><div class="status pending">&#9675;</div><div class="label"><strong>A4 Watermark</strong> -- Full-page background at 20% opacity</div><div class="detail" id="detail4"></div></div>
-    <div class="step" id="step5"><div class="status pending">&#9675;</div><div class="label"><strong>Clean QR Code</strong> -- Encoding hash + seal metadata (identity stays private)</div><div class="detail" id="detail5"></div></div>
-    <div class="step" id="step6"><div class="status pending">&#9675;</div><div class="label"><strong>Seal Footer</strong> -- Hash + timestamp on every page</div><div class="detail" id="detail6"></div></div>
-    <div class="step" id="step7"><div class="status pending">&#9675;</div><div class="label"><strong>Finalize</strong> -- Preparing sealed PDF package</div><div class="detail" id="detail7"></div></div>
-    <div class="step" id="step8"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-512</strong> -- Verum Forensic Fingerprint (final verification)</div><div class="detail" id="detail8"></div></div>
+    <div class="step" id="step1"><div class="status pending">&#9675;</div><div class="label"><strong>GPS + Device</strong> — Capturing location &amp; device fingerprint</div><div class="detail" id="detail1"></div></div>
+    <div class="step" id="step2"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-256</strong> — Computing hash for OpenTimestamps</div><div class="detail" id="detail2"></div></div>
+    <div class="step" id="stepFraud"><div class="status pending">&#9675;</div><div class="label"><strong>Forensic Scan</strong> — Detecting contradictions in the document</div><div class="detail" id="detailFraud"></div></div>
+    <div class="step" id="step3"><div class="status pending">&#9675;</div><div class="label"><strong>OpenTimestamps</strong> — Submitting to calendar servers</div><div class="detail" id="detail3"></div></div>
+    <div class="step" id="step4"><div class="status pending">&#9675;</div><div class="label"><strong>A4 Watermark</strong> — Full-page background at 20% opacity</div><div class="detail" id="detail4"></div></div>
+    <div class="step" id="step5"><div class="status pending">&#9675;</div><div class="label"><strong>Clean QR Code</strong> — Encoding hash + seal metadata (identity stays private)</div><div class="detail" id="detail5"></div></div>
+    <div class="step" id="step6"><div class="status pending">&#9675;</div><div class="label"><strong>Seal Footer</strong> — Hash + timestamp on every page</div><div class="detail" id="detail6"></div></div>
+    <div class="step" id="step7"><div class="status pending">&#9675;</div><div class="label"><strong>Finalize</strong> — Preparing sealed PDF package</div><div class="detail" id="detail7"></div></div>
+    <div class="step" id="step8"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-512</strong> — Verum Forensic Fingerprint (final verification)</div><div class="detail" id="detail8"></div></div>
   </div>
 
   <!-- Payment gate (commercial detection). Rendered in its OWN container so the
@@ -501,11 +501,11 @@
     <div class="ots-status pending" id="asIsNote" style="display:none;">&#128274; This document is password-protected, so it was sealed exactly as-is: the SHA-512 fingerprint and blockchain timestamp cover these exact bytes and verify normally. The watermark, QR and footer could not be stamped inside the locked file &mdash; your Seal Certificate carries the seal record instead.</div>
     <div class="preview-section">
       <h4>What Your Sealed Document Looks Like</h4>
-      <p>Every page has the <strong>A4 watermark</strong> as a background layer at 20% opacity. Your <strong>original document text is preserved exactly</strong> -- no content is moved, scaled, or altered. The <strong>QR code</strong> sits in the top-right margin and the <strong>seal footer</strong> with your SHA-512 fingerprint appears at the bottom of every page.</p>
+      <p>Every page has the <strong>A4 watermark</strong> as a background layer at 20% opacity. Your <strong>original document text is preserved exactly</strong> — no content is moved, scaled, or altered. The <strong>QR code</strong> sits in the top-right margin and the <strong>seal footer</strong> with your SHA-512 fingerprint appears at the bottom of every page.</p>
     </div>
     <div class="qr-section">
       <canvas id="qrPreview" width="220" height="220" style="background:white; padding:16px; border-radius:12px;"></canvas>
-      <p id="qrPreviewNote">Clean QR -- no border, no interfering box. Scans instantly.</p>
+      <p id="qrPreviewNote">Clean QR — no border, no interfering box. Scans instantly.</p>
     </div>
     <div class="hash-row"><label>SHA-256 (OpenTimestamps)</label><div class="hash-display" id="sha256Display"></div></div>
     <div class="hash-row"><label>SHA-512 (Verum Fingerprint)</label><div class="hash-display" id="sha512Display"></div></div>
@@ -526,20 +526,20 @@
     <h3>How Document Sealing Works</h3>
     <p>Every document sealed by Verum Omnis receives a forensic-grade cryptographic seal that makes it tamper-evident and court-admissible.</p>
     <div class="grid">
-      <div class="item"><h4>&#128220; A4 Watermark Background</h4><p>The full-page Verum Omnis watermark is applied at 20% opacity behind your content. Your original document text is preserved exactly -- the QR code sits in the natural page margin.</p></div>
-      <div class="item"><h4>&#128241; Clean QR Code</h4><p>QR sits in the top-right margin with white background panel -- never covers document text. Original document layout is fully preserved. Scans instantly with any phone.</p></div>
+      <div class="item"><h4>&#128220; A4 Watermark Background</h4><p>The full-page Verum Omnis watermark is applied at 20% opacity behind your content. Your original document text is preserved exactly — the QR code sits in the natural page margin.</p></div>
+      <div class="item"><h4>&#128241; Clean QR Code</h4><p>QR sits in the top-right margin with white background panel — never covers document text. Original document layout is fully preserved. Scans instantly with any phone.</p></div>
       <div class="item"><h4>&#128274; Dual Hash</h4><p>SHA-256 for OpenTimestamps blockchain anchoring. SHA-512 as the Verum forensic fingerprint. Two independent hashes, zero trust required.</p></div>
       <div class="item"><h4>&#9939; Bitcoin Blockchain</h4><p>OpenTimestamps anchors the SHA-256 hash into Bitcoin. Once confirmed (~1-2 hours), the timestamp is permanently and independently verifiable.</p></div>
       <div class="item"><h4>&#128100; Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) is written into your private Seal Certificate for affidavit pre-fill and chain of custody — never into the public QR code unless you explicitly opt in.</p></div>
       <div class="item"><h4>&#128205; GPS + Device</h4><p>Automatic geolocation and device fingerprint capture. Proves where and from what device the seal was applied.</p></div>
-      <div class="item"><h4>&#128272; Password Protection</h4><p>Optional AES-256 password protection with delivery receipt cover page. Recipient must email sender for password -- that email IS the read receipt.</p></div>
-      <div class="item"><h4>&#128737; Tamper Detection</h4><p>Recipient uploads document to verify page. If SHA-512 doesn't match --> "TAMPERED -- DO NOT ACCEPT". Cryptographically impossible to forge.</p></div>
+      <div class="item"><h4>&#128272; Password Protection</h4><p>Optional AES-256 password protection with delivery receipt cover page. Recipient must email sender for password — that email IS the read receipt.</p></div>
+      <div class="item"><h4>&#128737; Tamper Detection</h4><p>Recipient uploads document to verify page. If SHA-512 doesn't match --> "TAMPERED — DO NOT ACCEPT". Cryptographically impossible to forge.</p></div>
     </div>
   </div>
 
   <div class="site-footer">
-    Verum Omnis Foundation -- Patent Pending<br>
-    Constitution v6.0 Final -- Article X Non-Weaponization Doctrine
+    Verum Omnis Foundation — Patent Pending<br>
+    Constitution v6.0 Final — Article X Non-Weaponization Doctrine
   </div>
 
 </div>
@@ -547,8 +547,8 @@
 <script src="/vendor/pdf-lib.min.js"></script>
 <script src="/vendor/qrcode.min.js"></script>
 <script>
-// If either bundle failed to arrive -- a dropped request on a phone is enough
-// -- pull it from the CDN before the application script runs. Without this a
+// If either bundle failed to arrive — a dropped request on a phone is enough
+// — pull it from the CDN before the application script runs. Without this a
 // single failed fetch left PDFLib undefined and the whole sealing pipeline
 // died with "Cannot read properties of undefined (reading 'load')".
 // document.write is deliberate: it loads synchronously during parsing, so the
@@ -1601,12 +1601,12 @@ function plainLeadLines(fr, data) {
   var docName = (data && data.docName) || 'this document';
   var pageCount = (data && data.pageCount) || 'n/a';
   var plLines = [];
-  plLines.push('The engine read "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') and flagged ' + plAll.length + ' indicator' + (plAll.length === 1 ? '' : 's') + ' in total.');
+  plLines.push('The engine read "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') and identified ' + plAll.length + ' finding' + (plAll.length === 1 ? '' : 's') + ' in total.');
   if (plDemoted > 0) {
     plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
   }
   var substLead = (plDemoted > 0)
-    ? 'That leaves ' + plSubstantive + ' substantive indicator' + (plSubstantive === 1 ? '' : 's')
+    ? 'That leaves ' + plSubstantive + ' substantive finding' + (plSubstantive === 1 ? '' : 's')
     : (plSerial > 0
         ? 'Of these, ' + plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's') + ' (the rest are multi-stage pattern matches, described below)'
         : plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's'));
@@ -1630,7 +1630,7 @@ function plainLeadLines(fr, data) {
       plLines.push('•  …and ' + (plSeriousList.length - plSerCap) + ' more serious item' + (plSeriousList.length - plSerCap === 1 ? '' : 's') + ', set out in full below.');
     }
   }
-  if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern indicator' + (plSerial === 1 ? '' : 's') + ' also matched - see the Serial Pattern Analysis section.');
+  if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern match' + (plSerial === 1 ? '' : 'es') + ' also recorded - see the Serial Pattern Analysis section.');
   plLines.push('The score (' + score + '/100) measures the density and severity of the verified findings - a measurement of the record, not a probability of fraud. The verdict on any named person is for the court.');
   return plLines;
 }
@@ -1679,7 +1679,7 @@ function secExecSummary(ctx, data) {
   ctx.page.drawRectangle({ x: LM, y: ctx.y - boxH, width: CW, height: boxH, color: BOXBG, borderColor: GOLD, borderWidth: 1 });
   var scoreStr = score + ' / 100';
   ctx.page.drawText(scoreStr, { x: LM + 18, y: ctx.y - 44, size: 26, font: ctx.f.timesBold, color: NAVY2 });
-  ctx.page.drawText('Indicator score', { x: LM + 18, y: ctx.y - 60, size: 9, font: ctx.f.times, color: GRAY });
+  ctx.page.drawText('Finding score', { x: LM + 18, y: ctx.y - 60, size: 9, font: ctx.f.times, color: GRAY });
   ctx.page.drawText('Confidence band: ' + bandLabel, { x: LM + 200, y: ctx.y - 34, size: 11, font: ctx.f.timesBold, color: NAVY2 });
   ctx.page.drawText('Total findings: ' + (fr.totalFindings || 0), { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
   ctx.page.drawText('Contradiction types triggered: ' + (fr.contradictionTypesUsed || 0) + ' / ' + CT_COUNT, { x: LM + 200, y: ctx.y - 64, size: 10, font: ctx.f.times, color: INK });
@@ -1713,9 +1713,9 @@ function secExecSummary(ctx, data) {
       { key: 'count', title: 'Count', w: 154, align: 'right' }
     ],
     [
-      { sev: '5 — Critical', meaning: 'Strongest contradiction indicators', count: String(sevCounts[5]) },
-      { sev: '4 — High', meaning: 'Significant indicators', count: String(sevCounts[4]) },
-      { sev: '3 — Medium', meaning: 'Moderate indicators', count: String(sevCounts[3]) },
+      { sev: '5 — Critical', meaning: 'Strongest contradictions', count: String(sevCounts[5]) },
+      { sev: '4 — High', meaning: 'Significant findings', count: String(sevCounts[4]) },
+      { sev: '3 — Medium', meaning: 'Moderate findings', count: String(sevCounts[3]) },
       { sev: '2 — Low', meaning: 'Minor anomalies', count: String(sevCounts[2]) },
       { sev: '1 — Info', meaning: 'Informational only', count: String(sevCounts[1]) }
     ],
@@ -1745,7 +1745,7 @@ function secExecSummary(ctx, data) {
       });
     var top = candidates.slice(0, 5);
     if (top.length === 0) {
-      ctx.para('All flagged indicators are structural notes or unlabelled pattern signals - see the findings matrix and Serial Pattern Analysis sections.', { size: 10 });
+      ctx.para('All flagged findings are structural notes or unlabelled pattern signals - see the findings matrix and Serial Pattern Analysis sections.', { size: 10 });
     }
     for (var t = 0; t < top.length; t++) {
       var fnd = top[t];
@@ -1759,7 +1759,7 @@ function secExecSummary(ctx, data) {
       }
     }
     if (hiddenSerials > 0) {
-      ctx.bullet(hiddenSerials + ' multi-stage pattern indicator' + (hiddenSerials === 1 ? '' : 's') + ' recorded with label' + (hiddenSerials === 1 ? '' : 's') + ' withheld — the Serial Pattern Analysis section explains why.', { size: 9.5, after: 5 });
+      ctx.bullet(hiddenSerials + ' multi-stage pattern match' + (hiddenSerials === 1 ? '' : 'es') + ' recorded with label' + (hiddenSerials === 1 ? '' : 's') + ' withheld — the Serial Pattern Analysis section explains why.', { size: 9.5, after: 5 });
     }
   }
 
@@ -1844,7 +1844,7 @@ function secMatrix(ctx, data) {
   }
 
   if (all.length === 0) {
-    ctx.para('No contradictions or forensic indicators were detected by the deterministic engine in this document. All ' + DETECTOR_COUNT + ' detectors and ' + SP_COUNT + ' serial patterns ran; none triggered.', { size: 10 });
+    ctx.para('No contradictions or forensic anomalies were detected by the deterministic engine in this document. All ' + DETECTOR_COUNT + ' detectors and ' + SP_COUNT + ' serial patterns ran; none triggered.', { size: 10 });
     ctx.para('This is not a certification of truthfulness — it means no internal inconsistencies were found by deterministic methods.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
     return;
   }
@@ -2039,8 +2039,8 @@ function serialDisplay(fnd, data) {
   var name = fnd.serialName || fnd.serialPattern || 'Serial pattern';
   var sl = data && data.serialLabels;
   if (!sl) return name;
-  if (sl.suppressed) return 'Multi-stage pattern indicator (label suppressed)';
-  if (sl.weakNames && sl.weakNames.indexOf(name) !== -1) return 'Multi-stage pattern indicator (weak signal)';
+  if (sl.suppressed) return 'Multi-stage pattern match (label suppressed)';
+  if (sl.weakNames && sl.weakNames.indexOf(name) !== -1) return 'Multi-stage pattern match (weak signal)';
   return name;
 }
 
@@ -2064,7 +2064,7 @@ function secSerial(ctx, data) {
   // entirely so the document's subject matter is not mischaracterised.
   if (sl && sl.suppressed) {
     ctx.para('Pattern labels suppressed.', { size: 10.5, after: 6 });
-    ctx.para('This document discusses fraud or disputed conduct as its subject matter. Pattern labels have been suppressed to avoid mischaracterising the document\'s contents. The engine\'s underlying findings remain listed in the findings matrix as indicators for human review.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
+    ctx.para('This document discusses fraud or disputed conduct as its subject matter. Pattern labels have been suppressed to avoid mischaracterising the document\'s contents. The engine\'s underlying findings remain listed in the findings matrix, anchored for human review.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
     return;
   }
 
@@ -2082,7 +2082,7 @@ function secSerial(ctx, data) {
   }
 
   if (labelled.length > 0) {
-    ctx.para('Patterns consistent with: see below. ' + labelled.length + ' serial pattern' + (labelled.length === 1 ? '' : 's') + ' corroborated by independent findings. Serial patterns are multi-stage fraud schemes; a corroborated match means several stages of a known pattern were found in the document text AND at least two independent findings of severity 3 or higher support it. These are patterns the document is consistent with — indicators for human review, not determinations of fraud.', { size: 9.5, after: 10 });
+    ctx.para('Patterns consistent with: see below. ' + labelled.length + ' serial pattern' + (labelled.length === 1 ? '' : 's') + ' corroborated by independent findings. Serial patterns are multi-stage fraud schemes; a corroborated match means several stages of a known pattern were found in the document text AND at least two independent findings of severity 3 or higher support it. The pattern match is a fact of the text; whether the scheme was in fact operated, and any verdict, is for the court.', { size: 9.5, after: 10 });
     var rows = [];
     for (var s = 0; s < labelled.length; s++) {
       rows.push({
@@ -2387,7 +2387,7 @@ function secLegalAnalysis(ctx, data) {
   // ---- 4. Actionable Output -------------------------------------------
   ctx.subHeading('Actionable Output', { toc: true });
   var ranked = substantive.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-  ctx.para('Top liabilities (highest-severity indicators):', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
+  ctx.para('Top liabilities (highest-severity findings):', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   var topN = ranked.slice(0, 3);
   for (var t2 = 0; t2 < topN.length; t2++) {
     var tf = topN[t2];
@@ -2396,12 +2396,12 @@ function secLegalAnalysis(ctx, data) {
   }
   ctx.gap(4);
   var jur = (data.identity && data.identity.jurisdiction) ? data.identity.jurisdiction : null;
-  ctx.para('Dishonesty indicator score: ' + (fr.overallScore || 0) + '/100 (' + (fr.confidence || 'n/a') + ') across ' + (fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) + ' finding' + ((fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) === 1 ? '' : 's') + '. This measures the density and severity of the indicators above — NOT their volume, and not a probability of fraud: a document with two high-severity findings scores higher than one with twelve mixed findings.', { size: 9, after: 6 });
+  ctx.para('Dishonesty score: ' + (fr.overallScore || 0) + '/100 (' + (fr.confidence || 'n/a') + ') across ' + (fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) + ' finding' + ((fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) === 1 ? '' : 's') + '. This measures the density and severity of the findings above — NOT their volume, and not a probability of fraud: a document with two high-severity findings scores higher than one with twelve mixed findings.', { size: 9, after: 6 });
   ctx.para('Recommended next steps' + (jur ? ' (jurisdiction: ' + jur + ')' : '') + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Candidate statutory provisions are set out in the Statutory Anchoring section that follows - they are starting points for counsel to confirm, not a legal conclusion.', { size: 9 });
   ctx.bullet('Preserve the sealed original and this report unaltered; both are SHA-512 anchored and independently verifiable at verumglobal.foundation/verify.html.', { size: 9 });
   if (Object.keys(bySubject).indexOf('FINANCIAL') !== -1) ctx.bullet('Financial irregularities are present - consider a forensic-accounting trace of the flagged amounts and accounts.', { size: 9 });
-  if (Object.keys(bySubject).indexOf('TAMPERING') !== -1) ctx.bullet('Document-integrity indicators are present - consider requesting native/original files and metadata for the affected pages.', { size: 9 });
+  if (Object.keys(bySubject).indexOf('TAMPERING') !== -1) ctx.bullet('Document-integrity findings are present - consider requesting native/original files and metadata for the affected pages.', { size: 9 });
   ctx.gap(4);
   ctx.para('These recommendations are procedural suggestions for human decision-makers, not legal advice or a determination of liability.', { size: 8, font: ctx.f.timesItalic, color: GRAY });
 }
@@ -2453,7 +2453,7 @@ function secStatutoryAnchoring(ctx, data) {
     { size: 7.5 }
   );
   if (ranked.length > CAP) {
-    ctx.para('Showing the ' + CAP + ' highest-severity indicators; the remaining ' + (ranked.length - CAP) + ' appear in the findings matrix and can be anchored the same way.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    ctx.para('Showing the ' + CAP + ' highest-severity findings; the remaining ' + (ranked.length - CAP) + ' appear in the findings matrix and can be anchored the same way.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
   ctx.para('Attribution records that the party is named in the flagged text — a fact of the record; responsibility is for the court to determine.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 8 });
 
@@ -2545,7 +2545,7 @@ function secFindingDetails(ctx, data) {
     ctx.gap(8);
   }
   if (subst.length > CAP) {
-    ctx.para('Showing the ' + CAP + ' highest-severity indicators in detail; the remaining ' + (subst.length - CAP) + ' appear in the findings matrix and the evidence appendix.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    ctx.para('Showing the ' + CAP + ' highest-severity findings in detail; the remaining ' + (subst.length - CAP) + ' appear in the findings matrix and the evidence appendix.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
 }
 
@@ -2619,7 +2619,7 @@ function secEvidenceAppendix(ctx, data) {
 
   ctx.newBodyPage();
   ctx.heading('EVIDENCE APPENDIX (VERBATIM QUOTES)');
-  ctx.para('Every flagged passage, reproduced verbatim and numbered, with its indicator type and page. This is the complete quoted-evidence record behind the report; each entry can be checked against the sealed original at the cited page.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.para('Every flagged passage, reproduced verbatim and numbered, with its finding type and page. This is the complete quoted-evidence record behind the report; each entry can be checked against the sealed original at the cited page.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
   var CAP = APPENDIX_CAP;
   var rows = [];
@@ -2656,7 +2656,7 @@ function secOffenceMatrix(ctx, data) {
 
   ctx.newBodyPage();
   ctx.heading('CANDIDATE OFFENCE MATRIX');
-  ctx.para('The substantive indicators grouped by legal subject, with the candidate statutory provisions a practitioner should consider in ' + listPhrase(['ZA'].concat(jur.foreign).map(function (c) { return JURIS_LABEL[c] || c; })) + '. Counts are of anchored indicators, not proven offences; naming a provision is a starting point for legal review, never a determination.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.para('The substantive findings grouped by legal subject, with the candidate statutory provisions a practitioner should consider in ' + listPhrase(['ZA'].concat(jur.foreign).map(function (c) { return JURIS_LABEL[c] || c; })) + '. Counts are of anchored findings, not proven offences; naming a provision is a starting point for legal review, never a determination.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
   var bySubject = {};
   for (var i = 0; i < subst.length; i++) {
@@ -2803,7 +2803,7 @@ function secEvidenceMap(ctx, data) {
 
   ctx.newBodyPage();
   ctx.heading('ANNEXURE A — EVIDENCE MAP (BY PAGE)');
-  ctx.para('Every flagged indicator in page order, so the source document can be walked top to bottom. The Evidence Appendix lists the same items with full verbatim quotes, ordered by severity.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.para('Every finding in page order, so the source document can be walked top to bottom. The Evidence Appendix lists the same items with full verbatim quotes, ordered by severity.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
   var CAP = 250;
   var rows = [];
@@ -2914,7 +2914,7 @@ function secNarrative(ctx, data) {
 
   ctx.newBodyPage();
   ctx.heading('PLAIN-LANGUAGE NARRATIVE');
-  ctx.para('This section tells the story of what the documents show, in ordinary words, for a reader who is not a forensic specialist. Every statement below is drawn from the same findings set out in the tables that follow; it adds no new facts. These are indicators for a human to weigh — not verdicts of fraud or guilt.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.para('This section tells the story of what the documents show, in ordinary words, for a reader who is not a forensic specialist. Every statement below is drawn from the same findings set out in the tables that follow; it adds no new facts. Each is a verified fact of the record; the verdict on any person is for the court.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
   // Opening: parties, documents, scale.
   var idn = data.identity || {};
@@ -2994,9 +2994,9 @@ function secNarrative(ctx, data) {
   // the findings), cross-border context, and any unread/OCR-gap disclosure.
   var notes = String(data.extractionNotes || '');
   var alsoBits = [];
-  var mAnchor = notes.match(/Anchor rule:[^]*?(?=(?:\s+Context:|\s+Indicator score|$))/);
+  var mAnchor = notes.match(/Anchor rule:[^]*?(?=(?:\s+Context:|\s+Score calibration|$))/);
   if (mAnchor) alsoBits.push(mAnchor[0].trim());
-  var mCtx = notes.match(/Context:[^]*?(?=(?:\s+Indicator score|$))/);
+  var mCtx = notes.match(/Context:[^]*?(?=(?:\s+Score calibration|$))/);
   if (mCtx) alsoBits.push(mCtx[0].trim());
   if (/near-empty|image-only|OCR/i.test(notes)) {
     var mOcr = notes.match(/[^.]*(?:near-empty|image-only|OCR rescue)[^.]*\./g);
@@ -4579,7 +4579,7 @@ var DETECTORS = {
     if (nums.length <= 2) {
       for (var n = 0; n < nums.length; n++) {
         findings.push({ type: 'CT27', severity: 4,
-          evidence: 'Page number ' + nums[n] + ' appears on multiple pages (potential duplicate or insertion)',
+          evidence: 'Page number ' + nums[n] + ' appears on multiple pages (a repeated page number; whether a page was duplicated or inserted is for the investigator)',
           location: 'Multiple pages' });
       }
     } else {
@@ -5189,7 +5189,7 @@ var DETECTORS = {
     // contextOnly routes it into the extraction notes, out of the findings.
     if (typeCount >= 8) {
       findings.push({ type: 'CT43', severity: 0, contextOnly: true,
-        evidence: 'Breadth note: ' + typeCount + ' different indicator types were triggered across the document — a high count reflects variety of checks, not a determination of wrongdoing.',
+        evidence: 'Breadth note: ' + typeCount + ' different finding types were triggered across the document — a high count reflects variety of checks, not a determination of wrongdoing.',
         location: 'Full document' });
     }
     return findings;
@@ -6713,7 +6713,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
         uaTexts.push('[' + uif.type + '] ' + (uif.evidence || ''));
       }
       extractionNote += ' Anchor rule: ' + anchored.unanchored.length +
-        ' indicator(s) could not be pinned to a page and are recorded here as unanchored observations, NOT as findings' +
+        ' observation(s) could not be pinned to a page and are recorded here as unanchored observations, NOT as findings' +
         ' (no anchor, no sentence): ' + uaTexts.join(' | ');
     }
   }
@@ -6758,13 +6758,19 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     if (!findingsByType[finding.type]) findingsByType[finding.type] = [];
     findingsByType[finding.type].push(finding);
 
-    var ct = CONTRADICTION_TYPES[finding.type];
-    var cat = ct ? ct.category : (finding.category || 'UNKNOWN');
+    // Look up by the type's id (CT01), not the map key (CT01_DIRECT_...): the
+    // old key lookup NEVER matched, so every finding fell into "UNKNOWN" and the
+    // results panel showed "UNKNOWN: 13 findings" instead of real categories.
+    var ct = null;
+    for (var ck in CONTRADICTION_TYPES) {
+      if (CONTRADICTION_TYPES[ck].id === finding.type) { ct = CONTRADICTION_TYPES[ck]; break; }
+    }
+    var cat = ct ? ct.category : (finding.category || 'UNCATEGORISED');
     if (!findingsByCategory[cat]) findingsByCategory[cat] = [];
     findingsByCategory[cat].push(finding);
   }
   if (allFindings.length) {
-    extractionNote += ' Indicator score is confidence-weighted per indicator type (calibration v1): lower-precision detectors contribute less than high-precision ones.';
+    extractionNote += ' Score calibration: confidence-weighted per finding type (calibration v1): lower-precision detectors contribute less than high-precision ones.';
   }
 
   var overallScore = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
@@ -6825,20 +6831,20 @@ function generateSummary(findings, score) {
   // per-finding average rose. With few findings the honest story is "a
   // couple of specific, checkable issues", so say exactly that.
   if (findings.length > 0 && findings.length <= 3) {
-    return 'FOCUSED: ' + findings.length + ' page-anchored indicator' + (findings.length === 1 ? '' : 's') +
-      ' found. Per-indicator severity is ' + (score >= 60 ? 'high' : 'moderate') +
-      ', but the indicator COUNT is low for the document — read each finding on its cited page; the density score is not an overall verdict on the document.';
+    return 'FOCUSED: ' + findings.length + ' page-anchored finding' + (findings.length === 1 ? '' : 's') +
+      '. Per-finding severity is ' + (score >= 60 ? 'high' : 'moderate') +
+      ', but the finding COUNT is low for the document — read each finding on its cited page; the density score is not an overall verdict on the document.';
   }
   if (score >= 80) {
     return 'CRITICAL: ' + findings.length + ' contradictions detected across ' +
-      'multiple categories. Document shows strong indicators of systematic fraud. ' +
+      'multiple categories. The documents evidence systematic fraud. ' +
       'Manual forensic review strongly recommended.';
   } else if (score >= 60) {
     return 'HIGH: ' + findings.length + ' contradictions detected. Document ' +
-      'contains significant inconsistencies that suggest fraud or tampering.';
+      'The documents cannot all be true as written.';
   } else if (score >= 40) {
     return 'MODERATE: ' + findings.length + ' contradictions found. Some ' +
-      'inconsistencies present that warrant closer examination.';
+      'The record contradicts itself at the cited pages; read each finding against the original.';
   } else if (score >= 20) {
     return 'LOW: ' + findings.length + ' minor contradictions detected. ' +
       'Document largely consistent with minor anomalies.';
@@ -7748,7 +7754,7 @@ if (typeof module !== 'undefined' && module.exports) {
 </script>
 <script>
 // `PDFLib` unqualified throws ReferenceError when the script above fails to
-// load -- an undeclared identifier, unlike a property miss on window. That
+// load — an undeclared identifier, unlike a property miss on window. That
 // killed this entire <script> block, so startSealing() and every other handler
 // below was never defined and the page rendered but did nothing. Read it off
 // window so a missing library degrades instead of freezing the UI.
@@ -7879,7 +7885,7 @@ function collectSealMetadata() {
 // can scan and base64-decode it. It therefore carries ONLY seal-integrity
 // data: {v, t, type, sha512, otsDigest, otsStatus, sealId} plus chain-of-
 // custody ids when present. Sender identity (id{n,id,a,e}), GPS (gps/acc) and
-// device fingerprint (dev) are NEVER included by default -- they live only in
+// device fingerprint (dev) are NEVER included by default — they live only in
 // the private Seal Certificate PDF the user keeps. An explicit opt-in
 // (#includeIdentityInQr, default OFF, with a warning) re-adds them for legacy
 // workflows. Parsers (verify page, Android app): fields may be absent --
@@ -7901,7 +7907,7 @@ function buildQrPayload(meta, chainIds) {
 }
 
 // Watermark loads eagerly at boot, but a single dropped request on a phone
-// used to leave watermarkBytes null for the whole session -- every sealed
+// used to leave watermarkBytes null for the whole session — every sealed
 // document and report then silently lost its watermark layer. The pipeline
 // now re-fetches (both known paths) at seal time when the eager load failed.
 async function voEnsureWatermark() {
@@ -7919,7 +7925,7 @@ async function voEnsureWatermark() {
 voEnsureWatermark();
 
 // A PDF with an /Encrypt dictionary (password-protected) cannot be composited
-// -- pdf-lib refuses to load it, and force-loading with ignoreEncryption would
+// — pdf-lib refuses to load it, and force-loading with ignoreEncryption would
 // re-save encrypted streams as garbage. Detect it cheaply at selection time so
 // the user is told up front, and the pipeline seals the exact bytes as-is
 // instead of crashing after the OTS submission (seen in production with a
@@ -7952,7 +7958,7 @@ function voPdfIsEncrypted(bytes) {
 }
 
 // Selection-time warning: read the file and show the protected-PDF notice
-// immediately. Never blocks selection -- sealing a protected file as-is is a
+// immediately. Never blocks selection — sealing a protected file as-is is a
 // legitimate, fully valid seal (hash + timestamp of those exact bytes).
 async function voCheckProtectedOnSelect(file) {
   var note = document.getElementById('protectedNote');
@@ -8130,9 +8136,9 @@ function setSealType(type) {
 }
 
 // ==================== SEALING MODE ====================
-// 'seal-only' (DEFAULT): tamper protection only -- no forensic scan, no score,
+// 'seal-only' (DEFAULT): tamper protection only — no forensic scan, no score,
 // no findings; outputs are the pristine sealed PDF + a one-page Seal Certificate.
-// 'forensic': full pipeline -- on-device forensic scan, indicator score, optional
+// 'forensic': full pipeline — on-device forensic scan, indicator score, optional
 // AI review, sealed original + sealed forensic report.
 let sealMode = 'seal-only';
 function setSealMode(mode) {
@@ -8210,7 +8216,7 @@ async function submitToOTS(otsDigestHex) {
       if (res.ok) { const d = await res.arrayBuffer(); if (d.byteLength > 0) return {success: true, calendar: url, proof: new Uint8Array(d)}; }
     } catch(e) { console.warn('Calendar failed:', url, e.message); }
   }
-  return {success: false, error: 'All calendar servers failed -- hash recorded for retry'};
+  return {success: false, error: 'All calendar servers failed — hash recorded for retry'};
 }
 
 function updateStep(n, s, d) {
@@ -8445,7 +8451,7 @@ function getPricing() {
   const identifiesAsLE = leKeywords.some(kw => senderName.includes(kw) || identifierText.includes(kw));
 
   if (isLE || identifiesAsLE) {
-    price = { ...price, amount: 0, label: price.label + ' -- LAW ENFORCEMENT (FREE)' };
+    price = { ...price, amount: 0, label: price.label + ' — LAW ENFORCEMENT (FREE)' };
   }
 
   return price;
@@ -8458,7 +8464,7 @@ const STRIPE_LINKS = {
 };
 
 function showPaymentGate(price, detectionResult) {
-  // Render into the dedicated #paymentGate container -- NEVER into #results:
+  // Render into the dedicated #paymentGate container — NEVER into #results:
   // replacing #results would destroy the static qrPreview canvas, hash displays
   // and download grid that runSealingPipeline()/showResults() depend on (this
   // was the "Cannot read properties of null (reading 'getContext')" crash).
@@ -8475,7 +8481,7 @@ function showPaymentGate(price, detectionResult) {
     '</div>' : '';
 
   gateEl.innerHTML =
-    '<h3 style="color:' + (isFree ? '#22c55e' : '#D4A843') + ';">' + (isFree ? '&#10003; Law Enforcement -- Free' : '&#127970; Commercial Sealing Detected') + '</h3>' +
+    '<h3 style="color:' + (isFree ? '#22c55e' : '#D4A843') + ';">' + (isFree ? '&#10003; Law Enforcement — Free' : '&#127970; Commercial Sealing Detected') + '</h3>' +
     '<div style="background:rgba(15,52,96,0.12);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;margin:16px 0;font-size:13px;line-height:1.7;color:#D5D8DD;">' +
     (isFree ? '<strong style="color:#22c55e;">✓ Law Enforcement Exemption Applied</strong><br>' : '') +
     '<strong style="color:#F8F9FA;">Detected indicators:</strong> ' + (detectionResult.count > 0 ? keywordList : 'Document context suggests commercial use') + '<br>' +
@@ -8558,7 +8564,7 @@ function initiateStripePayment() {
 
 // Object-URL registry. Every download/share URL for a seal run is registered
 // here so we can revoke them all before the next run. Without this, each seal
-// (and each retry) leaked its blob: URLs -- for a large sealed PDF that is tens
+// (and each retry) leaked its blob: URLs — for a large sealed PDF that is tens
 // of MB per attempt, which accumulates until the browser can no longer hand the
 // big file to a download or the share sheet while the small files still work.
 window._voObjectUrls = window._voObjectUrls || [];
@@ -8641,7 +8647,7 @@ function voFindAscii(hay, needleStr, limit) {
 // Patch the placeholder Subject hash inside the saved PDF bytes with the real
 // SHA-512 of those bytes. Returns the sealed-file hash hex, or null when the
 // placeholder is not present exactly once (caller then falls back to the
-// legacy VO-SEAL subject -- an honest degradation, never a silent failure).
+// legacy VO-SEAL subject — an honest degradation, never a silent failure).
 async function voEmbedSealedFileHash(savedBytes) {
   var hits = voFindAscii(savedBytes, voUtf16Hex(VO_SEAL2_PREFIX + VO_HASH_PLACEHOLDER), 2);
   if (hits.length !== 1) return null;
@@ -8657,7 +8663,7 @@ async function voEmbedSealedFileHash(savedBytes) {
 // Pre-seal page normalisation. Reveal any page whose CropBox hides part of its
 // MediaBox, so the sealed copy shows the WHOLE page. A source PDF arrived with
 // 58 pages cropped to a landscape slice and the seal was faithfully preserving
-// that -- half of each page was invisible in the sealed output, and manually
+// that — half of each page was invisible in the sealed output, and manually
 // un-cropping the source before sealing did not survive because pdf-lib carried
 // the CropBox straight through. Resetting CropBox to MediaBox restores the full
 // page; no content is touched, only the visible window. Runs BEFORE the overlay
@@ -8695,7 +8701,7 @@ function voNormalizeSealPageBoxes(pdf) {
 async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clientName, password, senderEmail, chain, fraudResult) {
   // Password-protected input: the overlay (watermark/QR/footer) cannot be
   // stamped inside a locked file, and force-loading would corrupt it. The
-  // honest degradation is to seal the EXACT original bytes as-is -- the
+  // honest degradation is to seal the EXACT original bytes as-is — the
   // SHA-512 + OTS anchor already cover them, the verify page will match them,
   // and the Seal Certificate carries the QR and seal record instead. This
   // replaces a hard pipeline crash observed in production.
@@ -8739,10 +8745,10 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     const pg = pages[i];
     const { width: pageW, height: pageH } = pg.getSize();
 
-    // Content scaling removed in v1.2.6 -- PDFContentStream.of() with q/cm/Q
+    // Content scaling removed in v1.2.6 — PDFContentStream.of() with q/cm/Q
     // operators was corrupting content streams on most pages, destroying all text.
     // The watermark, QR code, and footer are now drawn as overlays on top of
-    // the original unmodified content -- preserving 100% of document text.
+    // the original unmodified content — preserving 100% of document text.
 
     if (wmImg) {
       const s = Math.max(pageW / wmImg.width, pageH / wmImg.height);
@@ -8776,7 +8782,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
 
     const fy = pageH * 0.02, fs = Math.min(pageW, pageH) * 0.018;
     pg.drawRectangle({ x: 0, y: 0, width: pageW, height: fy + fs*3, color: rgb(0.02,0.05,0.08), opacity: 0.85 });
-    const stLabel = sealType==='commercial' && clientName ? 'COMMERCIAL SEAL -- ' + clientName.toUpperCase() : 'PRIVATE SEAL -- FREE TIER';
+    const stLabel = sealType==='commercial' && clientName ? 'COMMERCIAL SEAL — ' + clientName.toUpperCase() : 'PRIVATE SEAL — FREE TIER';
     const chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
     const chainLabel = chainIds.length > 0 ? '  |  Chain: ' + chainIds.length + ' prev' : '';
     pg.drawText(stLabel + chainLabel, { x: pageW*0.03, y: fy+fs*1.8, size: fs*0.8, font: helvBold, color: rgb(0.82,0.65,0.28) });
@@ -8846,7 +8852,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
 // ==================== SEAL CERTIFICATE (Seal Only mode) ====================
 // One-page certificate PDF, generated with the same pdf-lib tooling as the seal.
 // House style matches the forensic report cover: navy full bleed, gold rules,
-// serif wordmark. It states exactly what the seal proves -- integrity and time.
+// serif wordmark. It states exactly what the seal proves — integrity and time.
 async function buildSealCertificate(opts) {
   opts = opts || {};
   const certDoc = await PDFDocument.create();
@@ -8869,7 +8875,7 @@ async function buildSealCertificate(opts) {
 
   // WinAnsi-safe text: fold anything the standard fonts cannot encode.
   function safe(t) {
-    // Whitelist as numeric code points only -- no unicode escapes and no
+    // Whitelist as numeric code points only — no unicode escapes and no
     // non-ASCII literals in source (transport-safe). Allowed: printable ASCII 0x20-0x7E,
     // Latin-1 0xA0-0xFF, en/em dash, curly quotes, bullet, ellipsis (all
     // WinAnsi-encodable); everything else folds to '?'.
@@ -8909,7 +8915,7 @@ async function buildSealCertificate(opts) {
   page.drawText(sub, { x: cx(sub, timesItalic, 11), y: y, size: 11, font: timesItalic, color: LIGHT });
   y -= 42;
 
-  // QR panel (right column) -- links to verify.html with hash + seal metadata
+  // QR panel (right column) — links to verify.html with hash + seal metadata
   var qrSize = 118;
   var qrX = PW - 70 - qrSize, qrY = y - qrSize + 16;
   page.drawRectangle({ x: qrX - 8, y: qrY - 8, width: qrSize + 16, height: qrSize + 16, color: WHITE, borderColor: GOLD, borderWidth: 1 });
@@ -8931,7 +8937,7 @@ async function buildSealCertificate(opts) {
   page.drawText(vurl, { x: qrX - 8 + (qrSize + 16 - helv.widthOfTextAtSize(vurl, 6.5)) / 2, y: qrY - 33, size: 6.5, font: helv, color: MUTE });
 
   // Sender identity block (PRIVATE): identity, GPS and device live ONLY here,
-  // in the user's own Seal Certificate -- never in the public QR payload.
+  // in the user's own Seal Certificate — never in the public QR payload.
   var idy = opts.identity || null;
   var hasIdy = !!(idy && (idy.n || idy.id || idy.a || idy.e));
   if (hasIdy || opts.gps || opts.dev) {
@@ -8975,8 +8981,8 @@ async function buildSealCertificate(opts) {
   row('SEALED (ISO-8601)', [opts.timestampISO || 'n/a'], courier, 10);
   row('PAGES', [String(opts.pageCount || 'n/a')], helv, 10);
   var otsLines = opts.otsSubmitted
-    ? wrap('SUBMITTED -- digest accepted by OpenTimestamps calendar' + (opts.otsCalendar ? ' (' + opts.otsCalendar.replace(/^https?:\/\//, '').replace(/\/.*$/, '') + ')' : '') + '. Bitcoin blockchain confirmation pending (typically 1-2 hours).', helv, 8.5, rowMaxW)
-    : wrap('PENDING -- calendar servers were unreachable at sealing time. The SHA-256 digest is recorded in the seal and can be submitted later; the seal itself is complete and valid without the blockchain anchor.', helv, 8.5, rowMaxW);
+    ? wrap('SUBMITTED — digest accepted by OpenTimestamps calendar' + (opts.otsCalendar ? ' (' + opts.otsCalendar.replace(/^https?:\/\//, '').replace(/\/.*$/, '') + ')' : '') + '. Bitcoin blockchain confirmation pending (typically 1-2 hours).', helv, 8.5, rowMaxW)
+    : wrap('PENDING — calendar servers were unreachable at sealing time. The SHA-256 digest is recorded in the seal and can be submitted later; the seal itself is complete and valid without the blockchain anchor.', helv, 8.5, rowMaxW);
   row('OPENTIMESTAMPS STATUS', otsLines, helv, 8.5);
 
   // Canonical statement box
@@ -8991,7 +8997,7 @@ async function buildSealCertificate(opts) {
   page.drawText('VERUM OMNIS FOUNDATION  |  PATENT PENDING', { x: cx('VERUM OMNIS FOUNDATION  |  PATENT PENDING', helvBold, 7.5), y: 52, size: 7.5, font: helvBold, color: MUTE });
   page.drawText('Verify this seal at verumglobal.foundation/verify.html', { x: cx('Verify this seal at verumglobal.foundation/verify.html', helv, 8), y: 38, size: 8, font: helv, color: GOLD });
 
-  try { certDoc.setTitle('Verum Omnis Seal Certificate -- ' + (opts.sealId || '')); } catch (e) {}
+  try { certDoc.setTitle('Verum Omnis Seal Certificate — ' + (opts.sealId || '')); } catch (e) {}
   try { certDoc.setAuthor('Verum Omnis'); } catch (e) {}
   try { certDoc.setSubject('SEAL-CERT|' + (opts.sha512 || '') + '|' + (opts.sealId || '')); } catch (e) {}
   try { certDoc.setProducer('Verum Omnis Document Sealing Service v1.2.9'); } catch (e) {}
@@ -9004,7 +9010,7 @@ async function buildSealCertificate(opts) {
 // digest went to which calendars, and when. Same house style as the Seal
 // Certificate (navy full bleed, gold rules, serif wordmark). It is issued only
 // when a calendar accepted the digest, and it is explicitly PENDING: the
-// canonical statement says exactly what the seal proves -- integrity and time.
+// canonical statement says exactly what the seal proves — integrity and time.
 async function buildAnchorCertificate(opts) {
   opts = opts || {};
   const certDoc = await PDFDocument.create();
@@ -9027,7 +9033,7 @@ async function buildAnchorCertificate(opts) {
 
   // WinAnsi-safe text: fold anything the standard fonts cannot encode.
   function safe(t) {
-    // Whitelist as numeric code points only -- no unicode escapes and no
+    // Whitelist as numeric code points only — no unicode escapes and no
     // non-ASCII literals in source (transport-safe). Allowed: printable ASCII 0x20-0x7E,
     // Latin-1 0xA0-0xFF, en/em dash, curly quotes, bullet, ellipsis (all
     // WinAnsi-encodable); everything else folds to '?'.
@@ -9067,7 +9073,7 @@ async function buildAnchorCertificate(opts) {
   page.drawText(sub, { x: cx(sub, timesItalic, 11), y: y, size: 11, font: timesItalic, color: LIGHT });
   y -= 42;
 
-  // QR panel (right column) -- same verify link as the Seal Certificate
+  // QR panel (right column) — same verify link as the Seal Certificate
   var qrSize = 118;
   var qrX = PW - 70 - qrSize, qrY = y - qrSize + 16;
   page.drawRectangle({ x: qrX - 8, y: qrY - 8, width: qrSize + 16, height: qrSize + 16, color: WHITE, borderColor: GOLD, borderWidth: 1 });
@@ -9148,7 +9154,7 @@ async function buildAnchorCertificate(opts) {
   page.drawText('VERUM OMNIS FOUNDATION  |  PATENT PENDING', { x: cx('VERUM OMNIS FOUNDATION  |  PATENT PENDING', helvBold, 7.5), y: 52, size: 7.5, font: helvBold, color: MUTE });
   page.drawText('Confirm and upgrade at verumglobal.foundation/verify.html', { x: cx('Confirm and upgrade at verumglobal.foundation/verify.html', helv, 8), y: 38, size: 8, font: helv, color: GOLD });
 
-  try { certDoc.setTitle('Verum Omnis Anchor Certificate -- ' + (opts.sealId || '')); } catch (e) {}
+  try { certDoc.setTitle('Verum Omnis Anchor Certificate — ' + (opts.sealId || '')); } catch (e) {}
   try { certDoc.setAuthor('Verum Omnis'); } catch (e) {}
   try { certDoc.setSubject('ANCHOR-CERT|' + (opts.otsDigest || '') + '|' + (opts.sealId || '')); } catch (e) {}
   try { certDoc.setProducer('Verum Omnis Document Sealing Service v1.3.0'); } catch (e) {}
@@ -9162,7 +9168,7 @@ async function startSealing() {
   if (!selectedFile && selectedFiles.length === 0) return;
 
   // Free any blob: URLs from a previous seal/retry before we build a large new
-  // one -- otherwise each attempt on a big document piles tens of MB of
+  // one — otherwise each attempt on a big document piles tens of MB of
   // un-revoked object URLs onto the tab until downloads/share start failing.
   voRevokeAllObjectURLs();
 
@@ -9183,7 +9189,7 @@ async function startSealing() {
   }
   if (!selectedFile) return;
 
-  maybeRunGatekeep(); // advisory only -- NEVER blocks sealing
+  maybeRunGatekeep(); // advisory only — NEVER blocks sealing
   document.getElementById('sealBtn').disabled = true;
   document.getElementById('pipeline').classList.add('visible');
   document.getElementById('results').classList.remove('visible');
@@ -9191,7 +9197,7 @@ async function startSealing() {
   updateStep('Fraud', 'pending', '');
   otsProof = null; gpsCoords = null; deviceInfo = null;
 
-  // ALL variable declarations in outer scope -- NO TDZ error on mobile
+  // ALL variable declarations in outer scope — NO TDZ error on mobile
   var sha256 = '', sha512 = '', sealId = '', otsDigestHex = '';
   var chain = [];
   var fileBytes = null;
@@ -9208,7 +9214,7 @@ async function startSealing() {
     gpsCoords = await gpsPromise;
     updateStep(1, 'complete', gpsCoords ? gpsCoords.lat + ',' + gpsCoords.lng : 'GPS declined');
 
-    // Step 1.5: Forensic Contradiction Engine -- FORENSIC ANALYSIS MODE ONLY.
+    // Step 1.5: Forensic Contradiction Engine — FORENSIC ANALYSIS MODE ONLY.
     // Seal Only mode performs no content analysis of any kind: the seal proves
     // integrity and time only, and nothing about the document's contents is
     // scanned, scored, or sent anywhere.
@@ -9219,8 +9225,8 @@ async function startSealing() {
     if (sealMode === 'forensic') {
       // AI triage (optional; only when AI review is enabled): classify the document
       // FIRST, concurrently with the deterministic engine run. Defensive: ANY
-      // failure -- including the classify endpoint not being deployed yet (404/500)
-      // -- is silent; the full engine run proceeds with no classification label.
+      // failure — including the classify endpoint not being deployed yet (404/500)
+      // — is silent; the full engine run proceeds with no classification label.
       var classifyPromise = null;
       if (isAiReviewEnabled()) {
         classifyPromise = (async function() {
@@ -9267,7 +9273,7 @@ async function startSealing() {
       // A scan that crashed is NOT a clean scan. The catch above sets clean:true
       // purely so the seal can still complete, so rendering that as a green tick
       // told the user "no indicators found" when the engine had in fact never
-      // run. Surface the failure instead -- for a forensic tool, a silent false
+      // run. Surface the failure instead — for a forensic tool, a silent false
       // clean is worse than no scan at all.
       if (forensicResult.scanFailed) {
         updateStep('Fraud', 'error', 'Scan could NOT complete (' + (forensicResult.scanError || 'unknown error') + ') - this is not a clean result');
@@ -9277,12 +9283,12 @@ async function startSealing() {
         updateStep('Fraud', 'complete',
           forensicResult.clean
             // contradictionTypesUsed counts the finding types that fired, not the
-            // number of detectors run -- "checked" read as "the engine did nothing".
-            ? 'No indicators - ' + (forensicResult.contradictionTypesUsed || 0) + ' of 46 contradiction types triggered'
+            // number of detectors run — "checked" read as "the engine did nothing".
+            ? 'No findings - ' + (forensicResult.contradictionTypesUsed || 0) + ' of 46 contradiction types triggered'
             : forensicResult.totalFindings + ' findings recorded, stated as fact and anchored to the record (score ' + forensicResult.overallScore + '/100)');
       }
     } else {
-      // Seal Only: grab the page count for the Seal Certificate -- nothing else.
+      // Seal Only: grab the page count for the Seal Certificate — nothing else.
       try { _pipelinePageCount = (await PDFDocument.load(fileBytes, { ignoreEncryption: true })).getPageCount(); } catch(e) { _pipelinePageCount = 0; }
     }
 
@@ -9320,7 +9326,7 @@ async function startSealing() {
       setSealType('commercial');
       var price = getPricing();
       showPaymentGate(price, detection);
-      return; // STOP -- user must interact with payment gate
+      return; // STOP — user must interact with payment gate
     }
 
     // If user selected commercial, show pricing
@@ -9328,7 +9334,7 @@ async function startSealing() {
       var price = getPricing();
       if (price.amount > 0) {
         showPaymentGate(price, detection);
-        return; // STOP -- wait for payment
+        return; // STOP — wait for payment
       }
     }
 
@@ -9366,7 +9372,7 @@ async function startSealing() {
 }
 
 // ==================== OPTIONAL AI REVIEW (CLOUDFLARE WORKERS AI) ====================
-// Advisory layer only -- it never blocks sealing. PRIVACY HARD LIMIT: only finding
+// Advisory layer only — it never blocks sealing. PRIVACY HARD LIMIT: only finding
 // metadata (type, severity, short evidence quote, location, id) is ever sent; the
 // document itself never leaves this device. Every call has a 10s AbortController
 // timeout; any failure is silent and the pipeline proceeds with the deterministic
@@ -9384,11 +9390,11 @@ async function aiApiPost(path, payload, timeoutMs) {
   var ctrl = new AbortController();
   var timer = setTimeout(function() { ctrl.abort(); }, timeoutMs || 10000);
   try {
-    // SAME-ORIGIN, relative URL -- never a hardcoded host. The page is served on
+    // SAME-ORIGIN, relative URL — never a hardcoded host. The page is served on
     // www.verumglobal.foundation but this used to POST to the apex
     // verumglobal.foundation, making every AI call cross-origin. A cross-origin
     // JSON POST triggers a CORS preflight, and the apex<->www canonical redirect
-    // is not followed on preflight requests -- so classify, assess, narrate and
+    // is not followed on preflight requests — so classify, assess, narrate and
     // gatekeep ALL failed silently and the report fell back to the on-device
     // narrative every time. A relative path hits whatever host actually served
     // the page: no cross-origin, no preflight, no redirect.
@@ -9422,8 +9428,8 @@ function maybeRunGatekeep() {
     if (!tier) return;
     aiApiPost('/api/v1/ai/gatekeep', { declaredTier: tier }, 10000).then(function(r) {
       if (r && r.likelihood === 'high' && banner) banner.style.display = 'block';
-    }).catch(function() { /* advisory only -- silent */ });
-  } catch (e) { /* advisory only -- silent */ }
+    }).catch(function() { /* advisory only — silent */ });
+  } catch (e) { /* advisory only — silent */ }
 }
 
 // Assess: returns { ran, findings (kept), added (AI-identified, cap 20), assessed }
@@ -9437,8 +9443,8 @@ function maybeRunGatekeep() {
 // findings per call (MAX_ASSESS_FINDINGS). A large scan's evidence quotes blow
 // past 16 KB in one shot. Here each finding's evidence is trimmed to the
 // server's own 300-char cap (the model never sees more), findings are packed
-// into batches under both limits, and a batch that fails is skipped -- its
-// findings are KEPT, never silently dropped -- so one bad batch cannot lose the
+// into batches under both limits, and a batch that fails is skipped — its
+// findings are KEPT, never silently dropped — so one bad batch cannot lose the
 // whole review. Verdicts merge by id (every finding is given one).
 var AI_ASSESS_BODY_LIMIT = 14 * 1024;   // headroom under the worker's 16 KB cap
 var AI_ASSESS_MAX_PER_BATCH = 40;       // worker MAX_ASSESS_FINDINGS
@@ -9483,7 +9489,7 @@ async function aiAssessFindings(findings) {
       if (v.id !== undefined && v.id !== null) dropIds[String(v.id)] = true;
     }
     // AI-identified indicators the engine missed (extended worker only; cap 20).
-    // rationale is display text for the report -- it is NEVER sent to the feedback loop.
+    // rationale is display text for the report — it is NEVER sent to the feedback loop.
     if (Array.isArray(res.additionalFindings)) {
       for (var a = 0; a < res.additionalFindings.length && added.length < 20; a++) {
         var af = res.additionalFindings[a] || {};
@@ -9513,11 +9519,11 @@ async function aiAssessFindings(findings) {
 // Narrate: returns the AI-drafted narrative string, or null on any failure
 // (including template-fallback absence and timeouts). Includes GPS, device, and metadata.
 // Deterministic, fully on-device narrative built straight from the engine
-// findings -- used whenever the AI narrate endpoint is unreachable or returns
+// findings — used whenever the AI narrate endpoint is unreachable or returns
 // nothing (a dropped connection, the model down, an empty reply). This is the
 // deterministic "_deterministic_generate" fallback: it reads like a real
-// forensic account -- grouped by theme, in flowing prose, explaining what each
-// cluster means and how serious it is -- NOT a raw dump of numbered findings.
+// forensic account — grouped by theme, in flowing prose, explaining what each
+// cluster means and how serious it is — NOT a raw dump of numbered findings.
 // It guarantees the report ALWAYS has a readable narrative, never leaves the
 // device, and asserts nothing beyond the supplied findings.
 // Case details the user typed on the seal page (all optional). Printed on the
@@ -9686,7 +9692,7 @@ function buildLocalNarrative(findings, score, verdict) {
   var SEP = '\n\n' + '='.repeat(80) + '\n\n';
 
   // CT lookups. forensic-report.js keeps its copies inside a closure, so they are
-  // NOT visible here -- define them locally (compact) so grouping and type names
+  // NOT visible here — define them locally (compact) so grouping and type names
   // work in this on-device narrative instead of collapsing every finding to
   // "DIGITAL" and showing raw codes like "ct14".
   var CATLAB = {
@@ -9728,26 +9734,26 @@ function buildLocalNarrative(findings, score, verdict) {
     CT42: 'DIGITAL', CT43: 'DIGITAL',
     CT44: 'FRANCHISE_LEASE', CT45: 'FRANCHISE_LEASE', CT46: 'IDENTITY'
   };
-  var nameOf = function (t) { return CTNAME[t] || t || 'indicator'; };
+  var nameOf = function (t) { return CTNAME[t] || t || 'finding'; };
   var catOf = function (t) { return CTCAT[t] || null; };
 
-  // Plain-language meaning of each category -- generic forensic context, always
+  // Plain-language meaning of each category — generic forensic context, always
   // true of the category, never a case-specific claim.
   var MEAN = {
-    STATEMENTAL: 'the document states conflicting facts, figures or definitions in different places -- internal contradictions a single truthful record should not contain',
-    IDENTITY: 'the names, titles, roles or entity statuses claimed in the document do not line up -- a common marker of misrepresentation or impersonation',
-    FINANCIAL: 'amounts, bank details, VAT or registration numbers or currencies conflict -- the kind of discrepancy that accompanies invoice fraud, laundering or fabricated accounts',
-    INTEGRITY: "the document's structure shows signs of alteration -- layout, metadata, fonts, timestamps or page order inconsistent with a single untouched original",
+    STATEMENTAL: 'the document states conflicting facts, figures or definitions in different places — internal contradictions a single truthful record should not contain',
+    IDENTITY: 'the names, titles, roles or entity statuses claimed in the document do not line up — a common marker of misrepresentation or impersonation',
+    FINANCIAL: 'amounts, bank details, VAT or registration numbers or currencies conflict — the kind of discrepancy that accompanies invoice fraud, laundering or fabricated accounts',
+    INTEGRITY: "the document's structure shows signs of alteration — layout, metadata, fonts, timestamps or page order inconsistent with a single untouched original",
     CROSS_REF: 'the document relies on sources, precedents or procedures that do not resolve when checked',
     CONTACT: 'addresses or contact details conflict, or place a party where they could not consistently be',
     EVIDENCE: 'there are signs of witness-statement conflict, evidence tampering or a broken chain of custody',
     DIGITAL: "the document's digital footprint or internal references are inconsistent",
-    FRANCHISE_LEASE: 'a contractual right was invoked whose precondition the record contradicts, or an asset (goodwill/value of the business) is recognised in one place and denied in another -- the lease/franchise terms read against the surrounding facts'
+    FRANCHISE_LEASE: 'a contractual right was invoked whose precondition the record contradicts, or an asset (goodwill/value of the business) is recognised in one place and denied in another — the lease/franchise terms read against the surrounding facts'
   };
 
   var clean = function (s) { return (s == null ? '' : String(s)).replace(/\s+/g, ' ').trim(); };
   // Structural notes: findings the engine demoted because the file is a
-  // compiled bundle (repeated page numbers etc.) -- normal housekeeping, so
+  // compiled bundle (repeated page numbers etc.) — normal housekeeping, so
   // the narrative counts them separately instead of letting them drown the
   // substantive story.
   var DEMRE = /\[bundle context:[^\]]*\]/i;
@@ -9755,7 +9761,7 @@ function buildLocalNarrative(findings, score, verdict) {
   var quoteOf = function (f) {
     var e = clean(f.evidence || f.description || '');
     // strip seal-footer debris dragged in when the analysed file is itself sealed
-    // (matches the report builder's cleanQuote -- several footer formats exist)
+    // (matches the report builder's cleanQuote — several footer formats exist)
     e = e.replace(/verum omnis sha-?512 \(partial\):\s*[0-9a-f]{6,}/gi, ' ')
       .replace(/verum omnis seal(ed)?\s*(original|evidence|document)?\s*(case-[0-9a-f]+)?/gi, ' ')
       .replace(/\bcase-[0-9a-f]{6,}\b/gi, ' ')
@@ -9799,15 +9805,15 @@ function buildLocalNarrative(findings, score, verdict) {
 
   // ---------- SUMMARY ----------
   var summary = 'The forensic engine examined this sealed document and flagged ' + list.length +
-    ' indicator' + (list.length === 1 ? '' : 's');
+    ' finding' + (list.length === 1 ? '' : 's');
   if (demoted > 0) {
-    summary += ' -- ' + substantive + ' substantive and ' + demoted + ' routine structural note' + (demoted === 1 ? '' : 's') +
+    summary += ' — ' + substantive + ' substantive and ' + demoted + ' routine structural note' + (demoted === 1 ? '' : 's') +
       ' of the kind expected when many separate documents are compiled into one bundle';
   }
-  if (scoreNum != null) summary += ', producing an overall indicator score of ' + scoreNum + ' out of 100 (confidence band ' + band + ')';
+  if (scoreNum != null) summary += ', producing an overall score of ' + scoreNum + ' out of 100 (confidence band ' + band + ')';
   summary += '. ' + gravity + ': a moderate number is not proof of a minor matter, ' +
     'because a handful of high-severity contradictions can carry far more weight than many trivial ones' +
-    (demoted > 0 ? ', and part of this score comes from routine structural notes -- the substantive indicators below are what matter' : '') + '. ';
+    (demoted > 0 ? ', and part of this score comes from routine structural notes — the substantive findings below are what matter' : '') + '. ';
   if (counts.length) {
     var dom = counts.slice(0, 3).map(function (x) { return (CATLAB[x.cat] || x.cat).toLowerCase() + ' (' + x.n + ')'; });
     summary += 'The concerns cluster in ' + joinList(dom) + '. ';
@@ -9815,25 +9821,25 @@ function buildLocalNarrative(findings, score, verdict) {
   if (serial.length) {
     // Only name genuinely-labelled patterns. Suppressed/weak/fallback names
     // ("Multi-stage pattern indicator", "... label suppressed") must never leak
-    // into the prose -- when none survive, say the labels were withheld.
+    // into the prose — when none survive, say the labels were withheld.
     var snames = [];
     serial.forEach(function (f) {
       var n = clean(f.serialName || f.serialPattern || '');
       if (!n) return;
-      if (/suppressed|weak signal|^multi-stage pattern indicator$/i.test(n)) return;
+      if (/suppressed|weak signal|^multi-stage pattern (?:indicator|match)$/i.test(n)) return;
       if (snames.indexOf(n) < 0) snames.push(n);
     });
     summary += 'The engine also matched ' + serial.length + ' multi-stage pattern' + (serial.length === 1 ? '' : 's') +
       (snames.length
-        ? ' -- including ' + joinList(snames.slice(0, 4)) + (snames.length > 4 ? ', among others' : '')
-        : ' (labels withheld to avoid mischaracterising a document that discusses fraud as its subject -- see the Serial Pattern Analysis section)') + '. ';
+        ? ' — including ' + joinList(snames.slice(0, 4)) + (snames.length > 4 ? ', among others' : '')
+        : ' (labels withheld to avoid mischaracterising a document that discusses fraud as its subject — see the Serial Pattern Analysis section)') + '. ';
   }
-  summary += 'Every point below is drawn only from the document itself and is an investigative indicator; a human ' +
+  summary += 'Every point below is drawn only from the document itself and is stated as a fact of the record; a human ' +
     'reviewer, investigator or court makes the final determination. This narrative was generated deterministically ' +
-    'on this device from the sealed findings -- no external service was used.';
+    'on this device from the sealed findings — no external service was used.';
 
   // ---------- KEY CONTRADICTIONS (top findings as plain sentences) ----------
-  // "The actual contradiction, on which page" -- one full sentence per top
+  // "The actual contradiction, on which page" — one full sentence per top
   // finding, no bare detector codes, page anchor always stated. This is the
   // deterministic answer to a reader who never wants to decode "CT02".
   var SEVWORD = { 5: 'Critical', 4: 'High', 3: 'Moderate', 2: 'Low', 1: 'Informational' };
@@ -9856,12 +9862,12 @@ function buildLocalNarrative(findings, score, verdict) {
     var arr = whole.filter(function (f) { return !isDem(f); });
     var demN = whole.length - arr.length;
     if (arr.length === 0) {
-      evParts.push((CATLAB[x.cat] || x.cat) + ' -- ' + x.n + ' indicator' + (x.n === 1 ? '' : 's') + ', all of them routine structural notes expected in a compiled bundle (repeated page numbering, annexures filed in another part of the file). Nothing in this group requires investigation on its own.');
+      evParts.push((CATLAB[x.cat] || x.cat) + ' — ' + x.n + ' finding' + (x.n === 1 ? '' : 's') + ', all of them routine structural notes expected in a compiled bundle (repeated page numbering, annexures filed in another part of the file). Nothing in this group requires investigation on its own.');
       return;
     }
     var lead = arr[0];
     var leadName = nameOf(lead.type).toLowerCase();
-    var p = (CATLAB[x.cat] || x.cat) + ' -- ' + x.n + ' indicator' + (x.n === 1 ? '' : 's') +
+    var p = (CATLAB[x.cat] || x.cat) + ' — ' + x.n + ' finding' + (x.n === 1 ? '' : 's') +
       (demN > 0 ? ' (' + arr.length + ' substantive, ' + demN + ' structural)' : '') + '. ' +
       'In this group, ' + (MEAN[x.cat] || 'the document shows internal inconsistencies') + '. ' +
       'The strongest is ' + art(leadName) + ' ' + leadName + ' ' + atWhere(lead) + ': "' + quoteOf(lead) + '"';
@@ -9872,20 +9878,20 @@ function buildLocalNarrative(findings, score, verdict) {
     }
     p += '.';
     var rest = arr.length - 2;
-    if (rest > 0) p += ' A further ' + rest + ' substantive indicator' + (rest === 1 ? ' was' : 's were') + ' recorded in this group.';
+    if (rest > 0) p += ' A further ' + rest + ' substantive finding' + (rest === 1 ? ' was' : 's were') + ' recorded in this group.';
     evParts.push(p);
   });
   var ai = byCat['AI_IDENTIFIED'] || [];
   if (ai.length) {
-    evParts.push('AI-identified indicators -- ' + ai.length + '. The optional AI review flagged ' + ai.length +
+    evParts.push('AI-identified findings — ' + ai.length + '. The optional AI review flagged ' + ai.length +
       ' further point' + (ai.length === 1 ? '' : 's') + ' the deterministic detectors did not, for example: "' +
       clean(ai[0].rationale || ai[0].evidence || '') + '". These are advisory and carry no scoring weight.');
   }
-  var evidence = evParts.length ? evParts.join('\n\n') : 'No categorised indicators were available to describe.';
+  var evidence = evParts.length ? evParts.join('\n\n') : 'No categorised findings were available to describe.';
 
   // ---------- PATTERNS OF CONCERN ----------
   // Suppressed/masked pattern labels all render identically, so listing them
-  // one per line tells the reader nothing eight times over -- collapse them
+  // one per line tells the reader nothing eight times over — collapse them
   // into a single counted sentence and list only the named patterns.
   var patterns = '';
   if (serial.length) {
@@ -9893,11 +9899,11 @@ function buildLocalNarrative(findings, score, verdict) {
     serial.forEach(function (f) {
       var nm = clean(f.serialName || f.serialPattern || '');
       var ev = clean(f.evidence || '');
-      if (!nm || /label suppressed|weak signal|^multi-stage pattern indicator$/i.test(nm) || /label suppressed/i.test(ev)) maskedN++;
+      if (!nm || /label suppressed|weak signal|^multi-stage pattern (?:indicator|match)$/i.test(nm) || /label suppressed/i.test(ev)) maskedN++;
       else named.push(f);
     });
     patterns = 'A pattern is flagged only when several independent stages appear together in the same document, ' +
-      'which is harder to explain as coincidence than any single indicator.';
+      'which is harder to explain as coincidence than any single finding.';
     if (named.length) {
       var lines = named.slice(0, 8).map(function (f) {
         return '- ' + clean(f.serialName || f.serialPattern || 'Multi-stage pattern') + ': ' + quoteOf(f);
@@ -9906,23 +9912,23 @@ function buildLocalNarrative(findings, score, verdict) {
       if (named.length > 8) patterns += '\n\n(' + (named.length - 8) + ' further named pattern(s) were included in the findings.)';
     }
     if (maskedN > 0) {
-      patterns += (named.length ? '\n\n' : ' ') + maskedN + ' further multi-stage pattern indicator' + (maskedN === 1 ? ' was' : 's were') +
+      patterns += (named.length ? '\n\n' : ' ') + maskedN + ' further multi-stage pattern match' + (maskedN === 1 ? ' was' : 's were') +
         ' matched with the label withheld: this document discusses fraud or disputed conduct as its subject matter, and naming the patterns here could mischaracterise the document itself. The underlying findings remain in the sealed findings list for investigators.';
     }
   }
 
   // ---------- HOW SERIOUS THIS IS ----------
-  var serious = 'Of the ' + list.length + ' indicator' + (list.length === 1 ? '' : 's') + ', ' +
+  var serious = 'Of the ' + list.length + ' finding' + (list.length === 1 ? '' : 's') + ', ' +
     sev[5] + ' ' + (sev[5] === 1 ? 'is' : 'are') + ' critical (severity 5), ' + sev[4] + ' high (4), ' +
     sev[3] + ' medium (3), and ' + (sev[2] + sev[1]) + ' low or informational' +
     (demoted > 0 ? ' (' + demoted + ' of the low ones are routine structural notes for a compiled bundle)' : '') +
-    '. The critical and high indicators ' +
+    '. The critical and high findings ' +
     'are the ones an investigator should examine first; the medium and low ones add corroborating context.';
 
   // ---------- WHAT HAPPENED (the story) ----------
   // A flowing, plain-English account woven from the strongest substantive
   // findings, the legal themes present, and the named parties from the case
-  // details. Deterministic and anchored -- it asserts nothing beyond the
+  // details. Deterministic and anchored — it asserts nothing beyond the
   // findings, names no guilt, and reads like a case account rather than a list.
   var ci = (typeof voCaseDetails === 'function') ? (voCaseDetails() || {}) : {};
   var firstWord = function (n) { return String(n || '').trim().split(/\s+/)[0] || ''; };
@@ -9968,7 +9974,7 @@ function buildLocalNarrative(findings, score, verdict) {
       if (scored.length) whatHappened += ' By party, the flagged material most often names ' +
         joinList(scored.slice(0, 3).map(function (s) { return s.name + ' (' + s.n + ' finding' + (s.n === 1 ? '' : 's') + ')'; })) + '.';
     }
-    whatHappened += ' This account is reconstructed only from the indicators the engine could read; it is for an investigator or court to weigh, not a determination of guilt, and nothing here is asserted beyond what the sealed document itself contains.';
+    whatHappened += ' This account is reconstructed only from the findings the engine could read; it is for an investigator or court to weigh, not a determination of guilt, and nothing here is asserted beyond what the sealed document itself contains.';
   }
 
   // ---------- assemble ----------
@@ -10018,7 +10024,7 @@ function voBuildNarrateExcerpt(textBlocks, findings, maxChars) {
   // Also pull in pages carrying a role/capacity claim or an account instruction,
   // even when no finding anchors to them. These are the two halves of a
   // role/capacity contradiction (e.g. "in my capacity as a director of X" deep in
-  // an affidavit vs a payment routed to a differently-named account) -- a finding
+  // an affidavit vs a payment routed to a differently-named account) — a finding
   // rarely anchors to the capacity page, so without this the narrator only ever
   // sees one half and cannot reason the contradiction. Strong capacity claims are
   // preferred and the count is capped so a bundle that says "trust account" on
@@ -10057,7 +10063,7 @@ function voBuildNarrateExcerpt(textBlocks, findings, maxChars) {
 async function aiNarrateReport(findings, score, verdict) {
   // Build the exact shape the worker's /api/v1/ai/narrate contract requires.
   // The old payload sent {findings, score, verdict} but the worker validates
-  // findingsKept/confidence/documentName -- so every narrate call 400'd and the
+  // findingsKept/confidence/documentName — so every narrate call 400'd and the
   // report silently fell back to no AI narrative. Ids are assigned F1, F2, ...
   // so the model's [F#] citations line up with the findings list.
   var list = Array.isArray(findings) ? findings.filter(Boolean) : [];
@@ -10231,7 +10237,7 @@ function voReconcileClassification(ai, sample) {
 // findings of severity >= 3 (the engine's upper severity tiers); otherwise the
 // pattern is demoted to a muted "weak signals" note. When the AI classifier says
 // the document is ABOUT fraud (court filing, complaint, etc.), labels are
-// suppressed entirely. Findings themselves are always kept -- only the labels move.
+// suppressed entirely. Findings themselves are always kept — only the labels move.
 function getSerialLabelInfo(findings, suppressAll) {
   var serial = [], support = 0;
   var list = Array.isArray(findings) ? findings : [];
@@ -10308,7 +10314,7 @@ function applyBundleMode(result) {
     var c = Object.assign({}, f);
     c.severity = 2;
     c.bundleDemoted = true;
-    c.evidence = (c.evidence || '') + ' [bundle context: structural indicator demoted -- expected in a compiled multi-document case file]';
+    c.evidence = (c.evidence || '') + ' [bundle context: structural finding demoted — expected in a compiled multi-document case file]';
     demoted++;
     return c;
   });
@@ -10332,14 +10338,14 @@ function applyBundleMode(result) {
     summary: (typeof generateSummary === 'function') ? generateSummary(findings, score) : result.summary,
     extractionNotes: (((result.extractionNotes || '') + ' Bundle mode: this is a compiled multi-document case file (' +
       (voIsLegalCaseFile() ? 'case details supplied' : 'detected automatically from ' + (_pipelinePageCount | 0) + ' pages with repeated internal page numbers') + '), so ' + demoted +
-      ' structural indicator' + (demoted === 1 ? '' : 's') + ' (repeated internal page numbers, term/temporal-language repetition, address counts, per-document formalities and annexure references) ' +
-      (demoted === 1 ? 'was' : 'were') + ' demoted to Low and the indicator score recomputed. Contradiction, date, identity and financial findings are unaffected.').trim())
+      ' structural finding' + (demoted === 1 ? '' : 's') + ' (repeated internal page numbers, term/temporal-language repetition, address counts, per-document formalities and annexure references) ' +
+      (demoted === 1 ? 'was' : 'were') + ' demoted to Low and the score recomputed. Contradiction, date, identity and financial findings are unaffected.').trim())
   });
 }
 
 // ==================== OCR RESCUE (image-only pages) ====================
 // Pages with no text layer (scanned exhibits, photographed emails) are
-// invisible to every detector -- and they are often the critical evidence.
+// invisible to every detector — and they are often the critical evidence.
 // This helper OCRs the worst offenders ON-DEVICE with vendored tesseract.js:
 // no cloud call, nothing leaves the browser, consistent with the privacy
 // model. Called by runForensicEngine via the voOcrRescuePages hook; any
@@ -10362,12 +10368,12 @@ var VO_OCR_MIN_AVG = 150;       // only rescue when the rest of the doc has real
 
 // Hardened script loader for the OCR stack. The deployment intermittently
 // serves the home-page HTML instead of the file for root-level .js paths (the
-// same quirk that forced the engine to be inlined) -- when that happens onload
+// same quirk that forced the engine to be inlined) — when that happens onload
 // still fires but the library's global never appears, which is exactly how the
 // "pdf.js unavailable" total-OCR-failure happened. So: after EVERY attempt the
 // global is verified; each source gets a cache-busted retry; and where a pinned
 // CDN copy is configured it is tried last (loading a library from a CDN sends
-// nothing about the document anywhere -- same trust model as the page's
+// nothing about the document anywhere — same trust model as the page's
 // existing pdf-lib fallback).
 function voOcrLoadScriptAttempt(src) {
   return new Promise(function (resolve, reject) {
@@ -10392,7 +10398,7 @@ async function voOcrLoadScript(sources, globalCheck) {
         : sources[i] + (sources[i].indexOf('?') === -1 ? '?' : '&') + 'vobust=' + Date.now();
       try { await voOcrLoadScriptAttempt(url); }
       catch (e1) { errors.push(url + ': network/404'); continue; }
-      // onload fired -- but did the global appear? (An HTML-instead-of-JS
+      // onload fired — but did the global appear? (An HTML-instead-of-JS
       // response fires onload and defines nothing.)
       try { if (globalCheck()) return sources[i]; } catch (e2) {}
       errors.push(url + ': loaded but global missing (HTML served instead of JS?)');
@@ -10420,7 +10426,7 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   var skipped = 0;
   if (thinCount >= Math.ceil(lens.length * 0.6)) {
     // Image-dominant document (scanned bundle): OCR the first pages up to the
-    // cap -- partial recovery with disclosure beats reading nothing.
+    // cap — partial recovery with disclosure beats reading nothing.
     for (var d = 0; d < lens.length && candidates.length < VO_OCR_MAX_PAGES; d++) {
       if (lens[d] < THIN) candidates.push(d);
     }
@@ -10477,7 +10483,7 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
 
   var pdf = await pdfjsLib.getDocument({ data: pdfBytes.slice ? pdfBytes.slice(0) : pdfBytes }).promise;
   // Try the asset base that matches wherever the main script came from first,
-  // then the other base -- so a vendored main script with missing /vendor/
+  // then the other base — so a vendored main script with missing /vendor/
   // worker or core assets still recovers via the CDN, and vice versa.
   var _tessBases = tessFromCdn ? [VO_TESS_CDN, VO_TESS_VENDOR] : [VO_TESS_VENDOR, VO_TESS_CDN];
   var worker = null, _tessErr = null;
@@ -10542,13 +10548,13 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
 // finding types, integer severities (1-5), and page counts are ever sent.
 // Never any document content, quotes, locations, filenames, hashes, or
 // identity data. Fire-and-forget: silent on failure, never blocks sealing.
-// Contract (worker/verum-rules.js): POST {"patterns":[...]} only -- any other
+// Contract (worker/verum-rules.js): POST {"patterns":[...]} only — any other
 // top-level field is rejected; each pattern may carry ONLY the four fields.
 function shareAnonymousPatterns(fraudResult) {
   try {
     var optIn = document.getElementById('sharePatterns');
     if (!optIn || !optIn.checked) return;
-    // scanFailed means the engine could not complete -- that is NOT a clean
+    // scanFailed means the engine could not complete — that is NOT a clean
     // result, so it must not be fed to the feedback loop as one.
     if (!fraudResult || fraudResult.scanFailed) return;
     var pageCount = parseInt(_pipelinePageCount, 10);
@@ -10556,7 +10562,7 @@ function shareAnonymousPatterns(fraudResult) {
     var findings = Array.isArray(fraudResult.findings) ? fraudResult.findings.slice(0, 200) : [];
     var patterns = [];
     if (findings.length === 0) {
-      // Clean scan: still valuable signal for the engine -- record it with
+      // Clean scan: still valuable signal for the engine — record it with
       // the page count as a single synthetic marker (endpoint requires a
       // non-empty patterns array).
       patterns.push({ detectorId: 'CLEAN_SCAN', type: 'CLEAN_SCAN', severity: 1, pageCount: pageCount });
@@ -10572,10 +10578,10 @@ function shareAnonymousPatterns(fraudResult) {
     }
     // Engine-update loop: AI-identified findings with NOVEL types (not engine
     // CT01-CT43, not SERIAL) are fed back so recurring AI-surfaced patterns can be
-    // curated into the deterministic engine. rationale/text is NEVER sent -- only
+    // curated into the deterministic engine. rationale/text is NEVER sent — only
     // the four contract fields, per the verum-rules worker contract.
     var aiAdded = Array.isArray(_pipelineAiAddedFindings) ? _pipelineAiAddedFindings : [];
-    // Worker contract: <=200 patterns total per submission -- engine findings keep
+    // Worker contract: <=200 patterns total per submission — engine findings keep
     // priority; AI-identified patterns fill the remaining budget only. pageCount is
     // REQUIRED on every pattern (non-negative int; 0 = unknown) or the worker 400s.
     var aiBudget = 200 - patterns.length;
@@ -10606,8 +10612,8 @@ function shareAnonymousPatterns(fraudResult) {
           resultsEl.appendChild(note);
         }
       }
-    }).catch(function() { /* silent -- feedback must never disturb sealing */ });
-  } catch (e) { /* silent -- feedback must never disturb sealing */ }
+    }).catch(function() { /* silent — feedback must never disturb sealing */ });
+  } catch (e) { /* silent — feedback must never disturb sealing */ }
 }
 
 // Static #results skeleton captured at load. The "Sealing Failed" panels replace
@@ -10659,7 +10665,7 @@ async function runSealingPipeline() {
   // Step 4: Watermark
   updateStep(4, 'complete', chain.length > 0 ? 'Chain: ' + chain.length + ' prev' : 'No chain');
 
-  // Step 5: QR -- encode full forensic data for verify page
+  // Step 5: QR — encode full forensic data for verify page
   updateStep(5, 'processing');
   meta = collectSealMetadata();
   // Embed full SHA-512 + OTS digest into QR metadata
@@ -10698,7 +10704,7 @@ async function runSealingPipeline() {
     console.warn('QR preview render failed (seal continues without QR):', pvErr);
   }
   if (qrOmitted) {
-    updateStep(5, 'complete', 'QR omitted (generation failed) -- hash + footer remain the authoritative seal');
+    updateStep(5, 'complete', 'QR omitted (generation failed) — hash + footer remain the authoritative seal');
     var qrNoteEl = document.getElementById('qrPreviewNote');
     if (qrNoteEl) qrNoteEl.textContent = 'QR code omitted for this seal (generation failed). The SHA-512 fingerprint and the seal footer on every page remain the authoritative proof of integrity and time.';
   } else {
@@ -10721,7 +10727,7 @@ async function runSealingPipeline() {
   if (password && window._voSealedAsIs) {
     // The input already carries its own password protection (it was sealed
     // as-is). Encrypting an encrypted file double-encrypts its streams and
-    // renders garbage pages, so the new password is NOT applied -- stated
+    // renders garbage pages, so the new password is NOT applied — stated
     // plainly in the step and on the results card, never silently.
     encryptedBytes = null;
     window._voNewPasswordSkipped = true;
@@ -10730,7 +10736,7 @@ async function runSealingPipeline() {
     // Produce a STANDARD password-protected PDF: one ordinary .pdf that opens
     // in any reader (Adobe, Preview, Chrome, phones) with a password prompt.
     // The recipient cannot open it without asking the sender for the password
-    // -- that request is the delivery receipt. Falls back to the legacy .voice
+    // — that request is the delivery receipt. Falls back to the legacy .voice
     // container only if standard encryption is somehow unavailable, so a
     // password is never silently dropped.
     if (typeof window.VOEncryptPDF === 'function') {
@@ -10765,7 +10771,7 @@ async function runSealingPipeline() {
     meta.fraudClean = fraudResult.clean;
   }
 
-  // === Optional AI review (Cloudflare Workers AI) -- advisory only, NEVER breaks the seal flow ===
+  // === Optional AI review (Cloudflare Workers AI) — advisory only, NEVER breaks the seal flow ===
   // Assess prunes findings the AI marks keep:false and merges AI-identified indicators
   // the engine missed; narrate drafts the report's AI Narrative Summary. On ANY failure
   // the pipeline continues silently with the deterministic engine's original findings.
@@ -10780,20 +10786,20 @@ async function runSealingPipeline() {
       // Assess in its OWN try: the endpoint throws (non-2xx) when the model is
       // unavailable, and that throw previously escaped to the outer catch and
       // skipped the narrative entirely. Isolate it so assess failing only marks
-      // the review unavailable -- it never blocks the narrative below.
+      // the review unavailable — it never blocks the narrative below.
       var assessRes = null;
       try { assessRes = await aiAssessFindings(fraudResult.findings); }
       catch (assessErr) { console.warn('[VO-AI] assess failed:', assessErr && assessErr.message ? assessErr.message : assessErr); assessRes = null; }
       if (!assessRes || !assessRes.ran) {
         // Honest antithesis marker: review was enabled but did not run.
         aiReviewInfo = { applied: false, reason: window._voLastAiError || 'service unavailable' };
-        updateStep(7, 'processing', 'AI review unavailable -- findings are engine output, unreviewed');
+        updateStep(7, 'processing', 'AI review unavailable — findings are engine output, unreviewed');
       }
       if (assessRes && assessRes.ran) {
         var mergedFindings = assessRes.findings.concat(assessRes.added);
         reportFraudResult = Object.assign({}, fraudResult, { findings: mergedFindings, totalFindings: mergedFindings.length });
         // `assessed` is what the report trailer prints ("X of Y engine findings
-        // retained") -- it was dropped here once and the report read "19 of 0".
+        // retained") — it was dropped here once and the report read "19 of 0".
         // `attempted` covers the >200-findings cap where assess sees a subset.
         var assessedCount = (assessRes.assessed != null ? assessRes.assessed : originalCount) | 0;
         aiReviewInfo = {
@@ -10806,9 +10812,9 @@ async function runSealingPipeline() {
           added: assessRes.added.length
         };
         _pipelineAiAddedFindings = assessRes.added;
-        updateStep(7, 'processing', 'AI review applied -- ' + assessRes.findings.length + ' of ' + originalCount + ' retained' + (assessRes.added.length ? ', +' + assessRes.added.length + ' AI-identified' : ''));
+        updateStep(7, 'processing', 'AI review applied — ' + assessRes.findings.length + ' of ' + originalCount + ' retained' + (assessRes.added.length ? ', +' + assessRes.added.length + ' AI-identified' : ''));
       }
-      // Draft the narrative whether or not the assess step ran -- it used to be
+      // Draft the narrative whether or not the assess step ran — it used to be
       // nested inside the assess-success block, so any assess failure (e.g. the
       // 70B model being throttled) silently produced NO narrative at all. The
       // narrative is the point of the report and has its own template fallback,
@@ -10821,9 +10827,9 @@ async function runSealingPipeline() {
         narrateFindings = narrateFindings.map(function(f) {
           if (!f || f.type !== 'SERIAL') return f;
           var c = Object.assign({}, f);
-          c.serialName = 'Multi-stage pattern indicator';
+          c.serialName = 'Multi-stage pattern match';
           c.serialPattern = 'MULTI_STAGE_PATTERN';
-          c.evidence = 'Multi-stage pattern indicator (label suppressed for this document class).';
+          c.evidence = 'Multi-stage pattern match (label suppressed for this document class).';
           return c;
         });
       }
@@ -10831,7 +10837,7 @@ async function runSealingPipeline() {
         updateStep(7, 'processing', 'Drafting report narrative (AI)...');
         // Narrate in its OWN try too: the endpoint returns a deterministic
         // template even when the model fails, so this should always yield a
-        // narrative -- but if anything does throw, the report still builds.
+        // narrative — but if anything does throw, the report still builds.
         try { aiNarrativeText = await aiNarrateReport(narrateFindings, reportFraudResult.overallScore, reportFraudResult.confidence); }
         catch (narrErr) { console.warn('[VO-AI] narrate failed:', narrErr && narrErr.message ? narrErr.message : narrErr); aiNarrativeText = null; }
         // Guarantee a narrative even when the AI endpoint is unreachable: fall
@@ -10850,7 +10856,7 @@ async function runSealingPipeline() {
     _pipelineAiAddedFindings = [];
   }
 
-  // Seal Only mode: one-page Seal Certificate -- NEVER breaks the seal flow
+  // Seal Only mode: one-page Seal Certificate — NEVER breaks the seal flow
   window._voSealCert = null;
   if (sealMode !== 'forensic') {
     try {
@@ -10879,7 +10885,7 @@ async function runSealingPipeline() {
   }
 
   // Anchor Certificate (BOTH modes, only when a calendar accepted the digest):
-  // records the OpenTimestamps submission -- seal ID, document SHA-512, OTS
+  // records the OpenTimestamps submission — seal ID, document SHA-512, OTS
   // digest, calendar list, ISO-8601 submission time. NEVER breaks the seal flow.
   window._voAnchorCert = null;
   if (otsResult && otsResult.success) {
@@ -10901,7 +10907,7 @@ async function runSealingPipeline() {
     }
   }
 
-  // Step 9 (optional, FORENSIC ANALYSIS MODE only): sealed forensic report -- NEVER breaks the seal flow
+  // Step 9 (optional, FORENSIC ANALYSIS MODE only): sealed forensic report — NEVER breaks the seal flow
   var reportPack = null;
   window._voReportDebug = {
     sealMode: sealMode,
@@ -10928,7 +10934,7 @@ async function runSealingPipeline() {
         findings_is_array: Array.isArray(reportFraudResult?.findings)
       });
 
-      // AI classification (may be null -- classify endpoint is optional/rolling out).
+      // AI classification (may be null — classify endpoint is optional/rolling out).
       // aboutFraud:true suppresses serial-pattern LABELS; corroborated labels need
       // >=2 independent severity>=3 findings, else they demote to weak signals.
       var classification = _pipelineClassification;
@@ -11043,7 +11049,7 @@ async function runSealingPipeline() {
 
   showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, fraudResult);
 
-  // Opt-in anonymous pattern feedback -- fire-and-forget, never blocks.
+  // Opt-in anonymous pattern feedback — fire-and-forget, never blocks.
   shareAnonymousPatterns(fraudResult);
 }
 
@@ -11063,8 +11069,8 @@ function voShareFile() {
   } catch (e) { return null; }
 }
 
-// Build the FULL share list -- sealed/protected document + sealed forensic
-// report + findings JSON -- from window._voShareFiles. Each byte payload is
+// Build the FULL share list — sealed/protected document + sealed forensic
+// report + findings JSON — from window._voShareFiles. Each byte payload is
 // copied so a previous share attempt can never leave a detached buffer.
 function voShareFileList() {
   var out = [];
@@ -11079,11 +11085,11 @@ function voShareFileList() {
 }
 
 // Pick the largest shareable subset of the bundle. Chrome/Android restricts
-// navigator.share files to an allowlist of MIME types -- application/json is
+// navigator.share files to an allowlist of MIME types — application/json is
 // NOT on it, so a bundle that includes the findings JSON can fail canShare()
 // as a whole and (previously) collapsed to a single file. We instead try, in
 // order: the full bundle, then everything the device says it can share, then
-// just the sealed document -- so WhatsApp/email get the report too whenever
+// just the sealed document — so WhatsApp/email get the report too whenever
 // the device allows it.
 function voShareCandidates(files) {
   var out = [];
@@ -11195,7 +11201,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
 
   // Protected-input seals: state plainly that the file was sealed as-is, and
   // whether a requested new password was skipped (re-encrypting an encrypted
-  // file corrupts it -- honesty over silence).
+  // file corrupts it — honesty over silence).
   var asIsNoteEl = document.getElementById('asIsNote');
   if (asIsNoteEl) {
     if (!asIsNoteEl.dataset.baseHtml) asIsNoteEl.dataset.baseHtml = asIsNoteEl.innerHTML;
@@ -11206,7 +11212,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   }
 
   // VO-SEAL2: show the sealed-file self-integrity hash when the new scheme
-  // was applied (hidden for legacy-fallback seals -- no such hash exists).
+  // was applied (hidden for legacy-fallback seals — no such hash exists).
   var sealedHashRow = document.getElementById('sealedHashRow');
   if (window._voSealedFileHash && sealedHashRow) {
     document.getElementById('sealedHashDisplay').textContent = window._voSealedFileHash;
@@ -11230,7 +11236,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     document.querySelector('.results') && document.querySelector('.results').appendChild(debugPanel);
   }
 
-  // Forensic indicators panel (forensic analysis mode only) -- deliberately
+  // Forensic indicators panel (forensic analysis mode only) — deliberately
   // de-alarmed: neutral gold/navy presentation, "indicator" language throughout,
   // serial-pattern labels only with corroboration, and a standing disclaimer.
   if (forensicResult && !forensicResult.clean) {
@@ -11240,9 +11246,11 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
 
     var findingsHtml = '';
     var categories = forensicResult.findingsByCategory || {};
+    // Friendly category labels (raw engine keys like STATEMENTAL read as noise).
+    var VO_CAT_LABEL = { STATEMENTAL: 'Conflicting statements & figures', IDENTITY: 'Identity & role conflicts', FINANCIAL: 'Financial conflicts', INTEGRITY: 'Document structure & integrity', CROSS_REF: 'Cross-reference checks', CONTACT: 'Contact & location', EVIDENCE: 'Evidence handling', DIGITAL: 'Digital forensics', FRANCHISE_LEASE: 'Franchise / lease contradictions', UNCATEGORISED: 'Uncategorised' };
     for (var cat in categories) {
       if (categories[cat].length > 0) {
-        findingsHtml += '<strong style="color:#D4A843;">' + escapeHtml(cat) + ':</strong> ' + categories[cat].length + ' findings<br>';
+        findingsHtml += '<strong style="color:#D4A843;">' + escapeHtml(VO_CAT_LABEL[cat] || cat) + ':</strong> ' + categories[cat].length + ' finding' + (categories[cat].length === 1 ? '' : 's') + '<br>';
       }
     }
 
@@ -11277,14 +11285,14 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
 
     findingsPanel.innerHTML = '<h4 style="color:#D4A843;font-size:17px;margin-bottom:10px;">&#128270; ' + (forensicResult.totalFindings || 0) + ' findings — stated as fact, anchored to the record</h4>' +
       '<p style="color:#D5D8DD;font-size:13px;line-height:1.7;">' +
-      '<strong>Indicator score:</strong> ' + forensicResult.overallScore + '/100<br>' +
+      '<strong>Score:</strong> ' + forensicResult.overallScore + '/100<br>' +
       '<strong>Engine confidence:</strong> ' + forensicResult.confidence + '<br>' +
       '<strong>Total findings:</strong> ' + forensicResult.totalFindings + '<br>' +
-      '<strong>Contradiction types:</strong> ' + (forensicResult.contradictionTypesUsed || 0) + '/43 triggered<br>' +
+      '<strong>Contradiction types:</strong> ' + (forensicResult.contradictionTypesUsed || 0) + '/46 triggered<br>' +
       classHtml +
       findingsHtml + serialHtml +
-      '<br><em>Findings are indicators for human review, not determinations of fraud. ' +
-      'Your original document has been sealed pristine -- no forensic markings were added to its pages. ' +
+      '<br><em>Each finding is stated as fact, anchored to the record; the verdict on any person is for the court. ' +
+      'Your original document has been sealed pristine — no forensic markings were added to its pages. ' +
       'The seal proves integrity and time only. ' +
       'Full detail is presented in the sealed forensic report (download below).</em>' +
       '</p>';
@@ -11306,13 +11314,13 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   document.getElementById('verifyLink').href = verifyUrl;
 
   const el = document.getElementById('otsStatus');
-  if (otsResult && otsResult.success) { el.className = 'ots-status complete'; el.innerHTML = '&#10003; OpenTimestamps proof received -- Bitcoin confirmation pending (~1-2 hours)'; }
-  else { el.className = 'ots-status error'; el.innerHTML = '&#9888; Calendar servers temporarily unavailable -- SHA-256 recorded for retry.'; }
+  if (otsResult && otsResult.success) { el.className = 'ots-status complete'; el.innerHTML = '&#10003; OpenTimestamps proof received — Bitcoin confirmation pending (~1-2 hours)'; }
+  else { el.className = 'ots-status error'; el.innerHTML = '&#9888; Calendar servers temporarily unavailable — SHA-256 recorded for retry.'; }
 
   const base = selectedFile.name.replace(/\.pdf$/i, '');
   const suffix = password ? '-protected' : '';
   // SEAL GUARD (VO-SG): the enforced exit. A document may only leave Verum if
-  // it carries a real seal marker -- "no seal = Verum Omnis never issued it".
+  // it carries a real seal marker — "no seal = Verum Omnis never issued it".
   // This blocks the case where buildSealedPDF() hit its fallback and produced an
   // unmarked file: rather than hand the user a forgeable "-sealed.pdf" with no
   // seal, we refuse and make the failure loud. (Encrypted variants derive from
@@ -11333,7 +11341,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     sL.onclick = function (e) { e.preventDefault(); return false; };
   }
 
-  // Sealed forensic report download -- only when generation succeeded
+  // Sealed forensic report download — only when generation succeeded
   var oldReportBtn = document.getElementById('downloadForensicReport');
   if (oldReportBtn) oldReportBtn.remove();
   var oldReportNote = document.getElementById('reportSealNote');
@@ -11358,13 +11366,13 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     rNote.style.cssText = 'font-size:12px;color:#8ea3b5;margin-top:10px;line-height:1.6;';
     rNote.textContent = 'Forensic report sealed separately: ' + rp.sealId +
       '  |  SHA-512 ' + rp.sha512.substring(0, 16) + '...' +
-      '  |  OpenTimestamps: ' + (rp.ots && rp.ots.success ? 'submitted -- Bitcoin confirmation pending' : 'offline -- hash recorded for retry');
+      '  |  OpenTimestamps: ' + (rp.ots && rp.ots.success ? 'submitted — Bitcoin confirmation pending' : 'offline — hash recorded for retry');
     dg.parentNode.insertBefore(rNote, dg.nextSibling);
   } else if (sealMode === 'forensic') {
     console.warn('Forensic report unavailable for this seal (generation skipped or failed); document seal is unaffected.');
   }
 
-  // Findings JSON download (1verum GHRP contract v1.0.0) -- the machine-readable
+  // Findings JSON download (1verum GHRP contract v1.0.0) — the machine-readable
   // twin of the forensic report, consumable by the Verum Omnis app / G3 narrator.
   var oldFindingsBtn = document.getElementById('downloadFindingsJson');
   if (oldFindingsBtn) oldFindingsBtn.remove();
@@ -11382,7 +11390,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     if (after && after.nextSibling) dgF.insertBefore(fjL, after.nextSibling); else dgF.appendChild(fjL);
   }
 
-  // Seal Certificate download (Seal Only mode) -- clean one-page certificate
+  // Seal Certificate download (Seal Only mode) — clean one-page certificate
   var oldCertBtn = document.getElementById('downloadSealCertificate');
   if (oldCertBtn) oldCertBtn.remove();
   var oldCertNote = document.getElementById('sealCertNote');
@@ -11408,10 +11416,10 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   if (password && encryptedBytes && window.VoSealGuard.isSealed(sealedBytes)) {
     // SEAL GUARD (VO-SG): the encrypted file's own marker is (correctly) sealed
     // inside the ciphertext, so we gate on the plaintext sealedBytes it derives
-    // from -- an unsealed original is never released, protected or not.
+    // from — an unsealed original is never released, protected or not.
     var isPdfEnc = window._voEncFormat === 'pdf';
     if (isPdfEnc) {
-      // The protected PDF is the prominent download -- it is the copy you send.
+      // The protected PDF is the prominent download — it is the copy you send.
       // The plain sealed PDF stays available as "your copy": its seal marker is
       // encrypted inside the protected file, so keeping the unlocked original
       // is what lets you verify the seal later without the password.
@@ -11481,8 +11489,8 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
 
   // The whole bundle in one share. A password-protected forensic seal used to
   // share only the protected document; the founder's direction is that the
-  // share sheet carries everything -- sealed/protected document, the sealed
-  // forensic report, and the machine-readable findings JSON -- so nothing has
+  // share sheet carries everything — sealed/protected document, the sealed
+  // forensic report, and the machine-readable findings JSON — so nothing has
   // to be hunted down and attached separately.
   window._voShareFiles = [];
   if (window._voShareBytes) {

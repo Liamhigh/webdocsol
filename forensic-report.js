@@ -881,12 +881,12 @@ function plainLeadLines(fr, data) {
   var docName = (data && data.docName) || 'this document';
   var pageCount = (data && data.pageCount) || 'n/a';
   var plLines = [];
-  plLines.push('The engine read "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') and flagged ' + plAll.length + ' indicator' + (plAll.length === 1 ? '' : 's') + ' in total.');
+  plLines.push('The engine read "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') and identified ' + plAll.length + ' finding' + (plAll.length === 1 ? '' : 's') + ' in total.');
   if (plDemoted > 0) {
     plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
   }
   var substLead = (plDemoted > 0)
-    ? 'That leaves ' + plSubstantive + ' substantive indicator' + (plSubstantive === 1 ? '' : 's')
+    ? 'That leaves ' + plSubstantive + ' substantive finding' + (plSubstantive === 1 ? '' : 's')
     : (plSerial > 0
         ? 'Of these, ' + plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's') + ' (the rest are multi-stage pattern matches, described below)'
         : plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's'));
@@ -910,7 +910,7 @@ function plainLeadLines(fr, data) {
       plLines.push('•  …and ' + (plSeriousList.length - plSerCap) + ' more serious item' + (plSeriousList.length - plSerCap === 1 ? '' : 's') + ', set out in full below.');
     }
   }
-  if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern indicator' + (plSerial === 1 ? '' : 's') + ' also matched - see the Serial Pattern Analysis section.');
+  if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern match' + (plSerial === 1 ? '' : 'es') + ' also recorded - see the Serial Pattern Analysis section.');
   plLines.push('The score (' + score + '/100) measures the density and severity of the verified findings - a measurement of the record, not a probability of fraud. The verdict on any named person is for the court.');
   return plLines;
 }
@@ -959,7 +959,7 @@ function secExecSummary(ctx, data) {
   ctx.page.drawRectangle({ x: LM, y: ctx.y - boxH, width: CW, height: boxH, color: BOXBG, borderColor: GOLD, borderWidth: 1 });
   var scoreStr = score + ' / 100';
   ctx.page.drawText(scoreStr, { x: LM + 18, y: ctx.y - 44, size: 26, font: ctx.f.timesBold, color: NAVY2 });
-  ctx.page.drawText('Indicator score', { x: LM + 18, y: ctx.y - 60, size: 9, font: ctx.f.times, color: GRAY });
+  ctx.page.drawText('Finding score', { x: LM + 18, y: ctx.y - 60, size: 9, font: ctx.f.times, color: GRAY });
   ctx.page.drawText('Confidence band: ' + bandLabel, { x: LM + 200, y: ctx.y - 34, size: 11, font: ctx.f.timesBold, color: NAVY2 });
   ctx.page.drawText('Total findings: ' + (fr.totalFindings || 0), { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
   ctx.page.drawText('Contradiction types triggered: ' + (fr.contradictionTypesUsed || 0) + ' / ' + CT_COUNT, { x: LM + 200, y: ctx.y - 64, size: 10, font: ctx.f.times, color: INK });
@@ -993,9 +993,9 @@ function secExecSummary(ctx, data) {
       { key: 'count', title: 'Count', w: 154, align: 'right' }
     ],
     [
-      { sev: '5 — Critical', meaning: 'Strongest contradiction indicators', count: String(sevCounts[5]) },
-      { sev: '4 — High', meaning: 'Significant indicators', count: String(sevCounts[4]) },
-      { sev: '3 — Medium', meaning: 'Moderate indicators', count: String(sevCounts[3]) },
+      { sev: '5 — Critical', meaning: 'Strongest contradictions', count: String(sevCounts[5]) },
+      { sev: '4 — High', meaning: 'Significant findings', count: String(sevCounts[4]) },
+      { sev: '3 — Medium', meaning: 'Moderate findings', count: String(sevCounts[3]) },
       { sev: '2 — Low', meaning: 'Minor anomalies', count: String(sevCounts[2]) },
       { sev: '1 — Info', meaning: 'Informational only', count: String(sevCounts[1]) }
     ],
@@ -1025,7 +1025,7 @@ function secExecSummary(ctx, data) {
       });
     var top = candidates.slice(0, 5);
     if (top.length === 0) {
-      ctx.para('All flagged indicators are structural notes or unlabelled pattern signals - see the findings matrix and Serial Pattern Analysis sections.', { size: 10 });
+      ctx.para('All flagged findings are structural notes or unlabelled pattern signals - see the findings matrix and Serial Pattern Analysis sections.', { size: 10 });
     }
     for (var t = 0; t < top.length; t++) {
       var fnd = top[t];
@@ -1039,7 +1039,7 @@ function secExecSummary(ctx, data) {
       }
     }
     if (hiddenSerials > 0) {
-      ctx.bullet(hiddenSerials + ' multi-stage pattern indicator' + (hiddenSerials === 1 ? '' : 's') + ' recorded with label' + (hiddenSerials === 1 ? '' : 's') + ' withheld — the Serial Pattern Analysis section explains why.', { size: 9.5, after: 5 });
+      ctx.bullet(hiddenSerials + ' multi-stage pattern match' + (hiddenSerials === 1 ? '' : 'es') + ' recorded with label' + (hiddenSerials === 1 ? '' : 's') + ' withheld — the Serial Pattern Analysis section explains why.', { size: 9.5, after: 5 });
     }
   }
 
@@ -1124,7 +1124,7 @@ function secMatrix(ctx, data) {
   }
 
   if (all.length === 0) {
-    ctx.para('No contradictions or forensic indicators were detected by the deterministic engine in this document. All ' + DETECTOR_COUNT + ' detectors and ' + SP_COUNT + ' serial patterns ran; none triggered.', { size: 10 });
+    ctx.para('No contradictions or forensic anomalies were detected by the deterministic engine in this document. All ' + DETECTOR_COUNT + ' detectors and ' + SP_COUNT + ' serial patterns ran; none triggered.', { size: 10 });
     ctx.para('This is not a certification of truthfulness — it means no internal inconsistencies were found by deterministic methods.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
     return;
   }
@@ -1319,8 +1319,8 @@ function serialDisplay(fnd, data) {
   var name = fnd.serialName || fnd.serialPattern || 'Serial pattern';
   var sl = data && data.serialLabels;
   if (!sl) return name;
-  if (sl.suppressed) return 'Multi-stage pattern indicator (label suppressed)';
-  if (sl.weakNames && sl.weakNames.indexOf(name) !== -1) return 'Multi-stage pattern indicator (weak signal)';
+  if (sl.suppressed) return 'Multi-stage pattern match (label suppressed)';
+  if (sl.weakNames && sl.weakNames.indexOf(name) !== -1) return 'Multi-stage pattern match (weak signal)';
   return name;
 }
 
@@ -1344,7 +1344,7 @@ function secSerial(ctx, data) {
   // entirely so the document's subject matter is not mischaracterised.
   if (sl && sl.suppressed) {
     ctx.para('Pattern labels suppressed.', { size: 10.5, after: 6 });
-    ctx.para('This document discusses fraud or disputed conduct as its subject matter. Pattern labels have been suppressed to avoid mischaracterising the document\'s contents. The engine\'s underlying findings remain listed in the findings matrix as indicators for human review.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
+    ctx.para('This document discusses fraud or disputed conduct as its subject matter. Pattern labels have been suppressed to avoid mischaracterising the document\'s contents. The engine\'s underlying findings remain listed in the findings matrix, anchored for human review.', { size: 9, font: ctx.f.timesItalic, color: GRAY });
     return;
   }
 
@@ -1362,7 +1362,7 @@ function secSerial(ctx, data) {
   }
 
   if (labelled.length > 0) {
-    ctx.para('Patterns consistent with: see below. ' + labelled.length + ' serial pattern' + (labelled.length === 1 ? '' : 's') + ' corroborated by independent findings. Serial patterns are multi-stage fraud schemes; a corroborated match means several stages of a known pattern were found in the document text AND at least two independent findings of severity 3 or higher support it. These are patterns the document is consistent with — indicators for human review, not determinations of fraud.', { size: 9.5, after: 10 });
+    ctx.para('Patterns consistent with: see below. ' + labelled.length + ' serial pattern' + (labelled.length === 1 ? '' : 's') + ' corroborated by independent findings. Serial patterns are multi-stage fraud schemes; a corroborated match means several stages of a known pattern were found in the document text AND at least two independent findings of severity 3 or higher support it. The pattern match is a fact of the text; whether the scheme was in fact operated, and any verdict, is for the court.', { size: 9.5, after: 10 });
     var rows = [];
     for (var s = 0; s < labelled.length; s++) {
       rows.push({
@@ -1667,7 +1667,7 @@ function secLegalAnalysis(ctx, data) {
   // ---- 4. Actionable Output -------------------------------------------
   ctx.subHeading('Actionable Output', { toc: true });
   var ranked = substantive.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-  ctx.para('Top liabilities (highest-severity indicators):', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
+  ctx.para('Top liabilities (highest-severity findings):', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   var topN = ranked.slice(0, 3);
   for (var t2 = 0; t2 < topN.length; t2++) {
     var tf = topN[t2];
@@ -1676,12 +1676,12 @@ function secLegalAnalysis(ctx, data) {
   }
   ctx.gap(4);
   var jur = (data.identity && data.identity.jurisdiction) ? data.identity.jurisdiction : null;
-  ctx.para('Dishonesty indicator score: ' + (fr.overallScore || 0) + '/100 (' + (fr.confidence || 'n/a') + ') across ' + (fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) + ' finding' + ((fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) === 1 ? '' : 's') + '. This measures the density and severity of the indicators above — NOT their volume, and not a probability of fraud: a document with two high-severity findings scores higher than one with twelve mixed findings.', { size: 9, after: 6 });
+  ctx.para('Dishonesty score: ' + (fr.overallScore || 0) + '/100 (' + (fr.confidence || 'n/a') + ') across ' + (fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) + ' finding' + ((fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) === 1 ? '' : 's') + '. This measures the density and severity of the findings above — NOT their volume, and not a probability of fraud: a document with two high-severity findings scores higher than one with twelve mixed findings.', { size: 9, after: 6 });
   ctx.para('Recommended next steps' + (jur ? ' (jurisdiction: ' + jur + ')' : '') + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Candidate statutory provisions are set out in the Statutory Anchoring section that follows - they are starting points for counsel to confirm, not a legal conclusion.', { size: 9 });
   ctx.bullet('Preserve the sealed original and this report unaltered; both are SHA-512 anchored and independently verifiable at verumglobal.foundation/verify.html.', { size: 9 });
   if (Object.keys(bySubject).indexOf('FINANCIAL') !== -1) ctx.bullet('Financial irregularities are present - consider a forensic-accounting trace of the flagged amounts and accounts.', { size: 9 });
-  if (Object.keys(bySubject).indexOf('TAMPERING') !== -1) ctx.bullet('Document-integrity indicators are present - consider requesting native/original files and metadata for the affected pages.', { size: 9 });
+  if (Object.keys(bySubject).indexOf('TAMPERING') !== -1) ctx.bullet('Document-integrity findings are present - consider requesting native/original files and metadata for the affected pages.', { size: 9 });
   ctx.gap(4);
   ctx.para('These recommendations are procedural suggestions for human decision-makers, not legal advice or a determination of liability.', { size: 8, font: ctx.f.timesItalic, color: GRAY });
 }
@@ -1733,7 +1733,7 @@ function secStatutoryAnchoring(ctx, data) {
     { size: 7.5 }
   );
   if (ranked.length > CAP) {
-    ctx.para('Showing the ' + CAP + ' highest-severity indicators; the remaining ' + (ranked.length - CAP) + ' appear in the findings matrix and can be anchored the same way.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    ctx.para('Showing the ' + CAP + ' highest-severity findings; the remaining ' + (ranked.length - CAP) + ' appear in the findings matrix and can be anchored the same way.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
   ctx.para('Attribution records that the party is named in the flagged text — a fact of the record; responsibility is for the court to determine.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 8 });
 
@@ -1825,7 +1825,7 @@ function secFindingDetails(ctx, data) {
     ctx.gap(8);
   }
   if (subst.length > CAP) {
-    ctx.para('Showing the ' + CAP + ' highest-severity indicators in detail; the remaining ' + (subst.length - CAP) + ' appear in the findings matrix and the evidence appendix.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    ctx.para('Showing the ' + CAP + ' highest-severity findings in detail; the remaining ' + (subst.length - CAP) + ' appear in the findings matrix and the evidence appendix.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
 }
 
@@ -1899,7 +1899,7 @@ function secEvidenceAppendix(ctx, data) {
 
   ctx.newBodyPage();
   ctx.heading('EVIDENCE APPENDIX (VERBATIM QUOTES)');
-  ctx.para('Every flagged passage, reproduced verbatim and numbered, with its indicator type and page. This is the complete quoted-evidence record behind the report; each entry can be checked against the sealed original at the cited page.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.para('Every flagged passage, reproduced verbatim and numbered, with its finding type and page. This is the complete quoted-evidence record behind the report; each entry can be checked against the sealed original at the cited page.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
   var CAP = APPENDIX_CAP;
   var rows = [];
@@ -1936,7 +1936,7 @@ function secOffenceMatrix(ctx, data) {
 
   ctx.newBodyPage();
   ctx.heading('CANDIDATE OFFENCE MATRIX');
-  ctx.para('The substantive indicators grouped by legal subject, with the candidate statutory provisions a practitioner should consider in ' + listPhrase(['ZA'].concat(jur.foreign).map(function (c) { return JURIS_LABEL[c] || c; })) + '. Counts are of anchored indicators, not proven offences; naming a provision is a starting point for legal review, never a determination.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.para('The substantive findings grouped by legal subject, with the candidate statutory provisions a practitioner should consider in ' + listPhrase(['ZA'].concat(jur.foreign).map(function (c) { return JURIS_LABEL[c] || c; })) + '. Counts are of anchored findings, not proven offences; naming a provision is a starting point for legal review, never a determination.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
   var bySubject = {};
   for (var i = 0; i < subst.length; i++) {
@@ -2083,7 +2083,7 @@ function secEvidenceMap(ctx, data) {
 
   ctx.newBodyPage();
   ctx.heading('ANNEXURE A — EVIDENCE MAP (BY PAGE)');
-  ctx.para('Every flagged indicator in page order, so the source document can be walked top to bottom. The Evidence Appendix lists the same items with full verbatim quotes, ordered by severity.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.para('Every finding in page order, so the source document can be walked top to bottom. The Evidence Appendix lists the same items with full verbatim quotes, ordered by severity.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
   var CAP = 250;
   var rows = [];
@@ -2194,7 +2194,7 @@ function secNarrative(ctx, data) {
 
   ctx.newBodyPage();
   ctx.heading('PLAIN-LANGUAGE NARRATIVE');
-  ctx.para('This section tells the story of what the documents show, in ordinary words, for a reader who is not a forensic specialist. Every statement below is drawn from the same findings set out in the tables that follow; it adds no new facts. These are indicators for a human to weigh — not verdicts of fraud or guilt.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.para('This section tells the story of what the documents show, in ordinary words, for a reader who is not a forensic specialist. Every statement below is drawn from the same findings set out in the tables that follow; it adds no new facts. Each is a verified fact of the record; the verdict on any person is for the court.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
   // Opening: parties, documents, scale.
   var idn = data.identity || {};
@@ -2274,9 +2274,9 @@ function secNarrative(ctx, data) {
   // the findings), cross-border context, and any unread/OCR-gap disclosure.
   var notes = String(data.extractionNotes || '');
   var alsoBits = [];
-  var mAnchor = notes.match(/Anchor rule:[^]*?(?=(?:\s+Context:|\s+Indicator score|$))/);
+  var mAnchor = notes.match(/Anchor rule:[^]*?(?=(?:\s+Context:|\s+Score calibration|$))/);
   if (mAnchor) alsoBits.push(mAnchor[0].trim());
-  var mCtx = notes.match(/Context:[^]*?(?=(?:\s+Indicator score|$))/);
+  var mCtx = notes.match(/Context:[^]*?(?=(?:\s+Score calibration|$))/);
   if (mCtx) alsoBits.push(mCtx[0].trim());
   if (/near-empty|image-only|OCR/i.test(notes)) {
     var mOcr = notes.match(/[^.]*(?:near-empty|image-only|OCR rescue)[^.]*\./g);

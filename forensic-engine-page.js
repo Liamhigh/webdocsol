@@ -1231,7 +1231,7 @@ var DETECTORS = {
     if (nums.length <= 2) {
       for (var n = 0; n < nums.length; n++) {
         findings.push({ type: 'CT27', severity: 4,
-          evidence: 'Page number ' + nums[n] + ' appears on multiple pages (potential duplicate or insertion)',
+          evidence: 'Page number ' + nums[n] + ' appears on multiple pages (a repeated page number; whether a page was duplicated or inserted is for the investigator)',
           location: 'Multiple pages' });
       }
     } else {
@@ -1841,7 +1841,7 @@ var DETECTORS = {
     // contextOnly routes it into the extraction notes, out of the findings.
     if (typeCount >= 8) {
       findings.push({ type: 'CT43', severity: 0, contextOnly: true,
-        evidence: 'Breadth note: ' + typeCount + ' different indicator types were triggered across the document — a high count reflects variety of checks, not a determination of wrongdoing.',
+        evidence: 'Breadth note: ' + typeCount + ' different finding types were triggered across the document — a high count reflects variety of checks, not a determination of wrongdoing.',
         location: 'Full document' });
     }
     return findings;
@@ -3365,7 +3365,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
         uaTexts.push('[' + uif.type + '] ' + (uif.evidence || ''));
       }
       extractionNote += ' Anchor rule: ' + anchored.unanchored.length +
-        ' indicator(s) could not be pinned to a page and are recorded here as unanchored observations, NOT as findings' +
+        ' observation(s) could not be pinned to a page and are recorded here as unanchored observations, NOT as findings' +
         ' (no anchor, no sentence): ' + uaTexts.join(' | ');
     }
   }
@@ -3410,13 +3410,19 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     if (!findingsByType[finding.type]) findingsByType[finding.type] = [];
     findingsByType[finding.type].push(finding);
 
-    var ct = CONTRADICTION_TYPES[finding.type];
-    var cat = ct ? ct.category : (finding.category || 'UNKNOWN');
+    // Look up by the type's id (CT01), not the map key (CT01_DIRECT_...): the
+    // old key lookup NEVER matched, so every finding fell into "UNKNOWN" and the
+    // results panel showed "UNKNOWN: 13 findings" instead of real categories.
+    var ct = null;
+    for (var ck in CONTRADICTION_TYPES) {
+      if (CONTRADICTION_TYPES[ck].id === finding.type) { ct = CONTRADICTION_TYPES[ck]; break; }
+    }
+    var cat = ct ? ct.category : (finding.category || 'UNCATEGORISED');
     if (!findingsByCategory[cat]) findingsByCategory[cat] = [];
     findingsByCategory[cat].push(finding);
   }
   if (allFindings.length) {
-    extractionNote += ' Indicator score is confidence-weighted per indicator type (calibration v1): lower-precision detectors contribute less than high-precision ones.';
+    extractionNote += ' Score calibration: confidence-weighted per finding type (calibration v1): lower-precision detectors contribute less than high-precision ones.';
   }
 
   var overallScore = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
@@ -3477,20 +3483,20 @@ function generateSummary(findings, score) {
   // per-finding average rose. With few findings the honest story is "a
   // couple of specific, checkable issues", so say exactly that.
   if (findings.length > 0 && findings.length <= 3) {
-    return 'FOCUSED: ' + findings.length + ' page-anchored indicator' + (findings.length === 1 ? '' : 's') +
-      ' found. Per-indicator severity is ' + (score >= 60 ? 'high' : 'moderate') +
-      ', but the indicator COUNT is low for the document — read each finding on its cited page; the density score is not an overall verdict on the document.';
+    return 'FOCUSED: ' + findings.length + ' page-anchored finding' + (findings.length === 1 ? '' : 's') +
+      '. Per-finding severity is ' + (score >= 60 ? 'high' : 'moderate') +
+      ', but the finding COUNT is low for the document — read each finding on its cited page; the density score is not an overall verdict on the document.';
   }
   if (score >= 80) {
     return 'CRITICAL: ' + findings.length + ' contradictions detected across ' +
-      'multiple categories. Document shows strong indicators of systematic fraud. ' +
+      'multiple categories. The documents evidence systematic fraud. ' +
       'Manual forensic review strongly recommended.';
   } else if (score >= 60) {
     return 'HIGH: ' + findings.length + ' contradictions detected. Document ' +
-      'contains significant inconsistencies that suggest fraud or tampering.';
+      'The documents cannot all be true as written.';
   } else if (score >= 40) {
     return 'MODERATE: ' + findings.length + ' contradictions found. Some ' +
-      'inconsistencies present that warrant closer examination.';
+      'The record contradicts itself at the cited pages; read each finding against the original.';
   } else if (score >= 20) {
     return 'LOW: ' + findings.length + ' minor contradictions detected. ' +
       'Document largely consistent with minor anomalies.';
