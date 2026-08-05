@@ -6556,7 +6556,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   var templateNote = voExcludeTemplatePages(textBlocks);
   if (templateNote) extractionNote += ' ' + templateNote;
 
-  // Run all 37 detectors
+  // Run every detector
   var detectors = [
     DETECTORS.D01_DETECT_DIRECT_CONTRADICTION,
     DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY,
@@ -9237,9 +9237,9 @@ async function startSealing() {
         await voEnsureForensicScripts(function(msg){ updateStep('Fraud','processing',msg); });
         var pdfDocForForensics = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
         _pipelinePageCount = pdfDocForForensics.getPageCount();
-        updateStep('Fraud', 'processing', 'Scanning ' + _pipelinePageCount + ' page(s) - 37 contradiction detectors running...');
+        updateStep('Fraud', 'processing', 'Scanning ' + _pipelinePageCount + ' page(s) - 40 contradiction detectors running...');
         forensicResult = await runForensicEngine(fileBytes, pdfDocForForensics, function (done, total) {
-          updateStep('Fraud', 'processing', 'Scanning page ' + done + ' of ' + total + ' - 37 contradiction detectors running...');
+          updateStep('Fraud', 'processing', 'Scanning page ' + done + ' of ' + total + ' - 40 contradiction detectors running...');
         });
         // Keep the per-page text for the finding-anchored narrator excerpt.
         try { _pipelineTextBlocks = (forensicResult && Array.isArray(forensicResult.pageTexts)) ? forensicResult.pageTexts : null; } catch (ePT) { _pipelineTextBlocks = null; }

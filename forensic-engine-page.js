@@ -3211,7 +3211,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   var templateNote = voExcludeTemplatePages(textBlocks);
   if (templateNote) extractionNote += ' ' + templateNote;
 
-  // Run all 37 detectors
+  // Run every detector
   var detectors = [
     DETECTORS.D01_DETECT_DIRECT_CONTRADICTION,
     DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY,
