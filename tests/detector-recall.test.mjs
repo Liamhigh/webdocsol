@@ -191,6 +191,23 @@ ok(DET.D30_DETECT_TERM_DEFINITION_CONFLICT([
     'Elsewhere it says "Goodwill" means nothing of compensable value.'
   ]).length > 0,
   'CT08 still catches a real quoted term defined in two places');
+// CT08 glossary regression (evidence-bundle-7): a definitions chapter restated
+// in an index defines every term twice, IDENTICALLY — 25 such non-findings in
+// one run. Identical definitions are NOT a contradiction and must stay silent;
+// a real conflict must quote BOTH versions.
+ok(DET.D30_DETECT_TERM_DEFINITION_CONFLICT([
+    '"Caltex Facilities" means the facilities listed in Schedule 2.',
+    'Index of terms: "Caltex Facilities" means the facilities listed in Schedule 2.'
+  ]).length === 0,
+  'CT08 stays silent when a term is re-defined with IDENTICAL wording (glossary/index)');
+{
+  const d30diff = DET.D30_DETECT_TERM_DEFINITION_CONFLICT([
+    '"Goodwill" means the going-concern value of the business.',
+    'Later: "Goodwill" means nothing of compensable value.'
+  ]);
+  ok(d30diff.length === 1 && /defined differently/.test(d30diff[0].evidence) && /going-concern/.test(d30diff[0].evidence) && /compensable/.test(d30diff[0].evidence),
+    'CT08 conflict evidence quotes BOTH conflicting definitions');
+}
 
 // Serial patterns must NOT fire on isolated generic single words in legal text
 // (the run raised Digital Signature Forgery on "pdf", Witness Tampering on
