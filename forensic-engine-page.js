@@ -1002,12 +1002,17 @@ var DETECTORS = {
 
   D12_DETECT_BANK_DETAIL_MISMATCH: function(textBlocks) {
     var findings = [];
-    // Only treat an 8-12 digit number as a bank account when it sits next to
+    // Only treat a 9-12 digit number as a bank account when it sits next to
     // banking context ("account", "a/c", "acc no", "bank", "branch", "iban").
     // The old detector matched ANY 8+ digit run, so in a legal bundle it read
     // dates (11122018 = 11/12/2018), concatenated years (20162017), reference
     // and case numbers as "account numbers" and cried mismatch. False positives
     // like that on a HIGH finding destroy the report's credibility.
+    // The floor is 9 digits: SA account numbers run 9-11 digits, and OCR of a
+    // scanned bundle sheds digits — a confirmed run counted the 8-digit OCR
+    // fragment "40821030" as a fourth account beside three real 10-digit ones,
+    // inflating the mismatch. An 8-digit run near banking context is far more
+    // likely a truncated read of a real account than a distinct account.
     var CONTEXT = /(account|acc\.?\s*no|a\/c|bank|branch|iban|swift)/i;
     // Reject values that are really dates or year-runs.
     function looksLikeDateOrYears(n) {
@@ -1023,7 +1028,7 @@ var DETECTORS = {
       }
       return false;
     }
-    var numRe = /\b\d{8,12}\b/g;
+    var numRe = /\b\d{9,12}\b/g;
     var uniqueAccounts = {};
     for (var i = 0; i < textBlocks.length; i++) {
       var text = textBlocks[i], match;

@@ -67,6 +67,22 @@ t.ok(DETECTORS.D12_DETECT_BANK_DETAIL_MISMATCH(
 t.ok(DETECTORS.D12_DETECT_BANK_DETAIL_MISMATCH(
   ['the account number 62834571902 appears once only']
 ).length === 0, 'D12 no finding when only one account number is present');
+// OCR-shed-digit regression (ritzadvocat OCR run): the 8-digit fragment
+// "40821030" sat near banking context and was counted as a FOURTH account
+// beside three real 10-digit accounts. SA accounts run 9-11 digits; an 8-digit
+// run is a truncated OCR read, not a distinct account, and must not count.
+{
+  const d12ocr = DETECTORS.D12_DETECT_BANK_DETAIL_MISMATCH([
+    'Pay into bank account 4071828724.',
+    'Trust account 4082883975 is nominated; account 40821030 appears in a smudged OCR line.',
+    'The corporate account 9027934431 is on record.'
+  ]);
+  t.ok(d12ocr.length === 1 && /^3 different bank account numbers/.test(d12ocr[0].evidence) && !/40821030/.test(d12ocr[0].evidence),
+    'D12 counts the three real accounts and rejects the 8-digit OCR fragment');
+}
+t.ok(DETECTORS.D12_DETECT_BANK_DETAIL_MISMATCH(
+  ['bank account 40821030 and account 50932141 on file']
+).length === 0, 'D12 stays silent when only 8-digit OCR fragments sit near banking context');
 
 t.ok(DETECTORS.D15_DETECT_METADATA_FRAUD({
   getProducer: () => 'Adobe Photoshop 2024', getCreator: () => '',
