@@ -899,6 +899,17 @@ var DETECTORS = {
     // that the company IS dissolved.
     var NOT_STATUS_PROVISION_BEFORE = /\b(?:shall|may|must|will|would|can|could|to)\s+be\s+(?:[a-z]+\s+){0,2}?$/i;
     var NOT_STATUS_PROVISION_NEAR = /\bin\s+the\s+event\s+(?:of|that)\b|\bupon\s+(?:the\s+)?(?:dissolution|liquidation|winding[\s-]?up|deregistration)\b|\bon\s+(?:dissolution|liquidation|winding[\s-]?up)\b/i;
+    // Two more clause shapes seen in real franchise agreements (PD16 makes a
+    // false status "fact" the worst possible output, so these stay strict):
+    // (a) a conditional within the same sentence — "if/should/until the
+    //     Franchisee is finally liquidated ..." is a trigger, not a status;
+    // (b) an ENUMERATION of insolvency events joined by "or" — "liquidated or
+    //     placed under judicial management", "sequestrated or wound up". A
+    //     statement of an entity's actual status asserts ONE event; a clause
+    //     lists the menu. ("and" is excluded: "was liquidated in 2019 and
+    //     remains in liquidation" is an assertion, not a menu.)
+    var NOT_STATUS_CONDITIONAL = /\b(?:if|should|unless|until|where|whether)\b[^.!?]{0,80}\b(?:be|is|are|been|becomes?)\s+(?:finally\s+|provisionally\s+)?(?:liquidat|sequestrat|deregister|dissolv|wound|placed\s+under)/i;
+    var NOT_STATUS_EVENT_MENU = /\b(?:liquidat(?:ed|ion)|sequestrat(?:ed|ion)|deregist(?:ered|ration)|dissol(?:ved|ution)|wound\s+up|winding[\s-]?up)\b[^.!?]{0,40}\bor\b[^.!?]{0,40}\b(?:liquidat|sequestrat|deregist|dissolv|wound|winding|judicial\s+management|business\s+rescue|placed\s+under)/i;
     var statusClaims = [
       ['registered','deregistered','dissolved','liquidated'],
       ['active','suspended','under administration'],
@@ -917,7 +928,9 @@ var DETECTORS = {
           var pre = t.substring(Math.max(0, m.index - 40), m.index);
           var excluded = ((word === 'registered') && NOT_STATUS_REGISTERED.test(win)) ||
                          NOT_STATUS_PROVISION_BEFORE.test(pre) ||
-                         NOT_STATUS_PROVISION_NEAR.test(win);
+                         NOT_STATUS_PROVISION_NEAR.test(win) ||
+                         NOT_STATUS_CONDITIONAL.test(win) ||
+                         NOT_STATUS_EVENT_MENU.test(win);
           if (!excluded && ENTITY_NEAR.test(win)) {
             return { page: b + 1, snippet: win.replace(/\s+/g, ' ').trim() };
           }
@@ -1528,6 +1541,38 @@ var DETECTORS = {
     // glossary). The conflict exists only when the DEFINITIONS DIFFER, so the
     // definition's own words are captured and compared; identical text stays
     // silent, and a real conflict now quotes both versions (PD2/PD16).
+    //
+    // OCR noise must not manufacture a conflict. A duplicated agreement re-read
+    // by OCR yields "CAL TEX" for "CALTEX", "thari" for "than", "portions" for
+    // "portion", or a copy cut one letter shorter — and exact comparison then
+    // reports identical definitions as differing (8 such false facts in one
+    // real 330-page bundle). So: compare letters-and-digits only, over the
+    // shared length, and require a MATERIAL difference — more than 10% edit
+    // distance. OCR jitter perturbs a character or two; a real conflict
+    // rewrites the wording ("Expiration Date" vs "Termination Date" still
+    // fires; "other than" vs "other thari" stays silent).
+    function voEditDistance(a, b) {
+      var prev = [], cur = [], i, j;
+      for (j = 0; j <= b.length; j++) prev[j] = j;
+      for (i = 1; i <= a.length; i++) {
+        cur[0] = i;
+        for (j = 1; j <= b.length; j++) {
+          cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1,
+            prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
+        }
+        var swap = prev; prev = cur; cur = swap;
+      }
+      return prev[b.length];
+    }
+    function voMateriallyDiffer(a, b) {
+      var ca = String(a).toLowerCase().replace(/[^a-z0-9]/g, '');
+      var cb = String(b).toLowerCase().replace(/[^a-z0-9]/g, '');
+      var shared = Math.min(ca.length, cb.length);
+      if (shared < 12) return false; // too little text to establish a conflict
+      ca = ca.slice(0, shared); cb = cb.slice(0, shared);
+      if (ca === cb) return false;
+      return (voEditDistance(ca, cb) / shared) > 0.1;
+    }
     var definitions = {};
     var reported = {};
     for (var i = 0; i < textBlocks.length; i++) {
@@ -1540,7 +1585,8 @@ var DETECTORS = {
         var snippet = String(textBlocks[i]).substr(match.index + match[0].length, 90).replace(/\s+/g, ' ').trim();
         var norm = snippet.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').slice(0, 60);
         var prev = definitions[term];
-        if (prev && prev.page !== i && prev.norm && norm && prev.norm !== norm && !reported[term]) {
+        if (prev && prev.page !== i && prev.norm && norm && prev.norm !== norm &&
+            voMateriallyDiffer(prev.snippet, snippet) && !reported[term]) {
           reported[term] = true;
           findings.push({ type: 'CT08', severity: 3,
             evidence: 'Term "' + term + '" is defined differently in two places: "' + prev.snippet.slice(0, 70) + '" (Page ' + (prev.page + 1) + ') vs "' + snippet.slice(0, 70) + '" (Page ' + (i + 1) + ')',
