@@ -497,7 +497,7 @@
   <div class="results" id="results">
     <h3>Document Sealed</h3>
     <div class="ots-status pending" id="otsStatus">&#8987; OpenTimestamps proof pending Bitcoin blockchain confirmation (typically 1-2 hours)</div>
-    <div class="ots-status pending" style="border-color:rgba(212,168,67,0.4)">&#128241; This report comes from the website's deterministic engine &mdash; free for everyone, no download needed. For the <strong>full experience</strong> &mdash; the hybrid on-device AI with richer narrative reports, an evidence vault, and the legal chat &mdash; <a href="/index.html#coming-soon" style="color:var(--gold, #d4a843)">get the app that suits you</a> when they release: Android, Windows&nbsp;Lite, or the Fraud Firewall for institutions.</div>
+    <div class="ots-status pending" style="display:block;line-height:1.6;border-color:rgba(212,168,67,0.4)">&#128241; This report comes from the website's deterministic engine &mdash; free for everyone, no download needed. For the <strong>full experience</strong> &mdash; the hybrid on-device AI with richer narrative reports, an evidence vault, and the legal chat &mdash; <a href="/index.html#coming-soon" style="color:var(--gold, #d4a843)">get the app that suits you</a> when they release: Android, Windows&nbsp;Lite, or the Fraud Firewall for institutions.</div>
     <div class="ots-status pending" id="asIsNote" style="display:none;">&#128274; This document is password-protected, so it was sealed exactly as-is: the SHA-512 fingerprint and blockchain timestamp cover these exact bytes and verify normally. The watermark, QR and footer could not be stamped inside the locked file &mdash; your Seal Certificate carries the seal record instead.</div>
     <div class="preview-section">
       <h4>What Your Sealed Document Looks Like</h4>
@@ -1787,6 +1787,7 @@ function secExecSummary(ctx, data) {
   ctx.bullet('SEVERITY runs 1 (informational) to 5 (critical). Read the critical and high findings first; low ones are context.', { size: 9.5 });
   ctx.bullet('STRUCTURAL NOTES are low-severity quirks that naturally appear when many documents are combined into one file (repeated page numbers, annexures filed elsewhere in the bundle). They are listed separately so they never inflate the picture.', { size: 9.5 });
   ctx.bullet('THE SEAL proves this exact file existed at the stated time and has not been altered since. It authenticates the document - it does not judge its contents.', { size: 9.5 });
+  ctx.bullet('SHA-512 is the document\'s digital fingerprint. Change a single letter anywhere in the file and the fingerprint changes completely - that is how tampering is caught.', { size: 9.5 });
 }
 
 // ================= SECTION: DOCUMENT & EVIDENCE INDEX =================
@@ -2136,6 +2137,18 @@ function secTimeline(ctx, data) {
   var tlEvents = (tl && tl.events) || [];
   if (tlEvents.length) {
     ctx.para('The engine (v' + ENGINE_VERSION + ') reconstructs a chronological timeline from the dated findings. Each line names WHEN, WHO, and the page — read in order, this is the sequence the documents describe:', { size: 9.5, after: 6 });
+    // One-glance strip: the unique dates in order, arrow-joined (max 6), so the
+    // shape of the story is visible before the detail. ASCII arrows only — the
+    // report's standard PDF fonts carry WinAnsi, not arrow glyphs.
+    var uniqDt = [], seenDt = {};
+    for (var u = 0; u < tlEvents.length; u++) {
+      var dtv = tlEvents[u].date;
+      if (!seenDt[dtv]) { seenDt[dtv] = true; uniqDt.push(dtv); }
+    }
+    if (uniqDt.length >= 2) {
+      var strip = uniqDt.slice(0, 6).join('  -->  ') + (uniqDt.length > 6 ? '  -->  ...' : '');
+      ctx.para(strip, { size: 8.5, font: ctx.f.courier, color: NAVY2, after: 8 });
+    }
     for (var te = 0; te < tlEvents.length; te++) {
       var ev = tlEvents[te];
       var whoStr = (ev.who && ev.who.length) ? ev.who.join(', ') + ' — ' : '';
@@ -2598,6 +2611,29 @@ function secPersonIndex(ctx, data) {
   if (idx.length > PERSON_CAP) {
     ctx.para('Showing the ' + PERSON_CAP + ' most-mentioned of ' + idx.length + ' named parties.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY });
   }
+
+  // Consistency note: case-details parties the user named that NO flagged
+  // passage mentions. Stating this is a fact of the record (their account is
+  // uncontradicted in the flagged text), and it matters to a reader exactly as
+  // much as who IS named — without it, the index reads as if everyone in the
+  // case is implicated somewhere.
+  var declared = extractParties((data.identity && data.identity.parties) || '');
+  if (declared.length) {
+    var quiet = [];
+    for (var dp = 0; dp < declared.length; dp++) {
+      var dn = String(declared[dp]).toLowerCase();
+      var found = false;
+      for (var ip = 0; ip < idx.length; ip++) {
+        var inm = String(idx[ip].name || '').toLowerCase();
+        if (inm.indexOf(dn) !== -1 || dn.indexOf(inm) !== -1) { found = true; break; }
+      }
+      if (!found) quiet.push(declared[dp]);
+    }
+    if (quiet.length) {
+      ctx.gap(4);
+      ctx.para('Named in the case details but appearing in NO flagged passage: ' + listPhrase(quiet) + '. No contradiction in the record names ' + (quiet.length === 1 ? 'this party' : 'these parties') + ' — their account is uncontradicted in the flagged text.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    }
+  }
 }
 
 // ================= SECTION: EVIDENCE APPENDIX =================
@@ -2924,6 +2960,29 @@ function secNarrative(ctx, data) {
   opening += (idn.caseName ? ', in the matter of ' + idn.caseName : '') + '.';
   if (parties.length) opening += ' The parties named are ' + listPhrase(parties) + '.';
   ctx.para(opening, { size: 10.5, after: 8 });
+
+  // The story the dates tell: a chronological digest built from the dated
+  // findings (the same anchors as the Timeline Analysis section, compressed),
+  // so the SEQUENCE of events is the first thing a reader absorbs, before the
+  // finding-by-finding detail. Deterministic; adds no facts.
+  var tlD = (fr.timeline && fr.timeline.events) || [];
+  if (tlD.length >= 2 && !fr.unreadable) {
+    var seenD = {}, storyBits = [];
+    for (var td = 0; td < tlD.length && storyBits.length < 8; td++) {
+      var evD = tlD[td];
+      var kD = evD.date + '|' + (evD.page || '');
+      if (seenD[kD]) continue;
+      seenD[kD] = true;
+      var evTxt = String(evD.evidence || '').replace(/\s+/g, ' ');
+      if (evTxt.length > 110) evTxt = evTxt.slice(0, 107) + '...';
+      storyBits.push('On ' + evD.date + (evD.page ? ' (p.' + evD.page + ')' : '') + ': ' + evTxt);
+    }
+    if (storyBits.length >= 2) {
+      ctx.subHeading('The story the dates tell');
+      for (var sb = 0; sb < storyBits.length; sb++) ctx.bullet(storyBits[sb], { size: 9.5, after: 4 });
+      ctx.para('Read in order, these dated findings are the sequence the documents themselves describe. The full chronology is in the Timeline Analysis section.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+    }
+  }
 
   // Unreadable document: an honest non-result, never a clean bill of health.
   if (fr.unreadable) {
