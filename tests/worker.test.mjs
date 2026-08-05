@@ -173,7 +173,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   const pb = await r.json().catch(() => null);
   ok(pb && pb.format === 'plain', 'documented reply shape flows through as format:plain');
   ok(pb && /Acme Ltd/.test(pb.summary || ''), 'narrate passes the model summary through');
-  ok(pb && /investigative indicators/.test(pb.limits || ''), 'narrate appends the closing disclaimer to limits');
+  ok(pb && /verdict on any named person is for the court/.test(pb.limits || ''), 'narrate appends the PD16 closing disclaimer to limits');
   ok(/CONSTITUTION/.test(capturedUser) && /Truth over probability/.test(capturedUser),
     'the Constitution is loaded into the narrator context');
   ok(/Acme Ltd transferred R2,000,000/.test(capturedUser),

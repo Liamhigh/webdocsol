@@ -31,7 +31,7 @@ const pathA = [
 ];
 let a = D40(pathA);
 ok(a.length > 0 && a[0].type === 'CT46', 'Path A: fires CT46 when a corporate capacity is claimed but payment goes to a personal account');
-ok(a.length > 0 && a[0].severity === 4, 'CT46 is severity 4 (HIGH indicator, not a determination)');
+ok(a.length > 0 && a[0].severity === 4, 'CT46 is severity 4 (HIGH finding; the verdict is for the court)');
 ok(a.length > 0 && /Page 1 vs Page 2/.test(a[0].location), 'CT46 anchors to the real pages of each half');
 ok(a.length > 0 && /personal trust account/i.test(a[0].evidence) && /Feike \(Pty\) Ltd/i.test(a[0].evidence),
   'CT46 evidence quotes both the corporate claim and the personal-account instruction');
