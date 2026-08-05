@@ -9,6 +9,9 @@
 > working here, everything you build must fit the system described below.
 > Canonical Constitution: `verumglobal.foundation/constitution.html` ·
 > machine-readable: `verumglobal.foundation/constitution.json`.
+> Canonical verification hub (referenced below as **the Verification Hub**):
+> `verumglobal.foundation/verify.html` — defined once here; if it ever moves,
+> this line is the only place to change.
 
 ---
 
@@ -165,7 +168,7 @@ Every output (report, warning, prevention notice) is sealed with:
 1. SHA-512 hash of the complete document
 2. OpenTimestamps submission to the Bitcoin blockchain
 3. OTS receipt embedding
-4. QR code linking to `verumglobal.foundation/verify.html`
+4. QR code linking to the Verification Hub
 5. Seal footer on every page: `VERUM OMNIS SEAL | seal-{id} | {hash} | Page X of Y`
 
 `webdocsol` is the **master implementation**. All other repositories copy its sealing
@@ -179,12 +182,13 @@ wiped**. Everything that leaves any platform must be sealed.
    byte-identical seal format `VO-SEAL2`). A document sealed on any surface verifies
    on any other.
 2. **Verification happens at the website, only.** Apps do NOT re-implement
-   verification UI. The verify action / QR on every surface opens
-   `verumglobal.foundation/verify.html` — the single public verification hub. This is
-   what keeps the system stateless: the seal + Bitcoin anchor are the record, and one
-   canonical verifier reads them.
-3. **Forensics run on-device.** The apps (Android, Windows, Windows Lite) run their
-   own **hybrid engines** (Gemma 3 + Phi 3, Gemma 4 where available) for reports —
+   verification UI. The verify action / QR on every surface opens **the Verification
+   Hub** (defined in the header). This is what keeps the system stateless: the seal +
+   Bitcoin anchor are the record, and one canonical verifier reads them.
+3. **Forensics run on-device.** Every client app with an on-device engine — today
+   Android (`1verum`/`cursorfu`), the Windows Firewall, and the planned Windows Lite;
+   any future surface (e.g. Apple) inherits this rule unchanged — runs its own
+   **hybrid engine** (Gemma 3 + Phi 3, Gemma 4 where hardware allows) for reports:
    contextual narrative, role/capacity reasoning, cross-page synthesis — richer than
    the website's deterministic-only engine. The website remains the deterministic
    master (CT01–CT46) and the source of signed rule packages the apps sync.
@@ -222,6 +226,19 @@ institution — never the victim.
 evidence vault, document sealing, forensic scan, and the **legal chat interface**.
 No stream interception, no Mistral, no institutional billing. The Android hybrid
 implementation (`cursorfu` / `1verum`) is the reference design to port.
+
+**Hardware floor (binding — this is the mission):** Windows Lite exists to serve
+the poor and vulnerable, who own old machines. It MUST run on old, low-spec laptops
+and desktops:
+- **Small models only** — compact quantized Phi 3-class + Gemma 3-class builds,
+  CPU-only inference, modest RAM. Gemma 4 is opportunistic on capable hardware —
+  **never a requirement**.
+- **Graceful degradation** — if a model cannot load, the deterministic engine,
+  sealing, and vault still work fully. AI enhances; it is never a gate.
+- **The Firewall's model stack (Gemma 4 / Mistral) is explicitly too heavy for old
+  computers and must never become a Lite dependency.**
+- Acceptance rule: **if a feature cannot run on an old computer, it does not ship
+  in Lite.** Justice must not require new hardware.
 
 ---
 
@@ -275,6 +292,7 @@ seal ID), public Constitution display, sealed report generation, the AI endpoint
 
 **12.4 Windows Lite (planned) must:**
 - Mirror 12.2 (Android requirements) on desktop: 3 small models, vault, sealing, **legal chat interface**. No interception/billing modules.
+- **Run on low-spec hardware**: CPU-only inference, small quantized models, graceful degradation — see the §9-Lite hardware floor. If it cannot run on an old laptop, it does not ship.
 
 **12.5 Server-side (big systems) must:** run Gemma Latest for bulk cross-border
 mapping, Mistral for large-dataset orchestration, enforce Constitutional
@@ -341,7 +359,14 @@ silently:
    Constitution **v6.1** (operative seal `VO-9E51D3F507E6`).
 6. **§7 sealing/verification/forensics split** added at the founder's instruction
    (5 August 2026): identical sealing on every surface; verification only at the
-   website hub (`verify.html`); forensics on-device via each app's hybrid engine.
+   Verification Hub; forensics on-device via each app's hybrid engine.
+7. **§9-Lite hardware floor** added at the founder's instruction (5 August 2026):
+   Windows Lite must run on old, low-spec machines — small models only, CPU-only,
+   graceful degradation — because its purpose is access to justice for the poor and
+   vulnerable; the Firewall's heavier model stack must never become a Lite
+   dependency. Also: the Verification Hub alias is defined once in the header, and
+   the on-device forensics rule covers all client apps with on-device engines
+   (review feedback).
 
 *Where this document and the sealed Constitution v6.1 disagree, the Constitution
 governs.*
