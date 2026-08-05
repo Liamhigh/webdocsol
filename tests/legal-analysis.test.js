@@ -149,8 +149,18 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   const lines = R._plainLeadLines(fr, data);
   const joined = lines.join('\n');
   ok(lines.length > 0, 'plain lead is produced when there are findings');
-  ok(/sealed record of "Wallers Agreement" \(20 pages\) contains 4 findings\. The following are established\./.test(joined),
-    'plain lead opens with the sealed record, document name, page count and finding count stated as fact');
+  ok(/sealed record of "Wallers Agreement" \(20 pages\) contains 4 verified findings\. The following are established\./.test(joined),
+    'plain lead opens with the sealed record, document name, page count and verified finding count stated as fact');
+  // An AI-raised item is candidate tier — it must never inflate the verified
+  // count, never appear among the established serious findings, and must be
+  // disclosed as advisory (PD16).
+  const frAi = { overallScore: 62, findings: fr.findings.concat([
+    { source: 'ai', type: 'INCONSISTENT_ENTITLEMENT', severity: 4, rationale: 'franchisor vs franchisee' }
+  ]) };
+  const joinedAi = R._plainLeadLines(frAi, data).join('\n');
+  ok(/contains 4 verified findings\./.test(joinedAi), 'AI candidate does NOT inflate the verified findings count');
+  ok(/raised 1 further candidate item/.test(joinedAi) && /advisory only/.test(joinedAi),
+    'AI candidate is disclosed as advisory, outside the established findings');
   ok(/The serious ones, in plain words:/.test(joined), 'plain lead announces the serious findings');
   ok(/On p\. 11, .*goodwill/i.test(joined), 'plain lead NAMES the CT45 serious finding in plain words, anchored to its page');
   ok(/date does not add up/.test(joined), 'plain lead NAMES the CT03 serious finding in plain words');

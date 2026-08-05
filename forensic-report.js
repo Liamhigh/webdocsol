@@ -120,6 +120,12 @@ var VO_CHECK_HINTS = {
   FRANCHISE_LEASE: 'Check the title deed and head-lease records for the property, and the ownership sequence, against the clause being invoked.',
   AI_IDENTIFIED: 'Treat as a lead only: verify the quoted passage on its page before relying on it — this item was raised by AI review, not the deterministic engine.'
 };
+// Per-type overrides where the category hint would misdirect the reader (a
+// registration-number finding is checked at the companies register, not
+// against bank statements).
+var VO_CHECK_HINTS_TYPE = {
+  CT20: 'Check the number against the CIPC companies register (search by both the entity name and the number), and against the original document — scanned copies can misread digits. Record what the register returns for this entity.'
+};
 
 var CT_CATEGORY = {
   CT01: 'STATEMENTAL', CT02: 'STATEMENTAL', CT03: 'STATEMENTAL', CT04: 'STATEMENTAL',
@@ -183,7 +189,11 @@ var CATEGORY_EXPLAIN = {
 // Each contradiction type maps to the legal subject it most speaks to. A finding
 // is counted under exactly one subject so the picture is not double-inflated.
 var LEGAL_SUBJECT_OF = {
-  CT15: 'FINANCIAL', CT16: 'FINANCIAL', CT17: 'FINANCIAL', CT18: 'FINANCIAL', CT19: 'FINANCIAL', CT20: 'FINANCIAL', CT21: 'FINANCIAL', CT22: 'FINANCIAL',
+  // CT20 (invalid registration-number format) sits under MISREP, not FINANCIAL:
+  // a malformed registration number is an identity/representation question for
+  // the companies register, not an appropriation of money — anchoring it to
+  // common-law theft and money laundering overstated the candidate law.
+  CT15: 'FINANCIAL', CT16: 'FINANCIAL', CT17: 'FINANCIAL', CT18: 'FINANCIAL', CT19: 'FINANCIAL', CT20: 'MISREP', CT21: 'FINANCIAL', CT22: 'FINANCIAL',
   CT09: 'MISREP', CT10: 'MISREP', CT11: 'MISREP', CT12: 'MISREP', CT13: 'MISREP', CT14: 'MISREP',
   CT01: 'CONTRADICTION', CT02: 'CONTRADICTION', CT03: 'CONTRADICTION', CT04: 'CONTRADICTION', CT05: 'CONTRADICTION', CT06: 'CONTRADICTION', CT07: 'CONTRADICTION', CT08: 'CONTRADICTION', CT43: 'CONTRADICTION',
   CT23: 'TAMPERING', CT24: 'TAMPERING', CT25: 'TAMPERING', CT26: 'TAMPERING', CT27: 'TAMPERING', CT28: 'TAMPERING', CT29: 'TAMPERING', CT30: 'TAMPERING', CT41: 'TAMPERING', CT42: 'TAMPERING',
@@ -869,9 +879,18 @@ function plainLeadLines(fr, data) {
   fr = fr || {};
   var plAll = fr.findings || [];
   if (!(plAll.length > 0 && !fr.scanFailed && !fr.unreadable)) return [];
+  // "Established" means ENGINE-VERIFIED. An AI-raised item is candidate tier —
+  // the report's own AI section says "never presented as engine-verified" — so
+  // it must not be counted among the established findings (PD16).
+  var plVerified = [], plAiCands = 0;
+  for (var pv = 0; pv < plAll.length; pv++) {
+    if (plAll[pv] && plAll[pv].source === 'ai') plAiCands++;
+    else plVerified.push(plAll[pv]);
+  }
+  if (plVerified.length === 0) return [];
   var plDemoted = 0, plSerial = 0, plSubstantive = 0, plSerious = 0;
-  for (var pl = 0; pl < plAll.length; pl++) {
-    var plf = plAll[pl];
+  for (var pl = 0; pl < plVerified.length; pl++) {
+    var plf = plVerified[pl];
     if (plf.type === 'SERIAL') { plSerial++; continue; }
     if (isDemoted(plf)) { plDemoted++; continue; }
     plSubstantive++;
@@ -881,7 +900,7 @@ function plainLeadLines(fr, data) {
   var docName = (data && data.docName) || 'this document';
   var pageCount = (data && data.pageCount) || 'n/a';
   var plLines = [];
-  plLines.push('The sealed record of "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') contains ' + plAll.length + ' finding' + (plAll.length === 1 ? '' : 's') + '. The following are established.');
+  plLines.push('The sealed record of "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') contains ' + plVerified.length + ' verified finding' + (plVerified.length === 1 ? '' : 's') + '. The following are established.');
   if (plDemoted > 0) {
     plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
   }
@@ -894,7 +913,7 @@ function plainLeadLines(fr, data) {
   // Name the serious findings in plain words, right here at the top, so the
   // reader gets the whole picture before any table. Same lay clause the
   // narrative uses; capped so the lead stays short; anchored to the page.
-  var plSeriousList = plAll.filter(function (f) {
+  var plSeriousList = plVerified.filter(function (f) {
     return f && f.type !== 'SERIAL' && !isDemoted(f) && (f.severity || 0) >= 4;
   }).sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
   if (plSeriousList.length > 0) {
@@ -911,6 +930,7 @@ function plainLeadLines(fr, data) {
     }
   }
   if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern match' + (plSerial === 1 ? '' : 'es') + ' also recorded - see the Serial Pattern Analysis section.');
+  if (plAiCands > 0) plLines.push('The optional AI review raised ' + plAiCands + ' further candidate item' + (plAiCands === 1 ? '' : 's') + ' - advisory only, recorded in its own section, and not counted among the established findings until verified.');
   plLines.push('These findings are sealed under SHA-512 and anchored to the Bitcoin blockchain: they cannot be changed, altered, or deleted. The verdict on any named person is for the court.');
   return plLines;
 }
@@ -956,17 +976,26 @@ function secExecSummary(ctx, data) {
   // Fact box — counts only. The Constitution's Ordinal Confidence definition
   // ("never expressed as percentages ... no false precision") bars a 0-100
   // score from the narrative. Counts of verified findings are facts.
+  // "Verified" means ENGINE-VERIFIED: AI-raised items are candidate tier
+  // ("never presented as engine-verified") and are shown on their own line,
+  // never inside the verified total or its severity counts (PD16).
   var fbCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
   var fbAll = fr.findings || [];
-  for (var fb = 0; fb < fbAll.length; fb++) { var fbs = Math.max(1, Math.min(5, fbAll[fb].severity || 1)); fbCounts[fbs]++; }
+  var fbVerified = 0, fbAiCands = 0;
+  for (var fb = 0; fb < fbAll.length; fb++) {
+    if (fbAll[fb] && fbAll[fb].source === 'ai') { fbAiCands++; continue; }
+    fbVerified++;
+    var fbs = Math.max(1, Math.min(5, fbAll[fb].severity || 1)); fbCounts[fbs]++;
+  }
   var boxH = 86;
   ctx.ensure(boxH + 8);
   ctx.page.drawRectangle({ x: LM, y: ctx.y - boxH, width: CW, height: boxH, color: BOXBG, borderColor: GOLD, borderWidth: 1 });
-  ctx.page.drawText(String(fr.totalFindings || 0), { x: LM + 18, y: ctx.y - 44, size: 26, font: ctx.f.timesBold, color: NAVY2 });
+  ctx.page.drawText(String(fbVerified), { x: LM + 18, y: ctx.y - 44, size: 26, font: ctx.f.timesBold, color: NAVY2 });
   ctx.page.drawText('Verified findings', { x: LM + 18, y: ctx.y - 60, size: 9, font: ctx.f.times, color: GRAY });
   ctx.page.drawText('Critical: ' + fbCounts[5] + '     High: ' + fbCounts[4], { x: LM + 200, y: ctx.y - 34, size: 11, font: ctx.f.timesBold, color: NAVY2 });
   ctx.page.drawText('Medium: ' + fbCounts[3] + '     Low/Info: ' + (fbCounts[2] + fbCounts[1]), { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
-  ctx.page.drawText('Contradiction types triggered: ' + (fr.contradictionTypesUsed || 0) + ' / ' + CT_COUNT, { x: LM + 200, y: ctx.y - 64, size: 10, font: ctx.f.times, color: INK });
+  ctx.page.drawText('Contradiction types triggered: ' + (fr.contradictionTypesUsed || 0) + ' / ' + CT_COUNT
+    + (fbAiCands > 0 ? '      AI-raised candidates: ' + fbAiCands + ' (advisory)' : ''), { x: LM + 200, y: ctx.y - 64, size: 10, font: ctx.f.times, color: INK });
   ctx.y -= boxH + 12;
 
   // AI document classification (optional; only shown when the classifier ran)
@@ -979,12 +1008,13 @@ function secExecSummary(ctx, data) {
   if (fr.scanFailed) ctx.para('NOTE: the deterministic scan could not complete on this file. Counts shown are not meaningful; the seal itself is unaffected.', { size: 9.5, font: ctx.f.timesBold, color: RED, after: 8 });
   if (fr.summary) ctx.para(fr.summary, { size: 10, after: 10 });
   if (!fr.clean) {
-    ctx.para((fr.totalFindings || 0) + ' findings are recorded below. Each is a fact anchored to the sealed record — a contradiction, anomaly, or integrity signal the engine measured. What the facts establish in law, and any verdict on a named person, is for the court.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 12 });
+    ctx.para(fbVerified + ' verified finding' + (fbVerified === 1 ? ' is' : 's are') + ' recorded below. Each is a fact anchored to the sealed record — a contradiction, anomaly, or integrity signal the engine measured. What the facts establish in law, and any verdict on a named person, is for the court.'
+      + (fbAiCands > 0 ? ' The ' + fbAiCands + ' AI-raised candidate item' + (fbAiCands === 1 ? '' : 's') + ' appear' + (fbAiCands === 1 ? 's' : '') + ' in the AI-Identified Indicators section, advisory only.' : ''), { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 12 });
   }
 
-  // findings by severity
+  // findings by severity (engine-verified only; AI candidates have their own section)
   var sevCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
-  var all = fr.findings || [];
+  var all = (fr.findings || []).filter(function (f) { return !(f && f.source === 'ai'); });
   for (var i = 0; i < all.length; i++) {
     var s = Math.max(1, Math.min(5, all[i].severity || 1));
     sevCounts[s]++;
@@ -1720,7 +1750,8 @@ function secLegalAnalysis(ctx, data) {
   }
   ctx.gap(4);
   var jur = (data.identity && data.identity.jurisdiction) ? data.identity.jurisdiction : null;
-  ctx.para((fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) + ' finding' + ((fr.totalFindings != null ? fr.totalFindings : (fr.findings || []).length) === 1 ? '' : 's') + ' stand on the record above, each anchored to its page. A single verified contradiction can be decisive.', { size: 9, after: 6 });
+  var saVerified = (fr.findings || []).filter(function (f) { return !(f && f.source === 'ai'); }).length;
+  ctx.para(saVerified + ' verified finding' + (saVerified === 1 ? ' stands' : 's stand') + ' on the record above, each anchored to its page. A single verified contradiction can be decisive.', { size: 9, after: 6 });
   ctx.para('Recommended next steps' + (jur ? ' (jurisdiction: ' + jur + ')' : '') + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Candidate statutory provisions are set out in the Statutory Anchoring section that follows - they are starting points for counsel to confirm, not a legal conclusion.', { size: 9 });
   ctx.bullet('Preserve the sealed original and this report unaltered; both are SHA-512 anchored and independently verifiable at verumglobal.foundation/verify.html.', { size: 9 });
@@ -2408,7 +2439,8 @@ function secNarrative(ctx, data) {
     // engine category. The external review's core complaint was that findings
     // told the reader nothing actionable ("the human reviewer still has to
     // read the whole file"); every finding now carries its next step.
-    var checkHint = VO_CHECK_HINTS[(f.source === 'ai') ? 'AI_IDENTIFIED' : (CT_CATEGORY[f.type] || 'DIGITAL')];
+    var checkHint = (f.source === 'ai') ? VO_CHECK_HINTS.AI_IDENTIFIED
+      : (VO_CHECK_HINTS_TYPE[f.type] || VO_CHECK_HINTS[CT_CATEGORY[f.type] || 'DIGITAL']);
     if (checkHint) {
       ctx.para('What to check next: ' + checkHint, { size: 9.5, indent: 14, after: 3 });
     }

@@ -208,6 +208,32 @@ ok(DET.D30_DETECT_TERM_DEFINITION_CONFLICT([
   ok(d30diff.length === 1 && /defined differently/.test(d30diff[0].evidence) && /going-concern/.test(d30diff[0].evidence) && /compensable/.test(d30diff[0].evidence),
     'CT08 conflict evidence quotes BOTH conflicting definitions');
 }
+// CT08 OCR-noise regression (evidence-bundle-7, 330pp): the SAME agreement
+// bound twice into one bundle re-reads "CALTEX" as "CAL TEX", "than" as
+// "thari", "portion" as "portions", or cuts the second copy a letter short —
+// 8 identical definitions were reported as "defined differently" and, under
+// PD16, stated as established fact. OCR jitter is not a conflict; only a
+// MATERIAL rewrite of the wording is.
+ok(DET.D30_DETECT_TERM_DEFINITION_CONFLICT([
+    '"Caltex Lubricants" means those Lubricants and CALTEX Petroleum Products (other than Motor Fuel) supplied.',
+    'Copy: "Caltex Lubricants" means those Lubricants and CAL TEX Petroleum Products (other thari Motor Fuel) supplied.'
+  ]).length === 0,
+  'CT08 stays silent on OCR jitter between two copies of the same definition (CAL TEX / thari)');
+ok(DET.D30_DETECT_TERM_DEFINITION_CONFLICT([
+    '"Layout" means any CALTEX customised layout drawings for the Premises or any portion thereof.',
+    'Copy: "Layout" means any CAL TEX customised layout drawings for the Premises or any portions thereof.'
+  ]).length === 0,
+  'CT08 stays silent on singular/plural and spacing OCR noise');
+// A one-word rewrite of the defined meaning IS material and must still fire
+// (evidence-bundle-7 "Term": Expiration Date vs Termination Date — kept).
+{
+  const d30term = DET.D30_DETECT_TERM_DEFINITION_CONFLICT([
+    '"Term" means the period from the Commencement Date to the Expiration Date, subject to clause 5.',
+    'Copy: "Term" means the period from the Commencement Date to the Termination Date; 1.56 "Termination" follows.'
+  ]);
+  ok(d30term.length === 1 && /Expiration/.test(d30term[0].evidence) && /Termination/.test(d30term[0].evidence),
+    'CT08 still fires when the definition wording is materially rewritten (Expiration vs Termination)');
+}
 
 // Serial patterns must NOT fire on isolated generic single words in legal text
 // (the run raised Digital Signature Forgery on "pdf", Witness Tampering on
@@ -377,6 +403,27 @@ const BF = require('../forensic-engine-page.js').voBackfillPageAnchors;
     'in the event of liquidation of the company, creditors rank first'
   ]);
   ok(f.length === 0, 'CT14 does not pair a status with "in the event of liquidation" boilerplate');
+}
+// CT14 regression (evidence-bundle-7 p.72, rated CRITICAL): a franchise
+// agreement's insolvency-trigger clause — "if the Franchisee is finally
+// liquidated or placed under judicial management" — is a CONDITION, and an
+// ENUMERATION of insolvency events is a clause listing the menu, not a
+// statement that the entity IS liquidated. Under PD16 a false status "fact"
+// is the worst possible output, so both shapes must stay silent.
+{
+  const f = DET.D09_DETECT_ENTITY_STATUS_FAKE([
+    'a company, close corporation, trust, partnership, corporate or other business/trading name registered by the Franchisee that incorporates a reference to the Trade Marks without the prior written consent.',
+    'This agreement terminates if the Franchisee, being a company or close corporation, is finally liquidated or placed under judicial management, whether provisionally or finally.'
+  ]);
+  ok(f.length === 0, 'CT14 does not read an insolvency-trigger clause ("if ... finally liquidated or placed under judicial management") as entity status');
+}
+// A genuine status contradiction must still fire: the record ASSERTS both.
+{
+  const f = DET.D09_DETECT_ENTITY_STATUS_FAKE([
+    'Bright Idea Projects 66 (Pty) Ltd is a duly registered company in good standing.',
+    'The company was finally liquidated by order of the High Court on 12 March 2019.'
+  ]);
+  ok(f.length === 1, 'CT14 still fires when the record asserts an entity is both registered and liquidated');
 }
 
 // CT38 (D26): naming two jurisdictions is cross-border reality, not an
