@@ -58,9 +58,34 @@ ok(/\[Page 112\]/.test(ex) || /\[Page 114\]/.test(ex), 'includes a neighbour of 
 // A boilerplate deep page NOT referenced by any finding is excluded.
 ok(!/\[Page 74\]/.test(ex), 'excludes an unreferenced middle page (page 74)');
 
-// Fallback: no finding names a page -> document head, page-tagged.
-const headEx = build(pages, [{ type: 'CT18', location: '—' }], 12000);
-ok(/\[Page 1\]/.test(headEx) && /COVER LETTER/.test(headEx), 'fallback: head excerpt when no finding names a page');
+// Role/capacity reach (the Moolla scenario): the payment page is anchored by a
+// finding, but the affidavit's "in my capacity as director" page is NOT anchored
+// by any finding. The excerpt must still pull the affidavit page in via its
+// capacity marker, so the narrator sees BOTH halves of the contradiction.
+const cap = [];
+for (let i = 1; i <= 148; i++) cap.push('PAGE' + i + ' routine bundle text ' + 'filler '.repeat(30));
+cap[0] = 'COVER parties Louw and Moolla';
+cap[1] = 'Payment to SSM TRUST ACCOUNT 4082883975; Feike account 9027934431 also on file. ' + 'z'.repeat(120); // page 2 (anchored)
+cap[125] = 'I was contacted in my capacity as a director of Feike (Pty) Ltd. ' + 'q'.repeat(120);            // page 126 (NOT anchored)
+const capEx = build(cap, [{ type: 'CT02', location: 'p. 2 vs 138' }], 12000);
+ok(/\[Page 2\]/.test(capEx) && /SSM TRUST ACCOUNT/.test(capEx), 'includes the anchored payment page (both accounts visible)');
+ok(/\[Page 126\]/.test(capEx) && /in my capacity as a director of Feike/.test(capEx),
+  'pulls in the UNANCHORED affidavit page via its capacity marker, so the narrator sees both halves');
+
+// A bundle that mentions "trust account" on many pages must not flood the excerpt.
+const flood = [];
+for (let i = 1; i <= 40; i++) flood.push('Page ' + i + ' references a trust account in passing. ' + 'x'.repeat(60));
+const floodEx = build(flood, [{ type: 'CT01', location: 'Page 3' }], 12000);
+const markerPageCount = (floodEx.match(/\[Page \d+\]/g) || []).length;
+ok(markerPageCount <= 3 + 5 + 2, 'capacity-marker pages are capped, not unbounded (' + markerPageCount + ' page blocks)');
+
+// Fallback: no finding names a page AND no capacity/account marker anywhere ->
+// document head, page-tagged. (Use a clean bundle so nothing is pulled in.)
+const plainPages = [];
+for (let i = 1; i <= 12; i++) plainPages.push('Page ' + i + ' ordinary letter text with nothing notable. ' + 'w'.repeat(40));
+plainPages[0] = 'COVER LETTER opening page';
+const headEx = build(plainPages, [{ type: 'CT18', location: '—' }], 12000);
+ok(/\[Page 1\]/.test(headEx) && /COVER LETTER/.test(headEx), 'fallback: head excerpt when no finding names a page and no marker matches');
 
 // Degenerate inputs never throw.
 ok(build(null, findings, 12000) === '', 'no page text -> empty string');
