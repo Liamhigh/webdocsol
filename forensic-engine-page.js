@@ -2729,7 +2729,21 @@ function voDateSortKey(str) {
   if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return (+m[1]) * 10000 + (+m[2]) * 100 + (+m[3]);
   if ((m = s.match(/^(\d{1,2})\s+([a-z]{3,})\.?,?\s+(\d{4})$/))) { var mo = VO_MON[m[2].slice(0, 3)]; if (mo) return (+m[3]) * 10000 + mo * 100 + (+m[1]); }
   if ((m = s.match(/^([a-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})$/))) { var mo2 = VO_MON[m[1].slice(0, 3)]; if (mo2) return (+m[3]) * 10000 + mo2 * 100 + (+m[2]); }
-  if ((m = s.match(/^(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{2,4})$/))) { var y = +m[3]; if (y < 100) y += 2000; return y * 10000 + (+m[2]) * 100 + (+m[1]); }
+  // Slash/dash numeric dates may carry 2-digit years (15/11/17). DOTTED triples
+  // with a short final part ("1.1.10") are far more often CLAUSE NUMBERS than
+  // dates in legal text — the AllFuels bundle put "clause 1.1.10" into the
+  // story digest as "On 1.1.10" — so the dotted form requires a 4-digit year.
+  // Both numeric forms also bounds-check day/month; a failed read returns null
+  // (no date is better than a wrong one).
+  if ((m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/))) {
+    var y = +m[3]; if (y < 100) y += 2000;
+    if (+m[2] > 12 || +m[1] > 31 || +m[1] < 1 || +m[2] < 1) return null;
+    return y * 10000 + (+m[2]) * 100 + (+m[1]);
+  }
+  if ((m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/))) {
+    if (+m[2] > 12 || +m[1] > 31 || +m[1] < 1 || +m[2] < 1) return null;
+    return (+m[3]) * 10000 + (+m[2]) * 100 + (+m[1]);
+  }
   return null;
 }
 
@@ -3495,7 +3509,7 @@ function generateSummary(findings, score) {
     return 'HIGH: ' + findings.length + ' contradictions detected. Document ' +
       'The documents cannot all be true as written.';
   } else if (score >= 40) {
-    return 'MODERATE: ' + findings.length + ' contradictions found. Some ' +
+    return 'MODERATE: ' + findings.length + ' contradictions found. ' +
       'The record contradicts itself at the cited pages; read each finding against the original.';
   } else if (score >= 20) {
     return 'LOW: ' + findings.length + ' minor contradictions detected. ' +

@@ -2312,10 +2312,13 @@ function secNarrative(ctx, data) {
     var seenD = {}, storyBits = [];
     for (var td = 0; td < tlD.length && storyBits.length < 8; td++) {
       var evD = tlD[td];
-      var kD = evD.date + '|' + (evD.page || '');
+      var evTxt = String(evD.evidence || '').replace(/\s+/g, ' ');
+      // Dedupe by the finding's own words: the same finding can carry several
+      // nearby dates (or the same date rendered two ways), and repeating it
+      // per-date turned the digest into noise. One line per finding.
+      var kD = evTxt.slice(0, 80);
       if (seenD[kD]) continue;
       seenD[kD] = true;
-      var evTxt = String(evD.evidence || '').replace(/\s+/g, ' ');
       if (evTxt.length > 110) evTxt = evTxt.slice(0, 107) + '...';
       storyBits.push('On ' + evD.date + (evD.page ? ' (p.' + evD.page + ')' : '') + ': ' + evTxt);
     }
