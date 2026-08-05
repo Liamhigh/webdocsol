@@ -557,6 +557,7 @@ const NARRATE_SYSTEM = 'You are Verum Omnis, a constitutional forensic investiga
   '- TWO-TIER RULE: engine findings and AI candidates stay separate.\n' +
   '- Label candidates: pending verification. Never hide the tier.\n' +
   '- CONTRADICTION SHAPE: fact, pattern, dates, legal hypothesis.\n' +
+  '- CAPACITY vs INSTRUMENT: if a party claims a corporate role ("in my capacity as director of X") but money moves through a personal or differently-named account, that is a contradiction. Surface it, anchored to both pages.\n' +
   '- Legal conclusions are HYPOTHESIS. Say "may constitute".\n' +
   '- Cite only real law for the document\'s jurisdiction.\n' +
   '- Unsure of the exact section? State the principle.\n' +
@@ -569,15 +570,15 @@ const NARRATE_SYSTEM = 'You are Verum Omnis, a constitutional forensic investiga
   '- Label each: "AI-raised candidate - pending engine verification".\n' +
   '- Note engine blind spots so detectors can improve.\n' +
   '- No numbered lists. Short flowing paragraphs.\n' +
-  'Sections and lengths:\n' +
-  '- summary: what happened, who, why it matters. 300-400 words.\n' +
-  '- findings: grouped by theme, each anchored. 500-700 words.\n' +
-  '- contradictions: what was said versus shown. 250-350 words.\n' +
-  '- impact: named affected people, losses, timeline. 250-350 words.\n' +
-  '- legalContext: the laws in plain words. 250-350 words.\n' +
-  '- evidence: strongest exhibits and next steps. 200-300 words.\n' +
-  '- seal: seal date, GPS, device, verification. 100-150 words.\n' +
-  '- limits: findings stated as fact; the verdict on any named person is the court\'s. 75-100 words.\n' +
+  'Sections and lengths (STAY WITHIN these — the whole JSON must be COMPLETE and valid; do not overrun):\n' +
+  '- summary: what happened, who, why it matters. 150-220 words.\n' +
+  '- findings: grouped by theme, each anchored. 250-380 words.\n' +
+  '- contradictions: what was said versus shown. 150-250 words.\n' +
+  '- impact: named affected people, losses, timeline. 120-180 words.\n' +
+  '- legalContext: the laws in plain words. 120-180 words.\n' +
+  '- evidence: strongest exhibits and next steps. 100-160 words.\n' +
+  '- seal: seal date, GPS, device, verification. 50-90 words.\n' +
+  '- limits: findings stated as fact; the verdict on any named person is the court\'s. 50-80 words.\n' +
   'Reply ONLY valid JSON: ' +
   '{"summary":"...","findings":"...","contradictions":"...","impact":"...","legalContext":"...","evidence":"...","seal":"...","limits":"..."}';
 
@@ -1009,8 +1010,14 @@ async function handleAiNarrate(request, env) {
     // second 30 s on a model that is already known to be throttled here. This
     // keeps the server's worst case at one AI_TIMEOUT_MS, which the client's
     // narrate timeout comfortably covers.
+    // maxTokens sits comfortably ABOVE the length the section targets ask for
+    // (~1000-1540 words ≈ 2050 tokens), so a complete JSON reply is never
+    // truncated mid-object. The old 2560 cap was BELOW the old 2000-2600 word
+    // ask, so the reply was cut off and failed to parse -- the report then fell
+    // back to the deterministic narrative every time, which read as "the AI
+    // never ran". Right-sizing the ask + headroom here is the actual fix.
     const text = await callAi(env, AI_MODEL_FAST, NARRATE_SYSTEM, userContent,
-      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 2560, temperature: 0.2 });
+      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 3072, temperature: 0.2 });
     const parsed = extractJsonObject(text);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
       throw new Error('model reply is not a JSON object');
