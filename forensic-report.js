@@ -83,7 +83,17 @@ var CONSTITUTION = {
   anchor: 'Bitcoin via OpenTimestamps',
   url: 'verumglobal.foundation/constitution.html',
   jsonUrl: 'verumglobal.foundation/constitution.json',
-  courtStatus: 'v6.1 (sealed 5 August 2026) supersedes v6.0. v6.0 (seal VO-4FFEA8A806C1) is the version filed with the Constitutional Court of South Africa (CCT237/20 & CCT19/20); receipt acknowledged by the Registrar\'s office 9 July 2026 - acknowledgment of receipt only, not a ruling on the merits.'
+  courtStatus: 'v6.1 (sealed 5 August 2026) supersedes v6.0. v6.0 (seal VO-4FFEA8A806C1) is the version filed with the Constitutional Court of South Africa (CCT237/20 & CCT19/20); receipt acknowledged by the Registrar\'s office 9 July 2026 - acknowledgment of receipt only, not a ruling on the merits.',
+  // Sealed governance charter (v8.0, 5 Aug 2026). v6.1 remains the operating
+  // instrument of the deterministic engine; v8.0 governs the platform. Seal
+  // record read from the sealed v8.0 PDF's own VO-SEAL2 marker.
+  governance: {
+    version: '8.0 FINAL',
+    title: 'Universal AI Constitution',
+    sealId: 'VO-9A4F3C5E825C',
+    sha512: '9ef0607037e7f65849e4a7be144c7e8500dea933e37df0459d721346641598b02e81379665d4283854604ab9da6ad6859c6695429a3858593d484c7a22546d5b',
+    sealedAt: '05/08/2026 14:12:08 Africa/Johannesburg'
+  }
 };
 
 // ---------------- static engine maps (from forensic-engine.js v2.0) ----------------
@@ -1560,7 +1570,8 @@ function secConstitution(ctx, data) {
   ctx.bullet('Seal ID: ' + CONSTITUTION.sealId + ' - sealed ' + CONSTITUTION.sealedAt + '.', { size: 9.5 });
   ctx.bullet('SHA-512: ' + truncHash(CONSTITUTION.sha512, 32, 16) + ' (full fingerprint published at ' + CONSTITUTION.url + ').', { size: 9.5 });
   ctx.bullet('Blockchain anchor: ' + CONSTITUTION.anchor + '.', { size: 9.5 });
-  ctx.bullet('Status: ' + CONSTITUTION.courtStatus, { size: 9.5, after: 8 });
+  ctx.bullet('Status: ' + CONSTITUTION.courtStatus, { size: 9.5 });
+  ctx.bullet('Governance charter: Constitution v' + CONSTITUTION.governance.version + ' ("' + CONSTITUTION.governance.title + '") - seal ' + CONSTITUTION.governance.sealId + ', sealed ' + CONSTITUTION.governance.sealedAt + '; SHA-512 ' + truncHash(CONSTITUTION.governance.sha512, 32, 16) + '. v8.0 governs the platform; v6.1 remains the operating instrument of this engine.', { size: 9.5, after: 8 });
   ctx.gap(4);
 
   ctx.subHeading('For AI systems reading this sealed PDF');
