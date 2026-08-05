@@ -1429,6 +1429,39 @@ function secTimeline(ctx, data) {
       var strip = uniqDt.slice(0, 6).join('  -->  ') + (uniqDt.length > 6 ? '  -->  ...' : '');
       ctx.para(strip, { size: 8.5, font: ctx.f.courier, color: NAVY2, after: 8 });
     }
+    // Date arithmetic — measurements of the record (PD16). The reviewer's
+    // "2-year 3-month gap" had to be computed by hand; elapsed time between two
+    // anchored dates is pure arithmetic on facts already in the record, so the
+    // engine states it. What an interval MEANS is for the investigator and the
+    // court.
+    var keyed = [];
+    var seenKey = {};
+    for (var ku = 0; ku < tlEvents.length; ku++) {
+      var kv = tlEvents[ku];
+      if (kv.key && !seenKey[kv.key]) { seenKey[kv.key] = true; keyed.push(kv); }
+    }
+    if (keyed.length >= 2) {
+      var spanTxt = function (k1, k2) {
+        var y1 = Math.floor(k1 / 10000), m1 = Math.floor((k1 % 10000) / 100), d1 = k1 % 100;
+        var y2 = Math.floor(k2 / 10000), m2 = Math.floor((k2 % 10000) / 100), d2 = k2 % 100;
+        var months = (y2 - y1) * 12 + (m2 - m1) - (d2 < d1 ? 1 : 0);
+        if (months < 0) months = 0;
+        var yy = Math.floor(months / 12), mm = months % 12;
+        if (yy === 0 && mm === 0) return 'under a month';
+        return (yy ? yy + ' year' + (yy === 1 ? '' : 's') : '') + (yy && mm ? ' and ' : '') + (mm ? mm + ' month' + (mm === 1 ? '' : 's') : '');
+      };
+      var first = keyed[0], last = keyed[keyed.length - 1];
+      var lines = ['The dated record spans ' + spanTxt(first.key, last.key) + ', from ' + first.date + ' to ' + last.date + '.'];
+      var gapMax = null;
+      for (var gk = 1; gk < keyed.length; gk++) {
+        var gm = keyed[gk].key - keyed[gk - 1].key;
+        if (!gapMax || gm > gapMax.diff) gapMax = { diff: gm, a: keyed[gk - 1], b: keyed[gk] };
+      }
+      if (gapMax && spanTxt(gapMax.a.key, gapMax.b.key) !== 'under a month' && keyed.length > 2) {
+        lines.push('The longest interval between consecutive dated events is ' + spanTxt(gapMax.a.key, gapMax.b.key) + ', between ' + gapMax.a.date + ' and ' + gapMax.b.date + '.');
+      }
+      ctx.para(lines.join(' '), { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+    }
     for (var te = 0; te < tlEvents.length; te++) {
       var ev = tlEvents[te];
       var whoStr = (ev.who && ev.who.length) ? ev.who.join(', ') + ' — ' : '';

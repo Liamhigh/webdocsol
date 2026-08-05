@@ -1522,7 +1522,14 @@ var DETECTORS = {
       shall:1, will:1, may:1, must:1, agreement:1, party:1, parties:1, clause:1,
       section:1, hereto:1, herein:1, hereof:1, thereof:1, herewith:1 };
     var definitionRe = /("[^"]+"|\b[a-z][a-z'-]{3,})\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
+    // "Defined twice" is NOT a contradiction — a definitions chapter restated in
+    // an index, or the same agreement bound twice into a bundle, defines every
+    // term twice, IDENTICALLY (a real run produced 25 such non-findings from one
+    // glossary). The conflict exists only when the DEFINITIONS DIFFER, so the
+    // definition's own words are captured and compared; identical text stays
+    // silent, and a real conflict now quotes both versions (PD2/PD16).
     var definitions = {};
+    var reported = {};
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
       while ((match = definitionRe.exec(textBlocks[i])) !== null) {
@@ -1530,12 +1537,16 @@ var DETECTORS = {
         var term = match[1].toLowerCase().replace(/"/g, '').trim();
         // Bare (unquoted) words must be plausible defined terms, not boilerplate.
         if (!quoted && (TERM_STOP[term] || term.length < 4)) continue;
-        if (definitions[term] !== undefined && definitions[term] !== i) {
+        var snippet = String(textBlocks[i]).substr(match.index + match[0].length, 90).replace(/\s+/g, ' ').trim();
+        var norm = snippet.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').slice(0, 60);
+        var prev = definitions[term];
+        if (prev && prev.page !== i && prev.norm && norm && prev.norm !== norm && !reported[term]) {
+          reported[term] = true;
           findings.push({ type: 'CT08', severity: 3,
-            evidence: 'Term "' + term + '" defined in multiple locations',
-            location: 'Page ' + (definitions[term]+1) + ' and Page ' + (i+1) });
+            evidence: 'Term "' + term + '" is defined differently in two places: "' + prev.snippet.slice(0, 70) + '" (Page ' + (prev.page + 1) + ') vs "' + snippet.slice(0, 70) + '" (Page ' + (i + 1) + ')',
+            location: 'Page ' + (prev.page + 1) + ' and Page ' + (i + 1) });
         }
-        definitions[term] = i;
+        if (!prev) definitions[term] = { page: i, snippet: snippet, norm: norm };
       }
     }
     return findings;
