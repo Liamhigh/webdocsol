@@ -272,6 +272,11 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
 .pill-gold-big{display:inline-block;font-family:var(--mono);font-size:.72rem;letter-spacing:.15em;color:var(--gold);border:1px solid rgba(212,168,67,0.4);border-radius:999px;padding:.5rem 1.15rem;text-transform:uppercase;margin-bottom:1.5rem}
 .platform-grid{display:grid;gap:2rem;margin-top:4rem}
 @media(min-width:768px){.platform-grid{grid-template-columns:1fr 1fr}}
+@media(min-width:1024px){.platform-grid.three{grid-template-columns:repeat(3,1fr)}}
+.platform-status{display:inline-block;font-family:var(--mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);border:1px solid rgba(212,168,67,0.4);border-radius:999px;padding:.3rem .8rem;margin-bottom:1rem}
+.apps-note{max-width:860px;margin:3rem auto 0;border:1px solid var(--border);border-radius:.75rem;padding:1.5rem 1.75rem;background:rgba(26,46,82,0.3);text-align:left}
+.apps-note p{color:var(--body);font-size:.9rem;line-height:1.65;margin:0 0 .6rem}
+.apps-note p:last-child{margin-bottom:0}
 .platform-card{background:var(--navy-2);border:1px solid var(--border);border-radius:.75rem;padding:3rem;transition:border-color .3s,box-shadow .3s}
 .platform-card:hover{border-color:rgba(74,126,199,0.5);box-shadow:0 0 40px rgba(74,126,199,0.08)}
 .platform-icon{width:64px;height:64px;color:var(--blue);margin-bottom:1.5rem}
@@ -357,7 +362,7 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
       <a href="#standards" data-spy="standards">Standards</a>
       <a href="#firewall" data-spy="firewall">Firewall</a>
       <a href="verify.html" data-spy="verify">Verify</a>
-      <a href="#coming-soon" data-spy="coming-soon">Coming Soon</a>
+      <a href="#coming-soon" data-spy="coming-soon">Get the Apps</a>
     </div>
     <div class="nav-cta">
       <!-- Mandated addition: Constitution link between VERIFY anchor group and DOCUMENTS CTA -->
@@ -384,7 +389,7 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
   <a class="m-link" href="#standards">Standards</a>
   <a class="m-link" href="#firewall">Firewall</a>
   <a class="m-link" href="verify.html">Verify</a>
-  <a class="m-link" href="#coming-soon">Coming Soon</a>
+  <a class="m-link" href="#coming-soon">Get the Apps</a>
   <a class="m-link m-constitution" href="/constitution.html">Constitution</a>
   <div class="mobile-cta">
     <a class="btn-gold-fill" href="/seal-document.html">Seal Document</a>
@@ -936,23 +941,37 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
 <section class="section bg-0" id="coming-soon">
   <div class="container medium" style="text-align:center">
     <div class="reveal-item">
-      <span class="pill-gold-big">Coming Soon</span>
-      <h2 class="sec-title">Justice in Your Pocket</h2>
-      <p class="sec-intro" style="margin:0 auto">Upon conclusion of the Constitutional Court matter, Verum Omnis will be released as a free application for all private citizens and law enforcement agencies globally.</p>
+      <span class="pill-gold-big">Get the Apps</span>
+      <h2 class="sec-title">The Full Experience Lives in the Apps</h2>
+      <p class="sec-intro" style="margin:0 auto">Everything on this website is free for everyone — scan, seal, and verify with no download. But the website's reports are the deterministic engine only. The apps carry the <strong>hybrid on-device AI</strong>: richer narrative reports, role-and-capacity reasoning, a never-wiped evidence vault, and the legal chat. When they release, download the one that suits you — right here.</p>
     </div>
-    <div class="platform-grid" data-stagger style="text-align:left">
+    <div class="platform-grid three" data-stagger style="text-align:left">
       <article class="platform-card reveal-item">
         <svg class="platform-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="9" width="8" height="7" rx="1"/><path d="M8 11L5.5 8.5M16 11l2.5-2.5M10.5 12h.01M13.5 12h.01"/><path d="M9.5 16.5v2.5M14.5 16.5v2.5M10 21h4"/></svg>
         <h3 class="platform-name">Android</h3>
-        <p class="platform-desc">Mobile-first forensic analysis. Evidence capture, on-device processing, and court-ready report generation — all in your pocket.</p>
+        <span class="platform-status">Coming Soon — Free</span>
+        <p class="platform-desc">Justice in your pocket. Evidence capture with GPS, the hybrid forensic engine on-device, sealed court-ready reports, your own evidence vault, and the legal chat. Free forever for private citizens and law enforcement.</p>
         <button class="btn-notify" type="button" data-notify>Notify Me</button>
       </article>
       <article class="platform-card reveal-item">
         <svg class="platform-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1"/><path d="M12 5v14M4 12h16"/></svg>
-        <h3 class="platform-name">Windows</h3>
-        <p class="platform-desc">Desktop-grade forensic power. Bulk document processing, cross-case pattern detection, and enterprise integration for law enforcement.</p>
+        <h3 class="platform-name">Windows Lite</h3>
+        <span class="platform-status">Coming Soon — Free</span>
+        <p class="platform-desc">The Android experience on your desktop: the same hybrid AI engine, evidence vault, document sealing, and legal chat. No Apple version yet — it is planned; Windows Lite is the desktop option in the meantime. Free for private citizens.</p>
         <button class="btn-notify" type="button" data-notify>Notify Me</button>
       </article>
+      <article class="platform-card reveal-item">
+        <svg class="platform-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7l8-4z"/><path d="M8.5 12l2.5 2.5L15.5 10"/></svg>
+        <h3 class="platform-name">Fraud Firewall</h3>
+        <span class="platform-status">Coming Soon — Institutions</span>
+        <p class="platform-desc">For banks, insurers, and regulators: real-time transaction monitoring, stream analysis, and sealed prevention reports that stop fraud before the money moves. Self-serve download — no sales calls, no onboarding queue.</p>
+        <button class="btn-notify" type="button" data-notify>Notify Me</button>
+      </article>
+    </div>
+    <div class="apps-note reveal-item">
+      <p><strong>Release:</strong> upon conclusion of the Constitutional Court matter, the apps will be released for download on this page — free for all private citizens and law enforcement agencies globally.</p>
+      <p><strong>Institutions:</strong> the Fraud Firewall download is free and self-serve. Commercial use is governed by the <a href="/constitution.html" style="color:var(--gold)">Constitution's revenue statutes</a> (§7), agreed at installation — no procurement process required on our side, because the terms are the same for everyone and cannot be negotiated away.</p>
+      <p><strong>No download needed</strong> to scan, seal, or verify a document — that stays free on this website, forever.</p>
     </div>
   </div>
 </section>
