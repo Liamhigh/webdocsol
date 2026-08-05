@@ -1998,12 +1998,67 @@ function secOffenceMatrix(ctx, data) {
   ctx.table(
     [
       { key: 'subject', title: 'Legal subject', w: 110 },
-      { key: 'n', title: 'Indicators', w: 96 },
+      { key: 'n', title: 'Findings', w: 96 },
       { key: 'prov', title: 'Candidate provisions (for counsel to confirm)', w: 298 }
     ],
     rows,
     { size: 7.5 }
   );
+
+  // ---- Elements evidenced: the measurement against the statute ----
+  // PD16 taken to its full extent. A breathalyser does not say "maybe drunk";
+  // it states the reading against the limit. This block does the same for the
+  // core common-law offences: it measures which ELEMENTS of the offence the
+  // record evidences (each with its anchored finding), states the result
+  // flatly, and names the one element a document cannot carry — intent — which
+  // is the court's, along with the verdict on any named person. Deterministic:
+  // built only from the findings already anchored above; it adds no facts.
+  var typesPresent = {};
+  for (var tp = 0; tp < subst.length; tp++) {
+    if (!typesPresent[subst[tp].type] || (subst[tp].severity || 0) > (typesPresent[subst[tp].type].severity || 0)) {
+      typesPresent[subst[tp].type] = subst[tp];
+    }
+  }
+  var OFFENCE_ELEMENTS = [
+    { offence: 'common-law fraud', elements: [
+      { el: 'A misrepresentation — a statement the record itself contradicts', types: ['CT01', 'CT02', 'CT03', 'CT06', 'CT09', 'CT10', 'CT11', 'CT12', 'CT13', 'CT14', 'CT44', 'CT45', 'CT46'] },
+      { el: 'Actual or potential prejudice — money, rights or position at stake', types: ['CT02', 'CT15', 'CT16', 'CT17', 'CT18', 'CT19', 'CT20', 'CT21', 'CT22'] },
+      { el: 'Unlawfulness and intent', court: true }
+    ] },
+    { offence: 'common-law theft', elements: [
+      { el: 'Appropriation — money or property received or routed', types: ['CT15', 'CT17', 'CT18', 'CT46'] },
+      { el: 'Property of another — identified amounts in the record', types: ['CT02', 'CT15', 'CT16'] },
+      { el: 'Intent to permanently deprive', court: true }
+    ] }
+  ];
+  for (var oe = 0; oe < OFFENCE_ELEMENTS.length; oe++) {
+    var off = OFFENCE_ELEMENTS[oe];
+    var evidencedAll = true, anyEvidenced = false, elLines = [];
+    for (var eli = 0; eli < off.elements.length; eli++) {
+      var e = off.elements[eli];
+      if (e.court) { elLines.push(e.el + ': for the court — intent lives in a mind, not in a document.'); continue; }
+      var hits = [];
+      for (var ti = 0; ti < e.types.length; ti++) { if (typesPresent[e.types[ti]]) hits.push(typesPresent[e.types[ti]]); }
+      if (hits.length) {
+        anyEvidenced = true;
+        hits.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+        var anch = hits.slice(0, 2).map(function (h) { return (CT_NAMES[h.type] || h.type) + (h.location ? ' (' + h.location + ')' : ''); }).join('; ');
+        elLines.push(e.el + ': EVIDENCED — ' + anch + '.');
+      } else {
+        evidencedAll = false;
+        elLines.push(e.el + ': not evidenced in the flagged text.');
+      }
+    }
+    if (!anyEvidenced) continue;   // nothing in the record speaks to this offence — stay silent
+    ctx.ensure(84);
+    ctx.subHeading('Elements of ' + off.offence + ' — what the record evidences');
+    for (var ll = 0; ll < elLines.length; ll++) ctx.bullet(elLines[ll], { size: 9, after: 3 });
+    if (evidencedAll) {
+      ctx.para('Every documentary element of ' + off.offence + ' is evidenced in the record at the pages cited. The remaining element — intent — and the verdict on any named person are for the court.', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 8 });
+    } else {
+      ctx.para('Not every element of ' + off.offence + ' is evidenced in the flagged text: the elements marked EVIDENCED stand on the record; the missing ones do not. The verdict on any named person is for the court.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+    }
+  }
 }
 
 // ================= SECTION: RECOMMENDED ACTIONS (TIMEFRAMED) =================
