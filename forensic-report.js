@@ -68,21 +68,22 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
 var ENGINE_VERSION = '5.3.5-web';
-var CONSTITUTION_VERSION = '6.0';
+var CONSTITUTION_VERSION = '6.1';
 var DETECTOR_COUNT = 40, CT_COUNT = 46, SP_COUNT = 17;
 
-// ---------------- Verum Omnis Constitution v6.0 FINAL (canonical reference) ----------------
+// ---------------- Verum Omnis Constitution v6.1 FINAL (canonical reference) ----------------
 // Sealed instrument: "Truth for All". Full text + machine-readable record are public.
+// Seal record read from the sealed v6.1 PDF's own VO-SEAL2 marker (5 Aug 2026).
 var CONSTITUTION = {
-  version: '6.0 FINAL',
+  version: '6.1 FINAL',
   title: 'Truth for All',
-  sealId: 'VO-4FFEA8A806C1',
-  sha512: '4ffea8a806c1a01bd1a1541eaa212d75dd127e933d8885808c0ed90006b6de01197f317d706477ba2272e9973f8b9268dd333661355a40d70a28ccaebdc04b0a',
-  sealedAt: '14/07/2026 11:42:06 Africa/Johannesburg',
+  sealId: 'VO-9E51D3F507E6',
+  sha512: '203119e60a87253ddd8e492287a3b6ac029faa82833ce3b401bbf8febbe2cea9144ab0a93f90c7fa939990bda2a98786c157afc6f14aa40b5832e1f59d363ff8',
+  sealedAt: '05/08/2026 Africa/Johannesburg',
   anchor: 'Bitcoin via OpenTimestamps',
   url: 'verumglobal.foundation/constitution.html',
   jsonUrl: 'verumglobal.foundation/constitution.json',
-  courtStatus: 'Filed with the Constitutional Court of South Africa (CCT237/20 & CCT19/20); receipt acknowledged by the Registrar\'s office 9 July 2026 - acknowledgment of receipt only, not a ruling on the merits.'
+  courtStatus: 'v6.1 (sealed 5 August 2026) supersedes v6.0. v6.0 (seal VO-4FFEA8A806C1) is the version filed with the Constitutional Court of South Africa (CCT237/20 & CCT19/20); receipt acknowledged by the Registrar\'s office 9 July 2026 - acknowledgment of receipt only, not a ruling on the merits.'
 };
 
 // ---------------- static engine maps (from forensic-engine.js v2.0) ----------------
@@ -252,7 +253,8 @@ var STATUTES = {
          'Civil Transactions Law (Federal Law 5 of 1985) - Art 246 (performance in good faith); misrepresentation']
   },
   FINANCIAL: {
-    ZA: ['Prevention of Organised Crime Act 121 of 1998 - ss 4-6 (money laundering); Ch 3 (proceeds of crime)',
+    ZA: ['Common-law theft (unlawful appropriation of money or property with intent to permanently deprive)',
+         'Prevention of Organised Crime Act 121 of 1998 - ss 4-6 (money laundering); Ch 3 (proceeds of crime)',
          'Financial Intelligence Centre Act 38 of 2001 - suspicious & unusual transaction reporting',
          'Prevention and Combating of Corrupt Activities Act 12 of 2004 (corruption)'],
     AE: ['Anti-Money Laundering Law (Federal Decree-Law 20 of 2018)',
@@ -909,7 +911,7 @@ function plainLeadLines(fr, data) {
     }
   }
   if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern indicator' + (plSerial === 1 ? '' : 's') + ' also matched - see the Serial Pattern Analysis section.');
-  plLines.push('The indicator score (' + score + '/100) measures how densely the engine found inconsistencies. It is a signpost for a human investigator - not a percentage chance of fraud, and not a verdict.');
+  plLines.push('The score (' + score + '/100) measures the density and severity of the verified findings - a measurement of the record, not a probability of fraud. The verdict on any named person is for the court.');
   return plLines;
 }
 
@@ -1659,7 +1661,7 @@ function secLegalAnalysis(ctx, data) {
       actorRows,
       { size: 8.5 }
     );
-    ctx.para('Attribution is by name appearing in the flagged text - an indicator of relevance, not a finding of individual wrongdoing.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    ctx.para('Attribution records that the name appears in the flagged text - a fact of the record; responsibility is for the court to determine.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
 
   // ---- 4. Actionable Output -------------------------------------------
@@ -1733,7 +1735,7 @@ function secStatutoryAnchoring(ctx, data) {
   if (ranked.length > CAP) {
     ctx.para('Showing the ' + CAP + ' highest-severity indicators; the remaining ' + (ranked.length - CAP) + ' appear in the findings matrix and can be anchored the same way.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
-  ctx.para('Attribution is by a named party appearing in the flagged text — an indicator of relevance, not a finding of individual wrongdoing.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+  ctx.para('Attribution records that the party is named in the flagged text — a fact of the record; responsibility is for the court to determine.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 8 });
 
   // ---- Cross-border framework (only when the matter spans jurisdictions) --
   if (jur.isCrossBorder) {
