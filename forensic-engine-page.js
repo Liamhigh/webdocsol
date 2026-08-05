@@ -3440,6 +3440,12 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     confidence: confidence,
     totalFindings: allFindings.length,
     findings: allFindings,
+    // Per-page extracted text, in page order (index 0 = page 1). Exposed so the
+    // caller can build an AI-narrator excerpt centred on the pages the findings
+    // actually anchor to, rather than the first N characters of the bundle. It
+    // is deliberately NOT part of the findings JSON export (buildFindingsJson
+    // whitelists fields) and is dropped after the narrate call.
+    pageTexts: textBlocks,
     timeline: voBuildTimeline(allFindings),
     personIndex: voBuildPersonIndex(allFindings),
     findingsByType: findingsByType,

@@ -29,6 +29,7 @@ const suites = [
   'encrypt-detect.test.mjs',
   'constitution-lock.test.mjs',
   'ai-assess-batch.test.mjs',
+  'narrate-excerpt.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',
 ];

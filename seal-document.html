@@ -6785,6 +6785,12 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     confidence: confidence,
     totalFindings: allFindings.length,
     findings: allFindings,
+    // Per-page extracted text, in page order (index 0 = page 1). Exposed so the
+    // caller can build an AI-narrator excerpt centred on the pages the findings
+    // actually anchor to, rather than the first N characters of the bundle. It
+    // is deliberately NOT part of the findings JSON export (buildFindingsJson
+    // whitelists fields) and is dropped after the narrate call.
+    pageTexts: textBlocks,
     timeline: voBuildTimeline(allFindings),
     personIndex: voBuildPersonIndex(allFindings),
     findingsByType: findingsByType,
@@ -8570,6 +8576,10 @@ let _pipelineClassification = null;
 // from the document's own words (real parties, dates, amounts). Populated only
 // when AI review is on; sent to /api/v1/ai/narrate. Empty => findings-only.
 let _pipelineTextSample = '';
+// Per-page extracted text (index 0 = page 1), captured from the forensic engine
+// so the narrator excerpt can be built AROUND the pages the findings anchor to
+// rather than the document's opening pages. Dropped on reset.
+let _pipelineTextBlocks = null;
 
 // ==================== BUILD SEALED PDF ====================
 
@@ -9193,6 +9203,7 @@ async function startSealing() {
     var forensicResult = null;
     _pipelineClassification = null;
     _pipelineTextSample = '';
+    _pipelineTextBlocks = null;
     if (sealMode === 'forensic') {
       // AI triage (optional; only when AI review is enabled): classify the document
       // FIRST, concurrently with the deterministic engine run. Defensive: ANY
@@ -9230,6 +9241,8 @@ async function startSealing() {
         forensicResult = await runForensicEngine(fileBytes, pdfDocForForensics, function (done, total) {
           updateStep('Fraud', 'processing', 'Scanning page ' + done + ' of ' + total + ' - 37 contradiction detectors running...');
         });
+        // Keep the per-page text for the finding-anchored narrator excerpt.
+        try { _pipelineTextBlocks = (forensicResult && Array.isArray(forensicResult.pageTexts)) ? forensicResult.pageTexts : null; } catch (ePT) { _pipelineTextBlocks = null; }
       } catch(e) {
         console.warn('Forensic engine error:', e);
         forensicResult = { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], scanFailed: true, scanError: (e && e.message ? e.message : 'unknown'), extractionNotes: 'Forensic engine error: ' + (e && e.message ? e.message : 'unknown') + '. The scan could not complete; absence of findings here is NOT a clean result.', summary: 'Forensic scan could not complete' };
@@ -9960,6 +9973,57 @@ function buildLocalNarrative(findings, score, verdict) {
   return out;
 }
 
+// Build the AI narrator's document excerpt from the pages the findings actually
+// anchor to, instead of the first N characters of the bundle. On a 148-page file
+// the contradictions sit deep in the record, so a first-12k-chars excerpt showed
+// the narrator none of the evidence and it wrote a generic summary. This gathers
+// each finding's page(s) (parsing "Page 113", "p. 2 vs 138", "Page 1 vs Page 3"
+// and f.page), adds an immediate neighbour of each for context, always includes
+// page 1 for document identity (parties, letterhead, case name), tags every
+// block with its page so the narrator's citations line up, and budgets the
+// selected pages within the worker's excerpt cap. Falls back to the document
+// head when no finding names a page (or page text is unavailable).
+function voBuildNarrateExcerpt(textBlocks, findings, maxChars) {
+  maxChars = maxChars || 12000;
+  if (!Array.isArray(textBlocks) || !textBlocks.length) return '';
+  var nPages = textBlocks.length;
+  var want = {};
+  var addPage = function (p) { if (p >= 1 && p <= nPages) want[p] = true; };
+  var list = Array.isArray(findings) ? findings : [];
+  var pageRe = /(?:page|p\.?)\s*(\d{1,4})/gi;
+  var vsRe = /\bvs\.?\s*(?:page|p\.?\s*)?(\d{1,4})/gi;
+  for (var i = 0; i < list.length; i++) {
+    var f = list[i] || {};
+    var loc = String(f.location || '');
+    var m;
+    pageRe.lastIndex = 0; while ((m = pageRe.exec(loc)) !== null) addPage(parseInt(m[1], 10));
+    vsRe.lastIndex = 0;   while ((m = vsRe.exec(loc)) !== null) addPage(parseInt(m[1], 10));
+    if (typeof f.page === 'number') addPage(f.page);
+  }
+  var anchored = Object.keys(want).map(Number);
+  for (var a = 0; a < anchored.length; a++) { addPage(anchored[a] - 1); addPage(anchored[a] + 1); }
+  addPage(1);  // document identity
+  var ordered = Object.keys(want).map(Number).sort(function (x, y) { return x - y; });
+  // No finding named a page -> fall back to the document head, page-tagged.
+  if (!anchored.length) {
+    var head = '';
+    for (var h = 0; h < nPages && head.length < maxChars; h++) {
+      head += (head ? '\n\n' : '') + '[Page ' + (h + 1) + '] ' + String(textBlocks[h] || '').replace(/\s+/g, ' ').trim();
+    }
+    return head.slice(0, maxChars);
+  }
+  var perPageCap = Math.max(600, Math.floor(maxChars / ordered.length));
+  var out = [], used = 0;
+  for (var k = 0; k < ordered.length && used < maxChars; k++) {
+    var raw = String(textBlocks[ordered[k] - 1] || '').replace(/\s+/g, ' ').trim();
+    if (!raw) continue;
+    var block = '[Page ' + ordered[k] + '] ' + raw.slice(0, Math.min(perPageCap, maxChars - used));
+    out.push(block);
+    used += block.length + 2;
+  }
+  return out.join('\n\n').slice(0, maxChars);
+}
+
 async function aiNarrateReport(findings, score, verdict) {
   // Build the exact shape the worker's /api/v1/ai/narrate contract requires.
   // The old payload sent {findings, score, verdict} but the worker validates
@@ -10004,7 +10068,14 @@ async function aiNarrateReport(findings, score, verdict) {
   // dates and amounts instead of writing from bare finding codes. Bounded and
   // sent only because the user consented to AI review (text -> their own
   // Cloudflare AI). Empty when extraction produced nothing -> findings-only.
-  if (_pipelineTextSample) { metadata.documentExcerpt = String(_pipelineTextSample).slice(0, 12000); }
+  // Prefer an excerpt built AROUND the finding pages (so the narrator sees the
+  // actual evidence, not just the opening pages); fall back to the head sample.
+  var excerpt = '';
+  try {
+    if (_pipelineTextBlocks && _pipelineTextBlocks.length) excerpt = voBuildNarrateExcerpt(_pipelineTextBlocks, list, 12000);
+  } catch (eEx) { excerpt = ''; }
+  if (!excerpt && _pipelineTextSample) excerpt = String(_pipelineTextSample).slice(0, 12000);
+  if (excerpt) { metadata.documentExcerpt = excerpt; }
   console.log('[VO-AI-NARRATE] Requesting AI narrative for', findingsKept.length, 'findings',
     metadata.documentExcerpt ? '(with ' + metadata.documentExcerpt.length + ' chars of document text)' : '(findings only)');
   // Narrate now runs on the fast 8B model server-side with a single 30 s AI
@@ -11463,6 +11534,7 @@ function resetSealing() {
   _pipelineAiAddedFindings = [];
   _pipelineClassification = null;
   _pipelineTextSample = '';
+  _pipelineTextBlocks = null;
   window._voReportPack = null;
   window._voSealedFileHash = null;
   var sealedHashRowR = document.getElementById('sealedHashRow');
