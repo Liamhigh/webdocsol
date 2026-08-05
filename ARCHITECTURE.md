@@ -46,7 +46,7 @@ The website is the centre of gravity: **all document verification happens at the
 ## How the three surfaces stay one engine
 
 - **Shared contract:** the Findings JSON schema (`FINDINGS_JSON_SCHEMA.json`, mirrored across repos)
-  and the signed **rule packages** (`worker/rule-format.md`) — contradiction types **CT01–CT45**,
+  and the signed **rule packages** (`worker/rule-format.md`) — contradiction types **CT01–CT46**,
   their detectors (D01–D39), and fraud-keyword pairs.
 - **Engine-improvement distribution ("self-updating engine"):** when a new contradiction pattern
   is learned (e.g. from a case file), it ships as a **signed rule package** served by this repo's
@@ -73,7 +73,7 @@ The website is the centre of gravity: **all document verification happens at the
   re-sync the inline block. **Do not** "de-duplicate" the inline copy into a shared runtime module —
   root-level `.js` fetches are unreliable on this deployment, which is the entire reason the scripts
   are inlined.
-- Contradiction types are **CT01–CT45**. When adding one, keep `CT_NAMES`, `CT_CATEGORY`,
+- Contradiction types are **CT01–CT46**. When adding one, keep `CT_NAMES`, `CT_CATEGORY`,
   `NARRATIVE_MEANING` (in `forensic-report.js`) and `worker/rule-format.md` in sync.
 - Run `node tests/run-all.js` before pushing. Deterministic engine → no `Date.now()`/`Math.random()`
   in analysis paths (Prime Directive 4).

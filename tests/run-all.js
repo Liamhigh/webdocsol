@@ -17,6 +17,7 @@ const suites = [
   'find-seal.test.mjs',
   'seal-guard.test.mjs',
   'franchise-lease.test.mjs',
+  'role-capacity.test.mjs',
   'detector-recall.test.mjs',
   'digital-forensics.test.mjs',
   'ocr-rescue.test.mjs',
@@ -28,6 +29,7 @@ const suites = [
   'encrypt-detect.test.mjs',
   'constitution-lock.test.mjs',
   'ai-assess-batch.test.mjs',
+  'narrate-excerpt.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',
 ];

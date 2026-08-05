@@ -369,6 +369,17 @@ var CONTRADICTION_TYPES = {
     desc: 'Goodwill or value of the business is recognised or quantified in one document but denied or said to have no compensable value in another — a forfeiture or clawback is itself an admission that the asset exists.',
     severity: 5, category: 'FRANCHISE_LEASE',
     example: 'The clawback table quantifies the Value of the Business, yet a later submission argues "goodwill has no compensable value".'
+  },
+
+  // === CATEGORY 10: ROLE / CAPACITY CONTRADICTION (46) ===
+  // An actor asserts one capacity but the record shows conduct that capacity
+  // cannot hold — surfaced by the Ritz/Moolla matter, where a corporate capacity
+  // was claimed while money moved through a personal account.
+  CT46_ROLE_CAPACITY_CONFLICT: {
+    id: 'CT46', name: 'Role / Capacity Contradiction',
+    desc: 'An actor asserts they act in a corporate or restricted capacity (e.g. on behalf of a company, or a role barred from certain dealings) but the same record shows conduct inconsistent with that capacity — money routed to a personal account, or a briefing accepted that the stated capacity prohibits.',
+    severity: 4, category: 'IDENTITY',
+    example: 'A party states they act "on behalf of X (Pty) Ltd" yet directs payment to their personal trust account; or states they "may not accept briefs from the public" yet accepted one.'
   }
 };
 
@@ -1748,6 +1759,59 @@ var DETECTORS = {
       findings.push({ type: 'CT45', severity: 5,
         evidence: 'The franchisee is denied any compensation for its own improvements to the premises: "' + noComp.quote + '" — while the franchisor is entitled to acquire the property itself at value: "' + acquires.quote + '". Value denied to the party who built it, yet realised by the other. HYPOTHESIS: requires legal review.',
         location: loc(noComp, acquires) });
+    }
+    return findings;
+  },
+
+  // D40: Role / capacity contradiction. An actor claims to act in a CORPORATE or
+  // restricted capacity, but the same record shows conduct that capacity cannot
+  // hold -- money routed to an explicitly PERSONAL account, or a briefing the
+  // stated role bars. Both halves must be present and each is anchored to its
+  // page + quote. Deliberately conservative to protect precision: the corporate
+  // claim must name an entity by its registered-form suffix (Pty Ltd / CC / Ltd /
+  // Inc / NPC), and the account half must be labelled "personal" -- so a lawful
+  // firm/attorney trust account ("our trust account", "the firm's account") and
+  // an ordinary corporate payment do NOT trip it. It favours precision over
+  // recall; the contextual cases it cannot resolve deterministically are for the
+  // AI-review layer, not a guess. Never a determination -- an INDICATOR anchored
+  // to quoted text (Prime Directive 4).
+  D40_DETECT_ROLE_CAPACITY_CONFLICT: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    // Anchor each half to its PAGE + quote (case-insensitive match on lowered
+    // text; quote taken from the original), mirroring D38/D39.
+    function pageOf(re) {
+      for (var i = 0; i < blocks.length; i++) {
+        var raw = String(blocks[i] || '');
+        var m = re.exec(raw.toLowerCase());
+        if (m) {
+          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          return { page: i + 1, quote: q };
+        }
+      }
+      return null;
+    }
+    var loc = function (a, c) { return a.page === c.page ? 'Page ' + a.page : 'Page ' + a.page + ' vs Page ' + c.page; };
+
+    // Path A -- corporate capacity claim + payment to an explicitly PERSONAL
+    // account. The capacity phrase must be followed (within one clause) by a
+    // registered-form entity suffix, so "on behalf of my client" alone is inert.
+    var corpClaim = pageOf(/(?:in (?:my|his|her|its) capacity as|acting (?:on behalf of|for)|on behalf of)[^.]{0,60}(?:\(pty\) ?ltd|pty ltd|\bltd\b|\bcc\b|\binc\b|\bnpc\b|natural resource management)/);
+    var personalPay = pageOf(/(?:pay|payment|deposit|remit|transfer|paid|funds?)[^.]{0,80}personal (?:bank |trust )?account|personal (?:bank |trust )?account[^.]{0,80}(?:pay|deposit|remit|transfer|paid)/);
+    if (corpClaim && personalPay) {
+      findings.push({ type: 'CT46', severity: 4,
+        evidence: 'A corporate capacity is claimed: "' + corpClaim.quote + '" — yet payment is routed to an account labelled personal: "' + personalPay.quote + '". Acting for a company while banking through a personal account is inconsistent on its face. HYPOTHESIS: requires legal review.',
+        location: loc(corpClaim, personalPay) });
+    }
+
+    // Path B -- a stated restriction on the actor's capacity, contradicted by
+    // stated conduct that breaches it (a role-specific internal contradiction).
+    var restriction = pageOf(/(?:may not|not entitled to|prohibited from|not permitted to|precluded from)[^.]{0,50}(?:accept|take|receive|hold)[^.]{0,40}(?:brief|instruction|client (?:funds|money)|from (?:a )?member of the public|from the public)/);
+    var breach = pageOf(/(?:accepted|took|received|was briefed with|acting on)[^.]{0,40}(?:a |an |the )?(?:brief|instruction)[^.]{0,40}(?:from|by)[^.]{0,30}(?:member of the public|the public|a client)/);
+    if (restriction && breach) {
+      findings.push({ type: 'CT46', severity: 4,
+        evidence: 'The record states a restriction on the actor\'s capacity: "' + restriction.quote + '" — yet also records conduct that breaches it: "' + breach.quote + '". HYPOTHESIS: requires legal review.',
+        location: loc(restriction, breach) });
     }
     return findings;
   },
@@ -3186,7 +3250,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     DETECTORS.D35_DETECT_VERSION_ANOMALY,
     DETECTORS.D36_DETECT_SOURCE_FAILURE,
     DETECTORS.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED,
-    DETECTORS.D39_DETECT_ASSET_VALUE_DENIAL
+    DETECTORS.D39_DETECT_ASSET_VALUE_DENIAL,
+    DETECTORS.D40_DETECT_ROLE_CAPACITY_CONFLICT
   ];
 
   for (var d = 0; d < detectors.length; d++) {
@@ -3375,6 +3440,12 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     confidence: confidence,
     totalFindings: allFindings.length,
     findings: allFindings,
+    // Per-page extracted text, in page order (index 0 = page 1). Exposed so the
+    // caller can build an AI-narrator excerpt centred on the pages the findings
+    // actually anchor to, rather than the first N characters of the bundle. It
+    // is deliberately NOT part of the findings JSON export (buildFindingsJson
+    // whitelists fields) and is dropped after the narrate call.
+    pageTexts: textBlocks,
     timeline: voBuildTimeline(allFindings),
     personIndex: voBuildPersonIndex(allFindings),
     findingsByType: findingsByType,
