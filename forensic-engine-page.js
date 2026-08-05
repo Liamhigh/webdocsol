@@ -231,13 +231,13 @@ var CONTRADICTION_TYPES = {
   },
   CT26_FORMAT_ANOMALY: {
     id: 'CT26', name: 'Format Anomaly',
-    desc: 'Document formatting suggests editing or manipulation',
+    desc: 'Document formatting shows signs of editing or manipulation',
     severity: 3, category: 'INTEGRITY',
     example: 'Margins, headers, or page numbering change mid-document'
   },
   CT27_LAYOUT_MANIPULATION: {
     id: 'CT27', name: 'Layout Manipulation',
-    desc: 'Page layout suggests content was added, removed, or rearranged',
+    desc: 'Page layout shows content was added, removed, or rearranged',
     severity: 4, category: 'INTEGRITY',
     example: 'Page 3 has different header/footer suggesting inserted page'
   },
@@ -1193,7 +1193,7 @@ var DETECTORS = {
         if (blanks.length > 3 || consecutive) {
           var span = (blanks[0]+1) + (blanks.length > 1 ? '-' + (blanks[blanks.length-1]+1) : '');
           findings.push({ type: 'CT26', severity: 1,
-            evidence: blanks.length + ' near-empty pages (' + span + ') among pages averaging ' + Math.round(avg) + ' chars — most likely image-only pages not captured by OCR; re-scan with OCR enabled to read them, or confirm they are intentional dividers',
+            evidence: blanks.length + ' near-empty pages (' + span + ') among pages averaging ' + Math.round(avg) + ' chars — pages with no machine-readable text: image-only pages OCR did not capture, or intentional dividers. Establish which from the original; re-scan with OCR enabled to read them',
             location: 'Pages ' + span });
         } else {
           for (var b = 0; b < blanks.length; b++) {
@@ -3507,27 +3507,29 @@ function generateSummary(findings, score) {
   // or tampering", HIGHER than the old 12-finding report, purely because the
   // per-finding average rose. With few findings the honest story is "a
   // couple of specific, checkable issues", so say exactly that.
+  // PD16 + Ordinal Confidence: no band-label prefixes (CRITICAL/HIGH/MODERATE
+  // read as graded confidence), no score talk, no "appears". Counts and flat
+  // statements of what the record contains; the internal score only selects
+  // which statement fits.
   if (findings.length > 0 && findings.length <= 3) {
-    return 'FOCUSED: ' + findings.length + ' page-anchored finding' + (findings.length === 1 ? '' : 's') +
-      '. Per-finding severity is ' + (score >= 60 ? 'high' : 'moderate') +
-      ', but the finding COUNT is low for the document — read each finding on its cited page; the density score is not an overall verdict on the document.';
+    return findings.length + ' page-anchored finding' + (findings.length === 1 ? '' : 's') +
+      ' established. Per-finding severity is ' + (score >= 60 ? 'high' : 'moderate') +
+      ' and the finding count is low for the document — read each finding on its cited page.';
   }
   if (score >= 80) {
-    return 'CRITICAL: ' + findings.length + ' contradictions detected across ' +
-      'multiple categories. The documents evidence systematic fraud. ' +
-      'Manual forensic review strongly recommended.';
+    return findings.length + ' contradictions established across multiple categories. ' +
+      'The documents evidence systematic fraud. Manual forensic review strongly recommended.';
   } else if (score >= 60) {
-    return 'HIGH: ' + findings.length + ' contradictions detected. Document ' +
+    return findings.length + ' contradictions established. ' +
       'The documents cannot all be true as written.';
   } else if (score >= 40) {
-    return 'MODERATE: ' + findings.length + ' contradictions found. ' +
+    return findings.length + ' contradictions established. ' +
       'The record contradicts itself at the cited pages; read each finding against the original.';
   } else if (score >= 20) {
-    return 'LOW: ' + findings.length + ' minor contradictions detected. ' +
-      'Document largely consistent with minor anomalies.';
+    return findings.length + ' minor contradictions established. ' +
+      'The document is largely consistent, with the anomalies cited.';
   } else {
-    return 'CLEAN: No significant contradictions detected. Document appears ' +
-      'internally consistent.';
+    return 'No contradictions were detected. Every detector ran; none triggered.';
   }
 }
 
