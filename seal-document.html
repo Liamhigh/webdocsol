@@ -3495,11 +3495,22 @@ async function seal(reportBytes, sealOpts) {
     // navy seal footer on every page
     var fh = 34;
     pg.drawRectangle({ x: 0, y: 0, width: pageW, height: fh, color: NAVY, opacity: 0.97 });
+    // Both footer rows share their baseline with a right-aligned label, and the
+    // left strings vary in length (seal id, hash, page count, timestamp with
+    // timezone). Fitted rather than fixed, so a long value can never print
+    // through the label beside it.
+    var tagTxt = 'FORENSIC REPORT';
+    var tagW = helvBold.widthOfTextAtSize(tagTxt, 6.2);
+    var footMax = pageW - 32 - tagW - 8;
     var line1 = 'VERUM OMNIS SEALED ORIGINAL  |  ' + sealId + '  |  ' + short + '  |  ' + (p + 1) + '/' + pages.length;
-    pg.drawText(line1, { x: 16, y: fh - 14, size: 6.8, font: courier, color: GOLD });
+    var l1Size = 6.8;
+    while (l1Size > 3.5 && courier.widthOfTextAtSize(line1, l1Size) > (pageW - 32)) l1Size -= 0.2;
+    pg.drawText(line1, { x: 16, y: fh - 14, size: l1Size, font: courier, color: GOLD });
     var line2 = ts + '  |  verumglobal.foundation  |  OpenTimestamps  |  Patent Pending';
-    pg.drawText(line2, { x: 16, y: fh - 25, size: 6.2, font: helv, color: FOOT_TXT });
-    pg.drawText('FORENSIC REPORT', { x: pageW - 16 - helvBold.widthOfTextAtSize('FORENSIC REPORT', 6.2), y: fh - 25, size: 6.2, font: helvBold, color: FOOT_TXT });
+    var l2Size = 6.2;
+    while (l2Size > 3.5 && helv.widthOfTextAtSize(line2, l2Size) > footMax) l2Size -= 0.2;
+    pg.drawText(line2, { x: 16, y: fh - 25, size: l2Size, font: helv, color: FOOT_TXT });
+    pg.drawText(tagTxt, { x: pageW - 16 - tagW, y: fh - 25, size: 6.2, font: helvBold, color: FOOT_TXT });
   }
 
   try { pdf.setTitle((sealOpts.sourceName || 'document') + ' — Sealed Forensic Report'); } catch (e) {}
@@ -9056,9 +9067,30 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     const stLabel = sealType==='commercial' && clientName ? 'COMMERCIAL SEAL — ' + clientName.toUpperCase() : 'PRIVATE SEAL — FREE TIER';
     const chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
     const chainLabel = chainIds.length > 0 ? '  |  Chain: ' + chainIds.length + ' prev' : '';
-    pg.drawText(stLabel + chainLabel, { x: pageW*0.03, y: fy+fs*1.8, size: fs*0.8, font: helvBold, color: rgb(0.82,0.65,0.28) });
-    pg.drawText('VERUM OMNIS SEALED ORIGINAL  |  Seal: ' + sealId + '  |  SHA-512: ' + short + '...  |  ' + ts + '  |  ' + (i+1) + '/' + pages.length + chainLabel, { x: pageW*0.03, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.58,0.71,0.78) });
-    pg.drawText('verumglobal.foundation  |  OpenTimestamps  |  Patent Pending', { x: pageW*0.55, y: fy+fs*0.5, size: fs*0.75, font: helv, color: rgb(0.36,0.42,0.48) });
+    // Footer layout. The identity line (seal ID + hash + timestamp + page
+    // numbers) is long and its length varies with the seal ID and chain, so it
+    // was overrunning the fixed x=0.55*pageW start of the right-hand line and
+    // printing straight through it — two strings on one baseline, illegible on
+    // the sealed original. The right-hand line now sits on the TOP row,
+    // right-aligned, and the identity line owns the bottom row across the full
+    // width, shrinking to fit rather than colliding with anything.
+    var footLeft = pageW*0.03, footRight = pageW*0.03;
+    var footSize = fs*0.75;
+    var siteTxt = 'verumglobal.foundation  |  OpenTimestamps  |  Patent Pending';
+    var siteSize = footSize;
+    var siteMax = pageW * 0.5;
+    while (siteSize > 3.5 && helv.widthOfTextAtSize(siteTxt, siteSize) > siteMax) siteSize -= 0.2;
+    var stTxt = stLabel + chainLabel;
+    pg.drawText(stTxt, { x: footLeft, y: fy+fs*1.8, size: fs*0.8, font: helvBold, color: rgb(0.82,0.65,0.28) });
+    pg.drawText(siteTxt, {
+      x: Math.max(footLeft + helvBold.widthOfTextAtSize(stTxt, fs*0.8) + footSize,
+                  pageW - footRight - helv.widthOfTextAtSize(siteTxt, siteSize)),
+      y: fy+fs*1.8, size: siteSize, font: helv, color: rgb(0.36,0.42,0.48) });
+    var idTxt = 'VERUM OMNIS SEALED ORIGINAL  |  Seal: ' + sealId + '  |  SHA-512: ' + short + '...  |  ' + ts + '  |  ' + (i+1) + '/' + pages.length + chainLabel;
+    var idSize = footSize;
+    var idMax = pageW - footLeft - footRight;
+    while (idSize > 3.5 && helv.widthOfTextAtSize(idTxt, idSize) > idMax) idSize -= 0.2;
+    pg.drawText(idTxt, { x: footLeft, y: fy+fs*0.5, size: idSize, font: helv, color: rgb(0.58,0.71,0.78) });
 
     updateStep(6, 'processing', 'Page ' + (i+1) + ' of ' + pages.length);
   }
