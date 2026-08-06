@@ -198,6 +198,32 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'the system prompt certifies corroborated events (pathologist standard) but never person-level guilt');
   ok(capturedUser.indexOf('SEALED CASE FILE') >= 0,
     'the case file is clearly labelled for the narrator');
+
+  // PD16 language lock (the "constitutional certainty" order). The AI layer
+  // works on SEALED evidence — quoted text bound to a page in a record that
+  // cannot be altered — so it reports measurements, it does not hedge them.
+  // These assertions exist so a future edit cannot quietly reintroduce
+  // probabilistic language into the narrator's instructions.
+  ok(/WHY YOU STATE FACTS/.test(capturedSystem) && /sealed under SHA-512/.test(capturedSystem)
+    && /measurement to be reported/.test(capturedSystem),
+    'the narrator is told WHY it states facts: the evidence is sealed and page-anchored');
+  ok(/BANNED for anchored facts/.test(capturedSystem)
+    && /appears, might, possibly, seems, could, potentially/.test(capturedSystem),
+    'the narrator prompt bans hedging verbs for anchored facts');
+  ok(/Never an "indicator", "red flag", "concern" or "anomaly"/.test(capturedSystem),
+    'an established finding is called a finding, never an "indicator"');
+  ok(/No scores, no percentages, no confidence bands, ever/.test(capturedSystem),
+    'the narrator prompt forbids scores, percentages and confidence bands');
+  ok(!/Confidence is ordinal only\. Never percentages\./.test(capturedSystem),
+    'the superseded "confidence is ordinal only" instruction is gone');
+  // The embedded constitution the model reads must carry the same rule.
+  ok(/No scores, no percentages, no confidence bands/.test(capturedUser)
+    && /stated as fact or it is not stated at all/.test(capturedUser),
+    'the constitution loaded into the model states PD1 in its v8.0 form (no bands)');
+  ok(/internal weighting only/.test(capturedUser) && /never shown to a reader/.test(capturedUser),
+    'severity weights are marked internal-only in the constitution the model reads');
+  ok(!/Report the ordinal confidence band/.test(capturedUser),
+    'the constitution no longer instructs the model to report a confidence band');
 }
 
 console.log('\n[worker] PASS=' + pass + ' FAIL=' + fail);

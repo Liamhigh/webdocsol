@@ -233,6 +233,29 @@ breathalyzer prints a reading without pronouncing a conviction.
 - Clean result: `No contradictions were detected. Every detector ran; none triggered.`
 - Every finding anchored to quoted text and a page.
 
+### The AI layer obeys the same rule — because the evidence is sealed
+
+The Cloudflare Worker's AI endpoints (`/api/v1/ai/narrate`, `/assess`) are given the reason,
+not just the rule, because a model that understands *why* complies far more reliably:
+
+> Every finding you receive was produced by a deterministic engine from a document sealed under
+> SHA-512 and anchored to the Bitcoin blockchain. It is quoted evidence bound to a page in a
+> record that cannot be altered. It is therefore not a suspicion to be hedged — it is a
+> measurement to be reported.
+
+Concretely, the narrator prompt **bans** `appears`, `might`, `possibly`, `seems`, `could`,
+`potentially`, `apparently`, `allegedly`, `suggests`, `indicates`, `may indicate`,
+`is consistent with` for anchored facts, and forbids calling an established finding an
+"indicator", "red flag", "concern" or "anomaly". The embedded constitution the model reads
+carries PD1 in its v8.0 form (no scores, no percentages, **no confidence bands**), and the
+severity weights are marked *internal weighting only — never shown to a reader*.
+`tests/worker.test.mjs` asserts all of this, so a future edit cannot quietly reintroduce
+probabilistic language into the AI layer.
+
+**Two-tier naming.** An engine finding is a **finding**; an AI-raised item is a **candidate**.
+The report's AI section is headed *AI-Identified Candidates* and counts candidates, never
+findings. Do not blur the two words — the distinction is what keeps the verified count honest.
+
 **Two deliberate exceptions, both mandated by the Constitution:**
 1. **Per-finding ordinal severity** (Critical / High / Medium / Low / Info) — Prime Directive 1
    requires ordinal severity. It ranks what a finding *is*, not the probability that it is real.
