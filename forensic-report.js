@@ -1019,7 +1019,7 @@ function secExecSummary(ctx, data) {
   if (fr.summary) ctx.para(fr.summary, { size: 10, after: 10 });
   if (!fr.clean) {
     ctx.para(fbVerified + ' verified finding' + (fbVerified === 1 ? ' is' : 's are') + ' recorded below. Each is a fact anchored to the sealed record — a contradiction, anomaly, or integrity signal the engine measured. What the facts establish in law, and any verdict on a named person, is for the court.'
-      + (fbAiCands > 0 ? ' The ' + fbAiCands + ' AI-raised candidate item' + (fbAiCands === 1 ? '' : 's') + ' appear' + (fbAiCands === 1 ? 's' : '') + ' in the AI-Identified Indicators section, advisory only.' : ''), { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 12 });
+      + (fbAiCands > 0 ? ' The ' + fbAiCands + ' AI-raised candidate item' + (fbAiCands === 1 ? '' : 's') + ' appear' + (fbAiCands === 1 ? 's' : '') + ' in the AI-Identified Candidates section, advisory only.' : ''), { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 12 });
   }
 
   // findings by severity (engine-verified only; AI candidates have their own section)
@@ -1285,7 +1285,7 @@ function secMatrix(ctx, data) {
   var aiList = byCat['AI_IDENTIFIED'];
   if (aiList && aiList.length > 0) {
     aiList.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-    ctx.subHeading(ctx.sectionNo + '.' + (subNo + 1) + ' AI-Identified Indicators  (' + aiList.length + ' finding' + (aiList.length === 1 ? '' : 's') + ')', { toc: true });
+    ctx.subHeading(ctx.sectionNo + '.' + (subNo + 1) + ' AI-Identified Candidates  (' + aiList.length + ' candidate' + (aiList.length === 1 ? '' : 's') + ')', { toc: true });
     ctx.para('Flagged by the optional AI review (Cloudflare Workers AI), not by the deterministic engine. Candidate tier — pending engine or human verification; never presented as engine-verified. Advisory only; included at the document owner\'s request.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
     var aiRows = [];
     for (var ar = 0; ar < aiList.length; ar++) {
@@ -2269,7 +2269,7 @@ function secEvidenceMap(ctx, data) {
   ctx.table(
     [
       { key: 'page', title: 'Page', w: 74 },
-      { key: 'ind', title: 'Indicator', w: 150 },
+      { key: 'ind', title: 'Finding', w: 150 },
       { key: 'ev', title: 'Flagged text', w: 280 }
     ],
     rows,

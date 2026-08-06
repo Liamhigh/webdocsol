@@ -1268,7 +1268,7 @@ var DETECTORS = {
     for (var i = 0; i < tamperingIndicators.length; i++) {
       if (fullText.indexOf(tamperingIndicators[i]) !== -1) {
         findings.push({ type: 'CT41', severity: 5,
-          evidence: 'Tampering indicator found: "' + tamperingIndicators[i] + '"',
+          evidence: 'The record contains the tampering indicator "' + tamperingIndicators[i] + '"',
           location: 'Full document' });
       }
     }
