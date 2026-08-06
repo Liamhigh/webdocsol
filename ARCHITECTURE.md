@@ -4,17 +4,22 @@
 > working in this repository.** This repo is **one surface of a larger system**. Do not treat
 > it as a standalone app, and do not add infrastructure that contradicts the two hard
 > constraints below.
+>
+> **Then read [`ENGINE.md`](./ENGINE.md)** before changing any engine or report code — it is the
+> definitive detector reference and it records *why* each false-positive guard exists. Removing
+> one re-introduces a false statement of fact under seal. Repo map: [`REFERENCE.md`](./REFERENCE.md).
 
-## The system: one engine, three surfaces
+## The system: one engine, four surfaces
 
 Verum Omnis is a **deterministic forensic contradiction + document-sealing engine**, delivered
-across three repositories that share one engine contract:
+across four repositories that share one engine contract:
 
 | Repository | Surface | Role |
 |---|---|---|
-| **`webdocsol`** (this repo) | Website + Cloudflare Worker | **The hub.** Document sealing and the **canonical public verification endpoint**. |
+| **`webdocsol`** (this repo) | Website + Cloudflare Worker | **The hub, and the reference implementation of the engine.** Document sealing and the **canonical public verification endpoint**. |
 | **`1verum`** | Android app | On-device **hybrid** engine: deterministic 9-brain **+ Gemma-3 LLM + encrypted vault**. |
-| **`firebase`** | Guardian Fraud Firewall | Pipeline surface running the same engine + findings contract. |
+| **`cursorfu`** | Android (reference) | Hybrid forensic engine app — the working reference implementation of the Android hybrid design. |
+| **`firebase`** | Guardian Fraud Firewall (Windows / on-prem) | Pipeline surface running the same engine + findings contract. Windows Lite is planned from this repo's design system. |
 
 The website is the centre of gravity: **all document verification happens at the website.**
 
@@ -47,7 +52,10 @@ The website is the centre of gravity: **all document verification happens at the
 
 - **Shared contract:** the Findings JSON schema (`FINDINGS_JSON_SCHEMA.json`, mirrored across repos)
   and the signed **rule packages** (`worker/rule-format.md`) — contradiction types **CT01–CT46**,
-  their detectors (D01–D39), and fraud-keyword pairs.
+  their detectors (**D01–D40**), and fraud-keyword pairs.
+- **This engine is authoritative.** Where another surface's engine disagrees with this one, this
+  one is correct and the other is the one to fix. The guards in [`ENGINE.md`](./ENGINE.md) §4 were
+  each earned on a real evidence bundle; a surface without them will report false findings.
 - **Engine-improvement distribution ("self-updating engine"):** when a new contradiction pattern
   is learned (e.g. from a case file), it ships as a **signed rule package** served by this repo's
   Worker. Android (`update/RuleUpdateClient.kt`) and the firewall **download and RSA-verify** it and
@@ -73,10 +81,17 @@ The website is the centre of gravity: **all document verification happens at the
   re-sync the inline block. **Do not** "de-duplicate" the inline copy into a shared runtime module —
   root-level `.js` fetches are unreliable on this deployment, which is the entire reason the scripts
   are inlined.
-- Contradiction types are **CT01–CT46**. When adding one, keep `CT_NAMES`, `CT_CATEGORY`,
-  `NARRATIVE_MEANING` (in `forensic-report.js`) and `worker/rule-format.md` in sync.
+- Contradiction types are **CT01–CT46**, detectors **D01–D40**. When adding one, keep `CT_NAMES`,
+  `CT_CATEGORY`, `NARRATIVE_MEANING`, `CT_DETECTOR`, `LEGAL_SUBJECT_OF` (in `forensic-report.js`)
+  and `worker/rule-format.md` in sync, and bump `CT_COUNT`.
 - Run `node tests/run-all.js` before pushing. Deterministic engine → no `Date.now()`/`Math.random()`
   in analysis paths (Prime Directive 4).
+- **Report language is constitutional** (Prime Directive 16): findings stated as fact and anchored;
+  **no scores out of 100, no confidence bands, no hedging**, and the verdict on any named person is
+  reserved to the court. Tests fail the build if a score or a band returns. Full rules:
+  [`ENGINE.md`](./ENGINE.md) §6.
+- **Never hardcode a party, name, account number or case fact into a detector.** Detectors measure
+  structure; an engine that names a party fabricates evidence instead of measuring it.
 
 ## Deterministic engine, with a hybrid future
 
@@ -85,3 +100,7 @@ names, fuzzy clause matching). That ceiling is **by design** the boundary where 
 Gemma-3 layer** (in `1verum`) takes over — the LLM reads difficult documents and raises candidate
 contradictions the regex engine misses, always labelled as candidates pending verification. When in
 doubt on the web engine, prefer **precision over recall** and let the hybrid layer handle recall.
+
+An AI-raised item is **candidate tier and never a verified finding**: it is excluded from the
+verified count, the fact box, the severity table and the plain-language lead, and disclosed on its
+own advisory line. Mixing the two inflates the count and misdescribes the record.

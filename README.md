@@ -1,16 +1,22 @@
 # WebDocSol -- Verum Omnis Document Sealing & Verification Standard
 
 > **System context (read [`ARCHITECTURE.md`](./ARCHITECTURE.md) first).** This repo is the
-> **website hub** of the Verum Omnis system — one of three surfaces (**website + Android `1verum`
-> + Guardian firewall `firebase`**) that share one forensic engine. Two hard rules: the system is
+> **website hub** of the Verum Omnis system — one of four surfaces (**website + Android `1verum`
+> + Android reference `cursorfu` + Guardian firewall `firebase`**) that share one forensic engine,
+> of which **this repo holds the reference implementation**. Two hard rules: the system is
 > **stateless / serverless — no servers, no central user-data database** (state lives in the sealed
 > PDF, the Bitcoin anchor, and the user's device), and **all verification happens at the website**
 > (`verify.html`, via SHA-512 + OpenTimestamps/Bitcoin — not a server lookup).
+>
+> **Working on the engine or the report? Read [`ENGINE.md`](./ENGINE.md) first** — the detector
+> reference and the false-positive guards, each recorded with the real evidence bundle that
+> produced it. **Looking for a file, page, function or endpoint?** [`REFERENCE.md`](./REFERENCE.md).
 
 **Repository:** `Liamhigh/webdocsol`  
 **Version:** VO-DSS-1.2 (Verum Omnis Document Sealing Standard v1.2)  
-**Constitution:** v6.0 Final  
-**Date:** 2026-07-16  
+**Engine:** `VO_ENGINE_VERSION 5.3.5-web` — CT01–CT46, detectors D01–D40  
+**Constitution:** v8.0 (governance charter, seal `VO-9A4F3C5E825C`); v6.1 (engine operating instrument, seal `VO-9E51D3F507E6`)  
+**Date:** 2026-08-05  
 **Classification:** Constitutional / Immutable / Open Source  
 
 > ## DESIGN LOCK IN EFFECT
