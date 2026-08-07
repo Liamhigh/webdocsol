@@ -351,8 +351,21 @@ function detectJurisdictions(data) {
   // jurisdiction field is left blank. Home is ZA (VO's base); any other
   // jurisdiction named in the document makes the matter cross-border.
   var idText = String((data.identity && data.identity.jurisdiction) || '');
-  var evAll = (((data.findings && data.findings.findings) || []).map(function (f) { return String(f.evidence || ''); }).join(' '));
-  var hay = idText + ' ' + evAll;
+  var frAll = (data.findings && data.findings.findings) || [];
+  var evAll = frAll.map(function (f) { return String(f.evidence || ''); }).join(' ');
+  // The evidence strings alone under-detect: on the Greensky run the UAE leg
+  // lived in the engine's extraction note ("multiple jurisdictions are
+  // referenced (south africa, uae)" — demoted to a note by the anchor rule)
+  // and in the page-anchored party names ("Ras Al Khaimah Economic"), while
+  // no finding's evidence text named the Emirates at all — so the statutory
+  // section rendered SA-only for a visibly cross-border matter. Include both.
+  var whoAll = frAll.map(function (f) {
+    var w = (f && f.anchor && f.anchor.who) || [];
+    return w.map(function (x) { return (x && x.name) || ''; }).join(' ');
+  }).join(' ');
+  var noteAll = String((data.findings && data.findings.extractionNotes) || '') + ' ' +
+    String(data.extractionNotes || '');
+  var hay = idText + ' ' + evAll + ' ' + whoAll + ' ' + noteAll;
   var found = {};
   if (/south africa|\brsa\b|\bza\b|kwazulu|gauteng|western cape|eastern cape|free state|mpumalanga|limpopo|companies act 71 of 2008|constitutional court|high court of south africa|magistrate|\bsars\b|\bcipc\b|\.co\.za|\bZAR\b|\bR\s?\d/i.test(hay)) found.ZA = true;
   if (/emirates|\buae\b|dubai|abu dhabi|difc|sharjah|ajman|ras al khaimah|rakez|\bAED\b|dirham/i.test(hay)) found.AE = true;
@@ -380,6 +393,15 @@ function statutesForSubject(subject, jur) {
 // of relevance, never a finding of individual wrongdoing.
 function attributeParty(finding, parties) {
   var ev = String((finding && finding.evidence) || '');
+  // Also match against the parties the ENGINE bound to this finding's cited
+  // page(s) (anchor.who). Evidence strings are often nameless ("dated" is
+  // stated as X and as Y), so evidence-only matching left every Greensky
+  // finding "(unattributed)" even though the engine had already recorded who
+  // the cited pages name. Matching a DECLARED case party against those
+  // page-anchored names is still descriptive — the party is named on the page
+  // the finding cites — never a finding of wrongdoing.
+  var whoNames = (((finding && finding.anchor && finding.anchor.who) || [])
+    .map(function (x) { return (x && x.name) || ''; }).filter(Boolean)).join(' | ');
   for (var i = 0; i < parties.length; i++) {
     // Match on ANY significant token of the name (first OR surname): legal text
     // usually refers to a person by surname, so first-name-only would miss most.
@@ -388,10 +410,56 @@ function attributeParty(finding, parties) {
     var toks = parties[i].split(/\s+/).filter(function (t) { return t.replace(/[^A-Za-z]/g, '').length >= 3; });
     for (var j = 0; j < toks.length; j++) {
       var re = new RegExp('\\b' + toks[j].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'i');
-      if (re.test(ev)) return parties[i];
+      if (re.test(ev) || re.test(whoNames)) return parties[i];
     }
   }
   return null;
+}
+
+// Role-aware party extraction. extractParties() flattens "Complainant: L.
+// Highcock | Respondents: M. Nortje, K. Lappeman" into bare names, discarding
+// the one thing the user told us that the document cannot: who stands where.
+// This keeps the declared role per name so attribution lines and the scorecard
+// can carry it ("M. Nortje (Respondent)"). Descriptive only — a role restates
+// the user's own case details, it decides nothing.
+var VO_ROLE_LABEL_RE = /^\s*(complainants?|respondents?|applicants?|defendants?|plaintiffs?|accused|appellants?|witness(?:es)?)\b[\s\d]*(?:\(.*?\))?\s*:\s*/i;
+function extractPartiesWithRoles(partiesStr) {
+  if (!partiesStr) return [];
+  var out = [], seen = {};
+  var segs = String(partiesStr).split(/[|;\n]/);
+  for (var s = 0; s < segs.length; s++) {
+    var seg = segs[s], role = '';
+    var rm = seg.match(VO_ROLE_LABEL_RE);
+    if (rm) {
+      role = rm[1].toLowerCase().replace(/s$/, '').replace(/^./, function (c) { return c.toUpperCase(); });
+      if (role === 'Witnesse') role = 'Witness';
+      seg = seg.slice(rm[0].length);
+    }
+    var frags = seg.split(/,|\bvs?\.?\b|\bv\.\b|&|\/|\band\b/gi);
+    for (var f = 0; f < frags.length; f++) {
+      var p = frags[f].replace(/[^A-Za-z .'-]/g, ' ').replace(/\s+/g, ' ').trim();
+      if (!p || !/[A-Z]/.test(p) || p.length < 2) continue;
+      var key = p.toLowerCase();
+      if (seen[key]) continue;
+      seen[key] = true;
+      out.push({ name: p, role: role });
+      if (out.length >= 12) return out;
+    }
+  }
+  return out;
+}
+// name(lowercased) -> declared role, for annotating attribution lines.
+function partyRoleMap(partiesStr) {
+  var withRoles = extractPartiesWithRoles(partiesStr), m = {};
+  for (var i = 0; i < withRoles.length; i++) {
+    if (withRoles[i].role) m[withRoles[i].name.toLowerCase()] = withRoles[i].role;
+  }
+  return m;
+}
+function withRole(name, roleMap) {
+  if (!name || !roleMap) return name;
+  var r = roleMap[String(name).toLowerCase()];
+  return r ? name + ' (' + r + ')' : name;
 }
 
 // severity -> template dot rating (critical/high = ●●●, medium = ●●, else ●)
@@ -547,7 +615,15 @@ function cleanQuote(ev) {
     .replace(/verum omnis seal(ed)?\s*(original|evidence|document)?\s*(case-[0-9a-f]+)?/gi, ' ')
     .replace(/\bcase-[0-9a-f]{6,}\b/gi, ' ')
     .replace(/\b[0-9a-f]{6,}\s*\.{2,3}\s*[0-9a-f]{6,}\b/gi, ' ')     // truncated hash "ae76fb34...77f3ac68"
-    .replace(/\b(?=[0-9a-f]*\d)(?=[0-9a-f]*[a-f])[0-9a-f]{8,}\b/gi, ' ') // bare hex hash token (has a digit and a letter)
+    // Bare hex hash token. The old test (one digit + one letter) also matched
+    // identity-shaped numbers: "A08034452" is nine hex characters, so the CT09
+    // finding that NAMES the conflicting ID numbers rendered as "numbers
+    // appear: , —" with the values scrubbed out (Greensky run, 7 Aug 2026).
+    // A real hash fragment has letters interspersed through the digits; an
+    // ID/passport shape carries them only as a short prefix. So: require two
+    // hex letters, and keep any letters-then-digits token intact.
+    .replace(/\b(?=[0-9a-f]*\d)(?=(?:[0-9a-f]*[a-f]){2})[0-9a-f]{8,}\b/gi,
+      function (m) { return /^[a-f]{1,3}\d+$/i.test(m) ? m : ' '; })
     .replace(/\b\d+\s*\/\s*\d+\s*verify seal\b/gi, ' ')
     .replace(/\bverify seal\b/gi, ' ')
     .replace(/\bclean bundle page \d+ of \d+\b/gi, ' ')
@@ -1722,31 +1798,39 @@ function secLegalAnalysis(ctx, data) {
 
   // ---- 3. Per-actor scorecard -----------------------------------------
   ctx.subHeading('Behavioural Scorecard (by party)', { toc: true });
-  var parties = extractParties(data.identity && data.identity.parties);
-  if (parties.length === 0) {
+  var partiesWR = extractPartiesWithRoles(data.identity && data.identity.parties);
+  if (partiesWR.length === 0) {
     ctx.para('No parties were supplied in the case details, so findings could not be attributed to named individuals. To generate a per-party scorecard, enter the parties (e.g. "Complainant: L. Highcock | Respondents: M. Nortje, K. Lappeman") in the case details before sealing.', { size: 9, color: GRAY, after: 6 });
   } else {
     var actorRows = [];
-    for (var pa = 0; pa < parties.length; pa++) {
-      var nm = parties[pa];
-      var re = new RegExp('\\b' + nm.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').split(/\s+/)[0] + '\\b', 'i');
+    for (var pa = 0; pa < partiesWR.length; pa++) {
+      var nm = partiesWR[pa].name;
+      // Count via attributeParty so a finding whose EVIDENCE is nameless but
+      // whose cited page names the party (anchor.who) still lands in the row —
+      // on the Greensky run every finding was evidence-nameless, so the old
+      // evidence-only regex produced an all-zero scorecard even with parties
+      // declared. Attribution stays descriptive: named on the cited page.
       var hits = 0, maxS = 0;
       for (var fi = 0; fi < substantive.length; fi++) {
-        if (re.test(String(substantive[fi].evidence || ''))) { hits++; if ((substantive[fi].severity || 0) > maxS) maxS = substantive[fi].severity || 0; }
+        if (attributeParty(substantive[fi], [nm]) === nm) {
+          hits++;
+          if ((substantive[fi].severity || 0) > maxS) maxS = substantive[fi].severity || 0;
+        }
       }
-      actorRows.push({ party: nm, flags: String(hits), sev: hits ? (maxS + ' ' + sevLabel(maxS)) : '-' });
+      actorRows.push({ party: nm, role: partiesWR[pa].role || '—', flags: String(hits), sev: hits ? (maxS + ' ' + sevLabel(maxS)) : '-' });
     }
     actorRows.sort(function (a, b) { return parseInt(b.flags, 10) - parseInt(a.flags, 10); });
     ctx.table(
       [
-        { key: 'party', title: 'Party', w: 220 },
-        { key: 'flags', title: 'Findings naming them', w: 160, align: 'center' },
-        { key: 'sev', title: 'Highest severity', w: 124 }
+        { key: 'party', title: 'Party', w: 170 },
+        { key: 'role', title: 'Declared role', w: 90 },
+        { key: 'flags', title: 'Findings naming them', w: 130, align: 'center' },
+        { key: 'sev', title: 'Highest severity', w: 114 }
       ],
       actorRows,
       { size: 8.5 }
     );
-    ctx.para('Attribution records that the name appears in the flagged text - a fact of the record; responsibility is for the court to determine.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    ctx.para('Attribution records that the name appears in the flagged text or on the cited page - a fact of the record; the declared role restates the case details as entered. Responsibility is for the court to determine.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
 
   // ---- 4. Actionable Output -------------------------------------------
@@ -1784,6 +1868,7 @@ function secStatutoryAnchoring(ctx, data) {
 
   var jur = detectJurisdictions(data);
   var parties = extractParties(data.identity && data.identity.parties);
+  var roleMap = partyRoleMap(data.identity && data.identity.parties);
   var activeCodes = ['ZA'].concat(jur.foreign);
 
   ctx.newBodyPage();
@@ -1797,7 +1882,8 @@ function secStatutoryAnchoring(ctx, data) {
   var rows = [];
   for (var i = 0; i < Math.min(ranked.length, CAP); i++) {
     var f = ranked[i];
-    var who = attributeParty(f, parties) || '(unattributed)';
+    var whoName = attributeParty(f, parties);
+    var who = whoName ? withRole(whoName, roleMap) : '(unattributed)';
     var name = CT_NAMES[f.type] || (f.source === 'ai' ? 'AI-identified' : (f.type || 'Contradiction'));
     var stat = statutesForSubject(subjectOf(f), jur);
     var lawCell = stat.map(function (s) { return (JURIS_LABEL[s.jur] || s.jur) + ': ' + s.provisions.join('; '); }).join('\n');
@@ -1851,6 +1937,7 @@ function secFindingDetails(ctx, data) {
 
   var jur = detectJurisdictions(data);
   var parties = extractParties(data.identity && data.identity.parties);
+  var roleMap = partyRoleMap(data.identity && data.identity.parties);
 
   ctx.newBodyPage();
   ctx.heading('FINDINGS IN DETAIL');
@@ -1877,7 +1964,9 @@ function secFindingDetails(ctx, data) {
       .map(function (x) { return x && x.name; })
       .filter(Boolean);
     if (who) {
-      partyLine = 'Party implicated: ' + who;
+      // The declared role ("Respondent", "Complainant") restates the user's own
+      // case details next to the name — descriptive context, not a verdict.
+      partyLine = 'Party implicated: ' + withRole(who, roleMap);
     } else if (anchorNames.length) {
       partyLine = 'Parties named on the cited page(s): ' + anchorNames.join(', ') +
         ' (named in the document; role/attribution for counsel to determine)';
@@ -2370,6 +2459,7 @@ function secNarrative(ctx, data) {
   // Opening: parties, documents, scale.
   var idn = data.identity || {};
   var parties = extractParties(idn.parties || '');
+  var roleMap = partyRoleMap(idn.parties || '');
   var docCount = (data.documents && data.documents.length) || 1;
   var opening = 'Verum Omnis read ' + (docCount === 1 ? '"' + (data.docName || 'the document') + '"' : docCount + ' documents, analysed together as one bundle') + ' (' + (data.pageCount || 'n/a') + ' page' + (data.pageCount === 1 ? '' : 's') + ')';
   opening += (idn.caseName ? ', in the matter of ' + idn.caseName : '') + '.';
@@ -2437,7 +2527,7 @@ function secNarrative(ctx, data) {
     var name = CT_NAMES[f.type] || (f.source === 'ai' ? 'AI-identified concern' : (f.type || 'Contradiction'));
     var sevWord = (f.severity || 0) >= 4 ? 'A serious issue' : ((f.severity || 0) >= 3 ? 'A moderate issue' : 'A lesser issue');
     var who = attributeParty(f, parties);
-    var whoClause = who ? ' It concerns ' + who + '.' : '';
+    var whoClause = who ? ' It concerns ' + withRole(who, roleMap) + '.' : '';
     ctx.para((i + 1) + '. ' + sevWord + ' — ' + name + '. In plain terms, ' + withPeriod(narrativeMeaning(f)) + whoClause, { size: 10.5, font: ctx.f.timesBold, color: NAVY2, after: 2 });
     var where = fmtLocation(f.location);
     var loc = (where && where !== '—') ? ' (' + where + ')' : '';
@@ -2822,7 +2912,8 @@ async function seal(reportBytes, sealOpts) {
 
 // ================= exports =================
 var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
-  _extractParties: extractParties, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
+  _extractParties: extractParties, _extractPartiesWithRoles: extractPartiesWithRoles,
+  _partyRoleMap: partyRoleMap, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
   _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,
   _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
