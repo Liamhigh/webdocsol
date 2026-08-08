@@ -32,6 +32,7 @@ const suites = [
   'narrate-excerpt.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',
+  'greensky-regression.test.js',
 ];
 
 let failed = 0;

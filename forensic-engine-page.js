@@ -716,11 +716,21 @@ var DETECTORS = {
       var distinctD = {};
       for (var di = 0; di < st.length; di++) distinctD[st[di].key] = true;
       if (Object.keys(distinctD).length > 3) continue;
+      // A GENERIC label ("dated", "signed on") may only pair values on the
+      // SAME page. Across a bundle, "dated 6 April" on p.5 and "dated 30
+      // April" on p.368 are two separately-dated letters, not one date
+      // restated — the Greensky run reported exactly that pair as a HIGH
+      // finding twice. A qualified label ("termination date", "effective
+      // date") names ONE event, so it still pairs across pages; and a generic
+      // label restated on one page (the p.95 termination conflict pattern)
+      // still fires.
+      var GENERIC_DATE_LABEL = { 'dated': 1, 'date signed': 1, 'signed on': 1 };
       var base2 = st[0];
       var seenKeys2 = {};
       for (var q = 1; q < st.length; q++) {
         if (st[q].key === base2.key) continue;
         if (seenKeys2[st[q].key]) continue; // a repeated value is one discrepancy, not many
+        if (GENERIC_DATE_LABEL[lab2] && st[q].page !== base2.page) continue;
         seenKeys2[st[q].key] = true;
         findings.push({ type: 'CT03', severity: 4,
           evidence: '"' + lab2 + '" is stated as ' + base2.raw + ' and as ' + st[q].raw,
@@ -986,6 +996,13 @@ var DETECTORS = {
     // fires. Each malformed value is reported once, anchored to its pages.
     var cueRe = /(?:company\s+)?registration\s+(?:number|no\.?|nr\.?)|reg(?:istration)?\.?\s*(?:number|no\.?|nr\.?)|CIPC/gi;
     var SA_REG = /^(?:\d{4}\/\d{6}\/\d{2}|CK\d{2}\/\d{5,6}|CK\d{7})$/;
+    // A registration issued by a FOREIGN registry is not supposed to match the
+    // SA format. On the Greensky run a RAKEZ (Ras Al Khaimah free-zone) licence
+    // number was reported "Registration Number Fake" at severity 4 because it
+    // failed the CIPC pattern — a false accusation manufactured out of a
+    // format mismatch. When the text around the cue names a foreign registry,
+    // the finding downgrades to a verification note against THAT registry.
+    var FOREIGN_REG_RE = /\brakez\b|ras\s+al\s+khaimah|free\s*zone|fz-?llc|\bfze\b|\bfzco\b|\buae\b|united arab emirates|dubai|abu dhabi|sharjah|ajman|\bdifc\b|\badgm\b|\bjafza\b|\bdmcc\b|companies house|\bein\b|delaware/i;
     var bad = {};
     for (var i = 0; i < textBlocks.length; i++) {
       var block = textBlocks[i] || '';
@@ -997,18 +1014,26 @@ var DETECTORS = {
         if (!tok) continue;
         var val = tok[0].replace(/\s+/g, '');
         if (SA_REG.test(val)) continue; // a valid registration format is not "fake"
+        var context = block.slice(Math.max(0, cm.index - 300), cm.index + cm[0].length + 300);
         if (!bad[val]) {
           var quote = block.substring(cm.index, cm.index + cm[0].length + 30).replace(/\s+/g, ' ').trim();
-          bad[val] = { pages: [], quote: quote };
+          bad[val] = { pages: [], quote: quote, foreign: false };
         }
+        if (FOREIGN_REG_RE.test(context)) bad[val].foreign = true;
         if (bad[val].pages.indexOf(i + 1) === -1) bad[val].pages.push(i + 1);
       }
     }
     for (var v in bad) {
       if (!Object.prototype.hasOwnProperty.call(bad, v)) continue;
-      findings.push({ type: 'CT20', severity: 4,
-        evidence: 'A number labelled as a registration is not a valid SA registration format (expected YYYY/NNNNNN/NN or CK…): "' + bad[v].quote + '"',
-        location: 'Page ' + bad[v].pages.join(', ') });
+      if (bad[v].foreign) {
+        findings.push({ type: 'CT20', severity: 2,
+          evidence: 'A registration number does not match the SA (CIPC) format, and the surrounding text names a foreign registry (e.g. RAKEZ/UAE) — verify it against that registry, not the SA format: "' + bad[v].quote + '"',
+          location: 'Page ' + bad[v].pages.join(', ') });
+      } else {
+        findings.push({ type: 'CT20', severity: 4,
+          evidence: 'A number labelled as a registration is not a valid SA registration format (expected YYYY/NNNNNN/NN or CK…): "' + bad[v].quote + '"',
+          location: 'Page ' + bad[v].pages.join(', ') });
+      }
     }
     return findings;
   },
@@ -2602,7 +2627,15 @@ var VO_NON_PERSON_PHRASE = (function () {
     'electronic tag|resolution of disputes|conditions precedent|books of account|' +
     'minimum sales|agreement schedule|table of contents|business day|' +
     'yes no|no yes|yes yes|no no|caltex card|caltex facilities|caltex outlets|' +
-    'caltex franchisees|caltex operated outlets|starmart franchise system').split('|');
+    'caltex franchisees|caltex operated outlets|starmart franchise system|' +
+    // From the 7 Aug Greensky run: the party index bound a country ("South
+    // Africa"), legal furniture ("Trade License", "Fiduciary Duty"), a degree
+    // ("LL B") and a free-zone fragment ("Ras Al Khaimah Economic") as parties.
+    // Places and legal concepts are facts of a page, not actors on it.
+    'south africa|united arab emirates|hong kong|sri lanka|saudi arabia|' +
+    'new zealand|united kingdom|united states|ras al khaimah|' +
+    'ras al khaimah economic|al khaimah economic|trade license|trade licence|' +
+    'fiduciary duty|ll b').split('|');
   for (var i = 0; i < phrases.length; i++) m[phrases[i]] = 1;
   return m;
 })();
