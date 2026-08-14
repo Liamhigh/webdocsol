@@ -123,6 +123,50 @@ const E = require('../forensic-engine-page.js');
   ok(R._attributeParty({ evidence: 'no names here', anchor: { who: [] } }, ['Marius Nortje']) === null, 'no match still returns null');
 }
 
+// ---- 7. Marius Nortje's conduct admission of 6 April 2025 was MISSED ----
+// Founder report: the engine read the whole bundle and never surfaced the
+// email of Sun 06 Apr 2025 09:53 (pp. 53-54, requoted on 82, 86, 211, 215):
+//   "Because you refused to communicate with Kevin's Export and me, Kevin's
+//    Export proceeded with the deal, since Sealife Hong Kong was already his
+//    client."
+// The explicit-admission cues ("I admit", "we concede") never fire on real
+// correspondence. This is the shape that does: a causal justification + the
+// transaction proceeding + the writer placing themselves in it.
+{
+  const D01 = E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION;
+  const conduct = (pages) => (D01(pages) || []).filter(f => /own account of why/.test(f.evidence));
+
+  const real = ['cover page',
+    "Dear Liam, Because you refused to communicate with Kevin's Export and me, Kevin's Export proceeded with the deal, since Sealife Hong Kong was already his client. Regards Marius"];
+  const hit = conduct(real);
+  ok(hit.length === 1, 'the 6 April 2025 conduct admission is detected (was missed entirely)');
+  ok(hit.length === 1 && hit[0].severity === 4, 'it is ranked among the serious findings');
+  ok(hit.length === 1 && /proceeded with the deal/.test(hit[0].evidence), 'the finding quotes the admission verbatim');
+  ok(hit.length === 1 && /Page 2/.test(hit[0].location), 'it is anchored to the page it appears on');
+  ok(hit.length === 1 && !/admits|confesses|guilt|fraud/i.test(hit[0].evidence),
+    'the finding states the account as fact and draws no conclusion about it (PD16/S15.2)');
+
+  // The same passage requoted across the bundle aggregates to ONE finding
+  // naming every page, as the AllFuels aggregation rule requires.
+  const repeated = ['a',
+    "Because you refused to communicate with Kevin's Export and me, Kevin's Export proceeded with the deal, since Sealife Hong Kong was already his client.",
+    'b',
+    "Quoted again: Because you refused to communicate with Kevin's Export and me, Kevin's Export proceeded with the deal, since Sealife was already his client."];
+  const agg = conduct(repeated);
+  ok(agg.length === 1 && /2, 4/.test(agg[0].location),
+    'a requoted admission is ONE finding citing every page (' + (agg[0] || {}).location + ')');
+
+  // Precision guards - these must never fire.
+  ok(conduct(['The parties shall proceed with the transaction as set out in clause 5, because time is of the essence.']).length === 0,
+    'contract boilerplate ("the parties shall proceed") is not an admission');
+  ok(conduct(['We completed the sale of the property in 2019 and registered transfer.']).length === 0,
+    'a bare first-person account with no justification does not fire (affidavits are full of these)');
+  ok(conduct(['Because the weather was poor, I stayed at home that weekend and rested.']).length === 0,
+    'a causal sentence with no transaction does not fire');
+  ok(conduct(['Because of the delay, the shipment was cancelled by the carrier.']).length === 0,
+    'a causal transaction sentence with no first-person writer does not fire');
+}
+
 console.log('\n[greensky-regression] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[greensky-regression] ALL GREEN');
