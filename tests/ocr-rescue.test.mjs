@@ -251,6 +251,30 @@ function fakeDom(behaviours, state) {
   ok(!!resB && /recovered text on-device/.test(resB.note), 'single-worker path still rescues and reports');
 }
 
+// Unread-pages disclosure (founder ruling: the AllFuels bundle had 119 pages
+// the engine never read — a lease agreement among them — and the report said
+// nothing beyond a count). The OCR block must record WHICH pages stayed
+// unread and why, in a structured form the report builder receives.
+{
+  const fn = new Function(
+    'document', 'updateStep', 'pdfjsLib', 'Tesseract', 'window', 'navigator',
+    '"use strict";' + src + '\nreturn { voPageRanges: voPageRanges };'
+  );
+  const api = fn({ head: { appendChild() {} } }, () => {}, {}, {}, {}, { hardwareConcurrency: 2 });
+  ok(api.voPageRanges([210, 211, 212, 328]) === '210-212, 328', 'voPageRanges compresses runs for the disclosure line');
+  ok(api.voPageRanges([]) === '', 'voPageRanges: empty input');
+
+  ok(/remain unread: page\(s\) ' \+ voPageRanges\(cappedPages\)/.test(src),
+    'the over-cap note names the exact unread pages, not just a count');
+  ok(/_voUnreadPages = \{ capped: cappedPages, noText: noText\.slice\(\), renderFailed: renderFailed\.slice\(\) \}/.test(src),
+    'a structured unread-pages record is captured for the report builder');
+  ok(/_voUnreadPages = null;[^]*?DISTINCT-content mass/.test(src),
+    'the record is reset at rescue entry so a second document never inherits it');
+  ok(/unreadPages: _voUnreadPages/.test(html) &&
+     (html.match(/unreadPages: _voUnreadPages/g) || []).length >= 2,
+    'unread-pages data is passed to BOTH the main report build and the narrative twin');
+}
+
 console.log(`\n[ocr-rescue] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[ocr-rescue] FAILURES'); process.exit(1); }
 console.log('[ocr-rescue] ALL GREEN');
