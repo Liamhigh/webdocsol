@@ -190,6 +190,13 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(/FORMAT: short paragraphs/.test(capturedSystem) && /separated by a BLANK line/.test(capturedSystem)
     && /Never one unbroken block/.test(capturedSystem),
     'the narrator prompt demands structured paragraphs and bullets, never one block');
+  ok(/SYNTHESIS: you are a narrative synthesizer, not a form-filler/.test(capturedSystem)
+    && /never repeat a sentence template/.test(capturedSystem)
+    && /Connect findings that share a pattern into one theme/.test(capturedSystem),
+    'the narrator is a synthesizer: themes, varied language, no template repetition');
+  ok(/WHY IT MATTERS/.test(capturedSystem)
+    && /Never speculate about intent, motive, or anyone's credibility/.test(capturedSystem),
+    'the narrator explains consequence as fact and never judges intent or credibility');
   ok(/DECLARATIVE FINDINGS RULE/.test(capturedSystem) && /hallmarks of fraud/.test(capturedSystem),
     'the system prompt makes anchored facts declarative (forensic-instrument voice)');
   ok(/constitutional forensic investigator/.test(capturedSystem)

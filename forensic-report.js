@@ -2617,6 +2617,29 @@ function secNarrative(ctx, data, opts) {
   // software output — fixed rules, same result every run — not an AI's opinion.
   ctx.para('How these findings were made: by forensic software — a fixed set of deterministic detection rules that reads the text the same way every time and anchors every finding to quoted words on a cited page. They are not the opinion of a generative AI. Where the optional AI review contributed an item, it is labelled AI-identified and is advisory only.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
+  // The analyst's telling: when the optional AI narrator ran, its flowing
+  // synthesis of the same sealed findings leads the story — connected themes,
+  // varied language — clearly labelled, advisory, never the record itself.
+  // The deterministic pattern walk stays below as the verifiable backbone,
+  // word-for-word repeatable, so the story never outruns the evidence.
+  var flow = data.aiNarrative ? String(data.aiNarrative) : '';
+  if (flow) {
+    var fBlocks = narrativeBlocks(flow);
+    if (fBlocks.length) {
+      ctx.subHeading('The analyst\'s telling');
+      ctx.para('Written by the AI narrator from the sealed findings and the document\'s own words. Advisory: every fact it states is anchored in the verifiable backbone below and the sections that follow.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+      for (var fb = 0; fb < fBlocks.length; fb++) {
+        var bb = fBlocks[fb];
+        if (bb.kind === 'heading') ctx.subHeading(san(bb.text));
+        else if (bb.kind === 'bullet') ctx.bullet(san(bb.text), { size: 10, after: 3 });
+        else ctx.para(san(bb.text), { size: 10.5, after: 8 });
+      }
+      data._voFlowShown = true;
+      ctx.subHeading('The verifiable backbone: each pattern, anchored');
+      ctx.para('Everything below is the deterministic record itself — the same words on every run, each statement tied to its quoted text and page.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    }
+  }
+
   // Opening: parties, documents, scale.
   var idn = data.identity || {};
   var parties = extractParties(idn.parties || '');
@@ -2894,7 +2917,10 @@ function secAiReview(ctx, data) {
   // san() turns every newline into a space, so sanitizing BEFORE the split
   // collapsed the whole narrative into one squashed block with no structure --
   // sanitize each paragraph AFTER the split instead.
-  var narr = data.aiNarrative ? String(data.aiNarrative) : '';
+  // When the analyst's telling already rendered inside THE STORY IN PLAIN
+  // LANGUAGE (Part 1), this annex keeps only the review statistics — the
+  // narrative must never print twice.
+  var narr = (data.aiNarrative && !data._voFlowShown) ? String(data.aiNarrative) : '';
   if (!ar && !narr) return;
   ctx.newBodyPage();
   // When a narrative exists it is the report's story and gets the prominent
