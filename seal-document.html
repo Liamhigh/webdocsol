@@ -4023,7 +4023,7 @@ var CONTRADICTION_TYPES = {
 
   CT44_CONDITIONAL_CLAUSE_MISINVOKED: {
     id: 'CT44', name: 'Conditional Clause Misinvoked (Lessee/Owner Trap)',
-    desc: 'A termination or expiry rests on a clause conditioned on the party being the lessee (not the owner) under a head lease, but the record shows that party had become the owner of the premises — the triggering event never occurred, so the termination may be void.',
+    desc: 'A termination or expiry rests on a clause conditioned on the party being the lessee (not the owner) under a head lease, but the record shows that party had become the owner of the premises — the triggering event never occurred; whether the termination is void is for the court.',
     severity: 5, category: 'FRANCHISE_LEASE',
     example: 'Franchise deemed "expired by effluxion" under cl. 3.2.3 (lessee-only), but the franchisor had purchased the site and was the registered owner.'
   },
@@ -5350,7 +5350,7 @@ var DETECTORS = {
     var expandedTerms = fullText.match(/\b(additionally|furthermore|including but not limited to|etc|and so on)\b/gi);
     if (originalScope && expandedTerms && expandedTerms.length > 5) {
       findings.push({ type: 'CT07', severity: 2,
-        evidence: 'Scope may have expanded: ' + originalScope.length + ' scope references but ' + expandedTerms.length + ' expansion phrases',
+        evidence: 'The record carries ' + originalScope.length + ' scope reference(s) against ' + expandedTerms.length + ' scope-expansion phrase(s); read them together to establish whether the scope grew beyond the original grant',
         location: 'Full document' });
     }
     return findings;
@@ -5457,7 +5457,7 @@ var DETECTORS = {
           var quote = m[0].replace(/\s+/g, ' ').trim();
           if (quote.length > 220) quote = quote.substring(0, 220) + '…';
           findings.push({ type: 'CT05', severity: 3,
-            evidence: 'Possible causal impossibility in one sentence: "' + quote + '"',
+            evidence: 'A cause is stated after its effect within one sentence: "' + quote + '"',
             location: 'Page ' + (b + 1) });
           break; // one finding per page is enough; dedup caps the rest
         }
@@ -5557,7 +5557,7 @@ var DETECTORS = {
       var re = new RegExp('(?:' + imageNoun + '[^.]{0,40}' + term + '|' + term + '[^.]{0,40}' + imageNoun + ')');
       if (re.test(fullText)) {
         findings.push({ type: 'CT28', severity: 3,
-          evidence: 'Possible image manipulation: "' + manipTerms[i] + '" referenced next to an image',
+          evidence: 'The record references "' + manipTerms[i] + '" beside an image; examine the image against its original',
           location: 'Image sections' });
       }
     }
@@ -6118,7 +6118,7 @@ function voDigitalForensicsScan(pdfBytes, pdfDoc) {
   var eofs = voByteOffsets(u8, '%%EOF', 200);
   if (eofs.length >= 3) {
     findings.push({ type: 'CT30', severity: 2,
-      evidence: 'The file contains ' + eofs.length + ' embedded revision snapshots (incremental saves) — earlier versions of the document may be recoverable from within this file. Common in normal editing workflows, but on a document presented as a final/original it merits review with a PDF forensic tool.',
+      evidence: 'The file contains ' + eofs.length + ' embedded revision snapshots (incremental saves) — earlier versions of the document are embedded within this file and can be examined with a PDF forensic tool. Common in normal editing workflows; on a document presented as a final/original, examine the embedded revisions.',
       location: 'PDF structure' });
   }
 
@@ -6132,7 +6132,7 @@ function voDigitalForensicsScan(pdfBytes, pdfDoc) {
     for (var i = 0; i < eofs.length; i++) { if (eofs[i] > byteRangeAt) eofsAfterSig++; }
     if (eofsAfterSig >= 2) {
       findings.push({ type: 'CT41', severity: 4,
-        evidence: 'The file was saved ' + (eofsAfterSig - 1) + ' more time(s) AFTER a digital signature was applied — content may have been added or changed post-signing. (A benign cause is a second signature or form fill; verify the signed revision against the final file.)',
+        evidence: 'The file was saved ' + (eofsAfterSig - 1) + ' more time(s) AFTER a digital signature was applied. A second signature or form fill also produces this; verify the signed revision against the final file.',
         location: 'PDF structure' });
     }
   }
@@ -6176,7 +6176,7 @@ function voDigitalForensicsScan(pdfBytes, pdfDoc) {
         var xd = Date.parse(xmpCreate);
         if (isFinite(xd) && Math.abs(xd - infoCreate.getTime()) > 26 * 3600 * 1000) {
           findings.push({ type: 'CT29', severity: 3,
-            evidence: 'The file\'s two metadata stores disagree on the creation date: XMP says ' + xmpCreate + ' but the Info dictionary says ' + infoCreate.toISOString() + ' — consistent with editing that updated one store but not the other. Request the native original to establish the true date.',
+            evidence: 'The file\'s two metadata stores disagree on the creation date: XMP says ' + xmpCreate + ' but the Info dictionary says ' + infoCreate.toISOString() + '. One store was updated and the other was not. Request the native original to establish the true date.',
             location: 'PDF metadata' });
         }
       }
