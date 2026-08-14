@@ -3343,11 +3343,18 @@ function secNarrative(ctx, data, opts) {
   // The deterministic pattern walk stays below as the verifiable backbone,
   // word-for-word repeatable, so the story never outruns the evidence.
   var flow = data.aiNarrative ? String(data.aiNarrative) : '';
-  if (flow) {
+  var flowSrc = data.aiNarrativeSource || null;
+  // PROVENANCE GUARD: the on-device fallback narrative is deterministic
+  // template text — presenting it as the AI narrator's writing would be a
+  // false provenance claim. Only a genuinely AI-written telling (or a legacy
+  // caller that predates the flag) leads the story; 'local' stays in the annex.
+  if (flow && flowSrc !== 'local') {
     var fBlocks = narrativeBlocks(flow);
     if (fBlocks.length) {
       ctx.subHeading('The analyst\'s telling');
-      ctx.para('Written by the AI narrator from the sealed findings and the document\'s own words. Advisory: every fact it states is anchored in the verifiable backbone below and the sections that follow.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+      ctx.para(flowSrc === 'ai'
+        ? 'Written by the AI narrator from the sealed findings and the document\'s own words. Advisory: every fact it states is anchored in the verifiable backbone below and the sections that follow.'
+        : 'Drafted from the sealed findings. Advisory: every fact it states is anchored in the verifiable backbone below and the sections that follow.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
       for (var fb = 0; fb < fBlocks.length; fb++) {
         var bb = fBlocks[fb];
         if (bb.kind === 'heading') ctx.subHeading(san(bb.text));
@@ -3750,6 +3757,7 @@ async function build(opts) {
     extractionNotes: opts.extractionNotes || null,
     aiReview: opts.aiReview || null,
     aiNarrative: opts.aiNarrative || null,
+    aiNarrativeSource: opts.aiNarrativeSource || null,
     classification: opts.classification || null,
     serialLabels: opts.serialLabels || null,
     unreadPages: opts.unreadPages || null,
@@ -4044,6 +4052,7 @@ async function buildNarrative(opts) {
     extractionNotes: opts.extractionNotes || null,
     aiReview: opts.aiReview || null,
     aiNarrative: opts.aiNarrative || null,
+    aiNarrativeSource: opts.aiNarrativeSource || null,
     classification: opts.classification || null,
     serialLabels: opts.serialLabels || null,
     unreadPages: opts.unreadPages || null,
@@ -12004,6 +12013,7 @@ async function runSealingPipeline() {
   var reportFraudResult = fraudResult;
   var aiReviewInfo = null;
   var aiNarrativeText = null;
+  var aiNarrativeSource = null; // 'ai' = Workers-AI narrator; 'local' = on-device fallback
   _pipelineAiAddedFindings = [];
   try {
     if (isAiReviewEnabled() && fraudResult && !fraudResult.scanFailed && Array.isArray(fraudResult.findings) && fraudResult.findings.length > 0) {
@@ -12064,12 +12074,13 @@ async function runSealingPipeline() {
         // Narrate in its OWN try too: the endpoint returns a deterministic
         // template even when the model fails, so this should always yield a
         // narrative — but if anything does throw, the report still builds.
-        try { aiNarrativeText = await aiNarrateReport(narrateFindings, reportFraudResult.overallScore, reportFraudResult.confidence); }
+        try { aiNarrativeText = await aiNarrateReport(narrateFindings, reportFraudResult.overallScore, reportFraudResult.confidence); if (aiNarrativeText) aiNarrativeSource = 'ai'; }
         catch (narrErr) { console.warn('[VO-AI] narrate failed:', narrErr && narrErr.message ? narrErr.message : narrErr); aiNarrativeText = null; }
         // Guarantee a narrative even when the AI endpoint is unreachable: fall
         // back to an on-device narrative built directly from the findings.
         if (!aiNarrativeText) {
           aiNarrativeText = buildLocalNarrative(narrateFindings, reportFraudResult.overallScore, reportFraudResult.confidence);
+          if (aiNarrativeText) aiNarrativeSource = 'local';
         }
       }
     }
@@ -12079,6 +12090,7 @@ async function runSealingPipeline() {
     aiReviewInfo = (isAiReviewEnabled() && fraudResult && !fraudResult.scanFailed && fraudResult.findings && fraudResult.findings.length > 0)
       ? { applied: false, reason: window._voLastAiError || 'service unavailable' } : null;
     aiNarrativeText = null;
+    aiNarrativeSource = null;
     _pipelineAiAddedFindings = [];
   }
 
@@ -12197,6 +12209,7 @@ async function runSealingPipeline() {
         gps: (typeof gpsCoords !== 'undefined' && gpsCoords) ? { lat: gpsCoords.lat, lng: gpsCoords.lng } : null,
         aiReview: aiReviewInfo,
         aiNarrative: aiNarrativeText,
+        aiNarrativeSource: aiNarrativeSource,
         classification: classification,
         serialLabels: {
           suppressed: serialInfo.suppressed,
@@ -12263,6 +12276,7 @@ async function runSealingPipeline() {
             unreadPages: _voUnreadPages,
             gps: (typeof gpsCoords !== 'undefined' && gpsCoords) ? { lat: gpsCoords.lat, lng: gpsCoords.lng } : null,
             aiNarrative: aiNarrativeText,
+            aiNarrativeSource: aiNarrativeSource,
             aiReview: aiReviewInfo,
             ots: { submitted: !!(otsResult && otsResult.success), calendar: otsResult && otsResult.calendar ? otsResult.calendar : null },
             images: { watermark: watermarkBytes }

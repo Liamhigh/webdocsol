@@ -2623,11 +2623,18 @@ function secNarrative(ctx, data, opts) {
   // The deterministic pattern walk stays below as the verifiable backbone,
   // word-for-word repeatable, so the story never outruns the evidence.
   var flow = data.aiNarrative ? String(data.aiNarrative) : '';
-  if (flow) {
+  var flowSrc = data.aiNarrativeSource || null;
+  // PROVENANCE GUARD: the on-device fallback narrative is deterministic
+  // template text — presenting it as the AI narrator's writing would be a
+  // false provenance claim. Only a genuinely AI-written telling (or a legacy
+  // caller that predates the flag) leads the story; 'local' stays in the annex.
+  if (flow && flowSrc !== 'local') {
     var fBlocks = narrativeBlocks(flow);
     if (fBlocks.length) {
       ctx.subHeading('The analyst\'s telling');
-      ctx.para('Written by the AI narrator from the sealed findings and the document\'s own words. Advisory: every fact it states is anchored in the verifiable backbone below and the sections that follow.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+      ctx.para(flowSrc === 'ai'
+        ? 'Written by the AI narrator from the sealed findings and the document\'s own words. Advisory: every fact it states is anchored in the verifiable backbone below and the sections that follow.'
+        : 'Drafted from the sealed findings. Advisory: every fact it states is anchored in the verifiable backbone below and the sections that follow.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
       for (var fb = 0; fb < fBlocks.length; fb++) {
         var bb = fBlocks[fb];
         if (bb.kind === 'heading') ctx.subHeading(san(bb.text));
@@ -3030,6 +3037,7 @@ async function build(opts) {
     extractionNotes: opts.extractionNotes || null,
     aiReview: opts.aiReview || null,
     aiNarrative: opts.aiNarrative || null,
+    aiNarrativeSource: opts.aiNarrativeSource || null,
     classification: opts.classification || null,
     serialLabels: opts.serialLabels || null,
     unreadPages: opts.unreadPages || null,
@@ -3324,6 +3332,7 @@ async function buildNarrative(opts) {
     extractionNotes: opts.extractionNotes || null,
     aiReview: opts.aiReview || null,
     aiNarrative: opts.aiNarrative || null,
+    aiNarrativeSource: opts.aiNarrativeSource || null,
     classification: opts.classification || null,
     serialLabels: opts.serialLabels || null,
     unreadPages: opts.unreadPages || null,
