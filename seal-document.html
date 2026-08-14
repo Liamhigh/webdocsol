@@ -1715,7 +1715,7 @@ function plainLeadLines(fr, data) {
     : (plSerial > 0
         ? 'Of these, ' + plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's') + ' (the rest are multi-stage pattern matches, described below)'
         : plSubstantive + ' ' + (plSubstantive === 1 ? 'is a' : 'are') + ' substantive finding' + (plSubstantive === 1 ? '' : 's'));
-  plLines.push(substLead + (plSerious > 0 ? ', of which ' + plSerious + ' ' + (plSerious === 1 ? 'is' : 'are') + ' rated critical or high.' : '. None reached the critical or high band.'));
+  plLines.push(substLead + (plSerious > 0 ? ', of which ' + plSerious + ' ' + (plSerious === 1 ? 'is' : 'are') + ' serious; the serious findings lead the list below.' : '.'));
   // Name the serious findings in plain words, right here at the top, so the
   // reader gets the whole picture before any table. Same lay clause the
   // narrative uses; capped so the lead stays short; anchored to the page.
@@ -1760,7 +1760,6 @@ function secExecSummary(ctx, data) {
   var fr = data.findings;
   var score = fr.overallScore || 0;
   var band = fr.confidence || 'CLEAN';
-  var bandLabel = { CLEAN: 'CLEAN', LOW: 'LOW', MODERATE: 'MODERATE', HIGH: 'HIGH', VERY_HIGH: 'VERY HIGH' }[band] || band;
 
   // ---- plain-language lead ----------------------------------------------
   // The first thing a reader meets is a plain-English "bottom line": what was
@@ -1798,8 +1797,10 @@ function secExecSummary(ctx, data) {
   ctx.page.drawRectangle({ x: LM, y: ctx.y - boxH, width: CW, height: boxH, color: BOXBG, borderColor: GOLD, borderWidth: 1 });
   ctx.page.drawText(String(fbVerified), { x: LM + 18, y: ctx.y - 44, size: 26, font: ctx.f.timesBold, color: NAVY2 });
   ctx.page.drawText('Verified findings', { x: LM + 18, y: ctx.y - 60, size: 9, font: ctx.f.times, color: GRAY });
-  ctx.page.drawText('Critical: ' + fbCounts[5] + '     High: ' + fbCounts[4], { x: LM + 200, y: ctx.y - 34, size: 11, font: ctx.f.timesBold, color: NAVY2 });
-  ctx.page.drawText('Medium: ' + fbCounts[3] + '     Low/Info: ' + (fbCounts[2] + fbCounts[1]), { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
+  // Founder ruling (AGENTS.md, v8.0 §15.2): severity word-bands do not print.
+  // Ranking carries the weight; findings appear most serious first.
+  ctx.page.drawText('Findings are ordered most serious first', { x: LM + 200, y: ctx.y - 34, size: 11, font: ctx.f.timesBold, color: NAVY2 });
+  ctx.page.drawText('throughout this report.', { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
   ctx.page.drawText('Contradiction types triggered: ' + (fr.contradictionTypesUsed || 0) + ' / ' + CT_COUNT
     + (fbAiCands > 0 ? '      AI-raised candidates: ' + fbAiCands + ' (advisory)' : ''), { x: LM + 200, y: ctx.y - 64, size: 10, font: ctx.f.times, color: INK });
   ctx.y -= boxH + 12;
@@ -1825,22 +1826,7 @@ function secExecSummary(ctx, data) {
     var s = Math.max(1, Math.min(5, all[i].severity || 1));
     sevCounts[s]++;
   }
-  ctx.subHeading('Findings by severity');
-  ctx.table(
-    [
-      { key: 'sev', title: 'Severity', w: 130 },
-      { key: 'meaning', title: 'Meaning', w: 220 },
-      { key: 'count', title: 'Count', w: 154, align: 'right' }
-    ],
-    [
-      { sev: '5 — Critical', meaning: 'Strongest contradictions', count: String(sevCounts[5]) },
-      { sev: '4 — High', meaning: 'Significant findings', count: String(sevCounts[4]) },
-      { sev: '3 — Medium', meaning: 'Moderate findings', count: String(sevCounts[3]) },
-      { sev: '2 — Low', meaning: 'Minor anomalies', count: String(sevCounts[2]) },
-      { sev: '1 — Info', meaning: 'Informational only', count: String(sevCounts[1]) }
-    ],
-    { size: 9 }
-  );
+  ctx.para('Findings are ordered most serious first throughout this report; the order itself carries the weight (no severity bands are printed, per Constitution v8.0 §15.2).', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   if (plDemoted > 0) {
     ctx.para('Of the low-severity findings, ' + plDemoted + ' are structural notes expected in a compiled bundle; they are aggregated in the findings matrix rather than listed one by one.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   }
@@ -2007,7 +1993,6 @@ function secMatrix(ctx, data) {
         det: (CT_NAMES[g.type] || g.type) + '  (' + det + '·' + g.type + ')',
         claim: quoteEvidence(g.evidence),
         page: pageAnchor(g.location),
-        sev: (g.severity || '') + ' ' + sevLabel(g.severity || 0)
       });
     }
     if (rows.length > 0) {
@@ -2017,8 +2002,7 @@ function secMatrix(ctx, data) {
           { key: 'det', title: 'Detector / Type', w: 118 },
           { key: 'claim', title: 'Claim (anchor quote)', w: 262 },
           { key: 'page', title: 'Page', w: 52, align: 'center' },
-          { key: 'sev', title: 'Severity', w: 48 }
-        ],
+          ],
         rows,
         { size: 7.5 }
       );
@@ -2069,8 +2053,7 @@ function secMatrix(ctx, data) {
           { key: 'det', title: 'Detector / Type', w: 118 },
           { key: 'claim', title: 'Aggregated note', w: 262 },
           { key: 'page', title: 'Pages', w: 52, align: 'center' },
-          { key: 'sev', title: 'Severity', w: 48 }
-        ],
+          ],
         demoRows,
         { size: 7.5 }
       );
@@ -2090,7 +2073,6 @@ function secMatrix(ctx, data) {
         n: String(ar + 1),
         type: af.type || 'AI_INDICATOR',
         rationale: af.rationale || '',
-        sev: (af.severity || '') + ' ' + sevLabel(af.severity || 0)
       });
     }
     ctx.table(
@@ -2125,7 +2107,6 @@ function secMatrix(ctx, data) {
       n: String(idx++),
       type: tkey === 'SERIAL' ? 'Serial patterns' : ((CT_NAMES[tkey] || tkey) + ' (' + tkey + ')'),
       count: String(bt.count),
-      maxsev: bt.maxSev + ' ' + sevLabel(bt.maxSev),
       pages: Object.keys(bt.pages).map(Number).sort(function (a, b) { return a - b; }).slice(0, 8).join(', ') || '—'
     });
   }
@@ -2204,7 +2185,6 @@ function secSerial(ctx, data) {
         n: String(s + 1),
         name: labelled[s].serialName || labelled[s].serialPattern || (labelled[s].source === 'ai' ? 'AI-identified pattern' : 'Serial pattern'),
         evidence: (labelled[s].source === 'ai' && labelled[s].rationale) ? labelled[s].rationale : quoteEvidence(labelled[s].evidence),
-        sev: (labelled[s].severity || '') + ' ' + sevLabel(labelled[s].severity || 0)
       });
     }
     ctx.table(
@@ -2537,15 +2517,14 @@ function secLegalAnalysis(ctx, data) {
           if ((substantive[fi].severity || 0) > maxS) maxS = substantive[fi].severity || 0;
         }
       }
-      actorRows.push({ party: nm, role: partiesWR[pa].role || '—', flags: String(hits), sev: hits ? (maxS + ' ' + sevLabel(maxS)) : '-' });
+      actorRows.push({ party: nm, role: partiesWR[pa].role || '—', flags: String(hits) });
     }
     actorRows.sort(function (a, b) { return parseInt(b.flags, 10) - parseInt(a.flags, 10); });
     ctx.table(
       [
         { key: 'party', title: 'Party', w: 170 },
         { key: 'role', title: 'Declared role', w: 90 },
-        { key: 'flags', title: 'Findings naming them', w: 130, align: 'center' },
-        { key: 'sev', title: 'Highest severity', w: 114 }
+        { key: 'flags', title: 'Findings naming them', w: 244, align: 'center' }
       ],
       actorRows,
       { size: 8.5 }
@@ -2561,7 +2540,7 @@ function secLegalAnalysis(ctx, data) {
   for (var t2 = 0; t2 < topN.length; t2++) {
     var tf = topN[t2];
     var tq = quoteEvidence(tf.evidence); if (tq.length > 150) tq = tq.substring(0, 147) + '...';
-    ctx.bullet((CT_NAMES[tf.type] || tf.type) + ' (' + sevLabel(tf.severity || 0) + ') - ' + fmtLocation(tf.location) + ': ' + tq, { size: 9 });
+    ctx.bullet((CT_NAMES[tf.type] || tf.type) + ' - ' + fmtLocation(tf.location) + ': ' + tq, { size: 9 });
   }
   ctx.gap(4);
   var jur = (data.identity && data.identity.jurisdiction) ? data.identity.jurisdiction : null;
@@ -2622,7 +2601,7 @@ function secStatutoryAnchoring(ctx, data) {
     var lawCell = stat.map(function (s) { return (JURIS_LABEL[s.jur] || s.jur) + ': ' + s.provisions.join('; '); }).join('\n');
     rows.push({
       party: who,
-      finding: name + '  (' + sevLabel(f.severity || 0) + ')',
+      finding: name,
       page: fmtLocation(f.location),
       law: lawCell
     });
@@ -2707,7 +2686,6 @@ function secFindingDetails(ctx, data) {
       partyLine = 'Party implicated: not attributed to a named party';
     }
     var factLines = [
-      'Severity: ' + (f.severity || 0) + ' ' + sevLabel(f.severity || 0) + '   ' + sevDots(f.severity || 0),
       partyLine,
       'Location: ' + fmtLocation(f.location),
       'Legal subject: ' + (LEGAL_SUBJECT_LABEL[subj] || subj) + (CT_DETECTOR[f.type] ? '    |    Detector: ' + CT_DETECTOR[f.type] : '')
@@ -2886,7 +2864,7 @@ function secOffenceMatrix(ctx, data) {
     var prov = stat.map(function (x) { return (JURIS_LABEL[x.jur] || x.jur) + ': ' + x.provisions.join('; '); }).join('\n');
     rows.push({
       subject: (LEGAL_SUBJECT_LABEL[sk] || sk),
-      n: String(list.length) + '  (max ' + sevLabel(maxSev) + ')',
+      n: String(list.length),
       prov: prov
     });
   }
@@ -3088,7 +3066,7 @@ function secEvidenceMap(ctx, data) {
     var name = f.type === 'SERIAL' ? 'Serial pattern' : (CT_NAMES[f.type] || typ);
     var q = cleanQuote(f.evidence);
     if (q.length > 140) q = q.substring(0, 137) + '…';
-    rows.push({ page: fmtLocation(f.location), ind: name + ' (' + sevLabel(f.severity || 0) + ')', ev: q });
+    rows.push({ page: fmtLocation(f.location), ind: name, ev: q });
   }
   ctx.table(
     [
