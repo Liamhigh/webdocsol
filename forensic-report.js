@@ -734,7 +734,11 @@ function makeCtx(doc, fonts, images, sourceName) {
     var h = 34;
     ctx.ensure(h + (opts2.keepWith || 0));
     ctx.sectionNo++;
-    var label = opts2.label || (ctx.sectionNo + '. ' + title);
+    // §15.4 sections carry their own constitutional number ("1. CRITICAL
+    // LEGAL SUBJECTS"); auto-numbering on top produced "1. 1. CRITICAL…" in
+    // the TOC and page headings. A title that already starts with "N." keeps
+    // its own number.
+    var label = opts2.label || (/^\d+\.\s/.test(title) ? title : (ctx.sectionNo + '. ' + title));
     ctx.y -= 8;
     ctx.page.drawText(san(label), { x: LM, y: ctx.y - 12, size: 13.5, font: ctx.f.timesBold, color: GOLD });
     ctx.y -= 18;
@@ -3050,8 +3054,97 @@ async function seal(reportBytes, sealOpts) {
   return await pdf.save();
 }
 
+// ================= B10 — PLAIN-LANGUAGE NARRATIVE (founder-directed) =======
+// A short sealed PDF for non-specialists: the same verified findings, told in
+// ordinary words, every statement page-anchored. PD16 discipline is identical
+// to the main report — the narrative states what the record shows and reserves
+// every verdict for the court. It reuses the deterministic narrative sections;
+// it never invents facts, loss figures, or conclusions.
+function secSealExplainer(ctx, data) {
+  ctx.newBodyPage();
+  ctx.heading('WHY THIS RECORD CANNOT BE ALTERED');
+  ctx.para('Every document and this report carry a SHA-512 fingerprint — a 128-character code computed from the file\'s exact contents. Change a single character anywhere and the fingerprint changes completely. The fingerprint is anchored to the Bitcoin blockchain through OpenTimestamps, which fixes the moment it existed in a public record no one — including Verum Omnis — can edit.', { size: 10, after: 8 });
+  ctx.bullet('Anyone can verify this report at verumglobal.foundation/verify.html — no account, no permission needed.', { size: 9.5 });
+  ctx.bullet('If a single word of the sealed record were altered, verification would fail.', { size: 9.5 });
+  ctx.bullet('The findings in this narrative are the same sealed findings as the full forensic report, told in plain words.', { size: 9.5 });
+}
+
+async function buildNarrative(opts) {
+  opts = opts || {};
+  var fr = opts.findings || { clean: true, overallScore: 0, totalFindings: 0, findings: [], summary: '' };
+  var docs = opts.documents && opts.documents.length ? opts.documents : [{ name: 'document.pdf', pageCount: 'n/a', sha512: '', sealId: '' }];
+  var identity = opts.identity || {};
+  var generatedAt = opts.generatedAt ? new Date(opts.generatedAt)
+    : (opts.timestamp || opts.sealedAt) ? new Date(opts.timestamp || opts.sealedAt)
+    : new Date();
+  var doc0 = docs[0];
+  var reference = identity.reference ||
+    ('VO-WEB-' + fmtDateStamp(generatedAt) + '-' + (doc0.sealId ? String(doc0.sealId).replace(/^VO-/, '').substring(8, 12) : voDeterministicRefHex(doc0, generatedAt)));
+
+  var PDFDocument = PDFLibRef.PDFDocument, StandardFonts = PDFLibRef.StandardFonts;
+  var doc = await PDFDocument.create();
+  var fonts = {
+    times: await doc.embedFont(StandardFonts.TimesRoman),
+    timesBold: await doc.embedFont(StandardFonts.TimesRomanBold),
+    timesItalic: await doc.embedFont(StandardFonts.TimesRomanItalic),
+    courier: await doc.embedFont(StandardFonts.Courier),
+    courierBold: await doc.embedFont(StandardFonts.CourierBold),
+    helv: await doc.embedFont(StandardFonts.Helvetica),
+    helvBold: await doc.embedFont(StandardFonts.HelveticaBold)
+  };
+  var images = { logo: null, watermark: null };
+  var logoBytes = opts.images && opts.images.logo;
+  var wmBytes = opts.images && opts.images.watermark;
+  if (!logoBytes) logoBytes = await fetchPng('/images/logo-full.png');
+  if (!wmBytes) wmBytes = await fetchPng('/images/watermark_portrait.png');
+  if (logoBytes) { try { images.logo = await doc.embedPng(logoBytes); } catch (e) { images.logo = null; } }
+  if (wmBytes) { try { images.watermark = await doc.embedPng(wmBytes); } catch (e) { images.watermark = null; } }
+
+  var ctx = makeCtx(doc, fonts, images, doc0.name || 'document.pdf');
+  var data = {
+    findings: fr,
+    documents: docs,
+    identity: identity,
+    generatedAt: generatedAt,
+    reference: reference,
+    docName: doc0.name || 'document.pdf',
+    pageCount: doc0.pageCount || 'n/a',
+    sha512: doc0.sha512 || '',
+    ots: opts.ots || null,
+    extractionNotes: opts.extractionNotes || null,
+    aiReview: opts.aiReview || null,
+    aiNarrative: opts.aiNarrative || null,
+    classification: opts.classification || null,
+    serialLabels: opts.serialLabels || null
+  };
+
+  // Cover-lite: title, case identity, one-line lead. No scores, no bands.
+  ctx.newBodyPage();
+  ctx.y -= 60;
+  ctx.para('HUMAN-READABLE NARRATIVE REPORT', { size: 21, font: fonts.timesBold, color: NAVY2, after: 6 });
+  ctx.para(san(doc0.name || 'document'), { size: 12, font: fonts.timesItalic, color: GRAY, after: 4 });
+  if (identity.caseName) ctx.para('Matter: ' + san(identity.caseName), { size: 11, after: 2 });
+  ctx.para('Report reference: ' + reference + '    |    ' + fmtDate(generatedAt), { size: 10, color: GRAY, after: 12 });
+  var nSub = (fr.findings || []).filter(function (f) { return f && !isDemoted(f) && f.type !== 'SERIAL'; }).length;
+  ctx.para('This is the plain-language telling of the sealed forensic report: ' + nSub + ' verified finding' + (nSub === 1 ? '' : 's') + ', each anchored to the page it comes from. Nothing here goes beyond what the sealed record states; the verdict on any named person is for the court.', { size: 10.5, after: 8 });
+  var covLines = plainLeadLines(fr, data);
+  if (covLines.length) ctx.box('IN ONE PAGE', covLines, { titleColor: NAVY2 });
+
+  // The story, the people, the seal, the reservation.
+  secNarrative(ctx, data);
+  secPartyAnalysis(ctx, data);
+  secSealExplainer(ctx, data);
+  secVerdictReservation(ctx, data);
+
+  try { doc.setTitle('Verum Omnis Plain-Language Narrative — ' + (doc0.name || 'document')); } catch (e) {}
+  try { doc.setAuthor('Verum Omnis Constitutional Forensic AI'); } catch (e) {}
+  try { doc.setProducer('Verum Omnis Forensic Report Builder v1.3.1 (pdf-lib)'); } catch (e) {}
+  try { doc.setCreationDate(generatedAt); } catch (e) {}
+  return await doc.save();
+}
+
 // ================= exports =================
-var api = { build: build, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
+var api = { build: build, buildNarrative: buildNarrative, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
   _extractParties: extractParties, _extractPartiesWithRoles: extractPartiesWithRoles,
   _partyRoleMap: partyRoleMap, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
   _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,
