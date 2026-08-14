@@ -2824,6 +2824,61 @@ function narrativeBlocks(narr) {
   return out;
 }
 
+// ================= SECTION: UNREAD PAGES (honest non-result) =================
+// Founder ruling: when the engine could not read pages, the report must SAY
+// SO on its first pages — name each unread page and the reason, and route
+// them to a human. The AllFuels bundle had 119 unread pages that contained a
+// lease agreement with material clauses; no finding can come from a page the
+// engine never read, so silence about unread pages is a false clean bill.
+
+// Compress sorted 1-based page numbers to "3, 5-8, 12".
+function pageRanges(pages) {
+  if (!pages || !pages.length) return '';
+  var out = [], start = pages[0], prev = pages[0];
+  for (var i = 1; i <= pages.length; i++) {
+    var cur = pages[i];
+    if (cur === prev + 1) { prev = cur; continue; }
+    out.push(start === prev ? String(start) : start + '-' + prev);
+    start = prev = cur;
+  }
+  return out.join(', ');
+}
+
+function secUnreadPages(ctx, data) {
+  var up = data.unreadPages || {};
+  var groups = [];
+  if (up.capped && up.capped.length) groups.push({ pages: up.capped, why: 'image-only pages beyond the on-device OCR limit — never converted to text' });
+  if (up.noText && up.noText.length) groups.push({ pages: up.noText, why: 'rendered for OCR but no legible text was recovered (blank, photographic, or print too poor to read)' });
+  if (up.renderFailed && up.renderFailed.length) groups.push({ pages: up.renderFailed, why: 'could not be rendered for OCR at all' });
+  var total = 0;
+  for (var g = 0; g < groups.length; g++) total += groups[g].pages.length;
+
+  // Fallback for callers without structured data: surface the extraction-note
+  // sentences that name unread pages, rather than staying silent.
+  var noteBits = [];
+  if (!total) {
+    var notes = String(data.extractionNotes || '');
+    var mUn = notes.match(/[^.]*(?:remain unread|no legible text|could not be rendered|exceeded the OCR cap)[^.]*\./g);
+    if (mUn) noteBits = mUn;
+    if (!noteBits.length) return; // every page was read — nothing to disclose
+  }
+
+  ctx.newBodyPage();
+  ctx.heading('PAGES THE ENGINE COULD NOT READ', { label: 'PAGES THE ENGINE COULD NOT READ' });
+  ctx.para('The engine analyses only text it can read. The following pages of this bundle were NOT read, and nothing on them was examined:', { size: 10.5, after: 6 });
+  if (total) {
+    for (var b = 0; b < groups.length; b++) {
+      var grp = groups[b];
+      ctx.bullet('Page' + (grp.pages.length === 1 ? '' : 's') + ' ' + pageRanges(grp.pages) + '  (' + grp.pages.length + ' page' + (grp.pages.length === 1 ? '' : 's') + '): ' + grp.why + '.', { size: 10, after: 4 });
+    }
+  } else {
+    for (var nb = 0; nb < noteBits.length; nb++) ctx.bullet(noteBits[nb].trim(), { size: 10, after: 4 });
+  }
+  ctx.gap(2);
+  ctx.para('These pages MUST be reviewed by a human.', { size: 11, font: ctx.f.timesBold, color: NAVY2, after: 4 });
+  ctx.para('No finding in this report comes from an unread page, and the absence of a finding on an unread page means nothing — the page may hold material evidence (a contract, a schedule, an annexure) that this analysis never saw. Have the listed pages read by a person, or re-scanned at higher quality / transcribed and sealed again, before any conclusion about them is drawn.', { size: 10, after: 6 });
+}
+
 // ================= SECTION: AI REVIEW (optional cloud layer) =================
 function secAiReview(ctx, data) {
   var ar = (data.aiReview && data.aiReview.applied) ? data.aiReview : null;
@@ -2942,7 +2997,8 @@ async function build(opts) {
     aiReview: opts.aiReview || null,
     aiNarrative: opts.aiNarrative || null,
     classification: opts.classification || null,
-    serialLabels: opts.serialLabels || null
+    serialLabels: opts.serialLabels || null,
+    unreadPages: opts.unreadPages || null
   };
 
   // 1. cover
@@ -2961,6 +3017,9 @@ async function build(opts) {
   // institutional §15.4 sections. Unnumbered label so the constitutional
   // numbering (1-7) still belongs to the template sections.
   secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' });
+  // Missing evidence named on the first pages: every page the engine could
+  // not read, why, and the human-review instruction.
+  secUnreadPages(ctx, data);
   // Constitution v8.0 §15.4 template (founder ruling 1): the seven numbered
   // sections lead the institutional half; the full working detail follows as
   // annexes.
@@ -3228,7 +3287,8 @@ async function buildNarrative(opts) {
     aiReview: opts.aiReview || null,
     aiNarrative: opts.aiNarrative || null,
     classification: opts.classification || null,
-    serialLabels: opts.serialLabels || null
+    serialLabels: opts.serialLabels || null,
+    unreadPages: opts.unreadPages || null
   };
 
   // Cover-lite: title, case identity, one-line lead. No scores, no bands.
@@ -3244,8 +3304,9 @@ async function buildNarrative(opts) {
   var covLines = plainLeadLines(fr, data);
   if (covLines.length) ctx.box('IN ONE PAGE', covLines, { titleColor: NAVY2 });
 
-  // The story, the people, the seal, the reservation.
+  // The story, the unread-pages disclosure, the people, the seal, the reservation.
   secNarrative(ctx, data);
+  secUnreadPages(ctx, data);
   secPartyAnalysis(ctx, data);
   secSealExplainer(ctx, data);
   secVerdictReservation(ctx, data);
@@ -3263,7 +3324,7 @@ var api = { build: build, buildNarrative: buildNarrative, seal: seal, _sanitize:
   _partyRoleMap: partyRoleMap, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
   _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,
   _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
-  _narrativeBlocks: narrativeBlocks,
+  _narrativeBlocks: narrativeBlocks, _pageRanges: pageRanges,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;

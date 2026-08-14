@@ -233,6 +233,33 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(wall.map(b => b.text).join(' ').includes('Sentence number 12'), 'no text is lost in the split');
 }
 
+// ---- unread pages are disclosed, named, and routed to a human ----
+// Founder ruling: 119 unread pages in the AllFuels bundle held a lease
+// agreement the engine never saw. The report must name every unread page and
+// the reason, on the first pages, with an explicit human-review instruction.
+{
+  ok(R._pageRanges([3, 5, 6, 7, 8, 12]) === '3, 5-8, 12', 'pageRanges compresses runs');
+  ok(R._pageRanges([210]) === '210', 'pageRanges: single page');
+  ok(R._pageRanges([]) === '', 'pageRanges: empty');
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
+  ok(/function secUnreadPages/.test(src), 'unread-pages disclosure section exists');
+  const mainBuild = src.slice(src.indexOf('async function build('), src.indexOf('async function buildNarrative('));
+  const narrBuild = src.slice(src.indexOf('async function buildNarrative('));
+  ok(/secUnreadPages\(ctx, data\)/.test(mainBuild) && /secUnreadPages\(ctx, data\)/.test(narrBuild),
+    'the disclosure is wired into BOTH the main report and the narrative twin');
+  const storyAt = mainBuild.indexOf("secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' })");
+  const unreadAt = mainBuild.indexOf('secUnreadPages(ctx, data)');
+  const sec1At2 = mainBuild.indexOf('secCriticalSubjects(ctx, data)');
+  ok(storyAt !== -1 && storyAt < unreadAt && unreadAt < sec1At2,
+    'unread pages are disclosed on the first pages, right after the story');
+  ok(/These pages MUST be reviewed by a human\./.test(src),
+    'the disclosure carries the explicit human-review instruction');
+  ok(/absence of a finding on an unread page means nothing/.test(src),
+    'the disclosure states that unread pages are missing evidence, not a clean bill');
+  ok(/unreadPages: opts\.unreadPages \|\| null/.test(src),
+    'structured unread-pages data flows from the caller into the report data');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);
