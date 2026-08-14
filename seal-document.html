@@ -4444,26 +4444,39 @@ var DETECTORS = {
       if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
       return { key: year * 10000 + mon * 100 + day, raw: m[0] };
     }
-    function voTlCollect(re, blocks) {
-      var hits = [];
+    // Same window discipline as D02/D03: a label's date must lie strictly
+    // BEFORE the next label of either kind. A fixed lookahead let an expiry
+    // label with no date of its own ("Lease expiry date: see schedule.
+    // Invoice date: 31 July 2024") borrow the next field's date and
+    // manufacture an expiry the record never states.
+    function voTlCollect(blocks) {
+      var exp = [], inv = [];
       for (var b = 0; b < blocks.length; b++) {
         var block = blocks[b] || '';
-        re.lastIndex = 0;
-        var lm;
-        while ((lm = re.exec(block)) !== null) {
-          var win = block.slice(lm.index + lm[0].length, lm.index + lm[0].length + 50);
-          var dm = win.match(VO_TL_DATE);
+        var marks = [], lm;
+        VO_EXP_LABEL.lastIndex = 0;
+        while ((lm = VO_EXP_LABEL.exec(block)) !== null) marks.push({ kind: 'exp', start: lm.index, end: lm.index + lm[0].length });
+        VO_INV_LABEL.lastIndex = 0;
+        while ((lm = VO_INV_LABEL.exec(block)) !== null) marks.push({ kind: 'inv', start: lm.index, end: lm.index + lm[0].length });
+        marks.sort(function (x, y) { return x.start - y.start; });
+        for (var k = 0; k < marks.length; k++) {
+          var from = marks[k].end;
+          var boundary = k + 1 < marks.length ? marks[k + 1].start : block.length;
+          var to = Math.min(boundary, from + 50);
+          if (to <= from) continue;
+          var dm = block.slice(from, to).match(VO_TL_DATE);
           if (!dm) continue;
           var nd = voTlDate(dm);
           if (!nd) continue;
-          var quote = block.slice(lm.index, lm.index + lm[0].length + dm.index + dm[0].length).replace(/\s+/g, ' ').trim();
-          hits.push({ key: nd.key, raw: nd.raw, page: b, quote: quote });
+          var quote = block.slice(marks[k].start, from + dm.index + dm[0].length).replace(/\s+/g, ' ').trim();
+          (marks[k].kind === 'exp' ? exp : inv).push({ key: nd.key, raw: nd.raw, page: b, quote: quote });
         }
       }
-      return hits;
+      return { expiries: exp, invoices: inv };
     }
-    var expiries = voTlCollect(VO_EXP_LABEL, textBlocks);
-    var invoices = voTlCollect(VO_INV_LABEL, textBlocks);
+    var _tl = voTlCollect(textBlocks);
+    var expiries = _tl.expiries;
+    var invoices = _tl.invoices;
     if (expiries.length && invoices.length) {
       var lastExp = expiries[0];
       for (var e2 = 1; e2 < expiries.length; e2++) if (expiries[e2].key > lastExp.key) lastExp = expiries[e2];
@@ -5399,6 +5412,12 @@ var DETECTORS = {
       'no signature from', 'without a countersignature', 'failed to countersign',
       'did not countersign', 'unsigned agreement', 'unsigned mou', 'unsigned lease',
       'unsigned contract'];
+    // Enforcement/billing context near the missing-signature statement. The
+    // finding NEVER asserts reliance as a fact (an unsigned draft "for
+    // discussion only" is an ordinary document, and PD16 findings are stated
+    // as fact) — the evidence text quotes only the record. Nearby enforcement
+    // language raises the severity; without it this is a low note to verify.
+    var VO_UNSIGNED_RELIANCE_RE = /\bdemand(?:s|ed)?\b|\binvoic(?:e[sd]?|ing)\b|\bbill(?:s|ed|ing)?\b|\bpayment\b|\bamount(?:s)? (?:due|owing)\b|\bowes?\b|\bowing\b|\benforc\w+\b|\bterminated? (?:under|pursuant)\b|\bclaim(?:s|ed)?\b/i;
     var seenUnsigned = {};
     for (var u = 0; u < textBlocks.length; u++) {
       var lowU = (textBlocks[u] || '').toLowerCase();
@@ -5409,8 +5428,10 @@ var DETECTORS = {
         if (seenUnsigned[u]) break;
         seenUnsigned[u] = true;
         var uq = textBlocks[u].substring(Math.max(0, at - 60), at + unsignedCues[q].length + 60).replace(/\s+/g, ' ').trim();
-        findings.push({ type: 'CT23', severity: 4,
-          evidence: 'The record states a signature is missing ("' + unsignedCues[q] + '"): "' + uq + '" — an instrument relied on without full execution; verify against the signature pages of the original',
+        var ctxWin = textBlocks[u].substring(Math.max(0, at - 200), at + unsignedCues[q].length + 200);
+        var relied = VO_UNSIGNED_RELIANCE_RE.test(ctxWin);
+        findings.push({ type: 'CT23', severity: relied ? 4 : 2,
+          evidence: 'The record states a signature is missing ("' + unsignedCues[q] + '"): "' + uq + '" — verify execution against the signature pages of the original',
           location: 'Page ' + (u + 1) });
         break;
       }
