@@ -2701,10 +2701,15 @@ function secPartyAnalysis(ctx, data) {
   ctx.newBodyPage();
   ctx.heading('PARTY ANALYSIS & ACTIONABLE OUTPUT');
   ctx.subHeading('Behavioural Scorecard (by party)', { toc: true });
-  var partiesWR = extractPartiesWithRoles(data.identity && data.identity.parties);
+  var partiesWR = effectivePartiesWithRoles(data);
+  var anyFromRecord = false;
+  for (var pr = 0; pr < partiesWR.length; pr++) if (partiesWR[pr].fromRecord) anyFromRecord = true;
   if (partiesWR.length === 0) {
-    ctx.para('No parties were supplied in the case details, so findings could not be attributed to named individuals. To generate a per-party scorecard, enter the parties (e.g. "Complainant: L. Highcock | Respondents: M. Nortje, K. Lappeman") in the case details before sealing.', { size: 9, color: GRAY, after: 6 });
+    ctx.para('The record names no parties on the pages carrying findings, and none were entered in the case details, so no per-party scorecard can be produced.', { size: 9, color: GRAY, after: 6 });
   } else {
+    if (anyFromRecord) {
+      ctx.para('Names below were read from the record itself — the parties the engine found on the pages carrying findings. Entering the parties in the case details before sealing adds their declared roles; it is not required for attribution.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    }
     var actorRows = [];
     for (var pa = 0; pa < partiesWR.length; pa++) {
       var nm = partiesWR[pa].name;
@@ -2724,7 +2729,7 @@ function secPartyAnalysis(ctx, data) {
       actorRows,
       { size: 8.5 }
     );
-    ctx.para('Attribution records that the name appears in the flagged text or on the cited page - a fact of the record; the declared role restates the case details as entered. Responsibility is for the court to determine.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    ctx.para('Attribution records that the name appears in the flagged text or on the cited page - a fact of the record; a declared role restates the case details as entered, and "named in the record" means the engine read the name from the document itself. Responsibility is for the court to determine.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
   ctx.subHeading('Actionable Output', { toc: true });
   var ranked = substantive.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
@@ -2759,7 +2764,7 @@ function secStatutoryAnchoring(ctx, data) {
   if (substantive.length === 0) return;
 
   var jur = detectJurisdictions(data);
-  var parties = extractParties(data.identity && data.identity.parties);
+  var parties = effectiveParties(data);
   var roleMap = partyRoleMap(data.identity && data.identity.parties);
   var activeCodes = ['ZA'].concat(jur.foreign);
 
@@ -2841,7 +2846,7 @@ function secFindingDetails(ctx, data) {
   if (subst.length === 0) return;
 
   var jur = detectJurisdictions(data);
-  var parties = extractParties(data.identity && data.identity.parties);
+  var parties = effectiveParties(data);
   var roleMap = partyRoleMap(data.identity && data.identity.parties);
 
   ctx.newBodyPage();
@@ -3405,7 +3410,7 @@ function secNarrative(ctx, data, opts) {
 
   // Opening: parties, documents, scale.
   var idn = data.identity || {};
-  var parties = extractParties(idn.parties || '');
+  var parties = effectiveParties(data);
   var roleMap = partyRoleMap(idn.parties || '');
   var docCount = (data.documents && data.documents.length) || 1;
   var opening = 'Verum Omnis read ' + (docCount === 1 ? '"' + (data.docName || 'the document') + '"' : docCount + ' documents, analysed together as one bundle') + ' (' + (data.pageCount || 'n/a') + ' page' + (data.pageCount === 1 ? '' : 's') + ')';
@@ -3701,6 +3706,95 @@ function scrubNarrative(text) {
     if (keptHere.length) out.push(keptHere.join(' '));
   }
   return { text: out.join('\n\n'), kept: kept, dropped: dropped };
+}
+
+
+// Two spellings of the same party? Prefix match ("Marius Nortj" /
+// "Marius Nortje"), or the same surname with agreeing first initial
+// ("L. Highcock" declared vs "Liam Highcock" read from the record).
+function samePartyName(a, b) {
+  a = String(a || '').toLowerCase().replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+  b = String(b || '').toLowerCase().replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!a || !b) return false;
+  if (a.indexOf(b) === 0 || b.indexOf(a) === 0) return true;
+  var at = a.split(' '), bt = b.split(' ');
+  if (at[at.length - 1] !== bt[bt.length - 1]) return false;
+  return at[0].charAt(0) === bt[0].charAt(0);
+}
+
+// ---- Parties read from the RECORD ITSELF -----------------------------------
+// A sealed forensic report must not depend on the user typing names into a
+// form before sealing. The Greensky report of 14 Aug 2026 printed "No parties
+// were supplied in the case details, so findings could not be attributed to
+// named individuals" three lines above a finding quoting Marius Nortje by
+// name. The engine had already bound the names it found on each finding's
+// cited pages (anchor.who) — the report simply was not reading them.
+function documentParties(data) {
+  var fr = (data && data.findings && data.findings.findings) || [];
+  var counts = {}, order = [];
+  for (var i = 0; i < fr.length; i++) {
+    var who = (fr[i] && fr[i].anchor && fr[i].anchor.who) || [];
+    for (var w = 0; w < who.length; w++) {
+      var nm = who[w] && who[w].name ? String(who[w].name).replace(/\s+/g, ' ').trim() : '';
+      // Full names only: a lone token is a fragment, not a party.
+      if (nm.length < 4 || nm.indexOf(' ') === -1) continue;
+      if (!Object.prototype.hasOwnProperty.call(counts, nm)) { counts[nm] = 0; order.push(nm); }
+      counts[nm]++;
+    }
+  }
+  // Merge truncated spellings: extraction yields BOTH "Marius Nortj" and
+  // "Marius Nortje" from the same pages. The longer spelling wins and absorbs
+  // the shorter one's count, so one person is one row.
+  var byLen = order.slice().sort(function (a, b) { return b.length - a.length; });
+  var merged = [];
+  for (var n = 0; n < byLen.length; n++) {
+    var cand = byLen[n], absorbed = false;
+    for (var m = 0; m < merged.length; m++) {
+      if (merged[m].name.toLowerCase().indexOf(cand.toLowerCase()) === 0) {
+        merged[m].count += counts[cand];
+        absorbed = true;
+        break;
+      }
+    }
+    if (!absorbed) merged.push({ name: cand, count: counts[cand] });
+  }
+  merged.sort(function (a, b) { return b.count - a.count || a.name.localeCompare(b.name); });
+  var out = [];
+  for (var o = 0; o < merged.length && o < 12; o++) out.push(merged[o].name);
+  return out;
+}
+
+// Declared parties first (the user's own words carry their roles), then every
+// other party the record itself names. Never empty merely because a form was
+// left blank.
+function effectiveParties(data) {
+  var declared = extractParties((data && data.identity && data.identity.parties) || '');
+  var found = documentParties(data);
+  var out = declared.slice();
+  for (var i = 0; i < found.length; i++) {
+    var dup = false;
+    for (var d = 0; d < out.length; d++) {
+      if (samePartyName(out[d], found[i])) { dup = true; break; }
+    }
+    if (!dup) out.push(found[i]);
+  }
+  return out;
+}
+
+// Same, with roles: declared roles are kept; parties discovered in the record
+// are marked as such rather than given a role the user never stated.
+function effectivePartiesWithRoles(data) {
+  var declared = extractPartiesWithRoles((data && data.identity && data.identity.parties) || '');
+  var out = declared.slice();
+  var found = documentParties(data);
+  for (var i = 0; i < found.length; i++) {
+    var dup = false;
+    for (var d = 0; d < out.length; d++) {
+      if (samePartyName(out[d].name, found[i])) { dup = true; break; }
+    }
+    if (!dup) out.push({ name: found[i], role: 'named in the record', fromRecord: true });
+  }
+  return out;
 }
 
 // ================= SECTION: UNREAD PAGES (honest non-result) =================
@@ -4219,6 +4313,8 @@ var api = { build: build, buildNarrative: buildNarrative, seal: seal, _sanitize:
   _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
   _narrativeBlocks: narrativeBlocks, _pageRanges: pageRanges,
   _fmtLocation: fmtLocation, _pageNumbers: pageNumbers, _scrubNarrative: scrubNarrative,
+  _documentParties: documentParties, _effectiveParties: effectiveParties,
+  _effectivePartiesWithRoles: effectivePartiesWithRoles,
   _splitSentences: splitSentences,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
@@ -4779,7 +4875,14 @@ var DETECTORS = {
         if (VO_BOILER_RE.test(senC)) continue;
         if (!VO_CAUSE_RE.test(senC) || !VO_PROCEED_RE.test(senC) || !VO_SELF_RE.test(senC)) continue;
         condPages.push(cp + 1);
-        if (!condQuote) condQuote = senC.replace(/\s+/g, ' ').trim();
+        if (!condQuote) {
+          // Where the passage is requoted under the bundle's own heading
+          // ("Marius Admission Email 6 April 2025 Quoted from ... :"), the
+          // sentence begins with that furniture and the real admission gets
+          // truncated away. Start the quote at the justification itself.
+          var cutC = senC.search(VO_CAUSE_RE);
+          condQuote = (cutC > 30 ? senC.slice(cutC) : senC).replace(/\s+/g, ' ').trim();
+        }
         break; // one count per page
       }
     }
@@ -12516,6 +12619,68 @@ function voShareFile() {
   } catch (e) { return null; }
 }
 
+
+// ---- One-file bundle save (store-only ZIP, no dependency) ------------------
+// Saving the record used to fire one download per file, which trips the
+// browser's "allow multiple downloads?" permission prompt — and that grant
+// never persists in incognito, so the record-save looked broken every time.
+// One archive means one download and no prompt. Store-only (no compression):
+// the payloads are already-compressed PDFs, so deflate would buy nothing and
+// cost a dependency. Timestamps are FIXED, never wall-clock, so the same
+// bundle always produces the same archive bytes.
+var VO_CRC_TABLE = (function () {
+  var t = new Uint32Array(256);
+  for (var n = 0; n < 256; n++) {
+    var c = n;
+    for (var k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
+    t[n] = c >>> 0;
+  }
+  return t;
+})();
+function voCrc32(bytes) {
+  var c = 0xFFFFFFFF;
+  for (var i = 0; i < bytes.length; i++) c = VO_CRC_TABLE[(c ^ bytes[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function voZipBundle(entries) {
+  var enc = new TextEncoder();
+  var parts = [], central = [], offset = 0;
+  var DOS_TIME = 0, DOS_DATE = 33; // fixed 1 Jan 1980 — deterministic, not a clock
+  for (var i = 0; i < entries.length; i++) {
+    var nameBytes = enc.encode(entries[i].name);
+    var data = entries[i].bytes instanceof Uint8Array ? entries[i].bytes : new Uint8Array(entries[i].bytes);
+    var crc = voCrc32(data);
+    var lh = new Uint8Array(30 + nameBytes.length);
+    var lv = new DataView(lh.buffer);
+    lv.setUint32(0, 0x04034b50, true); lv.setUint16(4, 20, true); lv.setUint16(6, 0, true);
+    lv.setUint16(8, 0, true); lv.setUint16(10, DOS_TIME, true); lv.setUint16(12, DOS_DATE, true);
+    lv.setUint32(14, crc, true); lv.setUint32(18, data.length, true); lv.setUint32(22, data.length, true);
+    lv.setUint16(26, nameBytes.length, true); lv.setUint16(28, 0, true);
+    lh.set(nameBytes, 30);
+    parts.push(lh, data);
+    var ch = new Uint8Array(46 + nameBytes.length);
+    var cv = new DataView(ch.buffer);
+    cv.setUint32(0, 0x02014b50, true); cv.setUint16(4, 20, true); cv.setUint16(6, 20, true);
+    cv.setUint16(8, 0, true); cv.setUint16(10, 0, true); cv.setUint16(12, DOS_TIME, true);
+    cv.setUint16(14, DOS_DATE, true); cv.setUint32(16, crc, true);
+    cv.setUint32(20, data.length, true); cv.setUint32(24, data.length, true);
+    cv.setUint16(28, nameBytes.length, true); cv.setUint16(30, 0, true); cv.setUint16(32, 0, true);
+    cv.setUint16(34, 0, true); cv.setUint16(36, 0, true); cv.setUint32(38, 0, true);
+    cv.setUint32(42, offset, true);
+    ch.set(nameBytes, 46);
+    central.push(ch);
+    offset += lh.length + data.length;
+  }
+  var cdSize = 0;
+  for (var c2 = 0; c2 < central.length; c2++) cdSize += central[c2].length;
+  var eocd = new Uint8Array(22);
+  var ev = new DataView(eocd.buffer);
+  ev.setUint32(0, 0x06054b50, true); ev.setUint16(4, 0, true); ev.setUint16(6, 0, true);
+  ev.setUint16(8, entries.length, true); ev.setUint16(10, entries.length, true);
+  ev.setUint32(12, cdSize, true); ev.setUint32(16, offset, true); ev.setUint16(20, 0, true);
+  return new Blob(parts.concat(central, [eocd]), { type: 'application/zip' });
+}
+
 // Build the FULL share list — sealed/protected document + sealed forensic
 // report + findings JSON — from window._voShareFiles. Each byte payload is
 // copied so a previous share attempt can never leave a detached buffer.
@@ -12524,10 +12689,19 @@ function voShareFileList() {
   var items = window._voShareFiles || [];
   for (var i = 0; i < items.length; i++) {
     try {
-      out.push(new File([new Uint8Array(items[i].bytes)], items[i].name, { type: items[i].type }));
+      var rawBytes = new Uint8Array(items[i].bytes);
+      var fileObj = new File([rawBytes], items[i].name, { type: items[i].type });
+      // Keep the bytes reachable synchronously: the one-file bundle save zips
+      // them inside the click handler, where File.arrayBuffer() (async) would
+      // lose the user-activation token the share sheet needs.
+      fileObj.voBytes = rawBytes;
+      out.push(fileObj);
     } catch (e) {}
   }
-  if (!out.length) { var f = voShareFile(); if (f) out.push(f); }
+  if (!out.length) {
+    var f = voShareFile();
+    if (f) { try { f.voBytes = new Uint8Array(window._voShareBytes); } catch (eB) {} out.push(f); }
+  }
   return out;
 }
 
@@ -12639,15 +12813,23 @@ function addShareButton() {
     });
   });
 
-  // Save every file in the list to the device (same-gesture anchor downloads).
+  // Save the bundle to the device in ONE download: several files at once trip
+  // the browser's multiple-download prompt, which never persists in incognito.
   function saveFiles(list) {
     try {
-      for (var i = 0; i < list.length; i++) {
-        var a = document.createElement('a');
-        a.href = voMakeObjectURL(list[i]);
-        a.download = list[i].name || window._voShareName;
-        document.body.appendChild(a); a.click(); a.remove();
+      if (!list || !list.length) return;
+      var a = document.createElement('a');
+      if (list.length === 1) {
+        a.href = voMakeObjectURL(list[0]);
+        a.download = list[0].name || window._voShareName;
+      } else {
+        var entries = [];
+        for (var i = 0; i < list.length; i++) entries.push({ name: list[i].name, bytes: list[i].voBytes });
+        var base = String(window._voShareName || 'verum-omnis').replace(/\.[^.]+$/, '');
+        a.href = URL.createObjectURL(voZipBundle(entries));
+        a.download = base + '-verum-omnis-bundle.zip';
       }
+      document.body.appendChild(a); a.click(); a.remove();
     } catch (e) {}
   }
 

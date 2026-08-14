@@ -85,6 +85,49 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
     'every share ALSO saves the full bundle, queued BEFORE the share sheet opens');
   ok(/saves a copy of each to your device for your records/.test(shareSrc),
     'the hint tells the user the bundle is saved for their records');
+
+  // ONE download, not one per file. Several simultaneous downloads trip the
+  // browser's "allow multiple downloads?" prompt, and that grant never
+  // persists in incognito — so the record-save looked broken every session.
+  ok(/a\.href = URL\.createObjectURL\(voZipBundle\(entries\)\)/.test(shareSrc)
+    && /verum-omnis-bundle\.zip/.test(shareSrc),
+    'a multi-file bundle saves as ONE archive');
+  ok(!/for \(var i = 0; i < list\.length; i\+\+\) \{[^}]*a\.click\(\)/.test(shareSrc),
+    'no per-file download loop remains');
+  ok(/if \(list\.length === 1\)/.test(shareSrc), 'a single file still downloads as itself, unzipped');
+}
+
+// ---- the bundle archive is a valid, deterministic ZIP ----
+{
+  const zStart = html.indexOf('var VO_CRC_TABLE');
+  const zEnd = html.indexOf('// Build the FULL share list');
+  ok(zStart !== -1 && zEnd > zStart, 'ZIP writer block located');
+  const zSrc = html.slice(zStart, zEnd);
+  ok(!/Date\.now|new Date\(\)/.test(zSrc),
+    'the archive uses a FIXED timestamp — same bundle, same bytes, every time');
+
+  const parts = [];
+  class FakeBlob { constructor(p) { this.parts = p; } }
+  const fn = new Function('Blob', 'TextEncoder', '"use strict";' + zSrc + '\nreturn { voCrc32, voZipBundle };');
+  const api = fn(FakeBlob, TextEncoder);
+  ok(api.voCrc32(new TextEncoder().encode('123456789')) === 0xcbf43926,
+    'CRC32 matches the standard check vector');
+  const zip = api.voZipBundle([
+    { name: 'doc-sealed.pdf', bytes: new TextEncoder().encode('hello') },
+    { name: 'report-sealed.pdf', bytes: new TextEncoder().encode('world') }
+  ]);
+  const buf = Buffer.concat(zip.parts.map((p) => Buffer.from(p)));
+  ok(buf.readUInt32LE(0) === 0x04034b50, 'archive starts with a local file header');
+  ok(buf.readUInt32LE(buf.length - 22) === 0x06054b50, 'archive ends with the end-of-central-directory record');
+  ok(buf.readUInt16LE(buf.length - 22 + 8) === 2, 'the central directory records both entries');
+  ok(buf.includes(Buffer.from('doc-sealed.pdf')) && buf.includes(Buffer.from('report-sealed.pdf')),
+    'both sealed filenames survive into the archive');
+  const again = api.voZipBundle([
+    { name: 'doc-sealed.pdf', bytes: new TextEncoder().encode('hello') },
+    { name: 'report-sealed.pdf', bytes: new TextEncoder().encode('world') }
+  ]);
+  ok(Buffer.concat(again.parts.map((p) => Buffer.from(p))).equals(buf),
+    'the same bundle produces byte-identical archives (deterministic)');
 }
 
 console.log(`\n[crop-normalize] PASS=${pass} FAIL=${fail}`);

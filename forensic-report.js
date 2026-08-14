@@ -1981,10 +1981,15 @@ function secPartyAnalysis(ctx, data) {
   ctx.newBodyPage();
   ctx.heading('PARTY ANALYSIS & ACTIONABLE OUTPUT');
   ctx.subHeading('Behavioural Scorecard (by party)', { toc: true });
-  var partiesWR = extractPartiesWithRoles(data.identity && data.identity.parties);
+  var partiesWR = effectivePartiesWithRoles(data);
+  var anyFromRecord = false;
+  for (var pr = 0; pr < partiesWR.length; pr++) if (partiesWR[pr].fromRecord) anyFromRecord = true;
   if (partiesWR.length === 0) {
-    ctx.para('No parties were supplied in the case details, so findings could not be attributed to named individuals. To generate a per-party scorecard, enter the parties (e.g. "Complainant: L. Highcock | Respondents: M. Nortje, K. Lappeman") in the case details before sealing.', { size: 9, color: GRAY, after: 6 });
+    ctx.para('The record names no parties on the pages carrying findings, and none were entered in the case details, so no per-party scorecard can be produced.', { size: 9, color: GRAY, after: 6 });
   } else {
+    if (anyFromRecord) {
+      ctx.para('Names below were read from the record itself — the parties the engine found on the pages carrying findings. Entering the parties in the case details before sealing adds their declared roles; it is not required for attribution.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    }
     var actorRows = [];
     for (var pa = 0; pa < partiesWR.length; pa++) {
       var nm = partiesWR[pa].name;
@@ -2004,7 +2009,7 @@ function secPartyAnalysis(ctx, data) {
       actorRows,
       { size: 8.5 }
     );
-    ctx.para('Attribution records that the name appears in the flagged text or on the cited page - a fact of the record; the declared role restates the case details as entered. Responsibility is for the court to determine.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    ctx.para('Attribution records that the name appears in the flagged text or on the cited page - a fact of the record; a declared role restates the case details as entered, and "named in the record" means the engine read the name from the document itself. Responsibility is for the court to determine.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
   ctx.subHeading('Actionable Output', { toc: true });
   var ranked = substantive.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
@@ -2039,7 +2044,7 @@ function secStatutoryAnchoring(ctx, data) {
   if (substantive.length === 0) return;
 
   var jur = detectJurisdictions(data);
-  var parties = extractParties(data.identity && data.identity.parties);
+  var parties = effectiveParties(data);
   var roleMap = partyRoleMap(data.identity && data.identity.parties);
   var activeCodes = ['ZA'].concat(jur.foreign);
 
@@ -2121,7 +2126,7 @@ function secFindingDetails(ctx, data) {
   if (subst.length === 0) return;
 
   var jur = detectJurisdictions(data);
-  var parties = extractParties(data.identity && data.identity.parties);
+  var parties = effectiveParties(data);
   var roleMap = partyRoleMap(data.identity && data.identity.parties);
 
   ctx.newBodyPage();
@@ -2685,7 +2690,7 @@ function secNarrative(ctx, data, opts) {
 
   // Opening: parties, documents, scale.
   var idn = data.identity || {};
-  var parties = extractParties(idn.parties || '');
+  var parties = effectiveParties(data);
   var roleMap = partyRoleMap(idn.parties || '');
   var docCount = (data.documents && data.documents.length) || 1;
   var opening = 'Verum Omnis read ' + (docCount === 1 ? '"' + (data.docName || 'the document') + '"' : docCount + ' documents, analysed together as one bundle') + ' (' + (data.pageCount || 'n/a') + ' page' + (data.pageCount === 1 ? '' : 's') + ')';
@@ -2981,6 +2986,95 @@ function scrubNarrative(text) {
     if (keptHere.length) out.push(keptHere.join(' '));
   }
   return { text: out.join('\n\n'), kept: kept, dropped: dropped };
+}
+
+
+// Two spellings of the same party? Prefix match ("Marius Nortj" /
+// "Marius Nortje"), or the same surname with agreeing first initial
+// ("L. Highcock" declared vs "Liam Highcock" read from the record).
+function samePartyName(a, b) {
+  a = String(a || '').toLowerCase().replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+  b = String(b || '').toLowerCase().replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!a || !b) return false;
+  if (a.indexOf(b) === 0 || b.indexOf(a) === 0) return true;
+  var at = a.split(' '), bt = b.split(' ');
+  if (at[at.length - 1] !== bt[bt.length - 1]) return false;
+  return at[0].charAt(0) === bt[0].charAt(0);
+}
+
+// ---- Parties read from the RECORD ITSELF -----------------------------------
+// A sealed forensic report must not depend on the user typing names into a
+// form before sealing. The Greensky report of 14 Aug 2026 printed "No parties
+// were supplied in the case details, so findings could not be attributed to
+// named individuals" three lines above a finding quoting Marius Nortje by
+// name. The engine had already bound the names it found on each finding's
+// cited pages (anchor.who) — the report simply was not reading them.
+function documentParties(data) {
+  var fr = (data && data.findings && data.findings.findings) || [];
+  var counts = {}, order = [];
+  for (var i = 0; i < fr.length; i++) {
+    var who = (fr[i] && fr[i].anchor && fr[i].anchor.who) || [];
+    for (var w = 0; w < who.length; w++) {
+      var nm = who[w] && who[w].name ? String(who[w].name).replace(/\s+/g, ' ').trim() : '';
+      // Full names only: a lone token is a fragment, not a party.
+      if (nm.length < 4 || nm.indexOf(' ') === -1) continue;
+      if (!Object.prototype.hasOwnProperty.call(counts, nm)) { counts[nm] = 0; order.push(nm); }
+      counts[nm]++;
+    }
+  }
+  // Merge truncated spellings: extraction yields BOTH "Marius Nortj" and
+  // "Marius Nortje" from the same pages. The longer spelling wins and absorbs
+  // the shorter one's count, so one person is one row.
+  var byLen = order.slice().sort(function (a, b) { return b.length - a.length; });
+  var merged = [];
+  for (var n = 0; n < byLen.length; n++) {
+    var cand = byLen[n], absorbed = false;
+    for (var m = 0; m < merged.length; m++) {
+      if (merged[m].name.toLowerCase().indexOf(cand.toLowerCase()) === 0) {
+        merged[m].count += counts[cand];
+        absorbed = true;
+        break;
+      }
+    }
+    if (!absorbed) merged.push({ name: cand, count: counts[cand] });
+  }
+  merged.sort(function (a, b) { return b.count - a.count || a.name.localeCompare(b.name); });
+  var out = [];
+  for (var o = 0; o < merged.length && o < 12; o++) out.push(merged[o].name);
+  return out;
+}
+
+// Declared parties first (the user's own words carry their roles), then every
+// other party the record itself names. Never empty merely because a form was
+// left blank.
+function effectiveParties(data) {
+  var declared = extractParties((data && data.identity && data.identity.parties) || '');
+  var found = documentParties(data);
+  var out = declared.slice();
+  for (var i = 0; i < found.length; i++) {
+    var dup = false;
+    for (var d = 0; d < out.length; d++) {
+      if (samePartyName(out[d], found[i])) { dup = true; break; }
+    }
+    if (!dup) out.push(found[i]);
+  }
+  return out;
+}
+
+// Same, with roles: declared roles are kept; parties discovered in the record
+// are marked as such rather than given a role the user never stated.
+function effectivePartiesWithRoles(data) {
+  var declared = extractPartiesWithRoles((data && data.identity && data.identity.parties) || '');
+  var out = declared.slice();
+  var found = documentParties(data);
+  for (var i = 0; i < found.length; i++) {
+    var dup = false;
+    for (var d = 0; d < out.length; d++) {
+      if (samePartyName(out[d].name, found[i])) { dup = true; break; }
+    }
+    if (!dup) out.push({ name: found[i], role: 'named in the record', fromRecord: true });
+  }
+  return out;
 }
 
 // ================= SECTION: UNREAD PAGES (honest non-result) =================
@@ -3499,6 +3593,8 @@ var api = { build: build, buildNarrative: buildNarrative, seal: seal, _sanitize:
   _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
   _narrativeBlocks: narrativeBlocks, _pageRanges: pageRanges,
   _fmtLocation: fmtLocation, _pageNumbers: pageNumbers, _scrubNarrative: scrubNarrative,
+  _documentParties: documentParties, _effectiveParties: effectiveParties,
+  _effectivePartiesWithRoles: effectivePartiesWithRoles,
   _splitSentences: splitSentences,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
