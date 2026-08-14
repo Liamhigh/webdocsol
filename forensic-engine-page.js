@@ -509,7 +509,12 @@ var DETECTORS = {
   D02_DETECT_NUMERICAL_DISCREPANCY: function(textBlocks) {
     var findings = [];
     var LABEL_RE = /\b(grand total|sub-?total|total|balance(?:\s+due)?|amount(?:\s+(?:due|payable|paid))?|invoice total|net(?:\s+amount)?|gross(?:\s+amount)?|vat|tax|deposit|purchase price|contract (?:value|price|sum))\b/gi;
-    var AMOUNT_RE = /(?:[R$€£]\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)\d+(?:\.\d{2})?/;
+    // Magnitude words are part of the amount: "R231.3 million" is
+    // R231,300,000, not R231 (the AllFuels bundle's headline figure was read
+    // with its decimal and magnitude stripped). One or two decimals allowed
+    // when a magnitude word follows; bare amounts keep the strict two-decimal
+    // rule so reference numbers are not misread as money.
+    var AMOUNT_RE = /(?:[R$€£]\s*)\d+(?:[.,]\d{1,2})?\s*(?:million|billion|m|bn)\b|(?:[R$€£]\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)\d+(?:\.\d{2})?/i;
 
     // How far after a label an amount may sit and still belong to it.
     var MAX_LOOKAHEAD = 40;
@@ -541,7 +546,10 @@ var DETECTORS = {
 
         var am = block.slice(from, to).match(AMOUNT_RE);
         if (!am) continue;
-        var value = parseFloat(am[0].replace(/[^0-9.]/g, ''));
+        var magM = am[0].match(/(million|billion|m|bn)\b\s*$/i);
+        var numPart = magM ? am[0].slice(0, magM.index) : am[0];
+        var value = parseFloat(numPart.replace(/,(?=\d{3}\b)/g, '').replace(/[^0-9.,]/g, '').replace(',', '.'));
+        if (magM) value *= /^b/i.test(magM[1]) ? 1e9 : 1e6;
         if (isNaN(value) || value <= 100) continue;
 
         var label = marks[k].text.toLowerCase().replace(/\s+/g, ' ').replace(/^sub-total$/, 'subtotal');
@@ -786,15 +794,32 @@ var DETECTORS = {
     // for the reviewer — the finding says exactly that.
     var VO_EXP_LABEL = /\b(?:lease|agreement|contract|licen[cs]e|franchise)\s+(?:(?:shall\s+)?(?:expire[sd]?|terminate[sd]?)(?:\s+on)?|expiry\s+date|expiration\s+date|termination\s+date)\b[:\s]*|\b(?:expiry|expiration|termination)\s+date\s+of\s+the\s+(?:lease|agreement|contract)\b[:\s]*/gi;
     var VO_INV_LABEL = /\b(?:tax\s+invoice|invoice|statement)\s+(?:date[d]?|issued)(?:\s+on)?\b[:\s]*|\binvoiced\s+on\b[:\s]*/gi;
-    var VO_TL_DATE = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})|(\d{4})-(\d{2})-(\d{2}))\b/;
+    // Month-name, ISO, and numeric DD/MM/YYYY dates. A numeric date is
+    // ambiguous (01/03/2026 is 1 March or 3 January), so it carries BOTH
+    // readings as a range [keyMin, keyMax]; the comparison below only fires
+    // when it holds under EVERY reading — the invoice on the AllFuels bundle
+    // was dated "01/03/2026" and was invisible to the month-name-only check,
+    // even though both readings put it two years past the stated expiry.
+    var VO_TL_DATE = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})|(\d{4})-(\d{2})-(\d{2})|(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4}))\b/;
     var VO_TL_MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+    function voTlKey(y, mo, d) { return y * 10000 + mo * 100 + d; }
     function voTlDate(m) {
       var day, mon, year;
       if (m[1]) { day = +m[1]; mon = VO_TL_MONTHS[m[2].slice(0, 3).toLowerCase()]; year = +m[3]; }
       else if (m[4]) { mon = VO_TL_MONTHS[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
-      else { year = +m[7]; mon = +m[8]; day = +m[9]; }
+      else if (m[7]) { year = +m[7]; mon = +m[8]; day = +m[9]; }
+      else {
+        // Numeric: keep every valid reading (DD/MM and MM/DD).
+        var a = +m[10], b = +m[11], yr = +m[12];
+        var keys = [];
+        if (b >= 1 && b <= 12 && a >= 1 && a <= 31) keys.push(voTlKey(yr, b, a)); // DD/MM
+        if (a >= 1 && a <= 12 && b >= 1 && b <= 31) keys.push(voTlKey(yr, a, b)); // MM/DD
+        if (!keys.length) return null;
+        return { keyMin: Math.min.apply(null, keys), keyMax: Math.max.apply(null, keys), raw: m[0] };
+      }
       if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
-      return { key: year * 10000 + mon * 100 + day, raw: m[0] };
+      var k = voTlKey(year, mon, day);
+      return { keyMin: k, keyMax: k, raw: m[0] };
     }
     // Same window discipline as D02/D03: a label's date must lie strictly
     // BEFORE the next label of either kind. A fixed lookahead let an expiry
@@ -821,7 +846,7 @@ var DETECTORS = {
           var nd = voTlDate(dm);
           if (!nd) continue;
           var quote = block.slice(marks[k].start, from + dm.index + dm[0].length).replace(/\s+/g, ' ').trim();
-          (marks[k].kind === 'exp' ? exp : inv).push({ key: nd.key, raw: nd.raw, page: b, quote: quote });
+          (marks[k].kind === 'exp' ? exp : inv).push({ keyMin: nd.keyMin, keyMax: nd.keyMax, raw: nd.raw, page: b, quote: quote });
         }
       }
       return { expiries: exp, invoices: inv };
@@ -830,14 +855,18 @@ var DETECTORS = {
     var expiries = _tl.expiries;
     var invoices = _tl.invoices;
     if (expiries.length && invoices.length) {
+      // Conservative under ambiguity: the baseline expiry is the LATEST
+      // reading of any stated expiry, and an invoice counts as late only when
+      // its EARLIEST reading is still after that — so no ambiguous numeric
+      // date can ever manufacture the finding.
       var lastExp = expiries[0];
-      for (var e2 = 1; e2 < expiries.length; e2++) if (expiries[e2].key > lastExp.key) lastExp = expiries[e2];
-      var late = invoices.filter(function (iv) { return iv.key > lastExp.key; });
+      for (var e2 = 1; e2 < expiries.length; e2++) if (expiries[e2].keyMax > lastExp.keyMax) lastExp = expiries[e2];
+      var late = invoices.filter(function (iv) { return iv.keyMin > lastExp.keyMax; });
       // Dedupe repeated identical invoice dates; cap the citation list.
       var seenIv = {}, cited = [];
       for (var v2 = 0; v2 < late.length; v2++) {
-        if (seenIv[late[v2].key]) continue;
-        seenIv[late[v2].key] = true;
+        if (seenIv[late[v2].keyMin]) continue;
+        seenIv[late[v2].keyMin] = true;
         cited.push(late[v2]);
       }
       if (cited.length) {
@@ -1687,7 +1716,10 @@ var DETECTORS = {
         if (prev && prev.page !== i && prev.norm && norm && prev.norm !== norm &&
             voMateriallyDiffer(prev.snippet, snippet) && !reported[term]) {
           reported[term] = true;
-          findings.push({ type: 'CT08', severity: 3,
+          // Severity 2: definitional drift across a long agreement is common
+          // boilerplate; on the AllFuels rerun eight CT08 rows at Medium buried
+          // the critical findings. The conflict is still reported and quoted.
+          findings.push({ type: 'CT08', severity: 2,
             evidence: 'Term "' + term + '" is defined differently in two places: "' + prev.snippet.slice(0, 70) + '" (Page ' + (prev.page + 1) + ') vs "' + snippet.slice(0, 70) + '" (Page ' + (i + 1) + ')',
             location: 'Page ' + (prev.page + 1) + ' and Page ' + (i + 1) });
         }
@@ -1770,23 +1802,36 @@ var DETECTORS = {
     // as fact) — the evidence text quotes only the record. Nearby enforcement
     // language raises the severity; without it this is a low note to verify.
     var VO_UNSIGNED_RELIANCE_RE = /\bdemand(?:s|ed)?\b|\binvoic(?:e[sd]?|ing)\b|\bbill(?:s|ed|ing)?\b|\bpayment\b|\bamount(?:s)? (?:due|owing)\b|\bowes?\b|\bowing\b|\benforc\w+\b|\bterminated? (?:under|pursuant)\b|\bclaim(?:s|ed)?\b/i;
-    var seenUnsigned = {};
+    // ONE aggregated finding, not one per page. A bundle that carries its own
+    // written analysis repeats "uncountersigned MOU" on page after page — the
+    // AllFuels rerun produced 25 scattered CT23 rows that buried the fact
+    // instead of stating it once. Every page stating the same absence is one
+    // fact of the record: report it once, cite every page.
+    var unsignedPages = [], unsignedQuote = null, unsignedCue = null, unsignedRelied = false;
     for (var u = 0; u < textBlocks.length; u++) {
       var lowU = (textBlocks[u] || '').toLowerCase();
       for (var q = 0; q < unsignedCues.length; q++) {
         var at = lowU.indexOf(unsignedCues[q]);
         if (at === -1) continue;
-        // One finding per page: several cues on one page are one fact.
-        if (seenUnsigned[u]) break;
-        seenUnsigned[u] = true;
-        var uq = textBlocks[u].substring(Math.max(0, at - 60), at + unsignedCues[q].length + 60).replace(/\s+/g, ' ').trim();
+        unsignedPages.push(u + 1);
+        if (!unsignedQuote) {
+          unsignedCue = unsignedCues[q];
+          unsignedQuote = textBlocks[u].substring(Math.max(0, at - 60), at + unsignedCues[q].length + 60).replace(/\s+/g, ' ').trim();
+        }
         var ctxWin = textBlocks[u].substring(Math.max(0, at - 200), at + unsignedCues[q].length + 200);
-        var relied = VO_UNSIGNED_RELIANCE_RE.test(ctxWin);
-        findings.push({ type: 'CT23', severity: relied ? 4 : 2,
-          evidence: 'The record states a signature is missing ("' + unsignedCues[q] + '"): "' + uq + '" — verify execution against the signature pages of the original',
-          location: 'Page ' + (u + 1) });
-        break;
+        if (VO_UNSIGNED_RELIANCE_RE.test(ctxWin)) unsignedRelied = true;
+        break; // one count per page
       }
+    }
+    if (unsignedPages.length) {
+      var upList = unsignedPages.length > 8
+        ? unsignedPages.slice(0, 8).join(', ') + ' and ' + (unsignedPages.length - 8) + ' more'
+        : unsignedPages.join(', ');
+      findings.push({ type: 'CT23', severity: unsignedRelied ? 4 : 2,
+        evidence: 'The record states a signature is missing ("' + unsignedCue + '"): "' + unsignedQuote + '"' +
+          (unsignedPages.length > 1 ? ' — stated on ' + unsignedPages.length + ' pages (' + upList + ')' : '') +
+          ' — verify execution against the signature pages of the original',
+        location: 'Page ' + upList });
     }
     return findings;
   },
@@ -1942,7 +1987,10 @@ var DETECTORS = {
     // be phrased negation-before ("held no compensable goodwill") or -after.
     var recog = pageOf(/(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis|forfeit)/) ||
                 pageOf(/(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/);
-    var denies = pageOf(/goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)/);
+    // "Goodwill: N/A" in a schedule is a denial in table form — the AllFuels
+    // franchise agreement declares goodwill N/A on one page while defining it
+    // as a quantifiable asset on another.
+    var denies = pageOf(/goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)|goodwill\s*[:\-]?\s*n\s*\/\s*a\b|goodwill\s*[:\-]\s*n\/?a\b/);
     if (recog && denies) {
       findings.push({ type: 'CT45', severity: 5,
         evidence: 'Goodwill / value of the business is recognised: "' + recog.quote + '" — yet denied or said to have no compensable value: "' + denies.quote + '". The forfeiture/clawback is itself an admission the asset exists. Its legal characterisation is for the court.',
