@@ -33,6 +33,7 @@ const suites = [
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',
   'greensky-regression.test.js',
+  'allfuels-regression.test.js',
 ];
 
 let failed = 0;
