@@ -521,6 +521,47 @@ var DETECTORS = {
         break; // one count per page
       }
     }
+    // CONDUCT ADMISSION — a party, in their own words, explaining WHY the
+    // disputed transaction went ahead. The explicit cues above never fire on
+    // real correspondence: nobody writes "I admit". The Greensky bundle
+    // carries the shape that DOES appear, from Marius Nortje's email of
+    // 6 April 2025 (pp. 53-54, requoted on 82, 86, 211, 215):
+    //   "Because you refused to communicate with Kevin's Export and me,
+    //    Kevin's Export proceeded with the deal, since Sealife Hong Kong was
+    //    already his client."
+    // Signature: a causal justification + the transaction proceeding + the
+    // writer placing themselves in it. Precision guards: contract boilerplate
+    // ("the parties shall proceed...") is excluded, and a bare first-person
+    // account with NO justification ("we completed the sale in 2019") does
+    // not fire — affidavits are full of those and would flood the report.
+    var VO_CAUSE_RE = /\b(?:because|since|as a result|due to|owing to|given that|seeing that)\b/i;
+    var VO_PROCEED_RE = /\b(?:proceeded|went\s+ahead|carried\s+on|continued|concluded|completed|finalised|finalized|executed)\b[^.]{0,80}\b(?:deal|transaction|sale|shipment|order|export|contract|agreement|payment|transfer)\b/i;
+    var VO_SELF_RE = /\b(?:i|we|me|my|our|us)\b/i;
+    var VO_BOILER_RE = /\b(?:shall|hereby|whereas|herein|the\s+parties\s+agree)\b/i;
+    var condPages = [], condQuote = null;
+    for (var cp = 0; cp < textBlocks.length; cp++) {
+      var sentsC = String(textBlocks[cp] || '').split(/[.!?]+\s+/);
+      for (var sc = 0; sc < sentsC.length; sc++) {
+        var senC = sentsC[sc];
+        if (senC.length < 30 || senC.length > 600) continue;
+        if (VO_BOILER_RE.test(senC)) continue;
+        if (!VO_CAUSE_RE.test(senC) || !VO_PROCEED_RE.test(senC) || !VO_SELF_RE.test(senC)) continue;
+        condPages.push(cp + 1);
+        if (!condQuote) condQuote = senC.replace(/\s+/g, ' ').trim();
+        break; // one count per page
+      }
+    }
+    if (condPages.length) {
+      var cpList = condPages.length > 8
+        ? condPages.slice(0, 8).join(', ') + ' and ' + (condPages.length - 8) + ' more'
+        : condPages.join(', ');
+      findings.push({ type: 'CT01', severity: 4,
+        evidence: 'A party gives their own account of why the disputed transaction went ahead: "' + condQuote + '"' +
+          (condPages.length > 1 ? ' — the same account appears on ' + condPages.length + ' pages (' + cpList + ')' : '') +
+          ' — the words are the writer\'s own; read the full passage in context and establish what it settles',
+        location: 'Page ' + cpList });
+    }
+
     if (admPages.length) {
       var apList = admPages.length > 8
         ? admPages.slice(0, 8).join(', ') + ' and ' + (admPages.length - 8) + ' more'
