@@ -26,6 +26,12 @@ const src = html.slice(start, end);
 // The block must no longer use the old un-verified loader.
 ok(!/voLoadScriptOnce/.test(src), 'old un-verified voLoadScriptOnce is gone');
 
+// DETERMINISM-LOCK (AGENTS.md: no Date.now()/Math.random() in analysis
+// paths). The rescue hook runs inside runForensicEngine; the ETA clock lives
+// in the UI-owned voOcrProgress OUTSIDE this block. Codex flagged the
+// original in-hook Date.now() on PR #131 — this keeps it out for good.
+ok(!/Date\.now|Math\.random/.test(src), 'OCR rescue hook contains no wall-clock or randomness');
+
 // DRIFT-LOCK: the OCR candidate threshold must cover every page CT26 calls
 // "near-empty ... most likely image-only pages not captured by OCR". They were
 // 30 and 40, so pages carrying 30-39 chars were reported as unread-by-OCR while
