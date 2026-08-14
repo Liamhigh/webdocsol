@@ -283,6 +283,14 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'the flowing story leads; dates and pattern walk follow');
   ok(/data\._voFlowShown = true/.test(story) && /!data\._voFlowShown/.test(src),
     'the annex AI section skips the narrative when it already led the story');
+  // Provenance guard: the on-device fallback narrative is deterministic
+  // template text and must NEVER be presented as the AI narrator's writing.
+  ok(/flowSrc !== 'local'/.test(story),
+    'the on-device fallback narrative never leads as the analyst telling');
+  ok(/flowSrc === 'ai'/.test(story) && /Written by the AI narrator/.test(story),
+    'the "Written by the AI narrator" label is reserved for a genuine AI telling');
+  ok(/aiNarrativeSource: opts\.aiNarrativeSource \|\| null/.test(src),
+    'the narrative author flag flows from the caller into both builds');
 }
 
 // ---- unread pages are disclosed, named, and routed to a human ----
