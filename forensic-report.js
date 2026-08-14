@@ -921,6 +921,16 @@ function drawCover(ctx, data) {
   if (data.identity.parties) cLine('Parties: ' + data.identity.parties, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.jurisdiction) cLine('Jurisdiction: ' + data.identity.jurisdiction, ctx.f.timesBold, 9.5, GOLD, 15);
 
+  // Provenance statement (founder ruling): the first page must say what made
+  // the findings. They are the output of forensic SOFTWARE — fixed detection
+  // rules applied identically to every document — not a generative AI opinion.
+  var pv1 = 'The findings in this report are produced by forensic software: a fixed set of deterministic detection rules,';
+  var pv2 = 'applied identically to every document, each finding anchored to quoted text on a cited page.';
+  var pv3 = 'They are not the opinion of a generative AI. Any optional AI-review note is labelled as such, and is advisory only.';
+  pg.drawText(pv1, { x: centerX(pv1, ctx.f.helv, 7.5), y: 96, size: 7.5, font: ctx.f.helv, color: GOLD });
+  pg.drawText(pv2, { x: centerX(pv2, ctx.f.helv, 7.5), y: 85, size: 7.5, font: ctx.f.helv, color: GOLD });
+  pg.drawText(pv3, { x: centerX(pv3, ctx.f.helv, 7.5), y: 74, size: 7.5, font: ctx.f.helv, color: GOLD });
+
   // bottom block
   pg.drawText('CONSTITUTIONAL FORENSIC AI V ' + CONSTITUTION_VERSION, { x: centerX('CONSTITUTIONAL FORENSIC AI V ' + CONSTITUTION_VERSION, ctx.f.helvBold, 7), y: 58, size: 7, font: ctx.f.helvBold, color: LGRAY });
   pg.drawText('VERUM OMNIS  |  AI FORENSICS FOR TRUTH', { x: centerX('VERUM OMNIS  |  AI FORENSICS FOR TRUTH', ctx.f.helv, 7), y: 44, size: 7, font: ctx.f.helv, color: LGRAY });
@@ -2585,13 +2595,16 @@ function narrativeMeaning(f) {
   return 'the documents are inconsistent on this point';
 }
 
-function secNarrative(ctx, data) {
+function secNarrative(ctx, data, opts) {
   var fr = data.findings || {};
   var all = fr.findings || [];
 
   ctx.newBodyPage();
-  ctx.heading('PLAIN-LANGUAGE NARRATIVE');
-  ctx.para('This section tells the story of what the documents show, in ordinary words, for a reader who is not a forensic specialist. Every statement below is drawn from the same findings set out in the tables that follow; it adds no new facts. Each is a verified fact of the record; the verdict on any person is for the court.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.heading('PLAIN-LANGUAGE NARRATIVE', opts && opts.label ? { label: opts.label } : undefined);
+  ctx.para('This section tells the story of what the documents show, in ordinary words, for a reader who is not a forensic specialist. Every statement below is drawn from the same findings set out in the sections that follow; it adds no new facts. Each is a verified fact of the record; the verdict on any person is for the court.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  // Provenance, stated where a first-time reader will see it: the findings are
+  // software output — fixed rules, same result every run — not an AI's opinion.
+  ctx.para('How these findings were made: by forensic software — a fixed set of deterministic detection rules that reads the text the same way every time and anchors every finding to quoted words on a cited page. They are not the opinion of a generative AI. Where the optional AI review contributed an item, it is labelled AI-identified and is advisory only.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
 
   // Opening: parties, documents, scale.
   var idn = data.identity || {};
@@ -2903,8 +2916,14 @@ async function build(opts) {
   ctx.drawWatermark(tocPage);
   ctx.drawHeader(tocPage);
   // 3-10. sections
+  // Founder ruling: the human story comes FIRST. A reader who is not a
+  // specialist gets the plain-language telling on the first pages, before the
+  // institutional §15.4 sections. Unnumbered label so the constitutional
+  // numbering (1-7) still belongs to the template sections.
+  secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' });
   // Constitution v8.0 §15.4 template (founder ruling 1): the seven numbered
-  // sections lead; the full working detail follows as annexes.
+  // sections lead the institutional half; the full working detail follows as
+  // annexes.
   secCriticalSubjects(ctx, data);     // 1. CRITICAL LEGAL SUBJECTS
   secDishonestyMatrix(ctx, data);     // 2. DISHONESTY DETECTION MATRIX
   secNineBrain(ctx, data);            // 3. NINE-BRAIN EXTRACTION FINDINGS
@@ -2914,7 +2933,6 @@ async function build(opts) {
   secDeclaration(ctx, data);          // 7. CERTIFICATION
   secAnnexDivider(ctx, data);
   secExecSummary(ctx, data);
-  secNarrative(ctx, data);       // deterministic human "story" (always present)
   secAiReview(ctx, data);        // optional AI narrative/review (no-op when off)
   secPartyAnalysis(ctx, data);   // scorecard + actionable output
   secStatutoryAnchoring(ctx, data); // B7 — Legal Mapping: person -> contradiction -> page -> law
@@ -3181,7 +3199,8 @@ async function buildNarrative(opts) {
   if (identity.caseName) ctx.para('Matter: ' + san(identity.caseName), { size: 11, after: 2 });
   ctx.para('Report reference: ' + reference + '    |    ' + fmtDate(generatedAt), { size: 10, color: GRAY, after: 12 });
   var nSub = (fr.findings || []).filter(function (f) { return f && !isDemoted(f) && f.type !== 'SERIAL'; }).length;
-  ctx.para('This is the plain-language telling of the sealed forensic report: ' + nSub + ' verified finding' + (nSub === 1 ? '' : 's') + ', each anchored to the page it comes from. Nothing here goes beyond what the sealed record states; the verdict on any named person is for the court.', { size: 10.5, after: 8 });
+  ctx.para('This is the plain-language telling of the sealed forensic report: ' + nSub + ' verified finding' + (nSub === 1 ? '' : 's') + ', each anchored to the page it comes from. Nothing here goes beyond what the sealed record states; the verdict on any named person is for the court.', { size: 10.5, after: 4 });
+  ctx.para('The findings are produced by forensic software — fixed deterministic detection rules, applied identically to every document — not by a generative AI. Any optional AI-review item is labelled as such, and is advisory only.', { size: 9, font: fonts.timesItalic, color: GRAY, after: 8 });
   var covLines = plainLeadLines(fr, data);
   if (covLines.length) ctx.box('IN ONE PAGE', covLines, { titleColor: NAVY2 });
 

@@ -56,5 +56,12 @@ Recorded so no session or external review re-litigates them:
    "this is a pattern of fraud"; §15.2 prohibits exactly that ("X is guilty
    of Y" — verdict belongs to the court). The engine states anchored facts
    and cites candidate law (POCA s1 included); the last step is the court's.
+5. **The human story leads, and the first pages state the provenance.** The
+   plain-language narrative renders on the FIRST pages of the main report
+   (unnumbered "THE STORY IN PLAIN LANGUAGE", before §15.4 section 1), and
+   the first pages of both report documents state that the findings are the
+   output of deterministic forensic software — fixed detection rules, page-
+   anchored quotes — not the opinion of a generative AI (the optional
+   AI-review layer stays labelled and advisory).
 - All verification happens at `verify.html` (the Verification Hub). No surface verifies locally.
 - Deploys automatically on push to `main` (Worker via Workers Builds, site via Pages).
