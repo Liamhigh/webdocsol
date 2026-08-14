@@ -3797,6 +3797,90 @@ function effectivePartiesWithRoles(data) {
   return out;
 }
 
+
+// ================= SECTION: THE SHORT VERSION (counsel's summary) ===========
+// Founder ruling: the full findings set is what an expert needs to audit, and
+// it is too much for the human who has to DECIDE. This section is the quick,
+// accurate read: each contradiction reduced to the two things the record says
+// that cannot both be true, side by side, with the pages to open. Nothing new
+// is asserted — both halves are the record's own words — and the full detail
+// follows for audit.
+
+// Split a two-sided finding into the halves the engine already built:
+//   "<lead>: \"A\" — yet <tail>: \"B\""   or   "<lead>: \"A\" vs \"B\""
+// Returns null when the finding is single-sided (a count, a missing annexure).
+function contradictionSides(ev) {
+  var s = cleanQuote(String(ev || ''));
+  if (!s) return null;
+  var m = s.split(/\s+—\s+yet\s+|\s+vs\.?\s+|\s+versus\s+/i);
+  if (m.length < 2) return null;
+  var a = m[0].trim(), b = m.slice(1).join(' ').trim();
+  if (a.length < 8 || b.length < 8) return null;
+  return { a: a, b: b };
+}
+
+function secShortVersion(ctx, data) {
+  var fr = data.findings || {};
+  var subst = (fr.findings || []).filter(function (f) {
+    return f && f.type !== 'SERIAL' && !isDemoted(f) && f.source !== 'ai';
+  }).sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+  if (!subst.length || fr.unreadable) return;
+
+  ctx.newBodyPage();
+  ctx.heading('THE SHORT VERSION', { label: 'THE SHORT VERSION' });
+  ctx.para('Everything the record establishes, reduced to what a decision-maker needs: what the document says in one place, what it also says in another, and the pages to open. Both columns are the record\'s own words. The full detail — every finding, its detector, its verification legs and its candidate law — follows for audit.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+
+  var pairs = [], singles = [];
+  for (var i = 0; i < subst.length; i++) {
+    var sides = contradictionSides(subst[i].evidence);
+    var where = fmtLocation(subst[i].location);
+    if (sides) pairs.push({ f: subst[i], a: sides.a, b: sides.b, where: where });
+    else singles.push({ f: subst[i], where: where });
+  }
+
+  if (pairs.length) {
+    ctx.subHeading('What cannot all be true at once');
+    var rows = [];
+    for (var p = 0; p < pairs.length; p++) {
+      var A = pairs[p].a, B = pairs[p].b;
+      if (A.length > 210) A = A.substring(0, 207) + '…';
+      if (B.length > 210) B = B.substring(0, 207) + '…';
+      rows.push({
+        subject: CT_NAMES[pairs[p].f.type] || pairs[p].f.type,
+        a: A, b: B,
+        where: (pairs[p].where && pairs[p].where !== '—') ? pairs[p].where : '—'
+      });
+    }
+    ctx.table(
+      [
+        { key: 'subject', title: 'The point', w: 96, font: ctx.f.timesBold },
+        { key: 'a', title: 'The record states', w: 174 },
+        { key: 'b', title: 'and also states', w: 174 },
+        { key: 'where', title: 'Pages', w: 60 }
+      ],
+      rows,
+      { size: 7.6 }
+    );
+    ctx.gap(6);
+  }
+
+  if (singles.length) {
+    ctx.subHeading('Also established');
+    for (var s2 = 0; s2 < singles.length; s2++) {
+      var sf = singles[s2].f;
+      var loc = (singles[s2].where && singles[s2].where !== '—') ? ' (' + singles[s2].where + ')' : '';
+      ctx.bullet(withPeriod(narrativeMeaning(sf)).replace(/\.$/, '') + loc + '.', { size: 9.5, after: 3 });
+    }
+    ctx.gap(4);
+  }
+
+  var jurS = detectJurisdictions(data);
+  ctx.para('Where to look next: each row above cites the pages to open in the original. ' +
+    (jurS.isCrossBorder ? 'This is a cross-border matter (' + listPhrase([JURIS_LABEL[jurS.home]].concat(jurS.foreign.map(function (c) { return JURIS_LABEL[c] || c; }))) + '); candidate law for each jurisdiction is set out in the Statutory Anchoring annex. ' : 'Candidate provisions are set out in the Statutory Anchoring annex. ') +
+    'They are starting points for counsel to confirm, not legal conclusions. The verdict on any named person is for the court.',
+    { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+}
+
 // ================= SECTION: UNREAD PAGES (honest non-result) =================
 // Founder ruling: when the engine could not read pages, the report must SAY
 // SO on its first pages — name each unread page and the reason, and route
@@ -3997,6 +4081,7 @@ async function build(opts) {
     ctx.box('IN ONE PAGE', part1Lines, { titleColor: NAVY2 });
     ctx.para('The story behind these findings starts on the next page. The full evidence — every finding anchored to its page — follows after it. Serious findings should be taken to a legal practitioner or the relevant authorities.', { size: 9.5, font: ctx.f.timesItalic, color: GRAY });
   }
+  secShortVersion(ctx, data);
   secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' });
   secUnreadPages(ctx, data);
   secSealExplainer(ctx, data, { label: 'WHY THIS RECORD CANNOT BE ALTERED' });
@@ -4291,7 +4376,9 @@ async function buildNarrative(opts) {
   var covLines = plainLeadLines(fr, data);
   if (covLines.length) ctx.box('IN ONE PAGE', covLines, { titleColor: NAVY2 });
 
-  // The story, the unread-pages disclosure, the people, the seal, the reservation.
+  // The short version, the story, the unread-pages disclosure, the people,
+  // the seal, the reservation.
+  secShortVersion(ctx, data);
   secNarrative(ctx, data);
   secUnreadPages(ctx, data);
   secPartyAnalysis(ctx, data);
@@ -4313,6 +4400,7 @@ var api = { build: build, buildNarrative: buildNarrative, seal: seal, _sanitize:
   _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
   _narrativeBlocks: narrativeBlocks, _pageRanges: pageRanges,
   _fmtLocation: fmtLocation, _pageNumbers: pageNumbers, _scrubNarrative: scrubNarrative,
+  _contradictionSides: contradictionSides,
   _documentParties: documentParties, _effectiveParties: effectiveParties,
   _effectivePartiesWithRoles: effectivePartiesWithRoles,
   _splitSentences: splitSentences,
