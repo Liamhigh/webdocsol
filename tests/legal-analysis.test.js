@@ -58,6 +58,25 @@ ok(R._narrativeMeaning({ type: 'ZZ99' }).length > 0, 'narrativeMeaning: generic 
   const cb = R._detectJurisdictions({ identity: { jurisdiction: 'South Africa / UAE' }, findings: { findings: [] } });
   ok(cb.isCrossBorder === true, 'detectJurisdictions: SA + UAE is cross-border');
   ok(cb.foreign.indexOf('AE') !== -1, 'detectJurisdictions: UAE detected as foreign leg');
+
+  // Founder ruling: GPS fixes the HOME jurisdiction; documents fix the
+  // cross-border legs (the Greensky MOU named the UAE while sealing happened
+  // in South Africa; sealing in Dubai must flip the home leg, not lose SA).
+  const gDxb = R._detectJurisdictions({ identity: {}, gps: { lat: 25.2, lng: 55.3 },
+    findings: { findings: [{ evidence: 'High Court of South Africa, Gauteng' }] } });
+  ok(gDxb.home === 'AE', 'GPS in Dubai sets the home jurisdiction to the UAE');
+  ok(gDxb.foreign.indexOf('ZA') !== -1 && gDxb.isCrossBorder === true,
+    'South Africa named in the documents stays as the cross-border leg');
+  const gZa = R._detectJurisdictions({ identity: {}, gps: { lat: -29.8, lng: 31.0 },
+    findings: { findings: [{ evidence: 'MOU signed in Ras Al Khaimah, AED 500,000' }] } });
+  ok(gZa.home === 'ZA' && gZa.foreign.indexOf('AE') !== -1,
+    'GPS in Durban keeps home ZA while the documents make the UAE leg active');
+  const gNone = R._detectJurisdictions({ identity: {}, gps: { lat: 48.8, lng: 2.35 },
+    findings: { findings: [] } });
+  ok(gNone.home === 'ZA', 'GPS outside all supported regions leaves the default home');
+  const statAe = R._statutesForSubject('CONTRADICTION', { home: 'AE', foreign: ['ZA'] });
+  ok(statAe.length >= 1 && statAe[0].jur === 'AE',
+    'statutory anchoring lists the GPS home jurisdiction first');
   const home = R._detectJurisdictions({ identity: { jurisdiction: 'South Africa' }, findings: { findings: [] } });
   ok(home.isCrossBorder === false, 'detectJurisdictions: SA only is not cross-border');
   // Currency corroboration: AED in evidence pulls in the UAE leg even if the field is blank.
@@ -201,6 +220,17 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   const sec1At = buildBody.indexOf('secCriticalSubjects(ctx, data)');
   ok(narrAt !== -1 && sec1At !== -1 && narrAt < sec1At,
     'plain-language narrative renders on the first pages, before §15.4 section 1');
+  // Story first, evidence second: page 2 is IN ONE PAGE, then the story, then
+  // unread pages, then the seal explainer — and the TOC placeholder comes
+  // AFTER the whole human part, so a lay reader meets the story before a
+  // 25-entry wall of section names.
+  const onePageAt = buildBody.indexOf("ctx.box('IN ONE PAGE'");
+  const sealExplAt = buildBody.indexOf('secSealExplainer(ctx, data');
+  const tocAt = buildBody.indexOf('var tocPage = doc.addPage');
+  ok(onePageAt !== -1 && onePageAt < narrAt, 'IN ONE PAGE is page 2 of the main report, before the story');
+  ok(sealExplAt !== -1 && narrAt < sealExplAt && sealExplAt < tocAt,
+    'the seal explainer joins Part 1, and the TOC only comes after the human part');
+  ok(tocAt < sec1At, 'the §15.4 sections follow the TOC as Part 2');
   ok((src.match(/not the opinion of a generative AI|not by a generative AI/g) || []).length >= 3,
     'cover, narrative intro and narrative twin all state findings are software output, not generative AI');
   ok(/produced by forensic software/.test(src) && /deterministic detection rules/.test(src),

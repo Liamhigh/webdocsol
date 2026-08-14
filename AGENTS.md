@@ -57,11 +57,21 @@ Recorded so no session or external review re-litigates them:
    of Y" — verdict belongs to the court). The engine states anchored facts
    and cites candidate law (POCA s1 included); the last step is the court's.
 5. **The human story leads, and the first pages state the provenance.** The
-   plain-language narrative renders on the FIRST pages of the main report
-   (unnumbered "THE STORY IN PLAIN LANGUAGE", before §15.4 section 1), and
-   the first pages of both report documents state that the findings are the
-   output of deterministic forensic software — fixed detection rules, page-
-   anchored quotes — not the opinion of a generative AI (the optional
-   AI-review layer stays labelled and advisory).
+   main report reads Story First, Evidence Second: page 2 is the "IN ONE
+   PAGE" summary, then "THE STORY IN PLAIN LANGUAGE", then "PAGES THE
+   ENGINE COULD NOT READ" (every unread page named, with its reason and a
+   human-review instruction), then "WHY THIS RECORD CANNOT BE ALTERED" —
+   and only THEN the table of contents and the §15.4 sections 1-7 with
+   their annexes. The first pages of both report documents state that the
+   findings are the output of deterministic forensic software — fixed
+   detection rules, page-anchored quotes — not the opinion of a generative
+   AI (the optional AI-review layer stays labelled and advisory). §15.4
+   heading names are constitutional and are NOT renamed for accessibility.
+6. **GPS fixes the home jurisdiction; documents fix the cross-border legs.**
+   When the user shared their location at sealing, deterministic bounding
+   boxes (ZA / AE / GB / US — no geocoding service) set `home`; any other
+   jurisdiction named in the record becomes a foreign leg (the Greensky MOU
+   named the UAE while sealing happened in South Africa). Statutory
+   anchoring lists the home jurisdiction first.
 - All verification happens at `verify.html` (the Verification Hub). No surface verifies locally.
 - Deploys automatically on push to `main` (Worker via Workers Builds, site via Pages).

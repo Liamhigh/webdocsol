@@ -366,12 +366,23 @@ function detectJurisdictions(data) {
   var noteAll = String((data.findings && data.findings.extractionNotes) || '') + ' ' +
     String(data.extractionNotes || '');
   var hay = idText + ' ' + evAll + ' ' + whoAll + ' ' + noteAll;
+  // Founder ruling: the sealing location (GPS, when the user shared it) fixes
+  // the HOME jurisdiction; the documents fix the cross-border legs.
+  // Deterministic bounding boxes — no geocoding service, no network call.
+  var g = data.gps || null;
+  if (g && isFinite(g.lat) && isFinite(g.lng)) {
+    var gla = Number(g.lat), glo = Number(g.lng);
+    if (gla >= -35 && gla <= -22 && glo >= 16 && glo <= 33.1) out.home = 'ZA';
+    else if (gla >= 22 && gla <= 26.6 && glo >= 51 && glo <= 56.6) out.home = 'AE';
+    else if (gla >= 49.8 && gla <= 61 && glo >= -8.7 && glo <= 1.8) out.home = 'GB';
+    else if (gla >= 24 && gla <= 49.5 && glo >= -125 && glo <= -66) out.home = 'US';
+  }
   var found = {};
   if (/south africa|\brsa\b|\bza\b|kwazulu|gauteng|western cape|eastern cape|free state|mpumalanga|limpopo|companies act 71 of 2008|constitutional court|high court of south africa|magistrate|\bsars\b|\bcipc\b|\.co\.za|\bZAR\b|\bR\s?\d/i.test(hay)) found.ZA = true;
   if (/emirates|\buae\b|dubai|abu dhabi|difc|sharjah|ajman|ras al khaimah|rakez|\bAED\b|dirham/i.test(hay)) found.AE = true;
   if (/united kingdom|\buk\b|england|wales|scotland|\bGBP\b/i.test(hay)) found.GB = true;
   if (/united states|\busa\b|\bu\.s\.|america|\bUSD\b/i.test(hay)) found.US = true;
-  out.foreign = Object.keys(found).filter(function (k) { return k !== 'ZA'; });
+  out.foreign = Object.keys(found).filter(function (k) { return k !== out.home; });
   out.isCrossBorder = out.foreign.length > 0;
   return out;
 }
@@ -380,7 +391,7 @@ function detectJurisdictions(data) {
 // jurisdictions (home first, then each foreign leg).
 function statutesForSubject(subject, jur) {
   var s = STATUTES[subject] || STATUTES.CONTRADICTION;
-  var codes = ['ZA'].concat(jur.foreign);
+  var codes = [jur.home].concat(jur.foreign);
   var out = [];
   for (var i = 0; i < codes.length; i++) {
     if (s[codes[i]] && s[codes[i]].length) out.push({ jur: codes[i], provisions: s[codes[i]] });
@@ -897,7 +908,7 @@ function drawCover(ctx, data) {
   caseName = wrapText(caseName, ctx.f.times, 14, 460)[0];
   pg.drawText(san(caseName), { x: centerX(caseName, ctx.f.times, 14), y: y, size: 14, font: ctx.f.times, color: COVER_SUB });
   y -= 22;
-  var sub = data.identity.subtitle || 'Deterministic Forensic Contradiction Investigation';
+  var sub = data.identity.subtitle || 'Findings by Forensic Software — the Story First, the Evidence After';
   pg.drawText(san(sub), { x: centerX(sub, ctx.f.timesItalic, 10.5), y: y, size: 10.5, font: ctx.f.timesItalic, color: GOLD });
   y -= 14;
 
@@ -2769,12 +2780,9 @@ function secNarrative(ctx, data, opts) {
   if (mAnchor) alsoBits.push(mAnchor[0].trim());
   var mCtx = notes.match(/Context:[^]*?(?=(?:\s+Score calibration|$))/);
   if (mCtx) alsoBits.push(mCtx[0].trim());
-  if (/near-empty|image-only|OCR/i.test(notes)) {
-    var mOcr = notes.match(/[^.]*(?:near-empty|image-only|OCR rescue)[^.]*\./g);
-    if (mOcr) alsoBits.push(mOcr.join(' ').trim());
-  }
+  // (Unread/OCR pages have their own first-pages section now — not repeated here.)
   if (alsoBits.length) {
-    ctx.para('Also on the record, but NOT counted as findings: ' + alsoBits.join(' '), { size: 9.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    ctx.para('The engine also noted items it could not pin to a specific page. These are leads for follow-up, never verified findings: ' + alsoBits.join(' '), { size: 9.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
   ctx.para('In short, the documents cannot all be true at the same time on the points above. Each contradiction is anchored to the quoted text and its page location, so it can be checked directly against the originals. What these inconsistencies mean in law is for a legal practitioner to determine — this report identifies them; it does not decide their consequences.', { size: 10.5, after: 6 });
 }
@@ -2998,28 +3006,32 @@ async function build(opts) {
     aiNarrative: opts.aiNarrative || null,
     classification: opts.classification || null,
     serialLabels: opts.serialLabels || null,
-    unreadPages: opts.unreadPages || null
+    unreadPages: opts.unreadPages || null,
+    gps: opts.gps || null
   };
 
   // 1. cover
   drawCover(ctx, data);
-  // The AI narrative is the human-readable "story" of the report. When present
-  // it leads, right after the executive summary, instead of being buried as an
-  // advisory footnote after the methodology. secAiReview returns early when no
-  // narrative/review exists, so nothing changes when AI review is off.
-  // 2. TOC placeholder page (drawn last with real page numbers)
+  // ---- PART 1 — THE STORY (for everyone) --------------------------------
+  // Founder ruling: the reader must know WHY they should care before any
+  // table of contents or matrix. Page 2 is the whole case in one page; the
+  // story, the unread-pages disclosure and the seal explainer follow. The
+  // TOC and the institutional sections come AFTER the human part, so the
+  // first thing a lay reader meets is the story, not a wall of section names.
+  var part1Lines = plainLeadLines(fr, data);
+  if (part1Lines.length) {
+    ctx.newBodyPage();
+    ctx.box('IN ONE PAGE', part1Lines, { titleColor: NAVY2 });
+    ctx.para('The story behind these findings starts on the next page. The full evidence — every finding anchored to its page — follows after it. Serious findings should be taken to a legal practitioner or the relevant authorities.', { size: 9.5, font: ctx.f.timesItalic, color: GRAY });
+  }
+  secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' });
+  secUnreadPages(ctx, data);
+  secSealExplainer(ctx, data, { label: 'WHY THIS RECORD CANNOT BE ALTERED' });
+  // ---- PART 2 — THE EVIDENCE (for investigators and lawyers) ------------
+  // TOC placeholder page (drawn last with real page numbers).
   var tocPage = doc.addPage([PW, PH]);
   ctx.drawWatermark(tocPage);
   ctx.drawHeader(tocPage);
-  // 3-10. sections
-  // Founder ruling: the human story comes FIRST. A reader who is not a
-  // specialist gets the plain-language telling on the first pages, before the
-  // institutional §15.4 sections. Unnumbered label so the constitutional
-  // numbering (1-7) still belongs to the template sections.
-  secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' });
-  // Missing evidence named on the first pages: every page the engine could
-  // not read, why, and the human-review instruction.
-  secUnreadPages(ctx, data);
   // Constitution v8.0 §15.4 template (founder ruling 1): the seven numbered
   // sections lead the institutional half; the full working detail follows as
   // annexes.
@@ -3232,13 +3244,13 @@ async function seal(reportBytes, sealOpts) {
 // to the main report — the narrative states what the record shows and reserves
 // every verdict for the court. It reuses the deterministic narrative sections;
 // it never invents facts, loss figures, or conclusions.
-function secSealExplainer(ctx, data) {
+function secSealExplainer(ctx, data, opts) {
   ctx.newBodyPage();
-  ctx.heading('WHY THIS RECORD CANNOT BE ALTERED');
+  ctx.heading('WHY THIS RECORD CANNOT BE ALTERED', opts && opts.label ? { label: opts.label } : undefined);
   ctx.para('Every document and this report carry a SHA-512 fingerprint — a 128-character code computed from the file\'s exact contents. Change a single character anywhere and the fingerprint changes completely. The fingerprint is anchored to the Bitcoin blockchain through OpenTimestamps, which fixes the moment it existed in a public record no one — including Verum Omnis — can edit.', { size: 10, after: 8 });
   ctx.bullet('Anyone can verify this report at verumglobal.foundation/verify.html — no account, no permission needed.', { size: 9.5 });
   ctx.bullet('If a single word of the sealed record were altered, verification would fail.', { size: 9.5 });
-  ctx.bullet('The findings in this narrative are the same sealed findings as the full forensic report, told in plain words.', { size: 9.5 });
+  ctx.bullet('The plain-language telling and the technical sections carry the SAME sealed findings — neither adds to nor subtracts from the record.', { size: 9.5 });
 }
 
 async function buildNarrative(opts) {
@@ -3288,7 +3300,8 @@ async function buildNarrative(opts) {
     aiNarrative: opts.aiNarrative || null,
     classification: opts.classification || null,
     serialLabels: opts.serialLabels || null,
-    unreadPages: opts.unreadPages || null
+    unreadPages: opts.unreadPages || null,
+    gps: opts.gps || null
   };
 
   // Cover-lite: title, case identity, one-line lead. No scores, no bands.
