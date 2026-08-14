@@ -773,6 +773,67 @@ var DETECTORS = {
           location: 'Full document' });
       }
     }
+
+    // Billing after a stated expiry. On the AllFuels bundle, rent was invoiced
+    // in March 2026 under a lease the record says expired 31 July 2024 — the
+    // engine reported the amounts but missed the sequence, which is the
+    // load-bearing fact. Deterministic: a date labelled as a lease/agreement
+    // expiry or termination, and an invoice/statement dated LATER, both quoted
+    // and anchored. Month-name and ISO dates only (numeric DD/MM vs MM/DD is
+    // ambiguous — same discipline as D03). The latest stated expiry is the
+    // baseline, so a renewed agreement whose expiry postdates the invoices
+    // never fires; whether the invoice belongs to the expired instrument is
+    // for the reviewer — the finding says exactly that.
+    var VO_EXP_LABEL = /\b(?:lease|agreement|contract|licen[cs]e|franchise)\s+(?:(?:shall\s+)?(?:expire[sd]?|terminate[sd]?)(?:\s+on)?|expiry\s+date|expiration\s+date|termination\s+date)\b[:\s]*|\b(?:expiry|expiration|termination)\s+date\s+of\s+the\s+(?:lease|agreement|contract)\b[:\s]*/gi;
+    var VO_INV_LABEL = /\b(?:tax\s+invoice|invoice|statement)\s+(?:date[d]?|issued)(?:\s+on)?\b[:\s]*|\binvoiced\s+on\b[:\s]*/gi;
+    var VO_TL_DATE = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})|(\d{4})-(\d{2})-(\d{2}))\b/;
+    var VO_TL_MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+    function voTlDate(m) {
+      var day, mon, year;
+      if (m[1]) { day = +m[1]; mon = VO_TL_MONTHS[m[2].slice(0, 3).toLowerCase()]; year = +m[3]; }
+      else if (m[4]) { mon = VO_TL_MONTHS[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
+      else { year = +m[7]; mon = +m[8]; day = +m[9]; }
+      if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
+      return { key: year * 10000 + mon * 100 + day, raw: m[0] };
+    }
+    function voTlCollect(re, blocks) {
+      var hits = [];
+      for (var b = 0; b < blocks.length; b++) {
+        var block = blocks[b] || '';
+        re.lastIndex = 0;
+        var lm;
+        while ((lm = re.exec(block)) !== null) {
+          var win = block.slice(lm.index + lm[0].length, lm.index + lm[0].length + 50);
+          var dm = win.match(VO_TL_DATE);
+          if (!dm) continue;
+          var nd = voTlDate(dm);
+          if (!nd) continue;
+          var quote = block.slice(lm.index, lm.index + lm[0].length + dm.index + dm[0].length).replace(/\s+/g, ' ').trim();
+          hits.push({ key: nd.key, raw: nd.raw, page: b, quote: quote });
+        }
+      }
+      return hits;
+    }
+    var expiries = voTlCollect(VO_EXP_LABEL, textBlocks);
+    var invoices = voTlCollect(VO_INV_LABEL, textBlocks);
+    if (expiries.length && invoices.length) {
+      var lastExp = expiries[0];
+      for (var e2 = 1; e2 < expiries.length; e2++) if (expiries[e2].key > lastExp.key) lastExp = expiries[e2];
+      var late = invoices.filter(function (iv) { return iv.key > lastExp.key; });
+      // Dedupe repeated identical invoice dates; cap the citation list.
+      var seenIv = {}, cited = [];
+      for (var v2 = 0; v2 < late.length; v2++) {
+        if (seenIv[late[v2].key]) continue;
+        seenIv[late[v2].key] = true;
+        cited.push(late[v2]);
+      }
+      if (cited.length) {
+        var ivDesc = cited.slice(0, 3).map(function (iv) { return iv.raw + ' (p.' + (iv.page + 1) + ')'; }).join(', ');
+        findings.push({ type: 'CT04', severity: 4,
+          evidence: 'Billing after the stated expiry: the record states an expiry/termination — "' + lastExp.quote + '" (p.' + (lastExp.page + 1) + ') — yet ' + (cited.length === 1 ? 'an invoice is' : cited.length + ' invoices are') + ' dated after it: ' + ivDesc + '. Verify the invoice(s) relate to the expired instrument and on what authority the billing continued',
+          location: 'Page ' + (lastExp.page + 1) + ' vs Page ' + cited.slice(0, 3).map(function (iv) { return iv.page + 1; }).join(', ') });
+      }
+    }
     return findings;
   },
 
@@ -1675,6 +1736,35 @@ var DETECTORS = {
         findings.push({ type: 'CT23', severity: 3,
           evidence: 'Non-standard signature method "' + sigPatterns[p] + '": "' + quote + '"',
           location: 'Page ' + (i + 1) });
+      }
+    }
+    // Missing-countersignature statements. When a party enforces or bills
+    // under an agreement the record itself says was never fully executed, the
+    // absence of the countersignature is the load-bearing fact — on the
+    // AllFuels bundle the record said "uncountersigned" in terms and the
+    // engine stayed silent. Cite-or-stay-silent discipline: this fires ONLY
+    // on the document's own words stating a signature is absent, never on an
+    // inferred blank line (OCR cannot prove a blank). Severity 4: reliance on
+    // an unexecuted instrument is a serious integrity signal for counsel.
+    var unsignedCues = ['uncountersigned', 'not countersigned', 'never countersigned',
+      'never signed', 'remains unsigned', 'was not signed', 'has not been signed',
+      'no signature from', 'without a countersignature', 'failed to countersign',
+      'did not countersign', 'unsigned agreement', 'unsigned mou', 'unsigned lease',
+      'unsigned contract'];
+    var seenUnsigned = {};
+    for (var u = 0; u < textBlocks.length; u++) {
+      var lowU = (textBlocks[u] || '').toLowerCase();
+      for (var q = 0; q < unsignedCues.length; q++) {
+        var at = lowU.indexOf(unsignedCues[q]);
+        if (at === -1) continue;
+        // One finding per page: several cues on one page are one fact.
+        if (seenUnsigned[u]) break;
+        seenUnsigned[u] = true;
+        var uq = textBlocks[u].substring(Math.max(0, at - 60), at + unsignedCues[q].length + 60).replace(/\s+/g, ' ').trim();
+        findings.push({ type: 'CT23', severity: 4,
+          evidence: 'The record states a signature is missing ("' + unsignedCues[q] + '"): "' + uq + '" — an instrument relied on without full execution; verify against the signature pages of the original',
+          location: 'Page ' + (u + 1) });
+        break;
       }
     }
     return findings;
@@ -2601,6 +2691,9 @@ var VO_NON_PERSON_TOK = (function () {
     // Case', 'Legal Relevance', 'Hong Kong Legal Relevance'. 'Case' can be a
     // rare surname; losing it is the safe direction for a forensic index.
     'confidential case legal relevance matter notice correspondence whatsapp screenshot screenshots email emails ' +
+    // AllFuels run: 'Cnr' (corner, address furniture) and 'Dispossession'
+    // (heading language) were bound into party names.
+    'cnr dispossession ' +
     // From the 3 Aug Greensky rerun: hash fragments ('BCFF SHA-', 'EC SHA-'),
     // 'Evidence Analyzed', and the SAPS case-number label ('SAPS CAS') were
     // bound as parties. 'Cas' can be a given name; safe direction is exclusion.
@@ -2635,7 +2728,10 @@ var VO_NON_PERSON_PHRASE = (function () {
     'south africa|united arab emirates|hong kong|sri lanka|saudi arabia|' +
     'new zealand|united kingdom|united states|ras al khaimah|' +
     'ras al khaimah economic|al khaimah economic|trade license|trade licence|' +
-    'fiduciary duty|ll b').split('|');
+    // AllFuels run (14 Aug): an address fragment ("Cnr R…"), a town
+    // ("Port Edward") and a heading fragment ("Desmond Smith's
+    // Dispossession") were bound as parties.
+    'fiduciary duty|ll b|port edward').split('|');
   for (var i = 0; i < phrases.length; i++) m[phrases[i]] = 1;
   return m;
 })();
