@@ -224,10 +224,10 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   // unread pages, then the seal explainer — and the TOC placeholder comes
   // AFTER the whole human part, so a lay reader meets the story before a
   // 25-entry wall of section names.
-  const onePageAt = buildBody.indexOf("ctx.box('IN ONE PAGE'");
+  const onePageAt = buildBody.indexOf('secExecutiveSummary(ctx, data)');
   const sealExplAt = buildBody.indexOf('secSealExplainer(ctx, data');
   const tocAt = buildBody.indexOf('var tocPage = doc.addPage');
-  ok(onePageAt !== -1 && onePageAt < narrAt, 'IN ONE PAGE is page 2 of the main report, before the story');
+  ok(onePageAt !== -1 && onePageAt < narrAt, 'the executive summary is the front page, before the story');
   ok(sealExplAt !== -1 && narrAt < sealExplAt && sealExplAt < tocAt,
     'the seal explainer joins Part 1, and the TOC only comes after the human part');
   ok(tocAt < sec1At, 'the §15.4 sections follow the TOC as Part 2');
@@ -461,6 +461,40 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'AI candidates are excluded from the summary — verified findings only');
   ok(/not legal conclusions/.test(src4) && /verdict on any named person is for the court/.test(src4),
     'the summary reserves the verdict and marks candidate law as starting points');
+}
+
+// ---- EXECUTIVE SUMMARY: the story on the front page ----
+// Founder ruling: a reader must get the story before anything else — the core
+// finding, the findings that matter most and WHAT EACH ESTABLISHES, the dates,
+// and what to do next. The consequence is stated as fact; the inference from
+// it to intent or liability stays with counsel and the court.
+{
+  const est = R._establishesOf;
+  ok(/applies only to a lessee/.test(est({ type: 'CT44' })), 'CT44 states the consequence of the clause condition');
+  ok(/forfeiture presupposes the asset/.test(est({ type: 'CT45' })), 'CT45 states why a forfeiture implicates the asset');
+  ok(/cannot carry the obligation it is being used to enforce/.test(est({ type: 'CT23' })),
+    'CT23 states what an unsigned counterpart cannot do');
+  ok(est({ type: 'ZZ99' }).length > 0, 'an unmapped type still yields a safe factual consequence');
+  const all = ['CT44', 'CT45', 'CT23', 'CT01', 'CT02', 'CT03', 'CT20', 'CT31', 'CT08', 'CT37', 'CT26', 'CT46', 'ZZ99']
+    .map((t) => est({ type: t })).join(' ');
+  ok(!/\b(guilty|fraud|theft|racketeering|stolen|criminal|dishonest|intended to)\b/i.test(all),
+    'no consequence line asserts a crime, intent or a verdict');
+  ok(!/\b(may|might|appears to|likely|probably|suggests)\b/i.test(all),
+    'no consequence line hedges');
+
+  const src5 = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
+  ok(/function secExecutiveSummary/.test(src5), 'the executive summary section exists');
+  const es = src5.slice(src5.indexOf('function secExecutiveSummary'), src5.indexOf('function secShortVersion'));
+  ok(/The findings that matter most/.test(es) && /What this establishes/.test(es),
+    'it names the top findings and what each establishes');
+  ok(/Key dates in the record/.test(es), 'it carries the dated sequence');
+  ok(/What to do next/.test(es) && /Preserve the sealed originals/.test(es),
+    'it closes with concrete next steps');
+  ok(/This report does not determine guilt/.test(es) && /The verdict is for the court/.test(es),
+    'it ends by reserving the verdict');
+  ok(/f\.source !== 'ai'/.test(es), 'AI candidates are excluded from the executive summary');
+  ok(/secExecutiveSummary\(ctx, data\)/.test(src5.slice(src5.indexOf('async function buildNarrative('))),
+    'the plain-language twin opens with it too');
 }
 
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);

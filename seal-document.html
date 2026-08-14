@@ -3798,6 +3798,97 @@ function effectivePartiesWithRoles(data) {
 }
 
 
+
+// ================= SECTION: EXECUTIVE SUMMARY (front of report) ============
+// Founder ruling: a reader must get the STORY on the front page — the core
+// finding in a sentence, the findings that matter most and what each one
+// establishes, the dates, and what to do next. The engine states the
+// consequence of a finding as fact ("an unsigned counterpart cannot carry the
+// obligation it is used to enforce") and stops there; the inference from that
+// to intent, motive or a person's liability is counsel's, and the court's.
+var VO_ESTABLISHES = {
+  CT44: 'The clause relied on applies only to a lessee. The same record places that party as the owner. The condition the termination rests on is contradicted inside the record itself.',
+  CT45: 'A forfeiture presupposes the asset it forfeits. The same record both recognises the value and denies it is compensable.',
+  CT23: 'The record states the agreement is unsigned. An unsigned counterpart cannot carry the obligation it is being used to enforce; execution has to be established from the original.',
+  CT01: 'The document asserts a fact and its negation. Both cannot hold, and the record does not resolve which one stands.',
+  CT02: 'The same quantity carries two different values. At most one can be correct.',
+  CT03: 'The same event carries two different dates. At most one can be correct.',
+  CT20: 'The number is not in a valid registration format, so the entity\'s status cannot be confirmed from it.',
+  CT31: 'The referenced material is not present in the bundle, so any claim resting on it cannot be checked from this record.',
+  CT08: 'A defined term carries two meanings in one instrument. The obligation it governs differs depending on which definition is applied.',
+  CT37: 'The contact details conflict across the record.',
+  CT26: 'The page make-up is irregular at that point in the bundle.',
+  CT46: 'The capacity claimed and the conduct recorded do not match.'
+};
+function establishesOf(f) {
+  if (f && f.type && VO_ESTABLISHES[f.type]) return VO_ESTABLISHES[f.type];
+  return 'The record states both positions. They cannot both hold, and the record does not resolve which one stands.';
+}
+
+function secExecutiveSummary(ctx, data) {
+  var fr = data.findings || {};
+  var subst = (fr.findings || []).filter(function (f) {
+    return f && f.type !== 'SERIAL' && !isDemoted(f) && f.source !== 'ai';
+  }).sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+
+  ctx.newBodyPage();
+  ctx.heading('EXECUTIVE SUMMARY', { label: 'EXECUTIVE SUMMARY' });
+  ctx.para('Source: ' + san(data.docName || 'document') + '  (' + (data.pageCount || 'n/a') + ' pages)    |    Reference: ' + (data.reference || '') + '    |    ' + fmtDate(data.generatedAt || new Date()),
+    { size: 8, font: ctx.f.courier, color: GRAY, after: 10 });
+
+  var lead = plainLeadLines(fr, data);
+  if (lead.length) ctx.box('IN ONE PAGE', lead, { titleColor: NAVY2 });
+
+  if (subst.length) {
+    ctx.subHeading('The findings that matter most');
+    var top = subst.slice(0, 3);
+    for (var i = 0; i < top.length; i++) {
+      var f = top[i];
+      var where = fmtLocation(f.location);
+      ctx.para((i + 1) + '. ' + (CT_NAMES[f.type] || f.type) + ((where && where !== '—') ? '  (' + where + ')' : ''),
+        { size: 10.4, font: ctx.f.timesBold, color: NAVY2, after: 2 });
+      var q = quoteEvidence(f.evidence);
+      if (q.length > 260) q = q.substring(0, 257) + '…';
+      ctx.para('The record states: ' + q, { size: 9.6, indent: 14, after: 2 });
+      ctx.para('What this establishes: ' + establishesOf(f), { size: 9.6, indent: 14, font: ctx.f.timesItalic, after: 8 });
+    }
+  }
+
+  // Key dates, straight from the dated findings — the sequence the documents
+  // themselves describe, deduped so one finding does not repeat per date.
+  var tl = (fr.timeline && fr.timeline.events) || [];
+  if (tl.length) {
+    var seen = {}, dateBits = [];
+    for (var t = 0; t < tl.length && dateBits.length < 5; t++) {
+      var ev = String(tl[t].evidence || '').replace(/\s+/g, ' ');
+      var k = ev.slice(0, 60);
+      if (seen[k]) continue;
+      seen[k] = true;
+      if (ev.length > 120) ev = ev.slice(0, 117) + '…';
+      dateBits.push(tl[t].date + (tl[t].page ? '  (p. ' + tl[t].page + ')' : '') + ' — ' + ev);
+    }
+    if (dateBits.length >= 2) {
+      ctx.subHeading('Key dates in the record');
+      for (var d = 0; d < dateBits.length; d++) ctx.bullet(dateBits[d], { size: 9.4, after: 3 });
+      ctx.gap(4);
+    }
+  }
+
+  ctx.subHeading('What to do next');
+  ctx.bullet('Preserve the sealed originals unaltered. They are SHA-512 fingerprinted and anchored via OpenTimestamps, and anyone can verify them at verumglobal.foundation/verify.html without an account.', { size: 9.4, after: 3 });
+  ctx.bullet('Open the cited pages and check each contradiction against the original documents. Every finding in this report names the page it came from.', { size: 9.4, after: 3 });
+  var up = data.unreadPages || {};
+  var unreadN = ((up.capped || []).length + (up.noText || []).length + (up.renderFailed || []).length);
+  if (unreadN > 0) {
+    ctx.bullet('Have the ' + unreadN + ' unread page' + (unreadN === 1 ? '' : 's') + ' listed in "Pages the engine could not read" reviewed by a person. Nothing on them was examined.', { size: 9.4, after: 3 });
+  }
+  ctx.bullet('Take the findings to a legal practitioner or the relevant authority. Candidate statutory provisions are set out in the Statutory Anchoring annex as starting points for counsel to confirm.', { size: 9.4, after: 3 });
+  ctx.gap(4);
+
+  ctx.para('This report does not determine guilt. It records what the documents state. The documents cannot all be true at the same time on the points above. Each contradiction is anchored to quoted text and its page, and the record is sealed and independently verifiable. The verdict is for the court.',
+    { size: 10, font: ctx.f.timesItalic, color: NAVY2, after: 6 });
+}
+
 // ================= SECTION: THE SHORT VERSION (counsel's summary) ===========
 // Founder ruling: the full findings set is what an expert needs to audit, and
 // it is too much for the human who has to DECIDE. This section is the quick,
@@ -4075,12 +4166,7 @@ async function build(opts) {
   // story, the unread-pages disclosure and the seal explainer follow. The
   // TOC and the institutional sections come AFTER the human part, so the
   // first thing a lay reader meets is the story, not a wall of section names.
-  var part1Lines = plainLeadLines(fr, data);
-  if (part1Lines.length) {
-    ctx.newBodyPage();
-    ctx.box('IN ONE PAGE', part1Lines, { titleColor: NAVY2 });
-    ctx.para('The story behind these findings starts on the next page. The full evidence — every finding anchored to its page — follows after it. Serious findings should be taken to a legal practitioner or the relevant authorities.', { size: 9.5, font: ctx.f.timesItalic, color: GRAY });
-  }
+  secExecutiveSummary(ctx, data);
   secShortVersion(ctx, data);
   secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' });
   secUnreadPages(ctx, data);
@@ -4373,8 +4459,7 @@ async function buildNarrative(opts) {
   var nSub = (fr.findings || []).filter(function (f) { return f && !isDemoted(f) && f.type !== 'SERIAL'; }).length;
   ctx.para('This is the plain-language telling of the sealed forensic report: ' + nSub + ' verified finding' + (nSub === 1 ? '' : 's') + ', each anchored to the page it comes from. Nothing here goes beyond what the sealed record states; the verdict on any named person is for the court.', { size: 10.5, after: 4 });
   ctx.para('The findings are produced by forensic software — fixed deterministic detection rules, applied identically to every document — not by a generative AI. Any optional AI-review item is labelled as such, and is advisory only.', { size: 9, font: fonts.timesItalic, color: GRAY, after: 8 });
-  var covLines = plainLeadLines(fr, data);
-  if (covLines.length) ctx.box('IN ONE PAGE', covLines, { titleColor: NAVY2 });
+  secExecutiveSummary(ctx, data);
 
   // The short version, the story, the unread-pages disclosure, the people,
   // the seal, the reservation.
@@ -4400,7 +4485,7 @@ var api = { build: build, buildNarrative: buildNarrative, seal: seal, _sanitize:
   _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
   _narrativeBlocks: narrativeBlocks, _pageRanges: pageRanges,
   _fmtLocation: fmtLocation, _pageNumbers: pageNumbers, _scrubNarrative: scrubNarrative,
-  _contradictionSides: contradictionSides,
+  _contradictionSides: contradictionSides, _establishesOf: establishesOf,
   _documentParties: documentParties, _effectiveParties: effectiveParties,
   _effectivePartiesWithRoles: effectivePartiesWithRoles,
   _splitSentences: splitSentences,
