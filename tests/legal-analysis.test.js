@@ -263,6 +263,28 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(wall.map(b => b.text).join(' ').includes('Sentence number 12'), 'no text is lost in the split');
 }
 
+// ---- the analyst's telling leads the story; the backbone stays deterministic ----
+// External review: the deterministic sections read templated ("robotic")
+// because they ARE templated — same input, same words, testifiable. The
+// flowing story is the AI narrator's job. When it ran, its synthesis renders
+// at the TOP of THE STORY IN PLAIN LANGUAGE (labelled, advisory), the
+// deterministic pattern walk follows as "the verifiable backbone", and the
+// annex never prints the same narrative twice.
+{
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
+  const story = src.slice(src.indexOf('function secNarrative'), src.indexOf('// ================= SECTION: AI REVIEW'));
+  ok(/The analyst's telling/.test(story) && /narrativeBlocks\(flow\)/.test(story),
+    'the AI narrative renders inside the story section through the typed-block parser');
+  ok(/Written by the AI narrator from the sealed findings/.test(story),
+    'the analyst telling is labelled as AI-written and advisory');
+  ok(/The verifiable backbone: each pattern, anchored/.test(story),
+    'the deterministic walk is introduced as the verifiable backbone');
+  ok(story.indexOf("The analyst's telling") < story.indexOf('The story the dates tell'),
+    'the flowing story leads; dates and pattern walk follow');
+  ok(/data\._voFlowShown = true/.test(story) && /!data\._voFlowShown/.test(src),
+    'the annex AI section skips the narrative when it already led the story');
+}
+
 // ---- unread pages are disclosed, named, and routed to a human ----
 // Founder ruling: 119 unread pages in the AllFuels bundle held a lease
 // agreement the engine never saw. The report must name every unread page and
