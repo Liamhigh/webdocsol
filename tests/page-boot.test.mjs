@@ -211,15 +211,24 @@ for (const page of PAGES) {
     'serial-pattern label suppression also triggers on user-entered case details');
 }
 
-// The template v5.1.1 Legal Analysis layer must be present in the inlined
-// report builder (drift guard: it must not silently vanish from the page).
+// Constitution v8.0 §15.4 template (founder ruling 1, AGENTS.md): the seven
+// numbered sections must be present in the inlined report builder and wired
+// into build(), with the party/actionable detail preserved as an annex
+// (drift guard: none of them may silently vanish from the page).
 {
   const html = readFileSync('seal-document.html', 'utf8');
-  ok(html.includes('function secLegalAnalysis'), 'inlined report includes the Legal Analysis section');
-  ok(html.includes('Critical Legal Subjects') && html.includes('Dishonesty Detection Matrix') &&
-     html.includes('Behavioural Scorecard') && html.includes('Actionable Output'),
-    'Legal Analysis renders all four template blocks');
-  ok(/secLegalAnalysis\(ctx, data\)/.test(html), 'secLegalAnalysis is wired into build()');
+  for (const fn of ['secCriticalSubjects', 'secDishonestyMatrix', 'secNineBrain',
+    'secTripleVerification', 'secSealedFindings', 'secVerdictReservation', 'secPartyAnalysis']) {
+    ok(html.includes('function ' + fn), 'inlined report includes ' + fn);
+    ok(new RegExp(fn + '\\(ctx, data\\)').test(html), fn + ' is wired into build()');
+  }
+  ok(html.includes('1. CRITICAL LEGAL SUBJECTS') && html.includes('2. DISHONESTY DETECTION MATRIX') &&
+     html.includes('3. NINE-BRAIN EXTRACTION FINDINGS') && html.includes('4. TRIPLE VERIFICATION SUMMARY') &&
+     html.includes('5. SEALED FINDINGS') && html.includes('6. VERDICT RESERVATION') &&
+     html.includes('7. CERTIFICATION'),
+    'all seven §15.4 section headings render');
+  ok(html.includes('Behavioural Scorecard') && html.includes('Actionable Output'),
+    'party analysis annex keeps the scorecard and actionable output');
 }
 
 // AI endpoints must be called SAME-ORIGIN. A hardcoded apex host made every AI

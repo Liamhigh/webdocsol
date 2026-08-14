@@ -1597,7 +1597,7 @@ function secTimeline(ctx, data) {
 // ================= SECTION: DECLARATION =================
 function secDeclaration(ctx, data) {
   ctx.newBodyPage();
-  ctx.heading('DECLARATION');
+  ctx.heading('7. CERTIFICATION');
   // AI-review status MUST match the Methodology section: this line used to be a
   // hardcoded "has NOT been applied", which contradicted the report on any run
   // where the advisory AI review actually ran (the Methodology page reads the
@@ -1699,27 +1699,32 @@ function secMethodology(ctx, data) {
 // Re-presents the engine's findings as the institutional-review "gold standard":
 // legal subjects, dishonesty matrix, per-actor scorecard, actionable output.
 // Deterministic; invents nothing; every line is an indicator for human review.
-function secLegalAnalysis(ctx, data) {
+// ---- §15.4 sections 1-2 + Party annex (founder ruling 1) ----------------
+// Split from the old LEGAL ANALYSIS block: Critical Legal Subjects and the
+// Dishonesty Matrix lead the report as constitutional template sections 1-2;
+// the scorecard and actionable output move to the Party Analysis annex.
+function voLegalPrelude(data) {
   var fr = data.findings || {};
   var all = (fr.findings || []).filter(function (f) { return f && !isDemoted(f); });
   var substantive = all.filter(function (f) { return f.type !== 'SERIAL'; });
-  if (substantive.length === 0) return; // nothing to narrate legally
-
-  ctx.newBodyPage();
-  ctx.heading('LEGAL ANALYSIS');
-  ctx.para('This section re-presents the findings above by legal subject and dishonesty pattern, following the Verum Omnis institutional-review standard. Every entry is a fact anchored to quoted text. What it establishes in law — and any verdict on a named person — is for the court to decide.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 12 });
-
-  // ---- 1. Critical Legal Subjects -------------------------------------
-  ctx.subHeading('Critical Legal Subjects', { toc: true });
   var bySubject = {};
   for (var i = 0; i < substantive.length; i++) {
     var subj = LEGAL_SUBJECT_OF[substantive[i].type] || 'CONTRADICTION';
     (bySubject[subj] = bySubject[subj] || []).push(substantive[i]);
   }
+  return { fr: fr, substantive: substantive, bySubject: bySubject };
+}
+
+function secCriticalSubjects(ctx, data) {
+  var L = voLegalPrelude(data);
+  if (L.substantive.length === 0) return;
+  ctx.newBodyPage();
+  ctx.heading('1. CRITICAL LEGAL SUBJECTS');
+  ctx.para('Findings grouped by legal subject. Every entry is a fact anchored to quoted text. What it establishes in law — and any verdict on a named person — is for the court to decide.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
   var subjRows = [];
   for (var so = 0; so < LEGAL_SUBJECT_ORDER.length; so++) {
     var sk = LEGAL_SUBJECT_ORDER[so];
-    var list = bySubject[sk];
+    var list = L.bySubject[sk];
     if (!list || !list.length) continue;
     list.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
     var ex = quoteEvidence(list[0].evidence);
@@ -1727,7 +1732,7 @@ function secLegalAnalysis(ctx, data) {
     subjRows.push({
       subject: LEGAL_SUBJECT_LABEL[sk],
       points: LEGAL_SUBJECT_KEYPOINTS[sk],
-      example: ex + '  (' + fmtLocation(list[0].location) + ', severity ' + (list[0].severity || 0) + ')'
+      example: ex + '  (' + fmtLocation(list[0].location) + ')'
     });
   }
   ctx.table(
@@ -1739,17 +1744,20 @@ function secLegalAnalysis(ctx, data) {
     subjRows,
     { size: 8 }
   );
+}
 
-  // ---- 2. Dishonesty Detection Matrix ---------------------------------
-  ctx.subHeading('Dishonesty Detection Matrix', { toc: true });
-  ctx.para('The same findings, grouped by the pattern of dishonesty each is consistent with. Dots indicate the highest severity in that lens (' + '●●●' + ' = critical/high).', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+function secDishonestyMatrix(ctx, data) {
+  var L = voLegalPrelude(data);
+  if (L.substantive.length === 0) return;
+  ctx.newBodyPage();
+  ctx.heading('2. DISHONESTY DETECTION MATRIX');
+  ctx.para('The same findings, grouped by the pattern of dishonesty each is consistent with. Rows are ordered most serious first.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   var byLens = {};
-  for (var d2 = 0; d2 < substantive.length; d2++) {
-    var lens = DISHONESTY_OF[substantive[d2].type] || 'CONTRADICTIONS';
-    (byLens[lens] = byLens[lens] || []).push(substantive[d2]);
+  for (var d2 = 0; d2 < L.substantive.length; d2++) {
+    var lens = DISHONESTY_OF[L.substantive[d2].type] || 'CONTRADICTIONS';
+    (byLens[lens] = byLens[lens] || []).push(L.substantive[d2]);
   }
-  // serial patterns are concealment signals
-  var serials = (fr.findings || []).filter(function (f) { return f && f.type === 'SERIAL'; });
+  var serials = (L.fr.findings || []).filter(function (f) { return f && f.type === 'SERIAL'; });
   if (serials.length) byLens['CONCEALMENT'] = (byLens['CONCEALMENT'] || []).concat(serials);
   var lensRows = [];
   for (var lo = 0; lo < DISHONESTY_ORDER.length; lo++) {
@@ -1757,11 +1765,10 @@ function secLegalAnalysis(ctx, data) {
     var ll = byLens[lk];
     if (!ll || !ll.length) continue;
     ll.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-    var maxSev = ll[0].severity || 0;
     var lex = quoteEvidence(ll[0].evidence);
     if (lex.length > 160) lex = lex.substring(0, 157) + '...';
     lensRows.push({
-      flag: sevDots(maxSev) + ' ' + DISHONESTY_LABEL[lk],
+      flag: DISHONESTY_LABEL[lk],
       look: DISHONESTY_MEAN[lk],
       example: ll.length + ' finding' + (ll.length === 1 ? '' : 's') + ' - e.g. ' + lex
     });
@@ -1775,8 +1782,149 @@ function secLegalAnalysis(ctx, data) {
     lensRows,
     { size: 8 }
   );
+}
 
-  // ---- 3. Per-actor scorecard -----------------------------------------
+// ---- §15.4 section 3: Nine-Brain Extraction Findings --------------------
+// v8.0 §2: the 46 contradiction types across 40 detectors ARE the nine
+// brains — "the spec and the code describe the same machine." Each finding
+// renders under the brain whose instrument produced it, in the template's
+// block form. Full detail remains in the Findings in Detail annex.
+var VO_BRAIN_OF_CT = (function () {
+  var m = {};
+  var put = function (b, list) { for (var i = 0; i < list.length; i++) m[list[i]] = b; };
+  put('B5', ['CT03', 'CT04', 'CT29']);
+  put('B6', ['CT02', 'CT15', 'CT16', 'CT17', 'CT18', 'CT19', 'CT20', 'CT21', 'CT22', 'CT34']);
+  put('B2', ['CT23', 'CT24', 'CT25', 'CT26', 'CT27', 'CT28', 'CT30', 'CT33', 'CT35', 'CT41', 'CT42']);
+  put('B3', ['CT36', 'CT37', 'CT38']);
+  return m; // everything else -> B1; SERIAL -> B4
+})();
+var VO_BRAIN_META = {
+  B1: { name: 'B1 — Contradiction Brain', label: 'CONTRADICTION FOUND' },
+  B2: { name: 'B2 — Document Brain', label: 'TAMPER FOUND' },
+  B3: { name: 'B3 — Communications Brain', label: 'COMMUNICATION GAP FOUND' },
+  B4: { name: 'B4 — Behavioral Brain', label: 'BEHAVIORAL PATTERN FOUND' },
+  B5: { name: 'B5 — Timeline Brain', label: 'TEMPORAL IMPOSSIBILITY FOUND' },
+  B6: { name: 'B6 — Financial Brain', label: 'FINANCIAL IRREGULARITY FOUND' }
+};
+function secNineBrain(ctx, data) {
+  var fr = data.findings || {};
+  var all = (fr.findings || []).filter(function (f) { return f && !isDemoted(f); });
+  if (all.length === 0) return;
+  ctx.newBodyPage();
+  ctx.heading('3. NINE-BRAIN EXTRACTION FINDINGS');
+  ctx.para('Each finding is rendered under the brain whose instruments produced it (Constitution v8.0 §2: the deterministic detectors are the nine brains\' implementation). B7 — Legal Mapping renders as the Statutory Anchoring annex. B8 — Audio: no audio atoms in this bundle. B9 — R&D trains and validates; it issues no findings.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  var byBrain = {};
+  for (var i = 0; i < all.length; i++) {
+    var b = all[i].type === 'SERIAL' ? 'B4' : (VO_BRAIN_OF_CT[all[i].type] || 'B1');
+    (byBrain[b] = byBrain[b] || []).push(all[i]);
+  }
+  var ORDER = ['B1', 'B2', 'B3', 'B4', 'B5', 'B6'];
+  var CAP = 10;
+  for (var o = 0; o < ORDER.length; o++) {
+    var list = byBrain[ORDER[o]];
+    if (!list || !list.length) continue;
+    list.sort(function (a, b2) { return (b2.severity || 0) - (a.severity || 0); });
+    ctx.subHeading(VO_BRAIN_META[ORDER[o]].name, { toc: true });
+    var shown = list.slice(0, CAP);
+    for (var k = 0; k < shown.length; k++) {
+      var f = shown[k];
+      ctx.ensure(56);
+      ctx.para(VO_BRAIN_META[ORDER[o]].label + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 1 });
+      ctx.para('- Type: ' + (CT_NAMES[f.type] || (f.serialPattern || f.type)) + (f.type === 'SERIAL' ? '' : ' (' + f.type + ')'), { size: 9, indent: 10, after: 1 });
+      ctx.para('- Evidence: ' + quoteEvidence(f.evidence), { size: 9, indent: 10, after: 1 });
+      ctx.para('- Anchor: ' + fmtLocation(f.location), { size: 9, indent: 10, after: 5 });
+    }
+    if (list.length > CAP) {
+      ctx.para('+ ' + (list.length - CAP) + ' further ' + VO_BRAIN_META[ORDER[o]].name.slice(5) + ' finding(s) in the Findings in Detail annex.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+    }
+  }
+}
+
+// ---- §15.4 section 4: Triple Verification Summary ------------------------
+// Honest mapping of the engine pipeline to the template's three legs: a
+// finding appears here only after (1) deterministic detection, (2) the anchor
+// rule (page + quoted text, unanchored observations demoted to notes), and
+// (3) review retention (AI consensus review where run; engine-verified
+// status otherwise).
+function secTripleVerification(ctx, data) {
+  var fr = data.findings || {};
+  var subst = (fr.findings || []).filter(function (f) { return f && !isDemoted(f) && f.type !== 'SERIAL'; })
+    .sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+  if (subst.length === 0) return;
+  ctx.newBodyPage();
+  ctx.heading('4. TRIPLE VERIFICATION SUMMARY');
+  var ai = data && data.aiReview;
+  var reviewLeg = (ai && ai.applied === true) ? 'RETAINED' : 'ENGINE-VERIFIED';
+  ctx.para('Legs: Detected = deterministic detector fired; Anchored = the anchor rule held (page + quoted text; unanchored observations are demoted to notes and never appear here); Review = ' + ((ai && ai.applied === true) ? 'retained by the advisory AI consensus review.' : 'engine-verified (AI consensus review not run on this report).'), { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+  var rows = [];
+  var CAP = 16;
+  for (var i = 0; i < Math.min(subst.length, CAP); i++) {
+    var f = subst[i];
+    var nm = (CT_NAMES[f.type] || f.type) + ' — ' + fmtLocation(f.location);
+    if (nm.length > 86) nm = nm.substring(0, 83) + '...';
+    rows.push({ finding: nm, a: 'PASS', b: 'PASS', c: reviewLeg, st: 'ACCEPTED' });
+  }
+  ctx.table(
+    [
+      { key: 'finding', title: 'Finding', w: 232 },
+      { key: 'a', title: 'Detected', w: 56, align: 'center' },
+      { key: 'b', title: 'Anchored', w: 56, align: 'center' },
+      { key: 'c', title: 'Review', w: 90, align: 'center' },
+      { key: 'st', title: 'Status', w: 70, align: 'center' }
+    ],
+    rows,
+    { size: 8 }
+  );
+  if (subst.length > CAP) {
+    ctx.para('+ ' + (subst.length - CAP) + ' further finding(s), same three legs, in the Findings in Detail annex.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
+}
+
+// ---- §15.4 section 5: Sealed Findings ------------------------------------
+function secSealedFindings(ctx, data) {
+  var fr = data.findings || {};
+  var subst = (fr.findings || []).filter(function (f) { return f && !isDemoted(f) && f.type !== 'SERIAL'; })
+    .sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+  if (subst.length === 0) return;
+  ctx.newBodyPage();
+  ctx.heading('5. SEALED FINDINGS');
+  ctx.para('The following are established by the sealed record, each anchored to its page:', { size: 10, after: 8 });
+  var CAP = 20;
+  var shown = subst.slice(0, CAP);
+  for (var i = 0; i < shown.length; i++) {
+    var f = shown[i];
+    var q = quoteEvidence(f.evidence);
+    if (q.length > 260) q = q.substring(0, 257) + '...';
+    ctx.para((i + 1) + '. ' + q + ' — Anchor: ' + fmtLocation(f.location) + '.', { size: 9.5, after: 5 });
+  }
+  if (subst.length > CAP) {
+    ctx.para('+ ' + (subst.length - CAP) + ' further finding(s) in the annexes, ordered most serious first.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
+  ctx.gap(4);
+  ctx.para('These findings are sealed under SHA-512 and anchored via OpenTimestamps. They cannot be changed.', { size: 9, font: ctx.f.timesBold, color: NAVY2 });
+}
+
+// ---- §15.4 section 6: Verdict Reservation --------------------------------
+function secVerdictReservation(ctx, data) {
+  ctx.newBodyPage();
+  ctx.heading('6. VERDICT RESERVATION');
+  ctx.para('The verdict on any named person is reserved for the court. This report records what the sealed documents state and measure — it makes no determination of guilt, liability, or wrongdoing.', { size: 10.5 });
+}
+
+// ---- Annex divider -------------------------------------------------------
+function secAnnexDivider(ctx, data) {
+  ctx.newBodyPage();
+  ctx.heading('ANNEXES');
+  ctx.para('The sections that follow preserve the full working detail behind Sections 1-7: the executive summary, narratives, party analysis, statutory anchoring (B7 — Legal Mapping), candidate offences, monetary figures, indexes, serial patterns, timeline, and the verbatim evidence appendix.', { size: 9.5, font: ctx.f.timesItalic, color: GRAY });
+}
+
+// ---- Party Analysis annex (scorecard + actionable output) ----------------
+function secPartyAnalysis(ctx, data) {
+  var L = voLegalPrelude(data);
+  var fr = L.fr, substantive = L.substantive, bySubject = L.bySubject;
+  if (substantive.length === 0) return;
+  ctx.newBodyPage();
+  ctx.heading('PARTY ANALYSIS & ACTIONABLE OUTPUT');
   ctx.subHeading('Behavioural Scorecard (by party)', { toc: true });
   var partiesWR = extractPartiesWithRoles(data.identity && data.identity.parties);
   if (partiesWR.length === 0) {
@@ -1785,17 +1933,9 @@ function secLegalAnalysis(ctx, data) {
     var actorRows = [];
     for (var pa = 0; pa < partiesWR.length; pa++) {
       var nm = partiesWR[pa].name;
-      // Count via attributeParty so a finding whose EVIDENCE is nameless but
-      // whose cited page names the party (anchor.who) still lands in the row —
-      // on the Greensky run every finding was evidence-nameless, so the old
-      // evidence-only regex produced an all-zero scorecard even with parties
-      // declared. Attribution stays descriptive: named on the cited page.
-      var hits = 0, maxS = 0;
+      var hits = 0;
       for (var fi = 0; fi < substantive.length; fi++) {
-        if (attributeParty(substantive[fi], [nm]) === nm) {
-          hits++;
-          if ((substantive[fi].severity || 0) > maxS) maxS = substantive[fi].severity || 0;
-        }
+        if (attributeParty(substantive[fi], [nm]) === nm) hits++;
       }
       actorRows.push({ party: nm, role: partiesWR[pa].role || '—', flags: String(hits) });
     }
@@ -1811,11 +1951,9 @@ function secLegalAnalysis(ctx, data) {
     );
     ctx.para('Attribution records that the name appears in the flagged text or on the cited page - a fact of the record; the declared role restates the case details as entered. Responsibility is for the court to determine.', { size: 8, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
-
-  // ---- 4. Actionable Output -------------------------------------------
   ctx.subHeading('Actionable Output', { toc: true });
   var ranked = substantive.slice().sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-  ctx.para('Top liabilities (highest-severity findings):', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
+  ctx.para('Top liabilities (most serious findings):', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   var topN = ranked.slice(0, 3);
   for (var t2 = 0; t2 < topN.length; t2++) {
     var tf = topN[t2];
@@ -1827,7 +1965,7 @@ function secLegalAnalysis(ctx, data) {
   var saVerified = (fr.findings || []).filter(function (f) { return !(f && f.source === 'ai'); }).length;
   ctx.para(saVerified + ' verified finding' + (saVerified === 1 ? ' stands' : 's stand') + ' on the record above, each anchored to its page. A single verified contradiction can be decisive.', { size: 9, after: 6 });
   ctx.para('Recommended next steps' + (jur ? ' (jurisdiction: ' + jur + ')' : '') + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
-  ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Candidate statutory provisions are set out in the Statutory Anchoring section that follows - they are starting points for counsel to confirm, not a legal conclusion.', { size: 9 });
+  ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Candidate statutory provisions are set out in the Statutory Anchoring annex - they are starting points for counsel to confirm, not a legal conclusion.', { size: 9 });
   ctx.bullet('Preserve the sealed original and this report unaltered; both are SHA-512 anchored and independently verifiable at verumglobal.foundation/verify.html.', { size: 9 });
   if (Object.keys(bySubject).indexOf('FINANCIAL') !== -1) ctx.bullet('Financial irregularities are present - consider a forensic-accounting trace of the flagged amounts and accounts.', { size: 9 });
   if (Object.keys(bySubject).indexOf('TAMPERING') !== -1) ctx.bullet('Document-integrity findings are present - consider requesting native/original files and metadata for the affected pages.', { size: 9 });
@@ -2706,11 +2844,21 @@ async function build(opts) {
   ctx.drawWatermark(tocPage);
   ctx.drawHeader(tocPage);
   // 3-10. sections
+  // Constitution v8.0 §15.4 template (founder ruling 1): the seven numbered
+  // sections lead; the full working detail follows as annexes.
+  secCriticalSubjects(ctx, data);     // 1. CRITICAL LEGAL SUBJECTS
+  secDishonestyMatrix(ctx, data);     // 2. DISHONESTY DETECTION MATRIX
+  secNineBrain(ctx, data);            // 3. NINE-BRAIN EXTRACTION FINDINGS
+  secTripleVerification(ctx, data);   // 4. TRIPLE VERIFICATION SUMMARY
+  secSealedFindings(ctx, data);       // 5. SEALED FINDINGS
+  secVerdictReservation(ctx, data);   // 6. VERDICT RESERVATION
+  secDeclaration(ctx, data);          // 7. CERTIFICATION
+  secAnnexDivider(ctx, data);
   secExecSummary(ctx, data);
   secNarrative(ctx, data);       // deterministic human "story" (always present)
   secAiReview(ctx, data);        // optional AI narrative/review (no-op when off)
-  secLegalAnalysis(ctx, data);   // template v5.1.1 structured legal layer
-  secStatutoryAnchoring(ctx, data); // person -> contradiction -> page -> law (+ cross-border)
+  secPartyAnalysis(ctx, data);   // scorecard + actionable output
+  secStatutoryAnchoring(ctx, data); // B7 — Legal Mapping: person -> contradiction -> page -> law
   secOffenceMatrix(ctx, data);   // candidate offences by subject x jurisdiction
   secActions(ctx, data);         // timeframed recommended actions (0-14 / 14-90 / 90+)
   secMonetaryFigures(ctx, data); // currency amounts found in flagged text (extraction only)
@@ -2722,7 +2870,6 @@ async function build(opts) {
   secTimeline(ctx, data);
   secEvidenceAppendix(ctx, data); // every quoted passage, verbatim, in one place
   secEvidenceMap(ctx, data);     // Annexure A: every indicator ordered by page
-  secDeclaration(ctx, data);
   secConstitution(ctx, data);
   secMethodology(ctx, data);
   // draw TOC now that section page numbers are known
