@@ -176,6 +176,23 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'plain lead is empty when the scan failed');
 }
 
+// ---- narrative reads as a story, not a data dump (source lock) ----
+// Every external review of the narrative made the same complaint: one numbered
+// entry per finding restates the same pattern until the story is unreadable.
+// The narrative walk groups instances of a pattern into one telling: meaning
+// once, strongest quote once, every page listed once, check-hint and law once.
+{
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
+  ok(/groups\.slice\(0,\s*CAP\)/.test(src), 'narrative walks pattern GROUPS, not raw findings');
+  ok(src.indexOf("head += ' The record shows this ' + g.length + ' times.'") !== -1,
+    'a repeated pattern is told once with its instance count');
+  ok(src.indexOf("'Where it happens: '") !== -1, 'a repeated pattern lists every page it touches, once');
+  ok(src.indexOf("'The strongest instance: '") !== -1, 'a repeated pattern quotes its strongest instance');
+  ok(src.indexOf("'At its core: '") !== -1, 'the narrative opens with a factual thesis of the top patterns');
+  ok(!/A moderate issue|A lesser issue/.test(src),
+    'per-finding severity adjectives are gone - pattern order carries the weight');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);

@@ -2646,37 +2646,90 @@ function secNarrative(ctx, data) {
   }
 
   var serious = subst.filter(function (f) { return (f.severity || 0) >= 4; });
-  var lead = 'Reading the ' + (docCount === 1 ? 'document' : 'documents together') + ', ' + subst.length + ' substantive contradiction' + (subst.length === 1 ? '' : 's') + ' stand' + (subst.length === 1 ? 's' : '') + ' out';
-  lead += serious.length ? ', ' + serious.length + ' of them serious. Taken in turn:' : '. Taken in turn:';
-  ctx.para(lead, { size: 10.5, after: 8 });
 
-  // The story, finding by finding, anchored: party -> contradiction -> page ->
-  // candidate law. Capped so the narrative stays readable; the findings matrix
-  // and the Statutory Anchoring section carry the complete detail.
+  // Group repeated findings of the same type into ONE telling. Every external
+  // read of the narrative made the same complaint: twenty numbered entries
+  // restating the same pattern is a data dump, not a story. A person needs
+  // each PATTERN once — what it means, who it concerns, and every page it
+  // touches — while the findings matrix keeps every instance individually.
+  // subst is sorted most-serious-first, so groups inherit that order and the
+  // first member of each group is its strongest instance.
+  var groups = [], groupOf = {};
+  for (var gi = 0; gi < subst.length; gi++) {
+    var gf = subst[gi];
+    var gk = (gf.source === 'ai' ? 'AI:' : '') + (gf.type || '?');
+    if (!groupOf[gk]) { groupOf[gk] = []; groups.push(groupOf[gk]); }
+    groupOf[gk].push(gf);
+  }
+
+  var lead = 'Reading the ' + (docCount === 1 ? 'document' : 'documents together') + ', ' + subst.length + ' substantive contradiction' + (subst.length === 1 ? '' : 's') + ' stand' + (subst.length === 1 ? 's' : '') + ' out';
+  lead += serious.length ? ', ' + serious.length + ' of them serious' : '';
+  lead += groups.length < subst.length ? ', following ' + groups.length + ' distinct pattern' + (groups.length === 1 ? '' : 's') + '.' : '.';
+  ctx.para(lead, { size: 10.5, after: 4 });
+
+  // The thesis, in one breath: what the most serious patterns are, as the
+  // plain clauses the findings already state. Factual synthesis only — the
+  // meanings are joined, never escalated into a judgment.
+  var thesisBits = [];
+  for (var tb = 0; tb < groups.length && thesisBits.length < 3; tb++) {
+    var tMeaning = narrativeMeaning(groups[tb][0]);
+    if (tMeaning && thesisBits.indexOf(tMeaning) === -1) thesisBits.push(tMeaning);
+  }
+  if (thesisBits.length) {
+    ctx.para('At its core: ' + thesisBits.join('; ') + '. Pattern by pattern:', { size: 10.5, after: 8 });
+  }
+
+  // The story, pattern by pattern, anchored: party -> contradiction -> pages ->
+  // candidate law, each stated once per pattern. The findings matrix and the
+  // Statutory Anchoring section carry the complete per-instance detail.
   var jur = detectJurisdictions(data);
   if (jur.isCrossBorder) {
     ctx.para('This is a cross-border matter (' + listPhrase([JURIS_LABEL[jur.home]].concat(jur.foreign.map(function (c) { return JURIS_LABEL[c] || c; }))) + '). Each contradiction is anchored below to the party it names, its page, and the candidate law of each jurisdiction; the fuller statutory mapping and the cross-border framework follow in the Statutory Anchoring section.', { size: 10, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   }
   var CAP = NARRATIVE_CAP;
-  var shown = subst.slice(0, CAP);
-  for (var i = 0; i < shown.length; i++) {
-    var f = shown[i];
+  var shownG = groups.slice(0, CAP);
+  var told = 0;
+  for (var i = 0; i < shownG.length; i++) {
+    var g = shownG[i];
+    var f = g[0]; // strongest instance of this pattern
+    told += g.length;
     var name = CT_NAMES[f.type] || (f.source === 'ai' ? 'AI-identified concern' : (f.type || 'Contradiction'));
-    var sevWord = (f.severity || 0) >= 4 ? 'A serious issue' : ((f.severity || 0) >= 3 ? 'A moderate issue' : 'A lesser issue');
-    var who = attributeParty(f, parties);
-    var whoClause = who ? ' It concerns ' + withRole(who, roleMap) + '.' : '';
-    ctx.para((i + 1) + '. ' + sevWord + ' — ' + name + '. In plain terms, ' + withPeriod(narrativeMeaning(f)) + whoClause, { size: 10.5, font: ctx.f.timesBold, color: NAVY2, after: 2 });
+
+    // Everyone this pattern concerns and every page it touches, across ALL
+    // its instances, stated once. No severity adjectives: the order of the
+    // patterns carries the weight (founder ruling — bands never print).
+    var whoBits = [], seenWho = {};
+    var pageBits = [], seenPage = {};
+    for (var m = 0; m < g.length; m++) {
+      var mw = attributeParty(g[m], parties);
+      if (mw && !seenWho[mw]) { seenWho[mw] = true; whoBits.push(withRole(mw, roleMap)); }
+      var mp = fmtLocation(g[m].location);
+      if (mp && mp !== '—' && !seenPage[mp]) { seenPage[mp] = true; pageBits.push(mp); }
+    }
+    pageBits.sort(function (a, b) {
+      return (parseInt(String(a).replace(/\D+/g, ''), 10) || 0) - (parseInt(String(b).replace(/\D+/g, ''), 10) || 0);
+    });
+
+    var head = (i + 1) + '. ' + name + '. In plain terms, ' + withPeriod(narrativeMeaning(f));
+    if (g.length > 1) head += ' The record shows this ' + g.length + ' times.';
+    if (whoBits.length) head += ' It concerns ' + listPhrase(whoBits) + '.';
+    ctx.para(head, { size: 10.5, font: ctx.f.timesBold, color: NAVY2, after: 2 });
+
     var where = fmtLocation(f.location);
     var loc = (where && where !== '—') ? ' (' + where + ')' : '';
     if (f.source === 'ai' && f.rationale) {
       ctx.para('The AI review noted: ' + san(f.rationale) + loc + '.', { size: 10, indent: 14, after: 3 });
     } else {
-      ctx.para('The record shows: ' + quoteEvidence(f.evidence) + loc + '.', { size: 10, indent: 14, after: 3 });
+      ctx.para((g.length > 1 ? 'The strongest instance: ' : 'The record shows: ') + quoteEvidence(f.evidence) + loc + '.', { size: 10, indent: 14, after: 3 });
     }
-    // What a HUMAN does with this finding — a concrete verification step per
+    if (pageBits.length > 1) {
+      var pgList = pageBits.slice(0, 12).join(', ') + (pageBits.length > 12 ? ' and ' + (pageBits.length - 12) + ' more' : '');
+      ctx.para('Where it happens: ' + pgList + '.', { size: 9.5, indent: 14, after: 3 });
+    }
+    // What a HUMAN does with this pattern — a concrete verification step per
     // engine category. The external review's core complaint was that findings
     // told the reader nothing actionable ("the human reviewer still has to
-    // read the whole file"); every finding now carries its next step.
+    // read the whole file"); every pattern carries its next step, once.
     var checkHint = (f.source === 'ai') ? VO_CHECK_HINTS.AI_IDENTIFIED
       : (VO_CHECK_HINTS_TYPE[f.type] || VO_CHECK_HINTS[CT_CATEGORY[f.type] || 'DIGITAL']);
     if (checkHint) {
@@ -2689,8 +2742,8 @@ function secNarrative(ctx, data) {
       ctx.para('Candidate law (for counsel to confirm): ' + lawBits.join('; ') + '.', { size: 9, font: ctx.f.timesItalic, color: GRAY, indent: 14, after: 8 });
     }
   }
-  if (subst.length > CAP) {
-    var rest = subst.length - CAP;
+  if (subst.length > told) {
+    var rest = subst.length - told;
     ctx.para('A further ' + rest + ' substantive finding' + (rest === 1 ? '' : 's') + ' ' + (rest === 1 ? 'is' : 'are') + ' set out in full in the findings matrix that follows.', { size: 10, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   }
 
