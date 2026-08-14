@@ -207,6 +207,32 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'the provenance statement names the mechanism: deterministic software rules');
 }
 
+// ---- AI narrative renders structured, never a text dump ----
+// The Workers-AI narrative arrives as free text; narrativeBlocks() must turn
+// ANY shape of reply into typed blocks (heading / bullet / para) with long
+// blocks split at sentence boundaries, so the PDF never shows a wall of text.
+{
+  const nb = R._narrativeBlocks;
+  ok(Array.isArray(nb('')) && nb('').length === 0, 'narrativeBlocks: empty input yields no blocks');
+
+  const structured = nb('SUMMARY\n\nFirst point of the story. Second sentence.\n\n' + '='.repeat(80) + '\n\nKEY EVIDENCE AND NEXT STEPS\n\n- request the original lease\n- trace the July payment\nClosing remark here.');
+  ok(structured.filter(b => b.kind === 'heading').length === 2, 'ALL-CAPS section titles become headings');
+  ok(!structured.some(b => /^=+$/.test(b.text)), 'separator rows are dropped');
+  ok(structured.filter(b => b.kind === 'bullet').length === 2 &&
+     structured.some(b => b.kind === 'bullet' && /original lease/.test(b.text)),
+    'single-newline "- " lines become bullets');
+  ok(structured.some(b => b.kind === 'para' && /Closing remark/.test(b.text)), 'text after a list still renders as a paragraph');
+
+  const numbered = nb('1. first item checked\n2) second item checked');
+  ok(numbered.length === 2 && numbered.every(b => b.kind === 'bullet'), 'numbered lines render as bullets');
+
+  // A single unbroken 12-sentence block must come out as several paragraphs.
+  const wall = nb(Array.from({ length: 12 }, (_, i) => 'Sentence number ' + (i + 1) + ' of the model reply keeps going on and on without a single break anywhere in sight.').join(' '));
+  ok(wall.length >= 3 && wall.every(b => b.kind === 'para' && b.text.length <= 700),
+    'a wall of text is split into readable paragraphs (' + wall.length + ' blocks)');
+  ok(wall.map(b => b.text).join(' ').includes('Sentence number 12'), 'no text is lost in the split');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);

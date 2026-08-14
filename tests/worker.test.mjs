@@ -187,6 +187,9 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'the user\'s case context reaches the narrator');
   ok(/TWO-TIER RULE/.test(capturedSystem) && /CONTRADICTION SHAPE/.test(capturedSystem),
     'the system prompt carries the two-tier rule and the contradiction shape');
+  ok(/FORMAT: short paragraphs/.test(capturedSystem) && /separated by a BLANK line/.test(capturedSystem)
+    && /Never one unbroken block/.test(capturedSystem),
+    'the narrator prompt demands structured paragraphs and bullets, never one block');
   ok(/DECLARATIVE FINDINGS RULE/.test(capturedSystem) && /hallmarks of fraud/.test(capturedSystem),
     'the system prompt makes anchored facts declarative (forensic-instrument voice)');
   ok(/constitutional forensic investigator/.test(capturedSystem)

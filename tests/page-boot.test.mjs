@@ -174,10 +174,10 @@ for (const page of PAGES) {
   const rep = readFileSync('forensic-report.js', 'utf8');
   ok(!/data\.aiNarrative\s*\?\s*san\(data\.aiNarrative\)/.test(rep),
     'narrative is NOT sanitized before the paragraph split (would squash it)');
-  ok(/var paras = narr\.split\(\/\\n\{2,\}\/\)/.test(rep),
-    'narrative is split into paragraphs on blank lines');
-  ok(/san\(paras\[p\]\)/.test(rep),
-    'each narrative paragraph is sanitized after the split');
+  ok(/var blocks = narrativeBlocks\(narr\)/.test(rep),
+    'narrative renders through the typed-block parser (headings/bullets/split paragraphs)');
+  ok(/san\(b\.text\)/.test(rep),
+    'each narrative block is sanitized after the split, at render time');
 }
 
 // Report-content regressions caught in the sealed Greensky report of 26 Jul 2026:
