@@ -219,6 +219,19 @@ const E = require('../forensic-engine-page.js');
     'no false-positive on "admits no liability" boilerplate');
 }
 
+// ---- 6. Constitution v8.0 §15.2 language lock (evidence strings) ----
+// Prohibited hedging ("may," "possibly," "appears to," "consistent with")
+// must not ship inside any evidence template the engine renders as a
+// finding. Source-level grep so a hedge cannot quietly return.
+{
+  const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-engine-page.js'), 'utf8');
+  const evidenceLines = src.split('\n').filter(l => /evidence:\s*'/.test(l) && !/^\s*\/\//.test(l));
+  const banned = /(evidence:\s*'[^']*\b(?:Possible|possibly|appears to|consistent with editing|may have been|may be recoverable|may have expanded)\b)/;
+  const bad = evidenceLines.filter(l => banned.test(l));
+  ok(bad.length === 0, 'no prohibited hedging in shipped evidence strings (' + bad.length + ' found)');
+  ok(!/may be void/.test(src), 'CT44 definition reserves voidness for the court');
+}
+
 console.log('\n[allfuels-regression] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[allfuels-regression] ALL GREEN');
