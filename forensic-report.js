@@ -1892,7 +1892,9 @@ function secSealedFindings(ctx, data) {
   if (subst.length === 0) return;
   ctx.newBodyPage();
   ctx.heading('5. SEALED FINDINGS');
-  ctx.para('The following are established by the sealed record, each anchored to its page:', { size: 10, after: 8 });
+  // §15.3 REQUIRED wording, verbatim: "The record contains [X] contradictions.
+  // The following are established."
+  ctx.para('The record contains ' + subst.length + ' verified finding' + (subst.length === 1 ? '' : 's') + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
   var CAP = 20;
   var shown = subst.slice(0, CAP);
   for (var i = 0; i < shown.length; i++) {
