@@ -494,6 +494,43 @@ var DETECTORS = {
         evidence: 'The document both affirms and negates "' + cw + '": "…' + mkSnip(pair[0]) + '…" vs "…' + mkSnip(pair[1]) + '…"',
         location: 'Same passage' });
     }
+
+    // Explicit admission statements. The Greensky review's central miss: a
+    // written first-person admission ("I admit that…", "we concede…") is the
+    // strongest statement a record can carry, and the engine had no detector
+    // for admission LANGUAGE at all. Cite-or-stay-silent: only explicit
+    // first-person admission phrasing fires — the engine quotes the sentence,
+    // it does not judge what was admitted (narrative admissions that only
+    // read as admissions in context belong to the AI review layer). One
+    // aggregated finding, every stating page cited.
+    var admissionCues = ['i admit', 'we admit', 'i concede', 'we concede',
+      'i acknowledge that', 'we acknowledge that', 'i accept that', 'we accept that',
+      'i was wrong', 'we were wrong', 'i misled', 'we misled',
+      'admitted under oath', 'admission of guilt'];
+    var admPages = [], admQuote = null, admCue = null;
+    for (var ap = 0; ap < textBlocks.length; ap++) {
+      var lowA = (textBlocks[ap] || '').toLowerCase();
+      for (var ac = 0; ac < admissionCues.length; ac++) {
+        var atA = lowA.indexOf(admissionCues[ac]);
+        if (atA === -1) continue;
+        admPages.push(ap + 1);
+        if (!admQuote) {
+          admCue = admissionCues[ac];
+          admQuote = textBlocks[ap].substring(Math.max(0, atA - 40), atA + admissionCues[ac].length + 120).replace(/\s+/g, ' ').trim();
+        }
+        break; // one count per page
+      }
+    }
+    if (admPages.length) {
+      var apList = admPages.length > 8
+        ? admPages.slice(0, 8).join(', ') + ' and ' + (admPages.length - 8) + ' more'
+        : admPages.join(', ');
+      findings.push({ type: 'CT01', severity: 4,
+        evidence: 'The record carries an explicit admission ("' + admCue + '"): "' + admQuote + '"' +
+          (admPages.length > 1 ? ' — admission language appears on ' + admPages.length + ' pages (' + apList + ')' : '') +
+          ' — read the full passage in context; what is admitted, and by whom, is for the reviewer',
+        location: 'Page ' + apList });
+    }
     return findings;
   },
 
@@ -793,7 +830,13 @@ var DETECTORS = {
     // never fires; whether the invoice belongs to the expired instrument is
     // for the reviewer — the finding says exactly that.
     var VO_EXP_LABEL = /\b(?:lease|agreement|contract|licen[cs]e|franchise)\s+(?:(?:shall\s+)?(?:expire[sd]?|terminate[sd]?)(?:\s+on)?|expiry\s+date|expiration\s+date|termination\s+date)\b[:\s]*|\b(?:expiry|expiration|termination)\s+date\s+of\s+the\s+(?:lease|agreement|contract)\b[:\s]*/gi;
-    var VO_INV_LABEL = /\b(?:tax\s+invoice|invoice|statement)\s+(?:date[d]?|issued)(?:\s+on)?\b[:\s]*|\binvoiced\s+on\b[:\s]*/gi;
+    // On a real invoice page "TAX INVOICE" is a heading and "Date:" sits in
+    // the details block below it — the adjacency-only pattern never matched,
+    // so the AllFuels p.334 invoice was invisible to this check across two
+    // runs. The bridged alternative requires the strong "tax invoice" heading
+    // (bare "invoice" bridges too easily in prose) and an explicit Date label
+    // within 120 chars.
+    var VO_INV_LABEL = /\b(?:tax\s+invoice|invoice|statement)\s+(?:date[d]?|issued)(?:\s+on)?\b[:\s]*|\btax\s+invoice\b[^]{0,120}?\bdate\s*[:\-]\s*|\binvoiced\s+on\b[:\s]*/gi;
     // Month-name, ISO, and numeric DD/MM/YYYY dates. A numeric date is
     // ambiguous (01/03/2026 is 1 March or 3 January), so it carries BOTH
     // readings as a range [keyMin, keyMax]; the comparison below only fires
@@ -1995,6 +2038,20 @@ var DETECTORS = {
       findings.push({ type: 'CT45', severity: 5,
         evidence: 'Goodwill / value of the business is recognised: "' + recog.quote + '" — yet denied or said to have no compensable value: "' + denies.quote + '". The forfeiture/clawback is itself an admission the asset exists. Its legal characterisation is for the court.',
         location: loc(recog, denies) });
+    }
+    // Path A2 — "Goodwill: N/A" declared in a schedule while the SAME
+    // agreement defines goodwill as a quantifiable asset. pageOf() returns
+    // only the first match, so when a bundle's commentary already supplies a
+    // recognition/denial pair (AllFuels p.2/3), the schedule-level N/A pair
+    // deeper in the agreement (p.89 vs p.104) went unreported. A distinct
+    // page-pair is a distinct fact of the record.
+    var naDeny = pageOf(/goodwill\s*[:\-]?\s*n\s*\/\s*a\b|goodwill\s*[:\-]\s*n\/?a\b/);
+    var defRecog = pageOf(/goodwill[^.]{0,80}means[^.]{0,120}(quantifiable|asset|reputation)/);
+    if (naDeny && defRecog &&
+        !(recog && denies && recog.page === defRecog.page && denies.page === naDeny.page)) {
+      findings.push({ type: 'CT45', severity: 5,
+        evidence: 'A schedule states "Goodwill: N/A": "' + naDeny.quote + '" — while the agreement itself defines goodwill as an asset: "' + defRecog.quote + '". The definition and the N/A declaration cannot both hold. Its legal characterisation is for the court.',
+        location: loc(defRecog, naDeny) });
     }
     // Path B — the Caltex/AllFuels clause-11 trap: the franchisee gets NO
     // compensation for its OWN improvements to the premises, while the

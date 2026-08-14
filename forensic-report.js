@@ -1883,7 +1883,20 @@ function secStatutoryAnchoring(ctx, data) {
   for (var i = 0; i < Math.min(ranked.length, CAP); i++) {
     var f = ranked[i];
     var whoName = attributeParty(f, parties);
-    var who = whoName ? withRole(whoName, roleMap) : '(unattributed)';
+    // Fallback: the parties the ENGINE bound to the cited pages, stated
+    // descriptively. Three external reviews quoted "(unattributed)" from this
+    // table while the finding's own detail section was already naming the
+    // parties on the cited pages — the table should carry the same fact.
+    var who;
+    if (whoName) {
+      who = withRole(whoName, roleMap);
+    } else {
+      var tblNames = ((f.anchor && f.anchor.who) || [])
+        .map(function (x) { return x && x.name; }).filter(Boolean);
+      who = tblNames.length
+        ? tblNames.slice(0, 2).join(', ') + ' (named on the cited pages)'
+        : '(unattributed)';
+    }
     var name = CT_NAMES[f.type] || (f.source === 'ai' ? 'AI-identified' : (f.type || 'Contradiction'));
     var stat = statutesForSubject(subjectOf(f), jur);
     var lawCell = stat.map(function (s) { return (JURIS_LABEL[s.jur] || s.jur) + ': ' + s.provisions.join('; '); }).join('\n');
