@@ -426,6 +426,43 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'no attribution path reads the user form alone');
 }
 
+// ---- THE SHORT VERSION: a quick, accurate read for the decision-maker ----
+// Founder ruling: the full findings set is what an EXPERT needs to audit, and
+// it is too much for the person who has to DECIDE. The short version reduces
+// each contradiction to the two things the record says that cannot both be
+// true, side by side, with the pages — the record's own words, nothing new.
+{
+  const sides = R._contradictionSides;
+  const trap = sides('Termination/expiry rests on a lessee-only clause (party not the owner): "chisee is not the owner of the Premises" — yet the record shows the party had become the owner of the premises: "fuel and the Owner/Lessor of the site"');
+  ok(trap && /not the owner of the Premises/.test(trap.a) && /Owner\/Lessor/.test(trap.b),
+    'an "A — yet B" finding splits into the two sides the record states');
+  const affirm = sides('The document both affirms and negates "signed": "…yes he signed under pressure…" vs "…goodwill taken without any signed waiver…"');
+  ok(affirm && /signed under pressure/.test(affirm.a) && /without any signed waiver/.test(affirm.b),
+    'an "A vs B" finding splits on the contrast');
+  ok(sides('Referenced "annexure 8" not found in document') === null,
+    'a single-sided finding is not forced into a pair');
+  ok(sides('') === null && sides(null) === null, 'empty evidence yields no pair');
+  ok(sides('short — yet x') === null, 'a fragment too short to be a quoted side is rejected');
+
+  const src4 = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
+  ok(/function secShortVersion/.test(src4), 'the short-version section exists');
+  const b4 = src4.slice(src4.indexOf('async function build('), src4.indexOf('async function buildNarrative('));
+  const shortAt = b4.indexOf('secShortVersion(ctx, data)');
+  const onePageAt2 = b4.indexOf("ctx.box('IN ONE PAGE'");
+  const storyAt2 = b4.indexOf("secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' })");
+  ok(shortAt !== -1 && onePageAt2 < shortAt && shortAt < storyAt2,
+    'it sits in Part 1: after IN ONE PAGE, before the story');
+  ok(/secShortVersion\(ctx, data\)/.test(src4.slice(src4.indexOf('async function buildNarrative('))),
+    'the plain-language twin carries it too');
+  ok(/What cannot all be true at once/.test(src4) && /The record states/.test(src4) && /and also states/.test(src4),
+    'the summary presents both sides of each contradiction side by side');
+  ok(/Also established/.test(src4), 'single-sided findings still appear, in one line each');
+  ok(/f\.source !== 'ai'/.test(src4.slice(src4.indexOf('function secShortVersion'), src4.indexOf('function secUnreadPages'))),
+    'AI candidates are excluded from the summary — verified findings only');
+  ok(/not legal conclusions/.test(src4) && /verdict on any named person is for the court/.test(src4),
+    'the summary reserves the verdict and marks candidate law as starting points');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);
