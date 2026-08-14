@@ -110,6 +110,69 @@ const E = require('../forensic-engine-page.js');
   for (const n of yes) ok(E.voLooksLikePerson(n), 'voLooksLikePerson accepts "' + n + '"');
 }
 
+// ---- 4. rerun round 2 (39-finding report): flooding and blind spots ----
+{
+  // 4a. One aggregated missing-signature finding, not one per page. The
+  // resealed bundle's own commentary repeats "uncountersigned" across many
+  // pages; 25 scattered CT23 rows buried the fact.
+  const pages = [];
+  for (let i = 0; i < 12; i++) {
+    pages[i] = (i % 2 === 0)
+      ? 'The uncountersigned MOU under which payment was demanded remains in dispute.'
+      : 'Ordinary narrative page ' + i + '.';
+  }
+  const sig = E.DETECTORS.D32_DETECT_SIGNATURE_ANOMALY(pages);
+  const missing = sig.filter(x => /signature is missing/.test(x.evidence));
+  ok(missing.length === 1, 'repeated unsigned statements collapse to ONE finding (got ' + missing.length + ')');
+  ok(missing.length && missing[0].severity === 4, 'aggregated finding keeps enforcement severity 4');
+  ok(missing.length && /6 pages/.test(missing[0].evidence), 'aggregated finding counts every stating page (' + (missing[0] && missing[0].evidence.match(/\d+ pages/)) + ')');
+
+  // 4b. Numeric invoice date fires when BOTH readings are past expiry
+  // (01/03/2026 is after 31 July 2024 whichever way it is read).
+  const num = [];
+  num[0] = 'The lease expires on 31 July 2024.';
+  num[10] = 'TAX INVOICE date: 01/03/2026 Rental March 2026 R173,396.20 due.';
+  for (let i = 1; i < 10; i++) num[i] = 'body';
+  const late = E.DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(num);
+  ok(late.some(x => /Billing after the stated expiry/.test(x.evidence) && /01\/03\/2026/.test(x.evidence)),
+    'numeric invoice date past expiry under both readings fires');
+
+  // ...but an ambiguous numeric date that is only late under ONE reading
+  // stays silent (05/08/2024 could be 5 Aug or 8 May against a 31 July 2024
+  // expiry).
+  const amb = [
+    'The lease expires on 31 July 2024.',
+    'TAX INVOICE date: 05/08/2024 monthly rental.'
+  ];
+  ok(!E.DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(amb).some(x => /Billing after/.test(x.evidence)),
+    'ambiguous numeric date late under only one reading stays silent');
+
+  // 4c. "Goodwill: N/A" beside a quantifiable-asset definition is CT45.
+  const gw = E.DETECTORS.D39_DETECT_ASSET_VALUE_DENIAL([
+    'Schedule Part 1 — 12. Goodwill: N/A as recorded.',
+    'Goodwill means the established reputation of a business regarded as a quantifiable asset.'
+  ]);
+  ok(gw.some(x => x.type === 'CT45'), '"Goodwill: N/A" vs quantifiable-asset definition fires CT45');
+
+  // 4d. Magnitude words survive amount parsing: "Total R1.2 million" vs
+  // "Total R900,000.00" is a genuine restatement comparison; and the D02
+  // value for R231.3 million is 231,300,000 — not 231 or 2313.
+  const mag = E.DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY([
+    'Grand total R1.2 million for the works.',
+    'Grand total R900,000.00 as invoiced.'
+  ]);
+  ok(mag.some(x => x.type === 'CT02' && /1\.2 million/i.test(x.evidence)),
+    'magnitude amounts compare against plain amounts (' + mag.length + ' findings)');
+
+  // 4e. CT08 term-definition conflicts are Low severity now.
+  const term = E.DETECTORS.D30_DETECT_TERM_DEFINITION_CONFLICT([
+    '1.1 "Rental" means the monthly rental payable to the Lessor under this agreement for the premises.',
+    '9.4 "Rental" means the amount, if any, payable by the Franchisee to the Franchisor from time to time.'
+  ]);
+  const t8 = term.find(x => x.type === 'CT08');
+  ok(!t8 || t8.severity === 2, 'CT08 term-definition conflicts report at severity 2 (got ' + (t8 && t8.severity) + ')');
+}
+
 console.log('\n[allfuels-regression] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[allfuels-regression] ALL GREEN');

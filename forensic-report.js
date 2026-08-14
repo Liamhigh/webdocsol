@@ -2276,7 +2276,9 @@ function secActions(ctx, data) {
 // amount (seen on the Greensky report). The class covers ALL letters plus
 // underscore (\p{L} with /u), so accented words ("Bár 2025") can't leak either.
 // Lookbehind + unicode property escapes are ES2018 (all targets).
-var VO_MONEY_RE = /(?<![\p{L}_])(?:ZAR|USD|AED|EUR|GBP|R|US\$|\$|€|£)\s?\d[\d ,.]*\d|\bdirhams?\b[^.\n]{0,24}\d[\d ,.]*/giu;
+// The magnitude word travels with the figure: "R231.3 Million" must render
+// as stated, not truncated to "R231" (AllFuels headline-figure regression).
+var VO_MONEY_RE = /(?<![\p{L}_])(?:ZAR|USD|AED|EUR|GBP|R|US\$|\$|€|£)\s?\d[\d ,.]*\d(?:\s?(?:million|billion|m|bn|k)\b)?|\bdirhams?\b[^.\n]{0,24}\d[\d ,.]*/giu;
 // Currency amounts in a string, de-duplicated, whitespace-normalised. Extraction
 // only — the caller never labels a figure a loss/gain.
 function extractMoney(text) {
