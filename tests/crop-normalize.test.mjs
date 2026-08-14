@@ -51,6 +51,39 @@ ok(/voNormalizeSealPageBoxes\(pdf\)/.test(html.replace('function voNormalizeSeal
 ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
   'the normaliser uses the engine decision function voCropHidesContent');
 
+// ---- seal bands live on ADDED space, never over content ----
+// The footer strip and QR panel used to be drawn over the page's own bottom
+// edge and top-right corner; on a scanned original with no margins that
+// covered the signature at the foot of a lease page. The stamping loop must
+// extend the media/crop boxes and draw all seal furniture in the added bands.
+{
+  const stamp = html.slice(html.indexOf('async function buildSealedPDF'), html.indexOf('function addBlockchainPage') !== -1 ? html.indexOf('function addBlockchainPage') : html.indexOf('async function buildSealedPDF') + 20000);
+  ok(/pg\.setMediaBox\(mbox\.x, mbox\.y - footH, mbox\.width, mbox\.height \+ footH \+ headH\)/.test(stamp),
+    'each page is EXTENDED (media box grows down for the footer, up for the seal band)');
+  ok(/pg\.setCropBox\(mbox\.x, mbox\.y - footH/.test(stamp),
+    'the crop box is extended with the media box so viewers show the bands');
+  ok(!/pg\.drawRectangle\(\{ x: 0, y: 0, width: pageW/.test(stamp),
+    'the footer strip is no longer painted over the page content at y=0');
+  ok(/y: footY/.test(stamp) && /y: headY/.test(stamp),
+    'footer and header furniture draw inside the new bands');
+  ok(/const panelY = headY \+/.test(stamp),
+    'the QR panel sits in the added header band, not over the page corner');
+}
+
+// ---- sharing always leaves the user a saved copy of the whole bundle ----
+// Samsung Internet attaches only part of the bundle even after canShare()
+// approves it, with no way to detect what the target app received. Every
+// share must ALSO save the full bundle to the device for the user's record.
+{
+  const shareSrc = html.slice(html.indexOf('function addShareButton'), html.indexOf('grid.insertBefore(btn, grid.firstChild)'));
+  ok(/try \{ shared = navigator\.share\(data\); \}/.test(shareSrc),
+    'share is still called synchronously in the click handler');
+  ok(/saveFiles\(files\);/.test(shareSrc) && shareSrc.indexOf('saveFiles(files);') > shareSrc.indexOf('navigator.share(data)'),
+    'every share ALSO saves the full bundle to the device (after the share call)');
+  ok(/saves a copy of each to your device for your records/.test(shareSrc),
+    'the hint tells the user the bundle is saved for their records');
+}
+
 console.log(`\n[crop-normalize] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[crop-normalize] FAILURES'); process.exit(1); }
 console.log('[crop-normalize] ALL GREEN');
