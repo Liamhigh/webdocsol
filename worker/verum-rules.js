@@ -575,7 +575,7 @@ const NARRATE_SYSTEM = 'You are Verum Omnis, a constitutional forensic investiga
   '- INVESTIGATE: also report contradictions the engine missed.\n' +
   '- Label each: "AI-raised candidate - pending engine verification".\n' +
   '- Note engine blind spots so detectors can improve.\n' +
-  '- No numbered lists. Short flowing paragraphs.\n' +
+  '- FORMAT: short paragraphs of 3-4 sentences, separated by a BLANK line. Use "- " bullets for any enumeration. Never one unbroken block.\n' +
   'Sections and lengths (STAY WITHIN these — the whole JSON must be COMPLETE and valid; do not overrun):\n' +
   '- summary: what happened, who, why it matters. 150-220 words.\n' +
   '- findings: grouped by theme, each anchored. 250-380 words.\n' +

@@ -2779,6 +2779,51 @@ function secNarrative(ctx, data, opts) {
   ctx.para('In short, the documents cannot all be true at the same time on the points above. Each contradiction is anchored to the quoted text and its page location, so it can be checked directly against the originals. What these inconsistencies mean in law is for a legal practitioner to determine — this report identifies them; it does not decide their consequences.', { size: 10.5, after: 6 });
 }
 
+// Structure the raw AI narrative into typed blocks so it can NEVER render as
+// a wall of text, whatever shape the model returned. Deterministic:
+//   heading — a short ALL-CAPS line or "Title:" line
+//   bullet  — a line starting "- ", "• ", "* " or "1." / "1)"
+//   para    — everything else, with any block longer than ~3 sentences split
+//             at sentence boundaries into readable paragraphs
+// Separator rows (===, ---) are dropped. Exported as _narrativeBlocks for tests.
+function narrativeBlocks(narr) {
+  var out = [];
+  var paras = String(narr || '').split(/\n{2,}/);
+  for (var p = 0; p < paras.length; p++) {
+    var trimmed = paras[p].trim();
+    if (!trimmed || /^[=_\-—–]{3,}$/.test(trimmed)) continue;
+    if (trimmed.length < 60 && (/^[A-Z0-9 ,'&()\-]+$/.test(trimmed) || /^[A-Z][^.]{0,58}:$/.test(trimmed))) {
+      out.push({ kind: 'heading', text: trimmed.replace(/:$/, '') });
+      continue;
+    }
+    var lines = paras[p].split(/\n/);
+    var buf = [];
+    var flush = function () {
+      var blockTxt = buf.join(' ').replace(/\s+/g, ' ').trim();
+      buf = [];
+      if (!blockTxt) return;
+      var sentences = blockTxt.match(/[^.!?]+[.!?]+(?:["')\]]+)?\s*|[^.!?]+$/g) || [blockTxt];
+      var cur = '', n = 0;
+      for (var s = 0; s < sentences.length; s++) {
+        cur += sentences[s];
+        n++;
+        if ((n >= 3 && cur.length > 280) || cur.length > 600) {
+          out.push({ kind: 'para', text: cur.trim() });
+          cur = ''; n = 0;
+        }
+      }
+      if (cur.trim()) out.push({ kind: 'para', text: cur.trim() });
+    };
+    for (var l = 0; l < lines.length; l++) {
+      var m = lines[l].match(/^\s*(?:[-•*]|\d{1,2}[.)])\s+(.*\S)\s*$/);
+      if (m) { flush(); out.push({ kind: 'bullet', text: m[1] }); }
+      else buf.push(lines[l]);
+    }
+    flush();
+  }
+  return out;
+}
+
 // ================= SECTION: AI REVIEW (optional cloud layer) =================
 function secAiReview(ctx, data) {
   var ar = (data.aiReview && data.aiReview.applied) ? data.aiReview : null;
@@ -2795,20 +2840,15 @@ function secAiReview(ctx, data) {
   ctx.heading(narr ? 'FORENSIC NARRATIVE' : 'AI REVIEW');
   if (narr) {
     ctx.para('Plain-language analysis of the findings below. Advisory: it carries no scoring weight, and every finding remains anchored to the quoted text in the sections that follow.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
-    // Render the narrative as flowing paragraphs (blank line = new paragraph)
-    // so it reads like a report, not one dense block.
-    var paras = narr.split(/\n{2,}/);
-    for (var p = 0; p < paras.length; p++) {
-      var block = san(paras[p]).replace(/\s*\n\s*/g, ' ').trim();
-      if (!block) continue;
-      // Skip the separator rules (rows of = or -) that divide narrative sections.
-      if (/^[=_\-—–]{3,}$/.test(block)) continue;
-      // A short ALL-CAPS or "Heading:" line becomes a sub-heading.
-      if (block.length < 60 && (/^[A-Z0-9 ,'&()\-]+$/.test(block) || /^[A-Z][^.]{0,58}:$/.test(block))) {
-        ctx.subHeading(block.replace(/:$/, ''));
-      } else {
-        ctx.para(block, { size: 10.5, after: 8 });
-      }
+    // Render through the typed-block parser: headings, bullets, and paragraphs
+    // split at sentence boundaries — a model reply that arrives as one giant
+    // block still comes out as readable, structured pages, never a text dump.
+    var blocks = narrativeBlocks(narr);
+    for (var p = 0; p < blocks.length; p++) {
+      var b = blocks[p];
+      if (b.kind === 'heading') ctx.subHeading(san(b.text));
+      else if (b.kind === 'bullet') ctx.bullet(san(b.text), { size: 10, after: 3 });
+      else ctx.para(san(b.text), { size: 10.5, after: 8 });
     }
   } else {
     ctx.para('This section is present only because the user enabled the optional cloud AI review. The AI pass is advisory: it carries no scoring weight and all deterministic findings remain anchored to quoted text.', { size: 9.5, after: 10 });
@@ -3223,6 +3263,7 @@ var api = { build: build, buildNarrative: buildNarrative, seal: seal, _sanitize:
   _partyRoleMap: partyRoleMap, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
   _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,
   _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
+  _narrativeBlocks: narrativeBlocks,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;
