@@ -173,6 +173,52 @@ const E = require('../forensic-engine-page.js');
   ok(!t8 || t8.severity === 2, 'CT08 term-definition conflicts report at severity 2 (got ' + (t8 && t8.severity) + ')');
 }
 
+// ---- 5. rerun round 3 (16-finding report) + Greensky master review ----
+{
+  // 5a. Real invoice layout: "TAX INVOICE" heading with "Date:" lower down.
+  const inv = [];
+  inv[0] = 'The lease expires on 31 July 2024 and the franchisee shall vacate.';
+  inv[20] = 'TAX INVOICE\nAll Fuels (Pty) Ltd\nVAT No 4123456789\nDate: 01/03/2026\nRental March 2026 R173,396.20';
+  for (let i = 1; i < 20; i++) inv[i] = 'body page';
+  const hit = E.DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(inv).find(x => /Billing after the stated expiry/.test(x.evidence));
+  ok(!!hit, 'invoice heading + separated Date: line is bridged and fires');
+
+  // ...but a "tax invoice" mention in prose with an unrelated later date label
+  // must not bridge (no explicit Date: within reach).
+  const prose = [
+    'The lease expires on 31 July 2024.',
+    'The tax invoice was disputed at the hearing. Judgment was reserved for a later date to be arranged in 2026.'
+  ];
+  ok(!E.DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(prose).some(x => /Billing after/.test(x.evidence)),
+    'prose mention of a tax invoice without a Date: label does not bridge');
+
+  // 5b. "Goodwill: N/A" pair fires EVEN WHEN another recognition/denial pair
+  // exists earlier in the bundle (the 16-finding run reported only p.2/3).
+  const gw2 = E.DETECTORS.D39_DETECT_ASSET_VALUE_DENIAL([
+    'GOODWILL FORFEITURE CONTRADICTION: goodwill forfeiture is recognised here yet held to possess no compensable goodwill value.',
+    'Schedule Part 1 — 12. Goodwill: N/A.',
+    'Goodwill means the established reputation of a business regarded as a quantifiable asset.'
+  ]);
+  ok(gw2.filter(x => x.type === 'CT45').length >= 2,
+    'both the commentary pair and the schedule N/A pair are reported (' + gw2.length + ')');
+
+  // 5c. Explicit admission language fires, aggregated and quoted.
+  const adm = E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION([
+    'In his reply Marius wrote: I admit that the consignment was routed through Kevin\'s Export while the agreement was in force.',
+    'plain page',
+    'Later he repeated: I admit the routing occurred.'
+  ]);
+  const admHit = adm.find(x => /explicit admission/.test(x.evidence));
+  ok(!!admHit, 'explicit first-person admission language fires');
+  ok(admHit && admHit.severity === 4 && /I admit that the consignment/.test(admHit.evidence),
+    'admission is quoted verbatim at severity 4');
+  ok(admHit && /2 pages/.test(admHit.evidence), 'admission pages aggregate into one finding');
+  ok(!E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION([
+    'The tenant admits no liability and denies each allegation.'
+  ]).some(x => /explicit admission/.test(x.evidence)),
+    'no false-positive on "admits no liability" boilerplate');
+}
+
 console.log('\n[allfuels-regression] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[allfuels-regression] ALL GREEN');
