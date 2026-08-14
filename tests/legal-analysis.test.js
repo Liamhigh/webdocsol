@@ -263,6 +263,53 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(wall.map(b => b.text).join(' ').includes('Sentence number 12'), 'no text is lost in the split');
 }
 
+// ---- page anchoring: plural, list and duplicate locations ----
+// From the sealed Greensky run of 14 Aug 2026: the identity finding printed
+// with NO page ("the same party is identified inconsistently.") because its
+// engine location is the PLURAL "Pages 11" and the matcher only understood
+// the singular "Page N"; and the date finding printed "p. 89 vs 89" because
+// both sides of the contrast were the same page. A report whose claim is
+// "every finding anchored to its page" cannot drop anchors it already has.
+{
+  ok(R._fmtLocation('Pages 11') === 'p. 11', 'plural "Pages 11" anchors (was "—")');
+  ok(R._fmtLocation('Pages 11, 12') === 'p. 11, 12', 'plural page list keeps every page');
+  ok(R._fmtLocation('Page 12, 324') === 'p. 12, 324', 'comma list after a singular label keeps both pages');
+  ok(R._fmtLocation('Page 89 vs Page 89') === 'p. 89', 'same page on both sides is deduped, not "89 vs 89"');
+  ok(R._fmtLocation('Page 11 vs Page 12') === 'p. 11 vs 12', 'a genuine two-page contrast keeps "vs"');
+  ok(R._fmtLocation('Full document') === 'Full document', 'non-numeric locations still pass through');
+  ok(R._fmtLocation('') === '—' && R._fmtLocation('Same passage') === '—', 'unanchored locations still read "—"');
+  ok(R._pageNumbers('Pages 11, 12').join(',') === '11,12', 'pageNumbers reads plural lists');
+  ok(R._pageNumbers('Page 89 vs Page 89').join(',') === '89', 'pageNumbers dedupes a repeated page');
+}
+
+// ---- §15.2 language gate on AI-written narrative ----
+// The narrator prompt forbids hedging and "red flag"/"indicator"; the model
+// ignored it on the Greensky run and produced "potential red flags", "may be
+// image-only" and "suggest potential issues" — which then led page 3 of a
+// sealed report. Prompts are instructions; this gate is the guarantee.
+{
+  const s = R._scrubNarrative;
+  const real = 'The examination revealed inconsistencies and potential red flags. The termination date is stated as both 7 Mar 2025 and 13 Mar 2025 [F1]. The pages may be image-only or intentional dividers [F3].';
+  const got = s(real);
+  ok(got.dropped === 2 && got.kept === 1, 'hedged and "red flag" sentences are dropped (' + got.kept + ' kept, ' + got.dropped + ' dropped)');
+  ok(/termination date is stated as both/.test(got.text) && !/red flag|may be/i.test(got.text),
+    'the compliant sentence survives verbatim; prohibited ones do not');
+  ok(!/appears to|indicator|credibility|guilty/i.test(s('It appears to be forged. This is an indicator. His credibility is poor. He is guilty.').text),
+    'hedging, indicator, credibility and guilt sentences are all removed');
+  ok(s('The invoice is dated 3 March 2026. The lease expired on 1 January 2026.').dropped === 0,
+    'plain factual sentences are never touched');
+  const heads = s('SUMMARY\n\nThe lease expired on 1 January 2026.');
+  ok(/SUMMARY/.test(heads.text), 'headings pass through the gate untouched');
+  // A draft that is mostly prohibited language must not lead the report.
+  const src2 = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
+  ok(/scrub\.kept >= 2 && scrub\.kept >= scrub\.dropped/.test(src2),
+    'a draft with more prohibited than compliant sentences never leads the story');
+  ok(/sentence' \+ \(scrub\.dropped === 1 \? '' : 's'\) \+ ' of the draft above/.test(src2),
+    'the report discloses how many sentences the gate removed');
+  ok(/var narr = \(narrScrub\.kept >= 2\) \? narrScrub\.text : ''/.test(src2),
+    'the annex path is gated too — no route prints prohibited language');
+}
+
 // ---- the analyst's telling leads the story; the backbone stays deterministic ----
 // External review: the deterministic sections read templated ("robotic")
 // because they ARE templated — same input, same words, testifiable. The
@@ -273,8 +320,8 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
 {
   const src = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
   const story = src.slice(src.indexOf('function secNarrative'), src.indexOf('// ================= SECTION: AI REVIEW'));
-  ok(/The analyst's telling/.test(story) && /narrativeBlocks\(flow\)/.test(story),
-    'the AI narrative renders inside the story section through the typed-block parser');
+  ok(/The analyst's telling/.test(story) && /narrativeBlocks\(scrub\.text\)/.test(story),
+    'the AI narrative renders inside the story section, gated then parsed into typed blocks');
   ok(/Written by the AI narrator from the sealed findings/.test(story),
     'the analyst telling is labelled as AI-written and advisory');
   ok(/The verifiable backbone: each pattern, anchored/.test(story),
