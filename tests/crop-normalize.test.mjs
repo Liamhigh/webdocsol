@@ -78,8 +78,11 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
   const shareSrc = html.slice(html.indexOf('function addShareButton'), html.indexOf('grid.insertBefore(btn, grid.firstChild)'));
   ok(/try \{ shared = navigator\.share\(data\); \}/.test(shareSrc),
     'share is still called synchronously in the click handler');
-  ok(/saveFiles\(files\);/.test(shareSrc) && shareSrc.indexOf('saveFiles(files);') > shareSrc.indexOf('navigator.share(data)'),
-    'every share ALSO saves the full bundle to the device (after the share call)');
+  // ORDER LOCK: saves queued BEFORE the share call. Saving after it raced the
+  // native sheet — on Samsung Internet the download UI dismissed the sheet
+  // entirely (field report: "downloads but no share sheet").
+  ok(/saveFiles\(files\);/.test(shareSrc) && shareSrc.indexOf('saveFiles(files);') < shareSrc.indexOf('shared = navigator.share(data)'),
+    'every share ALSO saves the full bundle, queued BEFORE the share sheet opens');
   ok(/saves a copy of each to your device for your records/.test(shareSrc),
     'the hint tells the user the bundle is saved for their records');
 }

@@ -12447,18 +12447,22 @@ function addShareButton() {
       return;
     }
     var data = { files: chosen, title: window._voShareName, text: window._voShareText || 'This document is sealed with Verum Omnis. Verify it at https://verumglobal.foundation/verify.html' };
-    var shared = null;
-    try { shared = navigator.share(data); } catch (eSync) {
-      fallbackDownload('Sharing didn’t work on this device — the files have downloaded instead.', files);
-      return;
-    }
     // FOR THE USER'S RECORD: the share sheet hands copies to another app, and
     // some browsers (Samsung Internet among them) attach only part of the
     // bundle even after canShare() approved it — with no way to detect what
     // the target app actually received. So every share ALSO saves the full
-    // bundle to the device, and the record is complete no matter what the
-    // share sheet delivered.
+    // bundle to the device. ORDER MATTERS: the saves are queued BEFORE the
+    // share call — triggering them after it raced the native sheet, and on
+    // Samsung Internet the download UI dismissed the sheet entirely (field
+    // report: "downloads but no share sheet"). Queued first, the downloads
+    // run in the background and the sheet opens on the same tap.
     saveFiles(files);
+    var shared = null;
+    try { shared = navigator.share(data); } catch (eSync) {
+      hint.style.color = '#D4A843';
+      hint.textContent = 'Sharing didn’t work on this device — the files are saved on your device; attach them from your Downloads.';
+      return;
+    }
     if (shared && shared.catch) shared.catch(function (err) {
       // AbortError / NotAllowedError = the user closed the share sheet. Ignore.
       if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
