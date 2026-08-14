@@ -9810,28 +9810,43 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     // original document. The seal proves integrity and time only; all forensic
     // characterisation lives exclusively in the separate sealed forensic report.
 
-    const marginW = pageW * 0.06;
-    const marginH = pageH * 0.06;
-    const panelSize = Math.min(marginW, marginH) * 0.85;
+    // SEAL BANDS ON NEW SPACE. The QR panel and footer strip used to be drawn
+    // OVER the page's own top-right corner and bottom edge — on scanned
+    // originals with no margins that covered real content (in one real case,
+    // the signature at the foot of a lease page). The page is EXTENDED
+    // instead: the media/crop boxes grow downward for the footer band and
+    // upward for the seal band, the original content keeps its exact
+    // coordinates, and the seal furniture owns only the added space.
+    const fy = pageH * 0.02, fs = Math.min(pageW, pageH) * 0.018;
+    const footH = fy + fs*3;
+    const panelSize = Math.max(Math.min(pageW, pageH) * 0.051, 26);
+    const headH = panelSize + 10;
+    const mbox = pg.getMediaBox();
+    pg.setMediaBox(mbox.x, mbox.y - footH, mbox.width, mbox.height + footH + headH);
+    try { pg.setCropBox(mbox.x, mbox.y - footH, mbox.width, mbox.height + footH + headH); } catch (eCb) {}
+    const ox = mbox.x;                  // page left edge (origin can be non-zero)
+    const footY = mbox.y - footH;       // base of the new footer band
+    const headY = mbox.y + mbox.height; // base of the new header band (old top edge)
 
-    if (panelSize > 8) {
-      const contentRight = pageW - marginW;
-      const contentTop = pageH - marginH;
-      const panelX = contentRight + (marginW - panelSize) / 2;
-      const panelY = contentTop + (marginH - panelSize) / 2;
-      const qrSize = panelSize - 4;
-
+    // Header band: navy, QR panel right, verification hint left.
+    pg.drawRectangle({ x: ox, y: headY, width: mbox.width, height: headH, color: rgb(0.02,0.05,0.08), opacity: 1 });
+    {
+      const panelX = ox + mbox.width - panelSize - 8;
+      const panelY = headY + (headH - panelSize) / 2;
       pg.drawRectangle({ x: panelX, y: panelY, width: panelSize, height: panelSize, color: rgb(1, 1, 1), opacity: 0.95 });
-
       if (qrImg) {
-        pg.drawImage(qrImg, { x: panelX + 2, y: panelY + 2, width: qrSize, height: qrSize });
+        pg.drawImage(qrImg, { x: panelX + 2, y: panelY + 2, width: panelSize - 4, height: panelSize - 4 });
       } else {
         pg.drawText(sealId.substring(0, 8), { x: panelX + 2, y: panelY + panelSize/2, size: 5, font: helv, color: rgb(0.3, 0.3, 0.3) });
       }
+      var hdrTxt = 'VERUM OMNIS SEALED ORIGINAL — scan the code or verify at verumglobal.foundation/verify.html';
+      var hdrSize = fs * 0.8;
+      var hdrMax = mbox.width - panelSize - 24 - pageW*0.06;
+      while (hdrSize > 3.5 && helvBold.widthOfTextAtSize(hdrTxt, hdrSize) > hdrMax) hdrSize -= 0.2;
+      pg.drawText(hdrTxt, { x: ox + pageW*0.03, y: headY + headH/2 - hdrSize/2, size: hdrSize, font: helvBold, color: rgb(0.82,0.65,0.28) });
     }
 
-    const fy = pageH * 0.02, fs = Math.min(pageW, pageH) * 0.018;
-    pg.drawRectangle({ x: 0, y: 0, width: pageW, height: fy + fs*3, color: rgb(0.02,0.05,0.08), opacity: 0.85 });
+    pg.drawRectangle({ x: ox, y: footY, width: mbox.width, height: footH, color: rgb(0.02,0.05,0.08), opacity: 1 });
     const stLabel = sealType==='commercial' && clientName ? 'COMMERCIAL SEAL — ' + clientName.toUpperCase() : 'PRIVATE SEAL — FREE TIER';
     const chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
     const chainLabel = chainIds.length > 0 ? '  |  Chain: ' + chainIds.length + ' prev' : '';
@@ -9842,23 +9857,23 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     // the sealed original. The right-hand line now sits on the TOP row,
     // right-aligned, and the identity line owns the bottom row across the full
     // width, shrinking to fit rather than colliding with anything.
-    var footLeft = pageW*0.03, footRight = pageW*0.03;
+    var footLeft = ox + pageW*0.03, footRight = pageW*0.03;
     var footSize = fs*0.75;
     var siteTxt = 'verumglobal.foundation  |  OpenTimestamps  |  Patent Pending';
     var siteSize = footSize;
     var siteMax = pageW * 0.5;
     while (siteSize > 3.5 && helv.widthOfTextAtSize(siteTxt, siteSize) > siteMax) siteSize -= 0.2;
     var stTxt = stLabel + chainLabel;
-    pg.drawText(stTxt, { x: footLeft, y: fy+fs*1.8, size: fs*0.8, font: helvBold, color: rgb(0.82,0.65,0.28) });
+    pg.drawText(stTxt, { x: footLeft, y: footY + fy+fs*1.8, size: fs*0.8, font: helvBold, color: rgb(0.82,0.65,0.28) });
     pg.drawText(siteTxt, {
       x: Math.max(footLeft + helvBold.widthOfTextAtSize(stTxt, fs*0.8) + footSize,
-                  pageW - footRight - helv.widthOfTextAtSize(siteTxt, siteSize)),
-      y: fy+fs*1.8, size: siteSize, font: helv, color: rgb(0.36,0.42,0.48) });
+                  ox + pageW - footRight - helv.widthOfTextAtSize(siteTxt, siteSize)),
+      y: footY + fy+fs*1.8, size: siteSize, font: helv, color: rgb(0.36,0.42,0.48) });
     var idTxt = 'VERUM OMNIS SEALED ORIGINAL  |  Seal: ' + sealId + '  |  SHA-512: ' + short + '...  |  ' + ts + '  |  ' + (i+1) + '/' + pages.length + chainLabel;
     var idSize = footSize;
     var idMax = pageW - footLeft - footRight;
     while (idSize > 3.5 && helv.widthOfTextAtSize(idTxt, idSize) > idMax) idSize -= 0.2;
-    pg.drawText(idTxt, { x: footLeft, y: fy+fs*0.5, size: idSize, font: helv, color: rgb(0.58,0.71,0.78) });
+    pg.drawText(idTxt, { x: footLeft, y: footY + fy+fs*0.5, size: idSize, font: helv, color: rgb(0.58,0.71,0.78) });
 
     updateStep(6, 'processing', 'Page ' + (i+1) + ' of ' + pages.length);
   }
@@ -12360,8 +12375,8 @@ function addShareButton() {
   var bundleN = (window._voShareFiles || []).length;
   if (canWebShare) {
     hint.textContent = bundleN > 1
-      ? 'Opens your phone’s share menu with the whole bundle attached (' + bundleN + ' files: sealed document, forensic report' + (bundleN > 2 ? ', findings JSON' : '') + ') — no hunting for downloads.'
-      : 'Opens your phone’s share menu so you can send the file straight to WhatsApp, email or any app — no hunting for the download.';
+      ? 'Opens your phone’s share menu with the whole bundle attached (' + bundleN + ' files) — and saves a copy of each to your device for your records.'
+      : 'Opens your phone’s share menu so you can send the file straight to WhatsApp, email or any app — and saves a copy to your device for your records.';
   } else {
     hint.textContent = bundleN > 1
       ? 'This browser can’t open a share menu (common inside WhatsApp/Gmail). Tapping saves all ' + bundleN + ' files so you can attach them — or open this page in Chrome/Safari for one-tap sharing.'
@@ -12391,17 +12406,28 @@ function addShareButton() {
       return;
     }
     var data = { files: chosen, title: window._voShareName, text: window._voShareText || 'This document is sealed with Verum Omnis. Verify it at https://verumglobal.foundation/verify.html' };
-    navigator.share(data).catch(function (err) {
+    var shared = null;
+    try { shared = navigator.share(data); } catch (eSync) {
+      fallbackDownload('Sharing didn’t work on this device — the files have downloaded instead.', files);
+      return;
+    }
+    // FOR THE USER'S RECORD: the share sheet hands copies to another app, and
+    // some browsers (Samsung Internet among them) attach only part of the
+    // bundle even after canShare() approved it — with no way to detect what
+    // the target app actually received. So every share ALSO saves the full
+    // bundle to the device, and the record is complete no matter what the
+    // share sheet delivered.
+    saveFiles(files);
+    if (shared && shared.catch) shared.catch(function (err) {
       // AbortError / NotAllowedError = the user closed the share sheet. Ignore.
       if (err && (err.name === 'AbortError' || err.name === 'NotAllowedError')) return;
-      fallbackDownload('Sharing didn’t work on this device — the files have downloaded instead.', files);
+      hint.style.color = '#D4A843';
+      hint.textContent = 'Sharing didn’t work on this device — the files are saved on your device; attach them from your Downloads.';
     });
   });
 
-  // Download the whole bundle (all sealed files), not just the document, so the
-  // WebView / no-share path still hands over everything.
-  function fallbackDownload(msg, files) {
-    var list = (files && files.length) ? files : voShareFileList();
+  // Save every file in the list to the device (same-gesture anchor downloads).
+  function saveFiles(list) {
     try {
       for (var i = 0; i < list.length; i++) {
         var a = document.createElement('a');
@@ -12410,6 +12436,12 @@ function addShareButton() {
         document.body.appendChild(a); a.click(); a.remove();
       }
     } catch (e) {}
+  }
+
+  // Download the whole bundle (all sealed files), not just the document, so the
+  // WebView / no-share path still hands over everything.
+  function fallbackDownload(msg, files) {
+    saveFiles((files && files.length) ? files : voShareFileList());
     if (msg) { hint.style.color = '#D4A843'; hint.textContent = msg; }
   }
 
