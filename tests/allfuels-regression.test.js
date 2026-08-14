@@ -45,6 +45,17 @@ const E = require('../forensic-engine-page.js');
     'Each party shall sign two counterparts and exchange them by courier.'
   ]);
   ok(proc.length === 0, 'no false-positive on ordinary execution-procedure language');
+
+  // Codex P1 (#133): an unsigned DRAFT with no enforcement context must not
+  // be a severity-4 "relied on" finding — the evidence text asserts only what
+  // the record states, and without nearby enforcement/billing language the
+  // severity stays low.
+  const draft = E.DETECTORS.D32_DETECT_SIGNATURE_ANOMALY([
+    'This unsigned agreement is a draft for discussion only and shall not be construed as binding.'
+  ]);
+  const dHit = draft.find(x => /signature is missing/.test(x.evidence));
+  ok(!!dHit && dHit.severity === 2, 'unsigned draft without enforcement context is severity 2 (got ' + (dHit && dHit.severity) + ')');
+  ok(!draft.some(x => /relied/i.test(x.evidence)), 'evidence text never asserts reliance as a fact');
 }
 
 // ---- 2. billing after the stated expiry ----
@@ -78,6 +89,17 @@ const E = require('../forensic-engine-page.js');
   ];
   ok(!E.DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(normal).some(x => /Billing after/.test(x.evidence)),
     'no finding for ordinary in-term invoicing');
+
+  // Codex P1 (#133): an expiry label with NO date of its own must not borrow
+  // the next field's date. "Lease expiry date: see schedule. Invoice date:
+  // 31 July 2024" would otherwise manufacture an expiry the record never
+  // states, and a later invoice would become a false post-expiry finding.
+  const borrowed = [
+    'Lease expiry date: see schedule attached. Invoice date: 31 July 2024 for monthly rental.',
+    'TAX INVOICE date: 1 March 2026 — rental due.'
+  ];
+  ok(!E.DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY(borrowed).some(x => /Billing after/.test(x.evidence)),
+    'an undated expiry label cannot borrow the next label\'s date (no manufactured expiry)');
 }
 
 // ---- 3. party-index garbage from this run ----
