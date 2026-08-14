@@ -10776,6 +10776,25 @@ function applyBundleMode(result) {
   });
 }
 
+// UI-owned OCR progress reporter. Wall-clock time may not enter the analysis
+// path (AGENTS.md: no Date.now() in analysis paths), but a 100+-page OCR run
+// with no time estimate reads as hung — so the clock and the remaining-time
+// arithmetic live HERE, in page UI code, and the rescue hook below reports
+// pure counts only. Reset per run via voOcrProgressReset().
+var _voOcrPaceT0 = null;
+function voOcrProgressReset() { _voOcrPaceT0 = null; }
+function voOcrProgress(pageIdx, done, total, workerCount) {
+  var eta = '';
+  if (_voOcrPaceT0 === null) _voOcrPaceT0 = Date.now();
+  if (done >= 2) {
+    var s = Math.round(((Date.now() - _voOcrPaceT0) / done) * (total - done) / 1000);
+    if (s >= 90) eta = ', ~' + Math.round(s / 60) + ' min left';
+    else if (s >= 5) eta = ', ~' + s + 's left';
+  }
+  updateStep('Fraud', 'processing', 'OCR page ' + (pageIdx + 1) + ' done (' + done + '/' + total +
+    ', on-device, ' + workerCount + ' worker' + (workerCount === 1 ? '' : 's') + eta + ')...');
+}
+
 // ==================== OCR RESCUE (image-only pages) ====================
 // Pages with no text layer (scanned exhibits, photographed emails) are
 // invisible to every detector — and they are often the critical evidence.
@@ -10822,13 +10841,17 @@ function voOcrLoadScriptAttempt(src) {
 // global check (so dependent paths like workerSrc can be kept consistent).
 // Named voOcrLoadScript so it never shadows the same-origin self-healing
 // voLoadScript used for the forensic scripts (different signature).
+// The retry cache-buster is a counter, not a timestamp: a retry only needs a
+// URL that differs from the failed attempt, and the analysis path must stay
+// free of wall-clock reads (AGENTS.md determinism rule).
+var _voOcrBustSeq = 0;
 async function voOcrLoadScript(sources, globalCheck) {
   try { if (globalCheck()) return sources[0]; } catch (e) {}
   var errors = [];
   for (var i = 0; i < sources.length; i++) {
     for (var attempt = 0; attempt < 2; attempt++) {
       var url = attempt === 0 ? sources[i]
-        : sources[i] + (sources[i].indexOf('?') === -1 ? '?' : '&') + 'vobust=' + Date.now();
+        : sources[i] + (sources[i].indexOf('?') === -1 ? '?' : '&') + 'vobust=' + (++_voOcrBustSeq);
       try { await voOcrLoadScriptAttempt(url); }
       catch (e1) { errors.push(url + ': network/404'); continue; }
       // onload fired — but did the global appear? (An HTML-instead-of-JS
@@ -10952,20 +10975,18 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
     } catch (e) { break; }
   }
   var rescued = [], noText = [], renderFailed = [], out = textBlocks.slice();
-  var _t0 = Date.now(), _completed = 0;
-  // Honest remaining-time estimate from the measured pace so a long scan
-  // reads as working, not hung.
-  function _ocrEta() {
-    if (_completed < 2) return '';
-    var leftMs = ((Date.now() - _t0) / _completed) * (candidates.length - _completed);
-    var s = Math.round(leftMs / 1000);
-    if (s < 5) return '';
-    return s >= 90 ? ', ~' + Math.round(s / 60) + ' min left' : ', ~' + s + 's left';
-  }
+  var _completed = 0;
+  // Progress is reported through the UI-owned voOcrProgress (defined outside
+  // this hook) with pure counts only — the remaining-time estimate needs a
+  // clock, and wall-clock time may not enter the analysis path (AGENTS.md).
+  var _report = (typeof voOcrProgress === 'function') ? voOcrProgress
+    : function (pageIdx, done, total, wc) {
+        updateStep('Fraud', 'processing', 'OCR page ' + (pageIdx + 1) + ' done (' + done + '/' + total + ', on-device)...');
+      };
+  if (typeof voOcrProgressReset === 'function') voOcrProgressReset();
   function _ocrTick(pageIdx) {
     _completed++;
-    updateStep('Fraud', 'processing', 'OCR page ' + (pageIdx + 1) + ' done (' + _completed + '/' + candidates.length +
-      ', on-device, ' + workers.length + ' worker' + (workers.length === 1 ? '' : 's') + _ocrEta() + ')...');
+    _report(pageIdx, _completed, candidates.length, workers.length);
   }
   try {
     for (var c0 = 0; c0 < candidates.length; c0 += workers.length) {
