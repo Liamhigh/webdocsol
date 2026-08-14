@@ -226,6 +226,86 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'the constitution no longer instructs the model to report a confidence band');
 }
 
+// --- feedback loop: the opt-in "Help improve the forensic engine" checkbox.
+// End-to-end contract between shareAnonymousPatterns (seal-document.html) and
+// handleFeedback (worker). The page promises users "no document content,
+// names, or quotes ever leave this device" — these tests hold both sides to it.
+{
+  const puts = [];
+  const kvEnv = { ...env, RULES_KV: {
+    get: async () => null,
+    list: async () => ({ keys: [] }),
+    put: async (key, value, opts) => { puts.push({ key, value, opts }); }
+  } };
+  const post = (payload) => worker.fetch(
+    mk('/api/v1/feedback/patterns', 'POST', JSON.stringify(payload)), kvEnv, {});
+
+  // 1. The exact shape the page sends for engine findings -> stored.
+  r = await post({ patterns: [
+    { detectorId: 'CT02', type: 'CT02', severity: 4, pageCount: 187 },
+    { detectorId: 'SERIAL', type: 'SP01', severity: 3, pageCount: 187 },
+    { detectorId: 'AI_IDENTIFIED', type: 'UNDISCLOSED_RELATED_PARTY', severity: 2, pageCount: 187 }
+  ] });
+  let fb = await r.json().catch(() => null);
+  ok(r.status === 200 && fb && fb.ok === true && fb.stored === 3,
+    'feedback accepts the exact client payload shape (' + r.status + ')');
+  ok(puts.length === 1 && /^feedback:\d{4}-\d{2}-\d{2}$/.test(puts[0].key),
+    'feedback is stored in a day bucket (' + (puts[0] && puts[0].key) + ')');
+  ok(puts[0] && puts[0].opts && puts[0].opts.expirationTtl === 90 * 24 * 60 * 60,
+    'feedback auto-deletes after 90 days');
+  {
+    const rec = JSON.parse(puts[0].value)[0];
+    const storedKeys = Object.keys(rec.patterns[0]).sort().join(',');
+    ok(storedKeys === 'detectorId,pageCount,severity,type',
+      'ONLY the four anonymous fields are stored (' + storedKeys + ')');
+  }
+
+  // 2. The clean-scan marker the page sends when nothing was found -> stored.
+  puts.length = 0;
+  r = await post({ patterns: [{ detectorId: 'CLEAN_SCAN', type: 'CLEAN_SCAN', severity: 1, pageCount: 12 }] });
+  fb = await r.json().catch(() => null);
+  ok(r.status === 200 && fb && fb.stored === 1, 'clean-scan marker is accepted');
+
+  // 3. Privacy guardrail: any content-bearing field is rejected AND not stored.
+  puts.length = 0;
+  r = await post({ patterns: [{ detectorId: 'CT02', type: 'CT02', severity: 4, pageCount: 1, quote: 'Mr X admitted the debt' }] });
+  fb = await r.json().catch(() => null);
+  ok(r.status === 422 && fb && fb.error === 'privacy_violation',
+    'a quote field is refused as a privacy violation (' + r.status + ')');
+  ok(puts.length === 0, 'nothing is stored when the guardrail fires');
+  r = await post({ patterns: [{ detectorId: 'CT02', type: 'CT02', severity: 4, pageCount: 1, name: 'K. Lappeman' }] });
+  ok(r.status === 422, 'a name field is refused as a privacy violation');
+
+  // 4. Shape violations: unknown fields, bad severity, empty/oversized arrays.
+  r = await post({ patterns: [{ detectorId: 'CT02', type: 'CT02', severity: 4, pageCount: 1 }], sessionId: 'abc' });
+  ok(r.status === 400, 'unknown top-level field is rejected');
+  r = await post({ patterns: [{ detectorId: 'CT02', type: 'CT02', severity: 9, pageCount: 1 }] });
+  ok(r.status === 400, 'severity outside 1-5 is rejected');
+  r = await post({ patterns: [] });
+  ok(r.status === 400, 'empty patterns array is rejected');
+  r = await post({ patterns: Array.from({ length: 201 }, () => ({ detectorId: 'CT02', type: 'CT02', severity: 1, pageCount: 1 })) });
+  ok(r.status === 400, 'more than 200 patterns is rejected');
+
+  // 5. Client-side lock: the page's sender must keep its privacy promise.
+  const fs = await import('node:fs');
+  const page = fs.readFileSync(path.join(__dirname, '..', 'seal-document.html'), 'utf8');
+  const fnStart = page.indexOf('function shareAnonymousPatterns');
+  const fnEnd = page.indexOf('\n}', fnStart);
+  const fn = page.slice(fnStart, fnEnd);
+  ok(fnStart > 0, 'shareAnonymousPatterns exists in the page');
+  ok(/optIn\.checked/.test(fn), 'sender is opt-in: it checks the checkbox first');
+  ok(/fraudResult\.scanFailed/.test(fn), 'a failed scan is never fed back as a result');
+  ok(/\/api\/v1\/feedback\/patterns/.test(fn), 'sender posts to the feedback endpoint');
+  ok(/\{\s*detectorId:\s*detectorId,\s*type:\s*type,\s*severity:\s*sev,\s*pageCount:\s*pageCount\s*\}/.test(fn)
+    && !/evidence|quote|location|filename|sha\d|caseDetails/.test(fn.replace(/\/\/[^\n]*/g, '')),
+    'sender builds ONLY the four anonymous fields — no content, names, or quotes');
+  // The novel-type filter must cover the engine's full CT range (CT01-CT46):
+  // an AI finding labelled with an ENGINE type is not a novel pattern, and
+  // before this lock CT44-CT46 leaked through as "AI-identified novelties".
+  ok(fn.indexOf('/^CT(0[1-9]|[1-3][0-9]|4[0-6])$/') !== -1,
+    'novel-type filter covers the full engine range CT01-CT46');
+}
+
 console.log('\n[worker] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[worker] ALL GREEN');
