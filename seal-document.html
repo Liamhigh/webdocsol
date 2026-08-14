@@ -10919,7 +10919,7 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   // then the other base — so a vendored main script with missing /vendor/
   // worker or core assets still recovers via the CDN, and vice versa.
   var _tessBases = tessFromCdn ? [VO_TESS_CDN, VO_TESS_VENDOR] : [VO_TESS_VENDOR, VO_TESS_CDN];
-  var worker = null, _tessErr = null;
+  var worker = null, _tessErr = null, _winBase = null;
   for (var _tb = 0; _tb < _tessBases.length && !worker; _tb++) {
     try {
       worker = await Tesseract.createWorker('eng', 1, {
@@ -10927,40 +10927,96 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
         corePath: _tessBases[_tb].core,
         langPath: _tessBases[_tb].lang
       });
+      _winBase = _tessBases[_tb];
     } catch (e) { _tessErr = e; }
   }
   if (!worker) throw (_tessErr || new Error('tesseract worker init failed on all asset bases'));
-  var rescued = [], noText = [], renderFailed = [], out = textBlocks.slice();
+  // Parallel worker pool. Recognition is the slow leg (~2-5 s/page of wasm
+  // work); a single worker read a large scan bundle one page at a time, so a
+  // 187-page rasterized file took on the order of ten minutes and looked
+  // frozen. Rendering stays sequential (pdf.js paints on the main thread);
+  // recognition runs across up to 4 workers. Extra workers reuse the SAME
+  // asset base the probe worker just validated; any that fail to start are
+  // simply not used (a pool of 1 is exactly the old behaviour).
+  var POOL = 1;
   try {
-    for (var c = 0; c < candidates.length; c++) {
-      var pageIdx = candidates[c];
-      updateStep('Fraud', 'processing', 'OCR page ' + (pageIdx + 1) + ' (' + (c + 1) + '/' + candidates.length + ', on-device)...');
-      try {
-        var page = await pdf.getPage(pageIdx + 1);
-        var viewport = page.getViewport({ scale: 2.0 });
-        var canvas = document.createElement('canvas');
-        canvas.width = Math.ceil(viewport.width);
-        canvas.height = Math.ceil(viewport.height);
-        await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
-        var res = await worker.recognize(canvas);
-        var text = (res && res.data && res.data.text ? res.data.text : '').replace(/\s+/g, ' ').trim();
-        if (text.length > VO_OCR_EMPTY_CHARS) {
-          out[pageIdx] = '[OCR] ' + text;
-          rescued.push(pageIdx + 1);
-        } else {
-          // Rendered fine but OCR read (almost) nothing: a blank page, a
-          // photo with no text, or print too poor to read. Named, not silent.
-          noText.push(pageIdx + 1);
+    var _hc = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) ? navigator.hardwareConcurrency : 2;
+    POOL = Math.max(1, Math.min(4, _hc - 1));
+  } catch (e) { POOL = 1; }
+  var workers = [worker];
+  for (var _w = 1; _w < POOL && _winBase; _w++) {
+    try {
+      workers.push(await Tesseract.createWorker('eng', 1, {
+        workerPath: _winBase.worker, corePath: _winBase.core, langPath: _winBase.lang
+      }));
+    } catch (e) { break; }
+  }
+  var rescued = [], noText = [], renderFailed = [], out = textBlocks.slice();
+  var _t0 = Date.now(), _completed = 0;
+  // Honest remaining-time estimate from the measured pace so a long scan
+  // reads as working, not hung.
+  function _ocrEta() {
+    if (_completed < 2) return '';
+    var leftMs = ((Date.now() - _t0) / _completed) * (candidates.length - _completed);
+    var s = Math.round(leftMs / 1000);
+    if (s < 5) return '';
+    return s >= 90 ? ', ~' + Math.round(s / 60) + ' min left' : ', ~' + s + 's left';
+  }
+  function _ocrTick(pageIdx) {
+    _completed++;
+    updateStep('Fraud', 'processing', 'OCR page ' + (pageIdx + 1) + ' done (' + _completed + '/' + candidates.length +
+      ', on-device, ' + workers.length + ' worker' + (workers.length === 1 ? '' : 's') + _ocrEta() + ')...');
+  }
+  try {
+    for (var c0 = 0; c0 < candidates.length; c0 += workers.length) {
+      var chunk = candidates.slice(c0, c0 + workers.length);
+      // Render this chunk's canvases one by one (main-thread work), then
+      // recognize them in parallel — one in-flight canvas per worker bounds
+      // bitmap memory the same way the old one-at-a-time loop did.
+      var jobs = [];
+      for (var k = 0; k < chunk.length; k++) {
+        var pageIdx = chunk[k];
+        try {
+          var page = await pdf.getPage(pageIdx + 1);
+          var viewport = page.getViewport({ scale: 2.0 });
+          var canvas = document.createElement('canvas');
+          canvas.width = Math.ceil(viewport.width);
+          canvas.height = Math.ceil(viewport.height);
+          await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+          jobs.push({ pageIdx: pageIdx, canvas: canvas, worker: workers[jobs.length % workers.length] });
+        } catch (pageErr) {
+          renderFailed.push(pageIdx + 1); // named in the note, scan continues
+          _ocrTick(pageIdx);
         }
-        canvas.width = canvas.height = 0; // release bitmap memory promptly
-      } catch (pageErr) {
-        renderFailed.push(pageIdx + 1); // named in the note, scan continues
       }
+      await Promise.all(jobs.map(function (job) {
+        return job.worker.recognize(job.canvas).then(function (res) {
+          var text = (res && res.data && res.data.text ? res.data.text : '').replace(/\s+/g, ' ').trim();
+          if (text.length > VO_OCR_EMPTY_CHARS) {
+            out[job.pageIdx] = '[OCR] ' + text;
+            rescued.push(job.pageIdx + 1);
+          } else {
+            // Rendered fine but OCR read (almost) nothing: a blank page, a
+            // photo with no text, or print too poor to read. Named, not silent.
+            noText.push(job.pageIdx + 1);
+          }
+        }).catch(function (pageErr) {
+          renderFailed.push(job.pageIdx + 1); // named in the note, scan continues
+        }).then(function () {
+          job.canvas.width = job.canvas.height = 0; // release bitmap memory promptly
+          _ocrTick(job.pageIdx);
+        });
+      }));
     }
   } finally {
-    try { await worker.terminate(); } catch (e) {}
+    for (var _tw = 0; _tw < workers.length; _tw++) { try { await workers[_tw].terminate(); } catch (e) {} }
     try { await pdf.destroy(); } catch (e) {}
   }
+  // Parallel completion can finish pages out of order; the note lists pages
+  // in document order regardless.
+  rescued.sort(function (a, b) { return a - b; });
+  noText.sort(function (a, b) { return a - b; });
+  renderFailed.sort(function (a, b) { return a - b; });
   // Full per-page accounting: every candidate page ends up in exactly one of
   // rescued / noText / renderFailed, so the extraction note states precisely
   // which pages were read and why the rest were not.

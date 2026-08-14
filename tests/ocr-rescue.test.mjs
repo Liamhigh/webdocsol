@@ -62,10 +62,13 @@ ok(/tesseract\.js@5\.1\.1\/dist\/worker\.min\.js/.test(src), 'tesseract worker C
 
 function build(env) {
   const fn = new Function(
-    'document', 'updateStep', 'pdfjsLib', 'Tesseract', 'window',
+    'document', 'updateStep', 'pdfjsLib', 'Tesseract', 'window', 'navigator',
     '"use strict";' + src + '\nreturn { voOcrLoadScript, voOcrRescuePages };'
   );
-  return fn(env.document, env.updateStep || (() => {}), env.pdfjsLib, env.Tesseract, env.window || {});
+  // navigator is injectable so the worker-pool sizing (hardwareConcurrency)
+  // is deterministic in tests regardless of the machine running them.
+  return fn(env.document, env.updateStep || (() => {}), env.pdfjsLib, env.Tesseract, env.window || {},
+    env.navigator || { hardwareConcurrency: 2 });
 }
 
 // Fake DOM whose appendChild simulates one behaviour per URL.
@@ -184,6 +187,62 @@ function fakeDom(behaviours, state) {
   ok(/3\b/.test(res.note) && res.textBlocks[2].indexOf('[OCR]') === 0, 'page 3 text was rescued into the blocks');
   ok(/no legible text/.test(res.note) && /\b4\b/.test(res.note), 'page 4 named as rendered-but-no-legible-text');
   ok(/could not be rendered/.test(res.note) && /\b5\b/.test(res.note), 'page 5 named as render-failed');
+}
+
+// 5. Worker pool: on a multi-core machine the rescue spins up parallel
+// tesseract workers (capped at 4) and still produces one result per page; on
+// a single-core machine it stays at exactly one worker (the old behaviour).
+// The single-worker sequential loop made a 187-page rasterized bundle take
+// ~10 minutes of one-page-at-a-time OCR.
+{
+  const pageText = 'z'.repeat(400);
+  const blocks = [pageText, '', '', '', '', pageText]; // pages 2-5 image-only
+  const fakePdf = {
+    async getPage(n) {
+      return {
+        getViewport: () => ({ width: 100, height: 100 }),
+        render: (opts) => { opts.canvasContext._pg = n; return { promise: Promise.resolve() }; },
+      };
+    },
+    async destroy() {},
+  };
+  const pdfjsLib = { GlobalWorkerOptions: {}, getDocument: () => ({ promise: Promise.resolve(fakePdf) }) };
+  const mkTess = (counter) => ({
+    async createWorker() {
+      counter.created++;
+      return {
+        async recognize(canvas) {
+          counter.recognized++;
+          return { data: { text: 'recovered page text long enough to pass the empty threshold ok' } };
+        },
+        async terminate() { counter.terminated++; },
+      };
+    },
+  });
+  const dom = {
+    head: { appendChild() { throw new Error('no script load should happen: globals provided'); } },
+    createElement: () => {
+      const ctx = {};
+      return { width: 0, height: 0, _ctx: ctx, getContext: () => ctx };
+    },
+  };
+
+  // 8 logical cores -> pool of 4 (1 probe + 3 extra), all terminated.
+  const many = { created: 0, recognized: 0, terminated: 0 };
+  const a = build({ document: dom, pdfjsLib, Tesseract: mkTess(many), navigator: { hardwareConcurrency: 8 } });
+  const resA = await a.voOcrRescuePages(new Uint8Array([1]), blocks, () => {});
+  ok(many.created === 4, `8-core machine creates a pool of 4 workers (got ${many.created})`);
+  ok(many.recognized === 4, `each image-only page recognized exactly once (got ${many.recognized})`);
+  ok(many.terminated === 4, `every pool worker is terminated (got ${many.terminated})`);
+  ok(!!resA && [2, 3, 4, 5].every(p => resA.textBlocks[p - 1].indexOf('[OCR]') === 0),
+    'all four image-only pages rescued through the pool');
+
+  // 1 core -> exactly one worker, identical accounting.
+  const solo = { created: 0, recognized: 0, terminated: 0 };
+  const b = build({ document: dom, pdfjsLib, Tesseract: mkTess(solo), navigator: { hardwareConcurrency: 1 } });
+  const resB = await b.voOcrRescuePages(new Uint8Array([1]), blocks, () => {});
+  ok(solo.created === 1, `single-core machine keeps a single worker (got ${solo.created})`);
+  ok(!!resB && /recovered text on-device/.test(resB.note), 'single-worker path still rescues and reports');
 }
 
 console.log(`\n[ocr-rescue] PASS=${pass} FAIL=${fail}`);
