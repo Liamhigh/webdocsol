@@ -191,6 +191,20 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(src.indexOf("'At its core: '") !== -1, 'the narrative opens with a factual thesis of the top patterns');
   ok(!/A moderate issue|A lesser issue/.test(src),
     'per-finding severity adjectives are gone - pattern order carries the weight');
+
+  // Founder ruling 5 (AGENTS.md): the story leads, and provenance is on the
+  // first pages. The narrative must be wired BEFORE §15.4 section 1 in
+  // build(), and the software-not-AI statement must appear on the cover, in
+  // the narrative intro, and on the sealed plain-language twin's first page.
+  const buildBody = src.slice(src.indexOf('async function build('), src.indexOf('async function buildNarrative('));
+  const narrAt = buildBody.indexOf("secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' })");
+  const sec1At = buildBody.indexOf('secCriticalSubjects(ctx, data)');
+  ok(narrAt !== -1 && sec1At !== -1 && narrAt < sec1At,
+    'plain-language narrative renders on the first pages, before §15.4 section 1');
+  ok((src.match(/not the opinion of a generative AI|not by a generative AI/g) || []).length >= 3,
+    'cover, narrative intro and narrative twin all state findings are software output, not generative AI');
+  ok(/produced by forensic software/.test(src) && /deterministic detection rules/.test(src),
+    'the provenance statement names the mechanism: deterministic software rules');
 }
 
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
