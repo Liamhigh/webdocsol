@@ -384,6 +384,48 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'structured unread-pages data flows from the caller into the report data');
 }
 
+// ---- parties are read from the RECORD, not from the user's form ----
+// Founder ruling: the system must not depend on the user naming the parties.
+// The Greensky report of 14 Aug 2026 printed "No parties were supplied in the
+// case details, so findings could not be attributed to named individuals"
+// three lines above a finding quoting Marius Nortje by name — the engine had
+// already bound the names (anchor.who); the report was not reading them.
+{
+  const data = { identity: {}, findings: { findings: [
+    { type: 'CT09', anchor: { who: [{ name: 'Marius Nortj' }, { name: 'Zone Authority' }, { name: 'Marius Nortje' }] } },
+    { type: 'CT28', anchor: { who: [{ name: 'Kevin Lappeman' }, { name: 'Liam Highcock' }, { name: 'Marius Nortje' }] } }
+  ] } };
+  const found = R._documentParties(data);
+  ok(found.length > 0, 'parties are discovered from the record with no case details entered');
+  ok(found.indexOf('Marius Nortje') !== -1, 'the party named in the findings is discovered');
+  ok(found.indexOf('Marius Nortj') === -1, 'the truncated spelling is merged away, not listed twice');
+  ok(found[0] === 'Marius Nortje', 'the most-cited party leads the list');
+  ok(found.every(n => n.indexOf(' ') !== -1), 'single-token fragments are never treated as parties');
+
+  // Declared parties keep their roles; discovered ones are marked as such.
+  const declared = { identity: { parties: 'Complainant: L. Highcock | Respondents: Marius Nortje' }, findings: data.findings };
+  const merged = R._effectiveParties(declared);
+  ok(merged.indexOf('L. Highcock') !== -1, 'declared parties are kept');
+  ok(!merged.some(n => /^Liam Highcock$/.test(n)),
+    '"Liam Highcock" from the record is recognised as the declared "L. Highcock", not a second party');
+  ok(merged.filter(n => /Nortje/.test(n)).length === 1, 'a party declared AND found in the record appears once');
+
+  const wr = R._effectivePartiesWithRoles(data);
+  ok(wr.length > 0 && wr.every(p => p.fromRecord === true && p.role === 'named in the record'),
+    'record-derived parties carry an honest role label, never an invented one');
+  const wrDecl = R._effectivePartiesWithRoles(declared);
+  ok(wrDecl.some(p => !p.fromRecord), 'declared parties keep their declared role');
+
+  // The report must no longer tell the user attribution is impossible.
+  const src3 = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
+  ok(!/No parties were supplied in the case details/.test(src3),
+    'the "no parties were supplied" dead end is gone');
+  ok(/var partiesWR = effectivePartiesWithRoles\(data\)/.test(src3),
+    'the scorecard is built from record-derived parties');
+  ok(!/extractParties\(idn\.parties/.test(src3) && !/var parties = extractParties\(data\.identity/.test(src3),
+    'no attribution path reads the user form alone');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);

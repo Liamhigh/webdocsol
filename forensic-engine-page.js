@@ -547,7 +547,14 @@ var DETECTORS = {
         if (VO_BOILER_RE.test(senC)) continue;
         if (!VO_CAUSE_RE.test(senC) || !VO_PROCEED_RE.test(senC) || !VO_SELF_RE.test(senC)) continue;
         condPages.push(cp + 1);
-        if (!condQuote) condQuote = senC.replace(/\s+/g, ' ').trim();
+        if (!condQuote) {
+          // Where the passage is requoted under the bundle's own heading
+          // ("Marius Admission Email 6 April 2025 Quoted from ... :"), the
+          // sentence begins with that furniture and the real admission gets
+          // truncated away. Start the quote at the justification itself.
+          var cutC = senC.search(VO_CAUSE_RE);
+          condQuote = (cutC > 30 ? senC.slice(cutC) : senC).replace(/\s+/g, ' ').trim();
+        }
         break; // one count per page
       }
     }
