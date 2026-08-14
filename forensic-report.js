@@ -2662,7 +2662,7 @@ function secNarrative(ctx, data, opts) {
     // the deterministic backbone below already tells the story in compliant
     // words, so nothing is lost by dropping a non-compliant draft.
     var scrub = scrubNarrative(flow);
-    var fBlocks = (scrub.kept >= 2 && scrub.kept >= scrub.dropped) ? narrativeBlocks(scrub.text) : [];
+    var fBlocks = voGatePasses(scrub) ? narrativeBlocks(scrub.text) : [];
     if (fBlocks.length) {
       ctx.subHeading('The analyst\'s telling');
       ctx.para(flowSrc === 'ai'
@@ -2876,7 +2876,7 @@ function narrativeBlocks(narr) {
       var blockTxt = buf.join(' ').replace(/\s+/g, ' ').trim();
       buf = [];
       if (!blockTxt) return;
-      var sentences = blockTxt.match(/[^.!?]+[.!?]+(?:["')\]]+)?\s*|[^.!?]+$/g) || [blockTxt];
+      var sentences = splitSentences(blockTxt);
       var cur = '', n = 0;
       for (var s = 0; s < sentences.length; s++) {
         cur += sentences[s];
@@ -2898,6 +2898,34 @@ function narrativeBlocks(narr) {
   return out;
 }
 
+
+
+// Sentence splitting that survives legal prose. A naive split on [.!?] cuts
+// "Mr. Nortje may have signed it." into "Mr." + "Nortje may have signed it.",
+// so the §15.2 gate dropped the second half and left a dangling "Mr." in a
+// SEALED report — and it split "R3 800 000.00" into "R3 800 000. 00",
+// corrupting a monetary amount. Periods that are NOT sentence ends (titles,
+// initials, decimals and clause numbering, citations like "p. 89"/"cl. 3",
+// ellipses) are masked before the split and restored after. The masking errs
+// toward UNDER-splitting on purpose: merging two sentences at worst drops one
+// extra compliant sentence, while over-splitting puts fragments in the record.
+var VO_DOT = '\u0001'; // sentinel; never present in extracted PDF text
+var VO_ABBREV_RE = /\b(?:mr|mrs|ms|dr|prof|hon|adv|inc|ltd|pty|cc|co|corp|no|nos|vs|v|etc|eg|ie|al|st|ave|rd|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|p|pp|para|paras|s|ss|cl|art|sec|fig|ch|ex)\.(?=\s|$)/gi;
+
+function splitSentences(text) {
+  var masked = String(text || '')
+    .replace(/\.\.\./g, VO_DOT + VO_DOT + VO_DOT)              // ellipsis
+    .replace(/(\d)\.(?=\d)/g, '$1' + VO_DOT)                   // 3.5, 6.2.1, 000.00
+    .replace(/\b([A-Z])\.(?=\s*[A-Z])/g, '$1' + VO_DOT)        // initials: M. Nortje
+    .replace(VO_ABBREV_RE, function (m) { return m.slice(0, -1) + VO_DOT; });
+  var parts = masked.match(/[^.!?]+[.!?]+(?:["')\]]+)?\s*|[^.!?]+$/g) || [masked];
+  var out = [];
+  for (var i = 0; i < parts.length; i++) {
+    var s = parts[i].split(VO_DOT).join('.');
+    if (s.trim()) out.push(s);
+  }
+  return out;
+}
 
 // §15.2 LANGUAGE GATE for AI-written narrative.
 // The narrator prompt forbids hedging, "red flag"/"indicator" nouns and any
@@ -2922,6 +2950,14 @@ var VO_BANNED_SENTENCE_RE = new RegExp([
   '|\\bcredibility\\b|\\bguilt(?:y)?\\b|\\binnocen(?:t|ce)\\b|\\blied\\b|\\bliar\\b'
 ].join(''), 'i');
 
+// Gate policy, named so it can be reasoned about rather than read out of an
+// inline comparison: a telling must carry at least this many compliant
+// sentences, and must not be majority-prohibited, to lead a sealed report.
+var VO_GATE_MIN_KEPT = 2;
+function voGatePasses(scrub) {
+  return scrub.kept >= VO_GATE_MIN_KEPT && scrub.kept >= scrub.dropped;
+}
+
 function scrubNarrative(text) {
   var out = [], kept = 0, dropped = 0;
   var paras = String(text || '').split(/\n{2,}/);
@@ -2935,7 +2971,7 @@ function scrubNarrative(text) {
       out.push(para);
       continue;
     }
-    var sentences = trimmed.match(/[^.!?]+[.!?]+(?:["')\]]+)?\s*|[^.!?]+$/g) || [trimmed];
+    var sentences = splitSentences(trimmed);
     var keptHere = [];
     for (var s = 0; s < sentences.length; s++) {
       if (VO_BANNED_SENTENCE_RE.test(sentences[s])) { dropped++; continue; }
@@ -3016,7 +3052,7 @@ function secAiReview(ctx, data) {
   // Same §15.2 gate as the leading telling: no path may print prohibited
   // language into a sealed report.
   var narrScrub = narrRaw ? scrubNarrative(narrRaw) : { text: '', kept: 0, dropped: 0 };
-  var narr = (narrScrub.kept >= 2) ? narrScrub.text : '';
+  var narr = (narrScrub.kept >= VO_GATE_MIN_KEPT) ? narrScrub.text : '';
   if (!ar && !narr) return;
   ctx.newBodyPage();
   // When a narrative exists it is the report's story and gets the prominent
@@ -3463,6 +3499,7 @@ var api = { build: build, buildNarrative: buildNarrative, seal: seal, _sanitize:
   _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
   _narrativeBlocks: narrativeBlocks, _pageRanges: pageRanges,
   _fmtLocation: fmtLocation, _pageNumbers: pageNumbers, _scrubNarrative: scrubNarrative,
+  _splitSentences: splitSentences,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;

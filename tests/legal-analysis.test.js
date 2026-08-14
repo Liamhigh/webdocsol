@@ -302,12 +302,29 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(/SUMMARY/.test(heads.text), 'headings pass through the gate untouched');
   // A draft that is mostly prohibited language must not lead the report.
   const src2 = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
-  ok(/scrub\.kept >= 2 && scrub\.kept >= scrub\.dropped/.test(src2),
-    'a draft with more prohibited than compliant sentences never leads the story');
+  ok(/function voGatePasses\(scrub\)/.test(src2) && /scrub\.kept >= VO_GATE_MIN_KEPT && scrub\.kept >= scrub\.dropped/.test(src2)
+    && /var fBlocks = voGatePasses\(scrub\)/.test(src2),
+    'a draft with more prohibited than compliant sentences never leads the story (named policy)');
   ok(/sentence' \+ \(scrub\.dropped === 1 \? '' : 's'\) \+ ' of the draft above/.test(src2),
     'the report discloses how many sentences the gate removed');
-  ok(/var narr = \(narrScrub\.kept >= 2\) \? narrScrub\.text : ''/.test(src2),
+  ok(/var narr = \(narrScrub\.kept >= VO_GATE_MIN_KEPT\) \? narrScrub\.text : ''/.test(src2),
     'the annex path is gated too — no route prints prohibited language');
+
+  // Sentence splitting must survive legal prose. A naive [.!?] split cut
+  // "Mr. Nortje may have signed it." into "Mr." + the rest, so the gate left
+  // a dangling "Mr." in a SEALED report, and split "R3 800 000.00" into
+  // "R3 800 000. 00" — a corrupted amount in a forensic document.
+  ok(s('Mr. Nortje may have signed it. The lease expired on 1 Jan 2026.').text === 'The lease expired on 1 Jan 2026.',
+    'a title before a name never leaves a dangling fragment when the sentence is dropped');
+  ok(/R3 800 000\.00/.test(s('The payment was R3 800 000.00 per cl. 3. It appears to be unsigned.').text),
+    'monetary amounts survive the split intact');
+  ok(s('Clause 6.2.1 applies. M. Nortje signed on p. 89.').dropped === 0
+    && /6\.2\.1/.test(s('Clause 6.2.1 applies. M. Nortje signed on p. 89.').text),
+    'clause numbering, initials and page citations are not sentence breaks');
+  const sp = R._splitSentences('Mr. Nortje signed. The lease expired.');
+  ok(sp.length === 2 && /^Mr\. Nortje signed\./.test(sp[0].trim()),
+    'the shared splitter keeps "Mr." with its sentence (' + sp.length + ' parts)');
+  ok(R._splitSentences('One sentence only').length === 1, 'a lone unterminated sentence still returns one part');
 }
 
 // ---- the analyst's telling leads the story; the backbone stays deterministic ----
