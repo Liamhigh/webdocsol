@@ -3127,9 +3127,22 @@ function secExecutiveSummary(ctx, data) {
       var where = fmtLocation(f.location);
       ctx.para((i + 1) + '. ' + (CT_NAMES[f.type] || f.type) + ((where && where !== '—') ? '  (' + where + ')' : ''),
         { size: 10.4, font: ctx.f.timesBold, color: NAVY2, after: 2 });
-      var q = quoteEvidence(f.evidence);
-      if (q.length > 260) q = q.substring(0, 257) + '…';
-      ctx.para('The record states: ' + q, { size: 9.6, indent: 14, after: 2 });
+      // Two-sided findings print BOTH halves. A single 260-character window
+      // cut the second quote off the Lessee/Owner trap — the reader saw the
+      // "lessee" side and lost the "owner" side, which is the half that makes
+      // the finding. Each side now gets its own budget.
+      var sidesE = contradictionSides(f.evidence);
+      if (sidesE) {
+        var A = sidesE.a, B = sidesE.b;
+        if (A.length > 190) A = A.substring(0, 187) + '…';
+        if (B.length > 190) B = B.substring(0, 187) + '…';
+        ctx.para('The record states: ' + A, { size: 9.6, indent: 14, after: 1 });
+        ctx.para('and also states: ' + B, { size: 9.6, indent: 14, after: 2 });
+      } else {
+        var q = quoteEvidence(f.evidence);
+        if (q.length > 260) q = q.substring(0, 257) + '…';
+        ctx.para('The record states: ' + q, { size: 9.6, indent: 14, after: 2 });
+      }
       ctx.para('What this establishes: ' + establishesOf(f), { size: 9.6, indent: 14, font: ctx.f.timesItalic, after: 8 });
     }
   }
@@ -3160,7 +3173,7 @@ function secExecutiveSummary(ctx, data) {
   var up = data.unreadPages || {};
   var unreadN = ((up.capped || []).length + (up.noText || []).length + (up.renderFailed || []).length);
   if (unreadN > 0) {
-    ctx.bullet('Have the ' + unreadN + ' unread page' + (unreadN === 1 ? '' : 's') + ' listed in "Pages the engine could not read" reviewed by a person. Nothing on them was examined.', { size: 9.4, after: 3 });
+    ctx.bullet('Have the ' + unreadN + ' unread page' + (unreadN === 1 ? '' : 's') + ' listed in "Pages the engine could not read" reviewed by a person. Nothing on ' + (unreadN === 1 ? 'it' : 'them') + ' was examined.', { size: 9.4, after: 3 });
   }
   ctx.bullet('Take the findings to a legal practitioner or the relevant authority. Candidate statutory provisions are set out in the Statutory Anchoring annex as starting points for counsel to confirm.', { size: 9.4, after: 3 });
   ctx.gap(4);
