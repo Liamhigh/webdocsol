@@ -136,6 +136,24 @@ if (constMatch) {
   }
 }
 
+// The report's PROMINENT surfaces must name the GOVERNING charter, not the
+// engine's operating instrument alone. The cover printed "CONSTITUTIONAL
+// FORENSIC AI V 6.1", which reads as a report running a superseded
+// constitution — v8.0 governs, v6.1 is the instrument, and both must show.
+{
+  const rep = readFileSync('forensic-report.js', 'utf8');
+  ok(/GOVERNED BY CONSTITUTION V' \+ CONSTITUTION\.governance\.version/.test(rep),
+    'the report cover names the governing charter (v8.0), not the instrument alone');
+  ok(/ENGINE INSTRUMENT V' \+ CONSTITUTION_VERSION/.test(rep),
+    'the cover still records the engine operating instrument alongside it');
+  ok(!/CONSTITUTIONAL FORENSIC AI V ' \+ CONSTITUTION_VERSION/.test(rep),
+    'the instrument-only cover line is gone');
+  ok(/under Constitution v' \+ CONSTITUTION\.governance\.version \+ ' \(seal ' \+ CONSTITUTION\.governance\.sealId/.test(rep),
+    'the certification names the governing charter and its seal');
+  ok(/generated under the Verum Omnis Constitution v' \+ CONSTITUTION\.governance\.version/.test(rep),
+    'the constitution annex opens with the governing charter');
+}
+
 console.log(`\n[constitution-lock] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[constitution-lock] FAILURES'); process.exit(1); }
 console.log('[constitution-lock] ALL GREEN');
