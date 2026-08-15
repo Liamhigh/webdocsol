@@ -266,13 +266,53 @@ function fakeDom(behaviours, state) {
 
   ok(/remain unread: page\(s\) ' \+ voPageRanges\(cappedPages\)/.test(src),
     'the over-cap note names the exact unread pages, not just a count');
-  ok(/_voUnreadPages = \{ capped: cappedPages, noText: noText\.slice\(\), renderFailed: renderFailed\.slice\(\) \}/.test(src),
+  ok(/_voUnreadPages = \{ capped: cappedPages, noText: noText\.slice\(\), renderFailed: renderFailed\.slice\(\), timedOut: timedOut\.slice\(\) \}/.test(src),
     'a structured unread-pages record is captured for the report builder');
   ok(/_voUnreadPages = null;[^]*?DISTINCT-content mass/.test(src),
     'the record is reset at rescue entry so a second document never inherits it');
   ok(/unreadPages: _voUnreadPages/.test(html) &&
      (html.match(/unreadPages: _voUnreadPages/g) || []).length >= 2,
     'unread-pages data is passed to BOTH the main report build and the narrative twin');
+}
+
+// ---- a wedged worker must never freeze the scan ----
+// Field report: "OCR gets to page 3 or 4 and just stays there forever." A
+// tesseract worker killed by the OS (out of memory on a phone) never settles
+// its promise, so the Promise.all over that chunk waited for the rest of the
+// session — no error, no progress, no way out. Every worker/renderer await is
+// now bounded, the wedged worker is retired, and the page is disclosed unread.
+{
+  ok(/function voOcrDeadline/.test(src), 'the OCR hook defines a deadline helper');
+  ok(/voOcrDeadline\(job\.worker\.recognize\(job\.canvas\), VO_OCR_RECOGNIZE_MS/.test(src),
+    'recognition is bounded (this is the await that froze)');
+  ok(/voOcrDeadline\(\s*page\.render/.test(src), 'page rendering is bounded');
+  ok(/voOcrDeadline\(Tesseract\.createWorker/.test(src), 'worker creation is bounded');
+  ok(/deadWorkers\.indexOf\(job\.worker\) === -1/.test(src) && /workers\.splice\(di, 1\)/.test(src),
+    'a worker that blows its deadline is retired from the pool');
+  ok(/if \(!workers\.length\)/.test(src) && /timedOut\.push\(candidates\[rem\] \+ 1\)/.test(src),
+    'if every worker wedges the remaining pages are recorded, not looped over');
+  ok(/timedOut: timedOut\.slice\(\)/.test(src), 'timed-out pages reach the report disclosure');
+  ok(/2200 \/ Math\.max/.test(src), 'the raster is capped so one huge page cannot exhaust memory');
+  ok(/_dm <= 4\) POOL = Math\.min\(POOL, 2\)/.test(src), 'low-memory devices use a smaller worker pool');
+
+  // The deadline helper itself: rejects a hung promise, passes a fast one
+  // through, and never leaves a timer running behind a resolved promise.
+  const fn2 = new Function('setTimeout', 'clearTimeout', 'Promise',
+    '"use strict";' + src.slice(src.indexOf('function voOcrDeadline'), src.indexOf('// Structured record of every page')) +
+    '\nreturn voOcrDeadline;');
+  let cleared = 0;
+  const dl = fn2(setTimeout, (t) => { cleared++; return clearTimeout(t); }, Promise);
+  const hung = new Promise(() => {});          // never settles — the OOM case
+  let hungErr = null;
+  await dl(hung, 40, 'ocr-p3').catch((e) => { hungErr = e; });
+  ok(hungErr && /VO_OCR_TIMEOUT:ocr-p3/.test(hungErr.message),
+    'a promise that never settles rejects with a labelled timeout');
+  const okVal = await dl(Promise.resolve('text'), 5000, 'ocr-p1');
+  ok(okVal === 'text', 'a promise that settles in time passes its value through');
+  ok(cleared > 0, 'the timer is cleared when the work finishes first (no leak)');
+  let passErr = null;
+  await dl(Promise.reject(new Error('render blew up')), 5000, 'render-p9').catch((e) => { passErr = e; });
+  ok(passErr && /render blew up/.test(passErr.message), 'a real failure is passed through unchanged');
 }
 
 console.log(`\n[ocr-rescue] PASS=${pass} FAIL=${fail}`);
