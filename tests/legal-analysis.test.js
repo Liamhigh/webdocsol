@@ -488,6 +488,13 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(/The findings that matter most/.test(es) && /What this establishes/.test(es),
     'it names the top findings and what each establishes');
   ok(/Key dates in the record/.test(es), 'it carries the dated sequence');
+  // Both halves of a two-sided finding must survive. A single truncation
+  // window cut the "owner" quote off the Lessee/Owner trap, leaving only the
+  // "lessee" half — the reader lost the half that makes the finding.
+  ok(/var sidesE = contradictionSides\(f\.evidence\)/.test(es) && /and also states: ' \+ B/.test(es),
+    'a two-sided finding prints both halves, each with its own budget');
+  ok(/\(unreadN === 1 \? 'it' : 'them'\)/.test(es),
+    'the unread-page instruction agrees in number ("1 unread page ... nothing on IT")');
   ok(/What to do next/.test(es) && /Preserve the sealed originals/.test(es),
     'it closes with concrete next steps');
   ok(/This report does not determine guilt/.test(es) && /The verdict is for the court/.test(es),
