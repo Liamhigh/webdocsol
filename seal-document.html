@@ -3998,6 +3998,7 @@ function secUnreadPages(ctx, data) {
   if (up.capped && up.capped.length) groups.push({ pages: up.capped, why: 'image-only pages beyond the on-device OCR limit — never converted to text' });
   if (up.noText && up.noText.length) groups.push({ pages: up.noText, why: 'rendered for OCR but no legible text was recovered (blank, photographic, or print too poor to read)' });
   if (up.renderFailed && up.renderFailed.length) groups.push({ pages: up.renderFailed, why: 'could not be rendered for OCR at all' });
+  if (up.timedOut && up.timedOut.length) groups.push({ pages: up.timedOut, why: 'exceeded the per-page OCR time limit on the device used, so reading was stopped and the page left unread' });
   var total = 0;
   for (var g = 0; g < groups.length; g++) total += groups[g].pages.length;
 
@@ -11956,6 +11957,33 @@ var VO_OCR_MAX_PAGES = 200;     // cap: OCR is ~seconds/page on-device. Raised f
 var VO_OCR_EMPTY_CHARS = 40;    // a page this thin is treated as image-only
 var VO_OCR_MIN_AVG = 150;       // only rescue when the rest of the doc has real text
 
+// NOTHING IN THE OCR HOOK MAY AWAIT FOREVER. A tesseract worker killed by the
+// OS (out of memory on a phone) or wedged inside wasm never settles its
+// promise, so the Promise.all over a chunk waits for it for the rest of the
+// session — the field report was "OCR reaches page 3 or 4 and stays there
+// forever", with no error shown and no way out. Every await that touches a
+// worker or the renderer is now bounded. A page that exceeds its bound is
+// recorded as unread and disclosed like any other unread page; the scan moves
+// on. (Extraction completeness has always been device-dependent — the OCR
+// cap, render failures — and is always disclosed; a frozen page is worse than
+// a disclosed one.)
+var VO_OCR_WORKER_INIT_MS = 45000;
+var VO_OCR_RENDER_MS = 30000;
+var VO_OCR_RECOGNIZE_MS = 60000;
+function voOcrDeadline(work, ms, label) {
+  var timer = null;
+  var clear = function () { if (timer) { clearTimeout(timer); timer = null; } };
+  return Promise.race([
+    Promise.resolve(work).then(
+      function (v) { clear(); return v; },
+      function (e) { clear(); throw e; }
+    ),
+    new Promise(function (_resolve, reject) {
+      timer = setTimeout(function () { reject(new Error('VO_OCR_TIMEOUT:' + label)); }, ms);
+    })
+  ]);
+}
+
 // Structured record of every page the engine could NOT read this run, and why:
 // { capped: [pageNo...], noText: [...], renderFailed: [...] } (1-based). Fed to
 // the report builder so unread pages are disclosed prominently with a
@@ -12111,11 +12139,11 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   var worker = null, _tessErr = null, _winBase = null;
   for (var _tb = 0; _tb < _tessBases.length && !worker; _tb++) {
     try {
-      worker = await Tesseract.createWorker('eng', 1, {
+      worker = await voOcrDeadline(Tesseract.createWorker('eng', 1, {
         workerPath: _tessBases[_tb].worker,
         corePath: _tessBases[_tb].core,
         langPath: _tessBases[_tb].lang
-      });
+      }), VO_OCR_WORKER_INIT_MS, 'worker-init');
       _winBase = _tessBases[_tb];
     } catch (e) { _tessErr = e; }
   }
@@ -12131,16 +12159,20 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   try {
     var _hc = (typeof navigator !== 'undefined' && navigator.hardwareConcurrency) ? navigator.hardwareConcurrency : 2;
     POOL = Math.max(1, Math.min(4, _hc - 1));
+    // Four wasm workers plus four page bitmaps is what pushes a phone into
+    // the OOM killer. Where the device reports 4 GB or less, keep two.
+    var _dm = (typeof navigator !== 'undefined' && navigator.deviceMemory) ? navigator.deviceMemory : null;
+    if (_dm && _dm <= 4) POOL = Math.min(POOL, 2);
   } catch (e) { POOL = 1; }
   var workers = [worker];
   for (var _w = 1; _w < POOL && _winBase; _w++) {
     try {
-      workers.push(await Tesseract.createWorker('eng', 1, {
+      workers.push(await voOcrDeadline(Tesseract.createWorker('eng', 1, {
         workerPath: _winBase.worker, corePath: _winBase.core, langPath: _winBase.lang
-      }));
+      }), VO_OCR_WORKER_INIT_MS, 'worker-init'));
     } catch (e) { break; }
   }
-  var rescued = [], noText = [], renderFailed = [], out = textBlocks.slice();
+  var rescued = [], noText = [], renderFailed = [], timedOut = [], out = textBlocks.slice();
   var _completed = 0;
   // Progress is reported through the UI-owned voOcrProgress (defined outside
   // this hook) with pure counts only — the remaining-time estimate needs a
@@ -12165,19 +12197,27 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
         var pageIdx = chunk[k];
         try {
           var page = await pdf.getPage(pageIdx + 1);
-          var viewport = page.getViewport({ scale: 2.0 });
+          // Cap the raster: scale 2.0 on an A0 plan or a 600-dpi scan produces
+          // a bitmap large enough to kill the tab before OCR ever runs.
+          var _vp1 = page.getViewport({ scale: 1 });
+          var _scale = Math.min(2.0, 2200 / Math.max(_vp1.width || 1, _vp1.height || 1));
+          if (!(_scale > 0.5)) _scale = 0.5;
+          var viewport = page.getViewport({ scale: _scale });
           var canvas = document.createElement('canvas');
           canvas.width = Math.ceil(viewport.width);
           canvas.height = Math.ceil(viewport.height);
-          await page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise;
+          await voOcrDeadline(
+            page.render({ canvasContext: canvas.getContext('2d'), viewport: viewport }).promise,
+            VO_OCR_RENDER_MS, 'render-p' + (pageIdx + 1));
           jobs.push({ pageIdx: pageIdx, canvas: canvas, worker: workers[jobs.length % workers.length] });
         } catch (pageErr) {
           renderFailed.push(pageIdx + 1); // named in the note, scan continues
           _ocrTick(pageIdx);
         }
       }
+      var deadWorkers = [];
       await Promise.all(jobs.map(function (job) {
-        return job.worker.recognize(job.canvas).then(function (res) {
+        return voOcrDeadline(job.worker.recognize(job.canvas), VO_OCR_RECOGNIZE_MS, 'ocr-p' + (job.pageIdx + 1)).then(function (res) {
           var text = (res && res.data && res.data.text ? res.data.text : '').replace(/\s+/g, ' ').trim();
           if (text.length > VO_OCR_EMPTY_CHARS) {
             out[job.pageIdx] = '[OCR] ' + text;
@@ -12188,12 +12228,30 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
             noText.push(job.pageIdx + 1);
           }
         }).catch(function (pageErr) {
-          renderFailed.push(job.pageIdx + 1); // named in the note, scan continues
+          if (pageErr && /VO_OCR_TIMEOUT/.test(String(pageErr.message || pageErr))) {
+            // The worker never answered. It cannot be trusted with the next
+            // chunk either, so retire it; the page is disclosed as unread.
+            timedOut.push(job.pageIdx + 1);
+            if (deadWorkers.indexOf(job.worker) === -1) deadWorkers.push(job.worker);
+          } else {
+            renderFailed.push(job.pageIdx + 1); // named in the note, scan continues
+          }
         }).then(function () {
           job.canvas.width = job.canvas.height = 0; // release bitmap memory promptly
           _ocrTick(job.pageIdx);
         });
       }));
+      for (var dw = 0; dw < deadWorkers.length; dw++) {
+        var di = workers.indexOf(deadWorkers[dw]);
+        if (di !== -1) workers.splice(di, 1);
+        try { deadWorkers[dw].terminate(); } catch (eT) {}
+      }
+      if (!workers.length) {
+        // Every worker has wedged. Record the rest as unread rather than
+        // looping on a pool that cannot answer.
+        for (var rem = c0 + chunk.length; rem < candidates.length; rem++) timedOut.push(candidates[rem] + 1);
+        break;
+      }
     }
   } finally {
     for (var _tw = 0; _tw < workers.length; _tw++) { try { await workers[_tw].terminate(); } catch (e) {} }
@@ -12204,15 +12262,17 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   rescued.sort(function (a, b) { return a - b; });
   noText.sort(function (a, b) { return a - b; });
   renderFailed.sort(function (a, b) { return a - b; });
+  timedOut.sort(function (a, b) { return a - b; });
   // Record every unread page + reason for the report's disclosure section.
   var cappedPages = cappedIdx.map(function (p) { return p + 1; });
-  _voUnreadPages = { capped: cappedPages, noText: noText.slice(), renderFailed: renderFailed.slice() };
+  _voUnreadPages = { capped: cappedPages, noText: noText.slice(), renderFailed: renderFailed.slice(), timedOut: timedOut.slice() };
   // Full per-page accounting: every candidate page ends up in exactly one of
   // rescued / noText / renderFailed, so the extraction note states precisely
   // which pages were read and why the rest were not.
   var tail =
     (noText.length ? ' ' + noText.length + ' page(s) rendered but held no legible text (blank, photographic, or print too poor to read): ' + noText.join(', ') + '.' : '') +
     (renderFailed.length ? ' ' + renderFailed.length + ' page(s) could not be rendered for OCR: ' + renderFailed.join(', ') + '.' : '') +
+    (timedOut.length ? ' ' + timedOut.length + ' page(s) exceeded the per-page OCR time limit and remain unread: ' + voPageRanges(timedOut) + '.' : '') +
     (skipped > 0 ? ' A further ' + skipped + ' image-only page(s) exceeded the OCR cap (' + VO_OCR_MAX_PAGES + ') and remain unread: page(s) ' + voPageRanges(cappedPages) + '.' : '');
   if (!rescued.length) {
     return { textBlocks: textBlocks, note: 'OCR rescue ran on ' + candidates.length + ' image-only page(s) but recovered no legible text; those pages remain unread.' + tail };

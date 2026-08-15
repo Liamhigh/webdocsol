@@ -3278,6 +3278,7 @@ function secUnreadPages(ctx, data) {
   if (up.capped && up.capped.length) groups.push({ pages: up.capped, why: 'image-only pages beyond the on-device OCR limit — never converted to text' });
   if (up.noText && up.noText.length) groups.push({ pages: up.noText, why: 'rendered for OCR but no legible text was recovered (blank, photographic, or print too poor to read)' });
   if (up.renderFailed && up.renderFailed.length) groups.push({ pages: up.renderFailed, why: 'could not be rendered for OCR at all' });
+  if (up.timedOut && up.timedOut.length) groups.push({ pages: up.timedOut, why: 'exceeded the per-page OCR time limit on the device used, so reading was stopped and the page left unread' });
   var total = 0;
   for (var g = 0; g < groups.length; g++) total += groups[g].pages.length;
 
