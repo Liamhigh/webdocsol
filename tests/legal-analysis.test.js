@@ -504,6 +504,47 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'the plain-language twin opens with it too');
 }
 
+// ---- SEALED FINDINGS lists only what is established AND anchored ----
+// From the 411-page two-document run of 21 Aug 2026: the executive summary
+// said "20 verified findings" while section 5 said "21", because section 5
+// counted the AI candidate the report's own AI section calls "never presented
+// as engine-verified". That candidate also printed as literally
+//     4. "" — Anchor: —.
+// in the middle of a sealed court document, under a heading promising "each
+// anchored to its page".
+{
+  const src6 = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
+  const sf = src6.slice(src6.indexOf('function secSealedFindings'), src6.indexOf('function secVerdictReservation'));
+  ok(/if \(f\.source === 'ai'\) return false;/.test(sf),
+    'AI candidates are excluded from SEALED FINDINGS (they are not established)');
+  ok(/if \(!loc \|\| loc === '—'\) return false;/.test(sf),
+    'unanchored items are excluded — the anchor rule is "no anchor, no sentence"');
+  ok(/quoteEvidence\(f\.evidence\)\.replace\(/.test(sf) && /\.length > 0;/.test(sf),
+    'an item with no renderable evidence can never print as an empty quote');
+
+  // The §15.3 count and the executive summary must count the same population:
+  // engine-verified, anchored findings. Both filters exclude source === 'ai'.
+  const lead = src6.slice(src6.indexOf('function plainLeadLines'), src6.indexOf('// ================= SECTION: EXECUTIVE SUMMARY'));
+  ok(/source === 'ai'/.test(lead) && /if \(f\.source === 'ai'\) return false;/.test(sf),
+    'the executive summary and section 5 count the same population');
+
+  // Behavioural: the three excluded shapes seen in that report.
+  const keeps = (f) => {
+    if (!f || f.source === 'ai') return false;
+    const loc = R._fmtLocation(f.location);
+    if (!loc || loc === '—') return false;
+    return R._cleanQuote(String(f.evidence || '')).replace(/["'\s.,;:—-]/g, '').length > 0;
+  };
+  ok(keeps({ type: 'CT44', evidence: 'Termination rests on a lessee-only clause', location: 'Page 11 vs Page 75' }),
+    'a real anchored engine finding is kept');
+  ok(!keeps({ type: 'AI_X', evidence: '', location: null, source: 'ai' }),
+    'the AI candidate that produced the 20-vs-21 mismatch is excluded');
+  ok(!keeps({ type: 'CT02', evidence: '""', location: 'Page 5' }),
+    'a finding whose evidence renders empty is excluded (no more \'4. "" — Anchor: —.\')');
+  ok(!keeps({ type: 'CT02', evidence: 'real text here', location: 'Multiple pages' }),
+    'an unanchored location is excluded even with evidence text');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);
