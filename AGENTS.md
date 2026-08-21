@@ -140,6 +140,16 @@ endorsed, validated, accredited or ruled on the merits of Verum Omnis, its
 engine or its methodology; that the platform is "court-recognised" or
 "judicially validated"; or that a **High Court** is among the courts of record
 (it is not — the forums are the Constitutional Court and a Magistrate's Court).
+
+**"Accepted" is the word to watch.** It has been softened out of `index.html`
+three separate times — "accepted as prima facie evidence", "accepted into court
+record", "accepted as formal proof of cyber forgery" — because it is the
+natural way to say it and it is wrong every time. A court *accepting* evidence
+means an admissibility ruling went in its favour. What happened is that the
+sealed file was **placed before the Court and not challenged** — nobody ruled
+either way. "Placed before the Court and relied upon; not excluded, struck out
+or challenged on admissibility" is the long way round, and it is the only
+version that survives being checked. Use it.
 The phrase *"in good faith and in the interest of justice"* in the H208/25
 judgment records the **respondent's own affidavit**, not a finding by the Court.
 The Daubert / ECT Act / ISO 27037 analysis is a **Legal Expert Report**; no
