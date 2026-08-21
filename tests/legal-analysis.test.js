@@ -545,6 +545,45 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'an unanchored location is excluded even with evidence text');
 }
 
+// ---- DOCUMENTS IN THIS BUNDLE: page anchors become legible ----
+// Once a bundle holds several documents, "p. 464" tells counsel nothing. The
+// engine recovers boundaries from the documents' own "Page N of M" numbering;
+// the report states them and marks findings whose halves sit in different
+// documents. Ranges below are the real 21 Aug 2026 three-document bundle.
+{
+  const map = [
+    { start: 1, end: 72, pages: 72, title: 'Caltex Franchise Agreement' },
+    { start: 73, end: 411, pages: 339, title: 'AllFuels Supplementary Report' },
+    { start: 412, end: 489, pages: 78, title: 'Clayton lease' }
+  ];
+  ok(R._docsForLocation('Page 11 vs Page 75', map).join(',') === '0,1',
+    'the goodwill finding is placed in documents 1 and 2');
+  ok(R._docsForLocation('Page 134, 464', map).join(',') === '1,2',
+    'the identity-number finding is placed in documents 2 and 3');
+  ok(R._docsForLocation('Page 165, 167', map).join(',') === '1', 'a single-document finding stays in one');
+  ok(R._docsForLocation('Full document', map).length === 0, 'a non-numeric location places nowhere');
+  ok(R._docsForLocation('Page 11 vs Page 75', []).length === 0, 'no map means no placement');
+
+  ok(/spans Document 1 and Document 2/.test(R._crossDocNote({ location: 'Page 11 vs Page 75' }, map)),
+    'a cross-document finding is marked as spanning both');
+  ok(R._crossDocNote({ location: 'Page 165, 167' }, map) === '',
+    'a single-document finding carries no cross-document note');
+  ok(R._crossDocNote({ location: 'Page 412' }, map) === '', 'a Clayton-only finding carries no note');
+
+  const src7 = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
+  ok(/function secDocumentsInBundle/.test(src7), 'the documents section exists');
+  const ds = src7.slice(src7.indexOf('function secDocumentsInBundle'), src7.indexOf('function secShortVersion'));
+  ok(/if \(map\.length < 2\) return;/.test(ds), 'the section is silent for a single-document bundle');
+  ok(/Findings that span more than one document/.test(ds), 'it lists the cross-document findings');
+  ok(/f\.source !== 'ai'/.test(ds), 'AI candidates are excluded from the cross-document count');
+  ok(/a fact of the record, not an assumption/.test(ds),
+    'the boundaries are presented as read from the record, not inferred');
+  const b7 = src7.slice(src7.indexOf('async function build('), src7.indexOf('async function buildNarrative('));
+  ok(b7.indexOf('secDocumentsInBundle(ctx, data)') > b7.indexOf('secExecutiveSummary(ctx, data)')
+    && b7.indexOf('secDocumentsInBundle(ctx, data)') < b7.indexOf('secShortVersion(ctx, data)'),
+    'it renders between the executive summary and the short version');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);

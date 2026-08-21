@@ -3203,6 +3203,91 @@ function secExecutiveSummary(ctx, data) {
     { size: 10, font: ctx.f.timesItalic, color: NAVY2, after: 6 });
 }
 
+
+// ================= SECTION: DOCUMENTS IN THIS BUNDLE =======================
+// A finding anchored to "p. 464" is unreadable once a bundle holds several
+// documents — nothing tells counsel that page 464 is the third one. The
+// engine recovers the boundaries from the documents' own "Page N of M"
+// numbering (voDetectDocuments); this section states them, and findings that
+// span a boundary are marked so a cross-document contradiction is visible as
+// what it is.
+function docsForLocation(location, map) {
+  if (!map || !map.length) return [];
+  var pages = pageNumbers(location);
+  var hit = [];
+  for (var p = 0; p < pages.length; p++) {
+    for (var d = 0; d < map.length; d++) {
+      if (pages[p] >= map[d].start && pages[p] <= map[d].end && hit.indexOf(d) === -1) hit.push(d);
+    }
+  }
+  hit.sort(function (a, b) { return a - b; });
+  return hit;
+}
+function docLabel(map, i) {
+  var d = map[i];
+  return 'Document ' + (i + 1) + (d && d.title ? ' (' + d.title + ')' : '');
+}
+// "spans Document 1 and Document 2" — stated only when a finding's own pages
+// fall in more than one detected document.
+function crossDocNote(f, map) {
+  var idx = docsForLocation(f && f.location, map);
+  if (idx.length < 2) return '';
+  var names = [];
+  for (var i = 0; i < idx.length; i++) names.push('Document ' + (idx[i] + 1));
+  return ' — spans ' + listPhrase(names);
+}
+
+function secDocumentsInBundle(ctx, data) {
+  var map = (data.findings && data.findings.documentMap) || [];
+  if (map.length < 2) return;
+  var subst = ((data.findings && data.findings.findings) || []).filter(function (f) {
+    return f && f.type !== 'SERIAL' && !isDemoted(f) && f.source !== 'ai';
+  });
+  var crossN = 0;
+  for (var c = 0; c < subst.length; c++) {
+    if (docsForLocation(subst[c].location, map).length > 1) crossN++;
+  }
+
+  ctx.newBodyPage();
+  ctx.heading('DOCUMENTS IN THIS BUNDLE', { label: 'DOCUMENTS IN THIS BUNDLE' });
+  ctx.para('This bundle contains more than one document. The boundaries below are read from the documents\' own internal page numbering ("Page N of M") — they are a fact of the record, not an assumption. Every page reference in this report is a BUNDLE page; use this table to place it in its own document.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+
+  var rows = [];
+  for (var i = 0; i < map.length; i++) {
+    rows.push({
+      no: String(i + 1),
+      title: map[i].title || '(untitled in the record)',
+      range: 'p. ' + map[i].start + ' – ' + map[i].end,
+      pages: String(map[i].pages)
+    });
+  }
+  ctx.table(
+    [
+      { key: 'no', title: '#', w: 24, font: ctx.f.timesBold },
+      { key: 'title', title: 'Document, as the record names it', w: 250 },
+      { key: 'range', title: 'Bundle pages', w: 130 },
+      { key: 'pages', title: 'Pages', w: 60, align: 'center' }
+    ],
+    rows,
+    { size: 8.5 }
+  );
+  ctx.gap(6);
+
+  if (crossN > 0) {
+    ctx.subHeading('Findings that span more than one document');
+    ctx.para(crossN + ' of the ' + subst.length + ' findings are anchored to pages in more than one of the documents above. A contradiction whose two halves sit in different documents is stated by the bundle as a whole, not by either document alone.', { size: 10, after: 6 });
+    for (var s = 0; s < subst.length; s++) {
+      var idx = docsForLocation(subst[s].location, map);
+      if (idx.length < 2) continue;
+      var names = [];
+      for (var n = 0; n < idx.length; n++) names.push(docLabel(map, idx[n]));
+      ctx.bullet((CT_NAMES[subst[s].type] || subst[s].type) + ' — ' + fmtLocation(subst[s].location) + ': ' + listPhrase(names) + '.', { size: 9.5, after: 3 });
+    }
+    ctx.gap(4);
+  }
+  ctx.para('What each finding establishes is set out in the sections that follow. Which document a page belongs to is a matter of the record; what that means in law is for a legal practitioner, and the verdict is for the court.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+}
+
 // ================= SECTION: THE SHORT VERSION (counsel's summary) ===========
 // Founder ruling: the full findings set is what an expert needs to audit, and
 // it is too much for the human who has to DECIDE. This section is the quick,
@@ -3250,10 +3335,11 @@ function secShortVersion(ctx, data) {
       var A = pairs[p].a, B = pairs[p].b;
       if (A.length > 210) A = A.substring(0, 207) + '…';
       if (B.length > 210) B = B.substring(0, 207) + '…';
+      var xd = crossDocNote(pairs[p].f, (data.findings && data.findings.documentMap) || []);
       rows.push({
-        subject: CT_NAMES[pairs[p].f.type] || pairs[p].f.type,
+        subject: (CT_NAMES[pairs[p].f.type] || pairs[p].f.type) + (xd ? '  [cross-document]' : ''),
         a: A, b: B,
-        where: (pairs[p].where && pairs[p].where !== '—') ? pairs[p].where : '—'
+        where: ((pairs[p].where && pairs[p].where !== '—') ? pairs[p].where : '—') + (xd ? xd.replace(' — spans', '\n') : '')
       });
     }
     ctx.table(
@@ -3482,6 +3568,7 @@ async function build(opts) {
   // TOC and the institutional sections come AFTER the human part, so the
   // first thing a lay reader meets is the story, not a wall of section names.
   secExecutiveSummary(ctx, data);
+  secDocumentsInBundle(ctx, data);
   secShortVersion(ctx, data);
   secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' });
   secUnreadPages(ctx, data);
@@ -3801,6 +3888,7 @@ var api = { build: build, buildNarrative: buildNarrative, seal: seal, _sanitize:
   _narrativeBlocks: narrativeBlocks, _pageRanges: pageRanges,
   _fmtLocation: fmtLocation, _pageNumbers: pageNumbers, _scrubNarrative: scrubNarrative,
   _contradictionSides: contradictionSides, _establishesOf: establishesOf,
+  _docsForLocation: docsForLocation, _crossDocNote: crossDocNote,
   _documentParties: documentParties, _effectiveParties: effectiveParties,
   _effectivePartiesWithRoles: effectivePartiesWithRoles,
   _splitSentences: splitSentences,

@@ -387,6 +387,71 @@ var CONTRADICTION_TYPES = {
 // Each detector scans for a specific type of contradiction or fraud indicator.
 // Detectors return an array of findings: [{ type, severity, evidence, location }]
 
+
+// ---- DOCUMENT BOUNDARIES IN A COMPILED BUNDLE ------------------------------
+// Once bundles hold several documents, a finding anchored to "p. 464" is
+// opaque: nothing tells the reader that page 464 is the third document. The
+// boundaries are recoverable from the documents' OWN internal page numbering
+// — "Page N of M" markers share an M within one document, and N restarts at 1
+// when the next begins. Deterministic, text-only, no guessing: a boundary is
+// reported only where the record states its own numbering.
+function voDetectDocuments(textBlocks) {
+  if (!textBlocks || textBlocks.length < 6) return [];
+  var marks = [];
+  for (var i = 0; i < textBlocks.length; i++) {
+    var re = /\b(?:page|p\.?|pg)\s*(\d{1,4})\s*(?:of|\/)\s*(\d{1,4})\b/gi;
+    var m, best = null;
+    while ((m = re.exec(String(textBlocks[i] || ''))) !== null) {
+      var n = parseInt(m[1], 10), tot = parseInt(m[2], 10);
+      if (!isFinite(n) || !isFinite(tot) || tot < 2 || n < 1 || n > tot) continue;
+      if (!best) best = { n: n, total: tot };
+    }
+    marks.push(best);
+  }
+  // Walk the bundle, cutting where the stated total changes or the stated page
+  // number restarts. Pages with no marker inherit the run they sit in.
+  var segs = [], cur = null;
+  for (var p = 0; p < marks.length; p++) {
+    var mk = marks[p];
+    if (!mk) { if (cur) cur.end = p; continue; }
+    var isNew = !cur || mk.total !== cur.total || mk.n <= cur.lastN;
+    if (isNew) {
+      // The document starts at its own page 1, which sits (n-1) pages back.
+      var startIdx = Math.max(cur ? cur.end + 1 : 0, p - (mk.n - 1));
+      cur = { start: startIdx, end: p, total: mk.total, lastN: mk.n };
+      segs.push(cur);
+    } else {
+      cur.end = p;
+      cur.lastN = mk.n;
+    }
+  }
+  if (segs.length < 2) return [];
+  // A run must be substantial to count as a document, and the runs must cover
+  // enough of the bundle to be worth stating at all.
+  var out = [], covered = 0;
+  for (var s = 0; s < segs.length; s++) {
+    var len = segs[s].end - segs[s].start + 1;
+    if (len < 3) continue;
+    covered += len;
+    out.push({ start: segs[s].start + 1, end: segs[s].end + 1, pages: len, statedTotal: segs[s].total });
+  }
+  if (out.length < 2 || covered < textBlocks.length * 0.5) return [];
+  // Name each document from the first line of its own first page, so the
+  // reader sees "Caltex Franchise Agreement", not just a page range.
+  for (var d = 0; d < out.length; d++) {
+    var head = String(textBlocks[out[d].start - 1] || '').replace(/\s+/g, ' ').trim();
+    // Drop the page marker and any seal furniture before reading a title. No
+    // lookbehind here: Safari before 16.4 throws on it and the whole scan dies.
+    head = head.replace(/\b(?:page|p\.?|pg)\s*\d+\s*(?:of|\/)\s*\d+\b/gi, ' ');
+    head = head.replace(/^(?:verum omnis[^|]*\||[0-9a-f]{8,}\s*)/i, '').trim();
+    var title = (head.split(/[.;:]/)[0] || '')
+      .replace(/[^A-Za-z0-9 &'\/,()-]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    if (title.length > 58) title = title.substring(0, 58).replace(/\s+\S*$/, '') + '…';
+    out[d].title = title.length >= 4 ? title : '';
+  }
+  return out;
+}
+
 var DETECTORS = {
 
   // D01-D05: Statemental detectors
@@ -3835,6 +3900,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     // is deliberately NOT part of the findings JSON export (buildFindingsJson
     // whitelists fields) and is dropped after the narrate call.
     pageTexts: textBlocks,
+    documentMap: voDetectDocuments(textBlocks),
     timeline: voBuildTimeline(allFindings),
     personIndex: voBuildPersonIndex(allFindings),
     findingsByType: findingsByType,
@@ -3891,6 +3957,7 @@ if (typeof module !== 'undefined' && module.exports) {
     SERIAL_PATTERNS: SERIAL_PATTERNS,
     runForensicEngine: runForensicEngine,
     detectSerialPatterns: detectSerialPatterns,
+    voDetectDocuments: voDetectDocuments,
     voBackfillPageAnchors: voBackfillPageAnchors,
     voPageForEvidence: voPageForEvidence,
     voPagesForEvidence: voPagesForEvidence,
