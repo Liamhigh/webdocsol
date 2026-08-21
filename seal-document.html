@@ -10747,11 +10747,28 @@ async function buildSealCertificate(opts) {
   var vurl = 'verumglobal.foundation/verify.html';
   page.drawText(vurl, { x: qrX - 8 + (qrSize + 16 - helv.widthOfTextAtSize(vurl, 6.5)) / 2, y: qrY - 33, size: 6.5, font: helv, color: MUTE });
 
-  // Sender identity block (PRIVATE): identity, GPS and device live ONLY here,
-  // in the user's own Seal Certificate — never in the public QR payload.
-  var idy = opts.identity || null;
+  // Sender identity block (PRIVATE): identity, GPS and device render ONLY when
+  // opts.includePrivate is true — i.e. on the separate PRIVATE certificate the
+  // sealer keeps. The default (shareable) certificate never carries them.
+  // FIELD LESSON (Aug 2026): certificates travel. A "private" certificate that
+  // is the only certificate ends up in shared evidence folders, and this block
+  // then hands every recipient the sealer's ID number, home address and a GPS
+  // fix to metres — while the sealer may be in hiding from the very people
+  // receiving the folder. Identity stays off anything that can be shared by
+  // default; the private variant is a second, clearly-labelled file.
+  var idy = opts.includePrivate ? (opts.identity || null) : null;
   var hasIdy = !!(idy && (idy.n || idy.id || idy.a || idy.e));
-  if (hasIdy || opts.gps || opts.dev) {
+  if (!opts.includePrivate && (opts.identity || opts.gps || opts.dev)) {
+    var py = qrY - 54;
+    page.drawText('SENDER IDENTITY', { x: qrX - 8, y: py, size: 7, font: helvBold, color: GOLD });
+    py -= 11;
+    var privNote = wrap('Recorded privately by the sealer. Not shown on this shareable certificate.', helv, 7, qrSize + 16);
+    for (var pn = 0; pn < privNote.length; pn++) {
+      page.drawText(safe(privNote[pn]), { x: qrX - 8, y: py, size: 7, font: helv, color: MUTE });
+      py -= 9.5;
+    }
+  }
+  if (opts.includePrivate && (hasIdy || opts.gps || opts.dev)) {
     var iy = qrY - 54;
     page.drawText('SENDER IDENTITY (PRIVATE)', { x: qrX - 8, y: iy, size: 7, font: helvBold, color: GOLD });
     iy -= 11;
@@ -12843,12 +12860,20 @@ async function runSealingPipeline() {
     _pipelineAiAddedFindings = [];
   }
 
-  // Seal Only mode: one-page Seal Certificate — NEVER breaks the seal flow
+  // Seal Only mode: one-page Seal Certificate — NEVER breaks the seal flow.
+  // TWO variants when identity/GPS/device were captured: the shareable
+  // certificate carries NO sender identity (safe to file, forward, or drop in
+  // an evidence folder); the PRIVATE variant carries the full identity block
+  // and exists solely for the sealer's own records. The shareable build gets
+  // no identity opts at all AND buildSealCertificate gates the block on
+  // includePrivate — two independent latches, so one future mistake cannot
+  // leak a home address into a distributed certificate.
   window._voSealCert = null;
+  window._voSealCertPrivate = null;
   if (sealMode !== 'forensic') {
     try {
       updateStep(7, 'processing', 'Building seal certificate...');
-      var certBytes = await buildSealCertificate({
+      var certBase = {
         fileName: selectedFile.name,
         sha512: sha512,
         sealId: sealId,
@@ -12856,17 +12881,32 @@ async function runSealingPipeline() {
         pageCount: _pipelinePageCount || null,
         otsSubmitted: !!(otsResult && otsResult.success),
         otsCalendar: otsResult && otsResult.calendar ? otsResult.calendar : null,
-        qrDataURL: qrDataURL,
-        identity: meta.id || null,
-        gps: meta.gps || null,
-        acc: meta.acc || null,
-        dev: meta.dev || null
-      });
+        qrDataURL: qrDataURL
+      };
+      var certBytes = await buildSealCertificate(Object.assign({}, certBase, {
+        identity: meta.id || null, gps: meta.gps || null, dev: meta.dev || null
+      }));
       window._voSealCert = { bytes: certBytes };
+      if (meta.id || meta.gps || meta.dev) {
+        try {
+          var certPrivBytes = await buildSealCertificate(Object.assign({}, certBase, {
+            includePrivate: true,
+            identity: meta.id || null,
+            gps: meta.gps || null,
+            acc: meta.acc || null,
+            dev: meta.dev || null
+          }));
+          window._voSealCertPrivate = { bytes: certPrivBytes };
+        } catch (privErr) {
+          console.warn('Private certificate generation failed (shareable certificate unaffected):', privErr);
+          window._voSealCertPrivate = null;
+        }
+      }
       updateStep(7, 'complete', 'Certificate ready');
     } catch (certErr) {
       console.warn('Seal certificate generation failed (document seal unaffected):', certErr);
       window._voSealCert = null;
+      window._voSealCertPrivate = null;
       updateStep(7, 'complete');
     }
   }
@@ -13535,6 +13575,8 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   if (oldCertBtn) oldCertBtn.remove();
   var oldCertNote = document.getElementById('sealCertNote');
   if (oldCertNote) oldCertNote.remove();
+  var oldCertPrivBtn = document.getElementById('downloadSealCertificatePrivate');
+  if (oldCertPrivBtn) oldCertPrivBtn.remove();
   if (window._voSealCert && window._voSealCert.bytes) {
     var cp = window._voSealCert;
     var cU = voMakeObjectURL(new Blob([cp.bytes], {type: 'application/pdf'}));
@@ -13543,13 +13585,26 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     cL.download = base + '-seal-certificate.pdf';
     cL.className = 'download-btn';
     cL.id = 'downloadSealCertificate';
-    cL.innerHTML = '&#11015; Download Seal Certificate';
+    cL.innerHTML = '&#11015; Download Seal Certificate (shareable)';
     var dg2 = document.getElementById('downloadGrid');
     if (sL.nextSibling) dg2.insertBefore(cL, sL.nextSibling); else dg2.appendChild(cL);
+    if (window._voSealCertPrivate && window._voSealCertPrivate.bytes) {
+      var cpP = window._voSealCertPrivate;
+      var cUP = voMakeObjectURL(new Blob([cpP.bytes], {type: 'application/pdf'}));
+      var cLP = document.createElement('a');
+      cLP.href = cUP;
+      cLP.download = base + '-seal-certificate-PRIVATE-do-not-share.pdf';
+      cLP.className = 'download-btn';
+      cLP.id = 'downloadSealCertificatePrivate';
+      cLP.innerHTML = '&#11015; Download PRIVATE Certificate (your records only)';
+      if (cL.nextSibling) dg2.insertBefore(cLP, cL.nextSibling); else dg2.appendChild(cLP);
+    }
     var cNote = document.createElement('div');
     cNote.id = 'sealCertNote';
     cNote.style.cssText = 'font-size:12px;color:#8ea3b5;margin-top:10px;line-height:1.6;';
-    cNote.textContent = 'This seal proves two things only — integrity and time. It is not a verification of the document\'s contents. Keep the Seal Certificate together with the sealed PDF.';
+    cNote.textContent = window._voSealCertPrivate
+      ? 'This seal proves two things only — integrity and time. It is not a verification of the document\'s contents. The shareable certificate carries no personal details and is safe to file or forward. The PRIVATE certificate carries your identity, address and GPS location — keep it for your own records and never place it in a shared folder.'
+      : 'This seal proves two things only — integrity and time. It is not a verification of the document\'s contents. Keep the Seal Certificate together with the sealed PDF.';
     dg2.parentNode.insertBefore(cNote, dg2.nextSibling);
   }
 
@@ -13723,6 +13778,7 @@ function resetSealing() {
   var sealedHashRowR = document.getElementById('sealedHashRow');
   if (sealedHashRowR) sealedHashRowR.style.display = 'none';
   window._voSealCert = null;
+  window._voSealCertPrivate = null;
   window._voAnchorCert = null;
   var anchorBtnR = document.getElementById('downloadAnchorCert');
   if (anchorBtnR) anchorBtnR.style.display = 'none';

@@ -130,6 +130,41 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
     'the same bundle produces byte-identical archives (deterministic)');
 }
 
+// ---- Seal Certificate privacy boundary ----
+// The certificate travels: users file it in shared evidence folders alongside
+// the sealed document. In Aug 2026 the only certificate variant carried the
+// sealer's ID number, residential address and a GPS fix to metres — read by
+// every recipient of a folder distributed to opposing parties, while the
+// sealer was in hiding. The shareable certificate must never carry the
+// private identity block; a separate PRIVATE variant, clearly named, may.
+{
+  const certStart = html.indexOf('async function buildSealCertificate');
+  const certEnd = html.indexOf('async function buildAnchorCertificate');
+  ok(certStart !== -1 && certEnd > certStart, 'buildSealCertificate exists ahead of buildAnchorCertificate');
+  const certSrc = html.slice(certStart, certEnd);
+  ok(/opts\.includePrivate\s*\?\s*\(opts\.identity/.test(certSrc),
+    'identity renders only when includePrivate is set (gate inside the builder)');
+  ok(/if\s*\(opts\.includePrivate\s*&&\s*\(hasIdy\s*\|\|\s*opts\.gps\s*\|\|\s*opts\.dev\)\)/.test(certSrc),
+    'GPS and device lines are behind the includePrivate gate too');
+  ok(/Recorded privately by the sealer/.test(certSrc),
+    'the shareable certificate says identity was recorded, without showing it');
+
+  // The pipeline builds the shareable certificate WITHOUT includePrivate and
+  // a separate private variant WITH it — two latches, not one.
+  ok(/_voSealCertPrivate/.test(html), 'a private certificate variant exists');
+  ok(/includePrivate:\s*true/.test(html), 'the private variant is built with includePrivate: true');
+  ok(/-seal-certificate-PRIVATE-do-not-share\.pdf/.test(html),
+    'the private certificate filename warns against sharing');
+  ok(/never place it in a shared folder/.test(html),
+    'the download note tells the user which certificate is which');
+
+  // The share bundle (_voShareFiles) must never include either certificate —
+  // shares go to third parties by definition.
+  const shareBlock = html.slice(html.indexOf('window._voShareFiles = [];'), html.indexOf('addShareButton();'));
+  ok(shareBlock.length > 0 && !/SealCert/.test(shareBlock),
+    'neither certificate variant is pushed into the share bundle');
+}
+
 console.log(`\n[crop-normalize] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[crop-normalize] FAILURES'); process.exit(1); }
 console.log('[crop-normalize] ALL GREEN');
