@@ -232,6 +232,45 @@ const E = require('../forensic-engine-page.js');
   ok(!/may be void/.test(src), 'CT44 definition reserves voidness for the court');
 }
 
+// ---- 7. D37 clause-numbering discontinuity (template surgery fingerprint) ----
+// Two AllFuels MOUs of the same year and template lineage: the Thongasi MOU
+// (Wayne Nell) carries a heading "9. VARIATIONS" whose sub-clauses are
+// numbered 10.1 / 10.2 — numbering from an instrument in which VARIATIONS was
+// clause 10. The Port Edward MOU (Gary Highcock) numbers the same clause
+// 9 / 9.1 correctly, which is what rules out a house drafting habit. Strings
+// below are the real extracted text from both documents.
+{
+  const D37 = E.DETECTORS.D37_DETECT_INTERNAL_CONFLICT_CATCHALL;
+
+  const thongasi = D37([
+    'Agreementbetweentheparties asatthedate hereof.\n9.\nVARIATIONS\n10.1 ThisMemorandumofUnderstanding shallnotbealtered,amendedvaried or\nsubstituted unless such alterations.\n10.2 Thedocumentshallbethe sole recordofthe consensusoftheParties.'
+  ], []);
+  ok(thongasi.some(x => x.type === 'CT43' && /numbered 9/.test(x.evidence) && /10\.1/.test(x.evidence)),
+    'D37 reports a heading numbered 9 whose first sub-clause is numbered 10.1');
+  ok(thongasi.length === 1, 'one numbering note per page, not one per sub-clause');
+  ok(!/cut from|lifted|deliberate|intent|tamper/i.test(thongasi[0].evidence),
+    'the numbering finding states the fact and never reaches for intent (s15.2)');
+  ok(/Page 1/.test(thongasi[0].location), 'the numbering finding is page-anchored');
+
+  const portEdward = D37([
+    '9.\nVARIATIONS\n.9.1This Memorandum of Understanding shall not be altered, amended varied or substituted unless such alterations are reduced to writing and signed by the Parties hereto.'
+  ], []);
+  ok(portEdward.length === 0, 'correctly numbered 9 / 9.1 stays silent');
+
+  // False positives that would each put a fabricated tampering signal in a
+  // sealed report. Every one of these must stay silent.
+  ok(D37(['9.\nVARIATIONS\nThe parties agree.\n10.\nNOTICES\n10.1 Notices shall be in writing.'], []).length === 0,
+    'an intervening numbered heading is ordinary drafting, not a discontinuity');
+  ok(D37(['9.\nVARIATIONS\n9.1 Subject to clause 10.1 hereof, no variation applies.'], []).length === 0,
+    'a cross-reference to another clause is not a numbering break');
+  ok(D37(['3.\nFEES\n91.2 The fee is payable.'], []).length === 0,
+    'an OCR digit swap (91.2) is outside the 1-3 jump bound');
+  ok(D37(['The fee payable to All Fuels shall be R3 800 000.00 and excludes VAT.'], []).length === 0,
+    'plain prose with money in it raises nothing');
+  ok(D37(['9.\nVARIATIONS\n8.1 An earlier clause number.'], []).length === 0,
+    'a backwards jump is not reported (only forward gaps of 1-3)');
+}
+
 console.log('\n[allfuels-regression] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[allfuels-regression] ALL GREEN');
