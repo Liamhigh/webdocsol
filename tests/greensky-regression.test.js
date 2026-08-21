@@ -167,6 +167,41 @@ const E = require('../forensic-engine-page.js');
     'a causal transaction sentence with no first-person writer does not fire');
 }
 
+// ---- 8. document boundaries inside a compiled bundle ----
+// Multi-document bundles made page anchors unreadable ("p. 464" — whose
+// document?). Boundaries are recovered from the documents' OWN "Page N of M"
+// numbering: stated by the record, never guessed.
+{
+  const mk = (title, total) => {
+    const out = [];
+    for (let i = 1; i <= total; i++) out.push(title + '. Clause text here. page ' + i + ' of ' + total);
+    return out;
+  };
+  const bundle = [].concat(mk('Caltex Franchise Agreement', 10), mk('Deed of Lease between the parties', 8), mk('Founding Affidavit', 6));
+  const docs = E.voDetectDocuments(bundle);
+  ok(docs.length === 3, 'three documents are detected in a compiled bundle (' + docs.length + ')');
+  ok(docs[0].start === 1 && docs[0].end === 10, 'first document spans its own pages');
+  ok(docs[1].start === 11 && docs[1].end === 18, 'second document starts where the first ends');
+  ok(docs[2].start === 19 && docs[2].end === 24, 'third document is placed correctly');
+  ok(/Caltex Franchise Agreement/.test(docs[0].title), 'the document is named from its own first page');
+  ok(!/page \d+ of \d+/i.test(docs[0].title), 'the page marker is stripped out of the title');
+
+  ok(E.voDetectDocuments(mk('One Document', 12)).length === 0, 'a single document reports no boundaries');
+  ok(E.voDetectDocuments(['plain', 'text', 'with', 'no', 'markers', 'at all']).length === 0,
+    'no page markers means no claim about boundaries');
+  ok(E.voDetectDocuments([]).length === 0 && E.voDetectDocuments(null).length === 0,
+    'empty input is safe');
+  // A two-page stub must not be promoted to a "document".
+  ok(E.voDetectDocuments([].concat(mk('Real Agreement', 10), mk('Stub', 2))).length === 0,
+    'a run shorter than three pages is not called a document');
+
+  // No lookbehind: Safari before 16.4 throws on it and the whole scan dies.
+  const engineSrc2 = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-engine-page.js'), 'utf8');
+  const fnSrc = engineSrc2.slice(engineSrc2.indexOf('function voDetectDocuments'), engineSrc2.indexOf('const DETECTORS') !== -1 ? engineSrc2.indexOf('const DETECTORS') : engineSrc2.indexOf('var DETECTORS'));
+  ok(!/\(\?<[=!]/.test(fnSrc), 'document detection uses no regex lookbehind');
+  ok(!/Date\.now|Math\.random/.test(fnSrc), 'document detection is deterministic');
+}
+
 console.log('\n[greensky-regression] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[greensky-regression] ALL GREEN');
