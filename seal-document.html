@@ -2663,8 +2663,22 @@ function secTripleVerification(ctx, data) {
 // ---- §15.4 section 5: Sealed Findings ------------------------------------
 function secSealedFindings(ctx, data) {
   var fr = data.findings || {};
-  var subst = (fr.findings || []).filter(function (f) { return f && !isDemoted(f) && f.type !== 'SERIAL'; })
-    .sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
+  // "Established" means ENGINE-VERIFIED and ANCHORED. Three exclusions, each
+  // earned on the 411-page two-document run of 21 Aug 2026:
+  //   - AI candidates: the report's own AI section says they are "never
+  //     presented as engine-verified", yet one was being counted here. The
+  //     executive summary said 20 findings and this section said 21.
+  //   - Unanchored items: the anchor rule is "no anchor, no sentence", and
+  //     this section's own opening promises "each anchored to its page".
+  //   - Items with no renderable evidence: one printed as literally
+  //     '4. "" — Anchor: —.' in the middle of a sealed court document.
+  var subst = (fr.findings || []).filter(function (f) {
+    if (!f || isDemoted(f) || f.type === 'SERIAL') return false;
+    if (f.source === 'ai') return false;
+    var loc = fmtLocation(f.location);
+    if (!loc || loc === '—') return false;
+    return quoteEvidence(f.evidence).replace(/["'\s.,;:—-]/g, '').length > 0;
+  }).sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
   if (subst.length === 0) return;
   ctx.newBodyPage();
   ctx.heading('5. SEALED FINDINGS');
