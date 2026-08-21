@@ -1,5 +1,34 @@
 # Forensic Report Generation Debug Guide
 
+> **Line numbers in this document are historical.** They were accurate when each section was
+> written and the files have moved a long way since. Search by function name
+> (`runForensicEngine`, `VerumReport.build`, `aiNarrateReport`) rather than jumping to a line.
+> The current engine and report contract is [`ENGINE.md`](./ENGINE.md).
+
+---
+
+## Symptom → cause → guard
+
+Field failures reported by the founder, each with the guard that now prevents it. If one of
+these reappears, the guard was weakened — find out how before changing anything else.
+
+| Symptom the user sees | Cause | Guard (do not remove) |
+|---|---|---|
+| **OCR stops at page 3–4 and stays there forever** | a Tesseract worker killed by the OS OOM killer leaves `recognize()` as a promise that never settles | `voOcrDeadline` + worker retirement (`deadWorkers`) + empty-pool exit + raster cap + `deviceMemory <= 4 → POOL 2`. `ENGINE.md` §12.1 |
+| **Seal footer or QR prints over a signature** | seal furniture drawn inside the original media box | pages are EXTENDED: `setMediaBox` / `setCropBox` grow the page, furniture draws in the new margin. `ENGINE.md` §12.2 |
+| **"Downloads but no share sheet"** (Samsung Internet) | `saveFiles()` fired after `navigator.share()` and the download UI dismissed the sheet | `saveFiles(files)` is called **before** `navigator.share(data)`. `ENGINE.md` §12.3 |
+| **"It asks do you want to download"** (incognito) | several simultaneous downloads trip the browser's multiple-download prompt, which never persists in a private window | multiple files save as ONE store-only ZIP (`voZipBundle`). `ENGINE.md` §12.3 |
+| **Report says "No parties were supplied" above a finding that names someone** | parties read from user input instead of the record | `documentParties` → `effectiveParties`, from `anchor.who`, deduped by `samePartyName`. AGENTS.md ruling 7 |
+| **A location prints as `—`, or "Page 89 vs Page 89"** | `pageAnchor` matched only singular "Page N" and did not dedupe | `pageNumbers` is plural/list-aware and dedupes; `—` now means the finding failed the anchor rule and should not be on the page at all |
+| **A quote is cut mid-number (`R3 800 000. 00`) or ends at `"Mr."`** | naive sentence splitting on `.` | `splitSentences` masks non-terminal periods before splitting. `ENGINE.md` §4.14 |
+| **Hedging or "red flag" wording in the plain-language section** | worker narrative rendered without gating | `scrubNarrative` drops prohibited sentences; `voGatePasses` falls back to the deterministic narrative. `ENGINE.md` §4.13 |
+| **Section 5 count disagrees with the executive summary, or an entry reads `4. "" — Anchor: —.`** | AI candidates and unanchored items reaching SEALED FINDINGS | `secSealedFindings` excludes `source === 'ai'`, empty locations and empty quotes. `ENGINE.md` §4.12 |
+| **The scan never starts, no error in the UI** | a regex lookbehind on Safari < 16.4 — it throws at **parse** time and kills the whole script | no lookbehind in new code. `ENGINE.md` §4.16 |
+| **A new contradiction type is never shared with the worker** | the novel-type filter's regex range was not widened | `/^CT(0[1-9]\|[1-3][0-9]\|4[0-6])$/` — widen it whenever a CT is added. `ENGINE.md` §12.4 |
+| **The narrative PDF omits unread pages or the home jurisdiction** | `unreadPages` / `gps` passed to `build` but not `buildNarrative` | pass the same option bag to both. `ENGINE.md` §12.5 |
+
+---
+
 ## Pipeline Overview
 The forensic report generation happens in **5 critical stages**:
 
