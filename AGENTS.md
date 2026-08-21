@@ -141,6 +141,21 @@ engine or its methodology; that the platform is "court-recognised" or
 "judicially validated"; or that a **High Court** is among the courts of record
 (it is not — the forums are the Constitutional Court and a Magistrate's Court).
 
+**Also never write:** that a matter was "reassessed as criminal" or reclassified from
+commercial to criminal by instructed counsel — the correspondence of 19 May 2025 records the
+opposite, counsel classifying it as commercial over the complainant's written objection; that
+any charge has been **laid**, or that any offence is a "verified charge" — offences named in a
+complaint are alleged and mapped to statute, and no prosecutor has ruled; that the
+Constitution becomes "recorded in the public records" or is "seeded" if any application
+succeeds — a filed document is already in the court file, a procedural remedy such as
+rescission carries no view on documents filed in support, and no outcome converts a filing
+into legal recognition; or any superlative nobody can verify, such as "first-ever in South
+African legal history" — the true and stronger claim is that the application was filed by the
+applicant **in person, without instructed counsel**.
+
+State an allegation as an allegation and name whose it is. "Fraud exceeding R231 million" is
+the complainant's figure, not a finding: write "alleged to exceed".
+
 **"Accepted" is the word to watch.** It has been softened out of `index.html`
 three separate times — "accepted as prima facie evidence", "accepted into court
 record", "accepted as formal proof of cyber forgery" — because it is the
