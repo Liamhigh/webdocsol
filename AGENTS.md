@@ -153,8 +153,28 @@ into legal recognition; or any superlative nobody can verify, such as "first-eve
 African legal history" — the true and stronger claim is that the application was filed by the
 applicant **in person, without instructed counsel**.
 
-State an allegation as an allegation and name whose it is. "Fraud exceeding R231 million" is
-the complainant's figure, not a finding: write "alleged to exceed".
+State an allegation as an allegation and name whose it is.
+
+**The R231 million figure — keep it, and keep it labelled.** It is the **complainant's
+estimate** of loss across seven affected operators, reached on industry-standard goodwill
+valuation by someone with thirteen years operating a site, working from average litreage. That
+is a legitimate basis for a claimed amount, and consistency matters: the figure has been used
+from the outset and changing it mid-matter would be worse than holding it. Quantum in
+litigation is proved later by expert evidence — a valuer or forensic accountant — and the
+complainant is not holding himself out as one.
+
+So: **do not delete it, do not inflate it, and do not describe it as computed, quantified,
+derived or anchored.** The published working (goodwill = 36 × monthly profit) yields
+approximately R29 million on its stated inputs; the difference is unexplained, so any claim
+that the figure follows from a formula does not survive checking. "Estimates at over R231
+million… quantum for determination on expert evidence" is honest, consistent and unattackable.
+
+**Never publish the extrapolations.** R2.6bn (34 sites), R2.95bn, and especially R65bn+ across
+"850+ branded marketer sites" multiply a per-victim figure across sites where no loss has been
+examined. The last one alleges industry-wide criminality against major oil companies that are
+not parties and against whom no victim-level evidence exists — a defamation exposure against
+the best-resourced litigants in the country, and an easy way to lose a strong case to a fight
+that was never necessary.
 
 **"Accepted" is the word to watch.** It has been softened out of `index.html`
 three separate times — "accepted as prima facie evidence", "accepted into court
