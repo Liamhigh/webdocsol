@@ -2238,6 +2238,62 @@ var DETECTORS = {
 
   D37_DETECT_INTERNAL_CONFLICT_CATCHALL: function(textBlocks, otherFindings) {
     var findings = [];
+
+    // ---- Clause-numbering discontinuity (template surgery fingerprint) ----
+    // When a short instrument is cut down from a longer one, the sub-clause
+    // numbering of the surviving clauses is the thing that gets left behind:
+    // the Thongasi MOU carries a heading "9. VARIATIONS" whose sub-clauses are
+    // numbered "10.1" and "10.2" — numbering from an instrument in which
+    // VARIATIONS was clause 10. The comparable Port Edward MOU numbers the
+    // same clause 9 / 9.1 correctly, so this is not a house drafting habit.
+    //
+    // This states a fact of the document and nothing more. It does NOT say the
+    // clause was cut from anywhere, does not name a source instrument, and does
+    // not reach for intent — which document a clause came from, and why, is not
+    // something numbering can establish (PD16; Constitution v8.0 s15.2).
+    //
+    // Guards, because a false "this was tampered with" is the worst thing this
+    // detector could say:
+    //  - the sub-clause must follow its heading with NO intervening numbered
+    //    heading, so an ordinary "9. VARIATIONS ... 10. NOTICES 10.1 ..." run
+    //    is silent;
+    //  - only the FIRST sub-clause after a heading is tested (a genuine 9.1 is
+    //    often followed by a cross-reference to 10.1, which is not an error);
+    //  - the mismatch must be a whole-number jump of exactly 1..3, so an OCR
+    //    digit swap ("9.1" -> "91") and unrelated decimals are excluded;
+    //  - a heading whose own number is absent is skipped entirely.
+    var HEADING_RE = /(?:^|\n)\s*(\d{1,2})\s*\.?\s*(?:\n|\s)\s*([A-Z][A-Z'’\s&/-]{3,40})(?=\n|\s\s|$)/g;
+    var SUBCLAUSE_RE = /(?:^|\n|\s)(\d{1,2})\.(\d{1,2})\b/g;
+    for (var cb = 0; cb < textBlocks.length; cb++) {
+      var page = textBlocks[cb] || '';
+      if (page.length < 40) continue;
+      var heads = [];
+      HEADING_RE.lastIndex = 0;
+      var hm;
+      while ((hm = HEADING_RE.exec(page)) !== null) {
+        heads.push({ num: parseInt(hm[1], 10), title: hm[2].replace(/\s+/g, ' ').trim(), end: hm.index + hm[0].length });
+      }
+      for (var hi = 0; hi < heads.length; hi++) {
+        var stop = hi + 1 < heads.length ? heads[hi + 1].end - heads[hi + 1].title.length : page.length;
+        var window = page.slice(heads[hi].end, Math.max(heads[hi].end, stop));
+        SUBCLAUSE_RE.lastIndex = 0;
+        var sm = SUBCLAUSE_RE.exec(window);
+        if (!sm) continue;
+        var parent = parseInt(sm[1], 10);
+        var gap = parent - heads[hi].num;
+        if (gap < 1 || gap > 3) continue;
+        var quoteAt = heads[hi].end + sm.index;
+        var quote = page.slice(Math.max(0, quoteAt - 60), quoteAt + 80).replace(/\s+/g, ' ').trim();
+        findings.push({ type: 'CT43', severity: 3,
+          evidence: 'Clause numbering does not run continuously: the heading is numbered ' +
+            heads[hi].num + ' ("' + heads[hi].title + '") but its first sub-clause is numbered ' +
+            sm[1] + '.' + sm[2] + ': "' + quote + '" — compare the clause numbering against the ' +
+            'instrument this clause was drawn from',
+          location: 'Page ' + (cb + 1) });
+        break; // one numbering note per page
+      }
+    }
+
     // If multiple different contradiction types found, flag as systematic fraud
     var uniqueTypes = {};
     for (var i = 0; i < otherFindings.length; i++) {
