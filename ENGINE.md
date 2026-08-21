@@ -23,8 +23,12 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 954 assertions; many exist
-   solely to stop the regressions in §4.
+5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1268 assertions;
+   many exist solely to stop the regressions in §4.
+6. **The report leads with the human story, not the table of contents** (§7). That order is a
+   founder ruling, not a layout preference.
+7. **No regex lookbehind in new code** (§4.16). Safari < 16.4 throws at parse time and the
+   whole scan dies silently.
 
 ---
 
@@ -36,6 +40,7 @@ PDF bytes
   ├─ voCropHidesContent()      CropBox smaller than MediaBox = hidden content
   ├─ voDigitalForensicsScan()  raw PDF structure: revisions, saves after signing, embedded files
   ├─ voExcludeTemplatePages()  boilerplate pages repeated across a bundle are not evidence
+  ├─ voDetectDocuments()       recovers document boundaries in a consolidated bundle (§8)
   ├─ DETECTORS D01–D40         each returns findings[] (§3)
   ├─ detectSerialPatterns()    multi-stage pattern matches across findings
   ├─ voBackfillPageAnchors()   binds every finding to its page
@@ -50,6 +55,13 @@ PDF bytes
 deterministic**: no `Date.now()`, no `Math.random()`, no network, no hidden state. Same input →
 same findings, on any device, forever. This is Prime Directive 4 and it is what makes a sealed
 report reproducible years later.
+
+**This has been validated in the field, not just in tests.** The same three-document bundle was
+sealed twice as two separate sealing events and analysed independently; the two sealed reports
+carried the same findings at the same page anchors (CT44 at pp. 8 vs 15; CT45 at pp. 11 vs 75
+and p. 2; CT09 at pp. 134, 470, 473). Determinism is the property that lets a reader distinguish
+a measurement from an opinion — treat any change that could make two runs differ as a
+constitutional breach, not a bug.
 
 ---
 
@@ -200,6 +212,61 @@ An AI-raised item is **candidate tier**. It is excluded from the verified count,
 the severity table and the plain-language lead, and disclosed on its own advisory line.
 Mixing the two inflates the count and misdescribes the record.
 
+### 4.11 D01 / conduct admission — a cause is not an admission
+An "admission of conduct" detector that fired on causal wording alone flagged ordinary contract
+boilerplate. **Guard:** all four conditions must hold in the same passage — a causal marker
+(`VO_CAUSE_RE`: because / since / as a result / due to / owing to / given that / seeing that),
+a proceed verb (`VO_PROCEED_RE`: proceeded / went ahead / carried on / continued / concluded /
+completed / finalised / executed, **within 80 characters** of deal / transaction / sale /
+shipment / order / export / contract / agreement / payment / transfer), a first-person subject
+(`VO_SELF_RE`: i / we / me / my / our / us), and **not** boilerplate (`VO_BOILER_RE`: shall /
+hereby / whereas / herein / the parties agree). The quote starts at the causal marker when the
+cut is more than 30 characters in.
+**Tests:** `greensky-regression.test.js`.
+
+### 4.12 `secSealedFindings` — SEALED FINDINGS lists only what is established AND anchored
+Section 5 once printed 21 findings while the executive summary counted 20, and one entry
+rendered as `4. "" — Anchor: —.` — an AI candidate with no quote and no page, printed under
+seal as a sealed finding. **Guard:** the section filters out demoted findings, `SERIAL`
+aggregates, anything with `source === 'ai'`, anything whose `fmtLocation` is empty or `—`, and
+anything whose quoted evidence is empty once punctuation and whitespace are stripped. A count
+mismatch between the executive summary and Section 5 is a bug, not a rounding difference.
+**Tests:** `legal-analysis.test.js`.
+
+### 4.13 `scrubNarrative` — the §15.2 gate DROPS sentences, it never rewrites them
+A worker-written narrative arrived on page 3 carrying `may have`, `appears to` and "red flag" —
+§15.2-prohibited language, under seal, in the plain-language section a lay reader reads first.
+**Guard:** `VO_BANNED_SENTENCE_RE` drops any sentence containing hedging, "red flag" /
+"indicator" / "anomaly", or credibility / guilt / innocence / lied / liar wording. It **drops**
+— rewriting a hedge into an assertion would put words in the narrator's mouth that the evidence
+may not carry. `voGatePasses` then requires `kept >= 2 && kept >= dropped`; if the narrative
+cannot clear that bar the deterministic narrative is used instead. On the real Greensky
+narrative, 4 of 5 sentences were dropped and the gate correctly rejected it.
+**Tests:** `legal-analysis.test.js`.
+
+### 4.14 `splitSentences` — a period is not always a full stop
+The old naive splitter cut `"Mr. Nortje may have signed it."` into a dangling `"Mr."`, and
+turned `R3 800 000.00` into `R3 800 000. 00`. **Guard:** non-terminal periods are masked with
+a `VO_DOT` sentinel (U+0001) before splitting and restored after — decimals, and the abbreviations in
+`VO_ABBREV_RE` (mr, mrs, dr, prof, inc, ltd, pty, no, vs, etc, p, pp, para, s, ss, cl, art,
+sec, fig, ch, ex). It deliberately errs toward **under**-splitting: a run-on sentence is
+ugly, a truncated quote under seal is a misquote.
+**Tests:** `legal-analysis.test.js`.
+
+### 4.15 `voDetectDocuments` — a bundle is one document until proven otherwise
+Splitting a consolidated bundle on weak signals mislabels which document a finding came from,
+which is worse than not splitting at all. **Guard:** ≥ 2 runs, ≥ 3 pages per run, ≥ 50 % page
+coverage; below that it returns nothing. See §8.
+**Tests:** `greensky-regression.test.js`.
+
+### 4.16 No regex lookbehind in new code
+Safari < 16.4 throws on `(?<=…)` / `(?<!…)` at **parse** time, which kills the entire script —
+the user sees a scan that silently never starts, not a failed detector. Do not add lookbehind
+anywhere in `forensic-engine-page.js`, `forensic-report.js` or `seal-document.html`.
+(Three pre-existing lookbehinds survive at `forensic-engine-page.js:3011`, `:3086` and
+`forensic-report.js:2491` for name/money detection. They are a known, separate debt — do not
+copy the pattern, and do not "fix" them as a drive-by.)
+
 ---
 
 ## 5. The anchor rule
@@ -266,28 +333,84 @@ findings. Do not blur the two words — the distinction is what keeps the verifi
 never be displayed. `tests/legal-analysis.test.js` asserts the absence of `/100` and confidence
 bands and will fail the build if either returns.
 
+### The prompt is not the enforcement — `scrubNarrative` is
+
+A prompt is a request; a gate is a guarantee. Everything the worker returns is passed through
+`scrubNarrative` (§4.13) **before it is drawn on a page**, and the report falls back to the
+deterministic narrative if too much was dropped. When you change the narrator prompt in
+`worker/verum-rules.js`, change the gate's expectations in `tests/legal-analysis.test.js` too —
+never loosen the gate to let a better-sounding prompt through.
+
+The narrator prompt also carries **FORMAT**, **SYNTHESIS** and **WHY IT MATTERS** rules
+(founder request: "it mustn't be a text dump"). `narrativeBlocks` then renders the result as
+typed heading / bullet / paragraph blocks. `tests/worker.test.mjs` locks the prompt text so a
+future edit cannot quietly delete those rules.
+
 ---
 
 ## 7. Report anatomy (`forensic-report.js`)
 
-`build(opts)` → PDF bytes; `seal(pdf, sha512, sealId)` → sealed PDF.
+`build(opts)` → main report PDF bytes · `buildNarrative(opts)` → the standalone
+plain-language narrative PDF · `seal(pdf, sealOpts)` → sealed PDF.
 
-1. Cover (QR to the Verification Hub) · 2. Table of contents · 3. **Executive Summary** —
-plain-language lead, fact box (verified findings, severity counts, types triggered /46),
-severity table · 4. **Plain-Language Narrative** — "the story the dates tell", each serious
-finding in ordinary words with its page and a "what to check next" · 5. **Forensic Narrative** —
-on-device deterministic narrative (or AI-assisted, marked advisory) · 6. **Legal Analysis** —
-critical legal subjects, dishonesty matrix, behavioural scorecard · 7. **Statutory Anchoring** —
-person → contradiction → page → candidate law · 8. **Candidate Offence Matrix** — includes
-**Elements Evidenced** (per offence, which elements the record evidences) · 9. Recommended
-actions (0–14 / 14–90 / 90+ days) · 10. Document & evidence index · 11. **Findings &
-Contradiction Matrix** by category · 12. **Findings in Detail** — one entry per finding with
-parties, location, verbatim quote, candidate law · 13. Person-mention index · 14. Serial
-pattern analysis · 15. Timeline analysis (with date arithmetic: span and longest gap) ·
-16. Evidence appendix (verbatim quotes) · 17. Annexure A — evidence map by page · 18. Declaration.
+**The report is in two halves, and the order is a founder ruling (AGENTS.md ruling 5): the
+human story leads, the institutional evidence follows.** Do not reorder Part 1 behind the
+table of contents "because that is how reports are laid out" — that is precisely the layout
+the ruling replaced.
 
-Jurisdiction is auto-detected from the document text (ZA home, plus AE/US/EU/UN legs) and
-drives the candidate-law tables.
+### Part 1 — the story (for everyone)
+
+| # | Section | What it is |
+|---|---|---|
+| — | **Cover** (`drawCover`) | QR to the Verification Hub, provenance lines, and `GOVERNED BY CONSTITUTION V8.0 \| ENGINE INSTRUMENT V6.1` — governance named first, instrument second |
+| 1 | **`secExecutiveSummary`** — *front page* | Source line, an **IN ONE PAGE** box, **The findings that matter most** (top 3, with *both* halves of a two-sided contradiction printed in full), **Key dates in the record**, **What to do next**, closing verdict reservation |
+| 2 | **`secDocumentsInBundle`** | When `voDetectDocuments` recovered document boundaries: which documents are in the bundle, their page ranges, and which findings cross between them (`crossDocNote`) |
+| 3 | **`secShortVersion`** | Each substantive finding as one line, contradictions split into their two sides by `contradictionSides` |
+| 4 | **`secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' })`** | On-device deterministic narrative, or the worker's narrative when enabled — always structured into headings/bullets/paragraphs by `narrativeBlocks`, never a text dump, and always passed through the §15.2 gate (§6) |
+| 5 | **`secUnreadPages`** | Every page the engine could not read, named with its reason (`capped` / `noText` / `renderFailed` / `timedOut`), collapsed into ranges by `pageRanges`, with a human-review instruction |
+| 6 | **`secSealExplainer(… { label: 'WHY THIS RECORD CANNOT BE ALTERED' })`** | SHA-512 + OpenTimestamps in plain words |
+
+Part 1 also carries the **provenance statement** required by ruling 5: the findings are the
+output of deterministic forensic software — fixed detection rules, page-anchored quotes — and
+**not** the opinion of a generative AI. Any optional AI layer stays labelled and advisory.
+
+### Part 2 — the evidence (for investigators and lawyers)
+
+**Table of contents** (placeholder page, drawn last once real page numbers are known), then
+the **Constitution v8.0 §15.4 seven-section template** in order — these headings are
+constitutional and are **not** renamed for accessibility:
+
+1. `secCriticalSubjects` — CRITICAL LEGAL SUBJECTS
+2. `secDishonestyMatrix` — DISHONESTY DETECTION MATRIX
+3. `secNineBrain` — NINE-BRAIN EXTRACTION FINDINGS
+4. `secTripleVerification` — TRIPLE VERIFICATION SUMMARY
+5. `secSealedFindings` — SEALED FINDINGS
+6. `secVerdictReservation` — VERDICT RESERVATION
+7. `secDeclaration` — CERTIFICATION
+
+Then `secAnnexDivider` and the annexes, in build order: `secExecSummary` (the legacy fact
+box / severity table) · `secAiReview` (no-op when off) · `secPartyAnalysis` ·
+`secStatutoryAnchoring` (person → contradiction → page → candidate law) · `secOffenceMatrix`
+(with **Elements Evidenced**) · `secActions` (0–14 / 14–90 / 90+ days) · `secMonetaryFigures` ·
+`secEvidenceIndex` · `secMatrix` · `secFindingDetails` · `secPersonIndex` · `secSerial` ·
+`secTimeline` · `secEvidenceAppendix` · `secEvidenceMap` (Annexure A) · `secConstitution` ·
+`secMethodology`.
+
+### Report facts the engine derives — never the user
+
+The report **must not** rely on the user to name anything. It derives:
+
+- **Parties** — `documentParties` / `effectiveParties` / `effectivePartiesWithRoles` read the
+  names out of `anchor.who` on the findings themselves, deduped by `samePartyName`
+  ("L. Highcock" and "Liam Highcock" are one party). A report saying "No parties were supplied"
+  above a finding that names someone is a bug.
+- **Jurisdiction** — `detectJurisdictions` sets `home` from the sealing GPS fix using
+  deterministic bounding boxes (ZA / AE / GB / US — **no geocoding service**, AGENTS.md
+  ruling 6); every other jurisdiction named in the record becomes a foreign leg.
+  `statutesForSubject` lists `[home].concat(foreign)`, home first.
+- **Page anchors** — `pageNumbers` / `fmtLocation` are plural- and list-aware ("Pages 11 and 12",
+  "Page 89 vs Page 89") and dedupe before printing. `—` in a location field means the finding
+  failed the anchor rule and should not have reached the page.
 
 ---
 
@@ -295,7 +418,8 @@ drives the candidate-law tables.
 
 ### `forensic-engine-page.js`
 `VO_ENGINE_VERSION` · `CONTRADICTION_TYPES` · `DETECTORS` · `SERIAL_PATTERNS` ·
-`runForensicEngine` · `detectSerialPatterns` · `voBackfillPageAnchors` · `voPageForEvidence` ·
+`runForensicEngine` · `detectSerialPatterns` · **`voDetectDocuments`** ·
+`voBackfillPageAnchors` · `voPageForEvidence` ·
 `voPagesForEvidence` · `voDigitalForensicsScan` · `voExcludeTemplatePages` ·
 `voEnforceAnchorRule` · `voContentMass` · `VO_NEAR_EMPTY_CHARS` · `voCtById` ·
 `voCropHidesContent` · `voExtractCitations` · `voExtractParties` ·
@@ -303,11 +427,25 @@ drives the candidate-law tables.
 `voBuildNameRoster` · `voExtractDates` · `voExtractQuotes` · `voParsePages` · `voDateSortKey` ·
 `voStatement` · `voAnchorEnrich` · `voBuildTimeline` · `voBuildPersonIndex`
 
+`voDetectDocuments(textBlocks)` recovers document boundaries inside a consolidated bundle from
+`Page N of M` markers: a new segment starts when the total `M` changes or `N` restarts. It
+requires **≥ 2 runs, ≥ 3 pages each, and ≥ 50 % page coverage** before it reports anything —
+below that it returns nothing rather than guess. Titles come from each document's *own* first
+page (marker stripped, capped at 58 characters). `runForensicEngine` attaches the result to
+its output as `documentMap`.
+
 ### `forensic-report.js` (`window.VerumReport`)
-`build` · `seal` — plus test seams: `_sanitize` `_cleanQuote` `_extractParties`
-`_legalSubjectOf` `_dishonestyOf` `_listPhrase` `_narrativeMeaning` `_ctNames`
-`_narrativeMeaningMap` `_plainLeadLines` `_detectJurisdictions` `_statutesForSubject`
-`_subjectOf` `_attributeParty` `_extractMoney`
+`build` · **`buildNarrative`** · `seal` — plus test seams: `_sanitize` `_cleanQuote`
+`_extractParties` `_extractPartiesWithRoles` `_partyRoleMap` `_legalSubjectOf` `_dishonestyOf`
+`_listPhrase` `_narrativeMeaning` `_ctNames` `_narrativeMeaningMap` `_plainLeadLines`
+`_narrativeBlocks` `_pageRanges` `_fmtLocation` `_pageNumbers` `_scrubNarrative`
+`_contradictionSides` `_establishesOf` `_docsForLocation` `_crossDocNote` `_documentParties`
+`_effectiveParties` `_effectivePartiesWithRoles` `_splitSentences` `_detectJurisdictions`
+`_statutesForSubject` `_subjectOf` `_attributeParty` `_extractMoney`
+
+`build(opts)` and `buildNarrative(opts)` take the same option bag; the host page must pass
+`unreadPages`, `gps`, `aiNarrative` and `aiNarrativeSource` to **both**, or the narrative PDF
+silently loses the unread-page disclosure and the home jurisdiction.
 
 ---
 
@@ -352,26 +490,31 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
+**27 suites · 1268 assertions.** `tests/run-all.js` is the registry — a new
+test file that is not registered there does not run.
+
 | Suite | Checks | Guards |
 |---|---|---|
+| `forensic-engine.test.js` | 328 | Core engine behaviour, extraction quality and OCR regressions |
+| `legal-analysis.test.js` | 189 | Party extraction, legal subjects, **PD16 language**, the §15.2 narrative gate, sentence splitting, page anchors, executive summary and SEALED FINDINGS integrity |
+| `page-boot.test.mjs` | 100 | The seal page still boots when a library is missing |
 | `detector-recall.test.mjs` | 93 | Recall + the §4 false-positive guards, pinned to real bundle strings |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
-| `page-boot.test.mjs` | 76 | The seal page still boots when a library is missing |
-| `legal-analysis.test.js` | 63 | Party extraction, legal subjects, **PD16 language** |
-| `forensic-engine.test.js` | 45 | Core engine behaviour and OCR regressions |
-| `worker.test.mjs` | 36 | Worker endpoints, limits, embedded constitution |
-| `constitution-lock.test.mjs` | 21 | Version chain, seal IDs, taxonomy renumber lock |
-| `ocr-rescue.test.mjs` | 18 | OCR fallback path |
+| `worker.test.mjs` | 65 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract |
+| `greensky-regression.test.js` | 55 | The Greensky bundle: D01 conduct admission (§4.11) and `voDetectDocuments` (§4.15) |
+| `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
+| `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
+| `allfuels-regression.test.js` | 36 | The AllFuels bundle, end to end |
+| `crop-normalize.test.mjs` | 31 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering** and ZIP validity/determinism |
+| `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
+| `seal-guard.test.mjs` / `ots-proof.test.mjs` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
 | `digital-forensics.test.mjs` / `findings-json.test.mjs` / `narrate-excerpt.test.mjs` | 16 each | PDF structure · JSON contract v1.1.0 · AI excerpt building |
 | `franchise-lease.test.mjs` | 15 | D38/D39 (CT44/CT45) |
-| `seal-guard.test.mjs` | 14 | "The only genuine Verum output is a sealed output" |
-| `role-capacity.test.mjs` | 13 | D40/CT46, no hardcoded parties |
-| `crop-normalize.test.mjs` / `wrangler-config.test.mjs` | 12 each | CropBox normalisation · deploy config drift |
+| `wrangler-config.test.mjs` / `role-capacity.test.mjs` | 13 each | Deploy config drift · D40/CT46, no hardcoded parties |
 | `ai-assess-batch.test.mjs` | 11 | Client batching under the worker's body limit |
 | `encrypt-detect.test.mjs` / `rule-classify.test.mjs` | 9 each | Encryption detection · deterministic classify fallback |
 | `find-seal.test.mjs` / `pdf-encrypt.test.mjs` | 8 each | Seal discovery · real password protection |
 | `voice-crypto.test.mjs` | 7 | `.voice` cross-page encryption |
-| `inline-scripts.test.mjs` | 6 | Inline copies byte-identical to source |
 | `engine-perf.test.mjs` | 5 | Per-page extraction does not re-parse the whole PDF |
 
 ---
@@ -384,3 +527,81 @@ the apps takes over: the model reads difficult documents and raises **candidates
 labelled as candidates pending verification, never counted as verified findings (§4.10).
 
 When in doubt on this engine: **prefer precision.** Let the hybrid layer chase recall.
+
+---
+
+## 12. The host page (`seal-document.html`) — hard-won behaviours
+
+The engine is only as good as the page that runs it. Each of the following was a field failure
+reported by the founder. None of them is decoration.
+
+### 12.1 OCR must never hang
+
+Symptom: "it gets to page three, page four, and it's just staying there forever." Cause: a
+Tesseract worker killed by the OS OOM killer leaves `recognize()` as a promise that **never
+settles**, so the progress bar stops and nothing times out.
+
+| Guard | Value / behaviour |
+|---|---|
+| `voOcrDeadline(work, ms, label)` | `Promise.race` against a timer that is **cleared on settle** (an uncleared timer keeps the tab awake) |
+| `VO_OCR_WORKER_INIT_MS` | 45 000 |
+| `VO_OCR_RENDER_MS` | 30 000 |
+| `VO_OCR_RECOGNIZE_MS` | 60 000 |
+| Worker retirement | a worker that misses a deadline goes into `deadWorkers`, is terminated and removed from the pool |
+| Empty-pool exit | when every worker has been retired, OCR stops cleanly instead of looping |
+| Raster cap | `Math.min(2.0, 2200 / max(vp.width, vp.height))`, floored at 0.5 — a full-scale bitmap of an A0 page kills the tab before OCR starts |
+| Low-memory pool | `navigator.deviceMemory <= 4` → `POOL = min(POOL, 2)` |
+
+Timed-out pages land in the `timedOut` bucket of `_voUnreadPages` (alongside `capped`,
+`noText`, `renderFailed`) and are **named in the report** by `secUnreadPages`. A page the
+engine could not read is disclosed, never silently dropped.
+
+`setTimeout` here is a deadline, not a clock reading, and does not breach the determinism rule
+(AGENTS.md). It is disclosed in the methodology section.
+
+### 12.2 The seal extends pages — it does not overlay them
+
+Symptom: the seal footer and QR panel were printing **over signatures**. Fix: each page is
+grown rather than stamped —
+
+```js
+pg.setMediaBox(mbox.x, mbox.y - footH, mbox.width, mbox.height + footH + headH);
+```
+
+plus a matching `setCropBox`; the footer draws at `footY` and the QR panel at `headY`, both in
+the new margin. Never move seal furniture back inside the original media box: that is evidence
+under the ink.
+
+### 12.3 Share always saves, and saves exactly once
+
+Two separate field failures, two separate fixes — both easy to undo by accident:
+
+1. **Saves are queued BEFORE `navigator.share(data)`.** Calling them after raced the native
+   sheet; on Samsung Internet the download UI dismissed the sheet entirely ("downloads but no
+   share sheet"). The share sheet hands copies to another app and some browsers attach only
+   part of a multi-file bundle after `canShare()` approved it — with no way to detect what the
+   target actually received — so **every share also saves the full bundle for the user's
+   record**.
+2. **Multiple files save as ONE store-only ZIP** (`voZipBundle` + `voCrc32`, fixed DOS date
+   0/33 so the bytes are deterministic). Several simultaneous downloads trip the browser's
+   multiple-download prompt, which never persists in incognito ("it asks do you want to
+   download").
+
+`fileObj.voBytes` carries the raw bytes synchronously so the ZIP can be built inside the tap
+handler — an `await` there loses the user-gesture context.
+**Tests:** `crop-normalize.test.mjs` covers the seal bands, the share ordering, and ZIP
+validity and determinism.
+
+### 12.4 Anonymous pattern sharing
+
+`shareAnonymousPatterns(fraudResult)` posts **novel contradiction types only** — no document
+text, no names — to the worker so the engine's coverage improves as the site is used. The
+novel-type filter is `/^CT(0[1-9]|[1-3][0-9]|4[0-6])$/`. **When a new CT is added, widen this
+regex**: it once stopped at CT43 while the engine ran to CT46, so three types could never be
+reported. `tests/worker.test.mjs` pins the range against the engine's `CT_COUNT`.
+
+### 12.5 Options the host page must pass to the report
+
+`build` **and** `buildNarrative` both need `unreadPages`, `gps`, `aiNarrative` and
+`aiNarrativeSource`. Passing them to only one produces a narrative PDF that quietly omits the
+unread-page disclosure and the GPS home jurisdiction.

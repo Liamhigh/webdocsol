@@ -32,7 +32,7 @@
 | File | Role |
 |---|---|
 | **`forensic-engine-page.js`** | The deterministic engine: CT01–CT46, detectors D01–D40, 17 serial patterns, anchoring, OCR rescue. **See [`ENGINE.md`](./ENGINE.md).** |
-| **`forensic-report.js`** | Sealed forensic report generator (`window.VerumReport.build` / `.seal`) — 16 numbered sections plus cover and contents, jurisdiction detection, candidate-law tables, PD16 language. |
+| **`forensic-report.js`** | Sealed forensic report generator (`window.VerumReport.build` / `.buildNarrative` / `.seal`). Two halves: **Part 1 — the story** (executive summary, documents in this bundle, the short version, the plain-language story, unread pages, seal explainer) then **Part 2 — the evidence** (table of contents, Constitution v8.0 §15.4 sections 1–7, annexes). Auto-derives parties and jurisdiction; PD16 language throughout. **Anatomy: [`ENGINE.md`](./ENGINE.md) §7.** |
 | **`seal-guard.js`** | Enforces *"the only genuine Verum output is a sealed output"* — blocks unsealed exports. |
 | **`ots-proof.js`** | OpenTimestamps proof handling: submit, parse, upgrade, verify the Bitcoin anchor. |
 | **`pdf-encrypt.js`** | Standard password protection for sealed PDFs (verified against an independent PDF engine). |
@@ -76,7 +76,13 @@ Other worker files: `rule-format.md` (wire format for rule packages) · `public-
 | `vendor/` | Pinned third-party libraries: `pdf.min.js` + worker (pdf.js), `pdf-lib.min.js`, `qrcode.min.js`, Tesseract OCR core/worker + `eng.traineddata.gz`. **Vendored deliberately** — the app must work offline and must not depend on a CDN. |
 | `seal-module/` | The portable sealing spec (`SPEC.md`) and per-surface implementations (`web`, `android`, `firewall`) so a seal produced anywhere verifies everywhere. |
 | `images/` | Logos and the watermark used in sealed PDFs. |
-| `tests/` | 25 suites — run with `node tests/run-all.js`. See ENGINE.md §10. |
+| `tests/` | **27 suites, 1268 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
+
+**Root PDFs:** `Verum-Omnis-Briefing.pdf` is the public briefing for law enforcement and
+attorneys (what the platform does, how the sealing service is used, why the record cannot be
+altered) — it is linked from `index.html`, so **any edit to it is a publication**.
+`constitution-v8.pdf` is the sealed charter. `greensky-ocr-verify.pdf`, `vanessa.pdf` and
+`forensic_test_document.pdf` are fixtures kept for manual reproduction of real bundles.
 
 ## 5. Documentation map
 
@@ -91,7 +97,7 @@ Other worker files: `rule-format.md` (wire format for rule packages) · `public-
 | `DEPLOYMENT.md` | Cloudflare Pages + Workers Builds deployment. |
 | `DESIGN_LOCK.md` | Locked visual decisions on the public site. |
 | `FORENSIC-DEBUG.md` | Debugging a scan: what to inspect when findings look wrong. |
-| `AGENTS.md` | Entry point for code assistants. |
+| `AGENTS.md` | **Entry point for code assistants** — quick facts, the five things most likely to be regressed, and the founder rulings (1–9) that must not be re-litigated. |
 | `README.md` | Project overview. |
 
 ## 6. Working here — the short version
@@ -109,4 +115,9 @@ node tests/run-all.js      # must be GREEN before every push
 5. **Deterministic:** no `Date.now()` / `Math.random()` in analysis paths.
 6. **PD16 language** in everything a reader sees: no scores, no confidence bands, no hedging,
    verdict reserved to the court.
-7. Deploys automatically on push to `main` (Worker via Workers Builds, site via Pages).
+7. **No regex lookbehind in new code** — Safari < 16.4 throws at parse time and the whole scan
+   dies silently (ENGINE.md §4.16).
+8. **Read the founder rulings in [`AGENTS.md`](./AGENTS.md) before redesigning anything.** The
+   report order, the absence of verdicts, and the auto-derivation of parties and jurisdiction
+   are settled decisions, not open questions.
+9. Deploys automatically on push to `main` (Worker via Workers Builds, site via Pages).

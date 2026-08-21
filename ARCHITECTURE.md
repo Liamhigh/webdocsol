@@ -92,6 +92,18 @@ The website is the centre of gravity: **all document verification happens at the
   [`ENGINE.md`](./ENGINE.md) §6.
 - **Never hardcode a party, name, account number or case fact into a detector.** Detectors measure
   structure; an engine that names a party fabricates evidence instead of measuring it.
+- **The report derives its own facts.** Parties come from `anchor.who` on the findings; the home
+  jurisdiction comes from the sealing GPS fix via deterministic bounding boxes (no geocoding
+  service). The user is never asked to name a party or a jurisdiction — adding a form field for
+  either is the wrong fix. `ENGINE.md` §7, AGENTS.md rulings 6–7.
+- **The report has a fixed two-part order** — the human story first, the table of contents and the
+  Constitution v8.0 §15.4 sections after it. This is a founder ruling, not a layout preference.
+  `ENGINE.md` §7, AGENTS.md ruling 5.
+- **No regex lookbehind in new code.** Safari < 16.4 throws at parse time, which kills the whole
+  script — the user sees a scan that silently never starts. `ENGINE.md` §4.16.
+- **`seal-document.html` carries its own hard-won behaviours** — OCR deadlines, seal geometry that
+  extends pages rather than overlaying them, and a share path that always saves the bundle. Read
+  `ENGINE.md` §12 before editing the OCR, sealing or share code.
 
 ## Deterministic engine, with a hybrid future
 

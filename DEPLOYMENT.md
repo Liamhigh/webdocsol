@@ -285,13 +285,32 @@ wrangler tail --format pretty
 - **Static assets**: Served by Cloudflare CDN (no build step)
 - **Worker code**: `worker/verum-rules.js` (routes API requests)
 
+### Merging to `main` IS the deploy
+
+Both halves of the site now deploy automatically on push to `main`:
+
+| What | Deployed by | Trigger |
+|---|---|---|
+| Static pages (`index.html`, `seal-document.html`, `verify.html`, …) | **Cloudflare Pages** | push to `main` |
+| The Worker (`worker/verum-rules.js`) | **Cloudflare Workers Builds** | push to `main` |
+
+A pull request runs three checks — **Sourcery review**, **Workers Builds: webdocsol**, and
+**Cloudflare Pages**. Wait for them before merging (`pull_request_read` →
+`get_check_runs`); merging red ships red. `wrangler deploy` by hand is the fallback for when
+Workers Builds is unavailable, not the normal path.
+
+**Because merge = publish:** run `node tests/run-all.js` (27 suites, 1268 assertions) and
+re-splice the inline copies into `seal-document.html` **before** the PR, not after. A merged
+regression is live within a minute.
+
 ### Before Making Changes
 1. Review `wrangler.toml` for current routes & bindings
 2. Check `DEPLOYMENT.md` (this file) for deployment process
-3. For client-side changes (HTML/JS): committing is **not** enough. The pages
-   are served from the `verumglobal.pages.dev` Pages project, which is not
-   built from this repo — the update must be published to that Pages project.
-4. For API changes (`worker/verum-rules.js`): **must** run
+3. For client-side changes (HTML/JS): edit the **root** files and re-splice the inline copies.
+   `seal-module/web/` is the portable spec, **not** the live site — a change made only there
+   ships nothing.
+4. For API changes (`worker/verum-rules.js`): Workers Builds deploys on merge. To deploy by
+   hand you **must** run
    `wrangler deploy` — with NO `--env` flag. `wrangler.toml` defines a single
    top-level environment on purpose (the KV and AI bindings used to sit under
    `[env.production]`, which meant an `--env`-less deploy shipped a Worker with

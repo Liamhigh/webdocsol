@@ -49,9 +49,16 @@ This repository standardises the Verum Omnis document sealing and verification s
 
 | Platform | Directory | Status |
 |----------|-----------|--------|
-| **Website** (`verumglobal.foundation`) | `/seal-module/web/` | Live |
+| **Website** (`verumglobal.foundation`) | **repository root** — `seal-document.html`, `verify.html`, `index.html` … | Live |
 | **Android App** | `/seal-module/android/` | Reference spec |
 | **Guardian Fraud Firewall** | `/seal-module/firewall/` | Reference spec |
+
+> **⚠ `seal-module/web/` is NOT the live site.** It holds older snapshots of
+> `seal-document.html` and `verify.html` kept alongside the portable sealing spec. The pages
+> Cloudflare Pages actually serves are the ones at the **repository root**, and they have moved
+> a long way past those snapshots (the live `seal-document.html` is ~748 KB because the engine
+> and report generator are inlined into it; the snapshot is ~136 KB). **Edit the root files.**
+> A change made only in `seal-module/web/` ships nothing.
 
 All implementations must produce **interoperable** sealed documents -- a document sealed on the website must verify on the Android app and the Firewall, and vice versa.
 
@@ -237,24 +244,37 @@ See `seal-module/SPEC.md` Section 8 for full chain format specification.
 
 ## File Structure
 
+Full map with every page, script and endpoint: [`REFERENCE.md`](./REFERENCE.md).
+
 ```
 webdocsol/
-|-- README.md                          # This file
-|-- DESIGN_LOCK.md                     # Permanent visual standard (DO NOT REGRESS)
-|-- design-reference/                  # Canonical visual reference
-|   |-- screenshot-v1.2.5.png         # Locked design screenshot
-|-- seal-module/
-|   |-- SPEC.md                        # Full technical specification
-|   |-- web/                           # Website implementation
-|   |   |-- seal-document.html         # Document sealing page
-|   |   |-- verify.html               # Document verification page
-|   |   |-- watermark-spec.md         # Watermark brand spec
+|-- index.html                         # LIVE homepage
+|-- seal-document.html                 # LIVE main app (engine + report inlined)
+|-- verify.html                        # LIVE Verification Hub — every seal QR points here
+|-- verify-data.html, dashboard.html, constitution.html, documents-resources.html
+|-- forensic-engine-page.js            # the deterministic engine (CT01-CT46, D01-D40)
+|-- forensic-report.js                 # sealed report generator (build / buildNarrative / seal)
+|-- seal-guard.js, ots-proof.js, pdf-encrypt.js
+|                                      #   ^ all five are ALSO inlined into seal-document.html
+|-- verum-ui.css                       # binding design tokens
+|-- Verum-Omnis-Briefing.pdf           # public briefing, linked from index.html
+|-- worker/
+|   |-- verum-rules.js                 # the Cloudflare Worker (AI + rules endpoints)
+|   |-- rule-format.md, public-key.der.b64, seed-rules.json
+|-- tests/                             # 27 suites, 1268 assertions
+|   |-- run-all.js                     # the registry — an unregistered file does not run
+|-- vendor/                            # pinned pdf.js, pdf-lib, qrcode, Tesseract (offline-first)
+|-- images/                            # logos + sealed-PDF watermark
+|-- AGENTS.md, ENGINE.md, ARCHITECTURE.md, REFERENCE.md, ...   # docs (see REFERENCE.md §5)
+|-- DESIGN_LOCK.md                     # permanent visual standard (DO NOT REGRESS)
+|-- design-reference/
+|   |-- screenshot-v1.2.5.png          # locked design screenshot
+|-- seal-module/                       # the PORTABLE SEALING SPEC — not the live site
+|   |-- SPEC.md                        # full technical specification
+|   |-- web/                           # older snapshots of the web implementation (see warning above)
 |   |-- android/                       # Android/Kotlin reference
-|   |   |-- README.md
 |   |-- firewall/                      # Python/Firewall reference
-|       |-- README.md
-|-- website/                           # Website notes
-    |-- README.md
+|-- website/                           # website notes
 ```
 
 ---
@@ -278,10 +298,24 @@ See `DESIGN_LOCK.md` for the complete locked color palette with exact values and
 
 ## Constitution Compliance
 
-All implementations must adhere to:
-- **Article III:** Truth over Probability -- never fabricate extraction results
-- **Article IV:** Evidence before Narrative -- extraction report before analysis
-- **Article X:** Non-Weaponization -- no brute-force, no unauthorized access
+Governed by **Constitution v8.0** (seal `VO-9A4F3C5E825C`, published verbatim at
+`constitution.html` and mirrored in [`CONSTITUTION-v8.md`](./CONSTITUTION-v8.md)); the engine's
+operating instrument remains v6.1 (seal `VO-9E51D3F507E6`). All implementations must adhere to:
+
+- **§1 PD1 — Ordinal confidence only.** No scores, no percentages, **no confidence bands**.
+- **§1 PD2 — No anchor, no sentence.** A finding that cannot cite quoted text and a page is
+  dropped, not softened.
+- **§1 PD4 — Determinism.** Same input → same findings, on any device, forever.
+- **§1 PD15 / §13 — Article X, Non-Weaponization is supreme.** No brute force, no unauthorised
+  access, no weapons integration. No authority may override it.
+- **§1 PD16 — Truth over probability.** Findings are stated as fact and anchored; never
+  fabricate an extraction result.
+- **§2 — Nine-Brain architecture.** The 46 contradiction types across 40 detectors *are* that
+  architecture (AGENTS.md ruling 3).
+- **§15.2 — Prohibited language.** No hedging, no bands, and **no verdict on a named person** —
+  that belongs exclusively to the court.
+- **§15.3 / §15.4 — The required sentences and the seven-section report template**, which
+  `forensic-report.js` implements (ENGINE.md §7).
 
 ---
 
