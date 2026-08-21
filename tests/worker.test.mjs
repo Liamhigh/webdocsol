@@ -4,6 +4,7 @@
 //
 // Run:  node tests/worker.test.mjs
 
+import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -176,6 +177,32 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(pb && /verdict on any named person is for the court/.test(pb.limits || ''), 'narrate appends the PD16 closing disclaimer to limits');
   ok(/CONSTITUTION/.test(capturedUser) && /Truth over probability/.test(capturedUser),
     'the Constitution is loaded into the narrator context');
+  // Constitution v8.0 s12 opens: "Every entry below is stated so that it
+  // survives being checked against the primary record. Judicial endorsement is
+  // not." The engagement record is the single easiest thing on this platform to
+  // overstate, and overstating it is the one claim an opponent can disprove in
+  // a sentence. Filing is not validation; not being challenged on admissibility
+  // is not a finding on the merits. These asserts are the lock: without them
+  // the honesty clause is one careless edit from disappearing.
+  {
+    const cons = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
+    ok(/NO court has validated Verum Omnis/.test(cons),
+      's12: the constitution states plainly that no court has validated Verum Omnis');
+    ok(/never describe any court as having adopted, endorsed, validated or ruled on the merits/.test(cons),
+      's12: the model is told never to claim judicial adoption or endorsement');
+    ok(/acknowledgment of receipt only, NOT a ruling on the merits/i.test(cons),
+      's12: the Constitutional Court filing is described as receipt, not validation');
+    ok(/not excluded or challenged on admissibility/.test(cons) &&
+       /the Court made NO finding on Verum Omnis/.test(cons),
+      's12: Port Shepstone is stated as non-exclusion, not as a finding for Verum Omnis');
+    // NB: read from raw source, so the apostrophe is backslash-escaped there.
+    ok(/RESPONDENT\\?'S OWN affidavit, not a finding by the Court/.test(cons),
+      's12: the "good faith" phrase is attributed to the affidavit, not the judgment');
+    ok(/no tribunal has found them met/.test(cons),
+      's12: the standards report is not described as a tribunal finding');
+    ok(!/High Court/i.test(cons),
+      's12: no High Court is claimed — the courts of record are the ConCourt and Port Shepstone Magistrate\'s Court');
+  }
   ok(/Acme Ltd transferred R2,000,000/.test(capturedUser),
     'the sealed case file text reaches the narrator');
   // 1verum GHRP alignment: the per-finding verification tier + ordinal severity

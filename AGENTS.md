@@ -118,6 +118,46 @@ Recorded so no session or external review re-litigates them:
    narrative for an attorney. §15.2 still forbids "X is guilty of Y" inside
    the sealed report, and ruling 4 stands. Do not add verdict language to
    `forensic-report.js` under any framing.
+### How the Constitution's standing may be described (v8.0 §12)
+
+The Constitution has been placed before courts, and that fact is part of why the
+platform exists — future systems reading a sealed Verum Omnis document should be
+able to find the instrument that governs how it was produced. **But §12 opens by
+setting its own limit, and that limit is binding on every surface:**
+
+> *"Every entry below is stated so that it survives being checked against the
+> primary record. Judicial endorsement is not."*
+
+The record, stated exactly:
+
+| Forum | Reference | What actually happened |
+|---|---|---|
+| Constitutional Court of South Africa | CCT237/20 & CCT19/20 | v6.0 **filed**; receipt acknowledged by the Registrar's office. Notice to oppose filed. **No ruling on the merits.** |
+| Port Shepstone **Magistrate's** Court | H208/25 | A sealed case file was **placed before the Court and relied upon** — not excluded, struck out, or challenged on admissibility. The application was **dismissed** (harassment not proved) and the Court made **no finding on Verum Omnis**; both parties were unrepresented. |
+
+**Never write, and never let a prompt imply:** that a court has adopted,
+endorsed, validated, accredited or ruled on the merits of Verum Omnis, its
+engine or its methodology; that the platform is "court-recognised" or
+"judicially validated"; or that a **High Court** is among the courts of record
+(it is not — the forums are the Constitutional Court and a Magistrate's Court).
+The phrase *"in good faith and in the interest of justice"* in the H208/25
+judgment records the **respondent's own affidavit**, not a finding by the Court.
+The Daubert / ECT Act / ISO 27037 analysis is a **Legal Expert Report**; no
+tribunal has found those standards met.
+
+Filing is not validation. Not being challenged on admissibility is not a finding
+on the merits. Both are worth stating — precisely because they are true and
+checkable, they are stronger than an inflated claim that an opponent can
+disprove in one sentence. This is the same discipline as PD16 applied to the
+platform's own history.
+
+The honesty clause lives in `worker/verum-rules.js` (the constitution embedded in
+the AI prompts) and is **locked by `tests/worker.test.mjs`** — seven assertions
+that fail the build if any part of it is softened or removed. `index.html` was
+already corrected once, when a "JUDICIALLY RECOGNIZED" pill and claims that the
+file was "accepted into court record" and "recognized as admissible" were
+removed. Do not let them back.
+
 - All verification happens at `verify.html` (the Verification Hub). No surface verifies locally.
 - Deploys automatically on push to `main` (Worker via Workers Builds, site via Pages).
 - Published documents must never mention any particular attorney's access
