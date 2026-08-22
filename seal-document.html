@@ -355,7 +355,7 @@
     <div class="icon">&#128196;</div>
     <h3>Upload PDF Document(s) — sealed as one</h3>
     <p>Drag and drop <strong>up to 10 PDFs</strong> here, or click to browse (hold Ctrl/Cmd to pick several). Multiple documents are <strong>merged and sealed as ONE</strong> — you get back a single sealed document and a single certificate, not one per file. Max 150MB total.</p>
-    <input type="file" id="fileInput" accept=".pdf,application/pdf" multiple>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf,.opus,.ogg,.oga,.m4a,.aac,.mp3,.wav,.amr,.3gp,audio/*" multiple>
   </div>
 
   <!-- File Info -->
@@ -10034,10 +10034,46 @@ async function voCheckProtectedOnSelect(file) {
   } catch (e) { /* detection is best-effort; the pipeline has its own fallback */ }
 }
 
+// Voice notes and other audio evidence. A WhatsApp voice note is an .opus
+// file (older exports: .m4a / .amr / .3gp); it cannot be merged into a PDF or
+// stamped, so audio is sealed AS-IS: the SHA-512 and blockchain anchor cover
+// the exact original bytes, and the Seal Certificate + .ots receipt carry the
+// seal record. The audio file itself is NEVER modified — the original is the
+// evidence.
+var VO_AUDIO_RE = /\.(opus|ogg|oga|m4a|aac|mp3|wav|amr|3gp)$/i;
+function voIsAudioFile(f) {
+  return VO_AUDIO_RE.test(f.name || '') || /^audio\//.test(f.type || '');
+}
+var selectedAudioFiles = [];
+var VO_AUDIO_MAX_FILES = 10;
+
 // Add PDFs to the bundle (deduped by name+size), enforcing a total-size cap.
 // A single file behaves exactly as before; two or more are merged at seal time.
 function voAddFiles(fileList) {
   var added = 0, rejected = [];
+  // Audio routes to its own batch path. Mixing audio and PDFs in one seal is
+  // refused rather than guessed at: a PDF bundle merges into ONE document,
+  // audio seals as N individual as-is files — silently doing both from one
+  // button would produce artifacts the user did not ask for.
+  var audioIn = [], pdfIn = [];
+  for (var ai = 0; ai < fileList.length; ai++) {
+    (voIsAudioFile(fileList[ai]) ? audioIn : pdfIn).push(fileList[ai]);
+  }
+  if ((audioIn.length && (pdfIn.length || selectedFiles.length)) ||
+      (pdfIn.length && selectedAudioFiles.length)) {
+    alert('Seal documents and voice notes separately: a PDF bundle merges into one sealed document, while each audio file is sealed as-is with its own certificate.');
+    return;
+  }
+  if (audioIn.length || selectedAudioFiles.length) {
+    for (var au = 0; au < audioIn.length; au++) {
+      var af = audioIn[au];
+      if (selectedAudioFiles.some(function (x) { return x.name === af.name && x.size === af.size; })) continue;
+      if (selectedAudioFiles.length >= VO_AUDIO_MAX_FILES) { alert('Up to ' + VO_AUDIO_MAX_FILES + ' voice notes per batch — seal the rest in a second batch.'); break; }
+      selectedAudioFiles.push(af);
+    }
+    voRenderAudioFiles();
+    return;
+  }
   for (var i = 0; i < fileList.length; i++) {
     var f = fileList[i];
     var isPdf = f.type === 'application/pdf' || /\.pdf$/i.test(f.name);
@@ -11277,7 +11313,115 @@ async function buildAnchorCertificate(opts) {
 
 // ==================== SEALING FLOW v1.2.6 ====================
 
+// ==================== VOICE-NOTE / AUDIO BATCH SEALING ====================
+// Each audio file is sealed AS-IS, individually: SHA-512 + SHA-256, seal ID,
+// OpenTimestamps submission, QR payload, shareable Seal Certificate (and a
+// PRIVATE certificate when identity/GPS/device were captured — same two-latch
+// privacy design as documents: the shareable artifacts NEVER carry identity).
+// Deliverables: ONE shareable ZIP (original audio + certificates + .ots
+// receipts) and, separately, a PRIVATE-certificates ZIP that must not be
+// distributed. The audio bytes are untouched throughout — the original file
+// IS the evidence; the certificate and receipt carry the seal record.
+function voRenderAudioFiles() {
+  var info = document.getElementById('fileInfo');
+  var list = document.getElementById('fileList');
+  if (!selectedAudioFiles.length) { if (selectedFiles.length === 0) { info.classList.remove('visible'); list.innerHTML = ''; document.getElementById('sealBtn').disabled = true; } return; }
+  info.classList.add('visible');
+  document.getElementById('sealBtn').disabled = false;
+  var total = selectedAudioFiles.reduce(function (s, x) { return s + x.size; }, 0);
+  document.getElementById('fileName').textContent = '🎤 ' + selectedAudioFiles.length + ' voice note' + (selectedAudioFiles.length === 1 ? '' : 's') + ' — each sealed as-is with its own certificate';
+  document.getElementById('fileSize').textContent = (total / 1024 / 1024).toFixed(2) + ' MB total';
+  var rows = selectedAudioFiles.map(function (f, i) {
+    return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;">' +
+      '<span>' + (i + 1) + '. ' + escapeHtml(f.name) + ' <span style="color:#4A7EC7;">(' + (f.size / 1024).toFixed(0) + ' KB)</span></span>' +
+      '<span style="cursor:pointer;color:#ef4444;" onclick="selectedAudioFiles.splice(' + i + ',1);voRenderAudioFiles();">✕</span></div>';
+  });
+  rows.push('<div style="font-size:12px;color:#8ea3b5;margin-top:8px;line-height:1.6;">Audio is sealed exactly as-is: the SHA-512 fingerprint and Bitcoin anchor cover these exact bytes, and the seal record lives on the certificate and .ots receipt. The audio file is never altered. A transcript is not evidence — the sealed audio is.</div>');
+  list.innerHTML = rows.join('');
+}
+
+async function voSealAudioBatch() {
+  var files = selectedAudioFiles.slice(0, VO_AUDIO_MAX_FILES);
+  if (!files.length) return;
+  var btn = document.getElementById('sealBtn');
+  btn.disabled = true;
+  var list = document.getElementById('fileList');
+  var status = document.createElement('div');
+  status.id = 'audioSealStatus';
+  status.style.cssText = 'font-size:13px;color:#D4A843;margin-top:10px;line-height:1.7;';
+  var old = document.getElementById('audioSealStatus'); if (old) old.remove();
+  list.parentNode.appendChild(status);
+  try { captureDevice(); } catch (e) {}
+  try { if (!gpsCoords) gpsCoords = await captureGPS(); } catch (e) { gpsCoords = null; }
+  var shareEntries = [], privEntries = [], rows = [], anyPending = false;
+  var hasIdentity = false;
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
+    status.textContent = 'Sealing ' + (i + 1) + ' of ' + files.length + ': ' + f.name + ' …';
+    try {
+      var bytes = new Uint8Array(await f.arrayBuffer());
+      var sha512 = await computeSHA512(bytes);
+      var otsDigestHex = await computeSHA256(bytes);
+      var sealId = 'VO-' + sha512.substring(0, 12).toUpperCase();
+      var otsResult = await submitToOTS(otsDigestHex);
+      if (!otsResult.success) anyPending = true;
+      var meta = collectSealMetadata();
+      meta.sha512 = sha512; meta.otsDigest = otsDigestHex; meta.otsStatus = !!otsResult.success; meta.sealId = sealId;
+      hasIdentity = hasIdentity || !!(meta.id || meta.gps || meta.dev);
+      var qrContent = 'https://verumglobal.foundation/verify.html?h=' + sha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(meta, null))));
+      var qrDataURL = await generateQRDataURL(qrContent, 400);
+      var certBase = { fileName: f.name, sha512: sha512, sealId: sealId,
+        timestampISO: new Date(meta.t).toISOString(), pageCount: null,
+        otsSubmitted: !!otsResult.success, otsCalendar: otsResult.calendar || null, qrDataURL: qrDataURL };
+      var certBytes = await buildSealCertificate(Object.assign({}, certBase, {
+        identity: meta.id || null, gps: meta.gps || null, dev: meta.dev || null }));
+      var baseName = f.name.replace(/\.[^.]+$/, '');
+      shareEntries.push({ name: f.name, bytes: bytes });
+      shareEntries.push({ name: baseName + '-' + sealId + '-seal-certificate.pdf', bytes: new Uint8Array(certBytes) });
+      if (meta.id || meta.gps || meta.dev) {
+        try {
+          var privBytes = await buildSealCertificate(Object.assign({}, certBase, {
+            includePrivate: true, identity: meta.id || null, gps: meta.gps || null,
+            acc: meta.acc || null, dev: meta.dev || null }));
+          privEntries.push({ name: baseName + '-' + sealId + '-seal-certificate-PRIVATE.pdf', bytes: new Uint8Array(privBytes) });
+        } catch (privErr) { console.warn('Private certificate failed for ' + f.name + ':', privErr); }
+      }
+      if (otsResult.success && window.VoOts) {
+        var receiptBytes = null;
+        try {
+          if (otsResult.proof && otsResult.proof.length > 0) {
+            var cand = VoOts.buildFileFromFragment(otsDigestHex, otsResult.proof);
+            var probe = VoOts.parseSummary(cand);
+            if (probe.valid && probe.attestations.some(function (a) { return a.type === 'pending'; })) receiptBytes = cand;
+          }
+        } catch (eF) { receiptBytes = null; }
+        if (!receiptBytes) { try { receiptBytes = VoOts.buildPendingReceipt(otsDigestHex, [otsResult.calendar]); } catch (eP) { receiptBytes = null; } }
+        if (receiptBytes) shareEntries.push({ name: baseName + '-' + sealId + '.ots', bytes: new Uint8Array(receiptBytes) });
+      }
+      rows.push('✓ ' + f.name + ' — ' + sealId + (otsResult.success ? '' : ' (blockchain anchor pending retry)'));
+    } catch (err) {
+      rows.push('✕ ' + f.name + ' — sealing failed: ' + (err && err.message ? err.message.substring(0, 80) : 'unknown error'));
+    }
+    status.innerHTML = escapeHtml(rows.join('\n')).replace(/\n/g, '<br>');
+  }
+  var out = ['<div style="margin-top:10px;">'];
+  if (shareEntries.length) {
+    var zipUrl = URL.createObjectURL(voZipBundle(shareEntries));
+    out.push('<a class="download-btn" href="' + zipUrl + '" download="voice-notes-sealed.zip">⬇ Download sealed voice notes (ZIP: audio + certificates + receipts)</a>');
+  }
+  if (privEntries.length) {
+    var privUrl = URL.createObjectURL(voZipBundle(privEntries));
+    out.push('<a class="download-btn" href="' + privUrl + '" download="voice-notes-PRIVATE-certificates-do-not-share.zip">⬇ Download PRIVATE certificates (your records only)</a>');
+  }
+  out.push('<div style="font-size:12px;color:#8ea3b5;margin-top:8px;line-height:1.6;">Keep each audio file together with its certificate and .ots receipt — the audio bytes are the evidence and were not modified. The certificate proves integrity and time only.' +
+    (privEntries.length ? ' The PRIVATE ZIP carries your identity details — never place it in a shared folder.' : '') +
+    (anyPending ? ' One or more blockchain submissions did not reach a calendar — re-seal those files later to anchor them.' : ' Bitcoin confirmation typically completes within 1–2 hours; verify later at verumglobal.foundation/verify.html.') + '</div></div>');
+  status.innerHTML += out.join('');
+  btn.disabled = false;
+}
+
 async function startSealing() {
+  if (selectedAudioFiles.length) { return voSealAudioBatch(); }
   if (!selectedFile && selectedFiles.length === 0) return;
 
   // Free any blob: URLs from a previous seal/retry before we build a large new

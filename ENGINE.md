@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1343 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1362 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -520,7 +520,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**27 suites · 1343 assertions.** `tests/run-all.js` is the registry — a new
+**27 suites · 1362 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -645,6 +645,21 @@ reported. `tests/worker.test.mjs` pins the range against the engine's `CT_COUNT`
 `build` **and** `buildNarrative` both need `unreadPages`, `ocrPages`, `gps`, `aiNarrative` and
 `aiNarrativeSource`. Passing them to only one produces a narrative PDF that quietly omits the
 unread-page disclosure and the GPS home jurisdiction.
+
+### 12.6a Voice notes and audio are sealed AS-IS, individually
+
+WhatsApp voice notes (`.opus`; older exports `.m4a`/`.amr`/`.3gp`) and other audio evidence
+cannot be merged into a PDF or stamped, so audio takes its own batch path (`voSealAudioBatch`,
+up to 10 files): each file gets SHA-512 + SHA-256, a seal ID, an OpenTimestamps submission, a
+QR payload and a shareable Seal Certificate — **the audio bytes are never modified**. The
+original file IS the evidence; the certificate and `.ots` receipt carry the seal record.
+Mixing audio and PDFs in one seal is refused with an explanation (a PDF bundle merges into ONE
+document; audio seals as N individual files). The certificate privacy latch (§12.6) carries
+over: identity/GPS/device appear only in PRIVATE certificates, delivered in a separate ZIP
+named `-do-not-share`. The UI states the evidentiary rule in terms: *a transcript is not
+evidence — the sealed audio is*. Transcription (the audio analogue of OCR, with the same
+provenance discipline as §4.18/§12.5's OCR rules) is a future layer, not part of sealing.
+**Tests:** `crop-normalize.test.mjs`.
 
 ### 12.6 The Seal Certificate never carries identity by default
 

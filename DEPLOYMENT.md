@@ -299,7 +299,7 @@ A pull request runs three checks — **Sourcery review**, **Workers Builds: webd
 `get_check_runs`); merging red ships red. `wrangler deploy` by hand is the fallback for when
 Workers Builds is unavailable, not the normal path.
 
-**Because merge = publish:** run `node tests/run-all.js` (27 suites, 1343 assertions) and
+**Because merge = publish:** run `node tests/run-all.js` (27 suites, 1362 assertions) and
 re-splice the inline copies into `seal-document.html` **before** the PR, not after. A merged
 regression is live within a minute.
 
