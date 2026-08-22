@@ -26,6 +26,10 @@ these reappears, the guard was weakened — find out how before changing anythin
 | **The scan never starts, no error in the UI** | a regex lookbehind on Safari < 16.4 — it throws at **parse** time and kills the whole script | no lookbehind in new code. `ENGINE.md` §4.16 |
 | **A new contradiction type is never shared with the worker** | the novel-type filter's regex range was not widened | `/^CT(0[1-9]\|[1-3][0-9]\|4[0-6])$/` — widen it whenever a CT is added. `ENGINE.md` §12.4 |
 | **The narrative PDF omits unread pages or the home jurisdiction** | `unreadPages` / `gps` passed to `build` but not `buildNarrative` | pass the same option bag to both. `ENGINE.md` §12.5 |
+| **A distributed Seal Certificate shows an ID number, address or GPS** | identity options reached the shareable certificate build | shareable cert passes no identity opts AND `buildSealCertificate` gates the block on `includePrivate` — two latches, both required. `ENGINE.md` §12.6 |
+| **A heading numbered 9 has sub-clauses numbered 10.1** goes unreported | D37's clause-numbering check weakened | forward jump of 1–3, no intervening heading, first sub-clause only. `ENGINE.md` §4.17 |
+| **"Perjury" appears in a sealed report as a finding** | someone "improved" oath context into a flag | the word is allowed only in candidate-law lines; engine output never contains it. Test-locked. `ENGINE.md` §4.18 |
+| **An index line "Supplementary Affidavit, 9pp" is tagged as sworn** | weak oath markers accepted singly | one weak marker never tags; two distinct weak markers or one strong execution formula required. `ENGINE.md` §4.18 |
 
 ---
 
