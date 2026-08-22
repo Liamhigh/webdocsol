@@ -14,7 +14,7 @@ npm run test:worker   # Cloudflare Worker API routing (worker/verum-rules.js)
 
 ## What is covered
 
-**27 suites, 1306 assertions.** `run-all.js` is the registry — **a test file that is not listed
+**27 suites, 1310 assertions.** `run-all.js` is the registry — **a test file that is not listed
 in it does not run**, so register every new file there. The full suite-by-suite table, with what
 each one guards and the real evidence bundle behind it, lives in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
