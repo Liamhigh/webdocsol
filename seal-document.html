@@ -5506,6 +5506,64 @@ var DETECTORS = {
         }
       }
     }
+
+    // ---- Invoice-number-keyed totals ----
+    // External review of the test fixture: "Invoice #2023-001" was totalled
+    // at $125,000.00 on its own page and $128,500.00 in a supporting
+    // reference, and the label pass above missed it because "TOTAL" and
+    // "invoice total" key differently. An invoice number is a far stronger
+    // key than a label word — the same invoice cannot have two totals.
+    // Guards: only TOTAL-labelled amounts (or an amount immediately after
+    // "INVOICE #X:") count — line items inside the invoice never do; amounts
+    // are compared numerically so "$125,000" equals "$125,000.00"; one
+    // finding per invoice number.
+    var invTotals = {}; // invoice id -> [{val, raw, page}]
+    var invRe = /\binvoice\s*#?\s*([A-Z0-9][\w-]{2,15})\b/gi;
+    for (var ivp = 0; ivp < textBlocks.length; ivp++) {
+      var ivt = textBlocks[ivp] || '', ivm;
+      invRe.lastIndex = 0;
+      var mentions = [];
+      while ((ivm = invRe.exec(ivt)) !== null) {
+        // "invoice date:", "invoice total", "invoice number" — label words, not
+        // ids. Filter them HERE: if kept as mentions they would truncate the
+        // real invoice's window and its second total would fall outside it.
+        if (/^(date|no|number|total|amount)$/i.test(ivm[1])) continue;
+        mentions.push({ id: ivm[1].toUpperCase(), start: ivm.index, end: ivm.index + ivm[0].length });
+      }
+      for (var mi = 0; mi < mentions.length; mi++) {
+        var men = mentions[mi];
+        var wEnd = mi + 1 < mentions.length ? mentions[mi + 1].start : Math.min(ivt.length, men.end + 700);
+        var win2 = ivt.substring(men.end, wEnd);
+        var amts = [];
+        // TOTAL-labelled amount anywhere in this invoice's window
+        var totRe = /total[^$\d\n]{0,20}\$\s?([\d,]+(?:\.\d{2})?)/gi, tm2;
+        while ((tm2 = totRe.exec(win2)) !== null) amts.push(tm2[1]);
+        // ...or an amount immediately after "INVOICE #X:" (summary-row form)
+        var immediate = win2.match(/^\s*:?\s*\$\s?([\d,]+(?:\.\d{2})?)/);
+        if (immediate) amts.push(immediate[1]);
+        for (var ai = 0; ai < amts.length; ai++) {
+          var v = parseFloat(amts[ai].replace(/,/g, ''));
+          if (!isFinite(v) || v < 100) continue;
+          (invTotals[men.id] = invTotals[men.id] || []).push({ val: v, raw: '$' + amts[ai], page: ivp + 1 });
+        }
+      }
+    }
+    for (var iid in invTotals) {
+      var vs = invTotals[iid], uniq = [];
+      for (var u = 0; u < vs.length; u++) {
+        var dup = false;
+        for (var q = 0; q < uniq.length; q++) if (Math.abs(uniq[q].val - vs[u].val) < 0.005) { dup = true; break; }
+        if (!dup) uniq.push(vs[u]);
+      }
+      if (uniq.length >= 2) {
+        uniq.sort(function (a, b) { return a.val - b.val; });
+        var lo = uniq[0], hi = uniq[uniq.length - 1];
+        findings.push({ type: 'CT02', severity: 4,
+          evidence: 'Invoice ' + iid + ' is totalled at two different amounts in the record: ' +
+            lo.raw + ' (p.' + lo.page + ') and ' + hi.raw + ' (p.' + hi.page + ') — verify which total governs',
+          location: lo.page === hi.page ? 'Page ' + lo.page : 'Page ' + lo.page + ' vs Page ' + hi.page });
+      }
+    }
     return findings;
   },
 
@@ -5891,6 +5949,86 @@ var DETECTORS = {
         findings.push({ type: 'CT11', severity: 4,
           evidence: 'Potential authority exceeded: "' + match[0] + '"',
           location: 'Full document' });
+      }
+    }
+
+    // ---- Revoked authority, later dated act ----
+    // External review of the test fixture: the record stated a person's
+    // signature authority was revoked on a date, and the same record showed
+    // that person signing and approving on later dates — and the engine said
+    // nothing. Both halves are the document's own words, so this is squarely
+    // detectable under cite-or-stay-silent. The finding states the two dated
+    // facts; whether the later act binds anyone is for the court.
+    // Guards:
+    //  - the revocation must be explicit ("authority revoked" / "revoked
+    //    signature authority" / "signature revoked") with a parseable date;
+    //  - the act needs an act word AND a date strictly AFTER the revocation,
+    //    close to the person's name — an act dated before the revocation was
+    //    within authority and stays silent;
+    //  - a dated re-grant/reinstatement after the revocation silences the
+    //    person entirely: the record answers its own question;
+    //  - name matching tolerates "M. Wellington" for "Marcus Wellington"
+    //    (initial + surname), nothing looser.
+    var VO_DATE_TXT = '(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\\.?\\s+\\d{1,2},?\\s+\\d{4}|\\d{1,2}\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\\.?\\s+\\d{4}';
+    var revRe = new RegExp('([A-Z][\\w\'’.]*(?:\\s+[A-Z][\\w\'’.]*){0,3})[^.\\n]{0,60}?(?:(?:signature\\s+)?authority\\s+(?:was\\s+)?revoked|revoked\\s+signature\\s+authority)(?:[^A-Za-z0-9]{0,15}(' + VO_DATE_TXT + '))?', 'g');
+    var revokedPeople = {};
+    for (var rp = 0; rp < textBlocks.length; rp++) {
+      var rt = textBlocks[rp] || '', rm;
+      revRe.lastIndex = 0;
+      while ((rm = revRe.exec(rt)) !== null) {
+        var rname = rm[1].replace(/[,.]+$/, '').trim();
+        var rkey = voDateSortKey(rm[2] || '');
+        if (!rname || rkey === null) continue; // undated revocations cannot order an act
+        var rtoks = rname.split(/\s+/);
+        var surname = rtoks[rtoks.length - 1].toLowerCase();
+        if (!revokedPeople[surname] || rkey < revokedPeople[surname].dateKey) {
+          revokedPeople[surname] = { name: rname, firstInitial: rtoks[0].charAt(0).toLowerCase(),
+            dateKey: rkey, dateStr: rm[2], page: rp + 1,
+            quote: rt.substring(Math.max(0, rm.index - 10), rm.index + rm[0].length + 10).replace(/\s+/g, ' ').trim() };
+        }
+      }
+    }
+    for (var sk in revokedPeople) {
+      var person = revokedPeople[sk];
+      // Re-grant guard: a dated grant/reinstatement AFTER the revocation, near
+      // the same surname, means the record resolved itself — stay silent.
+      var regrantRe = new RegExp('\\b\\w*' + sk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b[^.\\n]{0,80}?authority[^.\\n]{0,20}?(?:granted|reinstated|restored)[^A-Za-z0-9]{0,15}(' + VO_DATE_TXT + ')', 'gi');
+      var regranted = false;
+      for (var gp = 0; gp < textBlocks.length && !regranted; gp++) {
+        var gm; regrantRe.lastIndex = 0;
+        while ((gm = regrantRe.exec(textBlocks[gp] || '')) !== null) {
+          var gkey = voDateSortKey(gm[1]);
+          if (gkey !== null && gkey > person.dateKey) { regranted = true; break; }
+        }
+      }
+      if (regranted) continue;
+      // Later dated act: the person's name (full, or initial + surname), an
+      // act word, and a parseable date after the revocation, all in one
+      // tight window.
+      var nameForms = new RegExp('\\b(?:' + person.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '|' + person.firstInitial.toUpperCase() + '\\.?\\s+' + sk.charAt(0).toUpperCase() + sk.slice(1) + ')\\b');
+      var act = null;
+      for (var ap = 0; ap < textBlocks.length && !act; ap++) {
+        var at = textBlocks[ap] || '';
+        var nm2 = at.match(nameForms);
+        if (!nm2) continue;
+        var win = at.substring(Math.max(0, nm2.index - 120), nm2.index + 220);
+        if (!/sign|approv|authoriz/i.test(win)) continue;
+        var dre = new RegExp(VO_DATE_TXT, 'g'), dm2;
+        while ((dm2 = dre.exec(win)) !== null) {
+          var akey = voDateSortKey(dm2[0]);
+          if (akey !== null && akey > person.dateKey) {
+            act = { page: ap + 1, dateStr: dm2[0],
+              quote: win.replace(/\s+/g, ' ').trim().substring(0, 180) };
+            break;
+          }
+        }
+      }
+      if (act) {
+        findings.push({ type: 'CT11', severity: 4,
+          evidence: 'The record states ' + person.name + '’s signature authority was revoked ("' +
+            person.quote + '", p.' + person.page + ') and shows a later dated act by the same name ("' +
+            act.quote + '", p.' + act.page + ') — verify on what authority the later act was performed',
+          location: 'Pages ' + person.page + ', ' + act.page });
       }
     }
     return findings;

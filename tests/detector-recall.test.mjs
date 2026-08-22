@@ -583,6 +583,88 @@ const MASS = require('../forensic-engine-page.js').voContentMass;
     'D17 detects a run of 8x-sealed image-only pages as an OCR gap (got ' + f.length + ')');
 }
 
+
+// ---- D08: revoked authority, later dated act (test-fixture review, 22 Aug 2026) ----
+// The record stated Marcus Wellington's signature authority was revoked
+// Dec 1, 2022 AND showed him signing on January 12, 2023 — and the engine
+// said nothing. Strings below are from forensic_test_document.pdf verbatim.
+{
+  const D08 = DET.D08_DETECT_AUTHORITY_EXCEEDED;
+  const pages = [
+    'Marcus Wellington, Vice President (Signature authority revoked Dec 1, 2022)',
+    'Meridian Capital Group LLC: Marcus Wellington (VP) - signature revoked\nMW\nDate: January 12, 2023'
+  ];
+  const f = D08(pages);
+  const hit = f.find(x => x.type === 'CT11' && /revoked/.test(x.evidence) && /later dated act/.test(x.evidence));
+  ok(!!hit, 'D08 fires when a revoked signatory acts on a later date');
+  ok(hit && /Dec 1, 2022/.test(hit.evidence) && /January 12, 2023/.test(hit.evidence),
+    'both the revocation date and the later act date are quoted');
+  ok(hit && /Pages 1, 2/.test(hit.location), 'both pages are anchored (' + (hit && hit.location) + ')');
+
+  // Initial + surname form on the act side still matches.
+  const f2 = D08([
+    'Marcus Wellington (Signature authority revoked Dec 1, 2022)',
+    'Approved by M. Wellington. Date Approved: January 16, 2023'
+  ]);
+  ok(f2.some(x => /later dated act/.test(x.evidence)), 'initial+surname act form is matched');
+
+  // Guards, each of which must stay silent:
+  ok(!D08(['Marcus Wellington (Signature authority revoked Dec 1, 2022)',
+           'Signed by Marcus Wellington. Date: November 5, 2022'])
+      .some(x => /later dated act/.test(x.evidence)),
+    'an act BEFORE the revocation was within authority — silent');
+  ok(!D08(['Marcus Wellington (Signature authority revoked Dec 1, 2022)',
+           'Wellington signature authority reinstated January 5, 2023',
+           'Signed by Marcus Wellington. Date: January 12, 2023'])
+      .some(x => /later dated act/.test(x.evidence)),
+    'a dated re-grant after the revocation silences the finding — the record answered itself');
+  ok(!D08(['Marcus Wellington signature authority revoked',
+           'Signed by Marcus Wellington. Date: January 12, 2023'])
+      .some(x => /later dated act/.test(x.evidence)),
+    'an UNDATED revocation cannot order an act — silent');
+}
+
+// ---- D02: invoice-number-keyed totals (test-fixture review, 22 Aug 2026) ----
+{
+  const D02 = DET.D02_DETECT_NUMERICAL_DISCREPANCY;
+  const f = D02([
+    'INVOICE #2023-001\nConsulting Phase 1 $90,000.00\nLicensing $30,000.00\nTOTAL: $125,000.00\nCONFLICTING AMOUNT: Supporting document dated Jan 15 shows invoice total as $128,500.00'
+  ]);
+  const hit = f.find(x => /Invoice 2023-001/.test(x.evidence));
+  ok(!!hit, 'D02 pairs two totals for the same invoice number');
+  ok(hit && /\$125,000\.00/.test(hit.evidence) && /\$128,500\.00/.test(hit.evidence),
+    'both totals are quoted');
+
+  // Summary-row form: "Invoice #X: $A vs. $B" on a recap page.
+  const f2 = D02(['Summary: Invoice #2023-002: $85,000 vs. total of $87,250 (discrepancy noted)']);
+  ok(f2.some(x => /Invoice 2023-002/.test(x.evidence)), 'summary-row invoice totals are paired');
+
+  // Guards:
+  ok(!D02(['INVOICE #2023-001 TOTAL: $125,000.00', 'INVOICE #2023-001 TOTAL: $125,000.00'])
+      .some(x => /Invoice 2023-001/.test(x.evidence)),
+    'the same total twice is consistency, not a finding');
+  ok(!D02(['INVOICE #A-100 TOTAL: $10,000.00 INVOICE #A-200 TOTAL: $20,000.00'])
+      .some(x => /Invoice A-/.test(x.evidence)),
+    'different invoices with different totals are silent');
+  ok(!D02(['INVOICE #2023-001\nItem one $90,000.00\nItem two $30,000.00\nTOTAL: $125,000.00'])
+      .some(x => /Invoice 2023-001/.test(x.evidence)),
+    'line items inside an invoice never pair against its total');
+}
+
+// ---- Locked rejection: executed-before-effective is NORMAL, not a finding ----
+// The fixture's own annotation calls "Execution Date: January 10 /
+// Effective Date: January 15" a contradiction. It is not: contracts are
+// routinely signed before they take effect — that is the ordinary order of
+// commercial practice, and a detector firing on it would flood real
+// documents with false statements of fact. This test pins the silence.
+{
+  const pages = ['Effective Date: January 15, 2023\nExecution Date: January 10, 2023\nDocument Created: December 28, 2022'];
+  const d03 = DET.D03_DETECT_DATE_INCONSISTENCY(pages);
+  const d04 = DET.D04_DETECT_TEMPORAL_IMPOSSIBILITY(pages);
+  ok(d03.length === 0 && d04.length === 0,
+    'signing before the effective date is ordinary practice — no detector fires');
+}
+
 console.log(`\n[detector-recall] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[detector-recall] FAILURES'); process.exit(1); }
 console.log('[detector-recall] ALL GREEN');
