@@ -163,6 +163,18 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
   const shareBlock = html.slice(html.indexOf('window._voShareFiles = [];'), html.indexOf('addShareButton();'));
   ok(shareBlock.length > 0 && !/SealCert/.test(shareBlock),
     'neither certificate variant is pushed into the share bundle');
+
+  // A failed private build is retried once and then made VISIBLE (Sourcery,
+  // PR #173): the private certificate is the sealer's only custody record of
+  // the identity block, so silence here loses it without warning.
+  ok(/privTry < 2 && !window\._voSealCertPrivate/.test(html),
+    'the private certificate build retries once before giving up');
+  ok(/_voSealCertPrivateFailed = true/.test(html),
+    'a failed private build sets a failure flag');
+  ok(/private record failed, see downloads/.test(html),
+    'the pipeline step reports the private-record failure');
+  ok(/could not be generated this run/.test(html) && /sealCertPrivateWarn/.test(html),
+    'the download area shows a visible warning when the private certificate is missing');
 }
 
 console.log(`\n[crop-normalize] PASS=${pass} FAIL=${fail}`);

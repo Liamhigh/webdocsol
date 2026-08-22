@@ -12958,6 +12958,7 @@ async function runSealingPipeline() {
   // leak a home address into a distributed certificate.
   window._voSealCert = null;
   window._voSealCertPrivate = null;
+  window._voSealCertPrivateFailed = false;
   if (sealMode !== 'forensic') {
     try {
       updateStep(7, 'processing', 'Building seal certificate...');
@@ -12976,25 +12977,38 @@ async function runSealingPipeline() {
       }));
       window._voSealCert = { bytes: certBytes };
       if (meta.id || meta.gps || meta.dev) {
-        try {
-          var certPrivBytes = await buildSealCertificate(Object.assign({}, certBase, {
-            includePrivate: true,
-            identity: meta.id || null,
-            gps: meta.gps || null,
-            acc: meta.acc || null,
-            dev: meta.dev || null
-          }));
-          window._voSealCertPrivate = { bytes: certPrivBytes };
-        } catch (privErr) {
-          console.warn('Private certificate generation failed (shareable certificate unaffected):', privErr);
-          window._voSealCertPrivate = null;
+        // The PRIVATE certificate is the sealer's ONLY custody record of the
+        // identity/GPS/device block — the shareable certificate deliberately
+        // omits it and merely says it was "recorded privately by the sealer".
+        // A swallowed failure here therefore breaks that promise silently:
+        // the user would walk away with no private record and no warning.
+        // One retry, then a flagged failure the download area reports.
+        var privOpts = Object.assign({}, certBase, {
+          includePrivate: true,
+          identity: meta.id || null,
+          gps: meta.gps || null,
+          acc: meta.acc || null,
+          dev: meta.dev || null
+        });
+        window._voSealCertPrivateFailed = false;
+        for (var privTry = 0; privTry < 2 && !window._voSealCertPrivate; privTry++) {
+          try {
+            var certPrivBytes = await buildSealCertificate(privOpts);
+            window._voSealCertPrivate = { bytes: certPrivBytes };
+          } catch (privErr) {
+            console.warn('Private certificate generation failed (attempt ' + (privTry + 1) + ' of 2; shareable certificate unaffected):', privErr);
+          }
         }
+        if (!window._voSealCertPrivate) window._voSealCertPrivateFailed = true;
       }
-      updateStep(7, 'complete', 'Certificate ready');
+      updateStep(7, 'complete', window._voSealCertPrivateFailed
+        ? 'Certificate ready — private record failed, see downloads'
+        : 'Certificate ready');
     } catch (certErr) {
       console.warn('Seal certificate generation failed (document seal unaffected):', certErr);
       window._voSealCert = null;
       window._voSealCertPrivate = null;
+      window._voSealCertPrivateFailed = false;
       updateStep(7, 'complete');
     }
   }
@@ -13694,6 +13708,18 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       ? 'This seal proves two things only — integrity and time. It is not a verification of the document\'s contents. The shareable certificate carries no personal details and is safe to file or forward. The PRIVATE certificate carries your identity, address and GPS location — keep it for your own records and never place it in a shared folder.'
       : 'This seal proves two things only — integrity and time. It is not a verification of the document\'s contents. Keep the Seal Certificate together with the sealed PDF.';
     dg2.parentNode.insertBefore(cNote, dg2.nextSibling);
+    // A failed private build must be VISIBLE, never silently absent: the
+    // shareable certificate promises the identity details were "recorded
+    // privately by the sealer", and the private certificate IS that record.
+    var oldPrivWarn = document.getElementById('sealCertPrivateWarn');
+    if (oldPrivWarn) oldPrivWarn.remove();
+    if (window._voSealCertPrivateFailed) {
+      var pWarn = document.createElement('div');
+      pWarn.id = 'sealCertPrivateWarn';
+      pWarn.style.cssText = 'font-size:12px;color:#D4A843;margin-top:10px;line-height:1.6;';
+      pWarn.textContent = 'Your PRIVATE certificate could not be generated this run — the custody record of your identity, address and GPS is missing. The seal and the shareable certificate are unaffected. Re-seal the document to retry, or keep your own note of the capture details.';
+      cNote.parentNode.insertBefore(pWarn, cNote.nextSibling);
+    }
   }
 
   if (password && encryptedBytes && window.VoSealGuard.isSealed(sealedBytes)) {
@@ -13867,6 +13893,7 @@ function resetSealing() {
   if (sealedHashRowR) sealedHashRowR.style.display = 'none';
   window._voSealCert = null;
   window._voSealCertPrivate = null;
+  window._voSealCertPrivateFailed = false;
   window._voAnchorCert = null;
   var anchorBtnR = document.getElementById('downloadAnchorCert');
   if (anchorBtnR) anchorBtnR.style.display = 'none';
