@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1329 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1343 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -97,13 +97,13 @@ Each detector is a pure function `(textBlocks, …) → findings[]`.
 | Detector | Emits | What it establishes |
 |---|---|---|
 | D01 `DETECT_DIRECT_CONTRADICTION` | CT01 | The document both affirms and negates the same term |
-| D02 `DETECT_NUMERICAL_DISCREPANCY` | CT02 | The same labelled quantity is given two different numbers |
+| D02 `DETECT_NUMERICAL_DISCREPANCY` | CT02 | The same labelled quantity is given two different numbers; the same invoice number totalled at two amounts |
 | D03 `DETECT_DATE_INCONSISTENCY` | CT03 | Impossible or conflicting dates |
 | D04 `DETECT_TEMPORAL_IMPOSSIBILITY` | CT04 | Event ordering that cannot have happened |
 | D05 `DETECT_LOGICAL_IMPOSSIBILITY` | CT06 | Mutually exclusive statements |
 | D06 `DETECT_IDENTITY_CONFLICT` | CT09 | Identity details that do not line up |
 | D07 `DETECT_ROLE_CONTRADICTION` | CT10 | One party in incompatible roles |
-| D08 `DETECT_AUTHORITY_EXCEEDED` | CT11 | Acts beyond stated authority |
+| D08 `DETECT_AUTHORITY_EXCEEDED` | CT11 | Acts beyond stated authority; a signatory whose stated revocation is followed by a later dated act |
 | D09 `DETECT_ENTITY_STATUS_FAKE` | CT14 | An entity asserted both active and liquidated/dissolved |
 | D10 `DETECT_VAT_INVALID` | CT19 | VAT number not in a valid format |
 | D11 `DETECT_REGISTRATION_FAKE` | CT20 | Company registration number not in a valid format |
@@ -520,7 +520,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**27 suites · 1329 assertions.** `tests/run-all.js` is the registry — a new
+**27 suites · 1343 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -528,7 +528,7 @@ test file that is not registered there does not run.
 | `forensic-engine.test.js` | 328 | Core engine behaviour, extraction quality and OCR regressions |
 | `legal-analysis.test.js` | 207 | Party extraction, legal subjects, **PD16 language**, the §15.2 narrative gate, sentence splitting, page anchors, executive summary and SEALED FINDINGS integrity, OCR provenance (PD6) |
 | `page-boot.test.mjs` | 100 | The seal page still boots when a library is missing |
-| `detector-recall.test.mjs` | 93 | Recall + the §4 false-positive guards, pinned to real bundle strings |
+| `detector-recall.test.mjs` | 107 | Recall + the §4 false-positive guards, pinned to real bundle strings |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
 | `worker.test.mjs` | 72 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions) |
 | `greensky-regression.test.js` | 55 | The Greensky bundle: D01 conduct admission (§4.11) and `voDetectDocuments` (§4.15) |
@@ -555,6 +555,16 @@ The deterministic engine has a real ceiling on scanned/OCR'd documents (fuzzy pa
 paraphrased clauses). That ceiling is **by design** the boundary where the hybrid LLM layer on
 the apps takes over: the model reads difficult documents and raises **candidates**, always
 labelled as candidates pending verification, never counted as verified findings (§4.10).
+
+**Rejected detector requests, recorded so they are not re-litigated:**
+- **"Executed before effective date" (CT03/CT04).** Signing before the effective date is the
+  ordinary order of commercial practice; a detector firing on it floods real documents with
+  false statements of fact. A recall test PINS the silence.
+- **A deliverable completed before an "as of" status date.** Status lists report past work;
+  nothing is contradicted.
+- **Parsing the document's own "(CONTRADICTION)" annotations as findings.** Real evidence does
+  not annotate its own contradictions — that pattern exists only in test fixtures, and matching
+  it would overfit the engine to its own test data.
 
 When in doubt on this engine: **prefer precision.** Let the hybrid layer chase recall.
 
