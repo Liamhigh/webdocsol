@@ -611,6 +611,21 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'ocrPages reaches BOTH build and buildNarrative (rule 12.5)');
 }
 
+// ---- samePartyName sees through OCR word-splits ----
+// The 4-doc bundle report listed "CAL TEX" and "CALTEX" as separate parties
+// on its front page — OCR invented the space, and the dedupe compared
+// whole words. Letters-only comparison with the same prefix rule fixes it.
+{
+  const sp = R._samePartyName;
+  ok(typeof sp === 'function', '_samePartyName is exported for tests');
+  ok(sp('CAL TEX', 'CALTEX') === true, 'an OCR-split company name dedupes');
+  ok(sp('CAL TEX', 'Caltex Oil') === true, 'the split form matches the prefixed full form');
+  ok(sp('L. Highcock', 'Liam Highcock') === true, 'initial-vs-full-name dedupe still works');
+  ok(sp('Gary Highcock', 'Wayne Nel') === false, 'different people stay different');
+  ok(sp('CAL TEX', 'Calvin Texeira') === false, 'a real name sharing letters is not merged');
+  ok(sp('', 'CALTEX') === false && sp(null, null) === false, 'empty inputs never match');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);
