@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1310 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1321 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -393,7 +393,7 @@ the ruling replaced.
 | 2 | **`secDocumentsInBundle`** | When `voDetectDocuments` recovered document boundaries: which documents are in the bundle, their page ranges, and which findings cross between them (`crossDocNote`) |
 | 3 | **`secShortVersion`** | Each substantive finding as one line, contradictions split into their two sides by `contradictionSides` |
 | 4 | **`secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' })`** | On-device deterministic narrative, or the worker's narrative when enabled — always structured into headings/bullets/paragraphs by `narrativeBlocks`, never a text dump, and always passed through the §15.2 gate (§6) |
-| 5 | **`secUnreadPages`** | Every page the engine could not read, named with its reason (`capped` / `noText` / `renderFailed` / `timedOut`), collapsed into ranges by `pageRanges`, with a human-review instruction |
+| 5 | **`secUnreadPages`** | Every page the engine could not read, named with its reason (`capped` / `noText` / `renderFailed` / `timedOut`), collapsed into ranges by `pageRanges`, with a human-review instruction — plus **PAGES READ THROUGH OCR** (`secOcrProvenance`): pages whose text was machine-recovered are named, and findings anchored on them carry an OCR-provenance line in FINDINGS IN DETAIL. No per-word confidence is printed — that would be PD1's barred probability language; the disclosure is HOW the text was obtained and WHERE to verify it |
 | 6 | **`secSealExplainer(… { label: 'WHY THIS RECORD CANNOT BE ALTERED' })`** | SHA-512 + OpenTimestamps in plain words |
 
 Part 1 also carries the **provenance statement** required by ruling 5: the findings are the
@@ -520,13 +520,13 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**27 suites · 1310 assertions.** `tests/run-all.js` is the registry — a new
+**27 suites · 1321 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
 |---|---|---|
 | `forensic-engine.test.js` | 328 | Core engine behaviour, extraction quality and OCR regressions |
-| `legal-analysis.test.js` | 189 | Party extraction, legal subjects, **PD16 language**, the §15.2 narrative gate, sentence splitting, page anchors, executive summary and SEALED FINDINGS integrity |
+| `legal-analysis.test.js` | 200 | Party extraction, legal subjects, **PD16 language**, the §15.2 narrative gate, sentence splitting, page anchors, executive summary and SEALED FINDINGS integrity, OCR provenance (PD6) |
 | `page-boot.test.mjs` | 100 | The seal page still boots when a library is missing |
 | `detector-recall.test.mjs` | 93 | Recall + the §4 false-positive guards, pinned to real bundle strings |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
@@ -632,7 +632,7 @@ reported. `tests/worker.test.mjs` pins the range against the engine's `CT_COUNT`
 
 ### 12.5 Options the host page must pass to the report
 
-`build` **and** `buildNarrative` both need `unreadPages`, `gps`, `aiNarrative` and
+`build` **and** `buildNarrative` both need `unreadPages`, `ocrPages`, `gps`, `aiNarrative` and
 `aiNarrativeSource`. Passing them to only one produces a narrative PDF that quietly omits the
 unread-page disclosure and the GPS home jurisdiction.
 

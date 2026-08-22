@@ -261,7 +261,7 @@ webdocsol/
 |-- worker/
 |   |-- verum-rules.js                 # the Cloudflare Worker (AI + rules endpoints)
 |   |-- rule-format.md, public-key.der.b64, seed-rules.json
-|-- tests/                             # 27 suites, 1310 assertions
+|-- tests/                             # 27 suites, 1321 assertions
 |   |-- run-all.js                     # the registry — an unregistered file does not run
 |-- vendor/                            # pinned pdf.js, pdf-lib, qrcode, Tesseract (offline-first)
 |-- images/                            # logos + sealed-PDF watermark
