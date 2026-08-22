@@ -212,6 +212,44 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
     'the UI states the evidentiary rule: the audio, not any transcript, is the evidence');
 }
 
+// ---- Voice-Note Evidence Report: manifest parsing + hard rules ----
+// The report quotes the WhatsApp export line VERBATIM; parsed sender/time are
+// a labelled convenience. The report never transcribes, never says who is
+// speaking, and states that an audio file carries no sender identity.
+{
+  const fnSrc = html.match(/function voParseWaLine[\s\S]*?\n\}\nfunction voManifestLineFor[\s\S]*?\n\}/);
+  ok(!!fnSrc, 'manifest parser functions located');
+  const api2 = new Function(fnSrc[0] + '\nreturn { voParseWaLine, voManifestLineFor };')();
+
+  const android = api2.voParseWaLine('06/04/2025, 08:15 - Marius Nortje: PTT-20250406-WA0012.opus (file attached)');
+  ok(android && android.sender === 'Marius Nortje' && android.ts === '06/04/2025, 08:15',
+    'Android export line parses (sender + timestamp)');
+  const ios = api2.voParseWaLine('[2025/04/07, 09:02:11] Gary Highcock: <attached: PTT-20250407-WA0003.opus>');
+  ok(ios && ios.sender === 'Gary Highcock' && ios.ts === '2025/04/07, 09:02:11',
+    'iOS export line parses (sender + timestamp)');
+  ok(api2.voParseWaLine('random text with no structure') === null, 'unstructured lines return null');
+  ok(api2.voParseWaLine('06/04/2025, 08:15 - <attached: x.opus>') === null,
+    'a line whose "sender" slot holds the attachment token is rejected');
+
+  const man = '06/04/2025, 08:15 - Marius Nortje: PTT-20250406-WA0012.opus (file attached)\nnoise line\n';
+  const hit = api2.voManifestLineFor(man, 'PTT-20250406-WA0012.opus');
+  ok(hit && /Marius Nortje/.test(hit.line) && hit.sender === 'Marius Nortje',
+    'the manifest line for a filename is found and returned verbatim');
+  ok(api2.voManifestLineFor(man, 'PTT-20250409-WA0099.opus') === null,
+    'a file the export never mentions gets no attribution');
+
+  ok(/This report contains no transcription of any recording, and nothing in it identifies who is speaking/.test(html),
+    'the report states the no-transcription / no-speaker-attribution rule');
+  ok(/an audio file[\s\\n]*carries no sender identity/.test(html.replace(/\s+/g, ' ')),
+    'the report states that sender labels come from the export, not the audio');
+  ok(/pairing any image with any particular recording is for the reader/.test(html),
+    'screenshots are exhibits — pairing is left to the reader');
+  ok(/window\.VerumReport\.seal\(vrBytes/.test(html),
+    'the voice-note report is sealed through the standard report path');
+  ok(/not referenced by name in the supplied chat export/.test(html),
+    'an unreferenced recording is disclosed as such, never attributed');
+}
+
 console.log(`\n[crop-normalize] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[crop-normalize] FAILURES'); process.exit(1); }
 console.log('[crop-normalize] ALL GREEN');

@@ -10046,6 +10046,41 @@ function voIsAudioFile(f) {
 }
 var selectedAudioFiles = [];
 var VO_AUDIO_MAX_FILES = 10;
+// Companions to a voice-note batch: ONE WhatsApp chat export (.txt) that ties
+// each audio filename to a sender and time in WhatsApp's own words, and up to
+// ten screenshots as visual corroboration. Both are optional; both are
+// fingerprinted into the Voice-Note Evidence Report.
+var voManifestFile = null;
+var voScreenshotFiles = [];
+var VO_SCREENSHOT_RE = /\.(png|jpe?g)$/i;
+
+// WhatsApp export line parsing — deterministic, and used ONLY to label a line
+// the report also quotes verbatim. Two shapes cover Android and iOS exports:
+//   Android: 06/04/2025, 08:15 - Marius Nortje: PTT-20250406-WA0012.opus (file attached)
+//   iOS:     [2025/04/06, 08:15:32] Marius Nortje: <attached: 00000012-AUDIO-....opus>
+// The verbatim line is the fact; the parsed sender/time are a convenience and
+// are always labelled "as recorded in the chat export".
+function voParseWaLine(line) {
+  line = String(line || '').trim();
+  var m = line.match(/^\[([^\]]+)\]\s+([^:]+):\s*(.*)$/);
+  if (!m) m = line.match(/^(.+?)\s[-–]\s([^:]+):\s*(.*)$/);
+  if (!m) return null;
+  var sender = m[2].trim();
+  if (!sender || sender.length > 60 || /attached|omitted/i.test(sender)) return null;
+  return { ts: m[1].trim(), sender: sender, rest: m[3] };
+}
+function voManifestLineFor(manifestText, audioFileName) {
+  if (!manifestText || !audioFileName) return null;
+  var lines = String(manifestText).split(/\r?\n/);
+  var stem = String(audioFileName).replace(/\.[^.]+$/, '');
+  for (var i = 0; i < lines.length; i++) {
+    if (lines[i].indexOf(audioFileName) !== -1 || (stem.length >= 8 && lines[i].indexOf(stem) !== -1)) {
+      var parsed = voParseWaLine(lines[i]);
+      return { line: lines[i].trim(), sender: parsed ? parsed.sender : null, ts: parsed ? parsed.ts : null };
+    }
+  }
+  return null;
+}
 
 // Add PDFs to the bundle (deduped by name+size), enforcing a total-size cap.
 // A single file behaves exactly as before; two or more are merged at seal time.
@@ -10055,23 +10090,37 @@ function voAddFiles(fileList) {
   // refused rather than guessed at: a PDF bundle merges into ONE document,
   // audio seals as N individual as-is files — silently doing both from one
   // button would produce artifacts the user did not ask for.
-  var audioIn = [], pdfIn = [];
+  var audioIn = [], pdfIn = [], txtIn = [], shotIn = [];
   for (var ai = 0; ai < fileList.length; ai++) {
-    (voIsAudioFile(fileList[ai]) ? audioIn : pdfIn).push(fileList[ai]);
+    var fi = fileList[ai];
+    if (voIsAudioFile(fi)) audioIn.push(fi);
+    else if (/\.txt$/i.test(fi.name)) txtIn.push(fi);
+    else if (VO_SCREENSHOT_RE.test(fi.name) || /^image\/(png|jpe?g)$/.test(fi.type)) shotIn.push(fi);
+    else pdfIn.push(fi);
   }
-  if ((audioIn.length && (pdfIn.length || selectedFiles.length)) ||
-      (pdfIn.length && selectedAudioFiles.length)) {
+  var audioMode = audioIn.length || selectedAudioFiles.length;
+  if ((audioMode && (pdfIn.length || selectedFiles.length)) ||
+      (pdfIn.length === fileList.length && selectedAudioFiles.length)) {
     alert('Seal documents and voice notes separately: a PDF bundle merges into one sealed document, while each audio file is sealed as-is with its own certificate.');
     return;
   }
-  if (audioIn.length || selectedAudioFiles.length) {
+  if (audioMode) {
     for (var au = 0; au < audioIn.length; au++) {
       var af = audioIn[au];
       if (selectedAudioFiles.some(function (x) { return x.name === af.name && x.size === af.size; })) continue;
       if (selectedAudioFiles.length >= VO_AUDIO_MAX_FILES) { alert('Up to ' + VO_AUDIO_MAX_FILES + ' voice notes per batch — seal the rest in a second batch.'); break; }
       selectedAudioFiles.push(af);
     }
+    if (txtIn.length) voManifestFile = txtIn[txtIn.length - 1]; // one manifest; latest wins
+    for (var sh = 0; sh < shotIn.length && voScreenshotFiles.length < 10; sh++) {
+      var sf = shotIn[sh];
+      if (!voScreenshotFiles.some(function (x) { return x.name === sf.name && x.size === sf.size; })) voScreenshotFiles.push(sf);
+    }
     voRenderAudioFiles();
+    return;
+  }
+  if (txtIn.length || shotIn.length) {
+    alert('Chat exports (.txt) and screenshots accompany a voice-note batch — add the voice notes first.');
     return;
   }
   for (var i = 0; i < fileList.length; i++) {
@@ -11336,8 +11385,148 @@ function voRenderAudioFiles() {
       '<span>' + (i + 1) + '. ' + escapeHtml(f.name) + ' <span style="color:#4A7EC7;">(' + (f.size / 1024).toFixed(0) + ' KB)</span></span>' +
       '<span style="cursor:pointer;color:#ef4444;" onclick="selectedAudioFiles.splice(' + i + ',1);voRenderAudioFiles();">✕</span></div>';
   });
-  rows.push('<div style="font-size:12px;color:#8ea3b5;margin-top:8px;line-height:1.6;">Audio is sealed exactly as-is: the SHA-512 fingerprint and Bitcoin anchor cover these exact bytes, and the seal record lives on the certificate and .ots receipt. The audio file is never altered. A transcript is not evidence — the sealed audio is.</div>');
+  if (voManifestFile) {
+    rows.push('<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;color:#D4A843;">' +
+      '<span>💬 Chat export: ' + escapeHtml(voManifestFile.name) + '</span>' +
+      '<span style="cursor:pointer;color:#ef4444;" onclick="voManifestFile=null;voRenderAudioFiles();">✕</span></div>');
+  }
+  for (var si = 0; si < voScreenshotFiles.length; si++) {
+    rows.push('<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;color:#4A7EC7;">' +
+      '<span>🖼 Screenshot: ' + escapeHtml(voScreenshotFiles[si].name) + '</span>' +
+      '<span style="cursor:pointer;color:#ef4444;" onclick="voScreenshotFiles.splice(' + si + ',1);voRenderAudioFiles();">✕</span></div>');
+  }
+  rows.push('<div style="font-size:12px;color:#8ea3b5;margin-top:8px;line-height:1.6;">Audio is sealed exactly as-is: the SHA-512 fingerprint and Bitcoin anchor cover these exact bytes, and the seal record lives on the certificate and .ots receipt. The audio file is never altered. A transcript is not evidence — the sealed audio is.' +
+    ' Add the WhatsApp chat export (.txt, from Export chat) to tie each note to its sender and time in WhatsApp\'s own words, and screenshots (.png/.jpg) as visual corroboration — a Voice-Note Evidence Report will be built and sealed with the batch.</div>');
   list.innerHTML = rows.join('');
+}
+
+// Best-effort duration via the browser's own decoder. Not every browser can
+// decode .opus (Safari cannot); a failure is disclosed as "not determined on
+// this device", never guessed.
+function voAudioDuration(file) {
+  return new Promise(function (resolve) {
+    var url; var done = false;
+    var finish = function (v) { if (done) return; done = true; try { URL.revokeObjectURL(url); } catch (e) {} resolve(v); };
+    try {
+      url = URL.createObjectURL(file);
+      var a = new Audio();
+      a.preload = 'metadata';
+      a.onloadedmetadata = function () { finish(isFinite(a.duration) ? a.duration : null); };
+      a.onerror = function () { finish(null); };
+      a.src = url;
+      setTimeout(function () { finish(null); }, 4000);
+    } catch (e) { finish(null); }
+  });
+}
+
+// ==================== VOICE-NOTE EVIDENCE REPORT ====================
+// One sealed PDF recording, for each note: the fingerprint and seal record,
+// the device-reported file details, and — when a chat export was supplied —
+// the export line that references the file, QUOTED VERBATIM (the parsed
+// sender/time are labelled as coming from the export, never from the audio).
+// HARD RULES, stated in the report itself: no transcription; no assertion of
+// who is speaking; an audio file carries no sender identity — attribution
+// comes from the chat export, and voice identification is for a witness or
+// the court. Screenshots are exhibits: fingerprinted and embedded, with
+// pairing left to the reader against the chat export.
+async function buildVoiceNoteReport(items, manifest, shots, generatedAt) {
+  var doc = await PDFLib.PDFDocument.create();
+  var helv = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+  var helvB = await doc.embedFont(PDFLib.StandardFonts.HelveticaBold);
+  var courier = await doc.embedFont(PDFLib.StandardFonts.Courier);
+  var NAVY = PDFLib.rgb(0x0e / 255, 0x1a / 255, 0x2b / 255);
+  var GOLD = PDFLib.rgb(0xD4 / 255, 0xA8 / 255, 0x43 / 255);
+  var GRAY = PDFLib.rgb(0.35, 0.4, 0.45);
+  var PW = 595.28, PH = 841.89, MARGIN = 60, y, page;
+  function newPage() { page = doc.addPage([PW, PH]); y = PH - MARGIN; }
+  function ensure(h) { if (y - h < MARGIN) newPage(); }
+  function wrapText(t, font, size, w) {
+    var words = String(t).split(/\s+/), lines = [], cur = '';
+    for (var i = 0; i < words.length; i++) {
+      var cand = cur ? cur + ' ' + words[i] : words[i];
+      if (font.widthOfTextAtSize(cand, size) > w && cur) { lines.push(cur); cur = words[i]; }
+      else cur = cand;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  }
+  function para(t, opts) {
+    opts = opts || {};
+    var font = opts.font || helv, size = opts.size || 10, color = opts.color || NAVY;
+    var lines = wrapText(t, font, size, PW - 2 * MARGIN);
+    for (var i = 0; i < lines.length; i++) { ensure(size + 4); page.drawText(lines[i], { x: MARGIN, y: y, size: size, font: font, color: color }); y -= size + 4; }
+    y -= (opts.after === undefined ? 4 : opts.after);
+  }
+  function mono(t, size) {
+    var lines = wrapText(t, courier, size || 8, PW - 2 * MARGIN);
+    for (var i = 0; i < lines.length; i++) { ensure(12); page.drawText(lines[i], { x: MARGIN, y: y, size: size || 8, font: courier, color: GRAY }); y -= 11; }
+  }
+  newPage();
+  page.drawText('VOICE-NOTE EVIDENCE REPORT', { x: MARGIN, y: y, size: 20, font: helvB, color: NAVY }); y -= 26;
+  page.drawText('Verum Omnis — sealed audio custody record', { x: MARGIN, y: y, size: 10, font: helv, color: GOLD }); y -= 22;
+  para('Generated: ' + generatedAt.toISOString() + '   |   Recordings: ' + items.length +
+    (manifest ? '   |   Chat export: supplied' : '   |   Chat export: not supplied') +
+    (shots.length ? '   |   Screenshots: ' + shots.length : ''), { size: 9, color: GRAY, after: 10 });
+  para('WHAT THIS REPORT IS', { font: helvB, size: 11, after: 2 });
+  para('The sealed audio files are the evidence. This report records, for each recording: its cryptographic fingerprint and seal identifier, the file details as supplied to the sealing device, and — where a WhatsApp chat export was supplied — the export line that references the file, quoted verbatim.', { size: 9.5 });
+  para('This report contains no transcription of any recording, and nothing in it identifies who is speaking in any recording. Attribution of a voice is for a witness or the court.', { font: helvB, size: 9.5 });
+  para('Sender names and times shown below come from the supplied chat export, not from the audio files: an audio file carries no sender identity. The export line is quoted verbatim so the reader can check every label against WhatsApp\'s own record.', { size: 9.5, after: 10 });
+  if (manifest) {
+    para('CHAT EXPORT ON RECORD', { font: helvB, size: 11, after: 2 });
+    para(manifest.name + '  (' + manifest.lineCount + ' lines)', { size: 9.5, after: 1 });
+    mono('SHA-512: ' + manifest.sha512); y -= 6;
+  } else {
+    para('No chat export was supplied. The recordings stand on their fingerprints alone; nothing in this report attributes any recording to a sender.', { size: 9.5, color: GRAY, after: 8 });
+  }
+  for (var n = 0; n < items.length; n++) {
+    var it = items[n];
+    ensure(120);
+    y -= 6;
+    page.drawLine({ start: { x: MARGIN, y: y }, end: { x: PW - MARGIN, y: y }, thickness: 0.5, color: GOLD }); y -= 14;
+    para('RECORDING ' + (n + 1) + ' — ' + it.name, { font: helvB, size: 11, after: 2 });
+    mono('SHA-512: ' + it.sha512);
+    para('Seal ID: ' + it.sealId + '    |    Size: ' + (it.size / 1024).toFixed(1) + ' KB' +
+      (it.duration !== null ? '    |    Duration: ' + Math.floor(it.duration / 60) + 'm ' + Math.round(it.duration % 60) + 's (as decoded on the sealing device)' : '    |    Duration: not determined on this device'), { size: 9 });
+    para('Blockchain anchor: ' + (it.otsSubmitted ? 'digest accepted by OpenTimestamps calendar; Bitcoin confirmation upgrades the .ots receipt' : 'submission pending — re-seal later to anchor') +
+      '    |    Device-reported file date: ' + (it.lastModified ? new Date(it.lastModified).toISOString() : 'not available'), { size: 9 });
+    if (it.manifestHit) {
+      para('Chat-export line referencing this file (verbatim):', { font: helvB, size: 9, after: 2 });
+      mono('"' + it.manifestHit.line + '"', 8.5);
+      if (it.manifestHit.sender) {
+        para('As recorded in the chat export: sent by ' + it.manifestHit.sender + (it.manifestHit.ts ? ' at ' + it.manifestHit.ts : '') + '.', { size: 9 });
+      }
+    } else if (manifest) {
+      para('This file is not referenced by name in the supplied chat export.', { size: 9, color: GRAY });
+    }
+  }
+  if (shots.length) {
+    newPage();
+    para('SCREENSHOTS SUPPLIED AS VISUAL CORROBORATION', { font: helvB, size: 12, after: 2 });
+    para('Each image below was supplied by the sealer alongside the recordings and is fingerprinted here. A screenshot shows what a screen displayed at capture; pairing any image with any particular recording is for the reader, against the chat export.', { size: 9, after: 8 });
+    for (var s = 0; s < shots.length; s++) {
+      var img = null;
+      try { img = /\.png$/i.test(shots[s].name) ? await doc.embedPng(shots[s].bytes) : await doc.embedJpg(shots[s].bytes); } catch (eImg) { img = null; }
+      var capH = 26;
+      if (img) {
+        var maxW = PW - 2 * MARGIN, maxH = 520;
+        var scale = Math.min(maxW / img.width, maxH / img.height, 1);
+        var iw = img.width * scale, ih = img.height * scale;
+        ensure(ih + capH + 16);
+        page.drawImage(img, { x: MARGIN, y: y - ih, width: iw, height: ih });
+        y -= ih + 6;
+      } else {
+        ensure(capH + 16);
+        para('(image could not be embedded — the original file is in the sealed bundle)', { size: 8.5, color: GRAY, after: 2 });
+      }
+      para(shots[s].name, { size: 8.5, after: 1 });
+      mono('SHA-512: ' + shots[s].sha512.substring(0, 64) + '…', 7.5);
+      y -= 10;
+    }
+  }
+  try { doc.setTitle('Verum Omnis Voice-Note Evidence Report'); } catch (e) {}
+  try { doc.setAuthor('Verum Omnis'); } catch (e) {}
+  try { doc.setCreationDate(generatedAt); } catch (e) {}
+  return await doc.save();
 }
 
 async function voSealAudioBatch() {
@@ -11355,6 +11544,26 @@ async function voSealAudioBatch() {
   try { if (!gpsCoords) gpsCoords = await captureGPS(); } catch (e) { gpsCoords = null; }
   var shareEntries = [], privEntries = [], rows = [], anyPending = false;
   var hasIdentity = false;
+  // Manifest + screenshots are read up front so each recording can carry its
+  // chat-export line, and the report can fingerprint every companion file.
+  var manifestInfo = null;
+  if (voManifestFile) {
+    try {
+      var manBytes = new Uint8Array(await voManifestFile.arrayBuffer());
+      var manText = new TextDecoder('utf-8').decode(manBytes);
+      manifestInfo = { name: voManifestFile.name, text: manText,
+        lineCount: manText.split(/\r?\n/).length,
+        sha512: await computeSHA512(manBytes), bytes: manBytes };
+    } catch (eMan) { manifestInfo = null; }
+  }
+  var shotInfos = [];
+  for (var sc = 0; sc < voScreenshotFiles.length; sc++) {
+    try {
+      var scBytes = new Uint8Array(await voScreenshotFiles[sc].arrayBuffer());
+      shotInfos.push({ name: voScreenshotFiles[sc].name, bytes: scBytes, sha512: await computeSHA512(scBytes) });
+    } catch (eShot) {}
+  }
+  var reportItems = [];
   for (var i = 0; i < files.length; i++) {
     var f = files[i];
     status.textContent = 'Sealing ' + (i + 1) + ' of ' + files.length + ': ' + f.name + ' …';
@@ -11398,13 +11607,44 @@ async function voSealAudioBatch() {
         if (!receiptBytes) { try { receiptBytes = VoOts.buildPendingReceipt(otsDigestHex, [otsResult.calendar]); } catch (eP) { receiptBytes = null; } }
         if (receiptBytes) shareEntries.push({ name: baseName + '-' + sealId + '.ots', bytes: new Uint8Array(receiptBytes) });
       }
+      reportItems.push({ name: f.name, size: f.size, lastModified: f.lastModified || null,
+        sha512: sha512, sealId: sealId, otsSubmitted: !!otsResult.success,
+        duration: await voAudioDuration(f),
+        manifestHit: manifestInfo ? voManifestLineFor(manifestInfo.text, f.name) : null });
       rows.push('✓ ' + f.name + ' — ' + sealId + (otsResult.success ? '' : ' (blockchain anchor pending retry)'));
     } catch (err) {
       rows.push('✕ ' + f.name + ' — sealing failed: ' + (err && err.message ? err.message.substring(0, 80) : 'unknown error'));
     }
     status.innerHTML = escapeHtml(rows.join('\n')).replace(/\n/g, '<br>');
   }
+  // The Voice-Note Evidence Report: built from the sealed items, then itself
+  // sealed through the standard report path (QR + footer + self-integrity).
+  var voiceReportUrl = null;
+  if (reportItems.length) {
+    try {
+      status.textContent = 'Building Voice-Note Evidence Report…';
+      var vrBytes = await buildVoiceNoteReport(reportItems, manifestInfo, shotInfos, new Date());
+      var vrSha512 = await computeSHA512(new Uint8Array(vrBytes));
+      var vrSealId = 'VO-' + vrSha512.substring(0, 12).toUpperCase();
+      var vrQrContent = 'https://verumglobal.foundation/verify.html?h=' + vrSha512.substring(0, 32);
+      var vrQr = await generateQRDataURL(vrQrContent, 400);
+      var vrSealed = (window.VerumReport && typeof window.VerumReport.seal === 'function')
+        ? await window.VerumReport.seal(vrBytes, { sealId: vrSealId, sha512: vrSha512, qrDataURL: vrQr, sourceName: 'voice-note batch (' + reportItems.length + ' recordings)' })
+        : vrBytes;
+      shareEntries.push({ name: 'voice-note-evidence-report-sealed.pdf', bytes: new Uint8Array(vrSealed) });
+      if (manifestInfo) shareEntries.push({ name: manifestInfo.name, bytes: manifestInfo.bytes });
+      for (var so = 0; so < shotInfos.length; so++) shareEntries.push({ name: shotInfos[so].name, bytes: shotInfos[so].bytes });
+      voiceReportUrl = URL.createObjectURL(new Blob([vrSealed], { type: 'application/pdf' }));
+    } catch (vrErr) {
+      console.warn('Voice-note report failed (individual seals unaffected):', vrErr);
+      rows.push('✕ Voice-Note Evidence Report could not be built — the individual seals and certificates are unaffected.');
+      status.innerHTML = escapeHtml(rows.join('\n')).replace(/\n/g, '<br>');
+    }
+  }
   var out = ['<div style="margin-top:10px;">'];
+  if (voiceReportUrl) {
+    out.push('<a class="download-btn" href="' + voiceReportUrl + '" download="voice-note-evidence-report-sealed.pdf">⬇ Download Voice-Note Evidence Report (sealed PDF)</a>');
+  }
   if (shareEntries.length) {
     var zipUrl = URL.createObjectURL(voZipBundle(shareEntries));
     out.push('<a class="download-btn" href="' + zipUrl + '" download="voice-notes-sealed.zip">⬇ Download sealed voice notes (ZIP: audio + certificates + receipts)</a>');
