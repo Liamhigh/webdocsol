@@ -426,6 +426,7 @@ const AI_MODEL_FAST = '@cf/meta/llama-3.1-8b-instruct-fp8';
 const AI_MODEL_STRONG = '@cf/meta/llama-3.3-70b-instruct-fp8-fast';
 const MAX_AI_BODY = 16 * 1024;          // 16 KB hard cap for most AI endpoints
 const MAX_AI_NARRATE_BODY = 96 * 1024;  // narrate also carries the document text excerpt
+const MAX_TRANSCRIBE_BODY = 8 * 1024 * 1024; // base64 audio: covers a ~6 MB voice note; anything longer is not a voice note
 const MAX_NARRATE_EXCERPT = 12000;      // chars of document text sent to the narrator (kept lean so the fast model answers well within timeout)
 const AI_GATEKEEP_TIMEOUT_MS = 10000;   // 10 s for the fast model
 const AI_TIMEOUT_MS = 30000;            // 30 s for the strong model
@@ -700,6 +701,54 @@ function gatekeepFallback(sig, declaredTier) {
   if (sig.companySuffixHits > 2) { score += 1; reasons.push('multiple company suffixes present'); }
   if (score >= 2) return { likelihood: 'medium', reasons: reasons.slice(0, 3) };
   return { likelihood: 'low', reasons: reasons.length ? reasons.slice(0, 3) : ['no commercial signals detected'] };
+}
+
+// ---- /api/v1/ai/transcribe -------------------------------------------------
+// OPT-IN machine transcription of a voice note (Workers AI Whisper). The
+// client MUST have shown the user an explicit consent step: audio leaves the
+// device for this call, unlike every sealing operation. The response is a
+// MACHINE transcript - a reading aid, never evidence; the sealed audio is the
+// evidence, and the client renders the transcript only under a provenance
+// banner saying exactly that. machineGenerated:true is part of the wire
+// contract so no downstream surface can present the text as a human record.
+// Nothing is stored: the audio is decoded, transcribed and discarded.
+async function handleAiTranscribe(request, env) {
+  const body = await readBodyText(request, MAX_TRANSCRIBE_BODY);
+  if (body.tooBig) return err(413, 'body_too_large', 'Audio exceeds the transcription size limit (~6 MB). Voice notes are small; split longer recordings.');
+  let data;
+  try { data = JSON.parse(body.text); } catch {
+    return err(400, 'invalid_json', 'Request body is not valid JSON.');
+  }
+  if (!data || typeof data !== 'object' || typeof data.audio !== 'string' || !data.audio) {
+    return err(400, 'invalid_shape', 'Body must be {"audio":"<base64>","name":"file.opus"}.');
+  }
+  if (!env.AI || typeof env.AI.run !== 'function') {
+    return err(503, 'transcription_unavailable', 'The transcription model is not available. The sealed audio is unaffected.');
+  }
+  let bytes;
+  try {
+    const bin = atob(data.audio);
+    bytes = new Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  } catch {
+    return err(400, 'invalid_base64', 'audio is not valid base64.');
+  }
+  try {
+    const result = await env.AI.run('@cf/openai/whisper', { audio: bytes });
+    const text = result && typeof result.text === 'string' ? result.text.trim() : '';
+    if (!text) return err(502, 'empty_transcript', 'The model returned no text for this recording.');
+    return json({
+      ok: true,
+      machineGenerated: true,
+      model: '@cf/openai/whisper',
+      name: typeof data.name === 'string' ? data.name.slice(0, 120) : null,
+      text: text.slice(0, 20000),
+      wordCount: result.word_count || null,
+      disclaimer: 'Machine transcript - a reading aid, not evidence. The model may mis-hear words; verify every quoted word against the sealed audio, which is the evidence.'
+    });
+  } catch (e) {
+    return err(502, 'transcription_failed', 'Transcription failed for this recording. The sealed audio is unaffected.');
+  }
 }
 
 async function handleAiGatekeep(request, env) {
@@ -1278,6 +1327,7 @@ async function route(request, env) {
   if (path === '/api/v1/admin/publish' && request.method === 'POST') return handleAdminPublish(request, env);
   if (path === '/api/v1/ai/gatekeep' && request.method === 'POST') return handleAiGatekeep(request, env);
   if (path === '/api/v1/ai/classify' && request.method === 'POST') return handleAiClassify(request, env);
+  if (path === '/api/v1/ai/transcribe' && request.method === 'POST') return handleAiTranscribe(request, env);
   if (path === '/api/v1/ai/assess' && request.method === 'POST') return handleAiAssess(request, env);
   if (path === '/api/v1/ai/narrate' && request.method === 'POST') return handleAiNarrate(request, env);
   if (path === '/api/v1/ai/curate' && request.method === 'POST') return handleAiCurate(request, env);
@@ -1285,7 +1335,7 @@ async function route(request, env) {
   if ((path === '/images/logo-full.png' || path === '/images/watermark_portrait.png') && request.method === 'GET') return handleImageKv(env, SITE_IMAGES[path].key, SITE_IMAGES[path].contentType);
 
   const known = ['/api/v1/status', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish',
-    '/api/v1/ai/gatekeep', '/api/v1/ai/classify', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf', '/images/logo-full.png', '/images/watermark_portrait.png'];
+    '/api/v1/ai/gatekeep', '/api/v1/ai/classify', '/api/v1/ai/transcribe', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf', '/images/logo-full.png', '/images/watermark_portrait.png'];
   if (known.includes(path)) {
     return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' || path.endsWith('/constitution.pdf') ? 'GET' : 'POST' });
   }

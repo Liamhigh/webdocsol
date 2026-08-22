@@ -11395,6 +11395,11 @@ function voRenderAudioFiles() {
       '<span>🖼 Screenshot: ' + escapeHtml(voScreenshotFiles[si].name) + '</span>' +
       '<span style="cursor:pointer;color:#ef4444;" onclick="voScreenshotFiles.splice(' + si + ',1);voRenderAudioFiles();">✕</span></div>');
   }
+  var tcChecked = document.getElementById('voTranscribeOptIn') && document.getElementById('voTranscribeOptIn').checked;
+  rows.push('<div style="margin-top:10px;padding:8px 10px;border:1px solid #D4A843;border-radius:6px;">' +
+    '<label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:12.5px;color:#F8F9FA;">' +
+    '<input type="checkbox" id="voTranscribeOptIn"' + (tcChecked ? ' checked' : '') + ' style="margin-top:2px;">' +
+    '<span><strong>Transcribe recordings (optional, off by default).</strong> Each recording is sent to the AI service for machine transcription — <strong style="color:#D4A843;">the audio leaves this device for that step</strong>, unlike sealing, which is entirely local. Transcripts appear in the Evidence Report under a machine-transcript banner: they are reading aids, not evidence — the sealed audio is. Leave unticked for privileged or sensitive recordings.</span></label></div>');
   rows.push('<div style="font-size:12px;color:#8ea3b5;margin-top:8px;line-height:1.6;">Audio is sealed exactly as-is: the SHA-512 fingerprint and Bitcoin anchor cover these exact bytes, and the seal record lives on the certificate and .ots receipt. The audio file is never altered. A transcript is not evidence — the sealed audio is.' +
     ' Add the WhatsApp chat export (.txt, from Export chat) to tie each note to its sender and time in WhatsApp\'s own words, and screenshots (.png/.jpg) as visual corroboration — a Voice-Note Evidence Report will be built and sealed with the batch.</div>');
   list.innerHTML = rows.join('');
@@ -11424,11 +11429,14 @@ function voAudioDuration(file) {
 // the device-reported file details, and — when a chat export was supplied —
 // the export line that references the file, QUOTED VERBATIM (the parsed
 // sender/time are labelled as coming from the export, never from the audio).
-// HARD RULES, stated in the report itself: no transcription; no assertion of
-// who is speaking; an audio file carries no sender identity — attribution
-// comes from the chat export, and voice identification is for a witness or
-// the court. Screenshots are exhibits: fingerprinted and embedded, with
-// pairing left to the reader against the chat export.
+// HARD RULES, stated in the report itself: no transcription unless the sealer
+// ticked the consent box — and then every transcript is rendered under a
+// machine-transcript banner as a reading aid, never evidence, and the intro
+// discloses that transcripts are present; no assertion of who is speaking; an
+// audio file carries no sender identity — attribution comes from the chat
+// export, and voice identification is for a witness or the court. Screenshots
+// are exhibits: fingerprinted and embedded, with pairing left to the reader
+// against the chat export.
 async function buildVoiceNoteReport(items, manifest, shots, generatedAt) {
   var doc = await PDFLib.PDFDocument.create();
   var helv = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
@@ -11469,7 +11477,13 @@ async function buildVoiceNoteReport(items, manifest, shots, generatedAt) {
     (shots.length ? '   |   Screenshots: ' + shots.length : ''), { size: 9, color: GRAY, after: 10 });
   para('WHAT THIS REPORT IS', { font: helvB, size: 11, after: 2 });
   para('The sealed audio files are the evidence. This report records, for each recording: its cryptographic fingerprint and seal identifier, the file details as supplied to the sealing device, and — where a WhatsApp chat export was supplied — the export line that references the file, quoted verbatim.', { size: 9.5 });
-  para('This report contains no transcription of any recording, and nothing in it identifies who is speaking in any recording. Attribution of a voice is for a witness or the court.', { font: helvB, size: 9.5 });
+  var anyTranscript = false;
+  for (var atI = 0; atI < items.length; atI++) if (items[atI].transcript) { anyTranscript = true; break; }
+  if (anyTranscript) {
+    para('At the sealer\'s explicit request, machine transcripts are included below. A transcript is a reading aid produced by a speech-recognition model, not evidence — the sealed audio is. Nothing in this report identifies who is speaking in any recording. Attribution of a voice is for a witness or the court.', { font: helvB, size: 9.5 });
+  } else {
+    para('This report contains no transcription of any recording, and nothing in it identifies who is speaking in any recording. Attribution of a voice is for a witness or the court.', { font: helvB, size: 9.5 });
+  }
   para('Sender names and times shown below come from the supplied chat export, not from the audio files: an audio file carries no sender identity. The export line is quoted verbatim so the reader can check every label against WhatsApp\'s own record.', { size: 9.5, after: 10 });
   if (manifest) {
     para('CHAT EXPORT ON RECORD', { font: helvB, size: 11, after: 2 });
@@ -11497,6 +11511,13 @@ async function buildVoiceNoteReport(items, manifest, shots, generatedAt) {
       }
     } else if (manifest) {
       para('This file is not referenced by name in the supplied chat export.', { size: 9, color: GRAY });
+    }
+    if (it.transcript) {
+      para('MACHINE TRANSCRIPT — reading aid, not evidence', { font: helvB, size: 9, color: GOLD, after: 2 });
+      para('Produced by an automatic speech-recognition model at the sealer\'s request. The model can mis-hear words; verify every quoted word against the sealed audio, which is the evidence. Nothing in this transcript identifies who is speaking.', { size: 8, color: GRAY, after: 3 });
+      para('\u201C' + it.transcript.substring(0, 4000) + (it.transcript.length > 4000 ? ' \u2026' : '') + '\u201D', { size: 9 });
+    } else if (it.transcriptNote) {
+      para('Transcript: ' + it.transcriptNote + '.', { size: 8.5, color: GRAY });
     }
   }
   if (shots.length) {
@@ -11609,11 +11630,43 @@ async function voSealAudioBatch() {
       }
       reportItems.push({ name: f.name, size: f.size, lastModified: f.lastModified || null,
         sha512: sha512, sealId: sealId, otsSubmitted: !!otsResult.success,
-        duration: await voAudioDuration(f),
+        duration: await voAudioDuration(f), file: f,
         manifestHit: manifestInfo ? voManifestLineFor(manifestInfo.text, f.name) : null });
       rows.push('✓ ' + f.name + ' — ' + sealId + (otsResult.success ? '' : ' (blockchain anchor pending retry)'));
     } catch (err) {
       rows.push('✕ ' + f.name + ' — sealing failed: ' + (err && err.message ? err.message.substring(0, 80) : 'unknown error'));
+    }
+    status.innerHTML = escapeHtml(rows.join('\n')).replace(/\n/g, '<br>');
+  }
+  // OPT-IN transcription — runs AFTER every recording is sealed, so the
+  // evidence is anchored whether or not this step succeeds. The audio leaves
+  // the device ONLY here, only when the user ticked the consent box, and a
+  // failure never blocks anything: the note simply carries no transcript.
+  var tcOpt = document.getElementById('voTranscribeOptIn');
+  if (tcOpt && tcOpt.checked) {
+    for (var ti = 0; ti < reportItems.length; ti++) {
+      // reportItems only holds files that SEALED — index into it, never into
+      // the raw selection, or a failed seal shifts every later transcript
+      // onto the wrong recording.
+      var tf = reportItems[ti].file;
+      if (!tf || tf.size > 6 * 1024 * 1024) { reportItems[ti].transcript = null; reportItems[ti].transcriptNote = 'not transcribed — recording exceeds the transcription size limit'; continue; }
+      status.textContent = 'Transcribing ' + (ti + 1) + ' of ' + reportItems.length + ' (audio leaves this device for this step)…';
+      try {
+        var tBytes = new Uint8Array(await tf.arrayBuffer());
+        var tB64 = ''; for (var tb = 0; tb < tBytes.length; tb += 0x8000) tB64 += String.fromCharCode.apply(null, tBytes.subarray(tb, tb + 0x8000));
+        var tRes = await fetch('/api/v1/ai/transcribe', { method: 'POST', headers: { 'content-type': 'application/json' },
+          body: JSON.stringify({ audio: btoa(tB64), name: tf.name }) });
+        var tJson = await tRes.json().catch(function () { return null; });
+        if (tRes.ok && tJson && tJson.machineGenerated === true && tJson.text) {
+          reportItems[ti].transcript = tJson.text;
+        } else {
+          reportItems[ti].transcript = null;
+          reportItems[ti].transcriptNote = 'transcription unavailable (' + (tJson && tJson.error ? tJson.error : 'service error') + ') — the sealed audio is unaffected';
+        }
+      } catch (tErr) {
+        reportItems[ti].transcript = null;
+        reportItems[ti].transcriptNote = 'transcription failed — the sealed audio is unaffected';
+      }
     }
     status.innerHTML = escapeHtml(rows.join('\n')).replace(/\n/g, '<br>');
   }
@@ -11656,7 +11709,9 @@ async function voSealAudioBatch() {
   out.push('<div style="font-size:12px;color:#8ea3b5;margin-top:8px;line-height:1.6;">Keep each audio file together with its certificate and .ots receipt — the audio bytes are the evidence and were not modified. The certificate proves integrity and time only.' +
     (privEntries.length ? ' The PRIVATE ZIP carries your identity details — never place it in a shared folder.' : '') +
     (anyPending ? ' One or more blockchain submissions did not reach a calendar — re-seal those files later to anchor them.' : ' Bitcoin confirmation typically completes within 1–2 hours; verify later at verumglobal.foundation/verify.html.') + '</div></div>');
-  status.innerHTML += out.join('');
+  // Restore the per-file seal rows: "Building report…" must not be the last
+  // thing the user sees in place of which files actually sealed.
+  status.innerHTML = escapeHtml(rows.join('\n')).replace(/\n/g, '<br>') + out.join('');
   btn.disabled = false;
 }
 

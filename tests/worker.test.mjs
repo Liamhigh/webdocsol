@@ -263,6 +263,95 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'the constitution no longer instructs the model to report a confidence band');
 }
 
+// --- /api/v1/ai/transcribe: OPT-IN voice-note transcription (Whisper).
+// The wire contract is the evidence rule: machineGenerated:true on every
+// success, a disclaimer naming the sealed audio as the evidence, and every
+// failure a clean JSON error that tells the user the sealed audio is
+// unaffected. The audio is transcribed and discarded — nothing is stored.
+{
+  const tPost = (body, e) => worker.fetch(
+    mk('/api/v1/ai/transcribe', 'POST', typeof body === 'string' ? body : JSON.stringify(body)), e || env, {});
+
+  r = await worker.fetch(mk('/api/v1/ai/transcribe', 'GET'), env, {});
+  ok(r.status === 405, 'transcribe is POST-only (' + r.status + ')');
+
+  r = await tPost('not json');
+  let tj = await r.json().catch(() => null);
+  ok(r.status === 400 && tj && tj.error === 'invalid_json', 'invalid JSON body is a clean 400');
+
+  r = await tPost({ name: 'x.opus' });
+  tj = await r.json().catch(() => null);
+  ok(r.status === 400 && tj && tj.error === 'invalid_shape', 'a body without audio is a clean 400');
+
+  // env.AI has no run() here — the endpoint must degrade to a clean 503, and
+  // the message must carry the reassurance the client passes to the report.
+  r = await tPost({ audio: Buffer.from('x').toString('base64'), name: 'x.opus' });
+  tj = await r.json().catch(() => null);
+  ok(r.status === 503 && tj && tj.error === 'transcription_unavailable',
+    'missing AI binding degrades to 503 transcription_unavailable (' + r.status + ')');
+  ok(tj && /sealed audio is unaffected/.test(tj.message || ''),
+    'the 503 tells the user the sealed audio is unaffected');
+
+  const aiEnv = (run) => ({ ...env, AI: { run } });
+
+  r = await tPost({ audio: '!!!not-base64!!!', name: 'x.opus' }, aiEnv(async () => ({ text: 'hi' })));
+  tj = await r.json().catch(() => null);
+  ok(r.status === 400 && tj && tj.error === 'invalid_base64', 'malformed base64 is a clean 400');
+
+  // Success path: the model gets the DECODED bytes; the response carries the
+  // machine-provenance contract so no surface can present it as a human record.
+  let gotModel = '', gotAudio = null;
+  const audioBytes = [86, 79, 33, 7, 200];
+  r = await tPost(
+    { audio: Buffer.from(audioBytes).toString('base64'), name: 'PTT-20250406-WA0012.opus' },
+    aiEnv(async (model, opts) => { gotModel = model; gotAudio = opts.audio; return { text: '  I paid the rent on Friday.  ', word_count: 6 }; }));
+  tj = await r.json().catch(() => null);
+  ok(r.status === 200 && tj && tj.ok === true, 'a valid recording transcribes (' + r.status + ')');
+  ok(gotModel === '@cf/openai/whisper', 'the Whisper model is invoked');
+  ok(Array.isArray(gotAudio) && gotAudio.join(',') === audioBytes.join(','),
+    'the model receives the exact decoded audio bytes');
+  ok(tj && tj.machineGenerated === true && tj.model === '@cf/openai/whisper',
+    'machineGenerated:true and the model name are part of the wire contract');
+  ok(tj && tj.text === 'I paid the rent on Friday.' && tj.wordCount === 6,
+    'text is trimmed and word count passed through');
+  ok(tj && /reading aid, not evidence/.test(tj.disclaimer || '')
+    && /verify every quoted word against the sealed audio/.test(tj.disclaimer || ''),
+    'every success carries the reading-aid disclaimer naming the sealed audio as the evidence');
+  ok(tj && tj.name === 'PTT-20250406-WA0012.opus', 'the file name is echoed for client-side pairing');
+
+  // A very long name is truncated, a very long transcript is capped.
+  r = await tPost(
+    { audio: Buffer.from('x').toString('base64'), name: 'n'.repeat(500) },
+    aiEnv(async () => ({ text: 'w '.repeat(30000) })));
+  tj = await r.json().catch(() => null);
+  ok(tj && tj.name.length === 120 && tj.text.length === 20000, 'name is capped at 120 chars, text at 20000');
+
+  // Model failures are clean 502s with no stack trace and the reassurance line.
+  r = await tPost({ audio: Buffer.from('x').toString('base64') },
+    aiEnv(async () => { throw new Error('boom at /internal/whisper.js:42'); }));
+  const raw = await r.text();
+  tj = JSON.parse(raw);
+  ok(r.status === 502 && tj.error === 'transcription_failed', 'a model crash is a clean 502');
+  ok(!/whisper\.js:42|boom/.test(raw), 'the 502 leaks no stack trace or internal message');
+  ok(/sealed audio is unaffected/.test(tj.message || ''), 'the 502 tells the user the sealed audio is unaffected');
+
+  r = await tPost({ audio: Buffer.from('x').toString('base64') }, aiEnv(async () => ({ text: '   ' })));
+  tj = await r.json().catch(() => null);
+  ok(r.status === 502 && tj && tj.error === 'empty_transcript', 'an empty model reply is a clean 502, never ok:true');
+
+  // Client-side lock: transcription is OPT-IN, runs after sealing, and the
+  // consent copy must say the audio leaves the device — the one honest
+  // difference from every other sealing operation.
+  const page2 = fs.readFileSync(path.join(__dirname, '..', 'seal-document.html'), 'utf8');
+  ok(/id="voTranscribeOptIn"/.test(page2) && !/id="voTranscribeOptIn"[^>]*\bchecked\b[^>]*style/.test(page2.replace(/\(tcChecked \? ' checked' : ''\)/, '')),
+    'the consent checkbox exists and is not checked by default in the markup');
+  ok(/the audio leaves this device for that step/.test(page2),
+    'the consent copy states that the audio leaves the device');
+  ok(/Leave unticked for privileged or sensitive recordings/.test(page2),
+    'the consent copy warns about privileged recordings');
+  ok(/tcOpt && tcOpt\.checked/.test(page2), 'the transcription pass is gated on the checkbox');
+}
+
 // --- feedback loop: the opt-in "Help improve the forensic engine" checkbox.
 // End-to-end contract between shareAnonymousPatterns (seal-document.html) and
 // handleFeedback (worker). The page promises users "no document content,

@@ -55,11 +55,13 @@ source file, then re-splice** — `tests/inline-scripts.test.mjs` byte-compares 
 | `/api/v1/ai/narrate` | POST | Narrative generation from findings + document excerpt |
 | `/api/v1/ai/gatekeep` | POST | Licensing gatekeeper |
 | `/api/v1/ai/curate` | POST | Conservative rules curation |
+| `/api/v1/ai/transcribe` | POST | Opt-in voice-note transcription (Whisper) — `machineGenerated:true` reading aid, never evidence; nothing stored |
 | `/constitution.pdf`, `/docs/constitution.pdf` | GET | Sealed constitution PDF from KV |
 
 **Hard limits** (exceeding them is why AI narratives silently disappeared once — the client must
 batch): `MAX_AI_BODY` 16 KB · `MAX_AI_NARRATE_BODY` 96 KB · `MAX_NARRATE_EXCERPT` 12 000 chars ·
-`MAX_ASSESS_FINDINGS` 40 · `MAX_NARRATE_FINDINGS` 25 · `MAX_CURATE_CANDIDATES` 10.
+`MAX_ASSESS_FINDINGS` 40 · `MAX_NARRATE_FINDINGS` 25 · `MAX_CURATE_CANDIDATES` 10 ·
+`MAX_TRANSCRIBE_BODY` 8 MB base64 (≈6 MB audio; the client skips larger recordings).
 
 **KV holds only public, signed rule packages** — never user documents, findings or personal data.
 The Worker also carries an embedded copy of the constitution that governs the AI prompts; it must
@@ -76,7 +78,7 @@ Other worker files: `rule-format.md` (wire format for rule packages) · `public-
 | `vendor/` | Pinned third-party libraries: `pdf.min.js` + worker (pdf.js), `pdf-lib.min.js`, `qrcode.min.js`, Tesseract OCR core/worker + `eng.traineddata.gz`. **Vendored deliberately** — the app must work offline and must not depend on a CDN. |
 | `seal-module/` | The portable sealing spec (`SPEC.md`) and per-surface implementations (`web`, `android`, `firewall`) so a seal produced anywhere verifies everywhere. |
 | `images/` | Logos and the watermark used in sealed PDFs. |
-| `tests/` | **27 suites, 1374 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
+| `tests/` | **27 suites, 1410 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
 
 **Root PDFs:** `Verum-Omnis-Briefing.pdf` is the public briefing for law enforcement and
 attorneys (what the platform does, how the sealing service is used, why the record cannot be
