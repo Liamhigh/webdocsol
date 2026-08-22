@@ -2189,6 +2189,14 @@ function secFindingDetails(ctx, data) {
       'Location: ' + fmtLocation(f.location),
       'Legal subject: ' + (LEGAL_SUBJECT_LABEL[subj] || subj) + (CT_DETECTOR[f.type] ? '    |    Detector: ' + CT_DETECTOR[f.type] : '')
     ];
+    // Oath context is a FACT of the record (oath language on the cited page),
+    // not a classification of any statement as sworn testimony. A finding
+    // anchored inside an affidavit is materially different from one in
+    // correspondence and the reader is told so; what a false statement under
+    // oath constitutes remains the court's question, never this report's.
+    if (f.swornContext) {
+      factLines.push('Oath context: oath language (affidavit / commissioner-of-oaths formulae) appears on the cited page(s). What a false statement under oath constitutes is reserved to the court.');
+    }
     for (var k = 0; k < factLines.length; k++) ctx.para(factLines[k], { size: 9, color: NAVY2, after: 1 });
     // Provision the DOCUMENT ITSELF cites (cite-or-stay-silent), distinct from
     // the candidate statutes for counsel further down: this is the clause on the
@@ -2205,6 +2213,12 @@ function secFindingDetails(ctx, data) {
       ctx.para('Candidate law (for counsel to confirm):', { size: 9, font: ctx.f.timesBold, color: NAVY2, after: 2 });
       for (var s = 0; s < stat.length; s++) {
         ctx.bullet((JURIS_LABEL[stat[s].jur] || stat[s].jur) + ': ' + stat[s].provisions.join('; '), { size: 8.5 });
+      }
+      // PD16's one sanctioned exception: candidate legal characterisation, in
+      // the candidate-law list only. The finding above states the oath-language
+      // fact; this line names the provisions counsel would check.
+      if (f.swornContext) {
+        ctx.bullet('ZA (sworn-statement context): common-law perjury; Justices of the Peace and Commissioners of Oaths Act 16 of 1963, s 9 (false statement in a sworn affidavit)', { size: 8.5 });
       }
     }
     ctx.gap(8);
