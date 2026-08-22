@@ -19,7 +19,7 @@
 | Page | Purpose | Notes |
 |---|---|---|
 | **`index.html`** | Public homepage: what Verum Omnis is, the case record, the **Get the Apps** download hub (Android · Windows Lite · Fraud Firewall). | Institutions self-serve; free, subject to the commercial terms in Constitution §7. |
-| **`seal-document.html`** | **The main application.** Upload → deterministic scan → sealed PDF + sealed forensic report. Runs the engine, the report generator, OTS anchoring, optional password protection. | ~627 KB because the engine and report generator are **inlined** (see ENGINE.md §9). |
+| **`seal-document.html`** | **The main application.** Upload → deterministic scan → sealed PDF + sealed forensic report. Runs the engine, the report generator, OTS anchoring, optional password protection. | ~740 KB because the engine and report generator are **inlined** (see ENGINE.md §9). |
 | **`verify.html`** | **The Verification Hub.** Recomputes SHA-512, finds the seal marker, checks the OpenTimestamps/Bitcoin anchor. **Every seal QR on every surface points here.** | No account, no upload to a server — verification is local and cryptographic. |
 | **`verify-data.html`** | Report verification data — inspect a sealed report's findings JSON. | |
 | **`dashboard.html`** | Law-enforcement dashboard. | |
@@ -76,7 +76,7 @@ Other worker files: `rule-format.md` (wire format for rule packages) · `public-
 | `vendor/` | Pinned third-party libraries: `pdf.min.js` + worker (pdf.js), `pdf-lib.min.js`, `qrcode.min.js`, Tesseract OCR core/worker + `eng.traineddata.gz`. **Vendored deliberately** — the app must work offline and must not depend on a CDN. |
 | `seal-module/` | The portable sealing spec (`SPEC.md`) and per-surface implementations (`web`, `android`, `firewall`) so a seal produced anywhere verifies everywhere. |
 | `images/` | Logos and the watermark used in sealed PDFs. |
-| `tests/` | **27 suites, 1268 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
+| `tests/` | **27 suites, 1306 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
 
 **Root PDFs:** `Verum-Omnis-Briefing.pdf` is the public briefing for law enforcement and
 attorneys (what the platform does, how the sealing service is used, why the record cannot be
@@ -97,7 +97,7 @@ altered) — it is linked from `index.html`, so **any edit to it is a publicatio
 | `DEPLOYMENT.md` | Cloudflare Pages + Workers Builds deployment. |
 | `DESIGN_LOCK.md` | Locked visual decisions on the public site. |
 | `FORENSIC-DEBUG.md` | Debugging a scan: what to inspect when findings look wrong. |
-| `AGENTS.md` | **Entry point for code assistants** — quick facts, the five things most likely to be regressed, and the founder rulings (1–9) that must not be re-litigated. |
+| `AGENTS.md` | **Entry point for code assistants** — the stakes (platform output is evidence in live court proceedings), the seven things most likely to be regressed, the founder rulings that must not be re-litigated, and the never-write list for public claims. |
 | `README.md` | Project overview. |
 
 ## 6. Working here — the short version

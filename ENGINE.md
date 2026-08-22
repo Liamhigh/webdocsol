@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1268 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1306 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -46,6 +46,7 @@ PDF bytes
   ├─ voBackfillPageAnchors()   binds every finding to its page
   ├─ voEnforceAnchorRule()     drops content findings that cannot be anchored (§5)
   ├─ voAnchorEnrich()          WHO / WHERE / WHAT / WHEN per finding
+  ├─ voDetectSwornPages()      oath language per page; findings on those pages get swornContext (§4.18)
   └─ generateSummary()         fact-stated summary sentence (no bands)
         ↓
    findings JSON  →  forensic-report.js build()  →  sealed PDF (seal())
@@ -131,7 +132,7 @@ Each detector is a pure function `(textBlocks, …) → findings[]`.
 | D34 `DETECT_CURRENCY_FRAUD` | CT16 | Currency mismatch |
 | D35 `DETECT_VERSION_ANOMALY` | CT30 | Version-control anomaly |
 | D36 `DETECT_SOURCE_FAILURE` | CT32 | Source attribution failure |
-| D37 `DETECT_INTERNAL_CONFLICT_CATCHALL` | CT43 + CT24/29/30/41/42 | Structural catch-all; runs last |
+| D37 `DETECT_INTERNAL_CONFLICT_CATCHALL` | CT43 + CT24/29/30/41/42 | Clause-numbering discontinuity (a heading numbered N whose first sub-clause is numbered N+1..N+3 — template-surgery fingerprint, §4.17); breadth note; runs last |
 | D38 `DETECT_CONDITIONAL_CLAUSE_MISINVOKED` | CT44 | A right exercised on a condition the record itself contradicts (the "Lessee/Owner trap") |
 | D39 `DETECT_ASSET_VALUE_DENIAL` | CT45 | Value/goodwill recognised in one place and denied in another |
 | D40 `DETECT_ROLE_CAPACITY_CONFLICT` | CT46 | A party acting in a corporate capacity while the instrument is personal, or a stated restriction breached |
@@ -267,6 +268,31 @@ anywhere in `forensic-engine-page.js`, `forensic-report.js` or `seal-document.ht
 `forensic-report.js:2491` for name/money detection. They are a known, separate debt — do not
 copy the pattern, and do not "fix" them as a drive-by.)
 
+### 4.17 D37 clause-numbering discontinuity — heavily guarded, states only the numbering
+Two real MOUs from the same drafter, same year: one numbers VARIATIONS as clause 9 with
+sub-clauses 9.1; the other numbers the same heading 9 with sub-clauses **10.1 / 10.2** —
+numbering left behind when a clause was carried over from a longer instrument. D37 reports the
+discontinuity as CT43. **Guards:** an intervening numbered heading ends the search window
+(`9. VARIATIONS … 10. NOTICES 10.1` is ordinary drafting); only the FIRST sub-clause after a
+heading is tested (a genuine 9.1 followed by a cross-reference to 10.1 stays silent); the jump
+must be forward and between 1 and 3 (an OCR digit swap like `91.2` is excluded); one note per
+page. The finding quotes the numbering and **never** says the clause was "cut from" anything,
+names a source instrument, or reaches for intent — a test asserts those words are absent.
+**Tests:** `allfuels-regression.test.js`.
+
+### 4.18 Oath context — measured, never inferred, and "perjury" never in engine output
+A contradiction anchored inside an affidavit is a materially different fact from one in
+correspondence. `voDetectSwornPages` tags pages carrying oath language: **strong** execution
+formulae (commissioner of oaths, make(s) oath and say, sworn (to) before me, duly sworn,
+solemnly declare/affirm, depose(s) and say) tag on their own; **weak** markers (affidavit,
+deponent, under oath) require two distinct hits, so an index line ("Supplementary Affidavit,
+9pp") or a page merely referring to an affidavit is never tagged. Unmarked body pages of a long
+affidavit are not tagged — under-tagging is a gap, mis-tagging is a false statement of fact.
+Findings on tagged pages get `swornContext = true`; the report renders one factual line ("oath
+language appears on the cited page(s)… reserved to the court") plus a candidate-law bullet.
+**The word "perjury" appears nowhere in engine output**, and in the report source only inside
+candidate-law lines — both locked by tests. **Tests:** `allfuels-regression.test.js`.
+
 ---
 
 ## 5. The anchor rule
@@ -392,7 +418,7 @@ Then `secAnnexDivider` and the annexes, in build order: `secExecSummary` (the le
 box / severity table) · `secAiReview` (no-op when off) · `secPartyAnalysis` ·
 `secStatutoryAnchoring` (person → contradiction → page → candidate law) · `secOffenceMatrix`
 (with **Elements Evidenced**) · `secActions` (0–14 / 14–90 / 90+ days) · `secMonetaryFigures` ·
-`secEvidenceIndex` · `secMatrix` · `secFindingDetails` · `secPersonIndex` · `secSerial` ·
+`secEvidenceIndex` · `secMatrix` · `secFindingDetails` (each finding with parties, location, verbatim quote and candidate law; a finding with `swornContext` adds one factual oath-context line and a sworn-statement candidate-law bullet — see §4.18) · `secPersonIndex` · `secSerial` ·
 `secTimeline` · `secEvidenceAppendix` · `secEvidenceMap` (Annexure A) · `secConstitution` ·
 `secMethodology`.
 
@@ -418,7 +444,7 @@ The report **must not** rely on the user to name anything. It derives:
 
 ### `forensic-engine-page.js`
 `VO_ENGINE_VERSION` · `CONTRADICTION_TYPES` · `DETECTORS` · `SERIAL_PATTERNS` ·
-`runForensicEngine` · `detectSerialPatterns` · **`voDetectDocuments`** ·
+`runForensicEngine` · `detectSerialPatterns` · **`voDetectDocuments`** · **`voDetectSwornPages`** ·
 `voBackfillPageAnchors` · `voPageForEvidence` ·
 `voPagesForEvidence` · `voDigitalForensicsScan` · `voExcludeTemplatePages` ·
 `voEnforceAnchorRule` · `voContentMass` · `VO_NEAR_EMPTY_CHARS` · `voCtById` ·
@@ -433,6 +459,10 @@ requires **≥ 2 runs, ≥ 3 pages each, and ≥ 50 % page coverage** before it 
 below that it returns nothing rather than guess. Titles come from each document's *own* first
 page (marker stripped, capped at 58 characters). `runForensicEngine` attaches the result to
 its output as `documentMap`.
+
+**`voDetectSwornPages(textBlocks)`** returns the 1-based pages carrying oath language (guards in
+§4.18). `runForensicEngine` attaches the list to its output as `swornPages` and sets
+`swornContext = true` on any finding whose anchor page is in it.
 
 ### `forensic-report.js` (`window.VerumReport`)
 `build` · **`buildNarrative`** · `seal` — plus test seams: `_sanitize` `_cleanQuote`
@@ -490,7 +520,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**27 suites · 1268 assertions.** `tests/run-all.js` is the registry — a new
+**27 suites · 1306 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -500,12 +530,12 @@ test file that is not registered there does not run.
 | `page-boot.test.mjs` | 100 | The seal page still boots when a library is missing |
 | `detector-recall.test.mjs` | 93 | Recall + the §4 false-positive guards, pinned to real bundle strings |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
-| `worker.test.mjs` | 65 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract |
+| `worker.test.mjs` | 72 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions) |
 | `greensky-regression.test.js` | 55 | The Greensky bundle: D01 conduct admission (§4.11) and `voDetectDocuments` (§4.15) |
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
-| `allfuels-regression.test.js` | 36 | The AllFuels bundle, end to end |
-| `crop-normalize.test.mjs` | 31 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering** and ZIP validity/determinism |
+| `allfuels-regression.test.js` | 58 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
+| `crop-normalize.test.mjs` | 40 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, and the **seal-certificate privacy boundary** (§12.6) |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.mjs` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
 | `digital-forensics.test.mjs` / `findings-json.test.mjs` / `narrate-excerpt.test.mjs` | 16 each | PDF structure · JSON contract v1.1.0 · AI excerpt building |
@@ -605,3 +635,22 @@ reported. `tests/worker.test.mjs` pins the range against the engine's `CT_COUNT`
 `build` **and** `buildNarrative` both need `unreadPages`, `gps`, `aiNarrative` and
 `aiNarrativeSource`. Passing them to only one produces a narrative PDF that quietly omits the
 unread-page disclosure and the GPS home jurisdiction.
+
+### 12.6 The Seal Certificate never carries identity by default
+
+The one-page Seal Certificate once printed the sealer's name, ID number, residential address,
+email, device fingerprint and a GPS fix to six decimal places. It was designed as the user's
+private copy — but **certificates travel**: they get filed in shared evidence folders next to
+the sealed document, and in a live matter every recipient of a distributed folder could read
+the block while the sealer was in hiding from some of them.
+
+Now two variants exist. The **default (shareable) certificate carries no identity, no GPS, no
+device** — in their place a note that sender identity was recorded and is held privately by the
+sealer. A **PRIVATE variant** carries the full block and downloads as
+`*-seal-certificate-PRIVATE-do-not-share.pdf`. Two independent latches enforce it: the
+shareable build passes no identity options at all, **and** `buildSealCertificate` renders the
+block only when `opts.includePrivate` is true — so one future call-site mistake cannot leak an
+address into a distributed certificate. The share bundle (`_voShareFiles`) never includes either
+certificate. The QR payload was always identity-free by default; the forensic report reduces GPS
+to a country-level jurisdiction and never prints coordinates.
+**Tests:** `crop-normalize.test.mjs` (nine assertions).

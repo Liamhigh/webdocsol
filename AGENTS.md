@@ -30,12 +30,31 @@ directory, and what each one does.
 - Static site + Cloudflare Worker (`worker/verum-rules.js`). No servers, no database, no build step.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **27 suites, 1268 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **27 suites, 1306 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
 
-## The five things most likely to be regressed
+## The stakes — read this before anything else
+
+**The platform's output is now evidence in live proceedings.** Sealed documents and forensic
+reports produced by this code sit in the record of the Constitutional Court of South Africa
+(rescission, CCT237/20 & CCT19/20), the KwaZulu-Natal High Court (2026-179949), SAPS and Hawks
+dockets, and served evidence schedules whose SHA-512 values opposing senior counsel have been
+invited to verify. That means:
+
+- **A regression is not a bug — it is a discrepancy an opposing expert can put to a judge.**
+  Determinism (same input → same findings, forever) has been demonstrated in the field and is
+  now part of the platform's credibility in court. Any change that could make two runs differ
+  is a constitutional breach, not a refactor.
+- **The honesty locks are load-bearing.** The §15.2 language gate, the institutional-engagement
+  clause, the never-write list below — these exist because overstated claims were found and
+  corrected in served documents. Weakening one re-introduces a claim the founder has already
+  had to retract.
+- **The sealing flow is used by a person whose safety depends on it behaving as documented** —
+  see the certificate privacy latch (item 6 below).
+
+## The seven things most likely to be regressed
 
 Each was a real failure the founder reported. Read `ENGINE.md` before touching any of them.
 
@@ -54,6 +73,16 @@ Each was a real failure the founder reported. Read `ENGINE.md` before touching a
    files save as ONE store-only ZIP. Reversing the order kills the share sheet on Samsung
    Internet; separate downloads trip the incognito multiple-download prompt
    (`ENGINE.md` §12.3).
+6. **Certificate privacy** — the default Seal Certificate carries NO identity, address, GPS or
+   device; only the separate `-PRIVATE-do-not-share` variant does, and `buildSealCertificate`
+   renders the identity block only when `opts.includePrivate` is true (`ENGINE.md` §12.6).
+   Re-merging the two variants, or passing identity opts to the shareable build, hands the
+   sealer's home address to every recipient of a distributed evidence folder.
+7. **Oath context stays factual** — `voDetectSwornPages` measures oath language; findings gain
+   `swornContext` and the report states the fact plus candidate law. The word "perjury" appears
+   in the report ONLY inside candidate-law lines and in engine output NOT AT ALL — both
+   test-locked (`ENGINE.md` §4.18). Do not "improve" this into a perjury flag; the founder's
+   ruling is explicit: a forensic engine states facts, verdicts belong to the court.
 
 ### Founder rulings (2026-08-14, Constitution v8.0 VO-9A4F3C5E825C)
 
