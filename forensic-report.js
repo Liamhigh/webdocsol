@@ -625,6 +625,21 @@ function pageNumbers(location) {
   }
   return out;
 }
+// OCR provenance (PD6): does this finding's location touch a page whose text
+// was machine-recovered by OCR rather than read from a native text layer? A
+// quote that came through OCR can carry character-level misreads, so the
+// report says so on the finding and tells the reader to verify the wording
+// against the page image. This is disclosure of how the text was obtained —
+// never a confidence score (PD1 bars those from anything a reader sees).
+function ocrTouched(location, ocrPages) {
+  if (!ocrPages || !ocrPages.length) return false;
+  var pp = pageNumbers(location);
+  for (var i = 0; i < pp.length; i++) {
+    if (ocrPages.indexOf(pp[i]) !== -1) return true;
+  }
+  return false;
+}
+
 // A finding the engine demoted because the analysed file is a compiled bundle
 // of many documents (repeated page numbers, annexures living elsewhere in the
 // file, mixed earlier/later language). These are expected housekeeping notes
@@ -2197,6 +2212,9 @@ function secFindingDetails(ctx, data) {
     if (f.swornContext) {
       factLines.push('Oath context: oath language (affidavit / commissioner-of-oaths formulae) appears on the cited page(s). What a false statement under oath constitutes is reserved to the court.');
     }
+    if (ocrTouched(f.location, data.ocrPages)) {
+      factLines.push('OCR provenance: the text on the cited page(s) was recovered by optical character recognition from a scanned image, not read from a native text layer. Verify the quoted wording against the original page image before relying on exact characters or figures.');
+    }
     for (var k = 0; k < factLines.length; k++) ctx.para(factLines[k], { size: 9, color: NAVY2, after: 1 });
     // Provision the DOCUMENT ITSELF cites (cite-or-stay-silent), distinct from
     // the candidate statutes for counsel further down: this is the clause on the
@@ -3423,7 +3441,17 @@ function secUnreadPages(ctx, data) {
     var notes = String(data.extractionNotes || '');
     var mUn = notes.match(/[^.]*(?:remain unread|no legible text|could not be rendered|exceeded the OCR cap)[^.]*\./g);
     if (mUn) noteBits = mUn;
-    if (!noteBits.length) return; // every page was read — nothing to disclose
+    if (!noteBits.length) {
+      // Every page was read — but some may have been read through OCR, and
+      // that provenance must still be disclosed (PD6).
+      if (data.ocrPages && data.ocrPages.length) {
+        ctx.newBodyPage();
+        ctx.heading('PAGES THE ENGINE COULD NOT READ', { label: 'PAGES THE ENGINE COULD NOT READ' });
+        ctx.para('Every page of this bundle was read.', { size: 10.5, after: 6 });
+        secOcrProvenance(ctx, data);
+      }
+      return;
+    }
   }
 
   ctx.newBodyPage();
@@ -3440,6 +3468,24 @@ function secUnreadPages(ctx, data) {
   ctx.gap(2);
   ctx.para('These pages MUST be reviewed by a human.', { size: 11, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   ctx.para('No finding in this report comes from an unread page, and the absence of a finding on an unread page means nothing — the page may hold material evidence (a contract, a schedule, an annexure) that this analysis never saw. Have the listed pages read by a person, or re-scanned at higher quality / transcribed and sealed again, before any conclusion about them is drawn.', { size: 10, after: 6 });
+  secOcrProvenance(ctx, data);
+}
+
+// PD6 disclosure, second half: pages that WERE read, but through OCR. These
+// are not unread — the engine analysed their recovered text — yet the reader
+// must know the characters were machine-recovered: OCR can mis-read letters
+// and digits, and a quoted figure from such a page should be checked against
+// the page image before its exact characters are relied on. Findings anchored
+// on these pages additionally carry an OCR-provenance line in FINDINGS IN
+// DETAIL. No per-word confidence is printed: a confidence score is exactly
+// the probability language PD1 bars from a reader-facing page — the honest
+// disclosure is HOW the text was obtained and WHERE to verify it.
+function secOcrProvenance(ctx, data) {
+  var ocr = data.ocrPages || [];
+  if (!ocr.length) return;
+  ctx.gap(4);
+  ctx.para('PAGES READ THROUGH OCR', { size: 11, font: ctx.f.timesBold, color: NAVY2, after: 4 });
+  ctx.para('Page' + (ocr.length === 1 ? '' : 's') + ' ' + pageRanges(ocr) + ' (' + ocr.length + ' page' + (ocr.length === 1 ? '' : 's') + ') carried no machine-readable text layer; the text analysed was recovered on-device by optical character recognition (tesseract.js). These pages WERE analysed, and any finding anchored on them says so in FINDINGS IN DETAIL. Exact wording and figures quoted from these pages should be verified against the original page images: OCR can mis-read characters, and the sealed original — not the recovered text — is the evidence.', { size: 10, after: 6 });
 }
 
 // ================= SECTION: AI REVIEW (optional cloud layer) =================
@@ -3570,6 +3616,7 @@ async function build(opts) {
     classification: opts.classification || null,
     serialLabels: opts.serialLabels || null,
     unreadPages: opts.unreadPages || null,
+    ocrPages: opts.ocrPages || null,
     gps: opts.gps || null
   };
 
@@ -3862,6 +3909,7 @@ async function buildNarrative(opts) {
     classification: opts.classification || null,
     serialLabels: opts.serialLabels || null,
     unreadPages: opts.unreadPages || null,
+    ocrPages: opts.ocrPages || null,
     gps: opts.gps || null
   };
 
@@ -3902,7 +3950,7 @@ var api = { build: build, buildNarrative: buildNarrative, seal: seal, _sanitize:
   _narrativeBlocks: narrativeBlocks, _pageRanges: pageRanges,
   _fmtLocation: fmtLocation, _pageNumbers: pageNumbers, _scrubNarrative: scrubNarrative,
   _contradictionSides: contradictionSides, _establishesOf: establishesOf,
-  _docsForLocation: docsForLocation, _crossDocNote: crossDocNote,
+  _docsForLocation: docsForLocation, _crossDocNote: crossDocNote, _ocrTouched: ocrTouched,
   _documentParties: documentParties, _effectiveParties: effectiveParties,
   _effectivePartiesWithRoles: effectivePartiesWithRoles,
   _splitSentences: splitSentences,

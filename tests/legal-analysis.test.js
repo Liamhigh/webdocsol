@@ -584,6 +584,33 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'it renders between the executive summary and the short version');
 }
 
+// ---- OCR provenance (PD6): findings on machine-recovered pages say so ----
+// External review of the ritzadvocat report identified the gap: the report
+// said OCR ran on page 20 but no finding disclosed whether it depended on
+// OCR-recovered text. The fix is provenance, not confidence scores - a
+// percentage would be exactly the probability language PD1 bars.
+{
+  const t = R._ocrTouched;
+  ok(typeof t === 'function', '_ocrTouched is exported for tests');
+  ok(t('Page 20', [20]) === true, 'a finding on an OCR page is marked');
+  ok(t('Pages 19 and 20', [20]) === true, 'plural locations intersect the OCR list');
+  ok(t('Page 21', [20]) === false, 'a finding on a native-text page is not marked');
+  ok(t('Page 20', []) === false && t('Page 20', null) === false, 'no OCR pages, no marks');
+  ok(t('Metadata', [20]) === false, 'a structural location without pages is never marked');
+
+  const srcOcr = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
+  ok(/OCR provenance: the text on the cited page\(s\) was recovered by optical character recognition/.test(srcOcr),
+    'FINDINGS IN DETAIL carries the per-finding OCR provenance line');
+  ok(/PAGES READ THROUGH OCR/.test(srcOcr), 'the disclosure section names the OCR-read pages');
+  ok(/No per-word confidence is printed/.test(srcOcr),
+    'the section documents WHY no confidence score is shown (PD1)');
+  const htmlOcr = require('fs').readFileSync(require('path').join(__dirname, '..', 'seal-document.html'), 'utf8');
+  ok(/_voOcrRescuedPages = rescued\.slice\(\)/.test(htmlOcr),
+    'the host page records which pages OCR recovered');
+  ok((htmlOcr.match(/ocrPages: _voOcrRescuedPages,/g) || []).length === 2,
+    'ocrPages reaches BOTH build and buildNarrative (rule 12.5)');
+}
+
 console.log(`\n[legal-analysis] PASS=${pass} FAIL=${fail}`);
 console.log(`[legal-analysis] ${fail === 0 ? 'ALL GREEN' : 'FAILURES'}`);
 process.exit(fail === 0 ? 0 : 1);

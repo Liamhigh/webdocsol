@@ -30,6 +30,7 @@ these reappears, the guard was weakened — find out how before changing anythin
 | **A heading numbered 9 has sub-clauses numbered 10.1** goes unreported | D37's clause-numbering check weakened | forward jump of 1–3, no intervening heading, first sub-clause only. `ENGINE.md` §4.17 |
 | **"Perjury" appears in a sealed report as a finding** | someone "improved" oath context into a flag | the word is allowed only in candidate-law lines; engine output never contains it. Test-locked. `ENGINE.md` §4.18 |
 | **An index line "Supplementary Affidavit, 9pp" is tagged as sworn** | weak oath markers accepted singly | one weak marker never tags; two distinct weak markers or one strong execution formula required. `ENGINE.md` §4.18 |
+| **A finding quotes an OCR-recovered page with no provenance note** | `ocrPages` not passed, or the `_ocrTouched` check removed | the host records `_voOcrRescuedPages`, passes `ocrPages` to BOTH builders, and FINDINGS IN DETAIL marks affected findings. PD6. |
 
 ---
 
