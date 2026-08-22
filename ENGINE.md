@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1374 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1410 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -520,7 +520,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**27 suites · 1374 assertions.** `tests/run-all.js` is the registry — a new
+**27 suites · 1410 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -530,12 +530,12 @@ test file that is not registered there does not run.
 | `page-boot.test.mjs` | 100 | The seal page still boots when a library is missing |
 | `detector-recall.test.mjs` | 107 | Recall + the §4 false-positive guards, pinned to real bundle strings |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
-| `worker.test.mjs` | 72 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions) |
+| `worker.test.mjs` | 94 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock) |
 | `greensky-regression.test.js` | 55 | The Greensky bundle: D01 conduct admission (§4.11) and `voDetectDocuments` (§4.15) |
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `crop-normalize.test.mjs` | 44 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, and the **seal-certificate privacy boundary** (§12.6) |
+| `crop-normalize.test.mjs` | 89 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.mjs` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
 | `digital-forensics.test.mjs` / `findings-json.test.mjs` / `narrate-excerpt.test.mjs` | 16 each | PDF structure · JSON contract v1.1.0 · AI excerpt building |
@@ -657,8 +657,7 @@ Mixing audio and PDFs in one seal is refused with an explanation (a PDF bundle m
 document; audio seals as N individual files). The certificate privacy latch (§12.6) carries
 over: identity/GPS/device appear only in PRIVATE certificates, delivered in a separate ZIP
 named `-do-not-share`. The UI states the evidentiary rule in terms: *a transcript is not
-evidence — the sealed audio is*. Transcription (the audio analogue of OCR, with the same
-provenance discipline as §4.18/§12.5's OCR rules) is a future layer, not part of sealing.
+evidence — the sealed audio is*.
 
 A batch may carry companions: **one WhatsApp chat export (.txt)** and up to ten **screenshots**
 (.png/.jpg). They feed the **Voice-Note Evidence Report** (`buildVoiceNoteReport`) — one PDF,
@@ -666,12 +665,28 @@ sealed through `VerumReport.seal`, recording per note the fingerprint, seal ID, 
 file details, best-effort duration ("not determined on this device" when the browser cannot
 decode the codec), and the chat-export line referencing the file, **quoted verbatim**
 (`voManifestLineFor` / `voParseWaLine` handle Android and iOS export formats). Hard rules the
-report states in its own text, all test-pinned: **no transcription; nothing identifies who is
-speaking** (voice attribution is for a witness or the court); **sender labels come from the
-chat export, never the audio** (an audio file carries no sender identity); a recording the
-export never mentions is disclosed as unreferenced, not attributed; screenshots are exhibits
-whose pairing with any recording is left to the reader.
-**Tests:** `crop-normalize.test.mjs`.
+report states in its own text, all test-pinned: **no transcription unless the sealer opts in
+(below); nothing identifies who is speaking** (voice attribution is for a witness or the
+court); **sender labels come from the chat export, never the audio** (an audio file carries no
+sender identity); a recording the export never mentions is disclosed as unreferenced, not
+attributed; screenshots are exhibits whose pairing with any recording is left to the reader.
+
+**Transcription is the audio analogue of OCR** (§4.18/§12.5 provenance discipline) and is the
+ONE step where audio leaves the device, so it is **opt-in behind a consent checkbox, default
+off**, whose copy says exactly that ("the audio leaves this device for that step… Leave
+unticked for privileged or sensitive recordings"). The pass runs **after every recording is
+sealed** and indexes `reportItems[ti].file` — never the raw selection, because `reportItems`
+only holds files that sealed, and indexing the selection shifts every transcript after a
+failed seal onto the wrong recording. The Worker endpoint `/api/v1/ai/transcribe`
+(`handleAiTranscribe`, Workers AI Whisper, 8 MB base64 cap, nothing stored) answers with
+`machineGenerated:true`, the model name and a reading-aid disclaimer on every success — the
+client accepts a transcript **only** when `machineGenerated === true`. In the report each
+transcript renders under a **"MACHINE TRANSCRIPT — reading aid, not evidence"** banner with
+the verify-against-the-sealed-audio disclaimer; the intro is conditional and honest: with
+transcripts it **discloses** them ("At the sealer's explicit request…"), without them the
+no-transcription sentence stands. Every failure (oversize, service down, model error) writes a
+per-note "the sealed audio is unaffected" line and **never blocks sealing or the report**.
+**Tests:** `crop-normalize.test.mjs`, `worker.test.mjs`.
 
 ### 12.6 The Seal Certificate never carries identity by default
 

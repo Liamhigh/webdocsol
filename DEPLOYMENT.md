@@ -172,6 +172,7 @@ POST /api/v1/ai/narrate      — Generate AI narrative (optional)
 POST /api/v1/ai/assess       — AI review findings (optional)
 POST /api/v1/ai/classify     — Document classification (optional)
 POST /api/v1/feedback/patterns — Anonymous pattern feedback
+POST /api/v1/ai/transcribe   — Opt-in voice-note transcription (machine reading aid, never evidence)
 ```
 
 ## Environment Variables
@@ -299,7 +300,7 @@ A pull request runs three checks — **Sourcery review**, **Workers Builds: webd
 `get_check_runs`); merging red ships red. `wrangler deploy` by hand is the fallback for when
 Workers Builds is unavailable, not the normal path.
 
-**Because merge = publish:** run `node tests/run-all.js` (27 suites, 1374 assertions) and
+**Because merge = publish:** run `node tests/run-all.js` (27 suites, 1410 assertions) and
 re-splice the inline copies into `seal-document.html` **before** the PR, not after. A merged
 regression is live within a minute.
 

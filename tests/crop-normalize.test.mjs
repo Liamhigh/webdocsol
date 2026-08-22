@@ -250,6 +250,56 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
     'an unreferenced recording is disclosed as such, never attributed');
 }
 
+// ---- Opt-in transcription (piece 3): consent, ordering, honesty ----
+// Sealing is entirely local; transcription is the ONE step where audio leaves
+// the device, so it is opt-in (default off), runs only AFTER every recording
+// is sealed, and its output is rendered as a machine reading aid — never
+// evidence. A transcription failure must never block a seal.
+{
+  const batch = html.slice(html.indexOf('async function voSealAudioBatch'), html.indexOf('async function startSealing'));
+
+  // Consent: checkbox exists, default off, and the copy is honest about the
+  // one thing that matters — the audio leaves the device for this step.
+  ok(/id="voTranscribeOptIn"/.test(html), 'the transcription consent checkbox exists');
+  ok(/Transcribe recordings \(optional, off by default\)/.test(html),
+    'the consent copy says it is optional and off by default');
+  ok(/the audio leaves this device for that step/.test(html),
+    'the consent copy states the audio leaves the device');
+  ok(/reading aids, not evidence — the sealed audio is/.test(html),
+    'the consent copy states the evidentiary rule');
+  ok(/Leave unticked for privileged or sensitive recordings/.test(html),
+    'the consent copy warns about privileged recordings');
+
+  // Ordering: the opt-in pass sits AFTER the seal loop and BEFORE the report
+  // build, so the evidence is anchored whether or not transcription works.
+  const iSeal = batch.indexOf('reportItems.push(');
+  const iGate = batch.indexOf('tcOpt && tcOpt.checked');
+  const iReport = batch.indexOf('buildVoiceNoteReport(');
+  ok(iSeal > 0 && iGate > iSeal && iReport > iGate,
+    'transcription runs after sealing and before the report is built');
+  ok(/reportItems\[ti\]\.file/.test(batch) && !/files\[ti\]/.test(batch),
+    'the pass indexes the SEALED items, never the raw selection (a failed seal must not shift transcripts onto the wrong recording)');
+  ok(/tJson\.machineGenerated === true/.test(batch),
+    'a transcript is accepted only when the server marks it machine-generated');
+  ok(/tf\.size > 6 \* 1024 \* 1024/.test(batch), 'oversized recordings are skipped client-side');
+  ok(/transcription unavailable/.test(batch) && /transcription failed/.test(batch)
+    && (batch.match(/the sealed audio is unaffected/g) || []).length >= 2,
+    'every failure path records a note saying the sealed audio is unaffected');
+
+  // Report honesty: with transcripts the intro DISCLOSES them; without, the
+  // no-transcription sentence stands. Both branches must exist.
+  // NB: raw page source, so the apostrophe is backslash-escaped there.
+  ok(/At the sealer\\?'s explicit request, machine transcripts are included below/.test(html),
+    'when transcripts are present the intro discloses them');
+  ok(/This report contains no transcription of any recording/.test(html),
+    'without transcripts the no-transcription statement stands');
+  ok(/MACHINE TRANSCRIPT — reading aid, not evidence/.test(html),
+    'each transcript renders under the machine-transcript banner');
+  ok(/verify every quoted word against the sealed audio/.test(html)
+    && /Nothing in this transcript identifies who is speaking/.test(html),
+    'the per-transcript disclaimer names the sealed audio as the evidence and refuses speaker attribution');
+}
+
 console.log(`\n[crop-normalize] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[crop-normalize] FAILURES'); process.exit(1); }
 console.log('[crop-normalize] ALL GREEN');
