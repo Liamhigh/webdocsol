@@ -76,7 +76,7 @@ Other worker files: `rule-format.md` (wire format for rule packages) · `public-
 | `vendor/` | Pinned third-party libraries: `pdf.min.js` + worker (pdf.js), `pdf-lib.min.js`, `qrcode.min.js`, Tesseract OCR core/worker + `eng.traineddata.gz`. **Vendored deliberately** — the app must work offline and must not depend on a CDN. |
 | `seal-module/` | The portable sealing spec (`SPEC.md`) and per-surface implementations (`web`, `android`, `firewall`) so a seal produced anywhere verifies everywhere. |
 | `images/` | Logos and the watermark used in sealed PDFs. |
-| `tests/` | **27 suites, 1343 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
+| `tests/` | **27 suites, 1362 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
 
 **Root PDFs:** `Verum-Omnis-Briefing.pdf` is the public briefing for law enforcement and
 attorneys (what the platform does, how the sealing service is used, why the record cannot be

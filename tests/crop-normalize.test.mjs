@@ -177,6 +177,41 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
     'the download area shows a visible warning when the private certificate is missing');
 }
 
+// ---- Voice-note / audio as-is sealing ----
+// WhatsApp voice notes (.opus and friends) are sealed AS-IS, individually:
+// the audio bytes are never modified — the certificate and .ots receipt
+// carry the seal record. The privacy latch carries over: shareable artifacts
+// never hold identity; PRIVATE certificates land in their own ZIP.
+{
+  ok(/accept="\.pdf,application\/pdf,\.opus/.test(html),
+    'the uploader accepts audio files alongside PDFs');
+  const reM = html.match(/var VO_AUDIO_RE = (\/[^\n]+\/i);/);
+  ok(!!reM, 'VO_AUDIO_RE is defined');
+  const audioRe = eval(reM[1]);
+  for (const n of ['PTT-20250406-WA0012.opus', 'note.m4a', 'clip.mp3', 'voice.amr', 'x.ogg'])
+    ok(audioRe.test(n), 'audio extension recognised: ' + n);
+  for (const n of ['doc.pdf', 'evidence.txt', 'photo.jpg', 'opus.pdf'])
+    ok(!audioRe.test(n), 'non-audio not misrouted: ' + n);
+
+  ok(/Seal documents and voice notes separately/.test(html),
+    'mixing audio and PDFs in one seal is refused with an explanation');
+  ok(/VO_AUDIO_MAX_FILES = 10/.test(html), 'audio batch is capped at 10 files');
+  ok(/voSealAudioBatch/.test(html) && /if \(selectedAudioFiles\.length\) \{ return voSealAudioBatch\(\); \}/.test(html),
+    'the seal button routes audio selections to the batch sealer');
+
+  const batch = html.slice(html.indexOf('async function voSealAudioBatch'), html.indexOf('async function startSealing'));
+  ok(batch.length > 0 && !/PDFDocument\.load\(bytes\)/.test(batch),
+    'audio bytes are never passed through the PDF pipeline (sealed as-is)');
+  ok(/shareEntries\.push\(\{ name: f\.name, bytes: bytes \}\)/.test(batch),
+    'the ORIGINAL audio bytes go into the shareable ZIP unmodified');
+  ok(/includePrivate: true/.test(batch) && /voice-notes-PRIVATE-certificates-do-not-share\.zip/.test(html),
+    'identity lands only in the PRIVATE certificate ZIP, never the shareable one');
+  ok(!/privEntries\.push\(\{ name: f\.name/.test(batch),
+    'audio itself is never duplicated into the private ZIP');
+  ok(/A transcript is not evidence — the sealed audio is/.test(html),
+    'the UI states the evidentiary rule: the audio, not any transcript, is the evidence');
+}
+
 console.log(`\n[crop-normalize] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[crop-normalize] FAILURES'); process.exit(1); }
 console.log('[crop-normalize] ALL GREEN');
