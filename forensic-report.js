@@ -3050,6 +3050,13 @@ function samePartyName(a, b) {
   b = String(b || '').toLowerCase().replace(/[.,]/g, ' ').replace(/\s+/g, ' ').trim();
   if (!a || !b) return false;
   if (a.indexOf(b) === 0 || b.indexOf(a) === 0) return true;
+  // OCR splits one name into two words — the 4-doc bundle's index listed
+  // "CAL TEX" and "CALTEX" as separate parties on the report's front page.
+  // Compare letters-and-digits only, with the same prefix rule as above, so
+  // spacing the OCR invented cannot double a party. (This is no more
+  // permissive than the existing prefix rule — it only ignores whitespace.)
+  var ac = a.replace(/[^a-z0-9]/g, ''), bc = b.replace(/[^a-z0-9]/g, '');
+  if (ac && bc && (ac.indexOf(bc) === 0 || bc.indexOf(ac) === 0)) return true;
   var at = a.split(' '), bt = b.split(' ');
   if (at[at.length - 1] !== bt[bt.length - 1]) return false;
   return at[0].charAt(0) === bt[0].charAt(0);
@@ -3953,7 +3960,7 @@ var api = { build: build, buildNarrative: buildNarrative, seal: seal, _sanitize:
   _docsForLocation: docsForLocation, _crossDocNote: crossDocNote, _ocrTouched: ocrTouched,
   _documentParties: documentParties, _effectiveParties: effectiveParties,
   _effectivePartiesWithRoles: effectivePartiesWithRoles,
-  _splitSentences: splitSentences,
+  _splitSentences: splitSentences, _samePartyName: samePartyName,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;

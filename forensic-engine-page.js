@@ -3045,6 +3045,10 @@ var VO_NON_PERSON_TOK = (function () {
     // AllFuels run: 'Cnr' (corner, address furniture) and 'Dispossession'
     // (heading language) were bound into party names.
     'cnr dispossession ' +
+    // 4-doc bundle run (22 Aug 2026): 'Particular Terms' — a contract heading —
+    // was listed as a party in the sealed report's front page. 'Terms' and
+    // 'Particular' are contract furniture, never surnames.
+    'terms particular ' +
     // From the 3 Aug Greensky rerun: hash fragments ('BCFF SHA-', 'EC SHA-'),
     // 'Evidence Analyzed', and the SAPS case-number label ('SAPS CAS') were
     // bound as parties. 'Cas' can be a given name; safe direction is exclusion.

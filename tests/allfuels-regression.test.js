@@ -104,7 +104,9 @@ const E = require('../forensic-engine-page.js');
 
 // ---- 3. party-index garbage from this run ----
 {
-  const no = ['Port Edward', 'Cnr R', 'Desmond Smith’s Dispossession'];
+  // 'Particular Terms' — a contract heading listed as a party on the 4-doc
+  // bundle report's front page (22 Aug 2026).
+  const no = ['Port Edward', 'Cnr R', 'Desmond Smith’s Dispossession', 'Particular Terms'];
   for (const n of no) ok(!E.voLooksLikePerson(n), 'voLooksLikePerson rejects "' + n + '"');
   const yes = ['Gary Highcock', 'Bright Idea Projects', 'Palmbili Properties'];
   for (const n of yes) ok(E.voLooksLikePerson(n), 'voLooksLikePerson accepts "' + n + '"');
