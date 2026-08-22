@@ -219,6 +219,53 @@ const E = require('../forensic-engine-page.js');
     'no false-positive on "admits no liability" boilerplate');
 }
 
+// ---- 5b. voDetectSwornPages — oath context is measured, never inferred ----
+// A contradiction anchored inside an affidavit is a materially different fact
+// from one in correspondence. The engine records only the measurement (oath
+// language on the page); classifying a statement as sworn testimony, or naming
+// the offence a false one would constitute, stays with the court. Strings are
+// drawn from the real declarations in this matter (sworn 6 Aug 2026 before a
+// Commissioner of Oaths, SAPS Margate).
+{
+  const sworn = E.voDetectSwornPages([
+    'I, the undersigned, LIAM ANTHONY HIGHCOCK, do hereby make oath and say that the facts herein are true and correct.',
+    'The fee payable to All Fuels by the Operator in respect of the site shall be the sum of Three Million Eight Hundred Thousand Rand.',
+    'SIGNED and SWORN to before me at MARGATE on this 6th day of August 2026, COMMISSIONER OF OATHS, South African Police Service.',
+    'The deponent states under oath that the invoice was issued on 8 March.',
+    'Please see the affidavit of Clayton Bester for the history of the Hammarsdale site.',
+    'SKM_C550i26071813441 — Supplementary Affidavit, CCT, 9pp'
+  ]);
+  ok(sworn.includes(1), 'a first-person oath formula ("make oath and say") tags the page');
+  ok(sworn.includes(3), 'a commissioner-of-oaths execution block tags the page');
+  ok(sworn.includes(4), 'two distinct weak markers (deponent + under oath) tag the page');
+  ok(!sworn.includes(2), 'contract prose is never tagged');
+  ok(!sworn.includes(5), 'a page merely REFERRING to an affidavit is not tagged (one weak marker)');
+  ok(!sworn.includes(6), 'an index line naming an affidavit is not tagged');
+  ok(E.voDetectSwornPages([]).length === 0 && E.voDetectSwornPages(null).length === 0,
+    'empty and null inputs return no pages');
+}
+
+// ---- 5c. Oath context stays factual in both source files ----
+// The word "perjury" may appear ONLY as candidate law in the report (PD16's
+// sanctioned exception) and never in engine output at all.
+{
+  const fs2 = require('fs'), path2 = require('path');
+  const engSrc = fs2.readFileSync(path2.join(__dirname, '..', 'forensic-engine-page.js'), 'utf8');
+  const repSrc = fs2.readFileSync(path2.join(__dirname, '..', 'forensic-report.js'), 'utf8');
+  const engEvidence = engSrc.split('\n').filter(l => /evidence:\s*'/.test(l) && !/^\s*\/\//.test(l));
+  ok(!engEvidence.some(l => /perjur/i.test(l)), 'no engine evidence string contains "perjury"');
+  ok(/swornContext/.test(engSrc) && /voDetectSwornPages/.test(engSrc),
+    'the engine tags findings with swornContext from measured oath pages');
+  ok(/Oath context: oath language/.test(repSrc),
+    'the report states the oath-language fact, not a testimony classification');
+  ok(/Oath context: oath language[^']*reserved to the court/.test(repSrc),
+    'the oath-context line reserves the characterisation to the court');
+  const perjuryLines = repSrc.split('\n').filter(l => /perjur/i.test(l) && !/^\s*\/\//.test(l.trim()));
+  ok(perjuryLines.length > 0 && perjuryLines.every(l =>
+      /sworn-statement context|Common-law perjury|perjury \/ false testimony/.test(l)),
+    '"perjury" appears in the report only as candidate law (statute tables and the sworn-context bullet)');
+}
+
 // ---- 6. Constitution v8.0 §15.2 language lock (evidence strings) ----
 // Prohibited hedging ("may," "possibly," "appears to," "consistent with")
 // must not ship inside any evidence template the engine renders as a

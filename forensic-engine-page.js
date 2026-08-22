@@ -452,6 +452,62 @@ function voDetectDocuments(textBlocks) {
   return out;
 }
 
+// ===================== OATH-CONTEXT DETECTION =====================
+// Which pages carry the language of a sworn instrument? A contradiction whose
+// anchor page sits inside an affidavit is a materially different fact from one
+// in correspondence — the reader (and counsel) must know, because a false
+// statement under oath has its own legal character. The engine records ONLY
+// the measurement: oath language appears on the page. It never classifies a
+// statement as sworn testimony, and it never names the offence — "perjury" is
+// a verdict-adjacent word that appears nowhere in engine output (§15.2; the
+// report's candidate-law annex may cite statutes, which is PD16's one
+// sanctioned exception).
+//
+// Guards (precision over recall, as everywhere in this engine):
+//  - STRONG markers are execution formulae that essentially only occur inside
+//    a sworn instrument ("commissioner of oaths", "make oath and say", "sworn
+//    before me"). One suffices.
+//  - WEAK markers ("affidavit", "deponent", "under oath") also occur in pages
+//    that merely DISCUSS an affidavit — an index line reading "Supplementary
+//    Affidavit, 9pp" is not an oath. Two DISTINCT weak markers are required.
+//  - Body pages of a long affidavit may carry no markers at all and are not
+//    tagged: under-tagging is a gap, mis-tagging is a false statement of fact.
+var VO_OATH_STRONG = [
+  /commissioner\s+of\s+oaths/i,
+  /make[s]?\s+oath\s+and\s+(?:say|state)/i,
+  /solemnly\s+(?:and\s+sincerely\s+)?(?:declare|affirm)/i,
+  /depose[sd]?\s+and\s+(?:say|state)/i,
+  /duly\s+sworn/i,
+  /sworn\s+(?:to\s+)?before\s+me/i
+];
+var VO_OATH_WEAK = [
+  /\baffidavit\b/i,
+  /\bdeponent\b/i,
+  /\bunder\s+oath\b/i,
+  /\bi\s+make\s+oath\b/i
+];
+function voDetectSwornPages(textBlocks) {
+  var pages = [];
+  if (!textBlocks) return pages;
+  for (var p = 0; p < textBlocks.length; p++) {
+    var t = textBlocks[p] || '';
+    if (!t) continue;
+    var hit = false;
+    for (var s = 0; s < VO_OATH_STRONG.length; s++) {
+      if (VO_OATH_STRONG[s].test(t)) { hit = true; break; }
+    }
+    if (!hit) {
+      var weak = 0;
+      for (var w = 0; w < VO_OATH_WEAK.length; w++) {
+        if (VO_OATH_WEAK[w].test(t)) weak++;
+      }
+      hit = weak >= 2;
+    }
+    if (hit) pages.push(p + 1);
+  }
+  return pages;
+}
+
 var DETECTORS = {
 
   // D01-D05: Statemental detectors
@@ -3870,6 +3926,22 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   // one — WHICH provision. Runs on the kept, page-anchored findings only.
   voAnchorEnrich(allFindings, textBlocks);
 
+  // Oath-context tagging: where a finding's anchor page carries the language
+  // of a sworn instrument, record that FACT on the finding. The tag drives a
+  // context line and candidate-law entry in the report; it asserts nothing
+  // about the truth or falsity of anything sworn.
+  var swornPages = voDetectSwornPages(textBlocks);
+  if (swornPages.length) {
+    var swornSet = {};
+    for (var spx = 0; spx < swornPages.length; spx++) swornSet[swornPages[spx]] = true;
+    for (var sfx = 0; sfx < allFindings.length; sfx++) {
+      var sfw = (allFindings[sfx].anchor && allFindings[sfx].anchor.where) || [];
+      for (var sww = 0; sww < sfw.length; sww++) {
+        if (swornSet[sfw[sww]]) { allFindings[sfx].swornContext = true; break; }
+      }
+    }
+  }
+
   // Disclose the context notes (multi-jurisdiction, breadth) gathered earlier.
   if (_voContextNotes.length) {
     extractionNote += ' ' + _voContextNotes.join(' ');
@@ -3957,6 +4029,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     // whitelists fields) and is dropped after the narrate call.
     pageTexts: textBlocks,
     documentMap: voDetectDocuments(textBlocks),
+    swornPages: swornPages,
     timeline: voBuildTimeline(allFindings),
     personIndex: voBuildPersonIndex(allFindings),
     findingsByType: findingsByType,
@@ -4014,6 +4087,7 @@ if (typeof module !== 'undefined' && module.exports) {
     runForensicEngine: runForensicEngine,
     detectSerialPatterns: detectSerialPatterns,
     voDetectDocuments: voDetectDocuments,
+    voDetectSwornPages: voDetectSwornPages,
     voBackfillPageAnchors: voBackfillPageAnchors,
     voPageForEvidence: voPageForEvidence,
     voPagesForEvidence: voPagesForEvidence,
