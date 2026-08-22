@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1362 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1374 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -520,7 +520,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**27 suites · 1362 assertions.** `tests/run-all.js` is the registry — a new
+**27 suites · 1374 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -659,6 +659,18 @@ over: identity/GPS/device appear only in PRIVATE certificates, delivered in a se
 named `-do-not-share`. The UI states the evidentiary rule in terms: *a transcript is not
 evidence — the sealed audio is*. Transcription (the audio analogue of OCR, with the same
 provenance discipline as §4.18/§12.5's OCR rules) is a future layer, not part of sealing.
+
+A batch may carry companions: **one WhatsApp chat export (.txt)** and up to ten **screenshots**
+(.png/.jpg). They feed the **Voice-Note Evidence Report** (`buildVoiceNoteReport`) — one PDF,
+sealed through `VerumReport.seal`, recording per note the fingerprint, seal ID, device-reported
+file details, best-effort duration ("not determined on this device" when the browser cannot
+decode the codec), and the chat-export line referencing the file, **quoted verbatim**
+(`voManifestLineFor` / `voParseWaLine` handle Android and iOS export formats). Hard rules the
+report states in its own text, all test-pinned: **no transcription; nothing identifies who is
+speaking** (voice attribution is for a witness or the court); **sender labels come from the
+chat export, never the audio** (an audio file carries no sender identity); a recording the
+export never mentions is disclosed as unreferenced, not attributed; screenshots are exhibits
+whose pairing with any recording is left to the reader.
 **Tests:** `crop-normalize.test.mjs`.
 
 ### 12.6 The Seal Certificate never carries identity by default
