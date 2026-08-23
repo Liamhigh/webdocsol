@@ -286,6 +286,36 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
     && (batch.match(/the sealed audio is unaffected/g) || []).length >= 2,
     'every failure path records a note saying the sealed audio is unaffected');
 
+  // Mobile intake: the file picker filters to the accept list, so the chat
+  // export and screenshots MUST be listed or a phone user cannot select them
+  // at all (a real user could not add their screen grabs until this was
+  // fixed). Audio, PDFs, .txt and images all pass the filter.
+  const acceptM = html.match(/id="fileInput" accept="([^"]+)"/);
+  ok(!!acceptM, 'the uploader has an accept list');
+  for (const ext of ['.pdf', '.opus', '.txt', '.png', '.jpg', '.jpeg'])
+    ok(acceptM && acceptM[1].includes(ext), 'file picker admits ' + ext);
+
+  // Per-recording layout: the transcript comes first and the SENDING METADATA
+  // closes the block — the founder's spec is "the metadata at the end" of each
+  // transcript (sent-by/sent-at from the chat export).
+  const builder = html.slice(html.indexOf('async function buildVoiceNoteReport'), html.indexOf('async function voSealAudioBatch'));
+  ok(builder.indexOf('MACHINE TRANSCRIPT') > 0
+    && builder.indexOf('MACHINE TRANSCRIPT') < builder.indexOf('Chat-export line referencing this file'),
+    'sending metadata renders AFTER the transcript, closing each recording block');
+
+  // Filename-date fallback: WhatsApp names voice notes PTT-YYYYMMDD-WAnnnn;
+  // with no chat export that date is disclosed as a device-assigned file name,
+  // never as proof of sending time.
+  const ndSrc = html.match(/function voNameDate[\s\S]*?\n\}/);
+  ok(!!ndSrc, 'voNameDate exists');
+  const nd = new Function(ndSrc[0] + '\nreturn voNameDate;')();
+  ok(nd('PTT-20260822-WA0004.opus') === '2026-08-22', 'WhatsApp voice-note name yields its date');
+  ok(nd('AUD-20250406-WA0012.m4a') === '2025-04-06', 'AUD-prefixed name yields its date');
+  ok(nd('PTT-20261490-WA0001.opus') === null, 'an impossible month is rejected');
+  ok(nd('recording.opus') === null && nd('') === null, 'non-WhatsApp names yield nothing');
+  ok(/A file name is assigned by the device, not proof of sending time/.test(html),
+    'the filename date is disclosed as device-assigned, never as sending time');
+
   // Report honesty: with transcripts the intro DISCLOSES them; without, the
   // no-transcription sentence stands. Both branches must exist.
   // NB: raw page source, so the apostrophe is backslash-escaped there.
