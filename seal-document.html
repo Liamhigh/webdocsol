@@ -355,7 +355,7 @@
     <div class="icon">&#128196;</div>
     <h3>Upload PDF Document(s) — sealed as one</h3>
     <p>Drag and drop <strong>up to 10 PDFs</strong> here, or click to browse (hold Ctrl/Cmd to pick several). Multiple documents are <strong>merged and sealed as ONE</strong> — you get back a single sealed document and a single certificate, not one per file. Max 150MB total.</p>
-    <input type="file" id="fileInput" accept=".pdf,application/pdf,.opus,.ogg,.oga,.m4a,.aac,.mp3,.wav,.amr,.3gp,audio/*,.txt,text/plain,.png,.jpg,.jpeg,image/png,image/jpeg" multiple>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf,.opus,.ogg,.oga,.m4a,.aac,.mp3,.wav,.amr,.3gp,audio/*,.txt,text/plain,.png,.jpg,.jpeg,image/png,image/jpeg,.mp4,.mov,.m4v,.webm,.mkv,.avi,video/*" multiple>
   </div>
 
   <!-- File Info -->
@@ -10044,6 +10044,14 @@ var VO_AUDIO_RE = /\.(opus|ogg|oga|m4a|aac|mp3|wav|amr|3gp)$/i;
 function voIsAudioFile(f) {
   return VO_AUDIO_RE.test(f.name || '') || /^audio\//.test(f.type || '');
 }
+// Video evidence (WhatsApp videos, camera clips) joins the same as-is batch:
+// hashed, sealed and certified exactly like audio, never modified, never
+// transcribed. Audio naming wins for .3gp-style ambiguity.
+var VO_VIDEO_RE = /\.(mp4|mov|m4v|webm|mkv|avi)$/i;
+function voIsVideoFile(f) {
+  if (VO_AUDIO_RE.test(f.name || '')) return false;
+  return VO_VIDEO_RE.test(f.name || '') || /^video\//.test(f.type || '');
+}
 var selectedAudioFiles = [];
 var VO_AUDIO_MAX_FILES = 10;
 // Companions to a voice-note batch: ONE WhatsApp chat export (.txt) that ties
@@ -10104,7 +10112,7 @@ function voAddFiles(fileList) {
   var audioIn = [], pdfIn = [], txtIn = [], shotIn = [];
   for (var ai = 0; ai < fileList.length; ai++) {
     var fi = fileList[ai];
-    if (voIsAudioFile(fi)) audioIn.push(fi);
+    if (voIsAudioFile(fi) || voIsVideoFile(fi)) audioIn.push(fi);
     else if (/\.txt$/i.test(fi.name)) txtIn.push(fi);
     else if (VO_SCREENSHOT_RE.test(fi.name) || /^image\/(png|jpe?g)$/.test(fi.type)) shotIn.push(fi);
     else pdfIn.push(fi);
@@ -10120,6 +10128,7 @@ function voAddFiles(fileList) {
       var af = audioIn[au];
       if (selectedAudioFiles.some(function (x) { return x.name === af.name && x.size === af.size; })) continue;
       if (selectedAudioFiles.length >= VO_AUDIO_MAX_FILES) { alert('Up to ' + VO_AUDIO_MAX_FILES + ' voice notes per batch — seal the rest in a second batch.'); break; }
+      if (af.size > 200 * 1024 * 1024) { alert(af.name + ' is larger than 200 MB — seal it on its own through a desktop browser; the phone ZIP bundle cannot hold it.'); continue; }
       selectedAudioFiles.push(af);
     }
     if (txtIn.length) voManifestFile = txtIn[txtIn.length - 1]; // one manifest; latest wins
@@ -11389,7 +11398,7 @@ function voRenderAudioFiles() {
   info.classList.add('visible');
   document.getElementById('sealBtn').disabled = false;
   var total = selectedAudioFiles.reduce(function (s, x) { return s + x.size; }, 0);
-  document.getElementById('fileName').textContent = '🎤 ' + selectedAudioFiles.length + ' voice note' + (selectedAudioFiles.length === 1 ? '' : 's') + ' — each sealed as-is with its own certificate';
+  document.getElementById('fileName').textContent = '🎤 ' + selectedAudioFiles.length + ' recording' + (selectedAudioFiles.length === 1 ? '' : 's') + ' — each sealed as-is with its own certificate';
   document.getElementById('fileSize').textContent = (total / 1024 / 1024).toFixed(2) + ' MB total';
   var rows = selectedAudioFiles.map(function (f, i) {
     return '<div style="display:flex;justify-content:space-between;gap:12px;padding:3px 0;">' +
@@ -11457,7 +11466,22 @@ async function buildVoiceNoteReport(items, manifest, shots, generatedAt) {
   var GOLD = PDFLib.rgb(0xD4 / 255, 0xA8 / 255, 0x43 / 255);
   var GRAY = PDFLib.rgb(0.35, 0.4, 0.45);
   var PW = 595.28, PH = 841.89, MARGIN = 60, y, page;
-  function newPage() { page = doc.addPage([PW, PH]); y = PH - MARGIN; }
+  // The globe watermark is part of the sealed look on every Verum report;
+  // its absence reads as an unofficial document. Drawn first so all text
+  // sits above it. A failed fetch never blocks the report.
+  var wmImg = null;
+  try {
+    var wmB = await voEnsureWatermark();
+    if (wmB) wmImg = await doc.embedPng(wmB);
+  } catch (eWm) { wmImg = null; }
+  function newPage() {
+    page = doc.addPage([PW, PH]);
+    if (wmImg) {
+      var wmS = Math.min((PW * 0.72) / wmImg.width, (PH * 0.72) / wmImg.height);
+      page.drawImage(wmImg, { x: (PW - wmImg.width * wmS) / 2, y: (PH - wmImg.height * wmS) / 2 - 10, width: wmImg.width * wmS, height: wmImg.height * wmS, opacity: 0.15 });
+    }
+    y = PH - MARGIN;
+  }
   function ensure(h) { if (y - h < MARGIN) newPage(); }
   function wrapText(t, font, size, w) {
     var words = String(t).split(/\s+/), lines = [], cur = '';
@@ -11480,10 +11504,21 @@ async function buildVoiceNoteReport(items, manifest, shots, generatedAt) {
     var lines = wrapText(t, courier, size || 8, PW - 2 * MARGIN);
     for (var i = 0; i < lines.length; i++) { ensure(12); page.drawText(lines[i], { x: MARGIN, y: y, size: size || 8, font: courier, color: GRAY }); y -= 11; }
   }
+  // Local time first, UTC beside it. The zone is the DEVICE's setting (an
+  // IANA name like Africa/Johannesburg) — country-level, so it never
+  // discloses the sealer's position the way coordinates would.
+  function voDualStamp(d) {
+    var dt = new Date(d);
+    var tz = 'device zone unknown';
+    try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone || tz; } catch (eTz) {}
+    function p2(n) { return (n < 10 ? '0' : '') + n; }
+    var loc = dt.getFullYear() + '-' + p2(dt.getMonth() + 1) + '-' + p2(dt.getDate()) + ' ' + p2(dt.getHours()) + ':' + p2(dt.getMinutes()) + ':' + p2(dt.getSeconds());
+    return loc + ' (' + tz + ', device time) = ' + dt.toISOString().substring(0, 19) + ' UTC';
+  }
   newPage();
   page.drawText('VOICE-NOTE EVIDENCE REPORT', { x: MARGIN, y: y, size: 20, font: helvB, color: NAVY }); y -= 26;
   page.drawText('Verum Omnis — sealed audio custody record', { x: MARGIN, y: y, size: 10, font: helv, color: GOLD }); y -= 22;
-  para('Generated: ' + generatedAt.toISOString() + '   |   Recordings: ' + items.length +
+  para('Generated: ' + voDualStamp(generatedAt) + '   |   Recordings: ' + items.length +
     (manifest ? '   |   Chat export: supplied' : '   |   Chat export: not supplied') +
     (shots.length ? '   |   Screenshots: ' + shots.length : ''), { size: 9, color: GRAY, after: 10 });
   para('WHAT THIS REPORT IS', { font: helvB, size: 11, after: 2 });
@@ -11512,8 +11547,9 @@ async function buildVoiceNoteReport(items, manifest, shots, generatedAt) {
     mono('SHA-512: ' + it.sha512);
     para('Seal ID: ' + it.sealId + '    |    Size: ' + (it.size / 1024).toFixed(1) + ' KB' +
       (it.duration !== null ? '    |    Duration: ' + Math.floor(it.duration / 60) + 'm ' + Math.round(it.duration % 60) + 's (as decoded on the sealing device)' : '    |    Duration: not determined on this device'), { size: 9 });
-    para('Blockchain anchor: ' + (it.otsSubmitted ? 'digest accepted by OpenTimestamps calendar; Bitcoin confirmation upgrades the .ots receipt' : 'submission pending — re-seal later to anchor') +
-      '    |    Device-reported file date: ' + (it.lastModified ? new Date(it.lastModified).toISOString() : 'not available'), { size: 9 });
+    para('Blockchain anchor: ' + (it.otsSubmitted ? 'digest accepted by OpenTimestamps calendar; Bitcoin confirmation upgrades the .ots receipt' : 'submission pending — re-seal later to anchor'), { size: 9 });
+    para('Device-reported file date: ' + (it.lastModified ? voDualStamp(it.lastModified) : 'not available') +
+      (it.isVideo ? '    |    Type: video recording (sealed as-is, not transcribed)' : ''), { size: 9 });
     if (it.transcript) {
       para('MACHINE TRANSCRIPT — reading aid, not evidence', { font: helvB, size: 9, color: GOLD, after: 2 });
       para('Produced by an automatic speech-recognition model at the sealer\'s request. The model can mis-hear words; verify every quoted word against the sealed audio, which is the evidence. Nothing in this transcript identifies who is speaking.', { size: 8, color: GRAY, after: 3 });
@@ -11645,7 +11681,7 @@ async function voSealAudioBatch() {
       }
       reportItems.push({ name: f.name, size: f.size, lastModified: f.lastModified || null,
         sha512: sha512, sealId: sealId, otsSubmitted: !!otsResult.success,
-        duration: await voAudioDuration(f), file: f,
+        duration: await voAudioDuration(f), file: f, isVideo: voIsVideoFile(f),
         manifestHit: manifestInfo ? voManifestLineFor(manifestInfo.text, f.name) : null });
       rows.push('✓ ' + f.name + ' — ' + sealId + (otsResult.success ? '' : ' (blockchain anchor pending retry)'));
     } catch (err) {
@@ -11664,6 +11700,7 @@ async function voSealAudioBatch() {
       // the raw selection, or a failed seal shifts every later transcript
       // onto the wrong recording.
       var tf = reportItems[ti].file;
+      if (tf && voIsVideoFile(tf)) { reportItems[ti].transcript = null; reportItems[ti].transcriptNote = 'not transcribed — video recordings are sealed as-is; transcription covers voice notes only'; continue; }
       if (!tf || tf.size > 6 * 1024 * 1024) { reportItems[ti].transcript = null; reportItems[ti].transcriptNote = 'not transcribed — recording exceeds the transcription size limit'; continue; }
       status.textContent = 'Transcribing ' + (ti + 1) + ' of ' + reportItems.length + ' (audio leaves this device for this step)…';
       try {

@@ -292,8 +292,32 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
   // fixed). Audio, PDFs, .txt and images all pass the filter.
   const acceptM = html.match(/id="fileInput" accept="([^"]+)"/);
   ok(!!acceptM, 'the uploader has an accept list');
-  for (const ext of ['.pdf', '.opus', '.txt', '.png', '.jpg', '.jpeg'])
+  for (const ext of ['.pdf', '.opus', '.txt', '.png', '.jpg', '.jpeg', '.mp4', 'video/*'])
     ok(acceptM && acceptM[1].includes(ext), 'file picker admits ' + ext);
+
+  // Video evidence joins the as-is batch: hashed, sealed and certified like
+  // audio, never modified — and NEVER sent for transcription.
+  const vreM = html.match(/var VO_VIDEO_RE = (\/[^\n]+\/i);/);
+  ok(!!vreM, 'VO_VIDEO_RE is defined');
+  const videoRe = eval(vreM[1]);
+  for (const n of ['VID-20260822-WA0001.mp4', 'clip.mov', 'x.webm'])
+    ok(videoRe.test(n), 'video extension recognised: ' + n);
+  ok(!videoRe.test('doc.pdf') && !videoRe.test('note.opus'), 'non-video not misrouted');
+  ok(/voIsAudioFile\(fi\) \|\| voIsVideoFile\(fi\)/.test(html),
+    'videos route into the as-is media batch');
+  ok(/video recordings are sealed as-is; transcription covers voice notes only/.test(html),
+    'a video is never sent to the transcription service');
+
+  // Watermark + court time: every report page carries the globe layer, and
+  // times print device-local WITH the IANA zone name alongside UTC. The zone
+  // is country-level; coordinates are never printed in a shareable artifact.
+  const vb = html.slice(html.indexOf('async function buildVoiceNoteReport'), html.indexOf('async function voSealAudioBatch'));
+  ok(/voEnsureWatermark\(\)/.test(vb) && /opacity: 0\.15/.test(vb),
+    'the voice-note report draws the globe watermark on every page');
+  ok(/Intl\.DateTimeFormat\(\)\.resolvedOptions\(\)\.timeZone/.test(vb)
+    && /device time\) = /.test(vb),
+    'report times are device-local with the zone name plus UTC');
+  ok(!/gpsCoords/.test(vb), 'the report builder never touches GPS coordinates');
 
   // Per-recording layout: the transcript comes first and the SENDING METADATA
   // closes the block — the founder's spec is "the metadata at the end" of each
