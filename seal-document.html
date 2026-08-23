@@ -355,7 +355,7 @@
     <div class="icon">&#128196;</div>
     <h3>Upload PDF Document(s) — sealed as one</h3>
     <p>Drag and drop <strong>up to 10 PDFs</strong> here, or click to browse (hold Ctrl/Cmd to pick several). Multiple documents are <strong>merged and sealed as ONE</strong> — you get back a single sealed document and a single certificate, not one per file. Max 150MB total.</p>
-    <input type="file" id="fileInput" accept=".pdf,application/pdf,.opus,.ogg,.oga,.m4a,.aac,.mp3,.wav,.amr,.3gp,audio/*" multiple>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf,.opus,.ogg,.oga,.m4a,.aac,.mp3,.wav,.amr,.3gp,audio/*,.txt,text/plain,.png,.jpg,.jpeg,image/png,image/jpeg" multiple>
   </div>
 
   <!-- File Info -->
@@ -10081,6 +10081,17 @@ function voManifestLineFor(manifestText, audioFileName) {
   }
   return null;
 }
+// WhatsApp names voice notes PTT-YYYYMMDD-WAnnnn. When no chat export was
+// supplied, the date embedded in that name is the only date-of-recording
+// signal available — it is stated as what it is (a device-assigned file name),
+// never as proof of sending time.
+function voNameDate(fileName) {
+  var m = String(fileName || '').match(/(?:PTT|AUD|VID|IMG)-(20\d{2})(\d{2})(\d{2})-WA\d+/i);
+  if (!m) return null;
+  var mo = +m[2], d = +m[3];
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+  return m[1] + '-' + m[2] + '-' + m[3];
+}
 
 // Add PDFs to the bundle (deduped by name+size), enforcing a total-size cap.
 // A single file behaves exactly as before; two or more are merged at seal time.
@@ -11503,21 +11514,25 @@ async function buildVoiceNoteReport(items, manifest, shots, generatedAt) {
       (it.duration !== null ? '    |    Duration: ' + Math.floor(it.duration / 60) + 'm ' + Math.round(it.duration % 60) + 's (as decoded on the sealing device)' : '    |    Duration: not determined on this device'), { size: 9 });
     para('Blockchain anchor: ' + (it.otsSubmitted ? 'digest accepted by OpenTimestamps calendar; Bitcoin confirmation upgrades the .ots receipt' : 'submission pending — re-seal later to anchor') +
       '    |    Device-reported file date: ' + (it.lastModified ? new Date(it.lastModified).toISOString() : 'not available'), { size: 9 });
-    if (it.manifestHit) {
-      para('Chat-export line referencing this file (verbatim):', { font: helvB, size: 9, after: 2 });
-      mono('"' + it.manifestHit.line + '"', 8.5);
-      if (it.manifestHit.sender) {
-        para('As recorded in the chat export: sent by ' + it.manifestHit.sender + (it.manifestHit.ts ? ' at ' + it.manifestHit.ts : '') + '.', { size: 9 });
-      }
-    } else if (manifest) {
-      para('This file is not referenced by name in the supplied chat export.', { size: 9, color: GRAY });
-    }
     if (it.transcript) {
       para('MACHINE TRANSCRIPT — reading aid, not evidence', { font: helvB, size: 9, color: GOLD, after: 2 });
       para('Produced by an automatic speech-recognition model at the sealer\'s request. The model can mis-hear words; verify every quoted word against the sealed audio, which is the evidence. Nothing in this transcript identifies who is speaking.', { size: 8, color: GRAY, after: 3 });
       para('\u201C' + it.transcript.substring(0, 4000) + (it.transcript.length > 4000 ? ' \u2026' : '') + '\u201D', { size: 9 });
     } else if (it.transcriptNote) {
       para('Transcript: ' + it.transcriptNote + '.', { size: 8.5, color: GRAY });
+    }
+    // Sending metadata closes each recording's block, so a transcript is
+    // always followed by the record of when and by whom the note was sent.
+    if (it.manifestHit) {
+      para('Chat-export line referencing this file (verbatim):', { font: helvB, size: 9, after: 2 });
+      mono('"' + it.manifestHit.line + '"', 8.5);
+      if (it.manifestHit.sender) {
+        para('As recorded in the chat export: sent by ' + it.manifestHit.sender + (it.manifestHit.ts ? ' at ' + it.manifestHit.ts : '') + '.', { size: 9 });
+      }
+    } else {
+      if (manifest) para('This file is not referenced by name in the supplied chat export.', { size: 9, color: GRAY });
+      var nmDate = voNameDate(it.name);
+      if (nmDate) para('The file name follows WhatsApp\'s naming pattern and carries the date ' + nmDate + '. A file name is assigned by the device, not proof of sending time — supply the chat export (.txt) for the sending record.', { size: 8.5, color: GRAY });
     }
   }
   if (shots.length) {

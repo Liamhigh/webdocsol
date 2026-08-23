@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1410 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1424 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -520,7 +520,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**27 suites · 1410 assertions.** `tests/run-all.js` is the registry — a new
+**27 suites · 1424 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -535,7 +535,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `crop-normalize.test.mjs` | 89 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
+| `crop-normalize.test.mjs` | 103 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.mjs` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
 | `digital-forensics.test.mjs` / `findings-json.test.mjs` / `narrate-excerpt.test.mjs` | 16 each | PDF structure · JSON contract v1.1.0 · AI excerpt building |
@@ -686,6 +686,14 @@ the verify-against-the-sealed-audio disclaimer; the intro is conditional and hon
 transcripts it **discloses** them ("At the sealer's explicit request…"), without them the
 no-transcription sentence stands. Every failure (oversize, service down, model error) writes a
 per-note "the sealed audio is unaffected" line and **never blocks sealing or the report**.
+
+Layout rules (founder spec): within each recording's block the transcript renders FIRST and
+the **sending metadata closes the block** — the verbatim chat-export line plus the labelled
+sent-by/sent-at. When no export references a file, `voNameDate` reads the WhatsApp naming
+pattern (`PTT-YYYYMMDD-WAnnnn`) and the report states the date **as a device-assigned file
+name, never as proof of sending time**, and points the reader to the chat export. The
+uploader's `accept` list must keep `.txt`, `.png`, `.jpg`, `.jpeg` — mobile pickers filter on
+it, and before this a phone user could not select the chat export or screenshots at all.
 **Tests:** `crop-normalize.test.mjs`, `worker.test.mjs`.
 
 ### 12.6 The Seal Certificate never carries identity by default
