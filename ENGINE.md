@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1424 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1436 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -520,7 +520,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**27 suites · 1424 assertions.** `tests/run-all.js` is the registry — a new
+**27 suites · 1436 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -535,7 +535,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `crop-normalize.test.mjs` | 103 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
+| `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.mjs` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
 | `digital-forensics.test.mjs` / `findings-json.test.mjs` / `narrate-excerpt.test.mjs` | 16 each | PDF structure · JSON contract v1.1.0 · AI excerpt building |
@@ -694,7 +694,24 @@ pattern (`PTT-YYYYMMDD-WAnnnn`) and the report states the date **as a device-ass
 name, never as proof of sending time**, and points the reader to the chat export. The
 uploader's `accept` list must keep `.txt`, `.png`, `.jpg`, `.jpeg` — mobile pickers filter on
 it, and before this a phone user could not select the chat export or screenshots at all.
+
+**Video evidence** (`VO_VIDEO_RE`: .mp4/.mov/.m4v/.webm/.mkv/.avi, or a `video/*` MIME type)
+joins the same as-is batch: hashed, sealed, certified and fingerprinted into the report like
+audio, never modified — and **never sent for transcription** (the per-note line says so). A
+file over 200 MB is refused with an explanation (the ZIP bundle is built in phone memory).
+Every report page draws the **globe watermark** at 0.15 opacity via `voEnsureWatermark`
+(its absence reads as an unofficial document; a failed fetch never blocks the report). All
+report times print **device-local with the IANA zone name plus UTC** (`voDualStamp`) — the
+zone is country-level, so it serves court admissibility without disclosing the sealer's
+position; GPS coordinates never appear in the report.
 **Tests:** `crop-normalize.test.mjs`, `worker.test.mjs`.
+
+**Production routing note (2026-08-23):** the transcribe endpoint returned `not_found` in
+production while the code was live in the `webdocsol` Worker, because a stale
+dashboard-managed route still pointed API traffic at the old `verum-rules` Worker (last
+deployed 2026-07-20). Worker code changes are NOT live until the dashboard routes point at
+`webdocsol` — when an API endpoint 404s in production but exists in the repo, check the
+routes in the Cloudflare dashboard first (`wrangler.toml` deliberately declares none).
 
 ### 12.6 The Seal Certificate never carries identity by default
 
