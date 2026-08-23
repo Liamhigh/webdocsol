@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1436 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1441 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -520,7 +520,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**27 suites · 1436 assertions.** `tests/run-all.js` is the registry — a new
+**27 suites · 1441 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -711,7 +711,10 @@ production while the code was live in the `webdocsol` Worker, because a stale
 dashboard-managed route still pointed API traffic at the old `verum-rules` Worker (last
 deployed 2026-07-20). Worker code changes are NOT live until the dashboard routes point at
 `webdocsol` — when an API endpoint 404s in production but exists in the repo, check the
-routes in the Cloudflare dashboard first (`wrangler.toml` deliberately declares none).
+routes in the Cloudflare dashboard first. `wrangler.toml` declares exactly ONE route as a
+surgical bypass (the transcribe path — most-specific-route wins), pinned by
+`wrangler-config.test.mjs`; every other route stays dashboard-managed, and the stale
+`verum-rules`/`verumglobal-static` routes should be deleted in the dashboard when possible.
 
 ### 12.6 The Seal Certificate never carries identity by default
 

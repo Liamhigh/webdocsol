@@ -77,10 +77,25 @@ const topObs = section('observability');
 const envObs = section('env.production.observability');
 ok(kv(envObs, 'enabled') === kv(topObs, 'enabled'), 'observability identical in both environments');
 
-// Routes stay dashboard-managed: declaring them here would let any deploy from
-// this repo re-point live production traffic.
-ok(!/^\s*routes?\s*=/m.test(toml) && !/^\[\[.*routes.*\]\]/m.test(toml),
-  'no routes declared in wrangler.toml (they stay dashboard-managed)');
+// Routes stay dashboard-managed AS A RULE — with ONE pinned exception. A
+// stale dashboard route (the retired "verum-rules" Worker, last deployed
+// 2026-07-20) captured the domain's /api/* traffic and 404'd every endpoint
+// added since; the most-specific-route rule makes one narrow declared pattern
+// the least-power fix shippable from the repo. This lock allows EXACTLY that
+// pattern and nothing broader: a route ending in a bare /* or /api/* here
+// would let any deploy re-point live production traffic, and that stays
+// forbidden.
+{
+  const routeLines = toml.split(/\r?\n/).filter(l => /^\s*\{\s*pattern\s*=/.test(l));
+  ok(routeLines.length === 2, 'exactly one route pattern, declared in both environments (' + routeLines.length + ')');
+  for (const l of routeLines) {
+    ok(l.includes('"verumglobal.foundation/api/v1/ai/transcribe*"'),
+      'the only declared route is the transcribe path: ' + l.trim());
+    ok(l.includes('zone_name = "verumglobal.foundation"'), 'route carries its zone_name');
+  }
+  ok(!/pattern\s*=\s*"[^"]*\/(api\/)?\*"/.test(toml),
+    'no broad /* or /api/* route is declared — those stay dashboard-managed');
+}
 
 console.log(`\n[wrangler-config] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[wrangler-config] FAILURES'); process.exit(1); }
