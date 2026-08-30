@@ -18,24 +18,34 @@ the page but the site looks the same".
                              │
              ┌───────────────┴────────────────┐
              │                                │
-   /api/*, /docs/*, /images/*,        everything else
-      /constitution.pdf               (all HTML pages)
+        API traffic                   website HTML pages
+         (/api/*)                     (everything else)
              │                                │
-   Worker: verum-omnis-rules-prod    Worker: verumglobal-static
-   source: worker/verum-rules.js     source: worker/verumglobal-static.js
-             │                                │
-      wrangler deploy                  reverse-proxies to
-                                             ↓
-                                    https://verumglobal.pages.dev
-                                    (Cloudflare Pages project)
+   Worker: webdocsol                   reverse-proxied to
+   source: worker/verum-rules.js             ↓
+   deployed by Workers Builds       https://verumglobal.pages.dev
+   on every push to main            (Cloudflare Pages project)
 ```
+
+**Known issue (stale dashboard routes):** the dashboard still routes `/api/*`
+at the retired `verum-rules` Worker (frozen 2026-07-20) and site traffic
+through the retired `verumglobal-static` Worker. The site stays current
+regardless (the old static Worker proxies the same Pages project), but API
+traffic reaches July code. Until those stale routes are deleted in the
+dashboard, `wrangler.toml` declares one route —
+`verumglobal.foundation/api/v1/ai/*` — which wins by the most-specific-route
+rule and keeps the AI endpoints on the current `webdocsol` Worker. The non-AI
+endpoints are unchanged since the freeze, so no other traffic needs
+reclaiming.
 
 **The website's HTML is deployed by Cloudflare Pages, not by `wrangler`.** The
 Pages project is named `verumglobal`; it is connected to this repository
 through Cloudflare's Git integration (configured in the Cloudflare dashboard,
 which is why there is no workflow file in `.github/`). Pushes build there and
-are served at `verumglobal.pages.dev`, which the `verumglobal-static` Worker
-proxies onto the live domain.
+are served at `verumglobal.pages.dev`, which is proxied onto the live domain
+(today still through the retired `verumglobal-static` Worker's stale route;
+after the dashboard clean-up, through the static-proxy fallback built into
+`worker/verum-rules.js`).
 
 So `wrangler deploy` never updates a single HTML page — that path only ships
 `worker/verum-rules.js`. Conversely, a push that fails to build in Pages leaves
@@ -122,23 +132,24 @@ curl -I https://verumglobal.foundation/seal-document.html
 
 Main configuration for Cloudflare Workers deployment:
 
-- **name**: `verum-omnis-rules` — Worker project name
-- **main**: `worker/verum-rules.js` — Entry point
-- **env.production**: Production environment settings
-  - **routes**: URL patterns served by this worker
+- **name**: `webdocsol` — the Worker that Workers Builds redeploys on every
+  push to `main`
+- **main**: `worker/verum-rules.js` — Entry point (API router plus the
+  static-site proxy fallback)
+- Bindings are declared twice — at the top level and under
+  `[env.production]`, byte-identical (locked by
+  `tests/wrangler-config.test.mjs`) — so `wrangler deploy` with and without
+  `--env production` builds the same Worker:
   - **kv_namespaces**: KV storage bindings (RULES_KV)
-  - **ai**: Workers AI binding for narrative generation
+  - **ai**: Workers AI binding (classify / assess / narrate / transcribe)
   - **vars**: Environment variables (SERVICE_VERSION, ENVIRONMENT)
 
-**Production Routes:**
-```
-verumglobal.foundation/api/*
-verumglobal.foundation/constitution.pdf
-verumglobal.foundation/docs/*
-verumglobal.foundation/images/*
-```
-
-All other routes fall through to the `verumglobal-static` Worker.
+**Routes** are dashboard-managed as a rule; the Worker answers on
+`verumglobal.foundation/*` (site pages via the Pages proxy, `/api/*` via the
+router). The ONE route declared in `wrangler.toml` —
+`verumglobal.foundation/api/v1/ai/*` — is a temporary reclamation of the AI
+endpoints from the stale dashboard route described under "Known issue" above,
+and comes out again once the stale routes are deleted.
 
 ## Static Assets
 
@@ -253,7 +264,7 @@ wrangler dev
 
 1. Go to https://dash.cloudflare.com/
 2. Select `verumglobal.foundation` zone
-3. Navigate to **Workers & Pages** → **verum-omnis-rules-prod**
+3. Navigate to **Workers & Pages** → **webdocsol**
 
 **Metrics**:
 - Request count & latency
