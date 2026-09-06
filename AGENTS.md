@@ -39,7 +39,7 @@ the site and a small API.
 |---|---|---|
 | Website pages | repo root `*.html`, `verum-ui.css`, `images/`, `vendor/` | Served by the Worker as **Workers Static Assets** (`wrangler.toml [assets]`), through a fixed chain when a request reaches the Worker: bundled assets → the `main` branch on `raw.githubusercontent.com` → the legacy Cloudflare Pages origin. Every answer names its tier in `X-VO-Site-Source`; `GET /api/v1/site/health` shows which tier answers for the home page, the seal page and both logos. The two site images also have embedded last-resort copies (`worker/site-assets.js`). |
 | Forensic engine, PDF reports, sealing, OpenTimestamps, encryption | `forensic-engine-page.js`, `forensic-report.js`, `seal-guard.js`, `ots-proof.js`, `pdf-encrypt.js` — **inlined** into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers | The visitor's browser. Edit the source file, then re-splice the inline copy; `tests/inline-scripts.test.mjs` byte-compares them. |
-| API `/api/v1/*` — AI review (classify, assess, narrate), the opt-in court-ready narrative, voice-note transcription (voice notes arrive singly or as a WhatsApp chat-export `.zip` unpacked on the device — `ENGINE.md` §12.6a), signed rule packages, admin publish, site health | `worker/verum-rules.js` (router and handlers), `worker/static-proxy.js` (site chain), `worker/site-assets.js` (embedded images) | Cloudflare Worker `webdocsol`, route `verumglobal.foundation/*`, bindings `RULES_KV`, `AI`, `ASSETS`; secrets set in the dashboard only: `ADMIN_TOKEN`, `RULE_PRIVATE_KEY`, optional `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL`. `HUMAN_REPORT_MODEL` is a plain var. |
+| API `/api/v1/*` — AI review (classify, assess, narrate), the opt-in court-ready narrative, voice-note transcription (voice notes arrive singly or as a WhatsApp chat-export `.zip` unpacked on the device — `ENGINE.md` §12.6a), signed rule packages, admin publish, site health | `worker/verum-rules.js` (router and handlers), `worker/static-proxy.js` (site chain), `worker/site-assets.js` (embedded images) | Cloudflare Worker `webdocsol`, routes `verumglobal.foundation/*` and `www.verumglobal.foundation/*` (a route pattern names one host; www was served by the Pages custom domain until 2026-09-07), bindings `RULES_KV`, `AI`, `ASSETS`; secrets set in the dashboard only: `ADMIN_TOKEN`, `RULE_PRIVATE_KEY`, optional `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL`. `HUMAN_REPORT_MODEL` is a plain var. |
 | Dashboard data (`dashboard.html`) | This page only | It fetches `verum-forensic-hub.liamhigh78.workers.dev`, a **separate Worker that is not in this repository**. When it does not answer, the page says so; illustrative figures exist only behind `?demo=1` and are labelled. |
 
 **How a change ships.** Edit → `node tests/run-all.js` (every suite green) and `npm run check`
@@ -48,8 +48,9 @@ the deploy. Read the PR checks honestly: the **Workers Builds check fails instan
 PR branch** and means nothing; the build that deploys runs on the merge commit. Confirm a
 deploy with the Cloudflare connector (`workers_list` → `webdocsol.modified_on` after the merge)
 and by opening `/api/v1/site/health`. The sandbox used by AI sessions cannot reach
-`verumglobal.foundation`, `*.pages.dev` or `*.workers.dev`; ask the founder to open a URL, or
-read the connector.
+`verumglobal.foundation`, `*.pages.dev` or `*.workers.dev`; run the **live-site-probe** GitHub
+Actions workflow (`actions_run_trigger` → `get_job_logs`) to see both hosts from outside, ask the
+founder to open a URL, or read the connector.
 
 **Other repositories that depend on this one.** `Liamhigh/1verum` (Android;
 `core/Constitution.kt` hard-codes `https://verumglobal.foundation/api/v1/rules/manifest` and

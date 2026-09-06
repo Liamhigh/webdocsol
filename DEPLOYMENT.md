@@ -39,8 +39,9 @@ through the retired `verumglobal-static` Worker, with `wrangler.toml`
 reclaiming first the transcribe path and then `/api/v1/ai/*` via the
 most-specific-route rule. On 2026-09-06 both retired Workers were deleted in
 the dashboard — and their routes, including the site's, vanished with them.
-Since then `webdocsol` owns the whole domain through the single route
-`verumglobal.foundation/*`; the site moved into the Worker as static assets the
+Since then `webdocsol` owns the whole domain through its declared routes —
+`verumglobal.foundation/*` and, since 2026-09-07, `www.verumglobal.foundation/*`
+(a pattern names one host; until then www fell to the Pages custom domain); the site moved into the Worker as static assets the
 same day (PR #186), and the serving chain above was added after the deploy
 still showed a broken logo (PR #189). The Cloudflare Pages project `verumglobal`
 is still connected to the repository and builds every push, but its production
@@ -271,7 +272,9 @@ wrangler dev
 **Solution**: Verify KV namespace ID in `wrangler.toml` matches Cloudflare dashboard.
 
 ### Issue: "Static assets returning 404" / a logo or page is wrong
-**Solution**: open `https://verumglobal.foundation/api/v1/site/health`. `assetsBinding:false`
+**Solution**: open `https://verumglobal.foundation/api/v1/site/health` — or run the GitHub Actions
+workflow **live-site-probe** (Actions → live-site-probe → Run workflow), which curls both hosts from
+outside and prints status, content type, the `X-VO-Site-Source` tier and a snippet for every key path. `assetsBinding:false`
 means the deploy did not carry its assets (check the Workers Builds log for the merge commit and
 the wrangler version it used — the `[assets]` array form of `run_worker_first` needs wrangler ≥ 4.20);
 `source:"repo"` means the site is being served from the main branch; `source:"pages"` means the
@@ -312,7 +315,7 @@ wrangler tail --format pretty
 
 ### Key Context
 - This site is **live at Cloudflare** on **one Worker** (`webdocsol`) that owns
-  `verumglobal.foundation/*` — API and website alike
+  `verumglobal.foundation/*` and `www.verumglobal.foundation/*` — API and website alike
 - **Deployment method**: Cloudflare Workers Builds runs `wrangler deploy` on every push to `main`
 - **API token required** only for a by-hand deploy: `CLOUDFLARE_API_TOKEN`
 - **Static assets**: bundled with the Worker (`[assets]`, repo root), served through the chain
