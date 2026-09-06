@@ -1,0 +1,20 @@
+# Files in the repo root that are NOT part of the public website.
+# Workers Static Assets uploads everything in [assets] directory ("./")
+# except what this file matches (gitignore syntax).
+.git
+.gitignore
+.assetsignore
+.deploy-trigger
+worker/
+tests/
+node_modules/
+package.json
+package-lock.json
+wrangler.toml
+*.md
+# Test fixtures and probes live in the repo for the suite, not for serving
+# at the domain. No site page references them (verified before adding).
+vanessa.pdf
+greensky-ocr-verify.pdf
+forensic_test_document.pdf
+escape-probe.txt
