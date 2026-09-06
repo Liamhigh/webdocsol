@@ -11708,16 +11708,26 @@ async function voSealAudioBatch() {
         var tB64 = ''; for (var tb = 0; tb < tBytes.length; tb += 0x8000) tB64 += String.fromCharCode.apply(null, tBytes.subarray(tb, tb + 0x8000));
         var tRes = await fetch('/api/v1/ai/transcribe', { method: 'POST', headers: { 'content-type': 'application/json' },
           body: JSON.stringify({ audio: btoa(tB64), name: tf.name }) });
-        var tJson = await tRes.json().catch(function () { return null; });
+        var tRaw = await tRes.text().catch(function () { return ''; });
+        var tJson = null; try { tJson = JSON.parse(tRaw); } catch (tpe) {}
         if (tRes.ok && tJson && tJson.machineGenerated === true && tJson.text) {
           reportItems[ti].transcript = tJson.text;
         } else {
           reportItems[ti].transcript = null;
-          reportItems[ti].transcriptNote = 'transcription unavailable (' + (tJson && tJson.error ? tJson.error : 'service error') + ') — the sealed audio is unaffected';
+          // Name what actually answered. A worker failure carries its error
+          // code (and detail); anything else — an edge error page, a
+          // challenge, a misroute — is identified by status, content type and
+          // a tag-stripped snippet, so no failure is ever just "service
+          // error" again.
+          var tWhy = tJson && tJson.error
+            ? tJson.error + (tJson.detail ? ': ' + String(tJson.detail).slice(0, 160) : '')
+            : 'HTTP ' + tRes.status + ' ' + ((tRes.headers.get('content-type') || 'no content-type').split(';')[0]) +
+              (tRaw ? ' — ' + tRaw.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 120) : '');
+          reportItems[ti].transcriptNote = 'transcription unavailable (' + tWhy + ') — the sealed audio is unaffected';
         }
       } catch (tErr) {
         reportItems[ti].transcript = null;
-        reportItems[ti].transcriptNote = 'transcription failed — the sealed audio is unaffected';
+        reportItems[ti].transcriptNote = 'transcription failed (' + String((tErr && tErr.message) || 'network error').slice(0, 120) + ') — the sealed audio is unaffected';
       }
     }
     status.innerHTML = escapeHtml(rows.join('\n')).replace(/\n/g, '<br>');
