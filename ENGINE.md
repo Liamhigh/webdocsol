@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 29 suites, 1696 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 30 suites, 1721 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -522,7 +522,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**29 suites · 1696 assertions.** `tests/run-all.js` is the registry — a new
+**30 suites · 1721 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -535,6 +535,7 @@ test file that is not registered there does not run.
 | `worker.test.mjs` | 184 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget) |
 | `human-report.test.mjs` | 76 | **The court-ready narrative** (§13): one section contract in three artefacts, opt-in default OFF with honest consent copy, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery |
 | `site-serving.test.mjs` | 54 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
+| `zip-intake.test.mjs` | 25 | **WhatsApp chat exports unpacked on-device** (§12.6a): the page's ZIP reader against real archives (stored, deflated, data-descriptor, folder, macOS cruft, encrypted, garbage), expansion into typed Files, only evidence types admitted, documents inside a voice-note export named for a separate seal, the panel note, the .zip picker entry, the 25-note batch, the home-page copy and locally served photos |
 | `greensky-regression.test.js` | 55 | The Greensky bundle: D01 conduct admission (§4.11) and `voDetectDocuments` (§4.15) |
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
@@ -654,7 +655,7 @@ unread-page disclosure and the GPS home jurisdiction.
 
 WhatsApp voice notes (`.opus`; older exports `.m4a`/`.amr`/`.3gp`) and other audio evidence
 cannot be merged into a PDF or stamped, so audio takes its own batch path (`voSealAudioBatch`,
-up to 10 files): each file gets SHA-512 + SHA-256, a seal ID, an OpenTimestamps submission, a
+up to 25 files — raised from 10 on 2026-09-06 when whole chat exports became an input): each file gets SHA-512 + SHA-256, a seal ID, an OpenTimestamps submission, a
 QR payload and a shareable Seal Certificate — **the audio bytes are never modified**. The
 original file IS the evidence; the certificate and `.ots` receipt carry the seal record.
 Mixing audio and PDFs in one seal is refused with an explanation (a PDF bundle merges into ONE
@@ -663,8 +664,24 @@ over: identity/GPS/device appear only in PRIVATE certificates, delivered in a se
 named `-do-not-share`. The UI states the evidentiary rule in terms: *a transcript is not
 evidence — the sealed audio is*.
 
-A batch may carry companions: **one WhatsApp chat export (.txt)** and up to ten **screenshots**
-(.png/.jpg). They feed the **Voice-Note Evidence Report** (`buildVoiceNoteReport`) — one PDF,
+A batch may carry companions: **one WhatsApp chat export (.txt)** and up to twenty-five **images**
+(.png/.jpg — screen grabs of the notes, or the export's own photos).
+
+**Chat exports arrive as a .zip and are unpacked on the device (2026-09-06).** Saving voice
+notes one by one from WhatsApp defeated most users; *Export chat → Include media* is two taps
+and produces a `.zip` holding the chat `.txt` plus every attachment (`PTT-*.opus`, `IMG-*.jpg`,
+`VID-*.mp4`, `DOC-*.pdf`, `STK-*.webp`). `voAddFiles` now expands any archive first
+(`voExpandZips` → `voUnzip`: central-directory reader, stored and deflated entries, deflate
+through the browser's `DecompressionStream('deflate-raw')`, folders / `__MACOSX` / dotfiles /
+encrypted / ZIP64 refused with a named reason) and hands the resulting `File` objects to the
+unchanged intake (`voAddFilesNow`), so a note unpacked from an export is sealed exactly like a
+note picked by hand and the single-note path — one recording plus a screen grab of it, the
+recording's date verified from its own name and the chat line — is untouched. Only evidence
+types are admitted (`VO_ZIP_KEEP_RE`; stickers and contact cards are named in the panel note,
+never added); documents inside an export that also holds recordings are listed for a separate
+seal rather than silently mixed. Nothing leaves the device: unpacking is local, and the panel
+note says so. `tests/zip-intake.test.mjs` builds real archives (stored, deflated, data-descriptor,
+folder, macOS cruft, encrypted) and runs the reader headless. They feed the **Voice-Note Evidence Report** (`buildVoiceNoteReport`) — one PDF,
 sealed through `VerumReport.seal`, recording per note the fingerprint, seal ID, device-reported
 file details, best-effort duration ("not determined on this device" when the browser cannot
 decode the codec), and the chat-export line referencing the file, **quoted verbatim**
