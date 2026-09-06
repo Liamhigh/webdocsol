@@ -77,6 +77,21 @@ const topObs = section('observability');
 const envObs = section('env.production.observability');
 ok(kv(envObs, 'enabled') === kv(topObs, 'enabled'), 'observability identical in both environments');
 
+// The site ships with the Worker as static assets — the Pages origin behind
+// the proxy went stale (it 200-served its old home page for every missing
+// file), so the repo root is the site now. Both environments must carry the
+// same assets block, or an --env production deploy ships a Worker with no
+// site — the same class of bug the binding drift-lock above exists for.
+const topAssets = section('assets');
+const envAssets = section('env.production.assets');
+ok(topAssets && envAssets, 'both top-level and env.production assets sections exist');
+ok(kv(topAssets, 'directory') === './', 'assets directory is the repo root');
+ok(kv(envAssets, 'directory') === kv(topAssets, 'directory'), 'assets directory identical in both environments');
+ok(kv(topAssets, 'binding') === 'ASSETS', 'assets binding is ASSETS');
+ok(kv(envAssets, 'binding') === kv(topAssets, 'binding'), 'assets binding identical in both environments');
+ok((kv(topAssets, 'run_worker_first') || '').includes('"/api/*"'), 'the API keeps running the Worker first');
+ok(kv(envAssets, 'run_worker_first') === kv(topAssets, 'run_worker_first'), 'run_worker_first identical in both environments');
+
 // The ONE declared route is the site catch-all. History: it began as a
 // narrow exception (the transcribe path, then /api/v1/ai/*) to reclaim
 // traffic from a stale dashboard route on the retired "verum-rules" Worker.
