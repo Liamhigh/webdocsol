@@ -16,36 +16,37 @@ the page but the site looks the same".
 ```
                     verumglobal.foundation
                              │
+                   Worker: webdocsol
+          owns verumglobal.foundation/* via the route
+          declared in wrangler.toml; deployed by
+          Workers Builds on every push to main
              ┌───────────────┴────────────────┐
              │                                │
         API traffic                   website HTML pages
          (/api/*)                     (everything else)
              │                                │
-   Worker: webdocsol                   reverse-proxied to
-   source: worker/verum-rules.js             ↓
-   deployed by Workers Builds       https://verumglobal.pages.dev
-   on every push to main            (Cloudflare Pages project)
+    the router in                      reverse-proxied to
+    worker/verum-rules.js                    ↓
+                                    https://verumglobal.pages.dev
+                                    (Cloudflare Pages project)
 ```
 
-**Known issue (stale dashboard routes):** the dashboard still routes `/api/*`
-at the retired `verum-rules` Worker (frozen 2026-07-20) and site traffic
-through the retired `verumglobal-static` Worker. The site stays current
-regardless (the old static Worker proxies the same Pages project), but API
-traffic reaches July code. Until those stale routes are deleted in the
-dashboard, `wrangler.toml` declares one route —
-`verumglobal.foundation/api/v1/ai/*` — which wins by the most-specific-route
-rule and keeps the AI endpoints on the current `webdocsol` Worker. The non-AI
-endpoints are unchanged since the freeze, so no other traffic needs
-reclaiming.
+**Routing history:** until 2026-09-06 a stale dashboard route pointed `/api/*`
+at the retired `verum-rules` Worker (frozen 2026-07-20) and site traffic ran
+through the retired `verumglobal-static` Worker, with `wrangler.toml`
+reclaiming first the transcribe path and then `/api/v1/ai/*` via the
+most-specific-route rule. On 2026-09-06 both retired Workers were deleted in
+the dashboard — and their routes, including the site's, vanished with them.
+Since then `webdocsol` owns the whole domain through the single route
+declared in `wrangler.toml` (`verumglobal.foundation/*`), which every deploy
+re-asserts, so dashboard state can no longer orphan the site.
 
 **The website's HTML is deployed by Cloudflare Pages, not by `wrangler`.** The
 Pages project is named `verumglobal`; it is connected to this repository
 through Cloudflare's Git integration (configured in the Cloudflare dashboard,
 which is why there is no workflow file in `.github/`). Pushes build there and
-are served at `verumglobal.pages.dev`, which is proxied onto the live domain
-(today still through the retired `verumglobal-static` Worker's stale route;
-after the dashboard clean-up, through the static-proxy fallback built into
-`worker/verum-rules.js`).
+are served at `verumglobal.pages.dev`, which the static-proxy fallback built
+into `worker/verum-rules.js` proxies onto the live domain.
 
 So `wrangler deploy` never updates a single HTML page — that path only ships
 `worker/verum-rules.js`. Conversely, a push that fails to build in Pages leaves
@@ -144,12 +145,12 @@ Main configuration for Cloudflare Workers deployment:
   - **ai**: Workers AI binding (classify / assess / narrate / transcribe)
   - **vars**: Environment variables (SERVICE_VERSION, ENVIRONMENT)
 
-**Routes** are dashboard-managed as a rule; the Worker answers on
-`verumglobal.foundation/*` (site pages via the Pages proxy, `/api/*` via the
-router). The ONE route declared in `wrangler.toml` —
-`verumglobal.foundation/api/v1/ai/*` — is a temporary reclamation of the AI
-endpoints from the stale dashboard route described under "Known issue" above,
-and comes out again once the stale routes are deleted.
+**Routes**: the ONE route declared in `wrangler.toml` —
+`verumglobal.foundation/*` — is the whole domain, and it is permanent: the
+Worker serves site pages via the Pages proxy and `/api/*` via the router
+(see "Routing history" above). `tests/wrangler-config.test.mjs` pins the
+route list so it can neither narrow nor multiply without a deliberate,
+reviewed change.
 
 ## Static Assets
 
