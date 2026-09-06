@@ -53,6 +53,7 @@ source file, then re-splice** — `tests/inline-scripts.test.mjs` byte-compares 
 | `/api/v1/ai/classify` | POST | Document classification (advisory) |
 | `/api/v1/ai/assess` | POST | AI review of engine findings (advisory, candidate tier) |
 | `/api/v1/ai/narrate` | POST | Narrative generation from findings + document excerpt |
+| `/api/v1/ai/human-report` | POST | Court-ready narrative: one writer section per call, every sentence anchor- and §15.2-gated server-side; `machineGenerated:true` or `generated:false` — never a template (opt-in) |
 | `/api/v1/ai/gatekeep` | POST | Licensing gatekeeper |
 | `/api/v1/ai/curate` | POST | Conservative rules curation |
 | `/api/v1/ai/transcribe` | POST | Opt-in voice-note transcription (Whisper) — `machineGenerated:true` reading aid, never evidence; nothing stored |

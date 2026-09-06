@@ -325,6 +325,24 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(sp.length === 2 && /^Mr\. Nortje signed\./.test(sp[0].trim()),
     'the shared splitter keeps "Mr." with its sentence (' + sp.length + ' parts)');
   ok(R._splitSentences('One sentence only').length === 1, 'a lone unterminated sentence still returns one part');
+
+  // Headings are gated too: "GUILTY OF FRAUD" in capitals is a verdict, not
+  // a section name, and used to pass the gate unread because it had no
+  // full stop. Dates in May are not hedges.
+  const hg = s('GUILTY OF FRAUD AND PERJURY\n\nThe lease expired on 1 January 2026. The invoice is dated 3 March 2026.');
+  ok(hg.dropped === 1 && !/GUILTY/.test(hg.text) && /lease expired/.test(hg.text), 'a verdict dressed as a heading is dropped and counted');
+  ok(s('The respondent is guilty of fraud:\n\nThe lease expired on 1 January 2026. The invoice is dated 3 March 2026.').dropped === 1,
+    'a colon heading carrying a verdict is dropped');
+  ok(s('SUMMARY OF THE RECORD\n\nThe lease expired on 1 January 2026.').dropped === 0, 'a clean heading still passes');
+  ok(s('On 3 May 2026 the seller signed. In May 2026 the buyer paid. The deed is dated May 3, 2026.').dropped === 0,
+    'the month of May is not the hedge "may"');
+  ok(s('The seller may have signed on 3 May 2026.').dropped === 1, '"may have" still drops even beside a May date');
+  ok(s('The seller could have signed it. The seller would have known. It appears that the date moved. This is consistent with alteration. The stamp indicates receipt.').dropped === 5,
+    'could / would / appears that / consistent with / indicates are hedges');
+  ok(s('The signature block appears on the counterpart. The seller defrauded the buyer. He is a fraudster.').dropped === 2,
+    'bare "appears" is factual; defrauded / fraudster are person-level verdicts');
+  const qs = R._splitSentences('The seller wrote "the money moved. Nothing else did." on p.7. The lease expired.');
+  ok(qs.length === 2 && /Nothing else did\." on p\.7\./.test(qs[0]), 'a quotation with an inner full stop and "(p.7)" stay in one sentence (' + qs.length + ')');
 }
 
 // ---- the analyst's telling leads the story; the backbone stays deterministic ----

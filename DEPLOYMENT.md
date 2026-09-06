@@ -142,8 +142,10 @@ Main configuration for Cloudflare Workers deployment:
   `tests/wrangler-config.test.mjs`) — so `wrangler deploy` with and without
   `--env production` builds the same Worker:
   - **kv_namespaces**: KV storage bindings (RULES_KV)
-  - **ai**: Workers AI binding (classify / assess / narrate / transcribe)
-  - **vars**: Environment variables (SERVICE_VERSION, ENVIRONMENT)
+  - **ai**: Workers AI binding (classify / assess / narrate / human-report / transcribe)
+  - **vars**: Environment variables (SERVICE_VERSION, ENVIRONMENT, HUMAN_REPORT_MODEL)
+  - **assets**: the site itself (see Static Assets)
+  - optional secrets via `wrangler secret put`: `ADMIN_TOKEN`; `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL` for an external narrator provider
 
 **Routes**: the ONE route declared in `wrangler.toml` —
 `verumglobal.foundation/*` — is the whole domain, and it is permanent: the
@@ -154,25 +156,23 @@ reviewed change.
 
 ## Static Assets
 
-Static files are served by the Cloudflare Pages project
-`verumglobal.pages.dev`, which the `verumglobal-static` Worker reverse-proxies
-(source: `worker/verumglobal-static.js`):
+Since 2026-09-06 the website ships **inside the Worker deploy** as Workers
+Static Assets (`[assets] directory = "./"` in `wrangler.toml`, mirrored under
+`[env.production]` and drift-locked by `tests/wrangler-config.test.mjs`).
+Every file in the repo root that `.assetsignore` does not exclude is served
+directly — `seal-document.html`, `verify.html`, `constitution.html`,
+`images/`, `vendor/` and the rest — so what is merged to `main` *is* the live
+site. `/api/*` always runs the Worker first (`run_worker_first`). A request
+matching no asset falls through to the Worker's `serveStatic` proxy of the
+Cloudflare Pages project (`verumglobal.pages.dev`) as a last resort only;
+that Pages origin proved stale (it 200-serves its old home page for any
+missing file), which is why the site moved into the Worker.
 
-- `seal-document.html` — Main sealing interface
-- `verify.html` — Document verification page
-- `constitution.html` — Constitution document
-- `forensic-report.js` — Forensic report PDF builder
-- `forensic-engine-page.js` — Forensic engine (37 detectors)
-- `images/` — Logos, watermarks, assets
-
-The proxy maps extensionless URLs onto the matching `.html` file, so
-`/verify` serves `verify.html`. A page added to this repo will not be
-reachable at its extensionless URL until it is added to the `PAGES` list in
-`worker/verumglobal-static.js` **and** that Worker is redeployed.
-
-**Caching**: the proxy sets `no-store` and appends a cache-busting query
-parameter, so nothing it serves is cached at the edge or in the browser.
-Every request goes to the Pages origin.
+Extensionless URLs (`/verify` → `verify.html`) are handled by the assets
+layer's default `auto-trailing-slash` behaviour, so a page added to the repo
+is reachable at its extensionless URL on the next deploy with no list to
+update. `.assetsignore` keeps source (`worker/`, `tests/`), config, docs and
+the test-fixture PDFs out of the public upload.
 
 ## API Endpoints
 
@@ -181,6 +181,7 @@ API routes are handled by `worker/verum-rules.js`:
 ```
 POST /api/v1/seal            — Seal a document (VO-DSS)
 POST /api/v1/ai/narrate      — Generate AI narrative (optional)
+POST /api/v1/ai/human-report — Court-ready narrative, one gated section per call (opt-in)
 POST /api/v1/ai/assess       — AI review findings (optional)
 POST /api/v1/ai/classify     — Document classification (optional)
 POST /api/v1/feedback/patterns — Anonymous pattern feedback

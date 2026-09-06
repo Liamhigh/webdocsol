@@ -30,7 +30,7 @@ directory, and what each one does.
 - Static site + Cloudflare Worker (`worker/verum-rules.js`). No servers, no database, no build step.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **27 suites, 1441 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **28 suites, 1622 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
@@ -147,6 +147,49 @@ Recorded so no session or external review re-litigates them:
    narrative for an attorney. §15.2 still forbids "X is guilty of Y" inside
    the sealed report, and ruling 4 stands. Do not add verdict language to
    `forensic-report.js` under any framing.
+### Founder direction (2026-09-06) — the court-ready narrative ("human report")
+
+The founder asked for an LLM-written, court-ready narrative report with the
+structure of the Greensky reference (Executive Summary, Evidence Index,
+Chronology, Four Pillars, Contradictions Matrix, Critical Evidence Analysis,
+Perjury Analysis, Coercive Conduct, Legal Framework, Offence Matrix,
+Court-Ready Declaration, Recommendations, Authentication, Annexures). It ships
+as `buildHumanReport` + `POST /api/v1/ai/human-report` (ENGINE.md §13). The
+decisions below are binding on every later change:
+
+1. **It is the ruling-9 document, not the sealed forensic report.** A separate,
+   sealed, advisory companion titled COURT-READY NARRATIVE REPORT. It adds no
+   findings; `forensic-report.js` report sections and the §15.4 headings are
+   untouched; never title it "Verum Omnis Forensic Report".
+2. **The writer originates nothing.** The engine supplies every table, page,
+   quotation and number; the model writes prose only, one section per call.
+   A sentence citing a finding, page or quotation not in the inputs is
+   dropped server-side (PD2). Do not widen the inputs with anything the
+   sealed record does not contain.
+3. **Two gates, never loosened.** The worker's `humanGate` (no anchor, no
+   sentence; anchors verified in every spelling; quotations verified; §15.2
+   language; overstated court history; "perjury" outside candidate law;
+   headings gated) and the render-time `scrubNarrative` → `voGatePasses` gate
+   (headings gated). A section that loses either prints its deterministic twin
+   labelled as not machine-written. "Better-sounding prose" is not a reason to
+   relax a regex; the only anchor-free lines are the sanctioned exact answers,
+   the verdict reservation and a stated INSUFFICIENT gap.
+4. **Section names follow the Constitution, not the reference.** "How to Use
+   This Report" is absent (§15.2); "Perjury Analysis" is *Sworn Statements &
+   Candidate Law*; Counter-Narratives & Rebuttals exists for fairness; empty
+   sections say so (PD6).
+5. **Opt-in, default OFF, honest copy.** `#humanReportOptIn`; the copy names
+   what leaves the device and says "Leave unticked for privileged or
+   sensitive matters". GPS, device and sealer identity are not payload fields.
+6. **Provenance is inverted honestly.** The cover says this document *is*
+   machine-written; Authentication & Provenance names the model, contract,
+   temperature 0, the sealed technical report and findings JSON it was
+   written from, sections written vs printed, gate counts, and that no
+   language-model verification of the findings is claimed.
+7. **Keyless by default.** `HUMAN_REPORT_MODEL` on Workers AI with the 8B
+   fallback; an external OpenAI-compatible provider only through the three
+   `LLM_*` secrets, never committed.
+
 ### How the Constitution's standing may be described (v8.0 §12)
 
 The Constitution has been placed before courts, and that fact is part of why the

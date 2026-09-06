@@ -253,7 +253,7 @@ webdocsol/
 |-- verify.html                        # LIVE Verification Hub — every seal QR points here
 |-- verify-data.html, dashboard.html, constitution.html, documents-resources.html
 |-- forensic-engine-page.js            # the deterministic engine (CT01-CT46, D01-D40)
-|-- forensic-report.js                 # sealed report generator (build / buildNarrative / seal)
+|-- forensic-report.js                 # sealed report generator (build / buildNarrative / buildHumanReport / seal)
 |-- seal-guard.js, ots-proof.js, pdf-encrypt.js
 |                                      #   ^ all five are ALSO inlined into seal-document.html
 |-- verum-ui.css                       # binding design tokens

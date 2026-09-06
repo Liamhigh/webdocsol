@@ -69,7 +69,7 @@ ok(kv(envAi, 'binding') === kv(topAi, 'binding') && kv(topAi, 'binding') === 'AI
 const topVars = section('vars');
 const envVars = section('env.production.vars');
 ok(topVars && envVars, 'both vars sections exist');
-for (const key of ['ENVIRONMENT', 'SERVICE_VERSION']) {
+for (const key of ['ENVIRONMENT', 'SERVICE_VERSION', 'HUMAN_REPORT_MODEL']) {
   ok(kv(envVars, key) === kv(topVars, key), `${key} identical in both environments`);
 }
 

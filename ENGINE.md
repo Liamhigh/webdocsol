@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 27 suites, 1441 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 28 suites, 1622 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -328,7 +328,7 @@ breathalyzer prints a reading without pronouncing a conviction.
 
 ### The AI layer obeys the same rule — because the evidence is sealed
 
-The Cloudflare Worker's AI endpoints (`/api/v1/ai/narrate`, `/assess`) are given the reason,
+The Cloudflare Worker's AI endpoints (`/api/v1/ai/narrate`, `/assess`, `/human-report`) are given the reason,
 not just the rule, because a model that understands *why* complies far more reliably:
 
 > Every finding you receive was produced by a deterministic engine from a document sealed under
@@ -377,7 +377,8 @@ future edit cannot quietly delete those rules.
 ## 7. Report anatomy (`forensic-report.js`)
 
 `build(opts)` → main report PDF bytes · `buildNarrative(opts)` → the standalone
-plain-language narrative PDF · `seal(pdf, sealOpts)` → sealed PDF.
+plain-language narrative PDF · `buildHumanReport(opts)` → the court-ready narrative PDF (§13) ·
+`seal(pdf, sealOpts)` → sealed PDF.
 
 **The report is in two halves, and the order is a founder ruling (AGENTS.md ruling 5): the
 human story leads, the institutional evidence follows.** Do not reorder Part 1 behind the
@@ -465,7 +466,7 @@ its output as `documentMap`.
 `swornContext = true` on any finding whose anchor page is in it.
 
 ### `forensic-report.js` (`window.VerumReport`)
-`build` · **`buildNarrative`** · `seal` — plus test seams: `_sanitize` `_cleanQuote`
+`build` · **`buildNarrative`** · **`buildHumanReport`** · `seal` — plus test seams: `_sanitize` `_cleanQuote`
 `_extractParties` `_extractPartiesWithRoles` `_partyRoleMap` `_legalSubjectOf` `_dishonestyOf`
 `_listPhrase` `_narrativeMeaning` `_ctNames` `_narrativeMeaningMap` `_plainLeadLines`
 `_narrativeBlocks` `_pageRanges` `_fmtLocation` `_pageNumbers` `_scrubNarrative`
@@ -473,7 +474,8 @@ its output as `documentMap`.
 `_effectiveParties` `_effectivePartiesWithRoles` `_splitSentences` `_detectJurisdictions`
 `_statutesForSubject` `_subjectOf` `_attributeParty` `_extractMoney`
 
-`build(opts)` and `buildNarrative(opts)` take the same option bag; the host page must pass
+`build(opts)`, `buildNarrative(opts)` and `buildHumanReport(opts)` take the same option bag (the
+human report adds `humanSections`, `humanFindings` and `humanProvenance`, §13); the host page must pass
 `unreadPages`, `gps`, `aiNarrative` and `aiNarrativeSource` to **both**, or the narrative PDF
 silently loses the unread-page disclosure and the home jurisdiction.
 
@@ -520,17 +522,18 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**27 suites · 1441 assertions.** `tests/run-all.js` is the registry — a new
+**28 suites · 1622 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
 |---|---|---|
 | `forensic-engine.test.js` | 328 | Core engine behaviour, extraction quality and OCR regressions |
-| `legal-analysis.test.js` | 207 | Party extraction, legal subjects, **PD16 language**, the §15.2 narrative gate, sentence splitting, page anchors, executive summary and SEALED FINDINGS integrity, OCR provenance (PD6) |
+| `legal-analysis.test.js` | 215 | Party extraction, legal subjects, **PD16 language**, the §15.2 narrative gate, sentence splitting, page anchors, executive summary and SEALED FINDINGS integrity, OCR provenance (PD6) |
 | `page-boot.test.mjs` | 100 | The seal page still boots when a library is missing |
 | `detector-recall.test.mjs` | 107 | Recall + the §4 false-positive guards, pinned to real bundle strings |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
-| `worker.test.mjs` | 94 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock) |
+| `worker.test.mjs` | 184 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget) |
+| `human-report.test.mjs` | 76 | **The court-ready narrative** (§13): one section contract in three artefacts, opt-in default OFF with honest consent copy, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery |
 | `greensky-regression.test.js` | 55 | The Greensky bundle: D01 conduct admission (§4.11) and `voDetectDocuments` (§4.15) |
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
@@ -642,8 +645,8 @@ reported. `tests/worker.test.mjs` pins the range against the engine's `CT_COUNT`
 
 ### 12.5 Options the host page must pass to the report
 
-`build` **and** `buildNarrative` both need `unreadPages`, `ocrPages`, `gps`, `aiNarrative` and
-`aiNarrativeSource`. Passing them to only one produces a narrative PDF that quietly omits the
+`build`, `buildNarrative` **and** `buildHumanReport` all need `unreadPages`, `ocrPages`, `gps`, `aiNarrative` and
+`aiNarrativeSource` (the human report passes `aiNarrative: null` — its prose arrives per section). Passing them to only one produces a narrative PDF that quietly omits the
 unread-page disclosure and the GPS home jurisdiction.
 
 ### 12.6a Voice notes and audio are sealed AS-IS, individually
@@ -738,3 +741,90 @@ address into a distributed certificate. The share bundle (`_voShareFiles`) never
 certificate. The QR payload was always identity-free by default; the forensic report reduces GPS
 to a country-level jurisdiction and never prints coordinates.
 **Tests:** `crop-normalize.test.mjs` (nine assertions).
+
+---
+
+## 13. The court-ready narrative (the "human report")
+
+**What it is.** A sealed companion PDF written by an AI narrator *from* the sealed technical
+report and its findings JSON — the Statement-of-Case-class covering document that AGENTS.md
+ruling 9 sanctions. It adds no findings, it is advisory, it is never titled "Forensic Report",
+and the sealed technical report remains the evidentiary record.
+
+**One contract, three copies.** Fifteen sections in a fixed order — `HUMAN_SECTIONS` in
+`worker/verum-rules.js` = `HUMAN_REPORT_SECTIONS` in `forensic-report.js` = `VO_HUMAN_SECTIONS`
+in `seal-document.html`; `tests/human-report.test.mjs` pins all three: Executive Summary ·
+Evidence Index · Chronology & Pattern of Conduct · Four Pillars of Fraud · Contradictions
+Matrix · Critical Evidence Analysis · Counter-Narratives & Rebuttals · Sworn Statements &
+Candidate Law · Coercive Conduct · Legal Framework · Offence Matrix · Recommendations ·
+Court-Ready Declaration · Authentication & Provenance · Annexures. The list reconciles the
+founder's Greensky reference and the platform's 19-section GHRP specification
+(`firebase/REPORT_FORMAT_SPECIFICATION.md`) against Constitution v8: "How to Use This Report"
+is prohibited by §15.2 and absent; "Perjury Analysis" became *Sworn Statements & Candidate Law*
+(the word "perjury" only inside candidate-law lines, AGENTS.md); Counter-Narratives was added
+for fairness; an empty section states its emptiness ("No account on record", "None
+identified") instead of disappearing (PD6).
+
+**Division of labour (the GHRP rule: the writer originates nothing).** The engine renders
+every table, page, quotation and number — Evidence Index, Contradictions Matrix, Offence
+Matrix, Statutory Anchoring, Recommended Actions, the Sealed Findings list, Annexures. The
+model writes prose only, for the nine writer sections, **one section per call** to
+`POST /api/v1/ai/human-report` (Critical Evidence in batches of eight findings):
+`{section, findings[F#], candidates[C#], caseContext, excerpt, timeline, unreadPages,
+priorSummary}` → `{contract:'human-v1', section, generated, machineGenerated, model, text,
+plainTerms, gate}`. Findings carry an explicit `page`/`pages`, an 800-character quotation and
+the engine's own plain-terms sentence; GPS, device and sealer identity are not fields, so they
+cannot reach the model.
+
+**The gate is the guarantee; the prompt is a request.** Server side (`humanGate`): every
+sentence must **carry** an anchor — a `[F#]`/`(F#)`/"finding F#" id in the inputs, a page in
+the inputs (`p. 7`, `pp. 2-5` with the range expanded, `page 7`, `pg 7`, `p7`; a page spelled
+in words is refused; no page beyond `pageCount`), or a quotation of twelve characters or more
+(`"…"`, `“…”`, `‘…’`, `'…'`) found verbatim in the inputs — and a sentence with none is dropped
+(PD2 — "if a sentence cannot cite anchors, it cannot exist"). The only anchor-free lines are
+the sanctioned ones: the four exact answers the section rules dictate ("None identified.",
+"No account on record.", …), the verdict reservation, and a stated gap (`INSUFFICIENT`).
+§15.2 language is dropped (hedges including could/would/appears that/indicates/consistent
+with, indicator/red flag/anomaly, credibility/guilt/defrauded/dishonest, scores and
+percentages in any dress, severity labels, "how to read this report", person-level offence
+findings, overstated court history — court found/held/ruled/accepted — and "perjury" outside
+candidate law; "3 May 2026" is a date, not a hedge). Headings are gated too: "GUILTY OF
+FRAUD" in capitals is a verdict, not a section name. A section keeps at least two sentences
+and at least as many as it lost — or is exactly one sanctioned answer — or it answers
+`generated:false, reason:'gate_failed'` with **no text** — never a template dressed as AI.
+Client side, `buildHumanReport` runs `scrubNarrative` → `voGatePasses` again on every AI
+section (headings included), prints the removed-sentence count under it, and renders the
+deterministic twin — labelled "nothing here is machine-written" — for any section that did
+not survive. Never loosen either gate.
+
+**Model.** Keyless Workers AI: `HUMAN_REPORT_MODEL` (default
+`@cf/meta/llama-4-scout-17b-16e-instruct`, 131k-token context) with the fast 8B model as
+fallback; temperature 0 (PD4); 30 s per section on the primary and 15 s on the fallback,
+which also gets a shorter excerpt for its smaller window (the client waits 52 s per call and
+stops asking after five minutes in total, marking the rest `time_budget`); Constitution v6.1
+prepended server-side to every call. Sections nothing in the record engages (no sworn
+finding, no coercive statement) are not requested at all (`not_applicable`). An operator may instead point the narrator at any
+OpenAI-compatible chat-completions provider with three secrets — `LLM_API_BASE`,
+`LLM_API_KEY`, `LLM_MODEL` (`wrangler secret put`, never in the repo); the reply then names the
+model as `external:<model>` and the consent copy's "or the AI provider configured for this
+site" applies. Nothing is stored server-side.
+
+**Consent.** `#humanReportOptIn` — default OFF — inside the AI-review section. The copy states
+that findings and page excerpts around the finding pages (up to 24,000 characters per
+section) leave the device for that step, that every sentence is gated, that the result is
+machine-written and advisory, and "Leave unticked for privileged or sensitive matters". The
+step runs only behind the opt-in **and** AI review, after the technical report and the
+findings JSON (so it can cite both by hash), in its own `try` — it never blocks the seal, the
+report or the JSON.
+
+**Provenance and seal.** Cover title COURT-READY NARRATIVE REPORT, every body page headed
+"Verum Omnis Court-Ready Narrative" (`makeCtx` takes a `headerTitle`; the forensic report
+keeps its default), exactly the fifteen numbered contract sections (engine sub-sections such
+as Recommended Actions render under their contract heading through `engineUnder`), with
+inverted provenance lines (this document *is* machine-written; the findings it narrates are
+not); Authentication &
+Provenance prints the technical report's seal id and SHA-512, the findings JSON SHA-512, the
+model, contract and temperature, sections AI-written versus printed, gate counts, and "No
+language-model verification of the findings is claimed". Sealed through `VerumReport.seal`
+with `tag: 'NARRATIVE REPORT'` in the footer and the VO-SEAL2 subject; offered only behind
+`VoSealGuard.isSealed`; bundled into the share ZIP as `<name>-court-ready-narrative-sealed.pdf`.

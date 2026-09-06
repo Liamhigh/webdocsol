@@ -63,6 +63,9 @@ binding = "AI"
 [vars]
 ENVIRONMENT = "production"
 SERVICE_VERSION = "1.5.1-20260721-mistral-enhanced"
+# Court-ready narrative (human report) model — keyless Workers AI. Optional external
+# OpenAI-compatible provider via secrets (never here): LLM_API_BASE, LLM_API_KEY, LLM_MODEL.
+HUMAN_REPORT_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
 
 [observability]
 enabled = true
@@ -102,6 +105,7 @@ binding = "AI"
 [env.production.vars]
 ENVIRONMENT = "production"
 SERVICE_VERSION = "1.5.1-20260721-mistral-enhanced"
+HUMAN_REPORT_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
 
 [env.production.observability]
 enabled = true
