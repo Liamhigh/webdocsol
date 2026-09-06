@@ -9,9 +9,11 @@
 
 ## Deployment Architecture
 
-Two independent pieces serve `verumglobal.foundation`, and they are deployed
-in two different ways. Confusing them is the most common cause of "I changed
-the page but the site looks the same".
+One Worker serves `verumglobal.foundation`, and one deploy carries everything:
+Cloudflare Workers Builds builds the merge commit on `main` and ships the Worker
+**with the repository root as its static assets**. There is no separate site deploy
+any more — "I changed the page but the site looks the same" now means the merge
+build has not run yet, or the browser cached the page.
 
 ```
                     verumglobal.foundation
@@ -22,13 +24,13 @@ the page but the site looks the same".
           Workers Builds on every push to main
              ┌───────────────┴────────────────┐
              │                                │
-        API traffic                   website HTML pages
-         (/api/*)                     (everything else)
-             │                                │
-    the router in                      reverse-proxied to
-    worker/verum-rules.js                    ↓
-                                    https://verumglobal.pages.dev
-                                    (Cloudflare Pages project)
+        API traffic                   website (everything else)
+         (/api/*)                              │
+             │                    1. bundled static assets ([assets] = repo root)
+    the router in                 2. the main branch on raw.githubusercontent.com
+    worker/verum-rules.js         3. the legacy Pages origin (verumglobal.pages.dev)
+                                  (the two site images also: KV, then embedded copies)
+                                  X-VO-Site-Source names the tier on every answer
 ```
 
 **Routing history:** until 2026-09-06 a stale dashboard route pointed `/api/*`
@@ -38,20 +40,11 @@ reclaiming first the transcribe path and then `/api/v1/ai/*` via the
 most-specific-route rule. On 2026-09-06 both retired Workers were deleted in
 the dashboard — and their routes, including the site's, vanished with them.
 Since then `webdocsol` owns the whole domain through the single route
-declared in `wrangler.toml` (`verumglobal.foundation/*`), which every deploy
-re-asserts, so dashboard state can no longer orphan the site.
-
-**The website's HTML is deployed by Cloudflare Pages, not by `wrangler`.** The
-Pages project is named `verumglobal`; it is connected to this repository
-through Cloudflare's Git integration (configured in the Cloudflare dashboard,
-which is why there is no workflow file in `.github/`). Pushes build there and
-are served at `verumglobal.pages.dev`, which the static-proxy fallback built
-into `worker/verum-rules.js` proxies onto the live domain.
-
-So `wrangler deploy` never updates a single HTML page — that path only ships
-`worker/verum-rules.js`. Conversely, a push that fails to build in Pages leaves
-the old HTML live with no error anywhere in this repo. Check the Pages project,
-not the Worker, when a page change does not appear.
+`verumglobal.foundation/*`; the site moved into the Worker as static assets the
+same day (PR #186), and the serving chain above was added after the deploy
+still showed a broken logo (PR #189). The Cloudflare Pages project `verumglobal`
+is still connected to the repository and builds every push, but its production
+deployment is stale and it is only the last tier of the chain.
 
 ### Third-party scripts
 
@@ -162,11 +155,28 @@ Static Assets (`[assets] directory = "./"` in `wrangler.toml`, mirrored under
 Every file in the repo root that `.assetsignore` does not exclude is served
 directly — `seal-document.html`, `verify.html`, `constitution.html`,
 `images/`, `vendor/` and the rest — so what is merged to `main` *is* the live
-site. `/api/*` always runs the Worker first (`run_worker_first`). A request
-matching no asset falls through to the Worker's `serveStatic` proxy of the
-Cloudflare Pages project (`verumglobal.pages.dev`) as a last resort only;
-that Pages origin proved stale (it 200-serves its old home page for any
-missing file), which is why the site moved into the Worker.
+site. `/api/*` always runs the Worker first (`run_worker_first`).
+
+**The serving chain (`worker/static-proxy.js` `serveSite`).** A site request
+that reaches the Worker — because no bundled asset matched, or because a
+deploy did not carry its assets — is answered in a fixed order, and every
+answer names its tier in the `X-VO-Site-Source` response header:
+
+| Tier | Source | When |
+|---|---|---|
+| `assets` | `env.ASSETS` — the files bundled with the deploy | binding present and the file exists |
+| `repo` | `https://raw.githubusercontent.com/Liamhigh/webdocsol/main` — the same files straight from version control | assets missed; the repo is public, `main` is the live site by definition |
+| `pages` | the legacy Cloudflare Pages project (`verumglobal.pages.dev`, `serveStatic`) | repo unreachable; this origin proved stale (it 200-serves its old home page for any missing file), so it is last |
+| `kv`, `embedded` | the two site images only (`/images/logo-full.png`, `/images/watermark_portrait.png`): legacy KV keys, then the copies embedded in `worker/site-assets.js` | nothing upstream had the file — a broken logo cannot ship |
+
+Source, config, docs and fixtures are never site files on any tier
+(`SITE_DENY_RE` mirrors `.assetsignore`; `tests/site-serving.test.mjs` locks
+the two lists together and checks that every local reference in every page
+resolves to a served file). **`GET /api/v1/site/health`** reports which tier
+answers for the home page, the seal page and both images — open it first
+when a page or a logo is wrong; it turns the next outage into a one-URL
+diagnosis. HTML is served `no-store` on every tier; other files are cacheable
+for five minutes; failures are never cached.
 
 Extensionless URLs (`/verify` → `verify.html`) are handled by the assets
 layer's default `auto-trailing-slash` behaviour, so a page added to the repo
@@ -179,7 +189,10 @@ the test-fixture PDFs out of the public upload.
 API routes are handled by `worker/verum-rules.js`:
 
 ```
-POST /api/v1/seal            — Seal a document (VO-DSS)
+GET  /api/v1/status          — service status + current rule-package version
+GET  /api/v1/site/health     — which tier serves the site (assets / repo / kv / embedded / pages)
+GET  /api/v1/rules/manifest  — signed rule package (hard-coded by the Android app and the firewall)
+POST /api/v1/admin/publish   — publish a signed rule package (ADMIN_TOKEN)
 POST /api/v1/ai/narrate      — Generate AI narrative (optional)
 POST /api/v1/ai/human-report — Court-ready narrative, one gated section per call (opt-in)
 POST /api/v1/ai/assess       — AI review findings (optional)
@@ -257,8 +270,13 @@ wrangler dev
 ### Issue: "KV namespace not found"
 **Solution**: Verify KV namespace ID in `wrangler.toml` matches Cloudflare dashboard.
 
-### Issue: "Static assets returning 404"
-**Solution**: Check routes in `wrangler.toml`; ensure `verumglobal.foundation` zone is configured.
+### Issue: "Static assets returning 404" / a logo or page is wrong
+**Solution**: open `https://verumglobal.foundation/api/v1/site/health`. `assetsBinding:false`
+means the deploy did not carry its assets (check the Workers Builds log for the merge commit and
+the wrangler version it used — the `[assets]` array form of `run_worker_first` needs wrangler ≥ 4.20);
+`source:"repo"` means the site is being served from the main branch; `source:"pages"` means the
+repo tier was unreachable and the stale Pages origin answered. Then check routes in `wrangler.toml`
+and that the `verumglobal.foundation` zone is configured.
 
 ## Monitoring & Observability
 
@@ -293,27 +311,35 @@ wrangler tail --format pretty
 ## For Future AI Code Assistants
 
 ### Key Context
-- This site is **live at Cloudflare** using **Cloudflare Workers**
-- **Deployment method**: `wrangler deploy`
-- **API token required**: Set `CLOUDFLARE_API_TOKEN` environment variable
-- **Static assets**: Served by Cloudflare CDN (no build step)
-- **Worker code**: `worker/verum-rules.js` (routes API requests)
+- This site is **live at Cloudflare** on **one Worker** (`webdocsol`) that owns
+  `verumglobal.foundation/*` — API and website alike
+- **Deployment method**: Cloudflare Workers Builds runs `wrangler deploy` on every push to `main`
+- **API token required** only for a by-hand deploy: `CLOUDFLARE_API_TOKEN`
+- **Static assets**: bundled with the Worker (`[assets]`, repo root), served through the chain
+  above (assets → main branch → legacy Pages; images fall back to embedded copies)
+- **Worker code**: `worker/verum-rules.js` (router) · `worker/static-proxy.js` (site serving) ·
+  `worker/site-assets.js` (embedded images)
 
 ### Merging to `main` IS the deploy
 
-Both halves of the site now deploy automatically on push to `main`:
+One deploy carries everything: Workers Builds builds the merge commit on `main` and ships the
+Worker **with** the repo root as its static assets. There is no separate site deploy.
 
 | What | Deployed by | Trigger |
 |---|---|---|
-| Static pages (`index.html`, `seal-document.html`, `verify.html`, …) | **Cloudflare Pages** | push to `main` |
-| The Worker (`worker/verum-rules.js`) | **Cloudflare Workers Builds** | push to `main` |
+| The Worker (`worker/`) and the site (`index.html`, `seal-document.html`, `verify.html`, `images/`, `vendor/`, …) | **Cloudflare Workers Builds** | push to `main` |
+| (legacy) the Cloudflare Pages project `verumglobal` | still connected to the repo, builds on every push, **not** the origin the site is served from | push |
 
-A pull request runs three checks — **Sourcery review**, **Workers Builds: webdocsol**, and
-**Cloudflare Pages**. Wait for them before merging (`pull_request_read` →
-`get_check_runs`); merging red ships red. `wrangler deploy` by hand is the fallback for when
+A pull request shows three checks — **Sourcery review**, **Workers Builds: webdocsol**, and
+**Cloudflare Pages**. Read them honestly: the **Workers Builds check fails instantly on every
+pull-request branch** (a non-production-branch build the dashboard does not configure), so red
+there is not a signal about the change; the build that matters runs on the merge commit on
+`main`. After merging, confirm the deploy with the Cloudflare connector (`workers_list` →
+`webdocsol.modified_on` later than the merge) and open `/api/v1/site/health`. Sourcery is the
+one PR check whose red means something. `wrangler deploy` by hand is the fallback for when
 Workers Builds is unavailable, not the normal path.
 
-**Because merge = publish:** run `node tests/run-all.js` (27 suites, 1441 assertions) and
+**Because merge = publish:** run `node tests/run-all.js` (29 suites, 1696 assertions) and
 re-splice the inline copies into `seal-document.html` **before** the PR, not after. A merged
 regression is live within a minute.
 
@@ -324,16 +350,15 @@ regression is live within a minute.
    `seal-module/web/` is the portable spec, **not** the live site — a change made only there
    ships nothing.
 4. For API changes (`worker/verum-rules.js`): Workers Builds deploys on merge. To deploy by
-   hand you **must** run
-   `wrangler deploy` — with NO `--env` flag. `wrangler.toml` defines a single
-   top-level environment on purpose (the KV and AI bindings used to sit under
-   `[env.production]`, which meant an `--env`-less deploy shipped a Worker with
-   no bindings at all). Passing `--env production` now FAILS immediately with
-   "No environment found in configuration with name production", because no such
-   section exists. Cloudflare Workers Builds deploys without `--env`, so the
-   dashboard build/deploy command must not add one either.
-5. For proxy/routing changes (`worker/verumglobal-static.js`): must be
-   deployed to the `verumglobal-static` Worker.
+   hand run `wrangler deploy` — with or without `--env production`: `wrangler.toml` carries the
+   top level and a byte-equal `[env.production]` on purpose (the KV and AI bindings once sat under
+   `[env.production]` only, so an `--env`-less deploy shipped a Worker with no bindings; later the
+   section was removed and an `--env production` deploy aborted instantly). Both now exist and
+   `tests/wrangler-config.test.mjs` forbids them from diverging.
+5. Routing and site serving live in this one Worker (`wrangler.toml` routes,
+   `worker/static-proxy.js`). The retired `verum-rules` and `verumglobal-static` Workers were
+   deleted from the dashboard on 2026-09-06 and the second Worker's source file was removed
+   from the repo with them; there is exactly one Worker.
 
 ### Testing Deployment Locally
 ```bash

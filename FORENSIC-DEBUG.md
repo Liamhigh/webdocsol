@@ -31,6 +31,8 @@ these reappears, the guard was weakened — find out how before changing anythin
 | **"Perjury" appears in a sealed report as a finding** | someone "improved" oath context into a flag | the word is allowed only in candidate-law lines; engine output never contains it. Test-locked. `ENGINE.md` §4.18 |
 | **An index line "Supplementary Affidavit, 9pp" is tagged as sworn** | weak oath markers accepted singly | one weak marker never tags; two distinct weak markers or one strong execution formula required. `ENGINE.md` §4.18 |
 | **A finding quotes an OCR-recovered page with no provenance note** | `ocrPages` not passed, or the `_ocrTouched` check removed | the host records `_voOcrRescuedPages`, passes `ocrPages` to BOTH builders, and FINDINGS IN DETAIL marks affected findings. PD6. |
+| **The seal never leaves step 1 ("GPS + Device — processing")** | the Geolocation `timeout` option does not cover the permission prompt; an ignored or never-shown prompt leaves `getCurrentPosition` silent forever | `captureGPS` races the prompt against `VO_GPS_HARD_DEADLINE_MS` (15 s) and continues with "not provided". Reproduced headless 2026-09-06 (526 s stall). |
+| **Logos broken, or every page opens as the home page** | the request reached the Worker and an upstream that does not have the file answered (KV without the image key; the stale Pages origin, which 200-serves its home page for anything) | the site-serving chain in `worker/static-proxy.js` (assets → main branch → Pages; images → KV → embedded copies) and `GET /api/v1/site/health`, which names the tier. DEPLOYMENT.md "The serving chain". |
 
 ---
 

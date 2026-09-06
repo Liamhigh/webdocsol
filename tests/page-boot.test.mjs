@@ -412,6 +412,18 @@ for (const page of PAGES) {
     'report matrix explains the absence of analysis instead of implying consistency');
 }
 
+// The seal must never wait forever for a location. The Geolocation timeout
+// option excludes the permission prompt; an ignored prompt stalled step 1 for
+// 526 s in a headless run on 2026-09-06. captureGPS races a hard deadline.
+{
+  const src = readFileSync('seal-document.html', 'utf8');
+  const i = src.indexOf('function captureGPS()');
+  const body = src.slice(i, src.indexOf('function captureDevice()', i));
+  ok(i > 0 && /VO_GPS_HARD_DEADLINE_MS/.test(body) && /setTimeout\(function \(\) \{ done\(null\); \}, VO_GPS_HARD_DEADLINE_MS\)/.test(body),
+    'captureGPS resolves null after a hard deadline even if the permission prompt is never answered');
+  ok(/var VO_GPS_HARD_DEADLINE_MS = 15000;/.test(src), 'the GPS hard deadline is 15 s');
+}
+
 console.log(`\n[page-boot] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) {
   console.log('[page-boot] FAILURES');

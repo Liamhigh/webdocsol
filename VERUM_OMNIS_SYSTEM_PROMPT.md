@@ -194,8 +194,10 @@ wiped**. Everything that leaves any platform must be sealed.
    any future surface (e.g. Apple) inherits this rule unchanged — runs its own
    **hybrid engine** (Gemma 3 + Phi 3, Gemma 4 where hardware allows) for reports:
    contextual narrative, role/capacity reasoning, cross-page synthesis — richer than
-   the website's deterministic-only engine. The website remains the deterministic
-   master (CT01–CT46) and the source of signed rule packages the apps sync.
+   the website's deterministic engine. The website remains the deterministic
+   master (CT01–CT46) and the source of signed rule packages the apps sync; its
+   own AI layer (edge review, the opt-in court-ready narrative) is advisory,
+   gated sentence by sentence, and never adds a finding.
 
 ---
 

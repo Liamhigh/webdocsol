@@ -26,11 +26,68 @@ re-introduces a false statement of fact under seal.
 **Repo map:** [`REFERENCE.md`](./REFERENCE.md) — every page, script, worker endpoint and
 directory, and what each one does.
 
+## Start here — the state of the platform (updated 2026-09-06)
+
+Read this section first; it is the two-minute orientation. Everything below it is the detail.
+
+**What this is.** One public website and one Cloudflare Worker, both in this repository,
+deployed *together* by Cloudflare Workers Builds on every merge to `main`. The visitor's
+browser does the forensic work (nothing is uploaded to seal a document); the Worker serves
+the site and a small API.
+
+| Piece | Source of truth | Where it runs |
+|---|---|---|
+| Website pages | repo root `*.html`, `verum-ui.css`, `images/`, `vendor/` | Served by the Worker as **Workers Static Assets** (`wrangler.toml [assets]`), through a fixed chain when a request reaches the Worker: bundled assets → the `main` branch on `raw.githubusercontent.com` → the legacy Cloudflare Pages origin. Every answer names its tier in `X-VO-Site-Source`; `GET /api/v1/site/health` shows which tier answers for the home page, the seal page and both logos. The two site images also have embedded last-resort copies (`worker/site-assets.js`). |
+| Forensic engine, PDF reports, sealing, OpenTimestamps, encryption | `forensic-engine-page.js`, `forensic-report.js`, `seal-guard.js`, `ots-proof.js`, `pdf-encrypt.js` — **inlined** into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers | The visitor's browser. Edit the source file, then re-splice the inline copy; `tests/inline-scripts.test.mjs` byte-compares them. |
+| API `/api/v1/*` — AI review (classify, assess, narrate), the opt-in court-ready narrative, voice-note transcription, signed rule packages, admin publish, site health | `worker/verum-rules.js` (router and handlers), `worker/static-proxy.js` (site chain), `worker/site-assets.js` (embedded images) | Cloudflare Worker `webdocsol`, route `verumglobal.foundation/*`, bindings `RULES_KV`, `AI`, `ASSETS`; secrets set in the dashboard only: `ADMIN_TOKEN`, `RULE_PRIVATE_KEY`, optional `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL`. `HUMAN_REPORT_MODEL` is a plain var. |
+| Dashboard data (`dashboard.html`) | This page only | It fetches `verum-forensic-hub.liamhigh78.workers.dev`, a **separate Worker that is not in this repository**. When it does not answer, the page says so; illustrative figures exist only behind `?demo=1` and are labelled. |
+
+**How a change ships.** Edit → `node tests/run-all.js` (every suite green) and `npm run check`
+→ re-splice inline copies if you touched an inlined file → pull request → merge to `main` **is**
+the deploy. Read the PR checks honestly: the **Workers Builds check fails instantly on every
+PR branch** and means nothing; the build that deploys runs on the merge commit. Confirm a
+deploy with the Cloudflare connector (`workers_list` → `webdocsol.modified_on` after the merge)
+and by opening `/api/v1/site/health`. The sandbox used by AI sessions cannot reach
+`verumglobal.foundation`, `*.pages.dev` or `*.workers.dev`; ask the founder to open a URL, or
+read the connector.
+
+**Other repositories that depend on this one.** `Liamhigh/1verum` (Android;
+`core/Constitution.kt` hard-codes `https://verumglobal.foundation/api/v1/rules/manifest` and
+pins `publicKeyId vo-master-1`; QR codes open `verify.html?h=<sha512 prefix>&m=<metadata>`)
+and `Liamhigh/firebase` (fraud-firewall; `src/core/ruleUpdate.ts` hard-codes the same manifest
+URL, `src/seal/sealMetadata.ts` the same QR). Never move those URLs or change the manifest
+shape (`worker/rule-format.md`) without changing both clients. `VERUM_OMNIS_SYSTEM_PROMPT.md`
+is meant to be identical across the three repositories — an edit here must be mirrored there.
+
+**Known state right now.**
+- 6 September 2026: the two retired Workers (`verum-rules`, `verumglobal-static`) were deleted
+  from the dashboard; this Worker owns the domain (PRs #184–#186). The court-ready narrative
+  shipped (#188). The live site showed broken logos afterwards: the Worker answered
+  `/images/logo-full.png` from KV, which holds no such key, and whether the Workers Builds
+  deploy carries its static assets could not be confirmed from the sandbox — hence the serving
+  chain, the embedded images and the health endpoint.
+- The Cloudflare Pages project `verumglobal` is still connected to the repo and builds every
+  push, but its production deployment is stale and it is **not** the origin the site is served
+  from. The founder can disconnect it or point its production branch at `main`.
+- Voice-note transcription returned "service error" on 6 September; since #187 the report note
+  names the actual failure. Root cause still open — the next report PDF will say.
+- `vanessa.pdf`, a confidential real-matter report, was removed from the tree on 6 September
+  (no test used it); it remains in git history of this public repository until the founder
+  decides on a history purge or private visibility.
+
+**What must never be done.** The founder rulings and the seven regressions below; the §15.2
+language gate and the PD2 anchor gate are never loosened; no secret is ever committed; no
+`Date.now()` / `Math.random()` in an analysis path; no regex lookbehind; the inline copies are
+never "de-duplicated"; the rules-manifest URL and the QR verify URL never move; no court is
+ever described as having adopted, endorsed or validated anything. Read the bible for the area
+before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping and serving),
+`REFERENCE.md` (every file and endpoint), `FORENSIC-DEBUG.md` (what a failure looks like).
+
 ## Quick facts
-- Static site + Cloudflare Worker (`worker/verum-rules.js`). No servers, no database, no build step.
+- Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **28 suites, 1622 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **29 suites, 1696 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.

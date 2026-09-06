@@ -47,6 +47,7 @@ source file, then re-splice** — `tests/inline-scripts.test.mjs` byte-compares 
 | Endpoint | Method | Purpose |
 |---|---|---|
 | `/api/v1/status` | GET | Health/status |
+| `/api/v1/site/health` | GET | Which tier serves the site right now (`assets` / `repo` / `kv` / `embedded` / `pages`) for the home page, the seal page and both site images — open it first when a page or a logo is wrong |
 | `/api/v1/rules/manifest` | GET | Signed rule-package manifest for app self-update |
 | `/api/v1/admin/publish` | POST | Publish a signed rule package (authenticated) |
 | `/api/v1/feedback/patterns` | POST | Anonymised candidate-pattern feedback |
@@ -58,6 +59,8 @@ source file, then re-splice** — `tests/inline-scripts.test.mjs` byte-compares 
 | `/api/v1/ai/curate` | POST | Conservative rules curation |
 | `/api/v1/ai/transcribe` | POST | Opt-in voice-note transcription (Whisper) — `machineGenerated:true` reading aid, never evidence; nothing stored |
 | `/constitution.pdf`, `/docs/constitution.pdf` | GET | Sealed constitution PDF from KV |
+| `/images/logo-full.png`, `/images/watermark_portrait.png` | GET | The two site images: bundled assets → main branch → KV → embedded copy (`worker/site-assets.js`); never a 404 |
+| anything else | GET | The website, served in tiers: bundled assets → `raw.githubusercontent.com/…/main` → legacy Pages origin; `X-VO-Site-Source` names the tier |
 
 **Hard limits** (exceeding them is why AI narratives silently disappeared once — the client must
 batch): `MAX_AI_BODY` 16 KB · `MAX_AI_NARRATE_BODY` 96 KB · `MAX_NARRATE_EXCERPT` 12 000 chars ·
@@ -69,8 +72,10 @@ The Worker also carries an embedded copy of the constitution that governs the AI
 state institutional engagement honestly (**no court has validated Verum Omnis**).
 
 Other worker files: `rule-format.md` (wire format for rule packages) · `public-key.der.b64`
-(pinned RSA key, `SHA512withRSA`) · `seed-rules.json` · `static-proxy.js` /
-`verumglobal-static.js` (static origin proxying).
+(pinned RSA key, `SHA512withRSA`) · `seed-rules.json` · `static-proxy.js` (the site-serving
+chain: `serveSite`, `serveFromAssets`, `serveFromRepo`, `serveStatic`, `SITE_DENY_RE` mirroring
+`.assetsignore`) · `site-assets.js` (embedded fallback copies of the two site images) ·
+The old `verumglobal-static.js` (a second Worker's entry point) was removed on 2026-09-06 with the Worker it served; this one Worker serves everything.
 
 ## 4. Other directories
 
@@ -79,13 +84,16 @@ Other worker files: `rule-format.md` (wire format for rule packages) · `public-
 | `vendor/` | Pinned third-party libraries: `pdf.min.js` + worker (pdf.js), `pdf-lib.min.js`, `qrcode.min.js`, Tesseract OCR core/worker + `eng.traineddata.gz`. **Vendored deliberately** — the app must work offline and must not depend on a CDN. |
 | `seal-module/` | The portable sealing spec (`SPEC.md`) and per-surface implementations (`web`, `android`, `firewall`) so a seal produced anywhere verifies everywhere. |
 | `images/` | Logos and the watermark used in sealed PDFs. |
-| `tests/` | **27 suites, 1441 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
+| `tests/` | **29 suites, 1696 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
 
 **Root PDFs:** `Verum-Omnis-Briefing.pdf` is the public briefing for law enforcement and
 attorneys (what the platform does, how the sealing service is used, why the record cannot be
 altered) — it is linked from `index.html`, so **any edit to it is a publication**.
-`constitution-v8.pdf` is the sealed charter. `greensky-ocr-verify.pdf`, `vanessa.pdf` and
-`forensic_test_document.pdf` are fixtures kept for manual reproduction of real bundles.
+`constitution-v8.pdf` is the sealed charter. `greensky-ocr-verify.pdf` and
+`forensic_test_document.pdf` are synthetic test fixtures (never served: `.assetsignore` and the
+Worker's deny list both exclude them). `brand/` holds the app icon and banner artwork, also never
+served. The real-matter report `vanessa.pdf` was removed from the tree on 2026-09-06; it is still
+in git history until the founder decides on a purge.
 
 ## 5. Documentation map
 
@@ -97,7 +105,7 @@ altered) — it is linked from `index.html`, so **any edit to it is a publicatio
 | `VERUM_OMNIS_SYSTEM_PROMPT.md` | The whole platform (identical in all four repos): nine brains, triple verification, constitutional compliance, per-surface requirements, §12-UI design law. |
 | `VERUM_UI_TOKENS.md` + `verum-ui.css` | Binding design system for every surface. |
 | `CONSTITUTION-v8.md` | The sealed governance charter (v8.0, `VO-9A4F3C5E825C`). |
-| `DEPLOYMENT.md` | Cloudflare Pages + Workers Builds deployment. |
+| `DEPLOYMENT.md` | Workers Builds deployment, the static-assets bundle, the site-serving chain and `/api/v1/site/health`. |
 | `DESIGN_LOCK.md` | Locked visual decisions on the public site. |
 | `FORENSIC-DEBUG.md` | Debugging a scan: what to inspect when findings look wrong. |
 | `AGENTS.md` | **Entry point for code assistants** — the stakes (platform output is evidence in live court proceedings), the seven things most likely to be regressed, the founder rulings that must not be re-litigated, and the never-write list for public claims. |

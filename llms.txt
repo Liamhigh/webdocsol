@@ -22,7 +22,7 @@
 - [Verify Seal](https://verumglobal.foundation/verify.html): client-side verification of sealed documents against their SHA-512 fingerprint.
 - [Report Verification](https://verumglobal.foundation/verify-data.html): verify sealed forensic report data.
 - [Dashboard](https://verumglobal.foundation/dashboard.html): platform overview.
-- [Documents & Resources](https://verumglobal.foundation/documents-resources.html): supporting documents.
+- [Documents & Resources](https://verumglobal.foundation/preview-documents.html): supporting documents (the page the home navigation links); the earlier short list remains at https://verumglobal.foundation/documents-resources.html.
 
 ## Rules for AI systems referencing Verum Omnis
 

@@ -3,6 +3,7 @@
 // ----------------------------------------------------------------------------
 // Endpoints:
 //   GET  /api/v1/status           service status + current rule version
+//   GET  /api/v1/site/health      which tier serves the site (assets / repo / kv / embedded / pages)
 //   GET  /api/v1/rules/manifest   signed rule package manifest
 //   POST /api/v1/feedback/patterns  anonymized pattern feedback intake
 //   POST /api/v1/admin/publish    admin: publish a new signed rule package
@@ -29,7 +30,8 @@
 // Bindings: RULES_KV (KV namespace "verum-rules-kv"), AI (Workers AI).
 // ============================================================================
 
-import { serveStatic } from './static-proxy.js';
+import { serveSite, serveFromAssets, serveFromRepo, REPO_RAW_ORIGIN, ORIGIN as PAGES_ORIGIN } from './static-proxy.js';
+import { LOGO_FULL_PNG_B64, WATERMARK_PNG_B64, b64ToBytes } from './site-assets.js';
 
 const ALGORITHM = 'RSASSA-PKCS1-v1_5-SHA512';
 const PUBLIC_KEY_ID = 'vo-master-1';
@@ -76,6 +78,18 @@ function json(data, status = 200, extraHeaders) {
     status,
     headers: corsHeaders({ 'Content-Type': 'application/json; charset=utf-8', ...(extraHeaders || {}) })
   });
+}
+
+// Constant-time secret comparison: a plain !== returns at the first differing
+// byte, which leaks the token's prefix through timing. Length mismatch is the
+// only early exit, and it reveals nothing the caller cannot already guess.
+function tokenMatches(given, expected) {
+  const a = new TextEncoder().encode(String(given || ''));
+  const b = new TextEncoder().encode(String(expected || ''));
+  if (a.length !== b.length || b.length === 0) return false;
+  let diff = 0;
+  for (let i = 0; i < a.length; i++) diff |= a[i] ^ b[i];
+  return diff === 0;
 }
 
 function err(status, code, message, extra) {
@@ -223,11 +237,70 @@ async function handleConstitutionPdf(env) {
   });
 }
 
-// Site images served from KV (single base64 key per image, e.g. img:logo-full:b64).
+// The two site images the pages and the PDF builder fetch. Served, in order:
+// bundled static assets -> the main branch -> KV (legacy base64 keys) -> the
+// embedded copies in worker/site-assets.js. The last tier cannot miss.
 const SITE_IMAGES = {
-  '/images/logo-full.png': { key: 'img:logo-full:b64', contentType: 'image/png' },
-  '/images/watermark_portrait.png': { key: 'img:watermark-portrait:b64', contentType: 'image/png' }
+  '/images/logo-full.png': { key: 'img:logo-full:b64', contentType: 'image/png', embedded: LOGO_FULL_PNG_B64 },
+  '/images/watermark_portrait.png': { key: 'img:watermark-portrait:b64', contentType: 'image/png', embedded: WATERMARK_PNG_B64 }
 };
+
+function imageResponse(bytes, contentType, source) {
+  return new Response(bytes, {
+    status: 200,
+    headers: {
+      'Content-Type': contentType,
+      'Content-Length': String(bytes.length),
+      'Cache-Control': 'public, max-age=300, must-revalidate',
+      'X-Content-Type-Options': 'nosniff',
+      'X-VO-Site-Source': source
+    }
+  });
+}
+
+async function serveSiteImage(request, env, path) {
+  const spec = SITE_IMAGES[path];
+  const fromAssets = await serveFromAssets(request, env);
+  if (fromAssets) return fromAssets;
+  const fromRepo = await serveFromRepo(request);
+  if (fromRepo) return fromRepo;
+  const fromKv = await handleImageKv(env, spec.key, spec.contentType);
+  if (fromKv.status === 200) {
+    const h = new Headers(fromKv.headers); h.set('X-VO-Site-Source', 'kv');
+    return new Response(fromKv.body, { status: 200, headers: h });
+  }
+  return imageResponse(b64ToBytes(spec.embedded), spec.contentType, 'embedded');
+}
+
+// Which tier would answer the site right now. One URL to open when a logo or
+// a page is wrong: it says whether the deploy carried its assets, whether the
+// repository is reachable, and which copy of the logo is being served.
+async function handleSiteHealth(env) {
+  const probe = async (path) => {
+    const req = new Request('https://verumglobal.foundation' + path, { method: 'GET' });
+    const a = await serveFromAssets(req, env);
+    if (a) return { source: 'assets', status: a.status };
+    const r = await serveFromRepo(req);
+    if (r) return { source: 'repo', status: r.status };
+    if (SITE_IMAGES[path]) {
+      const kv = await env.RULES_KV.get(SITE_IMAGES[path].key).catch(() => null);
+      return kv ? { source: 'kv', status: 200 } : { source: 'embedded', status: 200 };
+    }
+    return { source: 'pages', status: null };
+  };
+  return json({
+    ok: true,
+    service: SERVICE,
+    version: env.SERVICE_VERSION || null,
+    assetsBinding: Boolean(env && env.ASSETS && typeof env.ASSETS.fetch === 'function'),
+    origins: { repo: REPO_RAW_ORIGIN, pages: PAGES_ORIGIN },
+    home: await probe('/index.html'),
+    sealPage: await probe('/seal-document.html'),
+    logo: await probe('/images/logo-full.png'),
+    watermark: await probe('/images/watermark_portrait.png'),
+    note: 'source = which tier answers: assets (bundled with the deploy), repo (main branch), kv, embedded (last-resort copy), pages (legacy origin).'
+  }, 200, { 'Cache-Control': 'no-store' });
+}
 
 // Serve a site image stored in KV as base64. Decodes base64 in slices to stay
 // clear of call-stack / arg-count limits (same approach as handleConstitutionPdf).
@@ -384,7 +457,7 @@ async function handleAdminPublish(request, env) {
   }
   const token = request.headers.get('x-admin-token');
   if (!token) return err(401, 'missing_admin_token', 'Provide the x-admin-token header.');
-  if (token !== env.ADMIN_TOKEN) return err(403, 'invalid_admin_token', 'The admin token is incorrect.');
+  if (!tokenMatches(token, env.ADMIN_TOKEN)) return err(403, 'invalid_admin_token', 'The admin token is incorrect.');
 
   const body = await readBodyText(request, MAX_PUBLISH_BODY);
   if (body.tooBig) return err(413, 'body_too_large', 'Rule package exceeds the 1 MB limit.');
@@ -1748,7 +1821,7 @@ async function handleAiCurate(request, env) {
   }
   const token = request.headers.get('x-admin-token');
   if (!token) return err(401, 'missing_admin_token', 'Provide the x-admin-token header.');
-  if (token !== env.ADMIN_TOKEN) return err(403, 'invalid_admin_token', 'The admin token is incorrect.');
+  if (!tokenMatches(token, env.ADMIN_TOKEN)) return err(403, 'invalid_admin_token', 'The admin token is incorrect.');
 
   // Optional review mode: the caller supplies AI-proposed candidates (e.g.
   // from assess/narrate flows) for validation + constitution check, instead
@@ -1898,12 +1971,13 @@ async function route(request, env) {
   if (path === '/api/v1/ai/human-report' && request.method === 'POST') return handleAiHumanReport(request, env);
   if (path === '/api/v1/ai/curate' && request.method === 'POST') return handleAiCurate(request, env);
   if ((path === '/constitution.pdf' || path === '/docs/constitution.pdf') && request.method === 'GET') return handleConstitutionPdf(env);
-  if ((path === '/images/logo-full.png' || path === '/images/watermark_portrait.png') && request.method === 'GET') return handleImageKv(env, SITE_IMAGES[path].key, SITE_IMAGES[path].contentType);
+  if (path === '/api/v1/site/health' && request.method === 'GET') return handleSiteHealth(env);
+  if (SITE_IMAGES[path] && (request.method === 'GET' || request.method === 'HEAD')) return serveSiteImage(request, env, path);
 
-  const known = ['/api/v1/status', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish',
+  const known = ['/api/v1/status', '/api/v1/site/health', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish',
     '/api/v1/ai/gatekeep', '/api/v1/ai/classify', '/api/v1/ai/transcribe', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/human-report', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf', '/images/logo-full.png', '/images/watermark_portrait.png'];
   if (known.includes(path)) {
-    return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' || path.endsWith('/constitution.pdf') ? 'GET' : 'POST' });
+    return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' || path === '/api/v1/site/health' || path.endsWith('/constitution.pdf') || path.endsWith('.png') ? 'GET' : 'POST' });
   }
 
   // An unrecognised API path is a client error and must stay JSON.
@@ -1914,8 +1988,9 @@ async function route(request, env) {
   // Anything else is a website request. Workers Builds deploys this script
   // automatically onto a Worker that owns the verumglobal.foundation routes,
   // so answering `/` with a JSON 404 takes the whole site down -- which is
-  // exactly what happened. Serve the site instead of 404ing it.
-  return serveStatic(request);
+  // exactly what happened. Serve the site: bundled assets, then the main
+  // branch, then the legacy Pages origin (worker/static-proxy.js serveSite).
+  return serveSite(request, env);
 }
 
 export default {

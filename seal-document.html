@@ -7,6 +7,7 @@
 <meta http-equiv="Expires" content="0">
 <meta name="vo-seal-build" content="1.11.0-20260906-court-ready-narrative">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" sizes="96x96" href="/images/favicon.png">
 <title>Seal Document — Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -10313,14 +10314,27 @@ function toggleSection(id) {
   el.style.display = el.style.display === 'none' ? 'block' : 'none';
 }
 
+// The Geolocation timeout option does NOT cover the time the browser spends
+// waiting for the user to answer the permission prompt (W3C spec). A prompt
+// that is ignored, or never shown (embedded browser, headless, a blocked
+// site), left the seal at step 1 forever — reproduced 2026-09-06 in headless
+// Chromium: 526 s at "GPS + Device — processing". The seal never depends on
+// a location: after VO_GPS_HARD_DEADLINE_MS the step records "not provided"
+// and the pipeline continues.
+var VO_GPS_HARD_DEADLINE_MS = 15000;
 function captureGPS() {
   return new Promise((resolve) => {
     if (!navigator.geolocation) { resolve(null); return; }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => { resolve({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6), accuracy: pos.coords.accuracy }); },
-      () => { resolve(null); },
-      { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-    );
+    var settled = false;
+    var done = function (v) { if (!settled) { settled = true; clearTimeout(hard); resolve(v); } };
+    var hard = setTimeout(function () { done(null); }, VO_GPS_HARD_DEADLINE_MS);
+    try {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => { done({ lat: pos.coords.latitude.toFixed(6), lng: pos.coords.longitude.toFixed(6), accuracy: pos.coords.accuracy }); },
+        () => { done(null); },
+        { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
+      );
+    } catch (e) { done(null); }
   });
 }
 

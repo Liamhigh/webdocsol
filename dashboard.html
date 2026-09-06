@@ -3,6 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="icon" type="image/png" sizes="96x96" href="/images/favicon.png">
 <title>Law Enforcement Dashboard — Verum Omnis</title>
 <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@300;400;500;600;700&display=swap" rel="stylesheet">
 <style>
@@ -330,7 +331,7 @@ var PATTERN_DESCS = {
   DOCUMENT_INTERNAL: 'Same document contradicts itself'
 };
 
-// Demo data for when API returns empty
+// Illustrative data, shown ONLY behind ?demo=1 and labelled on screen.
 function getDemoData(days) {
   var mult = days / 30;
   return {
@@ -383,23 +384,59 @@ async function loadDashboard(days) {
   document.getElementById('patternSection').style.display = 'none';
   document.getElementById('hotspotSection').style.display = 'none';
 
+  // Honesty rule (AGENTS.md, Constitution v8 §12): this page never shows an
+  // invented number as if it were the record. When the hub does not answer,
+  // or answers with no reports, the page says so. Illustrative figures exist
+  // only behind ?demo=1 and are labelled as such on screen.
+  var demoMode = /[?&]demo=1\b/.test(location.search);
   try {
-    var resp = await fetch(API_BASE + '/api/dashboard?days=' + days);
-    var data;
-    if (resp.ok) {
-      data = await resp.json();
-      // If empty, use demo
-      if (!data || !data.totalReports) data = getDemoData(days);
-    } else {
-      data = getDemoData(days);
+    var data = null;
+    if (!demoMode) {
+      var resp = await fetch(API_BASE + '/api/dashboard?days=' + days);
+      if (resp.ok) data = await resp.json();
     }
-    renderDashboard(data, days);
+    if (demoMode) {
+      renderDashboard(getDemoData(days), days);
+      showDemoBanner();
+    } else if (data && data.totalReports) {
+      renderDashboard(data, days);
+    } else {
+      renderUnavailable(data ? 'The forensic hub answered with no reports for this period.' : 'The forensic hub did not answer.');
+    }
   } catch (e) {
-    console.log('API error, using demo data:', e);
-    renderDashboard(getDemoData(days), days);
+    renderUnavailable('The forensic hub could not be reached.');
   }
 
   document.getElementById('loadingState').style.display = 'none';
+}
+
+function renderUnavailable(reason) {
+  ['statsGrid', 'crimeSection', 'patternSection', 'hotspotSection'].forEach(function (id) {
+    var el = document.getElementById(id); if (el) el.style.display = 'none';
+  });
+  var box = document.getElementById('unavailableState');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'unavailableState';
+    box.className = 'section';
+    document.getElementById('loadingState').insertAdjacentElement('afterend', box);
+  }
+  box.style.display = 'block';
+  box.innerHTML = '<h3>No live data to show</h3><p style="color:#8B95A5;line-height:1.6">' + reason +
+    ' Nothing on this page is simulated: figures appear here only when the Verum Omnis forensic hub reports them. ' +
+    'The sealing and verification tools are unaffected.</p>';
+}
+
+function showDemoBanner() {
+  var box = document.getElementById('unavailableState');
+  if (!box) {
+    box = document.createElement('div');
+    box.id = 'unavailableState';
+    box.className = 'section';
+    document.getElementById('loadingState').insertAdjacentElement('afterend', box);
+  }
+  box.style.display = 'block';
+  box.innerHTML = '<h3>ILLUSTRATIVE DATA — NOT THE RECORD</h3><p style="color:#8B95A5;line-height:1.6">This page was opened with <code>?demo=1</code>. Every number below is an invented example of what the dashboard shows when the forensic hub reports live data. None of it is real.</p>';
 }
 
 function renderDashboard(data, days) {

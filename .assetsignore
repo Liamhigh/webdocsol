@@ -4,7 +4,6 @@
 .git
 .gitignore
 .assetsignore
-.deploy-trigger
 worker/
 tests/
 node_modules/
@@ -12,9 +11,11 @@ package.json
 package-lock.json
 wrangler.toml
 *.md
-# Test fixtures and probes live in the repo for the suite, not for serving
-# at the domain. No site page references them (verified before adding).
-vanessa.pdf
+# Brand source assets (app icon, banners) and the portable sealing spec's
+# page snapshots are repository material, not site files.
+brand/
+seal-module/
+# Test fixtures live in the repo for the suite, not for serving at the domain.
+# No site page references them (tests/site-serving.test.mjs checks every page).
 greensky-ocr-verify.pdf
 forensic_test_document.pdf
-escape-probe.txt
