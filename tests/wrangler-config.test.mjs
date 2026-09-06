@@ -102,14 +102,18 @@ ok(kv(envAssets, 'run_worker_first') === kv(topAssets, 'run_worker_first'), 'run
 // became the permanent architecture. The drift this lock now guards against
 // is the route quietly narrowing or multiplying — either can orphan part of
 // the domain again.
+// Two hosts, one Worker (2026-09-07): a route pattern names one host, and
+// `verumglobal.foundation/*` never matched www — so www was served by the
+// zone's other origin (the Pages custom domain) while the apex ran this
+// Worker, and the two phones saw two different sites. Both hosts are declared
+// in both environments; nothing else may be.
 {
   const routeLines = toml.split(/\r?\n/).filter(l => /^\s*\{\s*pattern\s*=/.test(l));
-  ok(routeLines.length === 2, 'exactly one route pattern, declared in both environments (' + routeLines.length + ')');
-  for (const l of routeLines) {
-    ok(l.includes('"verumglobal.foundation/*"'),
-      'the declared route is the site catch-all: ' + l.trim());
-    ok(l.includes('zone_name = "verumglobal.foundation"'), 'route carries its zone_name');
-  }
+  ok(routeLines.length === 4, 'exactly two route patterns, declared in both environments (' + routeLines.length + ')');
+  const patterns = routeLines.map(l => (l.match(/pattern\s*=\s*"([^"]+)"/) || [])[1]).sort();
+  ok(patterns.join(',') === 'verumglobal.foundation/*,verumglobal.foundation/*,www.verumglobal.foundation/*,www.verumglobal.foundation/*',
+    'the declared routes are the apex and www catch-alls, nothing narrower or wider (' + patterns.join(' ') + ')');
+  for (const l of routeLines) ok(l.includes('zone_name = "verumglobal.foundation"'), 'route carries its zone_name');
 }
 
 console.log(`\n[wrangler-config] PASS=${pass} FAIL=${fail}`);

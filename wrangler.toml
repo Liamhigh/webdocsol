@@ -18,13 +18,20 @@ compatibility_flags = ["nodejs_compat"]
 # the Pages static proxy in worker/verum-rules.js), so the catch-all declared
 # here is the permanent architecture, not an exception: every deploy
 # re-asserts it, and the site cannot be orphaned by dashboard state again.
-# tests/wrangler-config.test.mjs pins this list to exactly this one pattern.
+# tests/wrangler-config.test.mjs pins this list to exactly these two patterns.
+# www: DNS proxies both hosts through Cloudflare, but a route pattern names
+# one host only — `verumglobal.foundation/*` never matched www, so www was
+# served by whatever origin the zone holds for it (the Cloudflare Pages
+# custom domain) while the apex ran this Worker. Two hosts, two origins, two
+# behaviours — the 2026-09-07 "logos broken on one phone, fine on another"
+# report. Both hosts now name this Worker.
 # After any routing change, verify
 # https://verumglobal.foundation/api/v1/rules/manifest still answers: the
 # Android app (1verum Constitution.kt) and the fraud-firewall rule updater
 # (firebase repo) both hard-code that URL.
 routes = [
-  { pattern = "verumglobal.foundation/*", zone_name = "verumglobal.foundation" }
+  { pattern = "verumglobal.foundation/*", zone_name = "verumglobal.foundation" },
+  { pattern = "www.verumglobal.foundation/*", zone_name = "verumglobal.foundation" }
 ]
 
 # THE SITE SHIPS WITH THE WORKER — Workers Static Assets. The Cloudflare
@@ -87,7 +94,8 @@ enabled = true
 # to the top-level bindings, so "cannot diverge" is enforced, not just intended.
 [env.production]
 routes = [
-  { pattern = "verumglobal.foundation/*", zone_name = "verumglobal.foundation" }
+  { pattern = "verumglobal.foundation/*", zone_name = "verumglobal.foundation" },
+  { pattern = "www.verumglobal.foundation/*", zone_name = "verumglobal.foundation" }
 ]
 
 [env.production.assets]

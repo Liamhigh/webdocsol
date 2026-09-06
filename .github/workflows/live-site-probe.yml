@@ -1,0 +1,26 @@
+# Eyes on the live site from outside. Run it by hand (Actions → live-site-probe
+# → Run workflow) whenever a page or an image is reported wrong: it prints,
+# for both hosts, the status, content type, the X-VO-Site-Source tier and a
+# text snippet for the home page, the seal page, both site images, the site
+# health endpoint, the status endpoint and a path that must not exist.
+# The AI sessions' sandbox cannot reach the domain; this can.
+name: live-site-probe
+on:
+  workflow_dispatch:
+jobs:
+  probe:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Probe both hosts
+        run: |
+          for host in verumglobal.foundation www.verumglobal.foundation; do
+            for p in / /seal-document.html /images/logo-full.png /images/mission-hands.jpg /api/v1/site/health /api/v1/status /this-path-does-not-exist; do
+              echo "===== https://$host$p"
+              curl -sS -A 'verum-live-site-probe' -o /tmp/body -D /tmp/hdr -w 'status=%{http_code} type=%{content_type} bytes=%{size_download} time=%{time_total}s\n' "https://$host$p" || echo "curl failed"
+              grep -i -E '^(x-vo-site-source|cf-ray|server|cache-control|content-type|cf-cache-status|location|x-powered-by|etag):' /tmp/hdr | tr -d '\r' || true
+              case "$p" in
+                /api/*) cat /tmp/body; echo ;;
+                *) head -c 400 /tmp/body | tr -d '\0' | sed 's/<[^>]*>/ /g' | tr -s ' \n\t' ' '; echo ;;
+              esac
+            done
+          done
