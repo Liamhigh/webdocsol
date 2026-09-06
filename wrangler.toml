@@ -10,14 +10,21 @@ compatibility_flags = ["nodejs_compat"]
 # THE ONE DECLARED ROUTE — a surgical exception to "routes stay in the
 # dashboard" (see the note at the bottom of this file). A stale dashboard
 # route still points the domain's /api/* traffic at the retired "verum-rules"
-# Worker (last deployed 2026-07-20), which answers 404 for every endpoint
-# added since. Cloudflare gives traffic to the MOST SPECIFIC matching route,
-# so declaring the transcribe path here reclaims exactly that path for this
-# Worker and nothing else. tests/wrangler-config.test.mjs pins this list to
-# exactly this one pattern — broadening it is a test failure by design.
-# Remove this once the stale dashboard routes are deleted.
+# Worker (last deployed 2026-07-20): it 404s endpoints added since (transcribe)
+# and serves July code for the ones that changed (assess, and narrate with its
+# honesty rules). Cloudflare gives traffic to the MOST SPECIFIC matching
+# route, so declaring the AI subtree here reclaims exactly /api/v1/ai/* for
+# this Worker and nothing else — the site, the rules manifest and the
+# feedback/admin endpoints stay on the dashboard-managed routes (all of those
+# are unchanged since the freeze, verified handler-by-handler against the
+# 2026-07-20 code). tests/wrangler-config.test.mjs pins this list to exactly
+# this one pattern — broadening it further is a test failure by design.
+# Remove this once the stale dashboard routes are deleted. During that
+# cleanup, verify https://verumglobal.foundation/api/v1/rules/manifest still
+# answers afterwards: the Android app (1verum Constitution.kt) and the
+# fraud-firewall rule updater (firebase repo) both hard-code that URL.
 routes = [
-  { pattern = "verumglobal.foundation/api/v1/ai/transcribe*", zone_name = "verumglobal.foundation" }
+  { pattern = "verumglobal.foundation/api/v1/ai/*", zone_name = "verumglobal.foundation" }
 ]
 
 # Single environment, deliberately.
@@ -61,7 +68,7 @@ enabled = true
 # to the top-level bindings, so "cannot diverge" is enforced, not just intended.
 [env.production]
 routes = [
-  { pattern = "verumglobal.foundation/api/v1/ai/transcribe*", zone_name = "verumglobal.foundation" }
+  { pattern = "verumglobal.foundation/api/v1/ai/*", zone_name = "verumglobal.foundation" }
 ]
 
 [[env.production.kv_namespaces]]
@@ -80,11 +87,13 @@ enabled = true
 
 # Routes stay dashboard-managed AS A RULE — declaring them broadly would let
 # any deploy from this repo re-point live production traffic. The single
-# declared exception is the transcribe route at the top of this file: it
-# exists because a stale dashboard route (old "verum-rules" Worker) was
-# capturing /api/* and 404ing every endpoint added after 2026-07-20, and the
-# most-specific-route rule makes one narrow pattern the least-power fix that
-# can ship from the repo. The test pins the list to that one pattern.
+# declared exception is the AI-subtree route at the top of this file: a stale
+# dashboard route (old "verum-rules" Worker, frozen 2026-07-20) captures
+# /api/*, 404ing endpoints added since and serving July code for the AI layer,
+# and the most-specific-route rule makes one /api/v1/ai/* pattern the
+# least-power fix that can ship from the repo — it re-points the AI endpoints
+# only, never the site or the non-AI API. The test pins the list to that one
+# pattern; zone-wide /* and api-wide /api/* stay forbidden.
 #
 # Routes this Worker answers on (dashboard-managed):
 #   verumglobal.foundation/*  (site via Pages proxy, /api/* via the router)
