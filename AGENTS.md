@@ -61,6 +61,23 @@ shape (`worker/rule-format.md`) without changing both clients. `VERUM_OMNIS_SYST
 is meant to be identical across the three repositories — an edit here must be mirrored there.
 
 **Known state right now.**
+- **7 September 2026, 01:16 SAST — the live domain is NOT served by this Worker yet.** The
+  `live-site-probe` workflow (two runs, five minutes apart, after the deploy that declared both
+  routes) showed: the apex `verumglobal.foundation` answers **every** path — `/`, the seal page,
+  both images, `/api/v1/status`, `/api/v1/site/health` — with a 1.5 KB React shell whose scripts
+  load from `3exuldgsw7sci.kimi.page` (the March design mock-up; the assets-only Worker
+  `verum-omnis-forensic-web` in the account, whose script is `export default { fetch() {} }`,
+  holds that shell and almost certainly the apex as a Custom Domain); `www` answers from the
+  Cloudflare Pages project `verumglobal` (Pages headers, `308 /seal-document.html →
+  /seal-document`, index.html for every unknown path including `/api/*`). No response on either
+  host carried `X-VO-Site-Source`. So the routes this Worker declares are not taking effect —
+  most likely the deploy's route step fails on the conflict (read the latest main build log in
+  Workers Builds). Consequences: the API does not exist on either public host (the
+  "transcription service error" is the home page HTML coming back from `www`), QR verify links
+  on the apex open the mock-up, the Android app's manifest URL returns HTML. Fix is in the
+  dashboard: detach the apex from `verum-omnis-forensic-web` (or delete that Worker), detach
+  `www` from the Pages project (or delete it), confirm `webdocsol` → Settings → Domains & Routes
+  lists both routes, then re-run `live-site-probe` and expect `X-VO-Site-Source` on both hosts.
 - 6 September 2026: the two retired Workers (`verum-rules`, `verumglobal-static`) were deleted
   from the dashboard; this Worker owns the domain (PRs #184–#186). The court-ready narrative
   shipped (#188). The live site showed broken logos afterwards: the Worker answered
