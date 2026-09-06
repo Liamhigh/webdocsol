@@ -78,6 +78,14 @@ is meant to be identical across the three repositories — an edit here must be 
   dashboard: detach the apex from `verum-omnis-forensic-web` (or delete that Worker), detach
   `www` from the Pages project (or delete it), confirm `webdocsol` → Settings → Domains & Routes
   lists both routes, then re-run `live-site-probe` and expect `X-VO-Site-Source` on both hosts.
+- 7 September 2026: the founder's first real run of the court-ready narrative (a 332-page
+  Greensky case file) came back with **no AI text in any section** — every section said
+  "(network)" — because the page was served by the host that has no API (previous bullet).
+  The forensic report's **five findings on that file are correct, not a regression**: the
+  engine is unchanged since 22 August and those five are the detections
+  `tests/greensky-regression` protects. PR #193 makes a section the narrator could not write
+  name its reason in plain words, retires the separate plain-language narrative PDF, gives the
+  narrative a contents page and sets its section budgets at the reference document's depth.
 - 6 September 2026: the two retired Workers (`verum-rules`, `verumglobal-static`) were deleted
   from the dashboard; this Worker owns the domain (PRs #184–#186). The court-ready narrative
   shipped (#188). The live site showed broken logos afterwards: the Worker answered
@@ -264,6 +272,37 @@ decisions below are binding on every later change:
 7. **Keyless by default.** `HUMAN_REPORT_MODEL` on Workers AI with the 8B
    fallback; an external OpenAI-compatible provider only through the three
    `LLM_*` secrets, never committed.
+
+### Founder direction (2026-09-07) — after the first real run (Greensky, 332 pages)
+
+The founder ran a 332-page Greensky case file and read the three PDFs against
+the reference "forensic goal" document. Decisions (PR #193), binding like the
+seven above:
+
+8. **One narrative, not two.** The plain-language narrative PDF (the
+   standalone `buildNarrative` download) is retired from the seal page: the
+   technical report's Part 1 already tells the findings in plain words and the
+   court-ready narrative is the covering document. `buildNarrative` stays in
+   `forensic-report.js` for the annex path and its tests; the page-boot and
+   human-report locks now pin the button's absence. Do not bring it back
+   without a founder decision.
+9. **A section the narrator could not write names its reason.** `failReason`
+   in the seal page maps the failure (an HTML answer where JSON was expected
+   is `no_api_at_this_address`, the Greensky case) and the `reasonText` map in
+   `buildHumanReport` prints the sentence — no_api_at_this_address, network,
+   timeout, ai_unavailable, gate_failed, no_json, empty, time_budget,
+   invalid_response, not_generated. A bare "(network)" is never printed again.
+10. **Depth follows the reference document; shape follows the Constitution.**
+   A contents page with real page numbers; an executive summary of 350–650
+   words (core pattern → KEY FINDINGS, one paragraph per finding → WHAT THE
+   RECORD ESTABLISHES); Critical Evidence with a heading line per finding
+   then 3–6 anchored sentences; the other budgets widened
+   (`HUMAN_SECTION_RULES`). The reference document's severity labels and
+   person-level verdicts are not adopted; the gates are unchanged.
+11. **Five findings on the 332-page file is not a regression.** Earlier,
+   higher counts were false positives removed deliberately (ENGINE.md §4.12);
+   the reference document was written over a different 451-page bundle. Do
+   not tune detectors to reproduce another document's count.
 
 ### How the Constitution's standing may be described (v8.0 §12)
 
