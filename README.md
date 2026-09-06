@@ -39,6 +39,7 @@
 - **Seal Chain of Custody** -- detects previous seals when re-sealing merged documents
 - **Per-page error recovery** -- individual pages that fail to embed get error notices instead of crashing the whole seal
 - **Proper error messages** -- clear explanations and recovery steps when sealing fails
+- **Voice notes and WhatsApp chat exports** -- a voice note seals exactly as it is (the original bytes, never altered); a whole chat export (`.zip`, Export chat → Include media) is unpacked on the device and its recordings, images and chat text seal together, with a Voice-Note Evidence Report tying each note to its sender and time in WhatsApp's own words
 - **Verify page rewrite** -- uses pdf-lib metadata extraction (no more "No Seal Found" false negatives)
 
 ---
@@ -264,7 +265,7 @@ webdocsol/
 |   |-- static-proxy.js                # the site-serving chain (assets -> main branch -> legacy Pages)
 |   |-- site-assets.js                 # embedded last-resort copies of the logo and watermark
 |   |-- rule-format.md, public-key.der.b64, seed-rules.json
-|-- tests/                             # 29 suites, 1696 assertions
+|-- tests/                             # 30 suites, 1721 assertions
 |   |-- run-all.js                     # the registry — an unregistered file does not run
 |-- vendor/                            # pinned pdf.js, pdf-lib, qrcode, Tesseract (offline-first)
 |-- images/                            # logo, favicon, sealed-PDF watermark (the only images the site serves)

@@ -195,7 +195,10 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
 
   ok(/Seal documents and voice notes separately/.test(html),
     'mixing audio and PDFs in one seal is refused with an explanation');
-  ok(/VO_AUDIO_MAX_FILES = 10/.test(html), 'audio batch is capped at 10 files');
+  // Raised from 10 to 25 on 2026-09-06 when whole WhatsApp chat exports became
+  // an input: a chat easily holds more than ten notes, and every note still
+  // gets its own certificate and anchor.
+  ok(/VO_AUDIO_MAX_FILES = 25/.test(html), 'audio batch is capped at 25 files');
   ok(/voSealAudioBatch/.test(html) && /if \(selectedAudioFiles\.length\) \{ return voSealAudioBatch\(\); \}/.test(html),
     'the seal button routes audio selections to the batch sealer');
 

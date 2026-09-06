@@ -32,6 +32,7 @@ const suites = [
   'narrate-excerpt.test.mjs',
   'human-report.test.mjs',
   'site-serving.test.mjs',
+  'zip-intake.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',
   'greensky-regression.test.js',

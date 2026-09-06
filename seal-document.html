@@ -355,8 +355,9 @@
   <div class="upload-zone" id="uploadZone">
     <div class="icon">&#128196;</div>
     <h3>Upload PDF Document(s) — sealed as one</h3>
-    <p>Drag and drop <strong>up to 10 PDFs</strong> here, or click to browse (hold Ctrl/Cmd to pick several). Multiple documents are <strong>merged and sealed as ONE</strong> — you get back a single sealed document and a single certificate, not one per file. Max 150MB total.</p>
-    <input type="file" id="fileInput" accept=".pdf,application/pdf,.opus,.ogg,.oga,.m4a,.aac,.mp3,.wav,.amr,.3gp,audio/*,.txt,text/plain,.png,.jpg,.jpeg,image/png,image/jpeg,.mp4,.mov,.m4v,.webm,.mkv,.avi,video/*" multiple>
+    <p>Drag and drop <strong>up to 10 PDFs</strong> here, or click to browse (hold Ctrl/Cmd to pick several). Multiple documents are <strong>merged and sealed as ONE</strong> — you get back a single sealed document and a single seal certificate.</p>
+    <p style="margin-top:8px;"><strong>Voice notes:</strong> pick the recordings (.opus) with any screen grabs of them — or upload a <strong>WhatsApp chat export (.zip)</strong>: on your phone open the chat → ⋮ → More → Export chat → <em>Include media</em>. The archive is unpacked <strong>on this device, never uploaded</strong>; every voice note, image and the chat text seal together and the report ties each note to its sender and time.</p>
+    <input type="file" id="fileInput" accept=".pdf,application/pdf,.opus,.ogg,.oga,.m4a,.aac,.mp3,.wav,.amr,.3gp,audio/*,.txt,text/plain,.png,.jpg,.jpeg,image/png,image/jpeg,.mp4,.mov,.m4v,.webm,.mkv,.avi,video/*,.zip,application/zip,application/x-zip-compressed" multiple>
   </div>
 
   <!-- File Info -->
@@ -365,6 +366,7 @@
     <span id="fileSize" style="color:#4A7EC7; margin-left:10px;"></span>
     <div id="fileList" style="margin-top:10px;font-size:13px;color:#D5D8DD;line-height:1.7;"></div>
   </div>
+  <div id="zipNote" style="display:none;margin:0 0 14px;background:rgba(74,126,199,0.08);border:1px solid rgba(74,126,199,0.35);border-radius:10px;padding:12px 14px;font-size:13px;color:#D5D8DD;line-height:1.6;"></div>
   <div id="protectedNote" style="display:none;margin:0 0 20px;background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:10px;padding:14px;font-size:13px;color:#D4A843;line-height:1.6;">&#128274; <strong>This PDF is password-protected.</strong> It can still be sealed — the seal (SHA-512 fingerprint + blockchain timestamp) will cover these exact bytes, and remains fully verifiable. But the watermark, QR code and footer cannot be stamped inside a locked file, so they will appear on your Seal Certificate instead of on the document pages. If you want a stamped copy, remove the password first (e.g. print the PDF to a new PDF), then seal that.</div>
 
   <!-- Seal Type Toggle -->
@@ -10484,11 +10486,12 @@ function voIsVideoFile(f) {
   return VO_VIDEO_RE.test(f.name || '') || /^video\//.test(f.type || '');
 }
 var selectedAudioFiles = [];
-var VO_AUDIO_MAX_FILES = 10;
+var VO_AUDIO_MAX_FILES = 25; // a whole chat export in one batch; each note still gets its own certificate and anchor
 // Companions to a voice-note batch: ONE WhatsApp chat export (.txt) that ties
 // each audio filename to a sender and time in WhatsApp's own words, and up to
-// ten screenshots as visual corroboration. Both are optional; both are
-// fingerprinted into the Voice-Note Evidence Report.
+// twenty-five images (screen grabs of the notes, or the chat export's own
+// photos) as visual corroboration. Both are optional; both are fingerprinted
+// into the Voice-Note Evidence Report.
 var voManifestFile = null;
 var voScreenshotFiles = [];
 var VO_SCREENSHOT_RE = /\.(png|jpe?g)$/i;
@@ -10532,9 +10535,147 @@ function voNameDate(fileName) {
   return m[1] + '-' + m[2] + '-' + m[3];
 }
 
+// ==================== ZIP INTAKE (WhatsApp "Export chat") ====================
+// A WhatsApp chat export is a .zip: the chat as .txt plus every attachment
+// (PTT-*.opus voice notes, IMG-*.jpg, VID-*.mp4, DOC-*.pdf, STK-*.webp).
+// Saving voice notes one by one from WhatsApp defeated most users; exporting
+// the chat is two taps. The archive is unpacked HERE, on the device — nothing
+// is uploaded — and each file then enters exactly the same intake as if it had
+// been picked by hand, so the single-voice-note path (a note plus a screen
+// grab of it, verified by the note's own date/time metadata) is unchanged.
+var VO_ZIP_RE = /\.zip$/i;
+function voIsZipFile(f) { return VO_ZIP_RE.test(f.name || '') || /(^|\/)(x-)?zip(-compressed)?$/i.test(f.type || ''); }
+var VO_ZIP_MAX_ENTRY = 200 * 1024 * 1024;
+var VO_ZIP_MAX_ENTRIES = 2000;
+// What a chat export may contribute as evidence; stickers (.webp), contact
+// cards (.vcf) and the like are named in the note but never added.
+var VO_ZIP_KEEP_RE = /\.(opus|ogg|oga|m4a|aac|mp3|wav|amr|3gp|mp4|mov|m4v|webm|mkv|avi|txt|png|jpe?g|pdf)$/i;
+function voMimeFor(name) {
+  var m = /\.([a-z0-9]+)$/i.exec(name || ''); var ext = m ? m[1].toLowerCase() : '';
+  return ({ opus: 'audio/ogg', ogg: 'audio/ogg', oga: 'audio/ogg', m4a: 'audio/mp4', aac: 'audio/aac', mp3: 'audio/mpeg', wav: 'audio/wav', amr: 'audio/amr', '3gp': 'audio/3gpp',
+    mp4: 'video/mp4', mov: 'video/quicktime', m4v: 'video/mp4', webm: 'video/webm', mkv: 'video/x-matroska', avi: 'video/x-msvideo',
+    txt: 'text/plain', png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', pdf: 'application/pdf' })[ext] || 'application/octet-stream';
+}
+// MS-DOS date/time (as ZIP stores it, local time) -> epoch ms; 0 when absent.
+function voDosDateToMs(dosTime, dosDate) {
+  if (!dosDate) return 0;
+  var sec = (dosTime & 0x1f) * 2, min = (dosTime >> 5) & 0x3f, hr = (dosTime >> 11) & 0x1f;
+  var day = dosDate & 0x1f, mon = ((dosDate >> 5) & 0x0f) - 1, yr = ((dosDate >> 9) & 0x7f) + 1980;
+  var t = new Date(yr, mon, day, hr, min, sec).getTime();
+  return isFinite(t) ? t : 0;
+}
+async function voInflateRaw(bytes) {
+  if (typeof DecompressionStream !== 'function') throw new Error('this browser cannot unpack compressed archives — pick the files individually');
+  var ds = new DecompressionStream('deflate-raw');
+  var writer = ds.writable.getWriter();
+  writer.write(bytes).catch(function () {}); writer.close().catch(function () {});
+  var reader = ds.readable.getReader(); var chunks = [], total = 0;
+  for (;;) { var r = await reader.read(); if (r.done) break; chunks.push(r.value); total += r.value.length; }
+  var out = new Uint8Array(total), off = 0;
+  for (var i = 0; i < chunks.length; i++) { out.set(chunks[i], off); off += chunks[i].length; }
+  return out;
+}
+// Reads a ZIP from its central directory — the authoritative index of names,
+// sizes, offsets and methods — never by scanning local headers, so the data
+// descriptors Android's exporter writes (flag bit 3) are not a problem.
+// Returns [{name, path, bytes, lastModified}] and [{name, skipped}] entries.
+async function voUnzip(buffer) {
+  var u8 = new Uint8Array(buffer), dv = new DataView(buffer), n = u8.length, eocd = -1;
+  for (var i = n - 22; i >= Math.max(0, n - 22 - 65535); i--) { if (dv.getUint32(i, true) === 0x06054b50) { eocd = i; break; } }
+  if (eocd < 0) throw new Error('not a ZIP archive');
+  var count = dv.getUint16(eocd + 10, true), cdOff = dv.getUint32(eocd + 16, true);
+  if (count === 0xffff || cdOff === 0xffffffff) throw new Error('ZIP64 archives are not supported — export a smaller chat, or pick the files individually');
+  if (count > VO_ZIP_MAX_ENTRIES) throw new Error('archive holds more than ' + VO_ZIP_MAX_ENTRIES + ' files');
+  var dec = new TextDecoder('utf-8'), entries = [], p = cdOff;
+  for (var e = 0; e < count && p + 46 <= n; e++) {
+    if (dv.getUint32(p, true) !== 0x02014b50) break;
+    var flags = dv.getUint16(p + 8, true), method = dv.getUint16(p + 10, true);
+    var dTime = dv.getUint16(p + 12, true), dDate = dv.getUint16(p + 14, true);
+    var csize = dv.getUint32(p + 20, true), usize = dv.getUint32(p + 24, true);
+    var nlen = dv.getUint16(p + 28, true), xlen = dv.getUint16(p + 30, true), clen = dv.getUint16(p + 32, true);
+    var lho = dv.getUint32(p + 42, true);
+    var name = dec.decode(u8.subarray(p + 46, p + 46 + nlen));
+    p += 46 + nlen + xlen + clen;
+    entries.push({ name: name, encrypted: !!(flags & 0x1), method: method, csize: csize, usize: usize, lho: lho, lastModified: voDosDateToMs(dTime, dDate) });
+  }
+  var out = [];
+  for (var k = 0; k < entries.length; k++) {
+    var en = entries[k];
+    if (en.name.slice(-1) === '/' || /(^|\/)(__MACOSX\/|\.)/.test(en.name)) continue; // folders, macOS cruft, dotfiles
+    var base = en.name.split('/').pop();
+    if (en.encrypted) { out.push({ name: base, skipped: 'password-protected' }); continue; }
+    if (en.usize > VO_ZIP_MAX_ENTRY) { out.push({ name: base, skipped: 'larger than 200 MB' }); continue; }
+    if (en.lho + 30 > n || dv.getUint32(en.lho, true) !== 0x04034b50) { out.push({ name: base, skipped: 'damaged entry' }); continue; }
+    var lnlen = dv.getUint16(en.lho + 26, true), lxlen = dv.getUint16(en.lho + 28, true);
+    var start = en.lho + 30 + lnlen + lxlen;
+    if (start + en.csize > n) { out.push({ name: base, skipped: 'truncated entry' }); continue; }
+    var raw = u8.subarray(start, start + en.csize), bytes;
+    if (en.method === 0) bytes = raw.slice();
+    else if (en.method === 8) { try { bytes = await voInflateRaw(raw); } catch (ie) { out.push({ name: base, skipped: ie.message }); continue; } }
+    else { out.push({ name: base, skipped: 'unsupported compression' }); continue; }
+    if (en.usize && bytes.length !== en.usize) { out.push({ name: base, skipped: 'size mismatch after unpacking' }); continue; }
+    out.push({ name: base, path: en.name, bytes: bytes, lastModified: en.lastModified });
+  }
+  return out;
+}
+// Expand any .zip in a selection into the files it holds (on-device). Returns
+// the flat list plus one plain-language note per archive for the file panel.
+async function voExpandZips(fileList) {
+  var files = Array.prototype.slice.call(fileList), out = [], notes = [], sawZip = false;
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
+    if (!voIsZipFile(f)) { out.push(f); continue; }
+    sawZip = true;
+    var entries;
+    try { entries = await voUnzip(await f.arrayBuffer()); }
+    catch (ze) { notes.push(f.name + ': could not be unpacked (' + (ze && ze.message ? ze.message : 'unreadable') + ')'); continue; }
+    var kept = 0, unused = [];
+    for (var j = 0; j < entries.length; j++) {
+      var en = entries[j];
+      if (en.skipped) { unused.push(en.name + ' — ' + en.skipped); continue; }
+      if (!VO_ZIP_KEEP_RE.test(en.name)) { unused.push(en.name); continue; }
+      out.push(new File([en.bytes], en.name, { type: voMimeFor(en.name), lastModified: en.lastModified || f.lastModified || 0 }));
+      kept++;
+    }
+    notes.push(f.name + ': ' + kept + ' file' + (kept === 1 ? '' : 's') + ' unpacked on this device (nothing was uploaded)' +
+      (unused.length ? '. Not used: ' + unused.slice(0, 6).join(', ') + (unused.length > 6 ? ' and ' + (unused.length - 6) + ' more' : '') : '') + '.');
+  }
+  return { files: out, notes: notes, sawZip: sawZip };
+}
+function voShowZipNote(notes) {
+  var el = document.getElementById('zipNote');
+  if (!el) return;
+  if (!notes || !notes.length) { el.style.display = 'none'; el.textContent = ''; return; }
+  el.textContent = notes.join(' ');
+  el.style.display = 'block';
+}
+// Entry point for every selection (picker or drop): archives are expanded
+// first; a chat export that holds voice notes AND documents becomes a
+// voice-note batch, and its documents are named in the note for a separate
+// seal — the intake below refuses to guess at a mixed seal.
+function voAddFiles(fileList) {
+  voExpandZips(fileList).then(function (x) {
+    var files = x.files, notes = x.notes;
+    if (x.sawZip) {
+      var hasAudio = files.some(function (f) { return voIsAudioFile(f) || voIsVideoFile(f); }) || selectedAudioFiles.length > 0;
+      if (hasAudio) {
+        var docs = files.filter(function (f) { return /\.pdf$/i.test(f.name) || f.type === 'application/pdf'; });
+        if (docs.length) {
+          files = files.filter(function (f) { return docs.indexOf(f) < 0; });
+          notes.push('Documents in the export are not part of a voice-note batch — seal them separately: ' + docs.map(function (d) { return d.name; }).slice(0, 6).join(', ') + (docs.length > 6 ? ' and ' + (docs.length - 6) + ' more' : '') + '.');
+        }
+      }
+    }
+    voShowZipNote(notes);
+    if (files.length) voAddFilesNow(files);
+  }).catch(function (err) {
+    alert('Could not read the selection: ' + (err && err.message ? err.message : 'unknown error'));
+  });
+}
+
 // Add PDFs to the bundle (deduped by name+size), enforcing a total-size cap.
 // A single file behaves exactly as before; two or more are merged at seal time.
-function voAddFiles(fileList) {
+function voAddFilesNow(fileList) {
   var added = 0, rejected = [];
   // Audio routes to its own batch path. Mixing audio and PDFs in one seal is
   // refused rather than guessed at: a PDF bundle merges into ONE document,
@@ -10563,7 +10704,7 @@ function voAddFiles(fileList) {
       selectedAudioFiles.push(af);
     }
     if (txtIn.length) voManifestFile = txtIn[txtIn.length - 1]; // one manifest; latest wins
-    for (var sh = 0; sh < shotIn.length && voScreenshotFiles.length < 10; sh++) {
+    for (var sh = 0; sh < shotIn.length && voScreenshotFiles.length < 25; sh++) {
       var sf = shotIn[sh];
       if (!voScreenshotFiles.some(function (x) { return x.name === sf.name && x.size === sf.size; })) voScreenshotFiles.push(sf);
     }
@@ -11852,7 +11993,7 @@ function voRenderAudioFiles() {
     '<input type="checkbox" id="voTranscribeOptIn"' + (tcChecked ? ' checked' : '') + ' style="margin-top:2px;">' +
     '<span><strong>Transcribe recordings (optional, off by default).</strong> Each recording is sent to the AI service for machine transcription — <strong style="color:#D4A843;">the audio leaves this device for that step</strong>, unlike sealing, which is entirely local. Transcripts appear in the Evidence Report under a machine-transcript banner: they are reading aids, not evidence — the sealed audio is. Leave unticked for privileged or sensitive recordings.</span></label></div>');
   rows.push('<div style="font-size:12px;color:#8ea3b5;margin-top:8px;line-height:1.6;">Audio is sealed exactly as-is: the SHA-512 fingerprint and Bitcoin anchor cover these exact bytes, and the seal record lives on the certificate and .ots receipt. The audio file is never altered. A transcript is not evidence — the sealed audio is.' +
-    ' Add the WhatsApp chat export (.txt, from Export chat) to tie each note to its sender and time in WhatsApp\'s own words, and screenshots (.png/.jpg) as visual corroboration — a Voice-Note Evidence Report will be built and sealed with the batch.</div>');
+    ' Add the WhatsApp chat export (.txt, from Export chat — or drop the whole export .zip here; it is unpacked on this device) to tie each note to its sender and time in WhatsApp\'s own words, and screen grabs (.png/.jpg) as visual corroboration — a Voice-Note Evidence Report will be built and sealed with the batch.</div>');
   list.innerHTML = rows.join('');
 }
 
