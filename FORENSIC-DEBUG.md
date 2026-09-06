@@ -64,6 +64,13 @@ The forensic report generation happens in **5 critical stages**:
   - Returns null/empty
 - **Recovery**: `aiNarrativeText` stays null; report still builds without it
 
+### Stage 3b: Court-Ready Narrative (Opt-in, default OFF)
+- **Location**: `aiHumanReport()` → `/api/v1/ai/human-report`, then `VerumReport.buildHumanReport()` → `VerumReport.seal()`
+- **Purpose**: the sealed AI-drafted companion report (ENGINE.md §13) — one worker call per writer section
+- **Failure modes**: a section answers `generated:false` with a `reason` (`ai_unavailable`, `timeout`, `no_json`, `gate_failed`, `no_findings`), or the client records `not_applicable` (nothing in the record engages the section, so it was not asked) or `time_budget` (the five-minute ceiling passed); the client records it and the PDF prints that section's deterministic twin labelled as not machine-written
+- **Recovery**: never blocks the seal, the forensic report or the findings JSON; the whole step is skipped unless `#humanReportOptIn` is ticked AND AI review is on
+- **Diagnose**: the Authentication & Provenance page of the narrative PDF states sections written vs printed and the gate counts; `window._voHumanReportPack` carries `generated`/`writerSections`/`model`
+
 ### Stage 4: Report PDF Construction (forensic-report.js:1042)
 - **Location**: `window.VerumReport.build(opts)`
 - **Input**: `{ findings, documents[], identity, ... }`

@@ -30,6 +30,7 @@ const suites = [
   'constitution-lock.test.mjs',
   'ai-assess-batch.test.mjs',
   'narrate-excerpt.test.mjs',
+  'human-report.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',
   'greensky-regression.test.js',

@@ -432,6 +432,181 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'novel-type filter covers the full engine range CT01-CT46');
 }
 
+// --- /api/v1/ai/human-report: the court-ready narrative, one section per call.
+// The gate is the guarantee: sentences that cite findings, pages or quotes not
+// in the inputs are dropped, §15.2 language is dropped, and a section that
+// loses the gate is reported generated:false — never a template dressed as AI.
+{
+  const hPost = (body, e) => worker.fetch(mk('/api/v1/ai/human-report', 'POST', typeof body === 'string' ? body : JSON.stringify(body)), e || env, {});
+  r = await worker.fetch(mk('/api/v1/ai/human-report', 'GET'), env, {});
+  ok(r.status === 405, 'human-report is POST-only (' + r.status + ')');
+  r = await hPost('nope'); let hj = await r.json().catch(() => null);
+  ok(r.status === 400 && hj && hj.error === 'invalid_json', 'human-report: invalid JSON body is a clean 400');
+  r = await hPost({ section: 'evidence_index', findings: [] }); hj = await r.json().catch(() => null);
+  ok(r.status === 400 && hj && hj.error === 'invalid_section', 'an engine-rendered section is not a writer section');
+  const hFindings = [
+    { id: 'F1', type: 'CT02', name: 'Date inconsistency', severity: 4, location: 'Page 2 vs Page 5', page: 2, pages: [2, 5], evidence: 'dated 3 March 2026 — yet dated 9 March 2026', quote: 'dated 3 March 2026', who: ['Acme Ltd'], sworn: false },
+    { id: 'F2', type: 'CT03', name: 'Signature missing', severity: 5, location: 'Page 7', page: 7, pages: [7], evidence: 'signature block left blank on the counterpart', quote: 'signature block left blank', who: [], law: [], sworn: true }
+  ];
+  const hGood = { section: 'executive_summary', documentName: 'demo.pdf', pageCount: 9, findings: hFindings,
+    candidates: [{ id: 'C1', type: 'CT09', name: 'Candidate', severity: 3, page: 3, pages: [3], evidence: 'an AI-raised item' }],
+    excerpt: '[Page 2] The agreement is dated 3 March 2026.\n[Page 5] The same agreement is dated 9 March 2026.',
+    caseContext: { caseName: 'Acme v Shell', jurisdiction: 'South Africa' }, gps: '-33.9,18.4', device: 'phone' };
+  // env.AI has no run() -> honest generated:false, never a template.
+  r = await hPost(hGood); hj = await r.json().catch(() => null);
+  ok(r.status === 200 && hj && hj.ok === true && hj.generated === false && hj.machineGenerated === false && hj.reason === 'ai_unavailable',
+    'no AI binding -> generated:false ai_unavailable (' + (hj && hj.reason) + ')');
+  ok(hj && hj.contract === 'human-v1' && hj.section === 'executive_summary', 'the reply names the contract and the section');
+  r = await hPost({ section: 'executive_summary', findings: [] }); hj = await r.json().catch(() => null);
+  ok(hj && hj.generated === false && hj.reason === 'no_findings', 'no findings -> no_findings, no model call');
+  // A draft flows through the gate: compliant, anchored sentences survive; the rest are dropped and counted.
+  let capUser = '', capSystem = '', capOpts = null;
+  const hDraft = 'The counterpart carries no signature on the page where one is required [F2] (p. 7). ' +
+    'The agreement is dated twice: "dated 3 March 2026" and "dated 9 March 2026" [F1] (p. 2, p. 5). ' +
+    'Acme Ltd is named on the cited pages [F1] (p. 2). ' +
+    'The two dates cannot both be the date of one agreement [F1]. ' +
+    'The record establishes both findings on the pages cited [F1] [F2]. ' +
+    'The verdict on any named person is for the court. ' +
+    'This might suggest carelessness [F1]. ' +
+    'The court accepted the report as evidence [F2] (p. 7). ' +
+    'A witness stated "the funds were routed through an offshore vehicle" [F9] (p. 12). ' +
+    'The record states "the counterpart was never countersigned by the seller" (p. 7). ' +
+    'Confidence: HIGH (85%).';
+  const AIenvH = { ...env, AI: { run: async (model, opts) => {
+    capOpts = opts;
+    capUser = (opts.messages.find(m => m.role === 'user') || {}).content || '';
+    capSystem = (opts.messages.find(m => m.role === 'system') || {}).content || '';
+    return { response: JSON.stringify({ text: hDraft }) };
+  } } };
+  r = await hPost(hGood, AIenvH); hj = await r.json().catch(() => null);
+  ok(hj && hj.generated === true && hj.machineGenerated === true && hj.model === '@cf/meta/llama-4-scout-17b-16e-instruct',
+    'a compliant draft is generated:true on the default keyless model (' + (hj && hj.model) + ')');
+  ok(hj && /no signature on the page/.test(hj.text) && /dated twice/.test(hj.text), 'anchored, compliant sentences survive');
+  ok(hj && !/might suggest/.test(hj.text), 'a hedged sentence is dropped (§15.2)');
+  ok(hj && !/court accepted/.test(hj.text), 'an overstated court-history sentence is dropped');
+  ok(hj && !/\[F9\]/.test(hj.text), 'a sentence citing a finding not in the inputs is dropped (PD2)');
+  ok(hj && !/never countersigned/.test(hj.text), 'a quotation not present in the inputs is dropped (PD2)');
+  ok(hj && !/85%/.test(hj.text), 'a score/percentage sentence is dropped (PD1)');
+  ok(hj && hj.gate && hj.gate.kept === 6 && hj.gate.dropped === 5, 'the gate counts kept and dropped honestly (' + JSON.stringify(hj && hj.gate) + ')');
+  ok(hj && /verdict on any named person is for the court/.test(hj.text), 'the executive summary closes with the verdict reservation');
+  ok(capOpts && capOpts.temperature === 0, 'the narrator runs at temperature 0 (PD4)');
+  ok(/CONSTITUTION/.test(capUser) && /Truth over probability/.test(capUser), 'the Constitution precedes every section');
+  ok(/Section: EXECUTIVE SUMMARY/.test(capUser), 'the section rules reach the model');
+  ok(!/18\.4|phone/.test(capUser) && !/gps|device/i.test(JSON.stringify(hj)), 'GPS and device data never reach the narrator or the reply');
+  ok(/never say a court adopted/i.test(capSystem) && /No scores, no percentages/.test(capSystem), 'the system prompt carries the honesty rules');
+  ok(/You originate nothing/.test(capSystem), 'the writer is told it originates nothing');
+  // A majority-prohibited draft loses the gate -> generated:false, no prose leaks.
+  const badEnv = { ...env, AI: { run: async () => ({ response: JSON.stringify({ text: 'This may be fraud [F1] (p. 2). It seems likely [F2] (p. 7). Confidence 90%.' }) }) } };
+  r = await hPost(hGood, badEnv); hj = await r.json().catch(() => null);
+  ok(hj && hj.generated === false && hj.reason === 'gate_failed' && !hj.text, 'a draft that fails the gate is generated:false with no text');
+  // plainTerms: one gated sentence per finding id; unknown or hedged ones vanish.
+  const ceEnv = { ...env, AI: { run: async () => ({ response: JSON.stringify({ text: 'The counterpart is unsigned [F2] (p. 7). The dates differ [F1] (p. 2).', plainTerms: { F1: 'The same agreement carries two different dates. Second sentence ignored.', F2: 'It might be unsigned.', F7: 'nope' } }) }) } };
+  r = await hPost({ ...hGood, section: 'critical_evidence' }, ceEnv); hj = await r.json().catch(() => null);
+  ok(hj && hj.generated === true && hj.plainTerms && hj.plainTerms.F1 === 'The same agreement carries two different dates.' && !hj.plainTerms.F2 && !hj.plainTerms.F7,
+    'plainTerms keeps one compliant sentence per known finding and drops hedged or unknown ones');
+  // External OpenAI-compatible provider: used when the three secrets exist.
+  const realFetchH = globalThis.fetch;
+  let extReq = null;
+  globalThis.fetch = async (url, init) => { extReq = { url: String(url), init }; return new Response(JSON.stringify({ choices: [{ message: { content: JSON.stringify({ text: hDraft }) } }] }), { status: 200, headers: { 'content-type': 'application/json' } }); };
+  try {
+    const extEnv = { ...env, LLM_API_BASE: 'https://llm.example.test/v1/', LLM_API_KEY: 'sk-test', LLM_MODEL: 'narrator-1' };
+    r = await hPost(hGood, extEnv); hj = await r.json().catch(() => null);
+    ok(extReq && extReq.url === 'https://llm.example.test/v1/chat/completions', 'the external provider is called at its chat-completions endpoint');
+    ok(extReq && /Bearer sk-test/.test((extReq.init.headers && (extReq.init.headers.authorization || extReq.init.headers.Authorization)) || ''), 'the external call carries the bearer secret');
+    ok(hj && hj.generated === true && hj.model === 'external:narrator-1', 'the reply names the external model (' + (hj && hj.model) + ')');
+    ok(!/sk-test/.test(JSON.stringify(hj)), 'the secret never appears in the reply');
+  } finally { globalThis.fetch = realFetchH; }
+}
+
+// --- human-report gate hardening: the guarantees the adversarial review found
+// missing. No anchor, no sentence (PD2); headings are gated; the prompt's
+// BANNED list is enforced; every anchor spelling is checked; sanctioned
+// one-line answers pass; the fallback model fits inside the client's wait.
+{
+  const hPost = (body, e) => worker.fetch(mk('/api/v1/ai/human-report', 'POST', JSON.stringify(body)), e || env, {});
+  const gFindings = [
+    { id: 'F1', type: 'CT02', name: 'Date inconsistency', severity: 4, page: 2, pages: [2, 5], evidence: 'dated 3 March 2026 — yet dated 9 March 2026', quote: 'dated 3 March 2026' },
+    { id: 'F2', type: 'CT03', name: 'Signature missing', severity: 5, page: 7, pages: [7], evidence: 'signature block left blank on the counterpart', quote: 'signature block left blank', sworn: true }
+  ];
+  const gBase = { section: 'chronology', pageCount: 9, findings: gFindings,
+    excerpt: '[Page 2] The agreement is dated 3 March 2026.\n[Page 5] The seller wrote: "the funds were routed through the trust account on 3 May 2026. Nothing else moved."' };
+  const PAD = 'The record states the first finding [F1] (p. 2). The record states the second finding [F2] (p. 7). ';
+  const mockAI = (text) => ({ ...env, AI: { run: async () => ({ response: JSON.stringify({ text }) }) } });
+  const gate = async (text, body) => (await hPost(body || gBase, mockAI(text))).json();
+  const kept = async (sentence, body) => { const j = await gate(PAD + sentence, body); return !!(j.text && j.text.indexOf(sentence.slice(0, 18)) >= 0); };
+  // PD2: no anchor, no sentence
+  ok(!(await kept('The respondent transferred R4,000,000 to a Panama account on 3 March 2026.')), 'an invented sentence with no anchor is dropped (PD2)');
+  ok(await kept('The verdict on any named person is for the court.'), 'the verdict reservation needs no anchor');
+  ok(await kept('Inducement: INSUFFICIENT on the record.'), 'a stated gap (INSUFFICIENT) needs no anchor (PD6)');
+  ok(!(await kept('The seller had insufficient funds for the deposit.')), 'the lower-case adjective is not the gap token');
+  ok(await kept('The seller wrote: "the funds were routed through the trust account on 3 May 2026. Nothing else moved."'), 'a verified quotation is an anchor, and its inner full stop does not split it');
+  // headings
+  let g = await gate('GUILTY OF FRAUD AND PERJURY\n\n' + PAD);
+  ok(g.generated === true && !/GUILTY/.test(g.text) && g.gate.dropped === 1, 'a verdict in capitals is not a heading: dropped and counted');
+  g = await gate('The respondent is guilty of fraud and perjury:\n\n' + PAD);
+  ok(!/guilty/.test(g.text) && g.gate.dropped === 1, 'a colon heading carrying a verdict is dropped');
+  g = await gate('RESPONDENT LIED UNDER OATH (SEE F9, P 99)\n\n' + PAD);
+  ok(!/LIED/.test(g.text), 'a heading with invented anchors is dropped');
+  g = await gate('PATTERN OF CONDUCT\r\n\r\n' + PAD);
+  ok(/PATTERN OF CONDUCT/.test(g.text) && g.gate.dropped === 0, 'a clean heading passes (CRLF paragraphs too)');
+  // the BANNED list, enforced
+  for (const t of ['The respondent could have signed it [F2] (p. 7).', 'The seller would have known the date [F1] (p. 2).', 'It appears that the date was altered [F1] (p. 2).',
+    'The dates are consistent with alteration [F1] (p. 2).', 'The blank block indicates non-execution [F2] (p. 7).', 'I believe the seller altered the date [F1] (p. 2).',
+    'The seller defrauded the buyer [F1] (p. 2).', 'The seller is dishonest and acted fraudulently [F1] (p. 2).', 'The respondent is a perjurer, per candidate law [F2] (p. 7).',
+    'The court found the report reliable [F2] (p. 7).', 'The report was accepted by the court [F2] (p. 7).', 'Fraud score 9/10 on this item [F1] (p. 2).',
+    'This scores nine out of ten [F1] (p. 2).', 'The confidence is high for this item [F1] (p. 2).', 'This is a CRITICAL severity item [F1] (p. 2).',
+    'A 90% certainty applies to this [F1] (p. 2).', 'The match is 90% [F1] (p. 2).', 'The seller may have signed the counterpart [F2] (p. 7).']) {
+    ok(!(await kept(t)), 'banned language dropped: ' + t);
+  }
+  for (const t of ['The signature block appears on the counterpart [F2] (p. 7).', 'The finding named Fraudulent application is anchored [F1] (p. 2).',
+    'The blank signature block may constitute non-execution [F2] (p. 7).', 'The letter is dated 2/10/2026 [F1] (p. 2).',
+    'In May 2026 the seller signed the counterpart [F2] (p. 7).', 'On 3 May 2026 the seller signed the counterpart [F2] (p. 7).', 'On May 3, 2026 the seller signed the counterpart [F2] (p. 7).',
+    'The office at Mayfair Street is named [F2] (p. 7).']) {
+    ok(await kept(t), 'compliant language kept: ' + t);
+  }
+  // every anchor spelling is checked
+  for (const t of ['The seller signed there [F2] (p 12).', 'The seller signed there [F2] (pg. 12).', 'The seller signed there [F2] (p12).', 'The seller signed there [F2] (p.99).',
+    'The seller signed at page twelve [F2].', 'The dates run across pp. 2-5 [F1].', 'The routing is established (F9) (p. 2).', 'Finding F9 establishes the routing (p. 2).',
+    'The seller signed there [F2] (p. 9999).']) {
+    ok(!(await kept(t)), 'unverifiable anchor dropped: ' + t);
+  }
+  for (const t of ['The seller signed there [F2] (p.7).', 'The dates appear at pp. 2, 5 [F1].', 'The dates appear at pp. 2 and 5 [F1].',
+    'The letter at p. 2, 3 March 2026, names the seller [F1].', 'The dates are established (F1) (p. 2).']) {
+    ok(await kept(t), 'valid anchor kept: ' + t);
+  }
+  // every quotation form is checked
+  for (const t of ['The seller wrote \u2018the money went to Panama on Monday\u2019 [F1] (p. 2).', "The seller wrote 'the money went to Panama on Monday' [F1] (p. 2).",
+    'The deed is "void ab initio" [F1] (p. 2).', 'The seller wrote "the money went to Panama. Nothing else moved." [F1] (p. 2).']) {
+    ok(!(await kept(t)), 'invented quotation dropped: ' + t);
+  }
+  ok(await kept("The seller's counterpart and the buyer's copy both carry the date [F1] (p. 2)."), 'apostrophes are not quotation marks');
+  // sanctioned one-line answers are complete
+  for (const t of ['None identified.', 'No account on record.', 'No oath language was found on the cited pages.', 'No systematic pattern is established in the record.']) {
+    g = await gate(t);
+    ok(g.generated === true && g.text.trim() === t && g.gate.exact === 1, 'sanctioned one-line answer passes: ' + t);
+  }
+  g = await gate('None identified. The respondent is guilty [F1] (p. 2).');
+  ok(g.generated === false && g.reason === 'gate_failed', 'a one-line answer plus a dropped sentence does not pass');
+  // timeouts: the fallback runs inside the client's wait, on a trimmed prompt
+  {
+    const src = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
+    ok(/HUMAN_TIMEOUT_MS = 30000/.test(src) && /HUMAN_FALLBACK_TIMEOUT_MS = 15000/.test(src) && /HUMAN_EXTERNAL_TIMEOUT_MS = 45000/.test(src),
+      'primary 30 s + fallback 15 s < the client\'s 52 s; the external provider keeps 45 s');
+    ok(/timeoutMs: HUMAN_FALLBACK_TIMEOUT_MS/.test(src) && /o\.fallbackUser \|\| user/.test(src), 'the fallback call uses the short timeout and the trimmed prompt');
+    const seen = [];
+    const big = { ...gBase, excerpt: ('[Page 2] ' + 'x'.repeat(200) + '\n').repeat(120) };
+    const e = { ...env, AI: { run: async (m, o) => { seen.push([m, o.messages[1].content.length]); if (m !== '@cf/meta/llama-3.1-8b-instruct-fp8') throw new Error('No such model'); return { response: JSON.stringify({ text: PAD }) }; } } };
+    g = await (await hPost(big, e)).json();
+    ok(g.generated === true && g.model === '@cf/meta/llama-3.1-8b-instruct-fp8' && seen.length === 2 && seen[1][1] < seen[0][1] - 10000,
+      'a failed primary falls back to the 8B model with a shorter excerpt (' + JSON.stringify(seen) + ')');
+    const origFetch = globalThis.fetch;
+    globalThis.fetch = async () => { const err = new Error('This operation was aborted'); err.name = 'AbortError'; throw err; };
+    try { g = await (await hPost(gBase, { ...env, LLM_API_BASE: 'https://llm.example.test/v1', LLM_API_KEY: 'sk-test', LLM_MODEL: 'narrator-1' })).json(); }
+    finally { globalThis.fetch = origFetch; }
+    ok(g.generated === false && g.reason === 'timeout', 'an aborted external provider call reports timeout, not ai_unavailable');
+  }
+}
+
 console.log('\n[worker] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[worker] ALL GREEN');
