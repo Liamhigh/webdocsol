@@ -4122,8 +4122,19 @@ async function buildHumanReport(opts) {
     } else if (sec && sec.reason === 'not_applicable') {
       ctx.para('No sealed finding engages this section, so the AI narrator was not asked to write it. The deterministic record follows; nothing here is machine-written.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
     } else {
-      var why = (sec && sec.reason) ? String(sec.reason).replace(/_/g, ' ') : 'not generated';
-      ctx.para('AI narrative not generated for this section (' + san(why) + '). The deterministic record follows; nothing here is machine-written.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+      var reasonText = {
+        no_api_at_this_address: 'the address this page was opened from answered with a web page instead of the AI service — the site was being served by a host that has no API, so the narrator could not be asked',
+        network: 'the AI service could not be reached from this page',
+        timeout: 'the AI service did not answer within the time allowed',
+        ai_unavailable: 'the AI model was unavailable',
+        gate_failed: 'the narrator\'s draft did not pass the anchor and language gate on the server and was discarded',
+        no_json: 'the narrator did not answer in the agreed format',
+        empty: 'the narrator returned nothing',
+        time_budget: 'the five-minute limit for the whole narrative passed before this section',
+        invalid_response: 'the AI service answered in an unexpected shape',
+        not_generated: 'the narrator was not run for this section'
+      }[(sec && sec.reason) || 'not_generated'] || ((sec && sec.reason) ? String(sec.reason).replace(/_/g, ' ') : 'not generated');
+      ctx.para('AI narrative not generated for this section: ' + san(reasonText) + '. The deterministic record follows; nothing here is machine-written.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
     }
     if (typeof fallback === 'function') fallback();
     return false;
@@ -4145,6 +4156,12 @@ async function buildHumanReport(opts) {
   }
 
   drawCover(ctx, data);
+  // Contents placeholder page (drawn last with real page numbers), as the
+  // forensic report does: the reference document opens with a table of
+  // contents and so does this one.
+  var tocPage = doc.addPage([PW, PH]);
+  ctx.drawWatermark(tocPage);
+  ctx.drawHeader(tocPage);
 
   // ---- 1. EXECUTIVE SUMMARY -----------------------------------------------
   ctx.newBodyPage();
@@ -4354,6 +4371,7 @@ async function buildHumanReport(opts) {
   engineUnder(secUnreadPages);
   engineUnder(secOcrProvenance);
 
+  drawToc(ctx, tocPage);
   try { doc.setTitle('Verum Omnis Court-Ready Narrative Report — ' + (doc0.name || 'document')); } catch (e) {}
   try { doc.setAuthor('Verum Omnis Constitutional Forensic AI'); } catch (e) {}
   try { doc.setProducer('Verum Omnis Forensic Report Builder v1.3.1 (pdf-lib)'); } catch (e) {}

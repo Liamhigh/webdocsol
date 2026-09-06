@@ -625,8 +625,11 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   const htmlOcr = require('fs').readFileSync(require('path').join(__dirname, '..', 'seal-document.html'), 'utf8');
   ok(/_voOcrRescuedPages = rescued\.slice\(\)/.test(htmlOcr),
     'the host page records which pages OCR recovered');
-  ok((htmlOcr.match(/ocrPages: _voOcrRescuedPages,/g) || []).length === 2,
-    'ocrPages reaches BOTH build and buildNarrative (rule 12.5)');
+  // Was 2 (build + buildNarrative) until the seal page stopped producing the
+  // plain-language narrative PDF on 2026-09-07; the court-ready narrative
+  // takes the same value through `ocrPages: _voOcrRescuedPages || null`.
+  ok((htmlOcr.match(/ocrPages: _voOcrRescuedPages,/g) || []).length === 1 && /ocrPages: _voOcrRescuedPages \|\| null/.test(htmlOcr),
+    'ocrPages reaches build AND buildHumanReport (rule 12.5)');
 }
 
 // ---- samePartyName sees through OCR word-splits ----

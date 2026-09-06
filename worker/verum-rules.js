@@ -1285,19 +1285,20 @@ const HUMAN_SECTIONS = [
 // law lives in the Constitution that precedes every call, not here.
 const HUMAN_SECTION_RULES = {
   executive_summary:
-    'Section: EXECUTIVE SUMMARY. 180-320 words.\n' +
-    'Open with the most serious anchored pattern.\n' +
-    'What the record establishes, who, when, why it matters.\n' +
-    'Cite findings as [F#] and pages as (p. N).\n' +
+    'Section: EXECUTIVE SUMMARY. 350-650 words.\n' +
+    'Paragraph 1: the core pattern the record establishes, in one or two sentences, anchored.\n' +
+    'Then a heading line KEY FINDINGS and one short paragraph per finding, most serious first: what the record states, who, when, the page(s), why it matters.\n' +
+    'Then a heading line WHAT THE RECORD ESTABLISHES: the pattern the findings form together, anchored.\n' +
+    'Cite findings as [F#] and pages as (p. N). Quote the record where a quotation exists in the inputs.\n' +
     'Close with: The verdict on any named person is for the court.',
   chronology:
-    'Section: CHRONOLOGY & PATTERN OF CONDUCT. 120-260 words.\n' +
+    'Section: CHRONOLOGY & PATTERN OF CONDUCT. 150-400 words.\n' +
     'Narrate the sequence the DATED evidence shows, in order.\n' +
     'Use only dates and pages in the inputs.\n' +
     'Present the sequence; assert no intent.\n' +
     'No sequence in the record? Write exactly: No systematic pattern is established in the record.',
   four_pillars:
-    'Section: FOUR PILLARS OF FRAUD. 150-300 words.\n' +
+    'Section: FOUR PILLARS OF FRAUD. 200-450 words.\n' +
     'Pillars: misrepresentation; knowledge; inducement or reliance; loss.\n' +
     'Per pillar: what the record evidences, anchored [F#] (p. N).\n' +
     'A pillar the record does not evidence: write INSUFFICIENT.\n' +
@@ -1306,7 +1307,7 @@ const HUMAN_SECTION_RULES = {
     'Section: CRITICAL EVIDENCE ANALYSIS.\n' +
     'For EVERY finding listed: one plain-terms sentence in plainTerms keyed by id.\n' +
     'plainTerms: one sentence a judge reads without training; no codes.\n' +
-    'Then text: 2-4 sentences per finding, anchored [F#] (p. N), quotes verbatim.\n' +
+    'Then text: a heading line per finding (its name and pages), then 3-6 sentences: what the record states, the quotation verbatim, what it establishes and what it does not, anchored [F#] (p. N).\n' +
     'Group findings that share a pattern. Explain what each establishes.',
   counter_narratives:
     'Section: COUNTER-NARRATIVES & REBUTTALS. 100-260 words.\n' +
@@ -1327,13 +1328,13 @@ const HUMAN_SECTION_RULES = {
     'Never intent, motive, psychology or credibility.\n' +
     'None in the inputs? Write exactly: None identified.',
   legal_framework:
-    'Section: LEGAL FRAMEWORK. 150-300 words.\n' +
+    'Section: LEGAL FRAMEWORK. 200-450 words.\n' +
     'Home jurisdiction first, then any other in caseContext.\n' +
     'Which provisions the anchored findings engage, in plain words.\n' +
     'Every conclusion as candidate law: may constitute; engages.\n' +
     'Cite only real law. Unsure of the section? State the principle.',
   recommendations:
-    'Section: RECOMMENDATIONS. 120-220 words.\n' +
+    'Section: RECOMMENDATIONS. 150-320 words.\n' +
     'Practical next steps for counsel and investigators.\n' +
     'Band them: 0-14 days; 14-90 days; 90+ days.\n' +
     'Tie each step to a finding [F#].\n' +

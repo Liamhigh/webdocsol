@@ -110,7 +110,9 @@ ok(/-court-ready-narrative-sealed\.pdf/.test(html), 'the human report is named a
 ok(/hrOpt && hrOpt\.checked && isAiReviewEnabled\(\)/.test(html), 'the step runs only behind opt-in AND AI review');
 ok(!/gps/i.test(html.slice(html.indexOf('async function aiHumanReport('), html.indexOf('async function aiClassifyDocument('))),
   'the human-report payload never carries GPS or device data');
-ok((html.match(/ocrPages: _voOcrRescuedPages,/g) || []).length === 2, 'the legal-analysis ocrPages lock is undisturbed');
+// (was 2 while the page also built the plain-language narrative; that PDF was retired 2026-09-07)
+ok((html.match(/ocrPages: _voOcrRescuedPages,/g) || []).length === 1 && /ocrPages: _voOcrRescuedPages \|\| null/.test(html),
+  'ocrPages reaches the forensic report and the court-ready narrative');
 ok(/unreadPages: _voUnreadPages,\n\s*onProgress/.test(html) && /var unread = voHumanUnreadList\(ctxIn && ctxIn\.unreadPages\)/.test(html),
   'the unread-page record reaches the narrator through the flattener (it is an object, not an array)');
 ok(/VO_HUMAN_TOTAL_BUDGET_MS = 5 \* 60 \* 1000/.test(html) && /reason: 'time_budget'/.test(html), 'the whole narrative has a five-minute ceiling');

@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 30 suites, 1721 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 30 suites, 1722 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -377,7 +377,9 @@ future edit cannot quietly delete those rules.
 ## 7. Report anatomy (`forensic-report.js`)
 
 `build(opts)` → main report PDF bytes · `buildNarrative(opts)` → the standalone
-plain-language narrative PDF · `buildHumanReport(opts)` → the court-ready narrative PDF (§13) ·
+plain-language narrative PDF (kept and tested, but **no longer produced by the seal page** since
+2026-09-07 — founder: not necessary; the forensic report's Part 1 is the plain-language telling and
+the court-ready narrative is the covering document) · `buildHumanReport(opts)` → the court-ready narrative PDF (§13) ·
 `seal(pdf, sealOpts)` → sealed PDF.
 
 **The report is in two halves, and the order is a founder ruling (AGENTS.md ruling 5): the
@@ -522,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**30 suites · 1721 assertions.** `tests/run-all.js` is the registry — a new
+**30 suites · 1722 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -814,6 +816,14 @@ Client side, `buildHumanReport` runs `scrubNarrative` → `voGatePasses` again o
 section (headings included), prints the removed-sentence count under it, and renders the
 deterministic twin — labelled "nothing here is machine-written" — for any section that did
 not survive. Never loosen either gate.
+
+**Shape (2026-09-07).** The narrative opens with a contents page drawn last with real page
+numbers, like the forensic report; a section the narrator could not write names the reason in
+plain words (the address had no API, the service could not be reached, it timed out, the server
+gate discarded the draft, the five-minute budget passed) — never a bare code. Section budgets
+follow the reference document's depth: the executive summary (350–650 words) opens with the
+core pattern, then KEY FINDINGS one paragraph per finding, then WHAT THE RECORD ESTABLISHES;
+Critical Evidence gives each finding a heading line and three to six anchored sentences.
 
 **Model.** Keyless Workers AI: `HUMAN_REPORT_MODEL` (default
 `@cf/meta/llama-4-scout-17b-16e-instruct`, 131k-token context) with the fast 8B model as

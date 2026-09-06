@@ -229,15 +229,15 @@ for (const page of PAGES) {
     'all seven §15.4 section headings render');
   ok(html.includes('Behavioural Scorecard') && html.includes('Actionable Output'),
     'party analysis annex keeps the scorecard and actionable output');
-  // B10 plain-language narrative twin: builder exported, page builds + seals
-  // it, and the download is seal-guarded like the forensic report.
+  // B10 plain-language narrative builder stays inlined and exported (the annex
+  // path and its tests use it) …
   ok(html.includes('async function buildNarrative'), 'B10 buildNarrative builder is inlined');
   ok(html.includes('buildNarrative: buildNarrative'), 'buildNarrative is exported on VerumReport');
-  ok(html.includes('VerumReport.buildNarrative'), 'seal flow calls buildNarrative');
-  ok(html.includes('downloadNarrativeReport'), 'narrative download button is wired');
-  ok(/window\._voNarrativePack\.bytes\) && window\.VoSealGuard\.isSealed\(window\._voNarrativePack\.bytes\)/.test(html) ||
-     html.includes('VoSealGuard.isSealed(window._voNarrativePack.bytes)'),
-    'narrative download is seal-guarded');
+  // The separate plain-language narrative PDF was retired on 2026-09-07 (founder:
+  // not necessary — the forensic report's Part 1 is the plain-language telling).
+  ok(!html.includes('downloadNarrativeReport') && !html.includes('plain-language-narrative-sealed.pdf'),
+    'the plain-language narrative PDF is no longer produced or offered');
+  ok(!/VerumReport\.buildNarrative\(/.test(html), 'the seal page no longer calls buildNarrative');
 }
 
 // AI endpoints must be called SAME-ORIGIN. A hardcoded apex host made every AI
