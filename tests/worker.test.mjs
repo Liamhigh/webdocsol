@@ -30,24 +30,56 @@ ok(j && j.error === 'not_found', '404 body has error=not_found');
 // A non-API path must be served as the website, NOT answered with a JSON 404.
 // This Worker gets deployed by CI onto a Worker owning the site's routes, so
 // 404ing `/` here takes the entire site down -- it did, on 2026-07-25.
+// Since 2026-09-06 the site is served in tiers: bundled assets (env.ASSETS),
+// then the main branch on raw.githubusercontent.com, then the legacy Pages
+// origin. Every answer names its tier in X-VO-Site-Source.
 {
   const realFetch = globalThis.fetch;
   const seen = [];
+  const byHost = { raw: null, pages: null };
   globalThis.fetch = async (req) => {
-    seen.push(typeof req === 'string' ? req : req.url);
-    return new Response('<!DOCTYPE html><title>site</title>', {
-      status: 200, headers: { 'content-type': 'text/html' }
-    });
+    const u = typeof req === 'string' ? req : req.url;
+    seen.push(u);
+    const h = /raw\.githubusercontent\.com/.test(u) ? byHost.raw : byHost.pages;
+    return h ? h(u) : new Response('not found', { status: 404 });
   };
   try {
+    byHost.raw = () => new Response('<!DOCTYPE html><title>site</title>', { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8' } });
     r = await worker.fetch(mk('/'), env, {});
     ok(r.status === 200, 'site root is served, not 404 (' + r.status + ')');
-    ok((r.headers.get('content-type') || '').includes('text/html'), 'site root returns HTML');
-    ok(seen.some(u => u.includes('verumglobal.pages.dev')), 'site root proxies to the Pages origin');
+    ok((r.headers.get('content-type') || '').includes('text/html'), 'site root returns HTML (typed by extension, not the raw host\'s text/plain)');
+    ok(seen.some(u => u === 'https://raw.githubusercontent.com/Liamhigh/webdocsol/main/index.html'), 'site root is served from the main branch');
+    ok(!seen.some(u => u.includes('verumglobal.pages.dev')), 'the Pages origin is not consulted when the repo answers');
+    ok(r.headers.get('x-vo-site-source') === 'repo', 'the answer names its tier (repo)');
 
     seen.length = 0;
     r = await worker.fetch(mk('/dashboard'), env, {});
-    ok(seen.some(u => u.includes('/dashboard.html')), 'extensionless page maps to its .html file');
+    ok(seen.some(u => u.endsWith('/main/dashboard.html')), 'extensionless page maps to its .html file');
+
+    // repo miss -> the legacy Pages origin still answers
+    byHost.raw = () => new Response('404: Not Found', { status: 404 });
+    byHost.pages = () => new Response('<!DOCTYPE html><title>site</title>', { status: 200, headers: { 'content-type': 'text/html' } });
+    seen.length = 0;
+    r = await worker.fetch(mk('/'), env, {});
+    ok(r.status === 200 && seen.some(u => u.includes('verumglobal.pages.dev')) && r.headers.get('x-vo-site-source') === 'pages',
+      'when the repo has no such file the Pages origin answers (' + r.headers.get('x-vo-site-source') + ')');
+
+    // bundled assets answer first, with no network at all
+    seen.length = 0;
+    const envA = { ...env, ASSETS: { fetch: async () => new Response('<!DOCTYPE html><title>bundled</title>', { status: 200, headers: { 'content-type': 'text/html; charset=utf-8' } }) } };
+    r = await worker.fetch(mk('/seal-document.html'), envA, {});
+    ok(r.status === 200 && seen.length === 0 && r.headers.get('x-vo-site-source') === 'assets', 'bundled assets answer before any origin is asked');
+    const envA404 = { ...env, ASSETS: { fetch: async () => new Response('nf', { status: 404 }) } };
+    byHost.raw = () => new Response('x', { status: 200, headers: { 'content-type': 'text/plain' } });
+    r = await worker.fetch(mk('/verify.html'), envA404, {});
+    ok(r.headers.get('x-vo-site-source') === 'repo', 'an assets miss falls through to the repo');
+
+    // source, config, docs and fixtures are never site files, on any tier
+    for (const p of ['/wrangler.toml', '/worker/verum-rules.js', '/tests/worker.test.mjs', '/.assetsignore', '/AGENTS.md', '/seal-module/SPEC.md', '/seal-module/web/seal-document.html', '/brand/banner_dark.png', '/greensky-ocr-verify.pdf', '/package.json']) {
+      seen.length = 0;
+      r = await worker.fetch(mk(p), envA, {});
+      ok(r.status === 404 && seen.length === 0, 'never served: ' + p + ' (' + r.status + ')');
+    }
   } finally {
     globalThis.fetch = realFetch;
   }
@@ -73,42 +105,49 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
 {
   const realFetch = globalThis.fetch;
   const seen = [];
+  const byHost = { raw: null, pages: null };
   globalThis.fetch = async (req) => {
-    seen.push(typeof req === 'string' ? req : req.url);
-    return new Response('x', { status: 200, headers: { 'content-type': 'application/javascript' } });
+    const u = typeof req === 'string' ? req : req.url;
+    seen.push(u);
+    const h = /raw\.githubusercontent\.com/.test(u) ? byHost.raw : byHost.pages;
+    return h ? h(u) : new Response('not found', { status: 404 });
   };
   try {
+    byHost.raw = () => new Response('x', { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8' } });
     let r = await worker.fetch(mk('/vendor/pdf-lib.min.js'), env, {});
     const cc = r.headers.get('cache-control') || '';
-    ok(!/no-store/.test(cc), 'asset response is cacheable (' + cc + ')');
+    ok(!/no-store/.test(cc) && /max-age=300/.test(cc), 'asset response is cacheable (' + cc + ')');
+    ok((r.headers.get('content-type') || '').includes('javascript'), 'a script from the repo is typed as JavaScript');
     ok(!seen.some(u => u.includes('_cb=')), 'asset request carries no cache-buster');
 
     // A failed asset must never be cached. Caching every status code for an
     // hour pinned a transient 404 at the edge, so forensic-engine-page.js came
     // back missing and the page reported "runForensicEngine is not defined".
-    globalThis.fetch = async () => new Response('not found', { status: 404 });
+    byHost.raw = () => new Response('nf', { status: 404 });
+    byHost.pages = () => new Response('not found', { status: 404 });
     r = await worker.fetch(mk('/forensic-engine-page.js'), env, {});
-    ok(/no-store/.test(r.headers.get('cache-control') || ''),
+    ok(r.status === 404 && /no-store/.test(r.headers.get('cache-control') || ''),
       'failed asset is not cached (' + (r.headers.get('cache-control') || '') + ')');
 
-    globalThis.fetch = async (req) => {
-      seen.push(typeof req === 'string' ? req : req.url);
-      return new Response('x', { status: 200, headers: { 'content-type': 'application/javascript' } });
-    };
+    // HTML is never cached by the browser, whichever tier answers
+    byHost.raw = () => new Response('<!DOCTYPE html>', { status: 200, headers: { 'content-type': 'text/plain; charset=utf-8' } });
+    r = await worker.fetch(mk('/seal-document'), env, {});
+    ok(/no-store/.test(r.headers.get('cache-control') || ''), 'HTML from the repo stays uncached');
+    byHost.raw = () => new Response('nf', { status: 404 });
+    byHost.pages = () => new Response('<!DOCTYPE html>', { status: 200, headers: { 'content-type': 'text/html' } });
     seen.length = 0;
     r = await worker.fetch(mk('/seal-document'), env, {});
-    ok(/no-store/.test(r.headers.get('cache-control') || ''), 'HTML stays uncached');
-    ok(seen.some(u => u.includes('_cb=')), 'HTML request is still cache-busted');
+    ok(/no-store/.test(r.headers.get('cache-control') || ''), 'HTML from Pages stays uncached');
+    ok(seen.some(u => u.includes('verumglobal.pages.dev') && u.includes('_cb=')), 'the Pages tier still cache-busts HTML');
 
-    // HTML-as-asset guard. During a Pages redeploy the origin briefly answered
-    // /vendor/tesseract.min.js with the home page as a 200 -- which the edge
-    // then cached for an hour. The OCR loader's global check failed and 32
-    // image-only pages of the Greensky bundle went unread. A .js asset that
-    // comes back text/html must be retried cache-busted, and if still HTML,
-    // answered 503 no-store -- never served as if it were the script.
+    // HTML-as-asset guard on the Pages tier. During a Pages redeploy the origin
+    // briefly answered /vendor/tesseract.min.js with the home page as a 200 --
+    // which the edge then cached for an hour. The OCR loader's global check
+    // failed and 32 image-only pages of the Greensky bundle went unread. A .js
+    // asset that comes back text/html must be retried cache-busted, and if
+    // still HTML, answered 503 no-store -- never served as if it were the script.
     let calls = 0;
-    globalThis.fetch = async (req) => {
-      const u = typeof req === 'string' ? req : req.url;
+    byHost.pages = (u) => {
       calls++;
       if (calls === 1) return new Response('<!DOCTYPE html><title>home</title>', { status: 200, headers: { 'content-type': 'text/html' } });
       ok(u.includes('_vb='), 'HTML-as-asset retry is cache-busted');
@@ -118,13 +157,20 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     ok(calls === 2 && (r.headers.get('content-type') || '').includes('javascript'),
       'asset served as JS after one cache-busted retry (calls=' + calls + ')');
 
-    globalThis.fetch = async () => new Response('<!DOCTYPE html><title>home</title>', { status: 200, headers: { 'content-type': 'text/html' } });
+    byHost.pages = () => new Response('<!DOCTYPE html><title>home</title>', { status: 200, headers: { 'content-type': 'text/html' } });
     r = await worker.fetch(mk('/vendor/tesseract.min.js'), env, {});
     ok(r.status === 503 && /no-store/.test(r.headers.get('cache-control') || ''),
       'persistent HTML-for-asset answers 503 no-store, never HTML-as-JS (' + r.status + ')');
 
+    // The repo tier applies the same guard: an HTML interstitial for a .js
+    // path is a miss, never a script.
+    byHost.raw = () => new Response('<!DOCTYPE html>', { status: 200, headers: { 'content-type': 'text/html' } });
+    r = await worker.fetch(mk('/vendor/tesseract.min.js'), env, {});
+    ok(r.status === 503, 'an HTML answer from the raw host for a script is a miss, not a script (' + r.status + ')');
+
     // An HTML page returning text/html is of course NOT the guard's business.
-    globalThis.fetch = async () => new Response('<!DOCTYPE html>', { status: 200, headers: { 'content-type': 'text/html' } });
+    byHost.raw = () => new Response('nf', { status: 404 });
+    byHost.pages = () => new Response('<!DOCTYPE html>', { status: 200, headers: { 'content-type': 'text/html' } });
     r = await worker.fetch(mk('/seal-document'), env, {});
     ok(r.status === 200, 'HTML pages still serve HTML normally');
   } finally {

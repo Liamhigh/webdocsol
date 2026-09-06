@@ -55,7 +55,7 @@ This repository standardises the Verum Omnis document sealing and verification s
 
 > **⚠ `seal-module/web/` is NOT the live site.** It holds older snapshots of
 > `seal-document.html` and `verify.html` kept alongside the portable sealing spec. The pages
-> Cloudflare Pages actually serves are the ones at the **repository root**, and they have moved
+> the Worker actually serves are the ones at the **repository root**, and they have moved
 > a long way past those snapshots (the live `seal-document.html` is ~748 KB because the engine
 > and report generator are inlined into it; the snapshot is ~136 KB). **Edit the root files.**
 > A change made only in `seal-module/web/` ships nothing.
@@ -252,6 +252,7 @@ webdocsol/
 |-- seal-document.html                 # LIVE main app (engine + report inlined)
 |-- verify.html                        # LIVE Verification Hub — every seal QR points here
 |-- verify-data.html, dashboard.html, constitution.html, documents-resources.html
+|-- preview-documents.html             # the Documents page the home navigation links (preview-index.html: unlinked home preview)
 |-- forensic-engine-page.js            # the deterministic engine (CT01-CT46, D01-D40)
 |-- forensic-report.js                 # sealed report generator (build / buildNarrative / buildHumanReport / seal)
 |-- seal-guard.js, ots-proof.js, pdf-encrypt.js
@@ -259,22 +260,22 @@ webdocsol/
 |-- verum-ui.css                       # binding design tokens
 |-- Verum-Omnis-Briefing.pdf           # public briefing, linked from index.html
 |-- worker/
-|   |-- verum-rules.js                 # the Cloudflare Worker (AI + rules endpoints)
+|   |-- verum-rules.js                 # the Cloudflare Worker: router, AI + rules endpoints, site health
+|   |-- static-proxy.js                # the site-serving chain (assets -> main branch -> legacy Pages)
+|   |-- site-assets.js                 # embedded last-resort copies of the logo and watermark
 |   |-- rule-format.md, public-key.der.b64, seed-rules.json
-|-- tests/                             # 27 suites, 1441 assertions
+|-- tests/                             # 29 suites, 1696 assertions
 |   |-- run-all.js                     # the registry — an unregistered file does not run
 |-- vendor/                            # pinned pdf.js, pdf-lib, qrcode, Tesseract (offline-first)
-|-- images/                            # logos + sealed-PDF watermark
+|-- images/                            # logo, favicon, sealed-PDF watermark (the only images the site serves)
+|-- brand/                             # app icon and banner artwork — repository material, never served
 |-- AGENTS.md, ENGINE.md, ARCHITECTURE.md, REFERENCE.md, ...   # docs (see REFERENCE.md §5)
 |-- DESIGN_LOCK.md                     # permanent visual standard (DO NOT REGRESS)
-|-- design-reference/
-|   |-- screenshot-v1.2.5.png          # locked design screenshot
 |-- seal-module/                       # the PORTABLE SEALING SPEC — not the live site
 |   |-- SPEC.md                        # full technical specification
 |   |-- web/                           # older snapshots of the web implementation (see warning above)
 |   |-- android/                       # Android/Kotlin reference
 |   |-- firewall/                      # Python/Firewall reference
-|-- website/                           # website notes
 ```
 
 ---

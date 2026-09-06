@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 28 suites, 1622 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 29 suites, 1696 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -522,7 +522,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**28 suites · 1622 assertions.** `tests/run-all.js` is the registry — a new
+**29 suites · 1696 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -534,6 +534,7 @@ test file that is not registered there does not run.
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
 | `worker.test.mjs` | 184 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget) |
 | `human-report.test.mjs` | 76 | **The court-ready narrative** (§13): one section contract in three artefacts, opt-in default OFF with honest consent copy, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery |
+| `site-serving.test.mjs` | 54 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
 | `greensky-regression.test.js` | 55 | The Greensky bundle: D01 conduct admission (§4.11) and `voDetectDocuments` (§4.15) |
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
