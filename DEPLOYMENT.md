@@ -33,6 +33,15 @@ build has not run yet, or the browser cached the page.
                                   X-VO-Site-Source names the tier on every answer
 ```
 
+**Routing reality on 2026-09-07 (read before trusting the diagram above).** The
+`live-site-probe` workflow showed the declared routes are not in effect: the apex is answered
+by the assets-only Worker `verum-omnis-forensic-web` (the March Kimi mock-up shell, almost
+certainly holding the apex as a Custom Domain) and `www` by the Cloudflare Pages project
+`verumglobal`; nothing reached this Worker on either host. Until the founder detaches those two
+hostnames in the dashboard and this Worker's routes bind, the diagram above describes the
+intended state, not the live one. Re-run `live-site-probe` after any dashboard change: a
+correct state shows `X-VO-Site-Source` on every answer and JSON at `/api/v1/site/health`.
+
 **Routing history:** until 2026-09-06 a stale dashboard route pointed `/api/*`
 at the retired `verum-rules` Worker (frozen 2026-07-20) and site traffic ran
 through the retired `verumglobal-static` Worker, with `wrangler.toml`

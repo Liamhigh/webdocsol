@@ -18,9 +18,10 @@ jobs:
               echo "===== https://$host$p"
               curl -sS -A 'verum-live-site-probe' -o /tmp/body -D /tmp/hdr -w 'status=%{http_code} type=%{content_type} bytes=%{size_download} time=%{time_total}s\n' "https://$host$p" || echo "curl failed"
               grep -i -E '^(x-vo-site-source|cf-ray|server|cache-control|content-type|cf-cache-status|location|x-powered-by|etag):' /tmp/hdr | tr -d '\r' || true
-              case "$p" in
-                /api/*) cat /tmp/body; echo ;;
-                *) head -c 400 /tmp/body | tr -d '\0' | sed 's/<[^>]*>/ /g' | tr -s ' \n\t' ' '; echo ;;
-              esac
+              if grep -qi '^content-type: application/json' /tmp/hdr; then
+                head -c 2000 /tmp/body; echo
+              else
+                head -c 300 /tmp/body | tr -d '\0' | sed 's/<[^>]*>/ /g' | tr -s ' \n\t' ' '; echo
+              fi
             done
           done
