@@ -4849,8 +4849,19 @@ async function buildHumanReport(opts) {
     } else if (sec && sec.reason === 'not_applicable') {
       ctx.para('No sealed finding engages this section, so the AI narrator was not asked to write it. The deterministic record follows; nothing here is machine-written.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
     } else {
-      var why = (sec && sec.reason) ? String(sec.reason).replace(/_/g, ' ') : 'not generated';
-      ctx.para('AI narrative not generated for this section (' + san(why) + '). The deterministic record follows; nothing here is machine-written.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+      var reasonText = {
+        no_api_at_this_address: 'the address this page was opened from answered with a web page instead of the AI service — the site was being served by a host that has no API, so the narrator could not be asked',
+        network: 'the AI service could not be reached from this page',
+        timeout: 'the AI service did not answer within the time allowed',
+        ai_unavailable: 'the AI model was unavailable',
+        gate_failed: 'the narrator\'s draft did not pass the anchor and language gate on the server and was discarded',
+        no_json: 'the narrator did not answer in the agreed format',
+        empty: 'the narrator returned nothing',
+        time_budget: 'the five-minute limit for the whole narrative passed before this section',
+        invalid_response: 'the AI service answered in an unexpected shape',
+        not_generated: 'the narrator was not run for this section'
+      }[(sec && sec.reason) || 'not_generated'] || ((sec && sec.reason) ? String(sec.reason).replace(/_/g, ' ') : 'not generated');
+      ctx.para('AI narrative not generated for this section: ' + san(reasonText) + '. The deterministic record follows; nothing here is machine-written.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
     }
     if (typeof fallback === 'function') fallback();
     return false;
@@ -4872,6 +4883,12 @@ async function buildHumanReport(opts) {
   }
 
   drawCover(ctx, data);
+  // Contents placeholder page (drawn last with real page numbers), as the
+  // forensic report does: the reference document opens with a table of
+  // contents and so does this one.
+  var tocPage = doc.addPage([PW, PH]);
+  ctx.drawWatermark(tocPage);
+  ctx.drawHeader(tocPage);
 
   // ---- 1. EXECUTIVE SUMMARY -----------------------------------------------
   ctx.newBodyPage();
@@ -5081,6 +5098,7 @@ async function buildHumanReport(opts) {
   engineUnder(secUnreadPages);
   engineUnder(secOcrProvenance);
 
+  drawToc(ctx, tocPage);
   try { doc.setTitle('Verum Omnis Court-Ready Narrative Report — ' + (doc0.name || 'document')); } catch (e) {}
   try { doc.setAuthor('Verum Omnis Constitutional Forensic AI'); } catch (e) {}
   try { doc.setProducer('Verum Omnis Forensic Report Builder v1.3.1 (pdf-lib)'); } catch (e) {}
@@ -13530,7 +13548,16 @@ async function aiHumanReport(findings, ctxIn) {
 
   var total = VO_HUMAN_WRITER_SECTIONS.length + Math.max(0, Math.ceil(fp.length / VO_HUMAN_CRITICAL_BATCH) - 1);
   var step = 0;
-  var failReason = function (e) { return (e && e.name === 'AbortError') ? 'timeout' : 'network'; };
+  // Name the failure the way the report will print it. An HTML answer where
+  // JSON was expected means the page was served by a host that has no API
+  // (the 7 September Greensky run: www was the Pages project) — say so,
+  // never "network".
+  var failReason = function (e) {
+    if (e && e.name === 'AbortError') return 'timeout';
+    var m = String((e && e.message) || '');
+    if ((e && e.name === 'SyntaxError') || /JSON|Unexpected token|returned HTTP 404|returned HTTP 405/.test(m)) return 'no_api_at_this_address';
+    return 'network';
+  };
   var overBudget = function () { return (Date.now() - startedAt) > VO_HUMAN_TOTAL_BUDGET_MS; };
   for (var s = 0; s < VO_HUMAN_WRITER_SECTIONS.length; s++) {
     var section = VO_HUMAN_WRITER_SECTIONS[s];
@@ -14650,44 +14677,13 @@ async function runSealingPipeline() {
       reportPack = { bytes: rSealedBytes, sealId: rSealId, sha512: rSha512, ots: rOts };
       window._voReportPack = reportPack;
 
-      // B10 — plain-language narrative twin (founder-directed): the same
-      // verified findings told for non-specialists, sealed separately.
-      // Never blocks the seal or the forensic report.
+      // The plain-language narrative PDF was retired on 2026-09-07 (founder:
+      // "the human narrative is not necessary"): the forensic report's Part 1
+      // already carries the plain-language telling, and the court-ready
+      // narrative below is the covering document. buildNarrative stays in
+      // forensic-report.js for the annex path and its tests; the seal page no
+      // longer produces or offers the file.
       window._voNarrativePack = null;
-      try {
-        if (typeof window.VerumReport.buildNarrative === 'function') {
-          var nBytes = await window.VerumReport.buildNarrative({
-            findings: reportFraudResult,
-            documents: [{ name: selectedFile.name, pageCount: _pipelinePageCount || null, sha512: sha512, sealId: sealId }],
-            identity: (function () {
-              var ci2 = voCaseDetails();
-              return { caseName: ci2.caseName || undefined, caseRefs: ci2.caseRefs || undefined, parties: ci2.parties || undefined, jurisdiction: ci2.jurisdiction || undefined };
-            })(),
-            extractionNotes: fraudResult && fraudResult.extractionNotes ? fraudResult.extractionNotes : null,
-            unreadPages: _voUnreadPages,
-            ocrPages: _voOcrRescuedPages,
-            gps: (typeof gpsCoords !== 'undefined' && gpsCoords) ? { lat: gpsCoords.lat, lng: gpsCoords.lng } : null,
-            aiNarrative: aiNarrativeText,
-            aiNarrativeSource: aiNarrativeSource,
-            aiReview: aiReviewInfo,
-            ots: { submitted: !!(otsResult && otsResult.success), calendar: otsResult && otsResult.calendar ? otsResult.calendar : null },
-            images: { watermark: watermarkBytes }
-          });
-          var nSha512 = await computeSHA512(nBytes);
-          var nSealId = 'VO-' + nSha512.substring(0, 12).toUpperCase();
-          var nDigestHex = await computeSHA256(new TextEncoder().encode(nSha512));
-          var nOts = await submitToOTS(nDigestHex);
-          var nMeta = collectSealMetadata();
-          nMeta.sha512 = nSha512; nMeta.otsDigest = nDigestHex; nMeta.otsStatus = nOts.success; nMeta.sealId = nSealId; nMeta.report = true;
-          var nQrContent = 'https://verumglobal.foundation/verify.html?h=' + nSha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(nMeta, null))));
-          var nQr = await generateQRDataURL(nQrContent, 400);
-          var nSealedBytes = await window.VerumReport.seal(nBytes, { sealId: nSealId, sha512: nSha512, qrDataURL: nQr, sourceName: selectedFile.name });
-          window._voNarrativePack = { bytes: nSealedBytes, sealId: nSealId, sha512: nSha512, ots: nOts };
-          console.log('[VO-REPORT-DEBUG] Narrative pack created', { size_kb: (nSealedBytes && nSealedBytes.length / 1024).toFixed(2) });
-        }
-      } catch (nErr) {
-        console.warn('Plain-language narrative generation failed (seal and report unaffected):', nErr);
-      }
 
       // Findings JSON (1verum GHRP contract v1.0.0) — the machine-readable
       // twin of the report, offered as its own download. Never blocks the seal.
@@ -15198,21 +15194,9 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       '  |  SHA-512 ' + rp.sha512.substring(0, 16) + '...' +
       '  |  OpenTimestamps: ' + (rp.ots && rp.ots.success ? 'submitted — Bitcoin confirmation pending' : 'offline — hash recorded for retry');
     dg.parentNode.insertBefore(rNote, dg.nextSibling);
-    // B10 plain-language narrative — same seal guard: only offered sealed.
-    var oldNarrBtn = document.getElementById('downloadNarrativeReport');
-    if (oldNarrBtn) oldNarrBtn.remove();
-    if (window._voNarrativePack && window._voNarrativePack.bytes && window.VoSealGuard.isSealed(window._voNarrativePack.bytes)) {
-      var np = window._voNarrativePack;
-      var nU = voMakeObjectURL(new Blob([np.bytes], {type: 'application/pdf'}));
-      var nL = document.createElement('a');
-      nL.href = nU;
-      nL.download = base + '-plain-language-narrative-sealed.pdf';
-      nL.className = 'download-btn';
-      nL.id = 'downloadNarrativeReport';
-      nL.innerHTML = '&#11015; Download Plain-Language Narrative';
-      if (rL.nextSibling) dg.insertBefore(nL, rL.nextSibling); else dg.appendChild(nL);
-    }
     // Court-ready narrative (human report) — same seal guard: only offered sealed.
+    // (The separate plain-language narrative PDF was retired 2026-09-07; the
+    // forensic report's Part 1 is the plain-language telling.)
     var oldHumanBtn = document.getElementById('downloadHumanReport');
     if (oldHumanBtn) oldHumanBtn.remove();
     if (window._voHumanReportPack && window._voHumanReportPack.bytes && window.VoSealGuard.isSealed(window._voHumanReportPack.bytes)) {
@@ -15224,7 +15208,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       hL.className = 'download-btn';
       hL.id = 'downloadHumanReport';
       hL.innerHTML = '&#11015; Download Court-Ready Narrative (AI-drafted, sealed)';
-      var hAnchor = document.getElementById('downloadNarrativeReport') || rL;
+      var hAnchor = rL;
       if (hAnchor.nextSibling) dg.insertBefore(hL, hAnchor.nextSibling); else dg.appendChild(hL);
     }
   } else if (sealMode === 'forensic') {
@@ -15384,9 +15368,6 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   }
   if (window._voReportPack && window._voReportPack.bytes && window.VoSealGuard.isSealed(window._voReportPack.bytes)) {
     window._voShareFiles.push({ bytes: window._voReportPack.bytes, name: base + '-forensic-report-sealed.pdf', type: 'application/pdf' });
-  }
-  if (window._voNarrativePack && window._voNarrativePack.bytes && window.VoSealGuard.isSealed(window._voNarrativePack.bytes)) {
-    window._voShareFiles.push({ bytes: window._voNarrativePack.bytes, name: base + '-plain-language-narrative-sealed.pdf', type: 'application/pdf' });
   }
   if (window._voHumanReportPack && window._voHumanReportPack.bytes && window.VoSealGuard.isSealed(window._voHumanReportPack.bytes)) {
     window._voShareFiles.push({ bytes: window._voHumanReportPack.bytes, name: base + '-court-ready-narrative-sealed.pdf', type: 'application/pdf' });

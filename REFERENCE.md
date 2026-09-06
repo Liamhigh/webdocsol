@@ -32,7 +32,7 @@
 | File | Role |
 |---|---|
 | **`forensic-engine-page.js`** | The deterministic engine: CT01–CT46, detectors D01–D40, 17 serial patterns, anchoring, OCR rescue. **See [`ENGINE.md`](./ENGINE.md).** |
-| **`forensic-report.js`** | Sealed forensic report generator (`window.VerumReport.build` / `.buildNarrative` / `.seal`). Two halves: **Part 1 — the story** (executive summary, documents in this bundle, the short version, the plain-language story, unread pages, seal explainer) then **Part 2 — the evidence** (table of contents, Constitution v8.0 §15.4 sections 1–7, annexes). Auto-derives parties and jurisdiction; PD16 language throughout. **Anatomy: [`ENGINE.md`](./ENGINE.md) §7.** |
+| **`forensic-report.js`** | Sealed forensic report generator (`window.VerumReport.build` / `.buildHumanReport` / `.seal`; `.buildNarrative` is kept for the annex path and tests but the seal page stopped producing that PDF on 2026-09-07). Two halves: **Part 1 — the story** (executive summary, documents in this bundle, the short version, the plain-language story, unread pages, seal explainer) then **Part 2 — the evidence** (table of contents, Constitution v8.0 §15.4 sections 1–7, annexes). Auto-derives parties and jurisdiction; PD16 language throughout. **Anatomy: [`ENGINE.md`](./ENGINE.md) §7.** |
 | **`seal-guard.js`** | Enforces *"the only genuine Verum output is a sealed output"* — blocks unsealed exports. |
 | **`ots-proof.js`** | OpenTimestamps proof handling: submit, parse, upgrade, verify the Bitcoin anchor. |
 | **`pdf-encrypt.js`** | Standard password protection for sealed PDFs (verified against an independent PDF engine). |
@@ -84,7 +84,7 @@ The old `verumglobal-static.js` (a second Worker's entry point) was removed on 2
 | `vendor/` | Pinned third-party libraries: `pdf.min.js` + worker (pdf.js), `pdf-lib.min.js`, `qrcode.min.js`, Tesseract OCR core/worker + `eng.traineddata.gz`. **Vendored deliberately** — the app must work offline and must not depend on a CDN. |
 | `seal-module/` | The portable sealing spec (`SPEC.md`) and per-surface implementations (`web`, `android`, `firewall`) so a seal produced anywhere verifies everywhere. |
 | `images/` | Logos and the watermark used in sealed PDFs. |
-| `tests/` | **30 suites, 1721 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
+| `tests/` | **30 suites, 1722 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
 
 **Root PDFs:** `Verum-Omnis-Briefing.pdf` is the public briefing for law enforcement and
 attorneys (what the platform does, how the sealing service is used, why the record cannot be
