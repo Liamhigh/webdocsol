@@ -747,7 +747,21 @@ async function handleAiTranscribe(request, env) {
       disclaimer: 'Machine transcript - a reading aid, not evidence. The model may mis-hear words; verify every quoted word against the sealed audio, which is the evidence.'
     });
   } catch (e) {
-    return err(502, 'transcription_failed', 'Transcription failed for this recording. The sealed audio is unaffected.');
+    // Name the failure CLASS without echoing internals: "transcription_failed"
+    // alone cost a field round-trip per diagnosis, but the raw message can
+    // carry paths or stack fragments and never leaves (test-locked). The
+    // class surfaces in the report note; the error name is a type, not a
+    // secret.
+    const eName = String((e && e.name) || '');
+    const eMsg = String((e && e.message) || '');
+    const detail =
+      /timeout|timed out/i.test(eMsg) ? 'model timeout' :
+      /quota|rate.?limit|429|capacity|overloaded/i.test(eMsg) ? 'model capacity or quota' :
+      /auth|401|403|permission|unauthoriz|not allowed|not entitled/i.test(eMsg) ? 'model authorization' :
+      /no such model|unknown model|model.*not found|404/i.test(eMsg) ? 'model unavailable' :
+      /binding|is not a function/i.test(eMsg) ? 'ai binding misconfigured' :
+      (eName && eName !== 'Error' ? eName.slice(0, 60) : 'model call failed');
+    return err(502, 'transcription_failed', 'Transcription failed for this recording. The sealed audio is unaffected.', { detail });
   }
 }
 
