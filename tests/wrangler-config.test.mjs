@@ -77,27 +77,24 @@ const topObs = section('observability');
 const envObs = section('env.production.observability');
 ok(kv(envObs, 'enabled') === kv(topObs, 'enabled'), 'observability identical in both environments');
 
-// Routes stay dashboard-managed AS A RULE — with ONE pinned exception. A
-// stale dashboard route (the retired "verum-rules" Worker, last deployed
-// 2026-07-20) captures the domain's /api/* traffic: it 404'd the transcribe
-// endpoint outright and serves July code for assess and narrate, so the
-// August honesty rules never reached production. The most-specific-route
-// rule makes one declared pattern for the AI subtree the least-power fix
-// shippable from the repo (the non-AI endpoints are byte-identical to the
-// frozen Worker, so nothing else needs to move). This lock allows EXACTLY
-// that pattern and nothing broader: a zone-wide /* or api-wide /api/* here
-// would let any deploy re-point the site or the whole API, and that stays
-// forbidden.
+// The ONE declared route is the site catch-all. History: it began as a
+// narrow exception (the transcribe path, then /api/v1/ai/*) to reclaim
+// traffic from a stale dashboard route on the retired "verum-rules" Worker.
+// On 2026-09-06 the retired Workers (verum-rules, verumglobal-static) were
+// deleted in the dashboard and their routes vanished with them, orphaning
+// the site; this Worker is the only one left and serves everything (the
+// /api/* router plus the Pages static proxy), so the declared catch-all
+// became the permanent architecture. The drift this lock now guards against
+// is the route quietly narrowing or multiplying — either can orphan part of
+// the domain again.
 {
   const routeLines = toml.split(/\r?\n/).filter(l => /^\s*\{\s*pattern\s*=/.test(l));
   ok(routeLines.length === 2, 'exactly one route pattern, declared in both environments (' + routeLines.length + ')');
   for (const l of routeLines) {
-    ok(l.includes('"verumglobal.foundation/api/v1/ai/*"'),
-      'the only declared route is the AI subtree: ' + l.trim());
+    ok(l.includes('"verumglobal.foundation/*"'),
+      'the declared route is the site catch-all: ' + l.trim());
     ok(l.includes('zone_name = "verumglobal.foundation"'), 'route carries its zone_name');
   }
-  ok(!/pattern\s*=\s*"verumglobal\.foundation\/(api\/)?\*"/.test(toml),
-    'no zone-wide /* or api-wide /api/* route is declared — those stay dashboard-managed');
 }
 
 console.log(`\n[wrangler-config] PASS=${pass} FAIL=${fail}`);

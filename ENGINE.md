@@ -706,20 +706,19 @@ zone is country-level, so it serves court admissibility without disclosing the s
 position; GPS coordinates never appear in the report.
 **Tests:** `crop-normalize.test.mjs`, `worker.test.mjs`.
 
-**Production routing note (2026-08-23, widened 2026-08-30):** the transcribe endpoint
-returned `not_found` in production while the code was live in the `webdocsol` Worker,
-because a stale dashboard-managed route still pointed API traffic at the old `verum-rules`
-Worker (last deployed 2026-07-20). Worker code changes are NOT live until the dashboard
-routes point at `webdocsol` — when an API endpoint 404s in production but exists in the
-repo, check the routes in the Cloudflare dashboard first. `wrangler.toml` declares exactly
-ONE route as a surgical bypass (most-specific-route wins): first the transcribe path,
-widened on 2026-08-30 to the AI subtree `/api/v1/ai/*` so assess and narrate — the August
-honesty rules — serve current code too (the non-AI endpoints are byte-identical to the
-frozen Worker, so only the AI layer needed reclaiming). The pattern is pinned by
-`wrangler-config.test.mjs`; every other route stays dashboard-managed, and the stale
-`verum-rules`/`verumglobal-static` routes should be deleted in the dashboard when possible
-(after that cleanup, confirm `/api/v1/rules/manifest` still answers — the Android app and
-the fraud-firewall rule updater hard-code it).
+**Production routing note (2026-08-23, widened 2026-08-30, settled 2026-09-06):** the
+transcribe endpoint once returned `not_found` in production while the code was live in the
+`webdocsol` Worker, because a stale dashboard-managed route still pointed API traffic at
+the old `verum-rules` Worker (last deployed 2026-07-20). `wrangler.toml` reclaimed first
+the transcribe path, then the AI subtree `/api/v1/ai/*`, via the most-specific-route rule.
+On 2026-09-06 the retired `verum-rules` and `verumglobal-static` Workers were deleted in
+the dashboard and their routes — including the site's — vanished with them, briefly
+orphaning the domain. Since then `wrangler.toml` declares the catch-all
+`verumglobal.foundation/*` as the permanent architecture: `webdocsol` serves everything
+(the `/api/*` router plus the Pages static proxy), every deploy re-asserts the route, and
+`wrangler-config.test.mjs` pins the list. The standing check after any routing change:
+confirm `/api/v1/rules/manifest` still answers — the Android app and the fraud-firewall
+rule updater hard-code it.
 
 ### 12.6 The Seal Certificate never carries identity by default
 
