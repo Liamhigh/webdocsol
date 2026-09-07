@@ -92,7 +92,7 @@ package yields different findings on different clients — by design, and disclo
 
 | Client | What it applies | How a hit is reported |
 | --- | --- | --- |
-| Website engine (`forensic-engine-page.js`, `voRunPackageRules`) | `fraud_keywords[].pairs` from groups whose `source_detector` is **not** one of its own detectors (its own vocabulary is skipped) | one finding per page where both phrases sit in one 80-character passage and no built-in finding of the same type reports that page; type = `produces` (else CT43), severity ≤ 3, weight 0.5; the report and findings JSON name the rule and the package version and SHA-512 |
+| Website engine (`forensic-engine-page.js`, `voRunPackageRules`) | `fraud_keywords[].pairs` from every group except the seed's twelve (FK01–FK12, its own exported vocabulary) | one finding per page where both phrases sit in one 80-character passage and no built-in finding of the same type reports that page; type = `produces` (else CT43), severity ≤ 3, weight 0.5; the report and findings JSON name the rule and the package version and SHA-512 |
 | Android app (`RuleProvider.kt`, `detectDownloadedFraudPairs`) | `fraud_keywords[].pairs` | a BEHAVIORAL/MODERATE contradiction `DOWNLOADED_RULE_<id>` when two claims sharing an actor or subject contain opposite sides |
 | Fraud-firewall (`pipeline/rules.ts`) | `fraud_keywords` phrases/pairs and `behavioral_markers` keywords/patterns | LOW-confidence signals on transaction text (substring match) |
 

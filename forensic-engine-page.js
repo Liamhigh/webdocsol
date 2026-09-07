@@ -4296,6 +4296,14 @@ var VO_PACKAGE_RULE_MAX_SEVERITY = 3;   // Android: MODERATE severity
 var VO_PACKAGE_RULE_WINDOW = 80;        // D01's one-clause window
 var VO_PACKAGE_RULE_MAX_FINDINGS = 25;  // per scan, before the per-type cap
 var VO_PACKAGE_RULE_FALLBACK_TYPE = 'CT43'; // Document Internal Conflict, when a rule names no type
+// The seed package (worker/seed-rules.json v1.0.0) is this engine's own
+// vocabulary exported for the apps: these twelve groups are skipped when a
+// package carries them, because applying them here again would be a looser
+// second copy of the detectors they were taken from. Every other group -- a
+// curated addition, whatever detector its `source_detector` label points at
+// -- is what the package adds. tests/rule-package.test.mjs locks this list
+// to the seed's groups whose source_detector is a built-in detector.
+var VO_ENGINE_OWN_RULE_GROUPS = ['FK01', 'FK02', 'FK03', 'FK04', 'FK05', 'FK06', 'FK07', 'FK08', 'FK09', 'FK10', 'FK11', 'FK12'];
 
 // Canonical JSON -- the signed bytes (rule-format.md): UTF-8, no whitespace,
 // object keys sorted recursively, arrays in order, JSON.stringify escaping.
@@ -4425,7 +4433,11 @@ function voCompileRulePackage(pkg, meta) {
     var src = (typeof entry.source_detector === 'string') ? entry.source_detector.trim().toUpperCase() : '';
     var produces = (typeof entry.produces === 'string' && /^CT\d{2}$/.test(entry.produces.trim()) && voCtById(entry.produces.trim()))
       ? entry.produces.trim() : null;
-    if (src && builtInDetector[src]) { builtIn.push(ruleId); continue; }
+    // The engine's own exported vocabulary: a seed group (by id) whose
+    // source_detector is one of the built-in detectors. A curated group that
+    // merely LABELS a built-in detector (e.g. "produces CT43 via D37") is not
+    // the engine's own and is applied.
+    if (VO_ENGINE_OWN_RULE_GROUPS.indexOf(ruleId) >= 0 && src && builtInDetector[src]) { builtIn.push(ruleId); continue; }
     var pl = Array.isArray(entry.pairs) ? entry.pairs : [];
     for (var p = 0; p < pl.length; p++) {
       var pr = pl[p];
@@ -4610,6 +4622,7 @@ if (typeof module !== 'undefined' && module.exports) {
     VO_RULES_PUBLIC_KEY_DER_B64: VO_RULES_PUBLIC_KEY_DER_B64,
     VO_PACKAGE_RULE_CONFIDENCE: VO_PACKAGE_RULE_CONFIDENCE,
     VO_PACKAGE_RULE_MAX_SEVERITY: VO_PACKAGE_RULE_MAX_SEVERITY,
+    VO_ENGINE_OWN_RULE_GROUPS: VO_ENGINE_OWN_RULE_GROUPS,
     voCanonicalJson: voCanonicalJson,
     voSemverNewer: voSemverNewer,
     voRulePackageShape: voRulePackageShape,

@@ -131,6 +131,11 @@ const key = makeKey();
   ok(cc.pairs.length === 3, 'curated package: pairs from the non-built-in groups only (' + cc.pairs.length + ')');
   ok(cc.pairs[0].ruleId === 'FK13' && cc.pairs[0].first === 'delivered' && cc.pairs[0].second === 'never delivered' && cc.pairs[0].produces === 'CT01', 'FK13 pair compiled with its CT type');
   ok(cc.pairs[2].ruleId === 'FK14' && cc.pairs[2].produces === null, 'an unknown source_detector (D99) is not the engine\'s own; its pair applies with no type');
+  // The engine's own vocabulary is the SEED's groups (by id) whose source_detector is a built-in detector — nothing else.
+  const seedOwn = seed.rules.fraud_keywords.filter(g => /^D\d{2}$/.test(String(g.source_detector || '')) && Object.keys(E.DETECTORS).some(k => k.indexOf(g.source_detector + '_') === 0)).map(g => g.id);
+  ok(JSON.stringify(seedOwn) === JSON.stringify(E.VO_ENGINE_OWN_RULE_GROUPS), 'VO_ENGINE_OWN_RULE_GROUPS equals the seed groups whose source_detector is a built-in detector (' + seedOwn.join(',') + ')');
+  const labelled = E.voCompileRulePackage({ version: '1.1.0', rules: { fraud_keywords: [{ id: 'FK14', group: 'guaranteed_return_language', source_detector: 'D37', produces: 'CT43', pairs: [['guaranteed return', 'capital at risk']] }] } }, {});
+  ok(labelled.pairs.length === 1 && labelled.builtInGroupsSkipped.length === 0 && labelled.pairs[0].produces === 'CT43', 'a curated group that merely labels a built-in detector (FK14 via D37, as published in v1.1.0) IS applied');
   ok(cc.pairs.every(p => p.ruleId !== 'FK15'), 'malformed pairs (too short, identical, not an array) are dropped');
   ok(cc.terms.length === 1 && cc.terms[0].term === 'flat term', 'terms: flat strings only, co-occurrence sets skipped (as RuleProvider.kt)');
   ok(cc.builtInGroupsSkipped.length === 2, 'the two seed groups in the curated package are skipped (' + cc.builtInGroupsSkipped.join(',') + ')');

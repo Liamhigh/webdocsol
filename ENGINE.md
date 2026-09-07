@@ -769,10 +769,13 @@ the same thing the app applies:
   The scan awaits the decision (bounded, 8.5 s) so the report names exactly what applied.
 - **Compile** (`voCompileRulePackage`, mirrors `RuleProvider.kt`): opposing-phrase pairs from
   `fraud_keywords[].pairs`; flat strings from `[].terms`; `behavioral_markers[].keywords`;
-  everything else counted. Groups whose `source_detector` names one of this engine's own
-  detectors (`D01`…) are **skipped**: the seed package is the engine's vocabulary exported for
-  the apps, and applying it again would be a looser second copy of D01 without its subject
-  alignment (§4.12). The package adds what the engine does not know.
+  everything else counted. The seed's twelve groups (`VO_ENGINE_OWN_RULE_GROUPS`, FK01–FK12,
+  each with a built-in `source_detector`) are **skipped**: the seed package is the engine's
+  vocabulary exported for the apps, and applying it again would be a looser second copy of D01
+  without its subject alignment (§4.12). Every other group is applied — including a curated
+  group that merely labels a built-in detector (v1.1.0's FK13/FK14 say `D37` because they
+  *produce* CT43, not because they came from it). The package adds what the engine does not
+  know.
 - **Apply** (`voRunPackageRules`, after every built-in detector and the serial patterns): a pair
   fires once per page where both phrases sit inside one 80-character passage (D01's window;
   a phrase that only occurs inside its opposite, "paid" in "not paid", does not count) and no
