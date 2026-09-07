@@ -27,7 +27,9 @@ jobs:
                 # The manifest is large; print its shape, never its full body.
                 jq -c '{version: .package.version, published_at: .package.published_at, rule_counts: ((.package.rules // {}) | map_values(length)), algorithm, publicKeyId, signature_bytes: ((.signature // "") | length), error, message}' /tmp/body 2>/dev/null || head -c 600 /tmp/body; echo
                 # Which fraud-keyword groups the website will APPLY: those whose source_detector is not one of its own detectors (rule metadata only, no phrases).
-                jq -c '[(.package.rules.fraud_keywords // [])[] | {id, group, source_detector, produces, pairs: ((.pairs // []) | length), terms: ((.terms // []) | length)}]' /tmp/body 2>/dev/null || true; echo
+                jq -c '[(.package.rules.fraud_keywords // [])[] | {id, group, source_detector, produces, keys: (keys - ["id","group","source_detector","produces","description"]), pairs: ((.pairs // []) | length), terms: ((.terms // []) | length)}]' /tmp/body 2>/dev/null || true; echo
+                # Groups beyond the seed's twelve are curated additions: print them whole (signed public rule data, never document content).
+                jq -c '(.package.rules.fraud_keywords // [])[12:]' /tmp/body 2>/dev/null | head -c 4000 || true; echo
               elif grep -qi '^content-type: application/json' /tmp/hdr; then
                 head -c 2000 /tmp/body; echo
               else
