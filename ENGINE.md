@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 30 suites, 1726 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 31 suites, 1833 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**30 suites · 1726 assertions.** `tests/run-all.js` is the registry — a new
+**31 suites · 1833 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -542,6 +542,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
+| `rule-package.test.mjs` | 92 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.mjs` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
@@ -744,6 +745,58 @@ everything (the `/api/*` router plus the serving chain), every deploy re-asserts
 binding, and `wrangler-config.test.mjs` pins the list. The standing check after any routing change:
 confirm `/api/v1/rules/manifest` still answers — the Android app and the fraud-firewall
 rule updater hard-code it.
+
+### 12.7 Signed rule packages — the engine-update loop closes on the website too (2026-09-07)
+
+The platform's "self-learning" is a supervised, signed loop, not an engine that rewrites
+itself: the seal and verify pages send **anonymised pattern metadata** (§12.4) →
+`POST /api/v1/ai/curate` (admin) drafts rule candidates from the aggregate, *draft only* →
+a human publishes a package with `POST /api/v1/admin/publish`, which the Worker signs
+(RSASSA-PKCS1-v1_5 / SHA-512 over canonical JSON, key `vo-master-1`) and serves at
+`GET /api/v1/rules/manifest` → every client verifies the signature against the pinned
+public key and applies the package **additively**. The Android app (`RuleUpdateClient`,
+`detectDownloadedFraudPairs`) and the fraud-firewall (`ruleUpdate.ts`) did this; the website
+sent feedback but never fetched a package. It now does, and what it applies is deliberately
+the same thing the app applies:
+
+- **Fetch, verify, cache** (`seal-document.html`, `voLoadRulePackage`): the manifest is fetched
+  from the relative path (works on the domain and on the Worker's `workers.dev` address),
+  verified with WebCrypto against `VO_RULES_PUBLIC_KEY_DER_B64` (= `worker/public-key.der.b64`,
+  test-locked, the same bytes the Android app and the firewall pin), compiled, and the last
+  **verified** manifest is kept in `localStorage` and re-verified on every load, so a phone
+  that is offline or on a host without the API still applies the newest package it has seen.
+  A newer verified package on the device is never downgraded (the Android version gate).
+  The scan awaits the decision (bounded, 8.5 s) so the report names exactly what applied.
+- **Compile** (`voCompileRulePackage`, mirrors `RuleProvider.kt`): opposing-phrase pairs from
+  `fraud_keywords[].pairs`; flat strings from `[].terms`; `behavioral_markers[].keywords`;
+  everything else counted. Groups whose `source_detector` names one of this engine's own
+  detectors (`D01`…) are **skipped**: the seed package is the engine's vocabulary exported for
+  the apps, and applying it again would be a looser second copy of D01 without its subject
+  alignment (§4.12). The package adds what the engine does not know.
+- **Apply** (`voRunPackageRules`, after every built-in detector and the serial patterns): a pair
+  fires once per page where both phrases sit inside one 80-character passage (D01's window;
+  a phrase that only occurs inside its opposite, "paid" in "not paid", does not count) and no
+  built-in finding of the same type already reports that page (withheld, and counted). Type =
+  the rule's `produces` when it is a known CT id, else CT43; severity ≤ 3 and weight 0.5
+  (Android: MODERATE); at most 25 per scan; then the normal dedupe, page anchoring, anchor
+  rule and scoring apply. Terms and markers are never executed: a single keyword is not a
+  contradiction.
+- **Provenance**: the engine result carries `rulePackage` (version, key id, canonical SHA-512,
+  counts, applied/withheld) or `null`; the extraction note says what applied; the report
+  prints one line on the cover, in Methodology and in the court-ready narrative's provenance
+  record ("Signed rule package: v1.1.0 (key vo-master-1, …) — N rules applied…" or "none
+  applied — built-in rules only (reason)"); the findings JSON carries `rule_package` and names
+  the rule on each package finding; feedback sends a package hit as `SIGNED_RULE_<id>`, never
+  as the detector whose type it borrows.
+- **Determinism**: the engine reads only `globalThis.voRulePackage`; the Node harness never
+  sets it, so every regression suite runs the built-in engine byte for byte. No
+  `Date.now`, no `Math.random`, no lookbehind in the package code (`tests/rule-package`).
+
+Live state on 2026-09-07: the Worker serves package **v1.1.0** (published 2026-07-19; 43/14/10/17/0
+rules). Its first twelve `fraud_keywords` groups are the engine's own (skipped); the two
+curated groups are what the website applies. The Worker now refuses a version that is not
+strictly newer than the published one (`409 version_not_newer`) and rejects leading-zero
+versions, because every client applies only a strictly newer semver.
 
 ### 12.6 The Seal Certificate never carries identity by default
 

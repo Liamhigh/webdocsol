@@ -13,6 +13,8 @@ Field failures reported by the founder, each with the guard that now prevents it
 these reappears, the guard was weakened — find out how before changing anything else.
 
 | Symptom the user sees | Cause | Guard (do not remove) |
+| The report says "Signed rule package: none applied — built-in rules only (this address answered with a web page instead of the rules service)" | The page was served by a host that has no API (the domain binding, DEPLOYMENT.md "Routing reality") — the manifest fetch got HTML. The scan still ran every built-in detector; only the additive package rules were absent. On a phone that had verified a package before, the cached copy applies instead. | `voLoadRulePackage` names the reason; `tests/rule-package` locks the reasons and the cache |
+| The report says the package applied but a curated rule "did not fire" | Package rules fire only where both phrases sit in one 80-character passage on one page and no built-in finding of the same type already reports that page (withheld, counted in the same line). Groups whose `source_detector` is a built-in detector are the engine's own vocabulary and are skipped by design. | `voRunPackageRules`; ENGINE.md §12.7 |
 |---|---|---|
 | **OCR stops at page 3–4 and stays there forever** | a Tesseract worker killed by the OS OOM killer leaves `recognize()` as a promise that never settles | `voOcrDeadline` + worker retirement (`deadWorkers`) + empty-pool exit + raster cap + `deviceMemory <= 4 → POOL 2`. `ENGINE.md` §12.1 |
 | **Seal footer or QR prints over a signature** | seal furniture drawn inside the original media box | pages are EXTENDED: `setMediaBox` / `setCropBox` grow the page, furniture draws in the new margin. `ENGINE.md` §12.2 |

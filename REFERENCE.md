@@ -48,11 +48,11 @@ source file, then re-splice** — `tests/inline-scripts.test.mjs` byte-compares 
 |---|---|---|
 | `/api/v1/status` | GET | Health/status |
 | `/api/v1/site/health` | GET | Which tier serves the site right now (`assets` / `repo` / `kv` / `embedded` / `pages`) for the home page, the seal page and both site images — open it first when a page or a logo is wrong |
-| `/api/v1/rules/manifest` | GET | Signed rule-package manifest for app self-update |
-| `/api/v1/admin/publish` | POST | Publish a signed rule package (authenticated) |
+| `/api/v1/rules/manifest` | GET | Signed rule-package manifest — applied by the Android app, the fraud-firewall **and the seal page** (ENGINE.md §12.7) |
+| `/api/v1/admin/publish` | POST | Publish a signed rule package (authenticated; strict semver, must be newer than the published version) |
 | `/api/v1/feedback/patterns` | POST | Anonymised candidate-pattern feedback |
 | `/api/v1/ai/classify` | POST | Document classification (advisory) |
-| `/api/v1/ai/assess` | POST | AI review of engine findings (advisory, candidate tier) |
+| `/api/v1/ai/assess` | POST | AI review of engine findings (advisory, candidate tier); additional findings carry a verbatim `quote` + `page` the seal page anchors in the sealed text |
 | `/api/v1/ai/narrate` | POST | Narrative generation from findings + document excerpt |
 | `/api/v1/ai/human-report` | POST | Court-ready narrative: one writer section per call, every sentence anchor- and §15.2-gated server-side; `machineGenerated:true` or `generated:false` — never a template (opt-in) |
 | `/api/v1/ai/gatekeep` | POST | Licensing gatekeeper |
@@ -84,7 +84,7 @@ The old `verumglobal-static.js` (a second Worker's entry point) was removed on 2
 | `vendor/` | Pinned third-party libraries: `pdf.min.js` + worker (pdf.js), `pdf-lib.min.js`, `qrcode.min.js`, Tesseract OCR core/worker + `eng.traineddata.gz`. **Vendored deliberately** — the app must work offline and must not depend on a CDN. |
 | `seal-module/` | The portable sealing spec (`SPEC.md`) and per-surface implementations (`web`, `android`, `firewall`) so a seal produced anywhere verifies everywhere. |
 | `images/` | Logos and the watermark used in sealed PDFs. |
-| `tests/` | **30 suites, 1726 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
+| `tests/` | **31 suites, 1833 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
 
 **Root PDFs:** `Verum-Omnis-Briefing.pdf` is the public briefing for law enforcement and
 attorneys (what the platform does, how the sealing service is used, why the record cannot be

@@ -265,7 +265,7 @@ webdocsol/
 |   |-- static-proxy.js                # the site-serving chain (assets -> main branch -> legacy Pages)
 |   |-- site-assets.js                 # embedded last-resort copies of the logo and watermark
 |   |-- rule-format.md, public-key.der.b64, seed-rules.json
-|-- tests/                             # 30 suites, 1726 assertions
+|-- tests/                             # 31 suites, 1833 assertions
 |   |-- run-all.js                     # the registry — an unregistered file does not run
 |-- vendor/                            # pinned pdf.js, pdf-lib, qrcode, Tesseract (offline-first)
 |-- images/                            # logo, favicon, sealed-PDF watermark (the only images the site serves)

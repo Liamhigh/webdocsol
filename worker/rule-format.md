@@ -46,7 +46,7 @@ SHA-512 — JCA name `SHA512withRSA`) over the **canonical JSON** of `package`.
 }
 ```
 
-- `contradiction_patterns`: the engine's 46 contradiction types (CT01–CT46).
+- `contradiction_patterns`: the engine's contradiction types (43 in v1.0.0/v1.1.0, CT01–CT43; the web engine itself now defines CT01–CT46 — the package lags its taxonomy and is never merged over it).
   `detectors` lists the automated detector ids (D01–D37) that can produce each
   type; an empty array means the type is defined for manual/other analysis.
 - `fraud_keywords`: keyword sets extracted verbatim from detector source
@@ -82,6 +82,29 @@ function canonicalJson(value) {
     .join(',') + '}';
 }
 ```
+
+## How clients apply a package (2026-09-07)
+
+Every client verifies first, then applies **additively**: built-in detectors and their
+keyword lists are never modified or removed, and a client with no verified package behaves
+exactly like a fresh install. Each client's engine has its own matching model, so the same
+package yields different findings on different clients — by design, and disclosed:
+
+| Client | What it applies | How a hit is reported |
+| --- | --- | --- |
+| Website engine (`forensic-engine-page.js`, `voRunPackageRules`) | `fraud_keywords[].pairs` from groups whose `source_detector` is **not** one of its own detectors (its own vocabulary is skipped) | one finding per page where both phrases sit in one 80-character passage and no built-in finding of the same type reports that page; type = `produces` (else CT43), severity ≤ 3, weight 0.5; the report and findings JSON name the rule and the package version and SHA-512 |
+| Android app (`RuleProvider.kt`, `detectDownloadedFraudPairs`) | `fraud_keywords[].pairs` | a BEHAVIORAL/MODERATE contradiction `DOWNLOADED_RULE_<id>` when two claims sharing an actor or subject contain opposite sides |
+| Fraud-firewall (`pipeline/rules.ts`) | `fraud_keywords` phrases/pairs and `behavioral_markers` keywords/patterns | LOW-confidence signals on transaction text (substring match) |
+
+`terms`, `contradiction_patterns`, `serial_patterns` and `case_configs` are parsed and counted
+by the website and the app but not executed; a single keyword is not a contradiction.
+
+## Versioning
+
+`version` is strict semver (`x.y.z`, no leading zeros). Every client applies only a
+**strictly newer** version than the one it holds, so the Worker refuses to publish a version
+that is not newer than the published one (`409 version_not_newer`). Roll a bad package back
+by publishing a higher version.
 
 ## Client verification
 
