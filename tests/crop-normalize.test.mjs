@@ -263,20 +263,20 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
 
   // Consent: checkbox exists, default off, and the copy is honest about the
   // one thing that matters — the audio leaves the device for this step.
-  ok(/id="voTranscribeOptIn"/.test(html), 'the transcription consent checkbox exists');
-  ok(/Transcribe recordings \(optional, off by default\)/.test(html),
-    'the consent copy says it is optional and off by default');
+  ok(!/id="voTranscribeOptIn"/.test(html) && /id="voTranscribeNote"/.test(html), 'no transcription tick box; the panel states whether transcription is on for the mode');
+  ok(/Transcription: ' \+ \(tcOn \? 'on \(Seal document with forensic report\)' : 'off \(Seal document\)'\)/.test(html),
+    'the voice-note panel says transcription follows the sealing mode');
   ok(/the audio leaves this device for that step/.test(html),
     'the consent copy states the audio leaves the device');
   ok(/reading aids, not evidence — the sealed audio is/.test(html),
     'the consent copy states the evidentiary rule');
-  ok(/Leave unticked for privileged or sensitive recordings/.test(html),
-    'the consent copy warns about privileged recordings');
+  ok(/Choose this for privileged or sensitive matters/.test(html) && /Seal document<\/strong> instead: nothing leaves the device/.test(html),
+    'privileged matters are pointed to Seal document (nothing leaves the device)');
 
   // Ordering: the opt-in pass sits AFTER the seal loop and BEFORE the report
   // build, so the evidence is anchored whether or not transcription works.
   const iSeal = batch.indexOf('reportItems.push(');
-  const iGate = batch.indexOf('tcOpt && tcOpt.checked');
+  const iGate = batch.indexOf("var tcOn = (typeof sealMode !== 'undefined' && sealMode === 'forensic');\n  if (tcOn) {");
   const iReport = batch.indexOf('buildVoiceNoteReport(');
   ok(iSeal > 0 && iGate > iSeal && iReport > iGate,
     'transcription runs after sealing and before the report is built');

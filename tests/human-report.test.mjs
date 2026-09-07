@@ -92,11 +92,13 @@ ok((report.match(/not the opinion of a generative AI|not by a generative AI/g) |
   'the deterministic-provenance statement still appears at least three times');
 
 // ---- the host page: consent, wiring, guard --------------------------------
-const optIn = html.match(/<input[^>]*id="humanReportOptIn"[^>]*>/);
-ok(Boolean(optIn), 'the human-report opt-in checkbox exists');
-ok(optIn && !/\bchecked\b/.test(optIn[0]), 'the human-report opt-in is OFF by default');
-ok(/leave this device for that step/.test(html) && /court-ready narrative/i.test(html), 'consent copy says the excerpt leaves the device for this step');
-ok(/Leave unticked for privileged or sensitive matters/.test(html), 'consent copy tells privileged users to leave it off');
+// Two modes, no switches (founder direction item 12, 2026-09-07): the narrative
+// is part of "Seal document with forensic report"; the mode card and the
+// disclosure box carry the consent.
+ok(!/id="humanReportOptIn"/.test(html) && !/id="aiReviewEnabled"/.test(html), 'no narrative or AI-review tick box exists');
+ok(/Seal document with forensic report/.test(html) && /the court-ready narrative is written section by section beside the technical report/.test(html), 'the disclosure says the narrative comes with the technical report');
+ok(/leave this device/.test(html) && /court-ready narrative/i.test(html), 'the disclosure says what leaves the device for this step');
+ok(/For privileged or sensitive matters choose <strong[^>]*>Seal document<\/strong> instead: nothing leaves the device/.test(html), 'the disclosure points privileged matters to Seal document');
 ok(!/maximum 4,000 characters from the document's first pages, sent for classification\) leave this device/.test(html),
   'the stale "4,000 characters" disclosure was rewritten');
 ok(/async function aiHumanReport\(/.test(html), 'aiHumanReport orchestrator is present');
@@ -107,7 +109,8 @@ ok(/window\._voHumanReportPack = null/.test(html), 'the human-report pack is res
 ok(/VoSealGuard\.isSealed\(window\._voHumanReportPack\.bytes\)/.test(html), 'the human-report download is seal-guarded');
 ok(/downloadHumanReport/.test(html), 'the human-report download button is wired');
 ok(/-court-ready-narrative-sealed\.pdf/.test(html), 'the human report is named as a sealed narrative');
-ok(/hrOpt && hrOpt\.checked && isAiReviewEnabled\(\)/.test(html), 'the step runs only behind opt-in AND AI review');
+ok(!/hrOpt && hrOpt\.checked/.test(html) && /if \(isAiReviewEnabled\(\) && reportFraudResult && !reportFraudResult\.scanFailed &&/.test(html), 'the step runs in forensic mode with no separate switch');
+ok(/function isAiReviewEnabled\(\) \{\s*return sealMode === 'forensic';\s*\}/.test(html), 'isAiReviewEnabled is the sealing mode itself');
 ok(!/gps/i.test(html.slice(html.indexOf('async function aiHumanReport('), html.indexOf('async function aiClassifyDocument('))),
   'the human-report payload never carries GPS or device data');
 // (was 2 while the page also built the plain-language narrative; that PDF was retired 2026-09-07)

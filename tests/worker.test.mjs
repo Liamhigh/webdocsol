@@ -389,13 +389,13 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   // consent copy must say the audio leaves the device — the one honest
   // difference from every other sealing operation.
   const page2 = fs.readFileSync(path.join(__dirname, '..', 'seal-document.html'), 'utf8');
-  ok(/id="voTranscribeOptIn"/.test(page2) && !/id="voTranscribeOptIn"[^>]*\bchecked\b[^>]*style/.test(page2.replace(/\(tcChecked \? ' checked' : ''\)/, '')),
-    'the consent checkbox exists and is not checked by default in the markup');
+  // Two modes, no switches (2026-09-07): transcription follows the sealing mode.
+  ok(!/id="voTranscribeOptIn"/.test(page2), 'no transcription tick box exists');
   ok(/the audio leaves this device for that step/.test(page2),
     'the consent copy states that the audio leaves the device');
-  ok(/Leave unticked for privileged or sensitive recordings/.test(page2),
-    'the consent copy warns about privileged recordings');
-  ok(/tcOpt && tcOpt\.checked/.test(page2), 'the transcription pass is gated on the checkbox');
+  ok(/voice-note audio leave this device to Cloudflare Workers AI/.test(page2) || /voice-note audio for transcription/.test(page2),
+    'the mode card and the disclosure name voice-note audio among what leaves the device');
+  ok(/var tcOn = \(typeof sealMode !== 'undefined' && sealMode === 'forensic'\);\s*if \(tcOn\) \{/.test(page2), 'the transcription pass is gated on the forensic mode');
 }
 
 // --- feedback loop: the opt-in "Help improve the forensic engine" checkbox.
@@ -465,7 +465,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   const fnEnd = page.indexOf('\n}', fnStart);
   const fn = page.slice(fnStart, fnEnd);
   ok(fnStart > 0, 'shareAnonymousPatterns exists in the page');
-  ok(/optIn\.checked/.test(fn), 'sender is opt-in: it checks the checkbox first');
+  ok(/if \(sealMode !== 'forensic'\) return;/.test(fn) && !/optIn\.checked/.test(fn), 'sender runs only in "Seal document with forensic report" (automatic there, never in Seal document)');
   ok(/fraudResult\.scanFailed/.test(fn), 'a failed scan is never fed back as a result');
   ok(/\/api\/v1\/feedback\/patterns/.test(fn), 'sender posts to the feedback endpoint');
   ok(/\{\s*detectorId:\s*detectorId,\s*type:\s*type,\s*severity:\s*sev,\s*pageCount:\s*pageCount\s*\}/.test(fn)

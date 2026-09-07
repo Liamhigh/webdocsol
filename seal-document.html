@@ -381,12 +381,12 @@
     <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.08em;margin-bottom:10px;">Sealing Mode</label>
     <div class="mode-grid">
       <button type="button" class="mode-card active" id="modeSealOnly" onclick="setSealMode('seal-only')">
-        <strong>&#128737; Seal Only — Tamper Protection <span style="font-size:10px;color:#4A7EC7;font-weight:400;">(default)</span></strong>
-        <span>Cryptographic seal + blockchain timestamp only. No content is analysed and nothing leaves this device. You receive the sealed PDF and a one-page Seal Certificate.</span>
+        <strong>&#128737; Seal document <span style="font-size:10px;color:#4A7EC7;font-weight:400;">(default)</span></strong>
+        <span>Cryptographic seal + Bitcoin blockchain timestamp only. No content is analysed and nothing leaves this device. You receive the sealed PDF and a one-page Seal Certificate. Choose this for privileged or sensitive matters.</span>
       </button>
       <button type="button" class="mode-card" id="modeForensic" onclick="setSealMode('forensic')">
-        <strong>&#128270; Seal + Forensic Analysis</strong>
-        <span>Everything in Seal Only, plus an on-device forensic scan (anchored findings, stated as fact), optional AI review, and a sealed forensic report.</span>
+        <strong>&#128270; Seal document with forensic report</strong>
+        <span>Everything in Seal document, plus the on-device forensic scan (anchored findings, stated as fact), the AI review, the Brain 9 sweep of the sealed text, transcription of voice notes, and two sealed reports: the technical forensic report and the court-ready narrative. For the AI steps, finding metadata, text excerpts, the sealed page text and voice-note audio leave this device to Cloudflare Workers AI; nothing is stored there.</span>
       </button>
     </div>
   </div>
@@ -426,26 +426,20 @@
     </div>
   </div>
 
-  <!-- Anonymous Pattern Sharing (opt-in) — forensic analysis mode only -->
+  <!-- Anonymous pattern sharing — automatic in forensic mode (founder direction 2026-09-07:
+       detector ids, contradiction types, severities and page counts are not personal information). -->
   <div id="patternShareSection" style="margin-bottom:24px;display:none;">
-    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;">
-      <input type="checkbox" id="sharePatterns" style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
-      <span>&#128202; Help improve the forensic engine — share anonymous pattern data only (no document content, names, or quotes ever leave this device).</span>
-    </label>
+    <div style="display:flex;align-items:flex-start;gap:10px;font-size:13px;color:#D5D8DD;line-height:1.6;">
+      <span style="flex-shrink:0;">&#128202;</span>
+      <span>The engine improves as it is used: after each forensic report, anonymous pattern data — detector ids, contradiction types, severities and page counts, never document content, names or quotes — is shared with the rules service, and signed rule packages come back to every client.</span>
+    </div>
     <div id="rulePackageStatus" style="font-size:12px;color:#8A93A0;line-height:1.6;margin-top:8px;padding-left:28px;">Rule package: checking the rules service…</div>
   </div>
 
-  <!-- AI Review Disclosure & Consent — forensic analysis mode only -->
+  <!-- Forensic-report disclosure — forensic mode only. No switches: choosing "Seal document with forensic report" IS the choice. -->
   <div id="aiReviewSection" style="margin-bottom:24px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;display:none;">
-    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">On-device analysis, optional AI review.</strong> Your document is analysed entirely on this device, in your browser. An optional AI review (Cloudflare Workers AI) can classify the document, assess the forensic findings and draft the report narrative. When enabled, finding metadata — the type, severity and a short quote for each finding — plus text excerpts (up to 4,000 characters from the first pages for classification, up to 12,000 characters around the finding pages for the report narrative, and the sealed page text in windows of about 11,000 characters for the Brain 9 sweep, pages without findings first) leave this device for that review; every Brain 9 suggestion must quote the text verbatim or it is discarded; nothing is stored server-side. The document itself is never uploaded.</p>
-    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;margin-bottom:14px;">
-      <input type="checkbox" id="aiReviewEnabled" checked style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
-      <span>Enable AI review (recommended) — a short excerpt is classified for context, findings are assessed by AI before the report is built, <strong style="color:#F8F9FA;">Brain 9 reads the sealed page text</strong> (up to 16 windows of about 11,000 characters, pages without findings first) for anything the engine missed — every suggestion must quote the text verbatim or it is discarded — and an AI narrative summary is added to the report. Advisory only: findings are stated as fact; Brain 9 recommendations are shown here and held outside the sealed report; the verdict on any person is for the court.</span>
-    </label>
-    <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;margin-bottom:14px;">
-      <input type="checkbox" id="humanReportOptIn" style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
-      <span><strong style="color:#F8F9FA;">Also draft a court-ready narrative report (optional, off by default).</strong> An AI narrator writes a companion report &mdash; executive summary, chronology, four pillars, critical evidence analysis, legal framework, recommendations &mdash; from the sealed findings, one section at a time. For that step, the findings and page excerpts of the document around the finding pages (up to 24,000 characters per section) <strong style="color:#D4A843;">leave this device for that step</strong> to the AI narrator (Cloudflare Workers AI, or the AI provider configured for this site). Every sentence is checked against the sealed record and the Constitution's language rules before it is printed; the result is sealed separately, labelled machine-written and advisory, and adds no findings. Leave unticked for privileged or sensitive matters.</span>
-    </label>
+    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">What "Seal document with forensic report" does.</strong> Your document is analysed entirely on this device, in your browser, by the deterministic engine; its findings are stated as fact and anchored to quoted text on cited pages. Then the AI review runs on Cloudflare Workers AI: a short excerpt is classified for context, the findings are assessed before the report is built, <strong style="color:#F8F9FA;">Brain 9 reads the sealed page text</strong> (up to 16 windows of about 11,000 characters, pages without findings first) for anything the engine missed — every suggestion must quote the text verbatim or it is discarded — and the court-ready narrative is written section by section beside the technical report. Brain 9 recommendations are shown here and held outside the sealed reports; the verdict on any person is for the court.</p>
+    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;"><strong style="color:#F8F9FA;">What leaves this device for those steps:</strong> finding metadata — the type, severity and a short quote for each finding — plus text excerpts (up to 4,000 characters from the first pages for classification, up to 12,000 characters around the finding pages for the report narrative, the sealed page text in windows of about 11,000 characters for the Brain 9 sweep, and the pages the narrative sections cite); voice-note audio for transcription. Nothing is stored server-side; GPS, device and sealer identity are never sent. For privileged or sensitive matters choose <strong style="color:#F8F9FA;">Seal document</strong> instead: nothing leaves the device.</p>
     <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">I am sealing as (optional)</label>
     <select id="tierSelector" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
       <option value="">Prefer not to say</option>
@@ -11420,6 +11414,8 @@ function applyModeVisibility() {
     var el = document.getElementById(els[i]);
     if (el) el.style.display = forensic ? '' : 'none';
   }
+  // The voice-note panel states whether transcription is on; it follows the mode.
+  try { if (document.getElementById('voTranscribeNote') && typeof voRenderAudioFiles === 'function') voRenderAudioFiles(); } catch (eV) {}
 }
 applyModeVisibility(); // default seal-only: hide all analysis-only UI on load
 
@@ -12517,11 +12513,13 @@ function voRenderAudioFiles() {
       '<span>🖼 Screenshot: ' + escapeHtml(voScreenshotFiles[si].name) + '</span>' +
       '<span style="cursor:pointer;color:#ef4444;" onclick="voScreenshotFiles.splice(' + si + ',1);voRenderAudioFiles();">✕</span></div>');
   }
-  var tcChecked = document.getElementById('voTranscribeOptIn') && document.getElementById('voTranscribeOptIn').checked;
-  rows.push('<div style="margin-top:10px;padding:8px 10px;border:1px solid #D4A843;border-radius:6px;">' +
-    '<label style="display:flex;gap:8px;align-items:flex-start;cursor:pointer;font-size:12.5px;color:#F8F9FA;">' +
-    '<input type="checkbox" id="voTranscribeOptIn"' + (tcChecked ? ' checked' : '') + ' style="margin-top:2px;">' +
-    '<span><strong>Transcribe recordings (optional, off by default).</strong> Each recording is sent to the AI service for machine transcription — <strong style="color:#D4A843;">the audio leaves this device for that step</strong>, unlike sealing, which is entirely local. Transcripts appear in the Evidence Report under a machine-transcript banner: they are reading aids, not evidence — the sealed audio is. Leave unticked for privileged or sensitive recordings.</span></label></div>');
+  // Transcription follows the sealing mode (founder direction 2026-09-07): on
+  // with "Seal document with forensic report", never in "Seal document".
+  var tcOn = (typeof sealMode !== 'undefined' && sealMode === 'forensic');
+  rows.push('<div id="voTranscribeNote" style="margin-top:10px;padding:8px 10px;border:1px solid #D4A843;border-radius:6px;">' +
+    '<div style="display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:#F8F9FA;">' +
+    '<span style="margin-top:1px;">' + (tcOn ? '&#9679;' : '&#9675;') + '</span>' +
+    '<span><strong>Transcription: ' + (tcOn ? 'on (Seal document with forensic report)' : 'off (Seal document)') + '.</strong> With a forensic report, each recording is sent to the AI service for machine transcription — <strong style="color:#D4A843;">the audio leaves this device for that step</strong>, unlike sealing, which is entirely local. Transcripts appear in the Evidence Report under a machine-transcript banner: they are reading aids, not evidence — the sealed audio is. Leave unticked for privileged or sensitive recordings.</span></div></div>');
   rows.push('<div style="font-size:12px;color:#8ea3b5;margin-top:8px;line-height:1.6;">Audio is sealed exactly as-is: the SHA-512 fingerprint and Bitcoin anchor cover these exact bytes, and the seal record lives on the certificate and .ots receipt. The audio file is never altered. A transcript is not evidence — the sealed audio is.' +
     ' Add the WhatsApp chat export (.txt, from Export chat — or drop the whole export .zip here; it is unpacked on this device) to tie each note to its sender and time in WhatsApp\'s own words, and screen grabs (.png/.jpg) as visual corroboration — a Voice-Note Evidence Report will be built and sealed with the batch.</div>');
   list.innerHTML = rows.join('');
@@ -12791,12 +12789,13 @@ async function voSealAudioBatch() {
     }
     status.innerHTML = escapeHtml(rows.join('\n')).replace(/\n/g, '<br>');
   }
-  // OPT-IN transcription — runs AFTER every recording is sealed, so the
-  // evidence is anchored whether or not this step succeeds. The audio leaves
-  // the device ONLY here, only when the user ticked the consent box, and a
-  // failure never blocks anything: the note simply carries no transcript.
-  var tcOpt = document.getElementById('voTranscribeOptIn');
-  if (tcOpt && tcOpt.checked) {
+  // Transcription — runs AFTER every recording is sealed, so the evidence is
+  // anchored whether or not this step succeeds. The audio leaves the device
+  // ONLY here, only in "Seal document with forensic report" (the mode card
+  // says so), and a failure never blocks anything: the note simply carries no
+  // transcript.
+  var tcOn = (typeof sealMode !== 'undefined' && sealMode === 'forensic');
+  if (tcOn) {
     for (var ti = 0; ti < reportItems.length; ti++) {
       // reportItems only holds files that SEALED — index into it, never into
       // the raw selection, or a failed seal shifts every later transcript
@@ -13098,9 +13097,11 @@ async function startSealing() {
 // document itself never leaves this device. Every call has a 10s AbortController
 // timeout; any failure is silent and the pipeline proceeds with the deterministic
 // engine's unpruned findings.
+// Two modes, no switches (founder direction 2026-09-07): "Seal document with
+// forensic report" IS the choice to run the AI review, the Brain 9 sweep,
+// transcription and the court-ready narrative. Seal-only never calls an AI.
 function isAiReviewEnabled() {
-  var cb = document.getElementById('aiReviewEnabled');
-  return !!(cb && cb.checked);
+  return sealMode === 'forensic';
 }
 
 // Last AI transport failure, surfaced in the report methodology so a fallback
@@ -14129,9 +14130,9 @@ async function aiNarrateReport(findings, score, verdict) {
 // One worker call per WRITER section (the engine renders the rest), so every
 // request stays inside one model timeout and a failure costs one section, not
 // the document. Section ids mirror worker/verum-rules.js HUMAN_SECTIONS and
-// forensic-report.js HUMAN_REPORT_SECTIONS (tests pin all three). Opt-in,
-// default OFF (#humanReportOptIn): page excerpts around the finding pages
-// leave this device for the AI narrator for this step.
+// forensic-report.js HUMAN_REPORT_SECTIONS (tests pin all three). Part of
+// "Seal document with forensic report" (no switch since 2026-09-07): page
+// excerpts around the finding pages leave this device for the AI narrator.
 var VO_HUMAN_SECTIONS = [
   'executive_summary', 'evidence_index', 'chronology', 'four_pillars',
   'contradictions_matrix', 'critical_evidence', 'counter_narratives',
@@ -15043,7 +15044,7 @@ try {
   }
 } catch (eBoot) {}
 
-// ==================== ANONYMOUS PATTERN SHARING (OPT-IN) ====================
+// ==================== ANONYMOUS PATTERN SHARING (AUTOMATIC IN FORENSIC MODE) ====================
 // Feeds the verum-rules feedback loop. PRIVACY HARD LIMIT: only detector IDs,
 // finding types, integer severities (1-5), and page counts are ever sent.
 // Never any document content, quotes, locations, filenames, hashes, or
@@ -15052,8 +15053,10 @@ try {
 // top-level field is rejected; each pattern may carry ONLY the four fields.
 function shareAnonymousPatterns(fraudResult) {
   try {
-    var optIn = document.getElementById('sharePatterns');
-    if (!optIn || !optIn.checked) return;
+    // Automatic in "Seal document with forensic report" (founder direction
+    // 2026-09-07: detector ids, contradiction types, severities and page counts
+    // are not personal information); never in "Seal document".
+    if (sealMode !== 'forensic') return;
     // scanFailed means the engine could not complete — that is NOT a clean
     // result, so it must not be fed to the feedback loop as one.
     if (!fraudResult || fraudResult.scanFailed) return;
@@ -15633,8 +15636,9 @@ async function runSealingPipeline() {
       // report or the JSON.
       window._voHumanReportPack = null;
       try {
-        var hrOpt = document.getElementById('humanReportOptIn');
-        if (hrOpt && hrOpt.checked && isAiReviewEnabled() && reportFraudResult && !reportFraudResult.scanFailed &&
+        // The court-ready narrative is part of "Seal document with forensic
+        // report": no separate switch (founder direction 2026-09-07).
+        if (isAiReviewEnabled() && reportFraudResult && !reportFraudResult.scanFailed &&
             Array.isArray(reportFraudResult.findings) && reportFraudResult.findings.length > 0 &&
             typeof window.VerumReport.buildHumanReport === 'function') {
           updateStep(7, 'processing', 'Drafting the court-ready narrative (AI, section by section)...');
