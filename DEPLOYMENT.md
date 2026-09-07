@@ -54,6 +54,12 @@ Custom Domain), which is immediate; the next deploy finds them in place. Re-run
 `live-site-probe` afterwards: a correct state shows `X-VO-Site-Source` on every answer and JSON
 at `/api/v1/site/health`.
 
+**The trainer run (cron).** `wrangler.toml [triggers] crons = ["0 3 * * 1"]` (both environments,
+drift-locked) runs `runAutoCuration` every Monday 03:00 UTC: it needs `RULE_PRIVATE_KEY` on the
+Worker and writes `rules:current`, `rules:history:<version>`, `rules:changelog` and
+`rules:auto-curate:last-run` in `RULES_KV`. Read `/api/v1/rules/changelog` to see what it did;
+set the var `AUTO_CURATE = "off"` (dashboard or wrangler.toml) to stop it. ENGINE.md §12.9.
+
 **The second door — `webdocsol.liamhigh78.workers.dev`.** The same probe found the Worker's
 own workers.dev address switched off (Cloudflare error 1042: wrangler disables it once routes
 or domains are declared), so on 7 September the Worker was reachable on no host at all.
@@ -373,7 +379,7 @@ there is not a signal about the change; the build that matters runs on the merge
 one PR check whose red means something. `wrangler deploy` by hand is the fallback for when
 Workers Builds is unavailable, not the normal path.
 
-**Because merge = publish:** run `node tests/run-all.js` (31 suites, 1887 assertions) and
+**Because merge = publish:** run `node tests/run-all.js` (31 suites, 1916 assertions) and
 re-splice the inline copies into `seal-document.html` **before** the PR, not after. A merged
 regression is live within a minute.
 

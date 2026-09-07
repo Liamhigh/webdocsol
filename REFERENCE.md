@@ -50,6 +50,8 @@ source file, then re-splice** — `tests/inline-scripts.test.mjs` byte-compares 
 | `/api/v1/site/health` | GET | Which tier serves the site right now (`assets` / `repo` / `kv` / `embedded` / `pages`) for the home page, the seal page and both site images — open it first when a page or a logo is wrong |
 | `/api/v1/rules/manifest` | GET | Signed rule-package manifest — applied by the Android app, the fraud-firewall **and the seal page** (ENGINE.md §12.7) |
 | `/api/v1/admin/publish` | POST | Publish a signed rule package (authenticated; strict semver, must be newer than the published version) |
+| `/api/v1/admin/curate-publish` | POST | Run the trainer now (authenticated): aggregate anonymous signals → draft → validate → append ≤ 3 rules → sign → publish (ENGINE.md §12.9) |
+| `/api/v1/rules/changelog` | GET | What the trainer published, when, from which signals; the last run and its reason; trainer settings |
 | `/api/v1/feedback/patterns` | POST | Anonymised candidate-pattern feedback |
 | `/api/v1/ai/classify` | POST | Document classification (advisory) |
 | `/api/v1/ai/assess` | POST | AI review of engine findings (advisory, candidate tier); additional findings carry a verbatim `quote` + `page` the seal page anchors in the sealed text |
@@ -85,7 +87,7 @@ The old `verumglobal-static.js` (a second Worker's entry point) was removed on 2
 | `vendor/` | Pinned third-party libraries: `pdf.min.js` + worker (pdf.js), `pdf-lib.min.js`, `qrcode.min.js`, Tesseract OCR core/worker + `eng.traineddata.gz`. **Vendored deliberately** — the app must work offline and must not depend on a CDN. |
 | `seal-module/` | The portable sealing spec (`SPEC.md`) and per-surface implementations (`web`, `android`, `firewall`) so a seal produced anywhere verifies everywhere. |
 | `images/` | Logos and the watermark used in sealed PDFs. |
-| `tests/` | **31 suites, 1887 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
+| `tests/` | **31 suites, 1916 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
 
 **Root PDFs:** `Verum-Omnis-Briefing.pdf` is the public briefing for law enforcement and
 attorneys (what the platform does, how the sealing service is used, why the record cannot be

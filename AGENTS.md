@@ -89,6 +89,10 @@ is meant to be identical across the three repositories — an edit here must be 
   The Worker's own address `webdocsol.liamhigh78.workers.dev` is kept ON (`workers_dev = true`)
   as a second door that does not depend on the domain: the probe checks it too, and the seal
   page works there today. Pages carry self-canonical links to the domain.
+- 7 September 2026: **the trainer run.** The Worker curates and publishes signed rule packages
+  weekly from anonymous signals (founder direction item 13; `ENGINE.md` §12.9). It needs
+  `RULE_PRIVATE_KEY` on the Worker (present: v1.1.0 was signed there in July) and records every
+  outcome at `/api/v1/rules/changelog`. First scheduled run: Monday 03:00 UTC.
 - 7 September 2026: **two modes, no switches.** "Seal document" or "Seal document with forensic
   report"; the second runs every AI step and produces the court-ready narrative with the
   technical report automatically (founder direction item 12). The mode card is the disclosure.
@@ -149,7 +153,7 @@ before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping 
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **31 suites, 1887 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **31 suites, 1916 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
@@ -351,6 +355,16 @@ seven above:
    `sealMode === 'forensic'`, and anonymous pattern sharing (detector ids, types, severities,
    page counts — "not personal information", the founder ruled) is automatic in that mode.
    Do not reintroduce AI or sharing tick boxes.
+13. **The engine improves itself on a schedule (2026-09-07).** No servers: the Worker's
+   trainer run (`runAutoCuration`, `wrangler.toml [triggers]` weekly, `POST
+   /api/v1/admin/curate-publish` on demand) turns recurring `AI_IDENTIFIED` /
+   `B9_RECOMMENDATION` signals into co-occurrence rules, validates them
+   deterministically, appends at most three to the current package (existing
+   rules byte-untouched), signs and publishes, and logs to
+   `GET /api/v1/rules/changelog` (`ENGINE.md` §12.9). Additive only; candidate
+   tier on every client; `AUTO_CURATE = "off"` stops it; an admin publish of a
+   higher version supersedes it. Never let the trainer remove, reweight or
+   retitle an existing rule.
 
 ### How the Constitution's standing may be described (v8.0 §12)
 

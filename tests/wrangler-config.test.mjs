@@ -77,6 +77,16 @@ const topObs = section('observability');
 const envObs = section('env.production.observability');
 ok(kv(envObs, 'enabled') === kv(topObs, 'enabled'), 'observability identical in both environments');
 
+// The trainer run: the Worker curates and publishes signed rule packages on a
+// schedule (founder direction 2026-09-07). The schedule and the switch must be
+// identical in both environments, and the switch must default to on.
+const topTrig = section('triggers');
+const envTrig = section('env.production.triggers');
+ok(topTrig && envTrig, 'both triggers sections exist');
+ok(kv(topTrig, 'crons') === '["0 3 * * 1"]', 'the trainer runs weekly, Monday 03:00 UTC (' + kv(topTrig, 'crons') + ')');
+ok(kv(envTrig, 'crons') === kv(topTrig, 'crons'), 'trainer schedule identical in both environments');
+ok(kv(topVars, 'AUTO_CURATE') === 'on' && kv(envVars, 'AUTO_CURATE') === 'on', 'AUTO_CURATE is on in both environments');
+
 // The site ships with the Worker as static assets — the Pages origin behind
 // the proxy went stale (it 200-served its old home page for every missing
 // file), so the repo root is the site now. Both environments must carry the

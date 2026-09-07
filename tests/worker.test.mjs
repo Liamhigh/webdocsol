@@ -763,6 +763,112 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(/Constitution v8 §2\.10: B9 trains and calibrates/.test(src), 'the endpoint cites the constitutional rule it implements');
 }
 
+// --- the trainer run: anonymous signals -> a validated, signed, additive rule
+// the website engine executes (founder direction item 13; ENGINE.md §12.9).
+{
+  const nodeCrypto = await import('node:crypto');
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const E = require(path.join(__dirname, '..', 'forensic-engine-page.js'));
+  const { privateKey, publicKey } = nodeCrypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const privB64 = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+  const pubB64 = publicKey.export({ format: 'der', type: 'spki' }).toString('base64');
+  const seed = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'worker', 'seed-rules.json'), 'utf8'));
+  const store = {};
+  const days = ['2026-09-01', '2026-09-03', '2026-09-05'].map(d => { // inside the 7-day window relative to the fake clock below
+    return d;
+  });
+  // Freeze "now" so the window and the buckets line up deterministically.
+  const RealDate = Date;
+  const NOW = new RealDate('2026-09-07T03:00:00.000Z').getTime();
+  global.Date = class extends RealDate { constructor(...a) { super(...(a.length ? a : [NOW])); } static now() { return NOW; } };
+  try {
+    const mkEnv = (aiRun, extra) => ({ ...env, ADMIN_TOKEN: 'test-admin-token', RULE_PRIVATE_KEY: privB64, AI: { run: aiRun }, RULES_KV: {
+      get: async (k) => (Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null),
+      list: async (opts) => ({ keys: Object.keys(store).filter(k => !opts || !opts.prefix || k.startsWith(opts.prefix)).map(name => ({ name })) }),
+      put: async (k, v) => { store[k] = v; }
+    }, ...(extra || {}) });
+    const admin = (p, body, e) => worker.fetch(new Request('https://verumglobal.foundation' + p, { method: 'POST', body: body === undefined ? '' : JSON.stringify(body), headers: { 'content-type': 'application/json', 'x-admin-token': 'test-admin-token' } }), e, {});
+    // 1. a current package (the seed) published by hand
+    r = await admin('/api/v1/admin/publish', seed, mkEnv(async () => ({ response: '{}' })));
+    ok(r.status === 200, 'seed published for the trainer test (' + r.status + ')');
+    // 2. anonymous feedback: one tactic recurring over three days, one below the bar, and noise
+    const rec = (patterns) => ({ received_at: '2026-09-01T00:00:00Z', count: patterns.length, patterns });
+    store['feedback:2026-09-01'] = JSON.stringify([rec([{ detectorId: 'AI_IDENTIFIED', type: 'INVOICE_SPLITTING', severity: 4, pageCount: 12 }, { detectorId: 'B9_RECOMMENDATION', type: 'INVOICE_SPLITTING', severity: 3, pageCount: 12 }, { detectorId: 'CT01', type: 'CT01', severity: 5, pageCount: 12 }])]);
+    store['feedback:2026-09-03'] = JSON.stringify([rec([{ detectorId: 'AI_IDENTIFIED', type: 'INVOICE_SPLITTING', severity: 4, pageCount: 40 }, { detectorId: 'AI_IDENTIFIED', type: 'CT11', severity: 3, pageCount: 40 }, { detectorId: 'AI_IDENTIFIED', type: 'CT11', severity: 3, pageCount: 41 }, { detectorId: 'AI_IDENTIFIED', type: 'SERIAL', severity: 3, pageCount: 40 }])]);
+    store['feedback:2026-09-05'] = JSON.stringify([rec([{ detectorId: 'B9_RECOMMENDATION', type: 'INVOICE_SPLITTING', severity: 3, pageCount: 8 }, { detectorId: 'AI_IDENTIFIED', type: 'CT11', severity: 3, pageCount: 8 }, { detectorId: 'CLEAN_SCAN', type: 'CLEAN_SCAN', severity: 1, pageCount: 3 }])]);
+    let promptSeen = null;
+    const modelDrafts = async (model, opts) => {
+      promptSeen = opts.messages;
+      return { response: JSON.stringify({ rules: [
+        { type: 'INVOICE_SPLITTING', group: 'invoice_splitting', produces: 'CT22', phrases: ['split invoice', 'below approval limit', 'separate purchase orders', 'same supplier', 'Same Day', 'R 5,000', 'invoice'], min_cooccur: 2, rationale: 'Several small invoices from one supplier just under an approval threshold.' },
+        { type: 'CT11', group: 'authority_after_revocation', phrases: ['authority revoked', 'signed after', 'no longer authorised', 'continued to approve'], min_cooccur: 2, rationale: 'An approver keeps signing after the mandate ended.' },
+        { type: 'MADE_UP_TYPE', group: 'x', phrases: ['a b', 'c d', 'e f', 'g h'], min_cooccur: 2, rationale: 'not a selected signal' }
+      ] }) };
+    };
+    // 3. the run (admin, on demand)
+    r = await admin('/api/v1/admin/curate-publish', undefined, mkEnv(modelDrafts));
+    let out = await r.json();
+    ok(r.status === 200 && out.ok === true && out.run && out.run.status === 'published', 'the trainer published (' + r.status + ' ' + (out.run && out.run.status) + ': ' + (out.run && out.run.reason) + ')');
+    ok(out.run.signals === 2, 'two learning signals reached the bar: INVOICE_SPLITTING (support 4 over 3 days, both detector ids merged) and CT11 (support 3 over 2 days); CT01 engine findings, SERIAL and CLEAN_SCAN are not signals (' + out.run.signals + ')');
+    const sigMsg = promptSeen ? JSON.parse(promptSeen[1].content) : { signals: [] };
+    ok(sigMsg.signals.length === 2 && sigMsg.signals[0].type === 'INVOICE_SPLITTING' && sigMsg.signals[0].support === 4 && sigMsg.signals[0].days === 3 && sigMsg.signals[0].detectorId === 'AI_IDENTIFIED+B9_RECOMMENDATION' && sigMsg.signals[1].type === 'CT11' && sigMsg.signals[1].support === 3 && sigMsg.signals[1].name === 'Authority Contradiction', 'the model sees types, support, days and the CT name only — never content (' + JSON.stringify(sigMsg.signals).slice(0, 160) + ')');
+    ok(/You are Brain 9/.test(promptSeen[0].content) && /never names, numbers, dates, places/.test(promptSeen[0].content), 'the trainer prompt is Brain 9 and forbids identifying data');
+    ok(out.run.accepted === 2 && out.run.published && out.run.published.version === '1.0.1' && out.run.published.previous === '1.0.0', 'two rules accepted, version 1.0.0 -> 1.0.1 (' + JSON.stringify(out.run.published && out.run.published.version) + '; rejected: ' + JSON.stringify(out.run.rejected) + ')');
+    const added = out.run.published.added;
+    const inv = added.find(a => a.type === 'INVOICE_SPLITTING'), ct11 = added.find(a => a.type === 'CT11');
+    ok(inv && inv.id === 'FK13' && JSON.stringify(inv.phrases) === JSON.stringify(['split invoice', 'below approval limit', 'separate purchase orders', 'same supplier', 'same day']) && inv.min_cooccur === 2 && inv.produces === 'CT22', 'INVOICE_SPLITTING: name-like/digit/stop phrases dropped, the rest kept lower-cased, produces the model\'s valid CT (' + JSON.stringify(inv) + ')');
+    ok(ct11 && ct11.id === 'FK14' && ct11.produces === 'CT11' && ct11.phrases.length === 4, 'CT11: a CT-typed signal produces its own CT');
+    ok(out.run.rejected.length === 1 && out.run.rejected[0].type === 'MADE_UP_TYPE', 'a draft for a type that was not a signal is rejected');
+    // 4. the package: additive, signed, verifiable, executable
+    r = await worker.fetch(mk('/api/v1/rules/manifest'), mkEnv(modelDrafts), {});
+    const manifest = await r.json();
+    ok(manifest.package.version === '1.0.1' && manifest.package.rules.fraud_keywords.length === 14, 'the manifest serves 1.0.1 with two groups appended (' + manifest.package.rules.fraud_keywords.length + ')');
+    ok(JSON.stringify(manifest.package.rules.fraud_keywords.slice(0, 12)) === JSON.stringify(seed.rules.fraud_keywords) && JSON.stringify(manifest.package.rules.contradiction_patterns) === JSON.stringify(seed.rules.contradiction_patterns), 'every existing rule is byte-identical: the trainer only appends');
+    const fk13 = manifest.package.rules.fraud_keywords[12];
+    ok(fk13.source_detector === 'B9' && fk13.curated_from.type === 'INVOICE_SPLITTING' && fk13.curated_from.support === 4 && /Auto-curated 2026-09-07 from 4 anonymous reports over 3 days/.test(fk13.description) && /recommendation tier, not a determination/.test(fk13.description), 'the appended rule says where it came from and that it is recommendation tier');
+    const v = await E.voVerifyRulePackage(manifest, { subtle: nodeCrypto.webcrypto.subtle, publicKeyB64: pubB64 });
+    ok(v.ok === true, 'the trainer\'s package verifies on the website engine (' + v.reason + ')');
+    const compiled = E.voCompileRulePackage(v.package, { sha512: v.sha512 });
+    ok(compiled.groups.length === 2 && compiled.groups[0].ruleId === 'FK13' && compiled.groups[0].min === 2 && compiled.groups[0].produces === 'CT22' && compiled.builtInGroupsSkipped.length === 12, 'the website compiles the two trainer rules as co-occurrence groups and still skips the seed (' + compiled.groups.length + ')');
+    const fired = E.voRunPackageRules(compiled, ['cover', 'Three separate purchase orders were raised, each a split invoice kept below approval limit.'], []);
+    ok(fired.findings.length === 1 && fired.findings[0].type === 'CT22' && fired.findings[0].packageRule === 'FK13' && fired.findings[0].location === 'Page 2', 'THE LOOP CLOSES: a tactic the AI review kept finding is now a deterministic rule that fires on the website (' + JSON.stringify(fired.findings[0] && fired.findings[0].evidence).slice(0, 120) + ')');
+    // 5. history, changelog, last run
+    ok(typeof store['rules:history:1.0.0'] === 'string' && JSON.parse(store['rules:history:1.0.0']).package.version === '1.0.0', 'the previous package is kept under rules:history:1.0.0');
+    r = await worker.fetch(mk('/api/v1/rules/changelog'), mkEnv(modelDrafts), {});
+    const log = await r.json();
+    ok(r.status === 200 && log.current.version === '1.0.1' && log.current.published_by === 'trainer:admin' && log.entries.length === 1 && log.entries[0].added.length === 2 && log.entries[0].trigger === 'admin' && log.lastRun.status === 'published' && log.trainer.enabled === true, 'the public changelog names the version, the trigger, the rules added and the last run');
+    // 6. a second run finds nothing new (both types are now covered)
+    r = await admin('/api/v1/admin/curate-publish', undefined, mkEnv(modelDrafts));
+    out = await r.json();
+    ok(out.run.status === 'no_change' && out.run.signals === 0 && /no learning signal/.test(out.run.reason), 'a second run changes nothing: the signals are covered (' + out.run.status + ')');
+    ok((await (await worker.fetch(mk('/api/v1/rules/manifest'), mkEnv(modelDrafts), {})).json()).package.version === '1.0.1', 'the package version is unchanged after a no-change run');
+    // 7. safety valves
+    r = await admin('/api/v1/admin/curate-publish', undefined, mkEnv(modelDrafts, { AUTO_CURATE: 'off' }));
+    ok((await r.json()).run.status === 'disabled', 'AUTO_CURATE=off disables the run');
+    const noKey = mkEnv(modelDrafts); delete noKey.RULE_PRIVATE_KEY;
+    r = await admin('/api/v1/admin/curate-publish', undefined, noKey);
+    ok((await r.json()).run.status === 'skipped' && /no signing key/.test((await admin('/api/v1/admin/curate-publish', undefined, noKey).then(x => x.json())).run.reason), 'no signing key -> skipped, reason recorded');
+    r = await worker.fetch(new Request('https://verumglobal.foundation/api/v1/admin/curate-publish', { method: 'POST', body: '' }), mkEnv(modelDrafts), {});
+    ok(r.status === 401, 'the admin trigger needs the admin token');
+    r = await worker.fetch(mk('/api/v1/admin/curate-publish'), mkEnv(modelDrafts), {});
+    ok(r.status === 405, 'GET on the admin trigger -> 405 (known path)');
+    // 8. a model failure changes nothing
+    delete store['rules:changelog']; // reset for a clean read
+    store['feedback:2026-09-06'] = JSON.stringify([rec([{ detectorId: 'AI_IDENTIFIED', type: 'NEW_TACTIC', severity: 3, pageCount: 5 }, { detectorId: 'AI_IDENTIFIED', type: 'NEW_TACTIC', severity: 3, pageCount: 5 }])]);
+    store['feedback:2026-09-04'] = JSON.stringify([rec([{ detectorId: 'AI_IDENTIFIED', type: 'NEW_TACTIC', severity: 3, pageCount: 5 }])]);
+    r = await admin('/api/v1/admin/curate-publish', undefined, mkEnv(async () => { throw new Error('model down'); }));
+    out = await r.json();
+    ok(out.run.status === 'failed' && /model unavailable: model down/.test(out.run.reason) && out.run.signals === 1, 'a failing model records its reason and publishes nothing');
+    // 9. the scheduled handler runs the same job
+    const waited = [];
+    const sched = await worker.scheduled({ cron: '0 3 * * 1' }, mkEnv(async () => ({ response: JSON.stringify({ rules: [] }) })), { waitUntil: (p) => waited.push(p) });
+    ok(waited.length === 1 && sched && sched.trigger === 'cron' && sched.status === 'no_change' && /no draft passed validation/.test(sched.reason), 'scheduled() runs the trainer as cron and records the outcome (' + (sched && sched.status) + ': ' + (sched && sched.reason) + ')');
+  } finally {
+    global.Date = RealDate;
+  }
+}
+
 console.log('\n[worker] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[worker] ALL GREEN');

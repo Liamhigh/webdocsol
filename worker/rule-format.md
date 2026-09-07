@@ -113,6 +113,24 @@ inside a 3-page window, anchored to the pages the phrases sit on). Publish `min_
 explicitly; a client without it reads ">= N" / "at least N" from `description`, and failing
 that uses half the phrases (never below 2). Groups with one phrase are ignored.
 
+## Auto-curated entries and the changelog
+
+The Worker's trainer run (ENGINE.md §12.9) appends `fraud_keywords` entries of this shape,
+never touching existing ones:
+
+```json
+{ "id": "FK15", "group": "invoice_splitting", "source_detector": "B9", "produces": "CT43",
+  "description": "…rationale… Auto-curated 2026-09-14 from 7 anonymous reports over 3 days (Brain 9 trainer run); recommendation tier, not a determination.",
+  "curated_from": { "type": "INVOICE_SPLITTING", "detectorId": "AI_IDENTIFIED", "support": 7, "days": 3, "window_days": 7 },
+  "min_cooccur": 2, "groups": [["split invoice", "below approval limit", "…"]] }
+```
+
+`GET /api/v1/rules/changelog` → `{ok, current:{version, published_at, published_by}, trainer:{schedule,
+min_support, min_days, max_new_rules_per_run, enabled}, lastRun, entries:[{version, previous,
+published_at, trigger, model, signals_considered, added:[{id, group, type, produces, support,
+days, phrases, min_cooccur}], rejected}]}`. `source_detector: "B9"` marks a trainer rule; clients
+apply it exactly like any other group.
+
 ## Versioning
 
 `version` is strict semver (`x.y.z`, no leading zeros). Every client applies only a
