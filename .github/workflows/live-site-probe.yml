@@ -3,7 +3,8 @@
 # for both hosts, the status, content type, the X-VO-Site-Source tier and a
 # text snippet for the home page, the seal page, both site images, the site
 # health endpoint, the status endpoint, the signed rule manifest (version,
-# publish date and rule counts only) and a path that must not exist. A third
+# publish date and rule counts only), the trainer's changelog (what the Worker
+# published by itself, its last run and its reason) and a path that must not exist. A third
 # host, the Worker's own workers.dev address, shows what the Worker answers
 # even while the public domain is bound elsewhere (it may be disabled: then
 # every path on it fails to resolve, which is itself the answer).
@@ -18,7 +19,7 @@ jobs:
       - name: Probe both hosts
         run: |
           for host in verumglobal.foundation www.verumglobal.foundation webdocsol.liamhigh78.workers.dev; do
-            for p in / /seal-document.html /images/logo-full.png /images/mission-hands.jpg /api/v1/site/health /api/v1/status /api/v1/rules/manifest /this-path-does-not-exist; do
+            for p in / /seal-document.html /images/logo-full.png /images/mission-hands.jpg /api/v1/site/health /api/v1/status /api/v1/rules/manifest /api/v1/rules/changelog /this-path-does-not-exist; do
               echo "===== https://$host$p"
               : > /tmp/body; : > /tmp/hdr
               curl -sS -A 'verum-live-site-probe' -o /tmp/body -D /tmp/hdr -w 'status=%{http_code} type=%{content_type} bytes=%{size_download} time=%{time_total}s\n' "https://$host$p" || echo "curl failed"
