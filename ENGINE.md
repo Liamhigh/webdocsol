@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 31 suites, 1886 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 31 suites, 1887 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**31 suites · 1886 assertions.** `tests/run-all.js` is the registry — a new
+**31 suites · 1887 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -642,11 +642,16 @@ validity and determinism.
 
 ### 12.4 Anonymous pattern sharing
 
-`shareAnonymousPatterns(fraudResult)` posts **novel contradiction types only** — no document
-text, no names — to the worker so the engine's coverage improves as the site is used. The
-novel-type filter is `/^CT(0[1-9]|[1-3][0-9]|4[0-6])$/`. **When a new CT is added, widen this
-regex**: it once stopped at CT43 while the engine ran to CT46, so three types could never be
-reported. `tests/worker.test.mjs` pins the range against the engine's `CT_COUNT`.
+`shareAnonymousPatterns(fraudResult)` posts pattern metadata — detector ids, contradiction
+types, severities and page counts; never document text, names or quotes — to the worker so
+the engine's coverage improves as the site is used. Since 2026-09-07 it runs **automatically
+in "Seal document with forensic report"** and never in "Seal document" (founder direction:
+contradictions, offences and criminals' tactics are not personal information; the disclosure
+box says so). Engine findings travel as their type; a signed-package hit as
+`SIGNED_RULE_<id>`; an AI candidate as `AI_IDENTIFIED` (or `_UNANCHORED`) with its type — CT
+codes included, because "the engine missed a CT01 here" is the loop's most useful signal (the
+old CT01–CT46 exclusion is gone); a Brain 9 recommendation as `B9_RECOMMENDATION`.
+`tests/worker.test.mjs` holds both ends of the contract to the four anonymous fields.
 
 ### 12.5 Options the host page must pass to the report
 
@@ -696,9 +701,10 @@ sender identity); a recording the export never mentions is disclosed as unrefere
 attributed; screenshots are exhibits whose pairing with any recording is left to the reader.
 
 **Transcription is the audio analogue of OCR** (§4.18/§12.5 provenance discipline) and is the
-ONE step where audio leaves the device, so it is **opt-in behind a consent checkbox, default
-off**, whose copy says exactly that ("the audio leaves this device for that step… Leave
-unticked for privileged or sensitive recordings"). The pass runs **after every recording is
+ONE step where audio leaves the device. Since 2026-09-07 it follows the sealing mode — on in
+"Seal document with forensic report", never in "Seal document" — and the voice-note panel says
+which, with the words "the audio leaves this device for that step" (the earlier opt-in checkbox is
+gone; founder direction item 12). The pass runs **after every recording is
 sealed** and indexes `reportItems[ti].file` — never the raw selection, because `reportItems`
 only holds files that sealed, and indexing the selection shifts every transcript after a
 failed seal onto the wrong recording. The Worker endpoint `/api/v1/ai/transcribe`
@@ -845,9 +851,10 @@ sealed reports". The website has no chat: this runs inside the seal pipeline.
   state only coverage and counts (`brain9SweepLine`: pages read of total, windows, budget,
   recommendations logged, suggestions discarded) on the technical report's Methodology page
   and in the narrative's provenance record.
-- **Consent.** Under the existing AI-review opt-in; its copy says the sealed page text is sent
-  in windows and that every suggestion must quote the text or is discarded. Leave it unticked
-  for privileged matters, as before.
+- **Consent.** Part of "Seal document with forensic report" (no switch since 2026-09-07); the
+  disclosure box says the sealed page text is sent in windows and that every suggestion must
+  quote the text or is discarded. Privileged matters use "Seal document": nothing leaves the
+  device.
 
 ### 12.6 The Seal Certificate never carries identity by default
 
@@ -943,13 +950,13 @@ OpenAI-compatible chat-completions provider with three secrets — `LLM_API_BASE
 model as `external:<model>` and the consent copy's "or the AI provider configured for this
 site" applies. Nothing is stored server-side.
 
-**Consent.** `#humanReportOptIn` — default OFF — inside the AI-review section. The copy states
-that findings and page excerpts around the finding pages (up to 24,000 characters per
-section) leave the device for that step, that every sentence is gated, that the result is
-machine-written and advisory, and "Leave unticked for privileged or sensitive matters". The
-step runs only behind the opt-in **and** AI review, after the technical report and the
-findings JSON (so it can cite both by hash), in its own `try` — it never blocks the seal, the
-report or the JSON.
+**Consent (2026-09-07, two modes).** There is no separate switch: the narrative is part of
+"Seal document with forensic report" and is produced with the technical report whenever that
+mode is chosen (founder direction item 12, reversing the earlier default-OFF opt-in). The mode
+card and the disclosure box name what leaves the device — findings, the page excerpts the
+sections cite, never GPS, device or sealer identity — and point privileged matters to "Seal
+document", where nothing leaves the device. Reports still say the prose is machine-written
+and advisory.
 
 **Provenance and seal.** Cover title COURT-READY NARRATIVE REPORT, every body page headed
 "Verum Omnis Court-Ready Narrative" (`makeCtx` takes a `headerTitle`; the forensic report

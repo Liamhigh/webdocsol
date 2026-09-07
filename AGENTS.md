@@ -89,6 +89,9 @@ is meant to be identical across the three repositories — an edit here must be 
   The Worker's own address `webdocsol.liamhigh78.workers.dev` is kept ON (`workers_dev = true`)
   as a second door that does not depend on the domain: the probe checks it too, and the seal
   page works there today. Pages carry self-canonical links to the domain.
+- 7 September 2026: **two modes, no switches.** "Seal document" or "Seal document with forensic
+  report"; the second runs every AI step and produces the court-ready narrative with the
+  technical report automatically (founder direction item 12). The mode card is the disclosure.
 - 7 September 2026: **Brain 9 reads the sealed text.** Founder direction: the AI must read
   the sealed files so nothing is missed, state what it finds, and the loop must let the engine
   catch it next time; Brain 9 verifies the model's claims are real and in the text. Built as
@@ -146,7 +149,7 @@ before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping 
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **31 suites, 1886 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **31 suites, 1887 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
@@ -294,7 +297,8 @@ decisions below are binding on every later change:
    This Report" is absent (§15.2); "Perjury Analysis" is *Sworn Statements &
    Candidate Law*; Counter-Narratives & Rebuttals exists for fairness; empty
    sections say so (PD6).
-5. **Opt-in, default OFF, honest copy.** `#humanReportOptIn`; the copy names
+5. **Opt-in, default OFF, honest copy** *(reversed by item 12 on 2026-09-07: the narrative is
+   now automatic in "Seal document with forensic report")*. `#humanReportOptIn`; the copy names
    what leaves the device and says "Leave unticked for privileged or
    sensitive matters". GPS, device and sealer identity are not payload fields.
 6. **Provenance is inverted honestly.** The cover says this document *is*
@@ -336,6 +340,17 @@ seven above:
    higher counts were false positives removed deliberately (ENGINE.md §4.12);
    the reference document was written over a different 451-page bundle. Do
    not tune detectors to reproduce another document's count.
+12. **Two modes, no switches (2026-09-07, reverses item 5).** The seal page
+   offers "Seal document" and "Seal document with forensic report" and nothing
+   else. The second runs the engine, the AI review, the Brain 9 sweep,
+   transcription of voice notes and the court-ready narrative beside the
+   technical report, automatically; the mode card states what leaves the
+   device, and "Seal document" is the choice for privileged matters (nothing
+   leaves the device). `#aiReviewEnabled`, `#humanReportOptIn` and
+   `#voTranscribeOptIn` and `#sharePatterns` no longer exist; `isAiReviewEnabled()` is
+   `sealMode === 'forensic'`, and anonymous pattern sharing (detector ids, types, severities,
+   page counts — "not personal information", the founder ruled) is automatic in that mode.
+   Do not reintroduce AI or sharing tick boxes.
 
 ### How the Constitution's standing may be described (v8.0 §12)
 
