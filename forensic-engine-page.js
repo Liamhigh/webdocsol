@@ -6,6 +6,7 @@
 // ========================================================================
 // VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.3.5-web
 // 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
+// + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
 // This engine analyzes documents for internal contradictions, fraudulent
 // patterns, and forensic anomalies. It is designed to detect perjury,
@@ -3999,6 +4000,38 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     allFindings = allFindings.concat(serialFindings);
   } catch(e) {}
 
+  // Signed rule package (the engine-update loop; see SIGNED RULE PACKAGES).
+  // The hosting page verifies the manifest's signature and hands the compiled
+  // package over as globalThis.voRulePackage; the engine applies it
+  // additively after every built-in detector has spoken, so a package rule
+  // can only add a finding where the engine reported nothing on that page.
+  // Inert -- byte-identical results -- when no package was handed over.
+  var _rulePkgInfo = null;
+  try {
+    var _gp = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
+    var _pkg = _gp && _gp.voRulePackage;
+    if (_pkg && typeof _pkg === 'object' && _pkg.version && Array.isArray(_pkg.pairs)) {
+      var _pr = voRunPackageRules(_pkg, textBlocks, allFindings);
+      allFindings = allFindings.concat(_pr.findings);
+      _rulePkgInfo = {
+        version: _pkg.version,
+        publishedAt: _pkg.publishedAt || null,
+        keyId: _pkg.keyId || VO_RULES_PUBLIC_KEY_ID,
+        sha512: _pkg.sha512 || null,
+        counts: _pkg.counts || null,
+        pairRules: _pkg.pairs.length,
+        builtInGroupsSkipped: Array.isArray(_pkg.builtInGroupsSkipped) ? _pkg.builtInGroupsSkipped.length : 0,
+        applied: _pr.findings.length,
+        withheld: _pr.withheld
+      };
+      extractionNote += ' Signed rule package v' + _pkg.version + ' (key ' + _rulePkgInfo.keyId +
+        (_pkg.sha512 ? ', SHA-512 ' + String(_pkg.sha512).slice(0, 16) + '...' : '') + ') applied additively: ' +
+        _pkg.pairs.length + ' phrase-pair rule(s) beyond the built-in detectors, ' + _pr.findings.length +
+        ' candidate finding(s) raised, ' + _pr.withheld + ' withheld where a built-in detector had already reported the page' +
+        (_rulePkgInfo.builtInGroupsSkipped ? '; ' + _rulePkgInfo.builtInGroupsSkipped + ' package group(s) skipped as this engine\'s own vocabulary' : '') + '.';
+    }
+  } catch(e) {}
+
   // Digital forensics on the raw PDF structure (revisions, post-signature
   // saves, active content, XMP vs Info disagreement).
   try {
@@ -4112,6 +4145,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     var finding = allFindings[f];
     var cw = VO_DETECTOR_CONFIDENCE[finding.type];
     if (cw === undefined) cw = 0.75;
+    // A signed-package rule is a candidate signal (Android: MODERATE, 0.5),
+    // never weighted like the detector whose type it borrows.
+    if (finding.packageRule) cw = Math.min(cw, VO_PACKAGE_RULE_CONFIDENCE);
     finding.confidence = cw;
     totalScore += finding.severity * cw;
     maxScore += 5; // max severity per finding at full confidence
@@ -4157,6 +4193,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
 
   return {
     engineVersion: VO_ENGINE_VERSION,
+    // The signed rule package this scan applied (version, key, canonical
+    // SHA-512, counts) or null: built-in rules only.
+    rulePackage: _rulePkgInfo,
     clean: unreadable ? false : overallScore < 20,
     unreadable: unreadable,
     overallScore: overallScore,
@@ -4220,6 +4259,318 @@ function generateSummary(findings, score) {
 }
 
 // ===================== EXPORT =====================
+// ===================== SIGNED RULE PACKAGES (additive engine update) =====================
+// The engine-update loop (worker/rule-format.md): the seal and verify pages
+// send anonymised pattern feedback -> /api/v1/ai/curate drafts rule candidates
+// from the aggregate -> a human publishes a signed package via
+// /api/v1/admin/publish -> every client fetches /api/v1/rules/manifest,
+// verifies the RSA-SHA512 signature against the pinned master key and applies
+// the package ADDITIVELY. The Android app (RuleProvider.kt +
+// ContradictionDetectors.detectDownloadedFraudPairs) and the fraud-firewall
+// (ruleUpdate.ts) already do; this is the website's copy of the same
+// contract, deliberately identical in what it applies:
+//   * fraud_keywords[].pairs -> opposing-phrase pairs. A pair fires once per
+//     page where both phrases sit inside one passage (the same 80-character
+//     window D01 uses) and no built-in detector already reported that type
+//     on that page. Groups whose `source_detector` names a built-in detector
+//     are this engine's own vocabulary, exported for the apps, and are
+//     skipped here -- the package adds what the engine does not know, never
+//     a looser second copy of what it does (§4.12 false-positive guards).
+//   * fraud_keywords[].terms, behavioral_markers, contradiction_patterns,
+//     serial_patterns, case_configs -> parsed and counted for the report,
+//     never executed: a single keyword is not a contradiction.
+// Determinism: the engine reads only the compiled, already-verified package
+// the hosting page hands over (globalThis.voRulePackage); with none, results
+// are byte-identical to the built-in engine (the Node harness never sets
+// it). The report and the findings JSON name the package version and the
+// SHA-512 of its canonical bytes, so a re-run can reproduce the scan.
+var VO_RULES_PUBLIC_KEY_ID = 'vo-master-1';
+var VO_RULES_ALGORITHM = 'RSASSA-PKCS1-v1_5-SHA512';
+// worker/public-key.der.b64 (SubjectPublicKeyInfo DER, base64) -- the key the
+// Android app pins as Constitution.RULES_PUBLIC_KEY_DER_B64 and the
+// fraud-firewall as VO_RULES_PUBLIC_KEY_DER_B64. tests/rule-package.test.mjs
+// locks this constant to the file byte for byte.
+var VO_RULES_PUBLIC_KEY_DER_B64 = 'MIICIjANBgkqhkiG9w0BAQEFAAOCAg8AMIICCgKCAgEA9FQPTWCsFh1qMs/mrOOgZvdjCh8APmlsJlallCm3CmWgMoFAyRHRAauvXWFoBoiaUQGGx7OGtZ6eBCpBlOGLxSnVk0T2hBgd6kxZwj1vHEITw9KmXMjy5qmUY1hd3BO3y4aAfrPKu+6ENSJo7Ax77fvBnHPG1oL8m3724oqU913HYI7Miob+CdL0Oi36oCBKhlw5sCYH+evMPU1PmOqTrmz8zUkDk4osqX8INTIchmk2j3BguMw8sjmKRnrB//t6LPYme4motggMPVMNR3hLJHX+ehCYDUtJLshZq1MPLjTT7aK36gCIPg2ja6BxWfYdx7ZzSFVcL+gapy4pA7VnDrhQ7jb10ojGnofssEbQEi7k9FpswMFegmGNmKEH5TQcKlI4VJvQcZddbhZXYwpfgsL/raEFMChEuzR3A49oIXgBBmi9AdQtdEHpfb2i9/PimxsilhDxa8Pi+8cEQUMbHcPeodfX/IWf+wotnc3VKGoffVL/8+hSU/voPhxfXyOcnbRYkFGeOZhcrE/u4Nh6Vkq6y1+cpVUtrIzOnaeNbNF248ZS7f65IZci8MTeo4nAqkWGmXcZHrZLT7YIvHSyAryYzBNoofm2uTuiTxp8Oiwa2yfU2UMQfg0eGZa0LBHCLbG72pxiVd2TGvdHh3QguO1/zM5NNRtoUnqHfuLBOJECAwEAAQ==';
+var VO_PACKAGE_RULE_CONFIDENCE = 0.5;   // Android: MODERATE confidence, weight 0.5
+var VO_PACKAGE_RULE_MAX_SEVERITY = 3;   // Android: MODERATE severity
+var VO_PACKAGE_RULE_WINDOW = 80;        // D01's one-clause window
+var VO_PACKAGE_RULE_MAX_FINDINGS = 25;  // per scan, before the per-type cap
+var VO_PACKAGE_RULE_FALLBACK_TYPE = 'CT43'; // Document Internal Conflict, when a rule names no type
+
+// Canonical JSON -- the signed bytes (rule-format.md): UTF-8, no whitespace,
+// object keys sorted recursively, arrays in order, JSON.stringify escaping.
+function voCanonicalJson(value) {
+  if (value === null || typeof value !== 'object') return JSON.stringify(value);
+  if (Array.isArray(value)) {
+    var parts = [];
+    for (var i = 0; i < value.length; i++) parts.push(voCanonicalJson(value[i]));
+    return '[' + parts.join(',') + ']';
+  }
+  var keys = Object.keys(value).sort();
+  var out = [];
+  for (var k = 0; k < keys.length; k++) {
+    out.push(JSON.stringify(keys[k]) + ':' + voCanonicalJson(value[keys[k]]));
+  }
+  return '{' + out.join(',') + '}';
+}
+
+function voRulesB64ToBytes(b64) {
+  var clean = String(b64 || '').replace(/[^A-Za-z0-9+/=]/g, '');
+  var bin = (typeof atob === 'function') ? atob(clean)
+    : (typeof Buffer !== 'undefined' ? Buffer.from(clean, 'base64').toString('binary') : '');
+  var bytes = new Uint8Array(bin.length);
+  for (var i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function voRulesBytesToHex(bytes) {
+  var hex = '';
+  for (var i = 0; i < bytes.length; i++) hex += (bytes[i] < 16 ? '0' : '') + bytes[i].toString(16);
+  return hex;
+}
+
+// Semver "a is newer than b". Non-semver strings never win.
+function voSemverNewer(a, b) {
+  var pa = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(a || ''));
+  var pb = /^(\d+)\.(\d+)\.(\d+)$/.exec(String(b || ''));
+  if (!pa) return false;
+  if (!pb) return true;
+  for (var i = 1; i <= 3; i++) {
+    var x = parseInt(pa[i], 10), y = parseInt(pb[i], 10);
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
+var VO_RULE_GROUPS = ['contradiction_patterns', 'fraud_keywords', 'behavioral_markers', 'serial_patterns', 'case_configs'];
+
+// Structural checks a manifest must pass BEFORE any cryptography: the wire
+// shape of rule-format.md, the algorithm and key id this client pins, a
+// semver version and the five rule arrays. Returns { ok, reason, package }.
+function voRulePackageShape(manifest) {
+  if (!manifest || typeof manifest !== 'object' || Array.isArray(manifest)) return { ok: false, reason: 'manifest_not_object' };
+  var pkg = manifest['package'];
+  if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg)) return { ok: false, reason: 'package_missing' };
+  if (typeof manifest.signature !== 'string' || !/^[A-Za-z0-9+/=\s]{64,}$/.test(manifest.signature)) return { ok: false, reason: 'signature_missing' };
+  if (manifest.algorithm !== VO_RULES_ALGORITHM) return { ok: false, reason: 'algorithm_unsupported' };
+  if (manifest.publicKeyId !== VO_RULES_PUBLIC_KEY_ID) return { ok: false, reason: 'key_id_unknown' };
+  if (typeof pkg.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(pkg.version)) return { ok: false, reason: 'version_invalid' };
+  if (!pkg.rules || typeof pkg.rules !== 'object' || Array.isArray(pkg.rules)) return { ok: false, reason: 'rules_missing' };
+  var total = 0;
+  for (var g = 0; g < VO_RULE_GROUPS.length; g++) {
+    var arr = pkg.rules[VO_RULE_GROUPS[g]];
+    if (!Array.isArray(arr)) return { ok: false, reason: 'rules_group_missing:' + VO_RULE_GROUPS[g] };
+    total += arr.length;
+  }
+  if (total === 0) return { ok: false, reason: 'rules_empty' };
+  if (total > 5000) return { ok: false, reason: 'rules_too_many' };
+  return { ok: true, reason: null, package: pkg };
+}
+
+// Verify a manifest's signature over the canonical JSON of its package with
+// the pinned public key (RSASSA-PKCS1-v1_5, SHA-512 -- the Worker's
+// signPackage, the Android client's SHA512withRSA). opts.subtle supplies a
+// WebCrypto SubtleCrypto (Node tests pass require('node:crypto').webcrypto.subtle);
+// opts.publicKeyB64 overrides the pinned key (tests only). Resolves to
+// { ok, reason, package, sha512 } -- sha512 is the hex digest of the exact
+// bytes the signature covers, which the report prints as the package's
+// fingerprint. Never throws.
+async function voVerifyRulePackage(manifest, opts) {
+  opts = opts || {};
+  var shape = voRulePackageShape(manifest);
+  if (!shape.ok) return { ok: false, reason: shape.reason, package: null, sha512: null };
+  var subtle = opts.subtle || ((typeof crypto !== 'undefined' && crypto && crypto.subtle) ? crypto.subtle : null);
+  if (!subtle) return { ok: false, reason: 'no_webcrypto', package: null, sha512: null };
+  try {
+    var canonical = voCanonicalJson(shape.package);
+    var data = new TextEncoder().encode(canonical);
+    var keyBytes = voRulesB64ToBytes(opts.publicKeyB64 || VO_RULES_PUBLIC_KEY_DER_B64);
+    var key = await subtle.importKey('spki', keyBytes, { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' }, false, ['verify']);
+    var sig = voRulesB64ToBytes(manifest.signature);
+    var valid = await subtle.verify('RSASSA-PKCS1-v1_5', key, sig, data);
+    if (!valid) return { ok: false, reason: 'signature_invalid', package: null, sha512: null };
+    var digest = await subtle.digest('SHA-512', data);
+    return { ok: true, reason: null, package: shape.package, sha512: voRulesBytesToHex(new Uint8Array(digest)) };
+  } catch (e) {
+    return { ok: false, reason: 'verify_error:' + ((e && e.message) ? String(e.message).slice(0, 80) : 'unknown'), package: null, sha512: null };
+  }
+}
+
+function voRulesTrimLower(s) {
+  return String(s === undefined || s === null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase();
+}
+
+// Compile a VERIFIED package into what the engine applies. meta carries the
+// provenance the report prints ({ sha512, keyId, fetchedFrom }). Mirrors the
+// Android RuleProvider: pairs from fraud_keywords[].pairs, flat string terms
+// from fraud_keywords[].terms, keywords from behavioral_markers[].keywords;
+// everything else is counted. `builtIn` names the groups skipped because
+// their source_detector is one of this engine's own detectors.
+function voCompileRulePackage(pkg, meta) {
+  meta = meta || {};
+  var rules = (pkg && pkg.rules && typeof pkg.rules === 'object') ? pkg.rules : {};
+  var detectors = (typeof DETECTORS !== 'undefined' && DETECTORS) ? DETECTORS : {};
+  var builtInDetector = {};
+  for (var dk in detectors) {
+    if (!Object.prototype.hasOwnProperty.call(detectors, dk)) continue;
+    var did = /^(D\d{2})/.exec(dk);
+    if (did) builtInDetector[did[1]] = true;
+  }
+  var pairs = [], terms = [], markers = [], builtIn = [], seenPair = {};
+  var fk = Array.isArray(rules.fraud_keywords) ? rules.fraud_keywords : [];
+  for (var i = 0; i < fk.length; i++) {
+    var entry = fk[i];
+    if (!entry || typeof entry !== 'object') continue;
+    var ruleId = (typeof entry.id === 'string' && entry.id) ? entry.id.slice(0, 32) : ('FK?' + i);
+    var src = (typeof entry.source_detector === 'string') ? entry.source_detector.trim().toUpperCase() : '';
+    var produces = (typeof entry.produces === 'string' && /^CT\d{2}$/.test(entry.produces.trim()) && voCtById(entry.produces.trim()))
+      ? entry.produces.trim() : null;
+    if (src && builtInDetector[src]) { builtIn.push(ruleId); continue; }
+    var pl = Array.isArray(entry.pairs) ? entry.pairs : [];
+    for (var p = 0; p < pl.length; p++) {
+      var pr = pl[p];
+      if (!Array.isArray(pr) || pr.length < 2) continue;
+      var a = voRulesTrimLower(pr[0]), b = voRulesTrimLower(pr[1]);
+      if (!a || !b || a === b || a.length < 3 || b.length < 3) continue;
+      var sig = a + '|' + b;
+      if (seenPair[sig]) continue;
+      seenPair[sig] = true;
+      pairs.push({ ruleId: ruleId, first: a, second: b, produces: produces });
+    }
+    var tl = Array.isArray(entry.terms) ? entry.terms : [];
+    for (var t = 0; t < tl.length; t++) {
+      if (typeof tl[t] !== 'string') continue; // array entries are co-occurrence sets, not single terms
+      var term = voRulesTrimLower(tl[t]);
+      if (term) terms.push({ ruleId: ruleId, term: term, produces: produces });
+    }
+  }
+  var bm = Array.isArray(rules.behavioral_markers) ? rules.behavioral_markers : [];
+  for (var m = 0; m < bm.length; m++) {
+    var mk = bm[m];
+    if (!mk || typeof mk !== 'object') continue;
+    var kws = [];
+    var kl = Array.isArray(mk.keywords) ? mk.keywords : [];
+    for (var kx = 0; kx < kl.length; kx++) {
+      var kw = voRulesTrimLower(kl[kx]);
+      if (kw) kws.push(kw);
+    }
+    markers.push({ ruleId: (typeof mk.id === 'string' ? mk.id.slice(0, 32) : ('BM?' + m)), name: (typeof mk.name === 'string' ? mk.name.slice(0, 80) : ''), keywords: kws });
+  }
+  var counts = {};
+  for (var g = 0; g < VO_RULE_GROUPS.length; g++) {
+    counts[VO_RULE_GROUPS[g]] = Array.isArray(rules[VO_RULE_GROUPS[g]]) ? rules[VO_RULE_GROUPS[g]].length : 0;
+  }
+  return {
+    version: String(pkg && pkg.version || '0.0.0'),
+    publishedAt: (pkg && typeof pkg.published_at === 'string') ? pkg.published_at : null,
+    source: (pkg && typeof pkg.source === 'string') ? pkg.source.slice(0, 120) : null,
+    sha512: meta.sha512 || null,
+    keyId: meta.keyId || VO_RULES_PUBLIC_KEY_ID,
+    fetchedFrom: meta.fetchedFrom || null,
+    counts: counts,
+    pairs: pairs,
+    terms: terms,
+    markers: markers,
+    builtInGroupsSkipped: builtIn
+  };
+}
+
+// Word-boundary positions of a phrase in lower-cased text.
+function voRulePhrasePositions(text, phrase) {
+  var re = new RegExp('(?:^|[^a-z0-9])(' + phrase.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ')(?![a-z0-9])', 'g');
+  var m, out = [];
+  while ((m = re.exec(text)) !== null) {
+    out.push(m.index + m[0].length - m[1].length);
+    if (m.index === re.lastIndex) re.lastIndex++;
+  }
+  return out;
+}
+
+// Every page a finding's location names: "Page 2", "Pages 1-3" (expanded),
+// "p. 95 vs 224", "Pages 17, 17". Empty for "Full document" and the like.
+function voRulePagesOf(location) {
+  var loc = String(location || '');
+  var out = [], seen = {};
+  var range = /(\d{1,5})\s*[-\u2013]\s*(\d{1,5})/.exec(loc);
+  if (range) {
+    var lo = parseInt(range[1], 10), hi = parseInt(range[2], 10);
+    if (hi >= lo && hi - lo <= 2000) { for (var pg = lo; pg <= hi; pg++) out.push(pg); return out; }
+  }
+  var re = /(\d{1,5})/g, m;
+  while ((m = re.exec(loc)) !== null) {
+    var n = parseInt(m[1], 10);
+    if (n > 0 && !seen[n]) { seen[n] = true; out.push(n); }
+  }
+  return out;
+}
+
+// Apply a compiled package to per-page text. `existing` are the findings the
+// built-in detectors already produced; a package finding is withheld when one
+// of them already reports the same type on the same page. Returns
+// { findings, withheld } -- deterministic: rules in package order, pages
+// ascending, first passage per page. Never throws.
+function voRunPackageRules(compiled, textBlocks, existing) {
+  var out = { findings: [], withheld: 0 };
+  if (!compiled || !Array.isArray(compiled.pairs) || !compiled.pairs.length) return out;
+  var blocks = (textBlocks && textBlocks.length) ? textBlocks : [''];
+  var lower = [];
+  for (var b = 0; b < blocks.length; b++) lower.push(String(blocks[b] || '').toLowerCase());
+  var reported = {};
+  var ex = Array.isArray(existing) ? existing : [];
+  for (var e = 0; e < ex.length; e++) {
+    var f = ex[e];
+    if (!f || !f.type) continue;
+    var pgs = voRulePagesOf(f.location);
+    if (!pgs.length) pgs = [1];
+    for (var q = 0; q < pgs.length; q++) reported[f.type + '@' + pgs[q]] = true;
+  }
+  for (var r = 0; r < compiled.pairs.length && out.findings.length < VO_PACKAGE_RULE_MAX_FINDINGS; r++) {
+    var rule = compiled.pairs[r];
+    var type = rule.produces || VO_PACKAGE_RULE_FALLBACK_TYPE;
+    var ct = voCtById(type) || voCtById(VO_PACKAGE_RULE_FALLBACK_TYPE);
+    var severity = Math.min(ct && ct.severity ? ct.severity : 3, VO_PACKAGE_RULE_MAX_SEVERITY);
+    for (var pg = 0; pg < lower.length && out.findings.length < VO_PACKAGE_RULE_MAX_FINDINGS; pg++) {
+      var text = lower[pg];
+      if (!text || text.indexOf(rule.first) < 0 || text.indexOf(rule.second) < 0) continue;
+      var aPos = voRulePhrasePositions(text, rule.first);
+      var bPos = voRulePhrasePositions(text, rule.second);
+      if (!aPos.length || !bPos.length) continue;
+      var hit = null;
+      for (var ai = 0; ai < aPos.length && !hit; ai++) {
+        var pa = aPos[ai], inside = false;
+        // "paid" inside "not paid" is one phrase, not two.
+        for (var bi = 0; bi < bPos.length; bi++) {
+          if (pa >= bPos[bi] && pa < bPos[bi] + rule.second.length) { inside = true; break; }
+        }
+        if (inside) continue;
+        for (var bj = 0; bj < bPos.length; bj++) {
+          var pb = bPos[bj];
+          if (pb >= pa && pb < pa + rule.first.length) continue;
+          if (Math.abs(pb - pa) <= VO_PACKAGE_RULE_WINDOW) { hit = { a: pa, b: pb }; break; }
+        }
+      }
+      if (!hit) continue;
+      var pageNo = pg + 1;
+      if (reported[type + '@' + pageNo]) { out.withheld++; continue; }
+      var start = Math.max(0, Math.min(hit.a, hit.b) - 40);
+      var end = Math.min(text.length, Math.max(hit.a + rule.first.length, hit.b + rule.second.length) + 40);
+      var passage = String(blocks[pg] || '').slice(start, end).replace(/\s+/g, ' ').trim();
+      if (passage.length > 220) passage = passage.slice(0, 220).replace(/\s+\S*$/, '') + '...';
+      out.findings.push({
+        type: type,
+        severity: severity,
+        evidence: 'Signed rule ' + rule.ruleId + ' (package v' + compiled.version + '): opposing phrases "' + rule.first + '" and "' + rule.second + '" in one passage: "' + passage + '"',
+        location: (lower.length <= 1) ? 'Full document' : ('Page ' + pageNo),
+        packageRule: rule.ruleId,
+        packageVersion: compiled.version,
+        detectorId: 'DXX_SIGNED_RULE_PACKAGE'
+      });
+      reported[type + '@' + pageNo] = true;
+    }
+  }
+  return out;
+}
+
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,
@@ -4253,6 +4604,18 @@ if (typeof module !== 'undefined' && module.exports) {
     voStatement: voStatement,
     voAnchorEnrich: voAnchorEnrich,
     voBuildTimeline: voBuildTimeline,
-    voBuildPersonIndex: voBuildPersonIndex
+    voBuildPersonIndex: voBuildPersonIndex,
+    VO_RULES_PUBLIC_KEY_ID: VO_RULES_PUBLIC_KEY_ID,
+    VO_RULES_ALGORITHM: VO_RULES_ALGORITHM,
+    VO_RULES_PUBLIC_KEY_DER_B64: VO_RULES_PUBLIC_KEY_DER_B64,
+    VO_PACKAGE_RULE_CONFIDENCE: VO_PACKAGE_RULE_CONFIDENCE,
+    VO_PACKAGE_RULE_MAX_SEVERITY: VO_PACKAGE_RULE_MAX_SEVERITY,
+    voCanonicalJson: voCanonicalJson,
+    voSemverNewer: voSemverNewer,
+    voRulePackageShape: voRulePackageShape,
+    voVerifyRulePackage: voVerifyRulePackage,
+    voCompileRulePackage: voCompileRulePackage,
+    voRunPackageRules: voRunPackageRules,
+    voRulePagesOf: voRulePagesOf
   };
 }

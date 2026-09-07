@@ -471,11 +471,15 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(/\{\s*detectorId:\s*detectorId,\s*type:\s*type,\s*severity:\s*sev,\s*pageCount:\s*pageCount\s*\}/.test(fn)
     && !/evidence|quote|location|filename|sha\d|caseDetails/.test(fn.replace(/\/\/[^\n]*/g, '')),
     'sender builds ONLY the four anonymous fields — no content, names, or quotes');
-  // The novel-type filter must cover the engine's full CT range (CT01-CT46):
-  // an AI finding labelled with an ENGINE type is not a novel pattern, and
-  // before this lock CT44-CT46 leaked through as "AI-identified novelties".
-  ok(fn.indexOf('/^CT(0[1-9]|[1-3][0-9]|4[0-6])$/') !== -1,
-    'novel-type filter covers the full engine range CT01-CT46');
+  // Reversed on 2026-09-07 (ENGINE.md §12.7): the loop's most useful signal is
+  // "the engine missed a CT01 here". An AI candidate typed with an engine code
+  // now travels as detectorId AI_IDENTIFIED (or AI_IDENTIFIED_UNANCHORED),
+  // distinguishable from an engine finding by its detectorId, never by its
+  // type; the old CT01-CT46 exclusion threw that signal away. Only SERIAL
+  // stays excluded (a serial label is the engine's own pattern name).
+  ok(fn.indexOf('/^CT(0[1-9]|[1-3][0-9]|4[0-6])$/') === -1 && /aType === 'SERIAL'\) continue;/.test(fn) &&
+    /af\.anchored \? 'AI_IDENTIFIED' : 'AI_IDENTIFIED_UNANCHORED'/.test(fn),
+    'CT-typed AI candidates reach the loop as AI_IDENTIFIED; only SERIAL is excluded');
 }
 
 // --- /api/v1/ai/human-report: the court-ready narrative, one section per call.
@@ -651,6 +655,65 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     finally { globalThis.fetch = origFetch; }
     ok(g.generated === false && g.reason === 'timeout', 'an aborted external provider call reports timeout, not ai_unavailable');
   }
+}
+
+// --- the signed rule-package loop: publish -> manifest -> the website verifies.
+// The Worker signs canonical JSON with RULE_PRIVATE_KEY (PKCS#8 DER, base64);
+// the website engine (forensic-engine-page.js, voVerifyRulePackage) verifies
+// the manifest with the matching public key. A throwaway RSA-2048 pair stands
+// in for vo-master-1 here; the pinned key itself is locked by rule-package.test.mjs.
+{
+  const nodeCrypto = await import('node:crypto');
+  const { createRequire } = await import('node:module');
+  const require = createRequire(import.meta.url);
+  const E = require(path.join(__dirname, '..', 'forensic-engine-page.js'));
+  const { privateKey, publicKey } = nodeCrypto.generateKeyPairSync('rsa', { modulusLength: 2048 });
+  const privB64 = privateKey.export({ format: 'der', type: 'pkcs8' }).toString('base64');
+  const pubB64 = publicKey.export({ format: 'der', type: 'spki' }).toString('base64');
+  const store = {};
+  const kvEnv = { ...env, ADMIN_TOKEN: 'test-admin-token', RULE_PRIVATE_KEY: privB64, RULES_KV: {
+    get: async (k) => (Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null),
+    list: async () => ({ keys: [] }),
+    put: async (k, v) => { store[k] = v; }
+  } };
+  const seed = JSON.parse(fs.readFileSync(path.join(__dirname, '..', 'worker', 'seed-rules.json'), 'utf8'));
+  const publish = (pkg, token) => worker.fetch(new Request('https://verumglobal.foundation/api/v1/admin/publish', {
+    method: 'POST', body: JSON.stringify(pkg), headers: { 'content-type': 'application/json', ...(token ? { 'x-admin-token': token } : {}) }
+  }), kvEnv, {});
+
+  r = await worker.fetch(mk('/api/v1/rules/manifest'), kvEnv, {});
+  ok(r.status === 503 && (await r.json()).error === 'no_rule_package', 'manifest answers 503 no_rule_package before any publish');
+  r = await publish(seed);
+  ok(r.status === 401, 'publish without the admin token is 401');
+  r = await publish(seed, 'wrong');
+  ok(r.status === 403, 'publish with a wrong admin token is 403');
+  r = await publish({ ...seed, version: '01.0.0' }, 'test-admin-token');
+  ok(r.status === 400 && (await r.json()).error === 'invalid_version', 'a leading-zero version is refused (the Android client would reject it)');
+  r = await publish({ ...seed, version: '1.0' }, 'test-admin-token');
+  ok(r.status === 400, 'a two-part version is refused');
+  r = await publish(seed, 'test-admin-token');
+  let pub = await r.json();
+  ok(r.status === 200 && pub.ok === true && pub.version === '1.0.0' && pub.rule_counts.fraud_keywords === 12, 'the seed package publishes (' + r.status + ')');
+  r = await worker.fetch(mk('/api/v1/status'), kvEnv, {});
+  ok(r.status === 200 && (await r.json()).version === '1.0.0', 'status reports the published version');
+  r = await publish(seed, 'test-admin-token');
+  let again = await r.json();
+  ok(r.status === 409 && again.error === 'version_not_newer' && again.current === '1.0.0', 'republishing the same version is refused: 409 version_not_newer');
+  r = await publish({ ...seed, version: '0.9.9' }, 'test-admin-token');
+  ok(r.status === 409, 'a lower version is refused');
+  r = await publish({ ...seed, version: '1.1.0' }, 'test-admin-token');
+  ok(r.status === 200 && (await r.json()).version === '1.1.0', 'a strictly newer version publishes');
+
+  r = await worker.fetch(mk('/api/v1/rules/manifest'), kvEnv, {});
+  const manifest = await r.json();
+  ok(r.status === 200 && manifest.algorithm === 'RSASSA-PKCS1-v1_5-SHA512' && manifest.publicKeyId === 'vo-master-1' && manifest.package.version === '1.1.0' && typeof manifest.signature === 'string', 'manifest carries package, signature, algorithm and key id');
+  ok(typeof manifest.package.published_at === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(manifest.package.published_at), 'the server stamps published_at into the signed package');
+  const v = await E.voVerifyRulePackage(manifest, { subtle: nodeCrypto.webcrypto.subtle, publicKeyB64: pubB64 });
+  ok(v.ok === true, 'THE CONTRACT: what the Worker signs, the website engine verifies (' + v.reason + ')');
+  const tampered = JSON.parse(JSON.stringify(manifest)); tampered.package.rules.fraud_keywords[0].pairs[0][1] = 'was paid';
+  ok((await E.voVerifyRulePackage(tampered, { subtle: nodeCrypto.webcrypto.subtle, publicKeyB64: pubB64 })).reason === 'signature_invalid', 'one changed phrase breaks the signature');
+  const compiled = E.voCompileRulePackage(v.package, { sha512: v.sha512, keyId: manifest.publicKeyId, fetchedFrom: 'live' });
+  ok(compiled.version === '1.1.0' && compiled.pairs.length === 0 && compiled.builtInGroupsSkipped.length === 12, 'the seed package compiles on the website to its own vocabulary, skipped (nothing to add)');
 }
 
 console.log('\n[worker] PASS=' + pass + ' FAIL=' + fail);

@@ -433,6 +433,19 @@ async function handleFeedback(request, env) {
   return json({ ok: true, stored: sanitized.length, bucket: day });
 }
 
+const SEMVER_RE = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/;
+// "a is strictly newer than b" for x.y.z strings; a non-semver a never wins.
+function semverNewer(a, b) {
+  const pa = SEMVER_RE.exec(String(a || '')), pb = SEMVER_RE.exec(String(b || ''));
+  if (!pa) return false;
+  if (!pb) return true;
+  for (let i = 1; i <= 3; i++) {
+    const x = Number(pa[i]), y = Number(pb[i]);
+    if (x !== y) return x > y;
+  }
+  return false;
+}
+
 // Deterministic "constitution check" stub: structural bounds only.
 function constitutionCheck(rules) {
   if (!rules || typeof rules !== 'object' || Array.isArray(rules)) {
@@ -469,11 +482,24 @@ async function handleAdminPublish(request, env) {
   if (!pkg || typeof pkg !== 'object' || Array.isArray(pkg)) {
     return err(400, 'invalid_shape', 'Rule package must be a JSON object.');
   }
-  if (typeof pkg.version !== 'string' || !/^\d+\.\d+\.\d+$/.test(pkg.version)) {
-    return err(400, 'invalid_version', 'Package version must be a semver string like "1.0.0".');
+  // Strict semver, no leading zeros: the Android client's SEMVER_REGEX rejects
+  // "01.0.0" as malformed, so a loosely-accepted version would be signed and
+  // then applied by no app.
+  if (typeof pkg.version !== 'string' || !SEMVER_RE.test(pkg.version)) {
+    return err(400, 'invalid_version', 'Package version must be a semver string like "1.0.0" (no leading zeros).');
   }
   const check = constitutionCheck(pkg.rules);
   if (check) return err(422, 'constitution_check_failed', check);
+  // Monotonic: every client applies only a STRICTLY newer version (Android
+  // isNewerVersion, the firewall's version gate, the website's voSemverNewer),
+  // so publishing an equal or lower version would be signed, served and
+  // applied by nobody while silently replacing the package clients hold.
+  const current = await loadCurrent(env);
+  if (current && current.package && typeof current.package.version === 'string' &&
+      !semverNewer(pkg.version, current.package.version)) {
+    return err(409, 'version_not_newer', 'Package version ' + pkg.version + ' is not newer than the published ' +
+      current.package.version + '; clients apply only a strictly newer version.', { current: current.package.version });
+  }
 
   // Server stamps the publish time; the rest of the package is used as sent.
   const toPublish = { ...pkg, published_at: new Date().toISOString() };
@@ -615,10 +641,13 @@ const ASSESS_SYSTEM = 'You are the antithesis reviewer in a forensic contradicti
   'to additionalFindings. Be conservative: flag only clear contradictions/inconsistencies ' +
   'supported by the evidence text you were given; never invent findings or new quotes; keep ' +
   'any quoted fragment under 120 characters; use an existing CT01-CT46 type name where one ' +
-  'fits, otherwise a short descriptive UPPER_SNAKE type. Return additionalFindings: [] when ' +
+  'fits, otherwise a short descriptive UPPER_SNAKE type. Every additional finding MUST carry ' +
+  '"quote": a verbatim fragment (under 120 characters) copied exactly from the evidence text ' +
+  'of the submitted findings, and "page": the page number stated in that finding\'s location ' +
+  '(0 when none is stated). No verbatim quote, no additional finding. Return additionalFindings: [] when ' +
   'nothing was missed. ' +
   'Reply ONLY compact JSON: {"verdicts":[{"id":...,"verdict":"keep|drop","reason":"<=12 words"}],' +
-  '"additionalFindings":[{"type":"CT01|UPPER_SNAKE","severity":1-5,"rationale":"brief"}]}';
+  '"additionalFindings":[{"type":"CT01|UPPER_SNAKE","severity":1-5,"rationale":"brief","quote":"verbatim","page":0}]}';
 
 // Prime Directive 14 (Constitution v6.1): AI system prompts are short
 // rules — the seal governs, not the prompt. Every rule below is a single
@@ -994,7 +1023,16 @@ function sanitizeAdditionalFindings(value) {
     const severity = Math.min(5, Math.max(1, Math.round(sev)));
     const rationale = asStr(f.rationale, 300).trim();
     if (!rationale) continue;
-    out.push({ type, severity, rationale, source: 'ai' });
+    // The anchor the client verifies against the sealed page text (PD2: no
+    // anchor, no sentence). Optional on the wire; the client demotes an
+    // unquoted candidate to an unanchored observation.
+    const quote = asStr(f.quote, 160).trim();
+    const pageNum = Number(f.page);
+    const page = (Number.isFinite(pageNum) && pageNum >= 0 && pageNum <= 1000000) ? Math.round(pageNum) : 0;
+    const item = { type, severity, rationale, source: 'ai' };
+    if (quote) item.quote = quote;
+    if (page > 0) item.page = page;
+    out.push(item);
     if (out.length >= MAX_ADDITIONAL_FINDINGS) break;
   }
   return out;

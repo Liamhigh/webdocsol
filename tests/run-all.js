@@ -33,6 +33,7 @@ const suites = [
   'human-report.test.mjs',
   'site-serving.test.mjs',
   'zip-intake.test.mjs',
+  'rule-package.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',
   'greensky-regression.test.js',
