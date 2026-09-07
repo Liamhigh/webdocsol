@@ -1,37 +1,47 @@
 # Config for the Worker that Cloudflare Workers Builds deploys on every push
-# to main. The Worker is named "webdocsol" in the dashboard and owns the
-# verumglobal.foundation routes, so this script serves BOTH the API and (via
-# the static-proxy fallback in worker/verum-rules.js) the website.
+# to main. The Worker is named "webdocsol" in the dashboard and is the origin
+# of verumglobal.foundation and www (Custom Domains declared below), so this
+# script serves BOTH the API and (via the serving chain in
+# worker/static-proxy.js) the website.
 name = "webdocsol"
 main = "worker/verum-rules.js"
 compatibility_date = "2024-11-07"
 compatibility_flags = ["nodejs_compat"]
 
-# THE ONE DECLARED ROUTE — now the whole site. This list began as a surgical
-# exception to "routes stay in the dashboard" (first one transcribe path,
-# then the /api/v1/ai/* subtree), winning traffic back from a stale dashboard
-# route on the retired "verum-rules" Worker via the most-specific-route rule.
-# On 2026-09-06 the retired "verum-rules" and "verumglobal-static" Workers
-# were deleted in the dashboard, and their routes — including the one
-# carrying the website — died with them, orphaning the domain. This Worker is
-# the only one left and serves EVERYTHING by design (the /api/* router plus
-# the Pages static proxy in worker/verum-rules.js), so the catch-all declared
-# here is the permanent architecture, not an exception: every deploy
-# re-asserts it, and the site cannot be orphaned by dashboard state again.
-# tests/wrangler-config.test.mjs pins this list to exactly these two patterns.
-# www: DNS proxies both hosts through Cloudflare, but a route pattern names
-# one host only — `verumglobal.foundation/*` never matched www, so www was
-# served by whatever origin the zone holds for it (the Cloudflare Pages
-# custom domain) while the apex ran this Worker. Two hosts, two origins, two
-# behaviours — the 2026-09-07 "logos broken on one phone, fine on another"
-# report. Both hosts now name this Worker.
+# THE DOMAIN, AS CUSTOM DOMAINS — both hostnames, this Worker as their origin.
+# History: this list began as a surgical exception to "routes stay in the
+# dashboard" (one transcribe path, then /api/v1/ai/*), winning traffic back
+# from a stale dashboard route on the retired "verum-rules" Worker. On
+# 2026-09-06 the retired "verum-rules" and "verumglobal-static" Workers were
+# deleted in the dashboard and their routes died with them, so this file
+# declared the zone routes `verumglobal.foundation/*` and (2026-09-07)
+# `www.verumglobal.foundation/*`. The outside probe (.github/workflows/
+# live-site-probe.yml) then showed NEITHER route in effect: the apex was
+# answered by the March mock-up Worker `verum-omnis-forensic-web` (a Workers
+# Custom Domain) and www by the Cloudflare Pages project `verumglobal` (a
+# Pages custom domain, i.e. a CNAME), and nothing reached this Worker on
+# either host. A zone route only runs in front of a proxied DNS record it
+# does not create; a Custom Domain is Cloudflare's documented replacement for
+# a `/*` route — Cloudflare creates the DNS record and the certificate, and
+# every deploy re-asserts the binding:
+# https://developers.cloudflare.com/workers/configuration/routing/custom-domains/
+# Dashboard prerequisite (founder, once): the apex must be released by
+# `verum-omnis-forensic-web` (remove its Custom Domain, or delete the Worker)
+# and www by the Pages project (remove the custom domain, then delete the
+# leftover CNAME in DNS → Records). A Custom Domain cannot be created over an
+# existing CNAME, and a deploy that meets either conflict fails its triggers
+# step AFTER the code has uploaded — the code still ships; the binding waits.
+# Adding the two Custom Domains by hand in webdocsol → Settings → Domains &
+# Routes is equivalent and immediate; the next deploy then finds them in place.
+# tests/wrangler-config.test.mjs pins this list to exactly these two
+# hostnames, both as Custom Domains, in both environments.
 # After any routing change, verify
 # https://verumglobal.foundation/api/v1/rules/manifest still answers: the
 # Android app (1verum Constitution.kt) and the fraud-firewall rule updater
 # (firebase repo) both hard-code that URL.
 routes = [
-  { pattern = "verumglobal.foundation/*", zone_name = "verumglobal.foundation" },
-  { pattern = "www.verumglobal.foundation/*", zone_name = "verumglobal.foundation" }
+  { pattern = "verumglobal.foundation", custom_domain = true },
+  { pattern = "www.verumglobal.foundation", custom_domain = true }
 ]
 
 # THE SITE SHIPS WITH THE WORKER — Workers Static Assets. The Cloudflare
@@ -94,8 +104,8 @@ enabled = true
 # to the top-level bindings, so "cannot diverge" is enforced, not just intended.
 [env.production]
 routes = [
-  { pattern = "verumglobal.foundation/*", zone_name = "verumglobal.foundation" },
-  { pattern = "www.verumglobal.foundation/*", zone_name = "verumglobal.foundation" }
+  { pattern = "verumglobal.foundation", custom_domain = true },
+  { pattern = "www.verumglobal.foundation", custom_domain = true }
 ]
 
 [env.production.assets]
@@ -118,14 +128,14 @@ HUMAN_REPORT_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
 [env.production.observability]
 enabled = true
 
-# Routing, current era (since 2026-09-06): this Worker owns
-# verumglobal.foundation/* through the single declared route at the top of
-# this file — site pages via the Pages proxy fallback, /api/* via the router.
-# The old "routes stay dashboard-managed" rule existed to protect production
-# traffic owned by OTHER Workers; those Workers (verum-rules,
-# verumglobal-static) are deleted, so the repo is now the one source of truth
-# for both the code and the route, and the test pins the list so the route
-# can neither narrow nor multiply without a deliberate, reviewed change.
+# Routing, current era (since 2026-09-07): this Worker is the origin of
+# verumglobal.foundation and www through the two Custom Domains declared at
+# the top of this file — site pages via the serving chain, /api/* via the
+# router. The old "routes stay dashboard-managed" rule existed to protect
+# production traffic owned by OTHER Workers; those Workers (verum-rules,
+# verumglobal-static) are deleted, so the repo is the one source of truth for
+# both the code and the domain binding, and the test pins the list so it can
+# neither narrow nor multiply without a deliberate, reviewed change.
 #
 # Admin note: the admin endpoints (/api/v1/admin/publish, /api/v1/ai/curate)
 # require the ADMIN_TOKEN secret on THIS Worker (`wrangler secret put
