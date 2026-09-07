@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 31 suites, 1833 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 31 suites, 1850 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**31 suites · 1833 assertions.** `tests/run-all.js` is the registry — a new
+**31 suites · 1850 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -542,7 +542,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `rule-package.test.mjs` | 92 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
+| `rule-package.test.mjs` | 109 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.mjs` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
@@ -769,17 +769,26 @@ the same thing the app applies:
   The scan awaits the decision (bounded, 8.5 s) so the report names exactly what applied.
 - **Compile** (`voCompileRulePackage`, mirrors `RuleProvider.kt`): opposing-phrase pairs from
   `fraud_keywords[].pairs`; flat strings from `[].terms`; `behavioral_markers[].keywords`;
-  everything else counted. Groups whose `source_detector` names one of this engine's own
-  detectors (`D01`…) are **skipped**: the seed package is the engine's vocabulary exported for
-  the apps, and applying it again would be a looser second copy of D01 without its subject
-  alignment (§4.12). The package adds what the engine does not know.
+  everything else counted. The seed's twelve groups (`VO_ENGINE_OWN_RULE_GROUPS`, FK01–FK12,
+  each with a built-in `source_detector`) are **skipped**: the seed package is the engine's
+  vocabulary exported for the apps, and applying it again would be a looser second copy of D01
+  without its subject alignment (§4.12). Every other group is applied — including a curated
+  group that merely labels a built-in detector (v1.1.0's FK13/FK14 say `D37` because they
+  *produce* CT43, not because they came from it). The package adds what the engine does not
+  know.
 - **Apply** (`voRunPackageRules`, after every built-in detector and the serial patterns): a pair
   fires once per page where both phrases sit inside one 80-character passage (D01's window;
   a phrase that only occurs inside its opposite, "paid" in "not paid", does not count) and no
   built-in finding of the same type already reports that page (withheld, and counted). Type =
   the rule's `produces` when it is a known CT id, else CT43; severity ≤ 3 and weight 0.5
   (Android: MODERATE); at most 25 per scan; then the normal dedupe, page anchoring, anchor
-  rule and scoring apply. Terms and markers are never executed: a single keyword is not a
+  rule and scoring apply. **Co-occurrence groups** (`fraud_keywords[].groups`, the shape the
+  curated v1.1.0 rules use): a set of phrases, each benign alone, fires once when at least
+  `min` distinct phrases co-occur inside the serial detector's 3-page window — `min` from an
+  explicit `min_cooccur`, else the description's ">= N", else half the phrases and never
+  below 2 — anchored to the pages the phrases sit on ("Page 3" / "Pages 1-3") with every
+  matched phrase and its page quoted; hyphenated spellings meet the phrase ("risk-free" =
+  "risk free"). Terms and markers are never executed: a single keyword is not a
   contradiction.
 - **Provenance**: the engine result carries `rulePackage` (version, key id, canonical SHA-512,
   counts, applied/withheld) or `null`; the extraction note says what applied; the report
@@ -794,7 +803,10 @@ the same thing the app applies:
 
 Live state on 2026-09-07: the Worker serves package **v1.1.0** (published 2026-07-19; 43/14/10/17/0
 rules). Its first twelve `fraud_keywords` groups are the engine's own (skipped); the two
-curated groups are what the website applies. The Worker now refuses a version that is not
+curated groups — FK13 `ml_staging_cooccurrence` (five terms, threshold 3) and FK14
+`guaranteed_return_language` (five phrases, threshold 2), both producing CT43 — are
+co-occurrence groups, and the website is the first client that executes them: the Android
+app applies `pairs` only, so v1.1.0 changes nothing on the app until it learns `groups`. The Worker now refuses a version that is not
 strictly newer than the published one (`409 version_not_newer`) and rejects leading-zero
 versions, because every client applies only a strictly newer semver.
 

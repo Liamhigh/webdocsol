@@ -92,7 +92,9 @@ is meant to be identical across the three repositories — an edit here must be 
 - 7 September 2026: the engine-update loop now closes on the website. The seal page fetches
   `/api/v1/rules/manifest`, verifies the RSA-SHA512 signature against the pinned key, caches the
   last verified package and applies it additively (`ENGINE.md` §12.7); the report and the
-  findings JSON name the package. The Worker serves package v1.1.0 (19 July). Fixed on the way:
+  findings JSON name the package. The Worker serves package v1.1.0 (19 July); its two curated
+  rules (FK13/FK14) are co-occurrence `groups`, which the website now executes and the Android
+  app does not (pairs only). Fixed on the way:
   the AI review's verdicts never pruned anything (the client looked for a `keep` field the
   Worker never sends); AI candidates now carry a verbatim quote the page anchors in the sealed
   text, or are labelled unanchored; CT-typed AI candidates now reach the feedback loop; the
@@ -135,7 +137,7 @@ before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping 
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **31 suites, 1833 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **31 suites, 1850 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.

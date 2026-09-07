@@ -131,6 +131,11 @@ const key = makeKey();
   ok(cc.pairs.length === 3, 'curated package: pairs from the non-built-in groups only (' + cc.pairs.length + ')');
   ok(cc.pairs[0].ruleId === 'FK13' && cc.pairs[0].first === 'delivered' && cc.pairs[0].second === 'never delivered' && cc.pairs[0].produces === 'CT01', 'FK13 pair compiled with its CT type');
   ok(cc.pairs[2].ruleId === 'FK14' && cc.pairs[2].produces === null, 'an unknown source_detector (D99) is not the engine\'s own; its pair applies with no type');
+  // The engine's own vocabulary is the SEED's groups (by id) whose source_detector is a built-in detector — nothing else.
+  const seedOwn = seed.rules.fraud_keywords.filter(g => /^D\d{2}$/.test(String(g.source_detector || '')) && Object.keys(E.DETECTORS).some(k => k.indexOf(g.source_detector + '_') === 0)).map(g => g.id);
+  ok(JSON.stringify(seedOwn) === JSON.stringify(E.VO_ENGINE_OWN_RULE_GROUPS), 'VO_ENGINE_OWN_RULE_GROUPS equals the seed groups whose source_detector is a built-in detector (' + seedOwn.join(',') + ')');
+  const labelled = E.voCompileRulePackage({ version: '1.1.0', rules: { fraud_keywords: [{ id: 'FK14', group: 'guaranteed_return_language', source_detector: 'D37', produces: 'CT43', pairs: [['guaranteed return', 'capital at risk']] }] } }, {});
+  ok(labelled.pairs.length === 1 && labelled.builtInGroupsSkipped.length === 0 && labelled.pairs[0].produces === 'CT43', 'a curated group that merely labels a built-in detector (FK14 via D37, as published in v1.1.0) IS applied');
   ok(cc.pairs.every(p => p.ruleId !== 'FK15'), 'malformed pairs (too short, identical, not an array) are dropped');
   ok(cc.terms.length === 1 && cc.terms[0].term === 'flat term', 'terms: flat strings only, co-occurrence sets skipped (as RuleProvider.kt)');
   ok(cc.builtInGroupsSkipped.length === 2, 'the two seed groups in the curated package are skipped (' + cc.builtInGroupsSkipped.join(',') + ')');
@@ -176,13 +181,40 @@ const key = makeKey();
   ok(capped.findings.length === E.voRunPackageRules(many, lots, []).findings.length && capped.findings.length === 25, 'deterministic and capped at 25 per scan (' + capped.findings.length + ')');
   ok(E.voRunPackageRules(null, pages, []).findings.length === 0 && E.voRunPackageRules({ version: '1', pairs: [] }, pages, []).findings.length === 0, 'no package / no pairs -> nothing');
   ok(E.VO_PACKAGE_RULE_CONFIDENCE === 0.5 && E.VO_PACKAGE_RULE_MAX_SEVERITY === 3, 'weight 0.5 and severity cap 3 (Android: MODERATE)');
+
+  // ---- 5b. co-occurrence groups: the shape the curated v1.1.0 rules use (as published) ----
+  const live = { version: '1.1.0', rules: { fraud_keywords: [
+    { id: 'FK13', group: 'ml_staging_cooccurrence', source_detector: 'D37', produces: 'CT43', description: 'Money-laundering staging language observed in the investment/commission/trust case class; each term is benign alone - flag only when >=3 terms from the group co-occur in one document. Investigative indicator, not a determination.', groups: [['commission', 'investment', 'trust account', 'offshore', 'intermediary']] },
+    { id: 'FK14', group: 'guaranteed_return_language', source_detector: 'D37', produces: 'CT43', description: 'Guaranteed-return solicitation language characteristic of investment-scam documentation in the same case class; flag when >=2 phrases from the group co-occur. Investigative indicator, not a determination.', groups: [['guaranteed returns', 'risk free', 'capital guaranteed', 'fixed returns', 'high yield']] }
+  ] } };
+  const lc = E.voCompileRulePackage(live, {});
+  ok(lc.groups.length === 2 && lc.pairs.length === 0 && lc.builtInGroupsSkipped.length === 0, 'v1.1.0\'s two curated groups compile as co-occurrence groups (' + lc.groups.length + ')');
+  ok(lc.groups[0].ruleId === 'FK13' && lc.groups[0].min === 3 && lc.groups[0].phrases.length === 5, 'FK13 threshold 3 read from its description (">=3 terms")');
+  ok(lc.groups[1].ruleId === 'FK14' && lc.groups[1].min === 2 && lc.groups[1].produces === 'CT43', 'FK14 threshold 2 read from its description (">=2 phrases")');
+  const gpages = ['Ordinary cover letter about the lease.', 'We offer guaranteed returns of 12% and the scheme is risk-free for participants.', 'Pay the commission into the trust account via an offshore intermediary.', 'Nothing of note here.'];
+  const gr = E.voRunPackageRules(lc, gpages, []);
+  ok(gr.findings.length === 2 && gr.withheld === 0, 'both groups fire on a document that carries their phrases (' + gr.findings.length + ')');
+  const g14 = gr.findings.find(f => f.packageRule === 'FK14'), g13 = gr.findings.find(f => f.packageRule === 'FK13');
+  ok(g14 && g14.type === 'CT43' && g14.severity === 3 && g14.location === 'Page 2' && /"guaranteed returns" \(p\. 2\), "risk free" \(p\. 2\)/.test(g14.evidence), 'FK14: CT43, severity 3, anchored to the page its phrases sit on, both phrases quoted (' + (g14 && g14.location) + ')');
+  ok(g14 && /2 of 5 phrases of the "guaranteed_return_language" group co-occur \(threshold 2\)/.test(g14.evidence), 'FK14 evidence states the count and the threshold');
+  ok(g13 && g13.location === 'Page 3' && /4 of 5 phrases/.test(g13.evidence), 'FK13: four phrases on page 3 clear the threshold of 3 (' + (g13 && g13.location) + ')');
+  ok(E.voRunPackageRules(lc, ['We offer guaranteed returns of 12%.', 'Unrelated page.'], []).findings.length === 0, 'one phrase alone never fires (each term is benign alone)');
+  ok(E.voRunPackageRules(lc, ['risk-free capital-guaranteed offer'], []).findings.length === 1, 'hyphenated spellings meet the group\'s phrases (risk-free = risk free)');
+  const spread = E.voRunPackageRules(lc, ['commission paid', 'to the trust account', 'via an offshore route', 'x', 'y'], []);
+  ok(spread.findings.length === 1 && spread.findings[0].location === 'Pages 1-3', 'phrases spread over the 3-page window co-occur and anchor to their pages (' + (spread.findings[0] && spread.findings[0].location) + ')');
+  ok(E.voRunPackageRules(lc, ['commission paid', 'x', 'y', 'to the trust account', 'z', 'via an offshore route'], []).findings.length === 0, 'phrases further apart than the window do not co-occur');
+  ok(E.voRunPackageRules(lc, gpages, [{ type: 'CT43', location: 'Page 2', evidence: 'x' }]).withheld === 1, 'a built-in CT43 already on the anchor page withholds the group finding');
+  const explicit = E.voCompileRulePackage({ version: '1.2.0', rules: { fraud_keywords: [{ id: 'FK20', group: 'g', produces: 'CT43', min_cooccur: 4, groups: [['a b', 'c d', 'e f', 'g h', 'i j']] }, { id: 'FK21', group: 'h', groups: [['one two', 'three four', 'five six', 'seven eight']] }] } }, {});
+  ok(explicit.groups[0].min === 4 && explicit.groups[1].min === 2, 'an explicit min_cooccur wins; with neither field nor prose the threshold is half the phrases, never below 2');
+  ok(E.voCompileRulePackage({ version: '1.2.0', rules: { fraud_keywords: [{ id: 'FK22', groups: [['solo']] }] } }, {}).groups.length === 0, 'a one-phrase group is not a co-occurrence rule');
+  ok(JSON.stringify(E.voRunPackageRules(lc, gpages, [])) === JSON.stringify(E.voRunPackageRules(lc, gpages, [])), 'group application is deterministic');
   ok(E.voSemverNewer('1.2.0', '1.1.9') && !E.voSemverNewer('1.1.0', '1.1.0') && !E.voSemverNewer('x', '1.0.0') && E.voSemverNewer('1.0.0', 'x'), 'semver comparison');
 }
 
 // ---- 6. the engine is inert without a package ----
 {
   const src = readFileSync(path.join(root, 'forensic-engine-page.js'), 'utf8');
-  ok(/var _pkg = _gp && _gp\.voRulePackage;\s*if \(_pkg && typeof _pkg === 'object' && _pkg\.version && Array\.isArray\(_pkg\.pairs\)\)/.test(src), 'runForensicEngine reads only globalThis.voRulePackage, guarded');
+  ok(/var _pkg = _gp && _gp\.voRulePackage;\s*if \(_pkg && typeof _pkg === 'object' && _pkg\.version && \(Array\.isArray\(_pkg\.pairs\) \|\| Array\.isArray\(_pkg\.groups\)\)\)/.test(src), 'runForensicEngine reads only globalThis.voRulePackage, guarded');
   ok(/rulePackage: _rulePkgInfo,/.test(src), 'the engine result carries rulePackage (null when none applied)');
   ok(/if \(finding\.packageRule\) cw = Math\.min\(cw, VO_PACKAGE_RULE_CONFIDENCE\);/.test(src), 'scoring caps a package finding\'s weight');
   ok(typeof globalThis.voRulePackage === 'undefined', 'the Node harness never sets a package (regression suites run the built-in engine)');
@@ -209,7 +241,7 @@ const key = makeKey();
   const R = require(path.join(root, 'forensic-report.js'));
   ok(typeof R._rulePackageLine === 'function', 'report exposes rulePackageLine');
   const applied = R._rulePackageLine({ rulePackage: { version: '1.1.0', keyId: 'vo-master-1', sha512: 'ab'.repeat(64), publishedAt: '2026-07-19T18:42:32.699Z', pairRules: 4, applied: 1, withheld: 2 } });
-  ok(/^Signed rule package: v1\.1\.0 \(key vo-master-1, canonical SHA-512 [a-f0-9]{16}(?:\.\.\.|…)[a-f0-9]{8}, published 2026-07-19\) — 4 phrase-pair rule\(s\) applied additively beside the built-in detectors; 1 candidate finding\(s\) raised, 2 withheld where a built-in detector had already reported the page\.$/.test(applied), 'applied line: ' + applied);
+  ok(/^Signed rule package: v1\.1\.0 \(key vo-master-1, canonical SHA-512 [a-f0-9]{16}(?:\.\.\.|…)[a-f0-9]{8}, published 2026-07-19\) — 4 phrase-pair rule\(s\) and 0 co-occurrence group\(s\) applied additively beside the built-in detectors; 1 candidate finding\(s\) raised, 2 withheld where a built-in detector had already reported the page\.$/.test(applied), 'applied line: ' + applied);
   ok(R._rulePackageLine({ rulePackage: null, rulePackageStatus: { state: 'unavailable', reason: 'no_api_at_this_address', reasonText: 'this address answered with a web page instead of the rules service' } }) ===
     'Signed rule package: none applied — built-in rules only (this address answered with a web page instead of the rules service).', 'none-applied line names the reason');
   ok(R._rulePackageLine({}) === 'Signed rule package: none applied — built-in rules only.', 'none-applied line with no status');
