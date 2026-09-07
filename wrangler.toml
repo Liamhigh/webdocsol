@@ -39,6 +39,18 @@ compatibility_flags = ["nodejs_compat"]
 # https://verumglobal.foundation/api/v1/rules/manifest still answers: the
 # Android app (1verum Constitution.kt) and the fraud-firewall rule updater
 # (firebase repo) both hard-code that URL.
+#
+# THE SECOND DOOR — workers.dev. Wrangler switches the *.workers.dev address
+# off when routes or domains are declared, and on 2026-09-07 the outside
+# probe found the Worker reachable on NO host at all: the domain bound
+# elsewhere, workers.dev answering Cloudflare error 1042. Keeping the
+# address on (webdocsol.<account>.workers.dev) gives the site and the API a
+# stable second door that does not depend on the domain binding: the probe
+# can verify a deploy, the founder can seal on it while the domain is being
+# repaired, and /api/v1/status shows whether a rule package is published.
+# Pages carry a canonical link to the domain, so search engines are not
+# confused. Same Worker, same bindings, same code.
+workers_dev = true
 routes = [
   { pattern = "verumglobal.foundation", custom_domain = true },
   { pattern = "www.verumglobal.foundation", custom_domain = true }
@@ -103,6 +115,7 @@ enabled = true
 # bindings. tests/wrangler-config.test.mjs asserts this block stays byte-equal
 # to the top-level bindings, so "cannot diverge" is enforced, not just intended.
 [env.production]
+workers_dev = true
 routes = [
   { pattern = "verumglobal.foundation", custom_domain = true },
   { pattern = "www.verumglobal.foundation", custom_domain = true }

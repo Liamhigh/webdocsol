@@ -86,6 +86,9 @@ is meant to be identical across the three repositories — an edit here must be 
   Custom Domain cannot be created over a CNAME); then either add both Custom Domains to
   `webdocsol` (Settings → Domains & Routes → Add → Custom Domain — immediate) or let the next
   deploy create them. Re-run `live-site-probe` and expect `X-VO-Site-Source` on both hosts.
+  The Worker's own address `webdocsol.liamhigh78.workers.dev` is kept ON (`workers_dev = true`)
+  as a second door that does not depend on the domain: the probe checks it too, and the seal
+  page works there today. Pages carry self-canonical links to the domain.
 - 7 September 2026: the founder's first real run of the court-ready narrative (a 332-page
   Greensky case file) came back with **no AI text in any section** — every section said
   "(network)" — because the page was served by the host that has no API (previous bullet).

@@ -54,6 +54,15 @@ Custom Domain), which is immediate; the next deploy finds them in place. Re-run
 `live-site-probe` afterwards: a correct state shows `X-VO-Site-Source` on every answer and JSON
 at `/api/v1/site/health`.
 
+**The second door — `webdocsol.liamhigh78.workers.dev`.** The same probe found the Worker's
+own workers.dev address switched off (Cloudflare error 1042: wrangler disables it once routes
+or domains are declared), so on 7 September the Worker was reachable on no host at all.
+`workers_dev = true` in both environments keeps that address on: same Worker, same bindings,
+same code, independent of the domain binding. Use it to verify a deploy from outside, to seal
+on while the domain is being repaired, and to read `/api/v1/status` (whether a signed rule
+package is published). Every page carries a self-canonical link to the domain, so the second
+address is never the one search engines index.
+
 **Routing history:** until 2026-09-06 a stale dashboard route pointed `/api/*`
 at the retired `verum-rules` Worker (frozen 2026-07-20) and site traffic ran
 through the retired `verumglobal-static` Worker, with `wrangler.toml`
