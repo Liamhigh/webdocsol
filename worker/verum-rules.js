@@ -2305,21 +2305,46 @@ function nextRuleId(pkg) {
   return 'FK' + String(max + 1).padStart(2, '0');
 }
 
-async function appendChangelog(env, entry) {
-  let log = [];
-  try { const raw = await env.RULES_KV.get(CHANGELOG_KEY); if (raw) log = JSON.parse(raw); if (!Array.isArray(log)) log = []; } catch { log = []; }
-  log.unshift(entry);
+// The changelog is read BEFORE anything is stored (a KV read failure aborts the run with
+// nothing published, and a transient read failure can never overwrite the log with a single
+// entry) and written AFTER the package is current, with one retry. If that write still fails
+// the run is still reported as published — the manifest is the truth, the changelog the log —
+// and the last-run record says the entry is missing (`changelog: "not_written"`).
+async function readChangelog(env) {
+  const raw = await env.RULES_KV.get(CHANGELOG_KEY); // a KV failure throws: the caller aborts before publishing
+  if (!raw) return [];
+  try { const log = JSON.parse(raw); return Array.isArray(log) ? log : []; } catch { return []; }
+}
+
+async function writeChangelog(env, priorLog, entry) {
+  let log = [entry].concat(priorLog);
   if (log.length > MAX_CHANGELOG_ENTRIES) log = log.slice(0, MAX_CHANGELOG_ENTRIES);
-  await env.RULES_KV.put(CHANGELOG_KEY, JSON.stringify(log));
+  const body = JSON.stringify(log);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { await env.RULES_KV.put(CHANGELOG_KEY, body); return true; } catch {}
+  }
+  return false;
 }
 
 async function runAutoCuration(env, trigger) {
-  const run = { trigger: trigger || 'cron', started_at: new Date().toISOString(), status: 'started', reason: null, signals: 0, drafted: 0, accepted: 0, rejected: [], published: null, model: null };
+  const run = { trigger: trigger || 'cron', started_at: new Date().toISOString(), status: 'started', reason: null, signals: 0, drafted: 0, accepted: 0, rejected: [], published: null, changelog: null, model: null };
   const finish = async (status, reason) => {
     run.status = status; run.reason = reason || null; run.finished_at = new Date().toISOString();
     try { await env.RULES_KV.put(LAST_RUN_KEY, JSON.stringify(run)); } catch {}
     return run;
   };
+  // Nothing escapes: an unexpected throw is recorded as a run outcome (the cron has nobody to
+  // report to), and once the package is current the run is never reported as anything but
+  // published.
+  try {
+    return await curate(env, trigger, run, finish);
+  } catch (e) {
+    const msg = (e && e.message) ? String(e.message).slice(0, 120) : 'unknown';
+    return finish(run.published ? 'published' : 'failed', (run.published ? 'published; then: ' : 'unexpected: ') + msg);
+  }
+}
+
+async function curate(env, trigger, run, finish) {
   if (String(env.AUTO_CURATE || 'on').toLowerCase() === 'off') return finish('disabled', 'AUTO_CURATE is off');
   if (!env.RULE_PRIVATE_KEY) return finish('skipped', 'no signing key on this service');
   const cur = await loadCurrent(env);
@@ -2382,13 +2407,18 @@ async function runAutoCuration(env, trigger) {
   let signature;
   try { signature = await signPackage(env, next); } catch (e) { return finish('failed', 'signing failed'); }
   const record = { package: next, signature, algorithm: ALGORITHM, publicKeyId: PUBLIC_KEY_ID, stored_at: new Date().toISOString(), published_by: 'trainer:' + (trigger || 'cron') };
+  // Read the changelog first: if KV cannot be read, nothing is published and nothing is lost.
+  let priorLog;
+  try { priorLog = await readChangelog(env); } catch (e) { return finish('failed', 'could not read the changelog; nothing published'); }
   try {
     await env.RULES_KV.put(HISTORY_PREFIX + cur.package.version, JSON.stringify(cur));
     await env.RULES_KV.put(CURRENT_KEY, JSON.stringify(record));
   } catch (e) { return finish('failed', 'could not store the package'); }
+  // From here the package is current: whatever happens below, this run published.
   run.published = { version: next.version, previous: cur.package.version, published_at: next.published_at, added };
-  await appendChangelog(env, { version: next.version, previous: cur.package.version, published_at: next.published_at, trigger: run.trigger, model: run.model, signals_considered: signals.length, added, rejected: run.rejected.length });
-  return finish('published', null);
+  const logged = await writeChangelog(env, priorLog, { version: next.version, previous: cur.package.version, published_at: next.published_at, trigger: run.trigger, model: run.model, signals_considered: signals.length, added, rejected: run.rejected.length });
+  run.changelog = logged ? 'written' : 'not_written';
+  return finish('published', logged ? null : 'published ' + next.version + '; the changelog entry could not be written (the manifest and this run record carry it)');
 }
 
 async function handleRulesChangelog(env) {

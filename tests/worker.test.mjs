@@ -864,6 +864,31 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     const waited = [];
     const sched = await worker.scheduled({ cron: '0 3 * * 1' }, mkEnv(async () => ({ response: JSON.stringify({ rules: [] }) })), { waitUntil: (p) => waited.push(p) });
     ok(waited.length === 1 && sched && sched.trigger === 'cron' && sched.status === 'no_change' && /no draft passed validation/.test(sched.reason), 'scheduled() runs the trainer as cron and records the outcome (' + (sched && sched.status) + ': ' + (sched && sched.reason) + ')');
+    // 10. the changelog is part of the publish transaction (Sourcery finding on PR #201):
+    //     read before anything is stored, written after with a retry, never able to turn a
+    //     published run into a reported failure or to overwrite the log with one entry.
+    const kvFailing = (mode) => ({
+      get: async (k) => { if (mode === 'get' && k === 'rules:changelog') throw new Error('kv read down'); return Object.prototype.hasOwnProperty.call(store, k) ? store[k] : null; },
+      list: async (opts) => ({ keys: Object.keys(store).filter(k => !opts || !opts.prefix || k.startsWith(opts.prefix)).map(name => ({ name })) }),
+      put: async (k, v) => { if (mode === 'put' && k === 'rules:changelog') throw new Error('kv write down'); store[k] = v; }
+    });
+    const modelNewTactic = async () => ({ response: JSON.stringify({ rules: [
+      { type: 'NEW_TACTIC', group: 'backdated_approval', phrases: ['backdated approval', 'signed retrospectively', 'approval after payment', 'retroactive authorisation'], min_cooccur: 2, rationale: 'An approval is recorded after the payment it authorises.' }
+    ] }) });
+    store['rules:changelog'] = JSON.stringify([{ version: '1.0.1', previous: '1.0.0', trigger: 'admin', added: [] }]); // an existing log that must survive
+    r = await admin('/api/v1/admin/curate-publish', undefined, mkEnv(modelNewTactic, { RULES_KV: kvFailing('get') }));
+    out = await r.json();
+    ok(r.status === 200 && out.run.status === 'failed' && /could not read the changelog; nothing published/.test(out.run.reason) && out.run.published === null, 'a changelog READ failure aborts the run before anything is stored (' + out.run.status + ': ' + out.run.reason + ')');
+    ok((await (await worker.fetch(mk('/api/v1/rules/manifest'), mkEnv(modelNewTactic), {})).json()).package.version === '1.0.1' && JSON.parse(store['rules:changelog']).length === 1, 'the package and the existing changelog are untouched after a read failure');
+    r = await admin('/api/v1/admin/curate-publish', undefined, mkEnv(modelNewTactic, { RULES_KV: kvFailing('put') }));
+    out = await r.json();
+    ok(r.status === 200 && out.run.status === 'published' && out.run.changelog === 'not_written' && out.run.published && out.run.published.version === '1.0.2' && /changelog entry could not be written/.test(out.run.reason), 'a changelog WRITE failure never turns a published run into a reported failure: status published, changelog not_written, the reason says so (' + out.run.status + ': ' + out.run.reason + ')');
+    ok((await (await worker.fetch(mk('/api/v1/rules/manifest'), mkEnv(modelNewTactic), {})).json()).package.version === '1.0.2' && JSON.parse(store['rules:auto-curate:last-run']).changelog === 'not_written' && JSON.parse(store['rules:auto-curate:last-run']).status === 'published', 'the manifest serves 1.0.2 and the last-run record carries the published version with changelog not_written');
+    ok(JSON.parse(store['rules:changelog']).length === 1 && JSON.parse(store['rules:changelog'])[0].version === '1.0.1', 'the existing changelog is left as it was, never overwritten with a partial log');
+    // 11. an unexpected throw anywhere else is a recorded outcome, never an escaped exception
+    const kvBroken = { get: async (k) => { if (k === 'rules:current') throw new Error('kv down'); return null; }, list: async () => ({ keys: [] }), put: async () => {} };
+    const brokenRun = await worker.scheduled({ cron: '0 3 * * 1' }, mkEnv(modelNewTactic, { RULES_KV: kvBroken }), { waitUntil: () => {} });
+    ok(brokenRun && brokenRun.status === 'failed' && /unexpected: kv down/.test(brokenRun.reason), 'a KV outage during the cron is a recorded failed run with its reason, not a swallowed exception (' + (brokenRun && brokenRun.status) + ': ' + (brokenRun && brokenRun.reason) + ')');
   } finally {
     global.Date = RealDate;
   }

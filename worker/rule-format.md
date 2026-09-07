@@ -129,7 +129,9 @@ never touching existing ones:
 min_support, min_days, max_new_rules_per_run, enabled}, lastRun, entries:[{version, previous,
 published_at, trigger, model, signals_considered, added:[{id, group, type, produces, support,
 days, phrases, min_cooccur}], rejected}]}`. `source_detector: "B9"` marks a trainer rule; clients
-apply it exactly like any other group.
+apply it exactly like any other group. `lastRun.changelog` is `"written"` or `"not_written"`: a
+published run whose changelog entry could not be stored still shows its version in `current`
+and in `lastRun.published`.
 
 ## Versioning
 
