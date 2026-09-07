@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 31 suites, 1850 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 31 suites, 1886 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**31 suites · 1850 assertions.** `tests/run-all.js` is the registry — a new
+**31 suites · 1886 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -534,7 +534,7 @@ test file that is not registered there does not run.
 | `page-boot.test.mjs` | 100 | The seal page still boots when a library is missing |
 | `detector-recall.test.mjs` | 107 | Recall + the §4 false-positive guards, pinned to real bundle strings |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
-| `worker.test.mjs` | 184 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget) |
+| `worker.test.mjs` | 233 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget) |
 | `human-report.test.mjs` | 76 | **The court-ready narrative** (§13): one section contract in three artefacts, opt-in default OFF with honest consent copy, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery |
 | `site-serving.test.mjs` | 54 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
 | `zip-intake.test.mjs` | 25 | **WhatsApp chat exports unpacked on-device** (§12.6a): the page's ZIP reader against real archives (stored, deflated, data-descriptor, folder, macOS cruft, encrypted, garbage), expansion into typed Files, only evidence types admitted, documents inside a voice-note export named for a separate seal, the panel note, the .zip picker entry, the 25-note batch, the home-page copy and locally served photos |
@@ -542,7 +542,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `rule-package.test.mjs` | 109 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
+| `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.mjs` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
@@ -809,6 +809,45 @@ co-occurrence groups, and the website is the first client that executes them: th
 app applies `pairs` only, so v1.1.0 changes nothing on the app until it learns `groups`. The Worker now refuses a version that is not
 strictly newer than the published one (`409 version_not_newer`) and rejects leading-zero
 versions, because every client applies only a strictly newer semver.
+
+### 12.8 Brain 9 reads the sealed text: recommendations, verified verbatim, never sealed findings (2026-09-07)
+
+Founder direction: the AI must read the sealed files so nothing is missed, state what it
+finds, and the self-learning loop must let the engine catch it next time; Brain 9, the
+research-and-development brain, verifies that what the model says is real and in the text.
+Constitution v8 §2.10 fixes the shape of that: B9 "cannot issue findings, verdicts, or
+conclusions"; when it detects that another brain missed evidence it "logs a recommendation —
+not a finding"; recommendations "must be anchored"; "all B9 output is internal, not part of
+sealed reports". The website has no chat: this runs inside the seal pipeline.
+
+- **What is read.** The sealed page text — the text layer the engine analysed, OCR rescues
+  included — never a raw evidence file. Pages under `VO_NEAR_EMPTY_CHARS` of content are not
+  read (there is nothing to read; they are already disclosed as unread pages).
+- **How** (`seal-document.html`, `aiBrain9Sweep`): after the eight deterministic brains and the
+  assess step, pages the engine flagged nothing on come first (a miss can only be there), then
+  flagged pages; consecutive pages are grouped into windows under 11,000 characters and 8
+  pages; at most 16 windows and three minutes; each window goes to `POST /api/v1/ai/sweep`
+  with the engine's `known` types for those pages. The model (Llama 3.3 70B, 8B fallback,
+  temperature 0) is told it is Brain 9, cannot issue verdicts, and must quote every item
+  verbatim.
+- **The anti-hallucination gate, twice.** The Worker (`verifySweepItem`) accepts an item only if
+  its quote (≥ 12 characters; whitespace, non-breaking spaces and curly quotes normalised,
+  nothing else) is a substring of the page text it was given — the page is corrected to where
+  the quote actually is — and discards and counts the rest. The seal page repeats the check
+  against its own copy of the sealed text (`voAnchorAiQuote`), drops a recommendation that
+  duplicates an engine finding of the same type on the same page, and deduplicates.
+- **What happens to a recommendation.** It is stated on the results panel (type, severity,
+  page, the verbatim quote, the rationale) and offered as a separate, unsealed
+  `…-brain9-recommendations.json`; with the feedback opt-in it goes to the loop as
+  `B9_RECOMMENDATION` / its type (the four anonymous fields only), so a recurring miss can be
+  curated into a signed rule the deterministic engine then applies (§12.7). It never enters a
+  sealed report's findings, the findings JSON or the court-ready narrative. The sealed reports
+  state only coverage and counts (`brain9SweepLine`: pages read of total, windows, budget,
+  recommendations logged, suggestions discarded) on the technical report's Methodology page
+  and in the narrative's provenance record.
+- **Consent.** Under the existing AI-review opt-in; its copy says the sealed page text is sent
+  in windows and that every suggestion must quote the text or is discarded. Leave it unticked
+  for privileged matters, as before.
 
 ### 12.6 The Seal Certificate never carries identity by default
 

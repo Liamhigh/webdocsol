@@ -247,7 +247,7 @@ const key = makeKey();
   ok(R._rulePackageLine({}) === 'Signed rule package: none applied — built-in rules only.', 'none-applied line with no status');
   const rsrc = readFileSync(path.join(root, 'forensic-report.js'), 'utf8');
   ok((rsrc.match(/rulePackage: opts\.rulePackage \|\| null,/g) || []).length === 3, 'all three report builders take rulePackage');
-  ok(/ctx\.para\(rulePackageLine\(data\), \{ size: 9, font: ctx\.f\.courier, color: GRAY, after: 2 \}\);/.test(rsrc) && /ctx\.bullet\(rulePackageLine\(data\), \{ size: 9\.5 \}\);/.test(rsrc) && /rulePackageLine\(data\),\s*'Verification: verumglobal\.foundation\/verify\.html/.test(rsrc), 'the line prints on the cover, in Methodology and in the court-ready narrative\'s provenance record');
+  ok(/ctx\.para\(rulePackageLine\(data\), \{ size: 9, font: ctx\.f\.courier, color: GRAY, after: 2 \}\);/.test(rsrc) && /ctx\.bullet\(rulePackageLine\(data\), \{ size: 9\.5 \}\);/.test(rsrc) && /rulePackageLine\(data\),\s*brain9SweepLine\(data\),\s*'Verification: verumglobal\.foundation\/verify\.html/.test(rsrc), 'the line prints on the cover, in Methodology and in the court-ready narrative\'s provenance record');
 }
 
 // ---- 8. the hybrid: the AI review prunes, anchors and feeds back ----
@@ -280,6 +280,37 @@ const key = makeKey();
   const wsrc = readFileSync(path.join(root, 'worker', 'verum-rules.js'), 'utf8');
   ok(/"quote":"verbatim","page":0\}\]\}'/.test(wsrc) && /No verbatim quote, no additional finding/.test(wsrc), 'the assess prompt requires a verbatim quote and a page for every additional finding');
   ok(/const quote = asStr\(f\.quote, 160\)\.trim\(\);/.test(wsrc) && /if \(quote\) item\.quote = quote;/.test(wsrc) && /if \(page > 0\) item\.page = page;/.test(wsrc), 'the Worker passes quote and page through its sanitizer');
+}
+
+// ---- 9. Brain 9 (R&D) reads the sealed text: recommendations, verified verbatim, never sealed findings ----
+{
+  const html = readFileSync(path.join(root, 'seal-document.html'), 'utf8');
+  ok(/async function aiBrain9Sweep\(textBlocks, engineFindings, onProgress\)/.test(html) && /function voBuildSweepWindows\(textBlocks, engineFindings\)/.test(html), 'the sweep and its window builder exist');
+  ok(/var AI_SWEEP_WINDOW_CHARS = 11000;/.test(html) && /var AI_SWEEP_MAX_PAGES_PER_WINDOW = 8;/.test(html) && /var AI_SWEEP_MAX_WINDOWS = 16;/.test(html) && /var AI_SWEEP_BUDGET_MS = 180000;/.test(html) && /var AI_SWEEP_MIN_PAGE_CHARS = 40;/.test(html), 'window, page, count, budget and near-empty caps as documented');
+  ok(/aiApiPost\('\/api\/v1\/ai\/sweep', \{ pages: win\.map/.test(html), 'each window goes to /api/v1/ai/sweep');
+  ok(/var anchor = voAnchorAiQuote\(it\.quote, it\.page\);\s*if \(!anchor\.found\) \{ info\.unverified\+\+; continue; \}/.test(html), 'the device verifies every quote again and discards the unverifiable');
+  ok(/if \(\(knownByPage\[page\] \|\| \[\]\)\.indexOf\(type\) >= 0\) \{ info\.duplicates\+\+; continue; \}/.test(html), 'a recommendation duplicating an engine finding on that page is dropped');
+  ok(/var sweep = await aiBrain9Sweep\(_pipelineTextBlocks, fraudResult\.findings,/.test(html) && html.indexOf('var sweep = await aiBrain9Sweep(') > html.indexOf('_pipelineAiAddedFindings = assessRes.added;') && html.indexOf('var sweep = await aiBrain9Sweep(') < html.indexOf('aiNarrativeText = await aiNarrateReport('), 'the sweep runs after assess and before the narrative');
+  ok(/_pipelineB9Recs = sweep\.recommendations;\s*_pipelineB9Info = sweep\.info;/.test(html) && /aiReviewInfo\.sweep = sweep\.info;/.test(html), 'the sweep result is kept apart and its coverage rides with the AI-review info');
+  ok(!/mergedFindings = assessRes\.findings\.concat\(assessRes\.added\)\.concat\(_pipelineB9Recs/.test(html) && !/_pipelineB9Recs\)[^\n]*totalFindings/.test(html), 'recommendations are NEVER merged into the report findings');
+  const fj = html.slice(html.indexOf('function buildFindingsJson('), html.indexOf('function buildFindingsJson(') + 9000);
+  ok(fj.indexOf('_pipelineB9Recs') < 0 && fj.indexOf('brain9') < 0, 'the findings JSON carries no Brain 9 output');
+  ok(/function voRenderBrain9Recommendations\(\)/.test(html) && /voRenderBrain9Recommendations\(\);\s*\n\s*\/\/ Opt-in anonymous pattern feedback/.test(html), 'the results panel states the sweep and its recommendations');
+  ok(/-brain9-recommendations\.json'/.test(html) && /Not part of any sealed report/.test(html), 'recommendations are offered as a separate, unsealed JSON');
+  ok(/patterns\.push\(\{ detectorId: 'B9_RECOMMENDATION', type: bType, severity: bSev, pageCount: pageCount \}\);/.test(html), 'recommendations feed the loop as B9_RECOMMENDATION with the four anonymous fields');
+  ok(/Brain 9 reads the sealed page text/.test(html) && /every suggestion must quote the text verbatim or it is discarded/.test(html) && /the sealed page text in windows of about 11,000 characters for the Brain 9 sweep/.test(html), 'the consent copy says the sealed page text leaves the device for the sweep and how it is gated');
+  ok(/_pipelineB9Recs = \[\];\s*_pipelineB9Info = null;\s*try \{/.test(html), 'sweep state is reset before every AI review');
+
+  global.PDFLib = global.PDFLib || { rgb: (r, g, b) => ({ r, g, b }), StandardFonts: {}, PDFDocument: {} };
+  const R = require(path.join(root, 'forensic-report.js'));
+  ok(typeof R._brain9SweepLine === 'function', 'report exposes brain9SweepLine');
+  ok(R._brain9SweepLine({}) === 'Brain 9 (R&D) sweep of the sealed text: not run.', 'no sweep info -> not run');
+  ok(R._brain9SweepLine({ aiReview: { applied: true, sweep: { ran: false, reason: 'service unavailable' } } }) === 'Brain 9 (R&D) sweep of the sealed text: NOT RUN (service unavailable).', 'a failed sweep names its reason');
+  const line = R._brain9SweepLine({ aiReview: { applied: true, sweep: { ran: true, pagesReadText: '1-9, 14-20', pagesTotal: 332, windows: 3, budgetHit: true, recommendations: 2, unverified: 1 } } });
+  ok(line === 'Brain 9 (R&D) sweep of the sealed text: read pages 1-9, 14-20 of 332 (3 windows, time budget reached); 2 anchored recommendations logged and 1 suggestion discarded as not found in the sealed text. Recommendations are not findings and are held outside this sealed report (Constitution v8 §2.10); they train the engine.', 'coverage line: ' + line);
+  const rsrc = readFileSync(path.join(root, 'forensic-report.js'), 'utf8');
+  ok(/ctx\.bullet\(brain9SweepLine\(data\), \{ size: 9\.5 \}\);/.test(rsrc) && /rulePackageLine\(data\),\s*brain9SweepLine\(data\),/.test(rsrc), 'the line prints in Methodology and in the narrative\'s provenance record');
+  ok(!/sweep\.recommendations|\.recommendations\[/.test(rsrc), 'the report never prints a recommendation itself (Constitution v8 §2.10)');
 }
 
 console.log(`\n[rule-package] PASS=${pass} FAIL=${fail}`);

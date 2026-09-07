@@ -1727,6 +1727,23 @@ function rulePackageLine(data) {
   return 'Signed rule package: none applied — built-in rules only' + (why ? ' (' + why + ')' : '') + '.';
 }
 
+// Brain 9 (R&D) sweep of the sealed text — Constitution v8 §2.10: its output
+// is recommendations, anchored, internal, never part of a sealed report. The
+// report therefore states only that the sweep ran, what it read and how many
+// anchored recommendations it logged; the recommendations themselves live in
+// the unsealed Brain 9 file the seal page offers, and feed the engine-
+// improvement loop.
+function brain9SweepLine(data) {
+  var sw = data && data.aiReview && data.aiReview.sweep;
+  if (!sw) return 'Brain 9 (R&D) sweep of the sealed text: not run.';
+  if (!sw.ran) return 'Brain 9 (R&D) sweep of the sealed text: NOT RUN (' + (sw.reason || 'service unavailable') + ').';
+  var w = sw.windows | 0, n = sw.recommendations | 0, u = sw.unverified | 0;
+  return 'Brain 9 (R&D) sweep of the sealed text: read pages ' + (sw.pagesReadText || '—') + ' of ' + (sw.pagesTotal | 0) +
+    ' (' + w + ' window' + (w === 1 ? '' : 's') + (sw.budgetHit ? ', time budget reached' : '') + '); ' +
+    n + ' anchored recommendation' + (n === 1 ? '' : 's') + ' logged and ' + u + ' suggestion' + (u === 1 ? '' : 's') +
+    ' discarded as not found in the sealed text. Recommendations are not findings and are held outside this sealed report (Constitution v8 §2.10); they train the engine.';
+}
+
 // ================= SECTION: CONSTITUTION & AI GOVERNANCE =================
 function secConstitution(ctx, data) {
   ctx.newBodyPage();
@@ -1761,6 +1778,7 @@ function secMethodology(ctx, data) {
   ctx.bullet('Mode: deterministic — keyword, pattern, numeric and structural heuristics over extracted page text. No generative AI was used to produce findings.', { size: 9.5 });
   ctx.bullet('AI review (Llama 3.3 70B on Cloudflare Workers AI, 8B fallback; single model, advisory): ' + (data.aiReview && data.aiReview.applied ? 'applied (advisory) — see AI REVIEW section.' : (data.aiReview && data.aiReview.applied === false ? 'NOT RUN (' + (data.aiReview.reason || 'service unavailable') + ') — findings are engine output, unreviewed.' : 'NOT applied — pending.')), { size: 9.5 });
   ctx.bullet(rulePackageLine(data), { size: 9.5 });
+  ctx.bullet(brain9SweepLine(data), { size: 9.5 });
   ctx.bullet('Text extraction: ' + (data.extractionNotes || 'per-page PDF content-stream decoding with ToUnicode CMaps.'), { size: 9.5 });
   ctx.gap(4);
 
@@ -4390,6 +4408,7 @@ async function buildHumanReport(opts) {
     'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the render-time §15.2 gate: ' + gateDroppedClient,
     'Engine: Forensic Contradiction Engine v' + ENGINE_VERSION + ' — deterministic mode',
     rulePackageLine(data),
+    brain9SweepLine(data),
     'Verification: verumglobal.foundation/verify.html (the only place a Verum seal is verified)'
   ];
   ctx.box('Provenance record', lines, { size: 9 });
@@ -4415,7 +4434,7 @@ async function buildHumanReport(opts) {
 
 // ================= exports =================
 var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buildHumanReport, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
-  _rulePackageLine: rulePackageLine,
+  _rulePackageLine: rulePackageLine, _brain9SweepLine: brain9SweepLine,
   _extractParties: extractParties, _extractPartiesWithRoles: extractPartiesWithRoles,
   _partyRoleMap: partyRoleMap, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
   _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,

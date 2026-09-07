@@ -716,6 +716,53 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(compiled.version === '1.1.0' && compiled.pairs.length === 0 && compiled.builtInGroupsSkipped.length === 12, 'the seed package compiles on the website to its own vocabulary, skipped (nothing to add)');
 }
 
+// --- Brain 9 (R&D) sweep of the sealed text: /api/v1/ai/sweep. Constitution v8
+// §2.10: recommendations, never findings; anchored; the quote must exist in
+// the very text the model was given, or the item is discarded and counted.
+{
+  const sweepPost = (payload, run) => worker.fetch(mk('/api/v1/ai/sweep', 'POST', JSON.stringify(payload)), { ...env, AI: { run } }, {});
+  const pages = [
+    { page: 4, text: 'INVOICE #2023-001 Business Services Engagement. Payment Received: Wire Transfer received January 18, 2023 - Amount: $125,000.00. * Note: M. Wellington revoked signature authority Dec 1, 2022.' },
+    { page: 5, text: 'Nothing of note on this page.' }
+  ];
+  const modelSays = (recommendations) => async (model, opts) => ({ response: JSON.stringify({ recommendations }) });
+  let calls = [];
+  r = await sweepPost({ pages, known: [{ type: 'CT15', page: 4 }] }, async (model, opts) => { calls.push({ model, opts }); return { response: JSON.stringify({ recommendations: [
+    { type: 'CT11', severity: 4, rationale: 'An authoriser whose authority was revoked before the invoice still authorised it.', quote: 'M. Wellington   revoked signature authority', page: 5 },
+    { type: 'CT02', severity: 3, rationale: 'made up', quote: 'this sentence is not in the text', page: 4 },
+    { type: 'x', severity: 2, rationale: 'too short a quote', quote: 'Wire', page: 4 },
+    { type: 'ct11', severity: 9, rationale: 'duplicate of the first', quote: 'M. Wellington revoked signature authority', page: 4 }
+  ] }) }; });
+  let sw = await r.json();
+  ok(r.status === 200 && sw.ok === true && sw.reviewed === true && sw.brain === 'B9', 'sweep answers (' + r.status + ')');
+  ok(sw.recommendations.length === 1 && sw.recommendations[0].type === 'CT11' && sw.recommendations[0].page === 4 && sw.recommendations[0].verified === true, 'a verbatim quote (whitespace forgiven) is kept and its page corrected to where it actually is (' + JSON.stringify(sw.recommendations[0] && sw.recommendations[0].page) + ')');
+  ok(sw.unverified === 2, 'an invented quote and a quote under 12 characters are discarded and counted (' + sw.unverified + ')');
+  ok(sw.recommendations.length === 1, 'the same quote reported twice (case/severity differing) is one recommendation');
+  ok(JSON.stringify(sw.pagesRead) === '[4,5]', 'the reply names the pages read');
+  ok(/Constitution v8 §2\.10/.test(sw.note) && /not findings/.test(sw.note), 'the reply says recommendations are not findings');
+  const sys = calls[0].opts.messages[0].content;
+  ok(/You are Brain 9, the research-and-development brain/.test(sys) && /cannot issue findings, verdicts or conclusions/.test(sys) && /copied EXACTLY, character for character/.test(sys), 'the prompt is Brain 9: no verdicts, verbatim quotes only');
+  const userMsg = JSON.parse(calls[0].opts.messages[1].content);
+  ok(userMsg.known.length === 1 && userMsg.known[0].type === 'CT15' && userMsg.pages.length === 2 && !('norm' in userMsg.pages[0]), 'the model receives the pages and the known types, nothing else');
+  ok(calls[0].model === '@cf/meta/llama-3.3-70b-instruct-fp8-fast' && calls[0].opts.temperature === 0, 'strong model, temperature 0');
+
+  r = await sweepPost({ pages, known: [] }, async () => { throw new Error('model down'); });
+  sw = await r.json();
+  ok(r.status === 200 && sw.ok === true && sw.reviewed === false && sw.recommendations.length === 0 && /model down/.test(sw.reason), 'a failing model degrades to reviewed:false with the reason, never a 5xx');
+  r = await sweepPost({ pages: [] }, modelSays([]));
+  ok(r.status === 400, 'no pages -> 400');
+  r = await sweepPost({ pages: Array.from({ length: 9 }, (_, i) => ({ page: i + 1, text: 'x' })) }, modelSays([]));
+  ok(r.status === 400 && (await r.json()).error === 'too_many_pages', 'more than 8 pages -> 400 too_many_pages');
+  r = await sweepPost({ pages: [{ page: 1, text: 'y'.repeat(12600) }] }, modelSays([]));
+  ok(r.status === 400 && (await r.json()).error === 'too_much_text', 'more than 12,500 characters -> 400 too_much_text');
+  r = await sweepPost({ pages: [{ page: '4', text: 'x' }] }, modelSays([]));
+  ok(r.status === 400 && (await r.json()).error === 'invalid_page', 'a non-integer page -> 400 invalid_page');
+  r = await worker.fetch(mk('/api/v1/ai/sweep'), env, {});
+  ok(r.status === 405, 'GET on the sweep endpoint -> 405 (the path is known)');
+  const src = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
+  ok(/Constitution v8 §2\.10: B9 trains and calibrates/.test(src), 'the endpoint cites the constitutional rule it implements');
+}
+
 console.log('\n[worker] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[worker] ALL GREEN');
