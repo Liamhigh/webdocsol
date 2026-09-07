@@ -39,7 +39,7 @@ the site and a small API.
 |---|---|---|
 | Website pages | repo root `*.html`, `verum-ui.css`, `images/`, `vendor/` | Served by the Worker as **Workers Static Assets** (`wrangler.toml [assets]`), through a fixed chain when a request reaches the Worker: bundled assets → the `main` branch on `raw.githubusercontent.com` → the legacy Cloudflare Pages origin. Every answer names its tier in `X-VO-Site-Source`; `GET /api/v1/site/health` shows which tier answers for the home page, the seal page and both logos. The two site images also have embedded last-resort copies (`worker/site-assets.js`). |
 | Forensic engine, PDF reports, sealing, OpenTimestamps, encryption | `forensic-engine-page.js`, `forensic-report.js`, `seal-guard.js`, `ots-proof.js`, `pdf-encrypt.js` — **inlined** into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers | The visitor's browser. Edit the source file, then re-splice the inline copy; `tests/inline-scripts.test.mjs` byte-compares them. |
-| API `/api/v1/*` — AI review (classify, assess, narrate), the opt-in court-ready narrative, voice-note transcription (voice notes arrive singly or as a WhatsApp chat-export `.zip` unpacked on the device — `ENGINE.md` §12.6a), signed rule packages, admin publish, site health | `worker/verum-rules.js` (router and handlers), `worker/static-proxy.js` (site chain), `worker/site-assets.js` (embedded images) | Cloudflare Worker `webdocsol`, routes `verumglobal.foundation/*` and `www.verumglobal.foundation/*` (a route pattern names one host; www was served by the Pages custom domain until 2026-09-07), bindings `RULES_KV`, `AI`, `ASSETS`; secrets set in the dashboard only: `ADMIN_TOKEN`, `RULE_PRIVATE_KEY`, optional `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL`. `HUMAN_REPORT_MODEL` is a plain var. |
+| API `/api/v1/*` — AI review (classify, assess, narrate), the opt-in court-ready narrative, voice-note transcription (voice notes arrive singly or as a WhatsApp chat-export `.zip` unpacked on the device — `ENGINE.md` §12.6a), signed rule packages, admin publish, site health | `worker/verum-rules.js` (router and handlers), `worker/static-proxy.js` (site chain), `worker/site-assets.js` (embedded images) | Cloudflare Worker `webdocsol`, Custom Domains `verumglobal.foundation` and `www.verumglobal.foundation` declared in `wrangler.toml` (since 2026-09-07; the zone routes declared before never bound — see Known state), bindings `RULES_KV`, `AI`, `ASSETS`; secrets set in the dashboard only: `ADMIN_TOKEN`, `RULE_PRIVATE_KEY`, optional `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL`. `HUMAN_REPORT_MODEL` is a plain var. |
 | Dashboard data (`dashboard.html`) | This page only | It fetches `verum-forensic-hub.liamhigh78.workers.dev`, a **separate Worker that is not in this repository**. When it does not answer, the page says so; illustrative figures exist only behind `?demo=1` and are labelled. |
 
 **How a change ships.** Edit → `node tests/run-all.js` (every suite green) and `npm run check`
@@ -70,14 +70,22 @@ is meant to be identical across the three repositories — an edit here must be 
   holds that shell and almost certainly the apex as a Custom Domain); `www` answers from the
   Cloudflare Pages project `verumglobal` (Pages headers, `308 /seal-document.html →
   /seal-document`, index.html for every unknown path including `/api/*`). No response on either
-  host carried `X-VO-Site-Source`. So the routes this Worker declares are not taking effect —
-  most likely the deploy's route step fails on the conflict (read the latest main build log in
-  Workers Builds). Consequences: the API does not exist on either public host (the
-  "transcription service error" is the home page HTML coming back from `www`), QR verify links
-  on the apex open the mock-up, the Android app's manifest URL returns HTML. Fix is in the
-  dashboard: detach the apex from `verum-omnis-forensic-web` (or delete that Worker), detach
-  `www` from the Pages project (or delete it), confirm `webdocsol` → Settings → Domains & Routes
-  lists both routes, then re-run `live-site-probe` and expect `X-VO-Site-Source` on both hosts.
+  host carried `X-VO-Site-Source`. So the zone routes this Worker declared never bound.
+  Cloudflare's documented rules say why that is decisive: a route on a hostname that is another
+  Worker's Custom Domain runs *before* that Worker, so a bound route would have answered; and a
+  zone route only runs in front of a proxied DNS record it does not create. `wrangler.toml`
+  therefore now declares both hostnames as **Custom Domains** (`custom_domain = true`) — this
+  Worker is their origin, Cloudflare creates the DNS records and certificates, every deploy
+  re-asserts the binding. Consequences until the binding exists: the API does not exist on
+  either public host (the "transcription service error" is the home page HTML coming back from
+  `www`), QR verify links on the apex open the mock-up, the Android app's manifest URL returns
+  HTML, and every Workers Builds deploy uploads the code and then fails its triggers step
+  (expected). Fix, in the dashboard, once, by the founder: release the apex from
+  `verum-omnis-forensic-web` (remove its Custom Domain or delete that Worker); remove `www` from
+  the Pages project `verumglobal` and delete the leftover `www` CNAME under DNS → Records (a
+  Custom Domain cannot be created over a CNAME); then either add both Custom Domains to
+  `webdocsol` (Settings → Domains & Routes → Add → Custom Domain — immediate) or let the next
+  deploy create them. Re-run `live-site-probe` and expect `X-VO-Site-Source` on both hosts.
 - 7 September 2026: the founder's first real run of the court-ready narrative (a 332-page
   Greensky case file) came back with **no AI text in any section** — every section said
   "(network)" — because the page was served by the host that has no API (previous bullet).
@@ -113,7 +121,7 @@ before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping 
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **30 suites, 1722 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **30 suites, 1726 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.

@@ -92,28 +92,28 @@ ok(kv(envAssets, 'binding') === kv(topAssets, 'binding'), 'assets binding identi
 ok((kv(topAssets, 'run_worker_first') || '').includes('"/api/*"'), 'the API keeps running the Worker first');
 ok(kv(envAssets, 'run_worker_first') === kv(topAssets, 'run_worker_first'), 'run_worker_first identical in both environments');
 
-// The ONE declared route is the site catch-all. History: it began as a
-// narrow exception (the transcribe path, then /api/v1/ai/*) to reclaim
-// traffic from a stale dashboard route on the retired "verum-rules" Worker.
-// On 2026-09-06 the retired Workers (verum-rules, verumglobal-static) were
-// deleted in the dashboard and their routes vanished with them, orphaning
-// the site; this Worker is the only one left and serves everything (the
-// /api/* router plus the Pages static proxy), so the declared catch-all
-// became the permanent architecture. The drift this lock now guards against
-// is the route quietly narrowing or multiplying — either can orphan part of
-// the domain again.
-// Two hosts, one Worker (2026-09-07): a route pattern names one host, and
-// `verumglobal.foundation/*` never matched www — so www was served by the
-// zone's other origin (the Pages custom domain) while the apex ran this
-// Worker, and the two phones saw two different sites. Both hosts are declared
-// in both environments; nothing else may be.
+// The domain binding is two Custom Domains — the apex and www — with this
+// Worker as their origin. History: the list began as a narrow zone route
+// (the transcribe path, then /api/v1/ai/*) reclaiming traffic from a stale
+// dashboard route on the retired "verum-rules" Worker; on 2026-09-06 the
+// retired Workers were deleted and their routes with them, so the file
+// declared the catch-all routes `verumglobal.foundation/*` and (2026-09-07)
+// `www.verumglobal.foundation/*`. The outside probe then showed neither
+// route in effect — the apex answered by the March mock-up Worker's Custom
+// Domain, www by the Pages project's custom domain — because a zone route
+// only runs in front of a proxied DNS record it does not create. A Custom
+// Domain is the documented replacement for a `/*` route: Cloudflare creates
+// the record and the certificate and every deploy re-asserts the binding.
+// The drift this lock guards against: the list narrowing (one host orphaned
+// again), widening, or quietly reverting to zone routes that never bound.
 {
   const routeLines = toml.split(/\r?\n/).filter(l => /^\s*\{\s*pattern\s*=/.test(l));
-  ok(routeLines.length === 4, 'exactly two route patterns, declared in both environments (' + routeLines.length + ')');
+  ok(routeLines.length === 4, 'exactly two hostnames, declared in both environments (' + routeLines.length + ')');
   const patterns = routeLines.map(l => (l.match(/pattern\s*=\s*"([^"]+)"/) || [])[1]).sort();
-  ok(patterns.join(',') === 'verumglobal.foundation/*,verumglobal.foundation/*,www.verumglobal.foundation/*,www.verumglobal.foundation/*',
-    'the declared routes are the apex and www catch-alls, nothing narrower or wider (' + patterns.join(' ') + ')');
-  for (const l of routeLines) ok(l.includes('zone_name = "verumglobal.foundation"'), 'route carries its zone_name');
+  ok(patterns.join(',') === 'verumglobal.foundation,verumglobal.foundation,www.verumglobal.foundation,www.verumglobal.foundation',
+    'the declared hostnames are the apex and www, nothing narrower or wider (' + patterns.join(' ') + ')');
+  for (const l of routeLines) ok(l.includes('custom_domain = true'), 'each hostname is a Custom Domain, this Worker its origin: ' + l.trim());
+  for (const l of routeLines) ok(!/zone_name|\/\*/.test(l), 'no zone route survives beside the Custom Domains: ' + l.trim());
 }
 
 console.log(`\n[wrangler-config] PASS=${pass} FAIL=${fail}`);

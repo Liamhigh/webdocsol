@@ -19,8 +19,8 @@ build has not run yet, or the browser cached the page.
                     verumglobal.foundation
                              │
                    Worker: webdocsol
-          owns verumglobal.foundation/* via the route
-          declared in wrangler.toml; deployed by
+      origin of verumglobal.foundation and www through the
+      Custom Domains declared in wrangler.toml; deployed by
           Workers Builds on every push to main
              ┌───────────────┴────────────────┐
              │                                │
@@ -34,13 +34,25 @@ build has not run yet, or the browser cached the page.
 ```
 
 **Routing reality on 2026-09-07 (read before trusting the diagram above).** The
-`live-site-probe` workflow showed the declared routes are not in effect: the apex is answered
-by the assets-only Worker `verum-omnis-forensic-web` (the March Kimi mock-up shell, almost
-certainly holding the apex as a Custom Domain) and `www` by the Cloudflare Pages project
-`verumglobal`; nothing reached this Worker on either host. Until the founder detaches those two
-hostnames in the dashboard and this Worker's routes bind, the diagram above describes the
-intended state, not the live one. Re-run `live-site-probe` after any dashboard change: a
-correct state shows `X-VO-Site-Source` on every answer and JSON at `/api/v1/site/health`.
+`live-site-probe` workflow showed the zone routes this file used to declare were not in effect:
+the apex is answered by the assets-only Worker `verum-omnis-forensic-web` (the March Kimi
+mock-up shell, holding the apex as a Workers Custom Domain) and `www` by the Cloudflare Pages
+project `verumglobal` (a Pages custom domain, i.e. a CNAME); nothing reached this Worker on
+either host. Cloudflare's own rules explain it: a zone route only runs in front of a proxied
+DNS record it does not create, and a route on a hostname that is another Worker's Custom
+Domain runs *before* that Worker — so a route that had bound would have answered; it never
+bound. Since 2026-09-07 `wrangler.toml` therefore declares both hostnames as **Custom Domains**
+(`custom_domain = true`), the documented replacement for a `/*` route: Cloudflare creates the
+DNS records and certificates and every deploy re-asserts the binding. Two things must happen in
+the dashboard first, once, by the founder: the apex must be released by
+`verum-omnis-forensic-web` (remove its Custom Domain or delete that Worker) and `www` by the
+Pages project (remove the custom domain, then delete the leftover `www` CNAME under DNS →
+Records) — a Custom Domain cannot be created over an existing CNAME. Until then every deploy
+uploads the code and then fails its triggers step, which is expected and harmless. The founder
+can also add the two Custom Domains by hand (`webdocsol` → Settings → Domains & Routes → Add →
+Custom Domain), which is immediate; the next deploy finds them in place. Re-run
+`live-site-probe` afterwards: a correct state shows `X-VO-Site-Source` on every answer and JSON
+at `/api/v1/site/health`.
 
 **Routing history:** until 2026-09-06 a stale dashboard route pointed `/api/*`
 at the retired `verum-rules` Worker (frozen 2026-07-20) and site traffic ran
@@ -48,11 +60,12 @@ through the retired `verumglobal-static` Worker, with `wrangler.toml`
 reclaiming first the transcribe path and then `/api/v1/ai/*` via the
 most-specific-route rule. On 2026-09-06 both retired Workers were deleted in
 the dashboard — and their routes, including the site's, vanished with them.
-Since then `webdocsol` owns the whole domain through its declared routes —
-`verumglobal.foundation/*` and, since 2026-09-07, `www.verumglobal.foundation/*`
-(a pattern names one host; until then www fell to the Pages custom domain); the site moved into the Worker as static assets the
-same day (PR #186), and the serving chain above was added after the deploy
-still showed a broken logo (PR #189). The Cloudflare Pages project `verumglobal`
+Since then `webdocsol` was meant to own the whole domain through declared zone
+routes — `verumglobal.foundation/*` and, from 2026-09-07, `www.verumglobal.foundation/*`
+— but the probe showed they never bound (see "Routing reality" above), so the same
+day the file switched to Custom Domains for both hostnames; the site moved into the
+Worker as static assets on 2026-09-06 (PR #186), and the serving chain above was
+added after the deploy still showed a broken logo (PR #189). The Cloudflare Pages project `verumglobal`
 is still connected to the repository and builds every push, but its production
 deployment is stale and it is only the last tier of the chain.
 
@@ -150,12 +163,12 @@ Main configuration for Cloudflare Workers deployment:
   - **assets**: the site itself (see Static Assets)
   - optional secrets via `wrangler secret put`: `ADMIN_TOKEN`; `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL` for an external narrator provider
 
-**Routes**: the ONE route declared in `wrangler.toml` —
-`verumglobal.foundation/*` — is the whole domain, and it is permanent: the
-Worker serves site pages via the Pages proxy and `/api/*` via the router
-(see "Routing history" above). `tests/wrangler-config.test.mjs` pins the
-route list so it can neither narrow nor multiply without a deliberate,
-reviewed change.
+**Domains**: `wrangler.toml` declares two Custom Domains —
+`verumglobal.foundation` and `www.verumglobal.foundation` — with this Worker
+as their origin, and that is permanent: the Worker serves site pages via the
+serving chain and `/api/*` via the router (see "Routing reality" above).
+`tests/wrangler-config.test.mjs` pins the list so it can neither narrow,
+multiply, nor revert to zone routes without a deliberate, reviewed change.
 
 ## Static Assets
 
@@ -323,8 +336,8 @@ wrangler tail --format pretty
 ## For Future AI Code Assistants
 
 ### Key Context
-- This site is **live at Cloudflare** on **one Worker** (`webdocsol`) that owns
-  `verumglobal.foundation/*` and `www.verumglobal.foundation/*` — API and website alike
+- This site is **live at Cloudflare** on **one Worker** (`webdocsol`) that is the origin of
+  `verumglobal.foundation` and `www.verumglobal.foundation` (Custom Domains) — API and website alike
 - **Deployment method**: Cloudflare Workers Builds runs `wrangler deploy` on every push to `main`
 - **API token required** only for a by-hand deploy: `CLOUDFLARE_API_TOKEN`
 - **Static assets**: bundled with the Worker (`[assets]`, repo root), served through the chain
@@ -351,7 +364,7 @@ there is not a signal about the change; the build that matters runs on the merge
 one PR check whose red means something. `wrangler deploy` by hand is the fallback for when
 Workers Builds is unavailable, not the normal path.
 
-**Because merge = publish:** run `node tests/run-all.js` (30 suites, 1722 assertions) and
+**Because merge = publish:** run `node tests/run-all.js` (30 suites, 1726 assertions) and
 re-splice the inline copies into `seal-document.html` **before** the PR, not after. A merged
 regression is live within a minute.
 

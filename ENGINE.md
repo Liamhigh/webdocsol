@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 30 suites, 1722 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 30 suites, 1726 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**30 suites · 1722 assertions.** `tests/run-all.js` is the registry — a new
+**30 suites · 1726 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -736,10 +736,12 @@ the old `verum-rules` Worker (last deployed 2026-07-20). `wrangler.toml` reclaim
 the transcribe path, then the AI subtree `/api/v1/ai/*`, via the most-specific-route rule.
 On 2026-09-06 the retired `verum-rules` and `verumglobal-static` Workers were deleted in
 the dashboard and their routes — including the site's — vanished with them, briefly
-orphaning the domain. Since then `wrangler.toml` declares the catch-all
-`verumglobal.foundation/*` as the permanent architecture: `webdocsol` serves everything
-(the `/api/*` router plus the Pages static proxy), every deploy re-asserts the route, and
-`wrangler-config.test.mjs` pins the list. The standing check after any routing change:
+orphaning the domain. The zone routes declared after that never bound (the apex was a
+mock-up Worker's Custom Domain, www a Pages custom domain — DEPLOYMENT.md "Routing
+reality"), so since 2026-09-07 `wrangler.toml` declares `verumglobal.foundation` and
+`www.verumglobal.foundation` as Custom Domains with `webdocsol` as their origin: it serves
+everything (the `/api/*` router plus the serving chain), every deploy re-asserts the
+binding, and `wrangler-config.test.mjs` pins the list. The standing check after any routing change:
 confirm `/api/v1/rules/manifest` still answers — the Android app and the fraud-firewall
 rule updater hard-code it.
 
