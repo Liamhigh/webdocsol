@@ -2,8 +2,12 @@
 # → Run workflow) whenever a page or an image is reported wrong: it prints,
 # for both hosts, the status, content type, the X-VO-Site-Source tier and a
 # text snippet for the home page, the seal page, both site images, the site
-# health endpoint, the status endpoint and a path that must not exist.
-# The AI sessions' sandbox cannot reach the domain; this can.
+# health endpoint, the status endpoint, the signed rule manifest (version,
+# publish date and rule counts only) and a path that must not exist. A third
+# host, the Worker's own workers.dev address, shows what the Worker answers
+# even while the public domain is bound elsewhere (it may be disabled: then
+# every path on it fails to resolve, which is itself the answer).
+# The AI sessions' sandbox cannot reach any of these; this can.
 name: live-site-probe
 on:
   workflow_dispatch:
@@ -13,12 +17,16 @@ jobs:
     steps:
       - name: Probe both hosts
         run: |
-          for host in verumglobal.foundation www.verumglobal.foundation; do
-            for p in / /seal-document.html /images/logo-full.png /images/mission-hands.jpg /api/v1/site/health /api/v1/status /this-path-does-not-exist; do
+          for host in verumglobal.foundation www.verumglobal.foundation webdocsol.liamhigh78.workers.dev; do
+            for p in / /seal-document.html /images/logo-full.png /images/mission-hands.jpg /api/v1/site/health /api/v1/status /api/v1/rules/manifest /this-path-does-not-exist; do
               echo "===== https://$host$p"
+              : > /tmp/body; : > /tmp/hdr
               curl -sS -A 'verum-live-site-probe' -o /tmp/body -D /tmp/hdr -w 'status=%{http_code} type=%{content_type} bytes=%{size_download} time=%{time_total}s\n' "https://$host$p" || echo "curl failed"
               grep -i -E '^(x-vo-site-source|cf-ray|server|cache-control|content-type|cf-cache-status|location|x-powered-by|etag):' /tmp/hdr | tr -d '\r' || true
-              if grep -qi '^content-type: application/json' /tmp/hdr; then
+              if [ "$p" = "/api/v1/rules/manifest" ] && grep -qi '^content-type: application/json' /tmp/hdr; then
+                # The manifest is large; print its shape, never its full body.
+                jq -c '{version: .package.version, published_at: .package.published_at, rule_counts: ((.package.rules // {}) | map_values(length)), algorithm, publicKeyId, signature_bytes: ((.signature // "") | length), error, message}' /tmp/body 2>/dev/null || head -c 600 /tmp/body; echo
+              elif grep -qi '^content-type: application/json' /tmp/hdr; then
                 head -c 2000 /tmp/body; echo
               else
                 head -c 300 /tmp/body | tr -d '\0' | sed 's/<[^>]*>/ /g' | tr -s ' \n\t' ' '; echo
