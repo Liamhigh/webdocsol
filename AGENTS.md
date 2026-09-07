@@ -39,7 +39,7 @@ the site and a small API.
 |---|---|---|
 | Website pages | repo root `*.html`, `verum-ui.css`, `images/`, `vendor/` | Served by the Worker as **Workers Static Assets** (`wrangler.toml [assets]`), through a fixed chain when a request reaches the Worker: bundled assets → the `main` branch on `raw.githubusercontent.com` → the legacy Cloudflare Pages origin. Every answer names its tier in `X-VO-Site-Source`; `GET /api/v1/site/health` shows which tier answers for the home page, the seal page and both logos. The two site images also have embedded last-resort copies (`worker/site-assets.js`). |
 | Forensic engine, PDF reports, sealing, OpenTimestamps, encryption | `forensic-engine-page.js`, `forensic-report.js`, `seal-guard.js`, `ots-proof.js`, `pdf-encrypt.js` — **inlined** into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers | The visitor's browser. The engine also applies the **signed rule package** the seal page fetches and verifies (`ENGINE.md` §12.7) — the same additive loop the Android app and the fraud-firewall run. Edit the source file, then re-splice the inline copy; `tests/inline-scripts.test.mjs` byte-compares them. |
-| API `/api/v1/*` — AI review (classify, assess, narrate), the opt-in court-ready narrative, voice-note transcription (voice notes arrive singly or as a WhatsApp chat-export `.zip` unpacked on the device — `ENGINE.md` §12.6a), signed rule packages, admin publish, site health | `worker/verum-rules.js` (router and handlers), `worker/static-proxy.js` (site chain), `worker/site-assets.js` (embedded images) | Cloudflare Worker `webdocsol`, Custom Domains `verumglobal.foundation` and `www.verumglobal.foundation` declared in `wrangler.toml` (since 2026-09-07; the zone routes declared before never bound — see Known state), bindings `RULES_KV`, `AI`, `ASSETS`; secrets set in the dashboard only: `ADMIN_TOKEN`, `RULE_PRIVATE_KEY`, optional `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL`. `HUMAN_REPORT_MODEL` is a plain var. |
+| API `/api/v1/*` — AI review (classify, assess, narrate), the Brain 9 sweep of the sealed text (`/api/v1/ai/sweep`: anchored recommendations, never findings), the opt-in court-ready narrative, voice-note transcription (voice notes arrive singly or as a WhatsApp chat-export `.zip` unpacked on the device — `ENGINE.md` §12.6a), signed rule packages, admin publish, site health | `worker/verum-rules.js` (router and handlers), `worker/static-proxy.js` (site chain), `worker/site-assets.js` (embedded images) | Cloudflare Worker `webdocsol`, Custom Domains `verumglobal.foundation` and `www.verumglobal.foundation` declared in `wrangler.toml` (since 2026-09-07; the zone routes declared before never bound — see Known state), bindings `RULES_KV`, `AI`, `ASSETS`; secrets set in the dashboard only: `ADMIN_TOKEN`, `RULE_PRIVATE_KEY`, optional `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL`. `HUMAN_REPORT_MODEL` is a plain var. |
 | Dashboard data (`dashboard.html`) | This page only | It fetches `verum-forensic-hub.liamhigh78.workers.dev`, a **separate Worker that is not in this repository**. When it does not answer, the page says so; illustrative figures exist only behind `?demo=1` and are labelled. |
 
 **How a change ships.** Edit → `node tests/run-all.js` (every suite green) and `npm run check`
@@ -89,6 +89,15 @@ is meant to be identical across the three repositories — an edit here must be 
   The Worker's own address `webdocsol.liamhigh78.workers.dev` is kept ON (`workers_dev = true`)
   as a second door that does not depend on the domain: the probe checks it too, and the seal
   page works there today. Pages carry self-canonical links to the domain.
+- 7 September 2026: **Brain 9 reads the sealed text.** Founder direction: the AI must read
+  the sealed files so nothing is missed, state what it finds, and the loop must let the engine
+  catch it next time; Brain 9 verifies the model's claims are real and in the text. Built as
+  `POST /api/v1/ai/sweep` + `aiBrain9Sweep` (`ENGINE.md` §12.8) under Constitution v8 §2.10:
+  recommendations, never findings; every quote verified verbatim twice (Worker and device);
+  stated on the results panel and in an unsealed JSON; counted (pages read, logged,
+  discarded) in the sealed reports; fed to the loop as `B9_RECOMMENDATION`. Never merged into
+  sealed findings, the findings JSON or the narrative — do not "promote" them without a signed
+  rule. The website has no chat; this runs inside the seal pipeline only.
 - 7 September 2026: the engine-update loop now closes on the website. The seal page fetches
   `/api/v1/rules/manifest`, verifies the RSA-SHA512 signature against the pinned key, caches the
   last verified package and applies it additively (`ENGINE.md` §12.7); the report and the
@@ -137,7 +146,7 @@ before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping 
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **31 suites, 1850 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **31 suites, 1886 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.

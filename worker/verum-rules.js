@@ -16,6 +16,7 @@
 //   POST /api/v1/ai/assess        AI antithesis review of candidate findings
 //   POST /api/v1/ai/narrate       AI forensic report narrative drafting
 //   POST /api/v1/ai/human-report  AI court-ready narrative, one gated section per call
+//   POST /api/v1/ai/sweep         Brain 9 (R&D) sweep of sealed page text: anchored recommendations, never findings
 //   POST /api/v1/ai/curate        admin: AI-drafted rule candidates from feedback
 //
 // Signing: RSASSA-PKCS1-v1_5 with SHA-512 over the canonical JSON of the
@@ -1093,6 +1094,147 @@ async function handleAiAssess(request, env) {
   }
 }
 
+// --- b2. /api/v1/ai/sweep — Brain 9 (R&D) reads the sealed text ---------------
+//
+// Constitution v8 §2.10: B9 trains and calibrates the other eight brains,
+// red-teams them, and "cannot issue findings, verdicts, or conclusions. If B9
+// detects that another brain missed evidence, it logs a recommendation — not
+// a finding. Recommendations must be anchored. All B9 output is internal, not
+// part of sealed reports." This endpoint is that brain's reading pass over
+// the SEALED page text (the text layer the engine itself analysed, OCR
+// rescues included — never a raw evidence file): the model names what the
+// eight deterministic brains did not report on these pages, and every item
+// must carry a verbatim quote. The quote is checked here, byte for byte after
+// whitespace and quote-mark normalisation, against the very text the model
+// was given; an item whose quote is not in the text is discarded and counted,
+// never returned. That check is the anti-hallucination gate: a recommendation
+// exists only if its words exist in the sealed record. The seal page repeats
+// the check against its own copy of the text, keeps the survivors OUT of the
+// sealed reports (a count and the pages read are all the report states) and
+// feeds them to the engine-improvement loop, so a recurring miss becomes a
+// signed rule the deterministic engine applies next time.
+const MAX_SWEEP_PAGES = 8;
+const MAX_SWEEP_TEXT_CHARS = 12500;
+const MAX_SWEEP_RECS = 10;
+const MIN_SWEEP_QUOTE_CHARS = 12;
+const SWEEP_SYSTEM = 'You are Brain 9, the research-and-development brain of the Verum Omnis forensic contradiction engine. ' +
+  'You read pages of a document sealed under SHA-512; the text is exact and cannot be altered. ' +
+  'Eight deterministic brains have already run; "known" lists the contradiction types they reported on these pages. ' +
+  'Your only job: find contradictions, inconsistencies or forensic anomalies on these pages that are NOT in known. ' +
+  'You cannot issue findings, verdicts or conclusions: every item is a recommendation for the engine. ' +
+  'For each item give: type (an existing CT01-CT46 type where one fits, otherwise a short UPPER_SNAKE type), ' +
+  'severity 1-5, rationale (under 200 characters, a statement of fact, no hedging, no verdict on any person), ' +
+  'quote (a fragment under 120 characters copied EXACTLY, character for character, from the page text), and page (the page number the quote is on). ' +
+  'A quote you cannot copy verbatim does not exist; never paraphrase, never invent, never combine fragments. ' +
+  'Be conservative: only clear contradictions or inconsistencies supported by the text. ' +
+  'Reply ONLY compact JSON: {"recommendations":[{"type":"CT01|UPPER_SNAKE","severity":1-5,"rationale":"...","quote":"verbatim","page":0}]} ' +
+  'and {"recommendations":[]} when nothing was missed.';
+
+// Whitespace, non-breaking spaces and curly quotes are the usual differences
+// between a model's copy of a fragment and the page text; nothing else is
+// forgiven.
+function sweepNorm(s) {
+  return String(s || '').toLowerCase().replace(/[\u2018\u2019\u02bc]/g, "'").replace(/[\u201c\u201d]/g, '"')
+    .replace(/[\u00a0\s]+/g, ' ').trim();
+}
+
+// Verify one model item against the supplied pages. Returns the accepted
+// recommendation (page corrected to where the quote actually is) or null.
+function verifySweepItem(item, pages) {
+  if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+  const type = asStr(item.type, 64).trim().toUpperCase().replace(/[^A-Z0-9_]/g, '_').replace(/^_+|_+$/g, '');
+  if (!type) return null;
+  const sev = Number(item.severity);
+  if (!Number.isFinite(sev)) return null;
+  const severity = Math.min(5, Math.max(1, Math.round(sev)));
+  const rationale = asStr(item.rationale, 300).trim();
+  if (!rationale) return null;
+  const quote = asStr(item.quote, 160).trim();
+  if (quote.length < MIN_SWEEP_QUOTE_CHARS) return null;
+  const needle = sweepNorm(quote);
+  if (needle.length < MIN_SWEEP_QUOTE_CHARS) return null;
+  const hinted = Number(item.page);
+  const order = [];
+  for (let i = 0; i < pages.length; i++) { if (pages[i].page === hinted) order.push(i); }
+  for (let i = 0; i < pages.length; i++) { if (order.indexOf(i) < 0) order.push(i); }
+  for (const idx of order) {
+    if (pages[idx].norm.indexOf(needle) >= 0) {
+      return { type, severity, rationale, quote, page: pages[idx].page, source: 'ai', brain: 'B9', verified: true };
+    }
+  }
+  return null;
+}
+
+async function handleAiSweep(request, env) {
+  const body = await readBodyText(request, MAX_AI_BODY);
+  if (body.tooBig) return err(413, 'body_too_large', 'Request body exceeds the 16 KB limit.');
+  let data;
+  try { data = JSON.parse(body.text); } catch {
+    return err(400, 'invalid_json', 'Request body is not valid JSON.');
+  }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    return err(400, 'invalid_shape', 'Body must be a JSON object of the form {"pages": [...], "known": [...]}.');
+  }
+  if (!Array.isArray(data.pages) || data.pages.length < 1) {
+    return err(400, 'invalid_shape', '"pages" must be a non-empty array of {"page", "text"}.');
+  }
+  if (data.pages.length > MAX_SWEEP_PAGES) {
+    return err(400, 'too_many_pages', 'A sweep window may contain at most ' + MAX_SWEEP_PAGES + ' pages.');
+  }
+  const pages = [];
+  let totalChars = 0;
+  for (let i = 0; i < data.pages.length; i++) {
+    const p = data.pages[i];
+    if (!p || typeof p !== 'object' || !Number.isInteger(p.page) || p.page < 1 || p.page > 1000000 || typeof p.text !== 'string') {
+      return err(400, 'invalid_page', 'pages[' + i + '] must be {"page": positive integer, "text": string}.');
+    }
+    totalChars += p.text.length;
+    pages.push({ page: p.page, text: p.text, norm: sweepNorm(p.text) });
+  }
+  if (totalChars > MAX_SWEEP_TEXT_CHARS) {
+    return err(400, 'too_much_text', 'A sweep window may carry at most ' + MAX_SWEEP_TEXT_CHARS + ' characters of page text.');
+  }
+  const known = [];
+  if (Array.isArray(data.known)) {
+    for (const k of data.known.slice(0, 200)) {
+      if (!k || typeof k !== 'object') continue;
+      const kt = asStr(k.type, 64).trim();
+      const kp = Number(k.page);
+      if (kt) known.push({ type: kt, page: Number.isFinite(kp) ? Math.round(kp) : 0 });
+    }
+  }
+  const pagesRead = pages.map(p => p.page);
+  const userPayload = JSON.stringify({
+    known,
+    pages: pages.map(p => ({ page: p.page, text: p.text }))
+  });
+  try {
+    const text = await callAi(env, AI_MODEL_STRONG, SWEEP_SYSTEM, userPayload,
+      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 1500, temperature: 0, fallbackModel: AI_MODEL_FAST });
+    const parsed = extractJsonObject(text);
+    if (!parsed || !Array.isArray(parsed.recommendations)) {
+      throw new Error('model reply has no recommendations array');
+    }
+    const recommendations = [];
+    let unverified = 0;
+    const seen = new Set();
+    for (const item of parsed.recommendations) {
+      const v = verifySweepItem(item, pages);
+      if (!v) { unverified++; continue; }
+      const key = v.type + '|' + v.page + '|' + sweepNorm(v.quote);
+      if (seen.has(key)) continue;
+      seen.add(key);
+      recommendations.push(v);
+      if (recommendations.length >= MAX_SWEEP_RECS) break;
+    }
+    return json({ ok: true, reviewed: true, brain: 'B9', model: 'llama-3.3-70b', pagesRead, recommendations, unverified,
+      note: 'Recommendations, not findings (Constitution v8 §2.10): each quote was verified against the supplied text; unverifiable items were discarded.' });
+  } catch (e) {
+    return json({ ok: true, reviewed: false, brain: 'B9', model: 'ai-unavailable', pagesRead, recommendations: [], unverified: 0,
+      reason: (e && e.message) ? String(e.message).slice(0, 160) : 'ai unavailable' });
+  }
+}
+
 // --- c. /api/v1/ai/narrate -------------------------------------------------
 
 // Deterministic narrative built purely from the structured input. Used when
@@ -2008,13 +2150,14 @@ async function route(request, env) {
   if (path === '/api/v1/ai/assess' && request.method === 'POST') return handleAiAssess(request, env);
   if (path === '/api/v1/ai/narrate' && request.method === 'POST') return handleAiNarrate(request, env);
   if (path === '/api/v1/ai/human-report' && request.method === 'POST') return handleAiHumanReport(request, env);
+  if (path === '/api/v1/ai/sweep' && request.method === 'POST') return handleAiSweep(request, env);
   if (path === '/api/v1/ai/curate' && request.method === 'POST') return handleAiCurate(request, env);
   if ((path === '/constitution.pdf' || path === '/docs/constitution.pdf') && request.method === 'GET') return handleConstitutionPdf(env);
   if (path === '/api/v1/site/health' && request.method === 'GET') return handleSiteHealth(env);
   if (SITE_IMAGES[path] && (request.method === 'GET' || request.method === 'HEAD')) return serveSiteImage(request, env, path);
 
   const known = ['/api/v1/status', '/api/v1/site/health', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish',
-    '/api/v1/ai/gatekeep', '/api/v1/ai/classify', '/api/v1/ai/transcribe', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/human-report', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf', '/images/logo-full.png', '/images/watermark_portrait.png'];
+    '/api/v1/ai/gatekeep', '/api/v1/ai/classify', '/api/v1/ai/transcribe', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/human-report', '/api/v1/ai/sweep', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf', '/images/logo-full.png', '/images/watermark_portrait.png'];
   if (known.includes(path)) {
     return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' || path === '/api/v1/site/health' || path.endsWith('/constitution.pdf') || path.endsWith('.png') ? 'GET' : 'POST' });
   }

@@ -437,10 +437,10 @@
 
   <!-- AI Review Disclosure & Consent — forensic analysis mode only -->
   <div id="aiReviewSection" style="margin-bottom:24px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;display:none;">
-    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">On-device analysis, optional AI review.</strong> Your document is analysed entirely on this device, in your browser. An optional AI review (Cloudflare Workers AI) can classify the document, assess the forensic findings and draft the report narrative. When enabled, only finding metadata — the type, severity and a short quote for each finding — plus short text excerpts (up to 4,000 characters from the first pages for classification, and up to 12,000 characters around the finding pages for the report narrative) leave this device for that review. The document itself is never uploaded.</p>
+    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">On-device analysis, optional AI review.</strong> Your document is analysed entirely on this device, in your browser. An optional AI review (Cloudflare Workers AI) can classify the document, assess the forensic findings and draft the report narrative. When enabled, finding metadata — the type, severity and a short quote for each finding — plus text excerpts (up to 4,000 characters from the first pages for classification, up to 12,000 characters around the finding pages for the report narrative, and the sealed page text in windows of about 11,000 characters for the Brain 9 sweep, pages without findings first) leave this device for that review; every Brain 9 suggestion must quote the text verbatim or it is discarded; nothing is stored server-side. The document itself is never uploaded.</p>
     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;margin-bottom:14px;">
       <input type="checkbox" id="aiReviewEnabled" checked style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
-      <span>Enable AI review (recommended) — a short excerpt is classified for context, findings are assessed by AI before the report is built, and an AI narrative summary is added to the report. Advisory only: findings are stated as fact; the verdict on any person is for the court.</span>
+      <span>Enable AI review (recommended) — a short excerpt is classified for context, findings are assessed by AI before the report is built, <strong style="color:#F8F9FA;">Brain 9 reads the sealed page text</strong> (up to 16 windows of about 11,000 characters, pages without findings first) for anything the engine missed — every suggestion must quote the text verbatim or it is discarded — and an AI narrative summary is added to the report. Advisory only: findings are stated as fact; Brain 9 recommendations are shown here and held outside the sealed report; the verdict on any person is for the court.</span>
     </label>
     <label style="display:flex;align-items:flex-start;gap:10px;cursor:pointer;font-size:13px;color:#D5D8DD;line-height:1.6;margin-bottom:14px;">
       <input type="checkbox" id="humanReportOptIn" style="width:18px;height:18px;accent-color:#D4A843;flex-shrink:0;margin-top:2px;">
@@ -2456,6 +2456,23 @@ function rulePackageLine(data) {
   return 'Signed rule package: none applied — built-in rules only' + (why ? ' (' + why + ')' : '') + '.';
 }
 
+// Brain 9 (R&D) sweep of the sealed text — Constitution v8 §2.10: its output
+// is recommendations, anchored, internal, never part of a sealed report. The
+// report therefore states only that the sweep ran, what it read and how many
+// anchored recommendations it logged; the recommendations themselves live in
+// the unsealed Brain 9 file the seal page offers, and feed the engine-
+// improvement loop.
+function brain9SweepLine(data) {
+  var sw = data && data.aiReview && data.aiReview.sweep;
+  if (!sw) return 'Brain 9 (R&D) sweep of the sealed text: not run.';
+  if (!sw.ran) return 'Brain 9 (R&D) sweep of the sealed text: NOT RUN (' + (sw.reason || 'service unavailable') + ').';
+  var w = sw.windows | 0, n = sw.recommendations | 0, u = sw.unverified | 0;
+  return 'Brain 9 (R&D) sweep of the sealed text: read pages ' + (sw.pagesReadText || '—') + ' of ' + (sw.pagesTotal | 0) +
+    ' (' + w + ' window' + (w === 1 ? '' : 's') + (sw.budgetHit ? ', time budget reached' : '') + '); ' +
+    n + ' anchored recommendation' + (n === 1 ? '' : 's') + ' logged and ' + u + ' suggestion' + (u === 1 ? '' : 's') +
+    ' discarded as not found in the sealed text. Recommendations are not findings and are held outside this sealed report (Constitution v8 §2.10); they train the engine.';
+}
+
 // ================= SECTION: CONSTITUTION & AI GOVERNANCE =================
 function secConstitution(ctx, data) {
   ctx.newBodyPage();
@@ -2490,6 +2507,7 @@ function secMethodology(ctx, data) {
   ctx.bullet('Mode: deterministic — keyword, pattern, numeric and structural heuristics over extracted page text. No generative AI was used to produce findings.', { size: 9.5 });
   ctx.bullet('AI review (Llama 3.3 70B on Cloudflare Workers AI, 8B fallback; single model, advisory): ' + (data.aiReview && data.aiReview.applied ? 'applied (advisory) — see AI REVIEW section.' : (data.aiReview && data.aiReview.applied === false ? 'NOT RUN (' + (data.aiReview.reason || 'service unavailable') + ') — findings are engine output, unreviewed.' : 'NOT applied — pending.')), { size: 9.5 });
   ctx.bullet(rulePackageLine(data), { size: 9.5 });
+  ctx.bullet(brain9SweepLine(data), { size: 9.5 });
   ctx.bullet('Text extraction: ' + (data.extractionNotes || 'per-page PDF content-stream decoding with ToUnicode CMaps.'), { size: 9.5 });
   ctx.gap(4);
 
@@ -5119,6 +5137,7 @@ async function buildHumanReport(opts) {
     'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the render-time §15.2 gate: ' + gateDroppedClient,
     'Engine: Forensic Contradiction Engine v' + ENGINE_VERSION + ' — deterministic mode',
     rulePackageLine(data),
+    brain9SweepLine(data),
     'Verification: verumglobal.foundation/verify.html (the only place a Verum seal is verified)'
   ];
   ctx.box('Provenance record', lines, { size: 9 });
@@ -5144,7 +5163,7 @@ async function buildHumanReport(opts) {
 
 // ================= exports =================
 var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buildHumanReport, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
-  _rulePackageLine: rulePackageLine,
+  _rulePackageLine: rulePackageLine, _brain9SweepLine: brain9SweepLine,
   _extractParties: extractParties, _extractPartiesWithRoles: extractPartiesWithRoles,
   _partyRoleMap: partyRoleMap, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
   _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,
@@ -11834,6 +11853,9 @@ let _pipelineDetection = null;
 let _pipelineFraudResult = null;
 let _pipelinePageCount = 0;
 let _pipelineAiAddedFindings = [];
+// Brain 9 (R&D) sweep output: anchored recommendations, never findings.
+let _pipelineB9Recs = [];
+let _pipelineB9Info = null;
 let _pipelineClassification = null;
 // Bounded document text captured during the scan so the AI narrator can write
 // from the document's own words (real parties, dates, amounts). Populated only
@@ -13169,6 +13191,188 @@ function voAnchorAiQuote(quote, pageHint) {
     }
   }
   return { found: false, quote: null, location: 'unanchored (AI candidate: quote not found in the sealed text)' };
+}
+
+// ==================== BRAIN 9 (R&D) SWEEP OF THE SEALED TEXT ====================
+// Constitution v8 §2.10: Brain 9 trains and calibrates the other eight brains,
+// red-teams them, and cannot issue findings, verdicts or conclusions — when it
+// detects that another brain missed evidence it logs an ANCHORED RECOMMENDATION,
+// internal, not part of sealed reports. This is that pass, on the website:
+// after the eight deterministic brains have run, the sealed page text (the text
+// layer the engine analysed, OCR rescues included — never a raw evidence file)
+// goes to /api/v1/ai/sweep in windows; every item the model returns must quote
+// the text verbatim, is verified server-side and AGAIN here against this
+// device's copy of the text, and is discarded otherwise. Survivors are listed on
+// this page and in a separate, unsealed recommendations file, counted (with the
+// pages read) in the sealed report's Methodology, and — with the opt-in — sent
+// to the engine-improvement loop, so a recurring miss becomes a signed rule the
+// deterministic engine applies next time. They never enter a sealed report.
+var AI_SWEEP_WINDOW_CHARS = 11000;   // under the worker's 12,500-character window cap (JSON overhead)
+var AI_SWEEP_MAX_PAGES_PER_WINDOW = 8;
+var AI_SWEEP_MAX_WINDOWS = 16;
+var AI_SWEEP_BUDGET_MS = 180000;     // three minutes; the pages not read are disclosed
+var AI_SWEEP_CALL_TIMEOUT_MS = 35000;
+var AI_SWEEP_MIN_PAGE_CHARS = 40;    // VO_NEAR_EMPTY_CHARS: an unread page has nothing to sweep
+
+function voSweepPagesOf(location) {
+  return (typeof voRulePagesOf === 'function') ? voRulePagesOf(location) : [];
+}
+
+// "1-9, 14, 17-20" from a list of page numbers.
+function voB9PageRanges(pages) {
+  var s = (pages || []).slice().sort(function (a, b) { return a - b; });
+  var out = [];
+  for (var i = 0; i < s.length; i++) {
+    var start = s[i];
+    while (i + 1 < s.length && s[i + 1] === s[i] + 1) i++;
+    out.push(start === s[i] ? String(start) : (start + '-' + s[i]));
+  }
+  return out.join(', ');
+}
+
+// Windows: pages the engine flagged nothing on come first (a miss can only be
+// there), then flagged pages; consecutive pages are grouped; every window
+// stays under the size caps. A page too long for one window is read in part.
+function voBuildSweepWindows(textBlocks, engineFindings) {
+  var flagged = {};
+  var list = Array.isArray(engineFindings) ? engineFindings : [];
+  for (var i = 0; i < list.length; i++) {
+    var pgs = voSweepPagesOf(list[i] && list[i].location);
+    for (var k = 0; k < pgs.length; k++) flagged[pgs[k]] = true;
+  }
+  var eligible = [];
+  for (var p = 0; p < textBlocks.length; p++) {
+    var t = String(textBlocks[p] || '');
+    var mass = (typeof voContentMass === 'function') ? voContentMass(t) : t.replace(/\s+/g, '').length;
+    if (mass < AI_SWEEP_MIN_PAGE_CHARS) continue;
+    eligible.push({ page: p + 1, text: t, flagged: !!flagged[p + 1] });
+  }
+  var order = eligible.filter(function (e) { return !e.flagged; }).concat(eligible.filter(function (e) { return e.flagged; }));
+  var windows = [], cur = [], curChars = 0;
+  for (var o = 0; o < order.length; o++) {
+    var e = order[o];
+    var text = e.text.length > AI_SWEEP_WINDOW_CHARS ? e.text.slice(0, AI_SWEEP_WINDOW_CHARS) : e.text;
+    var breaks = cur.length && (cur.length >= AI_SWEEP_MAX_PAGES_PER_WINDOW || curChars + text.length > AI_SWEEP_WINDOW_CHARS || cur[cur.length - 1].page + 1 !== e.page);
+    if (breaks) { windows.push(cur); cur = []; curChars = 0; }
+    cur.push({ page: e.page, text: text, flagged: e.flagged, truncated: text.length < e.text.length });
+    curChars += text.length;
+  }
+  if (cur.length) windows.push(cur);
+  return { windows: windows, eligiblePages: eligible.length };
+}
+
+async function aiBrain9Sweep(textBlocks, engineFindings, onProgress) {
+  var info = { ran: false, reason: null, windows: 0, windowsPlanned: 0, pagesRead: [], pagesReadText: '', pagesTotal: Array.isArray(textBlocks) ? textBlocks.length : 0, eligiblePages: 0, recommendations: 0, unverified: 0, duplicates: 0, budgetHit: false, failedWindows: 0 };
+  var recs = [];
+  if (!Array.isArray(textBlocks) || textBlocks.length === 0) { info.reason = 'no page text'; return { info: info, recommendations: recs }; }
+  var built = voBuildSweepWindows(textBlocks, engineFindings);
+  info.eligiblePages = built.eligiblePages;
+  info.windowsPlanned = built.windows.length;
+  var windows = built.windows.slice(0, AI_SWEEP_MAX_WINDOWS);
+  if (!windows.length) { info.reason = 'no page carried enough text to read'; return { info: info, recommendations: recs }; }
+  // The types the eight brains already reported, per page: the model reports
+  // only what they did not, and a duplicate of an engine finding is dropped.
+  var knownByPage = {};
+  var ef = Array.isArray(engineFindings) ? engineFindings : [];
+  for (var i = 0; i < ef.length; i++) {
+    var pgs = voSweepPagesOf(ef[i] && ef[i].location);
+    for (var k = 0; k < pgs.length; k++) { (knownByPage[pgs[k]] = knownByPage[pgs[k]] || []).push(String((ef[i] && ef[i].type) || '')); }
+  }
+  var seen = {};
+  var t0 = Date.now();
+  for (var w = 0; w < windows.length; w++) {
+    if (Date.now() - t0 > AI_SWEEP_BUDGET_MS) { info.budgetHit = true; break; }
+    var win = windows[w];
+    var pageNos = win.map(function (x) { return x.page; });
+    if (onProgress) { try { onProgress(w + 1, windows.length, voB9PageRanges(pageNos)); } catch (eP) {} }
+    var known = [];
+    for (var pi = 0; pi < pageNos.length; pi++) {
+      var kt = knownByPage[pageNos[pi]] || [];
+      for (var ki = 0; ki < kt.length; ki++) known.push({ type: kt[ki], page: pageNos[pi] });
+    }
+    var res = null;
+    try {
+      res = await aiApiPost('/api/v1/ai/sweep', { pages: win.map(function (x) { return { page: x.page, text: x.text }; }), known: known.slice(0, 200) }, AI_SWEEP_CALL_TIMEOUT_MS);
+    } catch (e) { res = null; }
+    if (!res || res.reviewed !== true || !Array.isArray(res.recommendations)) { info.failedWindows++; continue; }
+    info.windows++;
+    info.pagesRead = info.pagesRead.concat(pageNos);
+    info.unverified += (res.unverified | 0);
+    for (var r = 0; r < res.recommendations.length; r++) {
+      var it = res.recommendations[r] || {};
+      // The second verification: against this device's copy of the sealed text.
+      var anchor = voAnchorAiQuote(it.quote, it.page);
+      if (!anchor.found) { info.unverified++; continue; }
+      var type = (typeof it.type === 'string' && it.type.trim()) ? it.type.trim().slice(0, 64) : 'B9_RECOMMENDATION';
+      var page = parseInt(String(anchor.location).replace(/\D+/g, ''), 10) || (parseInt(it.page, 10) || 0);
+      if ((knownByPage[page] || []).indexOf(type) >= 0) { info.duplicates++; continue; }
+      var key = type + '|' + page + '|' + anchor.quote.toLowerCase();
+      if (seen[key]) { info.duplicates++; continue; }
+      seen[key] = true;
+      var sev = parseInt(it.severity, 10); if (!isFinite(sev) || sev < 1 || sev > 5) sev = 3;
+      recs.push({ type: type, severity: sev, rationale: String(it.rationale || '').slice(0, 300), quote: anchor.quote, page: page, location: anchor.location, brain: 'B9', source: 'ai', anchored: true });
+    }
+  }
+  info.ran = info.windows > 0;
+  if (!info.ran && !info.reason) info.reason = window._voLastAiError || 'service unavailable';
+  info.recommendations = recs.length;
+  info.pagesReadText = voB9PageRanges(info.pagesRead);
+  return { info: info, recommendations: recs };
+}
+
+// The results panel states what Brain 9 read and recommends, and offers the
+// recommendations as a separate, unsealed file. Never fails the panel.
+function voRenderBrain9Recommendations() {
+  try {
+    var el = document.getElementById('results');
+    if (!el || document.getElementById('brain9Recs')) return;
+    var info = _pipelineB9Info;
+    var recs = Array.isArray(_pipelineB9Recs) ? _pipelineB9Recs : [];
+    if (!info) return;
+    var box = document.createElement('div');
+    box.id = 'brain9Recs';
+    box.style.cssText = 'margin-top:18px;padding:14px 16px;border:1px solid rgba(74,126,199,0.45);border-radius:10px;background:rgba(15,52,96,0.10);font-size:13px;color:#D5D8DD;line-height:1.6;';
+    var head = document.createElement('div');
+    head.style.cssText = 'font-weight:700;color:#F8F9FA;margin-bottom:6px;';
+    head.textContent = 'Brain 9 (R&D) sweep of the sealed text';
+    box.appendChild(head);
+    var para = document.createElement('div');
+    para.textContent = info.ran
+      ? ('Read pages ' + (info.pagesReadText || '—') + ' of ' + info.pagesTotal + ' (' + info.windows + ' window' + (info.windows === 1 ? '' : 's') + (info.budgetHit ? ', time budget reached' : '') + '). ' +
+         recs.length + ' anchored recommendation' + (recs.length === 1 ? '' : 's') + '; ' + (info.unverified | 0) + ' suggestion' + ((info.unverified | 0) === 1 ? '' : 's') +
+         ' discarded as not found in the sealed text. Recommendations are not findings and are held outside the sealed report (Constitution v8 §2.10); they train the engine.')
+      : ('Not run — ' + (info.reason || 'service unavailable') + '.');
+    box.appendChild(para);
+    if (recs.length) {
+      var ul = document.createElement('ul');
+      ul.style.cssText = 'margin:8px 0 0 18px;padding:0;';
+      for (var i = 0; i < recs.length; i++) {
+        var li = document.createElement('li');
+        li.style.marginBottom = '6px';
+        li.textContent = recs[i].type + ' · severity ' + recs[i].severity + ' · ' + recs[i].location + ' — “' + recs[i].quote + '” — ' + recs[i].rationale;
+        ul.appendChild(li);
+      }
+      box.appendChild(ul);
+      var name = (typeof selectedFile !== 'undefined' && selectedFile && selectedFile.name) ? selectedFile.name : 'document';
+      var payload = {
+        brain: 'B9',
+        note: 'Recommendations, not findings (Constitution v8 §2.10). Each quote was verified verbatim against the sealed text on this device. Not part of any sealed report.',
+        document: name,
+        generated_utc: new Date().toISOString(),
+        pagesRead: info.pagesReadText,
+        pagesTotal: info.pagesTotal,
+        recommendations: recs
+      };
+      var a = document.createElement('a');
+      a.className = 'download-btn';
+      a.style.cssText = 'display:inline-block;margin-top:10px;';
+      a.href = URL.createObjectURL(new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' }));
+      a.download = name.replace(/\.pdf$/i, '') + '-brain9-recommendations.json';
+      a.textContent = '⬇ Download Brain 9 recommendations (JSON, unsealed)';
+      box.appendChild(a);
+    }
+    el.appendChild(box);
+  } catch (e) { /* the results panel never fails on this */ }
 }
 
 function aiAssessBatches(assessed) {
@@ -14897,6 +15101,17 @@ function shareAnonymousPatterns(fraudResult) {
       if (!isFinite(aSev) || aSev < 1) aSev = 1; else if (aSev > 5) aSev = 5;
       patterns.push({ detectorId: af.anchored ? 'AI_IDENTIFIED' : 'AI_IDENTIFIED_UNANCHORED', type: aType, severity: aSev, pageCount: pageCount });
     }
+    // Brain 9 recommendations (anchored, verified verbatim): the loop's training
+    // signal — "the eight brains missed this type here". Same four fields only.
+    var b9 = Array.isArray(_pipelineB9Recs) ? _pipelineB9Recs : [];
+    for (var b = 0; b < b9.length && patterns.length < 200; b++) {
+      var br = b9[b] || {};
+      var bType = (typeof br.type === 'string' ? br.type.trim() : '').slice(0, 64);
+      if (!bType || bType === 'SERIAL') continue;
+      var bSev = parseInt(br.severity, 10);
+      if (!isFinite(bSev) || bSev < 1) bSev = 1; else if (bSev > 5) bSev = 5;
+      patterns.push({ detectorId: 'B9_RECOMMENDATION', type: bType, severity: bSev, pageCount: pageCount });
+    }
     var ctrl = new AbortController();
     var timer = setTimeout(function() { ctrl.abort(); }, 8000);
     fetch('/api/v1/feedback/patterns', {
@@ -15084,6 +15299,8 @@ async function runSealingPipeline() {
   var aiNarrativeText = null;
   var aiNarrativeSource = null; // 'ai' = Workers-AI narrator; 'local' = on-device fallback
   _pipelineAiAddedFindings = [];
+  _pipelineB9Recs = [];
+  _pipelineB9Info = null;
   try {
     if (isAiReviewEnabled() && fraudResult && !fraudResult.scanFailed && Array.isArray(fraudResult.findings) && fraudResult.findings.length > 0) {
       updateStep(7, 'processing', 'AI review of findings (optional)...');
@@ -15118,6 +15335,26 @@ async function runSealingPipeline() {
         };
         _pipelineAiAddedFindings = assessRes.added;
         updateStep(7, 'processing', 'AI review applied — ' + assessRes.findings.length + ' of ' + originalCount + ' retained' + (assessRes.added.length ? ', +' + assessRes.added.length + ' AI-identified' : ''));
+      }
+      // Brain 9 (R&D) sweep of the sealed text — recommendations, never findings
+      // (Constitution v8 §2.10). Runs whether or not assess ran; its output is
+      // kept OUT of reportFraudResult; the report states coverage and counts.
+      try {
+        if (Array.isArray(_pipelineTextBlocks) && _pipelineTextBlocks.length) {
+          updateStep(7, 'processing', 'Brain 9 sweep: reading the sealed text for what the engine missed...');
+          var sweep = await aiBrain9Sweep(_pipelineTextBlocks, fraudResult.findings, function (i, n, pages) {
+            updateStep(7, 'processing', 'Brain 9 sweep: pages ' + pages + ' (window ' + i + ' of ' + n + ')...');
+          });
+          _pipelineB9Recs = sweep.recommendations;
+          _pipelineB9Info = sweep.info;
+          if (!aiReviewInfo) aiReviewInfo = { applied: false, reason: window._voLastAiError || 'service unavailable' };
+          aiReviewInfo.sweep = sweep.info;
+          updateStep(7, 'processing', sweep.info.ran
+            ? ('Brain 9 sweep read pages ' + sweep.info.pagesReadText + ' of ' + sweep.info.pagesTotal + ' — ' + sweep.recommendations.length + ' anchored recommendation(s)')
+            : 'Brain 9 sweep unavailable — the engine findings stand without it');
+        }
+      } catch (sweepErr) {
+        console.warn('[VO-AI] Brain 9 sweep failed (sealing unaffected):', sweepErr && sweepErr.message ? sweepErr.message : sweepErr);
       }
       // Draft the narrative whether or not the assess step ran — it used to be
       // nested inside the assess-success block, so any assess failure (e.g. the
@@ -15161,6 +15398,8 @@ async function runSealingPipeline() {
     aiNarrativeText = null;
     aiNarrativeSource = null;
     _pipelineAiAddedFindings = [];
+    _pipelineB9Recs = [];
+    _pipelineB9Info = null;
   }
 
   // Seal Only mode: one-page Seal Certificate — NEVER breaks the seal flow.
@@ -15469,6 +15708,9 @@ async function runSealingPipeline() {
   }
 
   showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, fraudResult);
+
+  // Brain 9 recommendations on screen and as an unsealed file — never in the sealed report.
+  voRenderBrain9Recommendations();
 
   // Opt-in anonymous pattern feedback — fire-and-forget, never blocks.
   shareAnonymousPatterns(fraudResult);

@@ -55,6 +55,7 @@ source file, then re-splice** — `tests/inline-scripts.test.mjs` byte-compares 
 | `/api/v1/ai/assess` | POST | AI review of engine findings (advisory, candidate tier); additional findings carry a verbatim `quote` + `page` the seal page anchors in the sealed text |
 | `/api/v1/ai/narrate` | POST | Narrative generation from findings + document excerpt |
 | `/api/v1/ai/human-report` | POST | Court-ready narrative: one writer section per call, every sentence anchor- and §15.2-gated server-side; `machineGenerated:true` or `generated:false` — never a template (opt-in) |
+| `/api/v1/ai/sweep` | POST | Brain 9 (R&D) reads a window of sealed page text and returns anchored **recommendations, never findings** (Constitution v8 §2.10); every quote is verified verbatim against the text supplied, unverifiable items are discarded and counted (ENGINE.md §12.8) |
 | `/api/v1/ai/gatekeep` | POST | Licensing gatekeeper |
 | `/api/v1/ai/curate` | POST | Conservative rules curation |
 | `/api/v1/ai/transcribe` | POST | Opt-in voice-note transcription (Whisper) — `machineGenerated:true` reading aid, never evidence; nothing stored |
@@ -84,7 +85,7 @@ The old `verumglobal-static.js` (a second Worker's entry point) was removed on 2
 | `vendor/` | Pinned third-party libraries: `pdf.min.js` + worker (pdf.js), `pdf-lib.min.js`, `qrcode.min.js`, Tesseract OCR core/worker + `eng.traineddata.gz`. **Vendored deliberately** — the app must work offline and must not depend on a CDN. |
 | `seal-module/` | The portable sealing spec (`SPEC.md`) and per-surface implementations (`web`, `android`, `firewall`) so a seal produced anywhere verifies everywhere. |
 | `images/` | Logos and the watermark used in sealed PDFs. |
-| `tests/` | **31 suites, 1850 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
+| `tests/` | **31 suites, 1886 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
 
 **Root PDFs:** `Verum-Omnis-Briefing.pdf` is the public briefing for law enforcement and
 attorneys (what the platform does, how the sealing service is used, why the record cannot be

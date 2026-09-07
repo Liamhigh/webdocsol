@@ -210,7 +210,7 @@ newly discovered patterns back through the anonymized feedback loop for curation
 Any platform that finds a contradiction updates its local vault, syncs to the master
 when online, and other platforms pull on next sync. *(The full `/sync` push/pull
 manifest protocol in this section is the target design; today the Worker serves
-signed rule packages via `/api/v1/rules/*` and takes pattern feedback via
+signed rule packages via `/api/v1/rules/*`, runs the Brain 9 sweep of sealed page text via `/api/v1/ai/sweep` (anchored recommendations, never findings — Constitution §2.10) and takes pattern feedback via
 `/api/v1/feedback/patterns`.)*
 
 ---
