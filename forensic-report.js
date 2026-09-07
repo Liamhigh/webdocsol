@@ -1718,7 +1718,7 @@ function rulePackageLine(data) {
     return 'Signed rule package: v' + rp.version + ' (key ' + (rp.keyId || 'vo-master-1') +
       (rp.sha512 ? ', canonical SHA-512 ' + truncHash(rp.sha512, 16, 8) : '') +
       (rp.publishedAt ? ', published ' + String(rp.publishedAt).slice(0, 10) : '') + ') — ' +
-      (rp.pairRules | 0) + ' phrase-pair rule(s) applied additively beside the built-in detectors; ' +
+      (rp.pairRules | 0) + ' phrase-pair rule(s) and ' + (rp.groupRules | 0) + ' co-occurrence group(s) applied additively beside the built-in detectors; ' +
       (rp.applied | 0) + ' candidate finding(s) raised, ' + (rp.withheld | 0) +
       ' withheld where a built-in detector had already reported the page.';
   }

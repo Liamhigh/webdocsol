@@ -4010,7 +4010,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   try {
     var _gp = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
     var _pkg = _gp && _gp.voRulePackage;
-    if (_pkg && typeof _pkg === 'object' && _pkg.version && Array.isArray(_pkg.pairs)) {
+    if (_pkg && typeof _pkg === 'object' && _pkg.version && (Array.isArray(_pkg.pairs) || Array.isArray(_pkg.groups))) {
       var _pr = voRunPackageRules(_pkg, textBlocks, allFindings);
       allFindings = allFindings.concat(_pr.findings);
       _rulePkgInfo = {
@@ -4020,13 +4020,14 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
         sha512: _pkg.sha512 || null,
         counts: _pkg.counts || null,
         pairRules: _pkg.pairs.length,
+        groupRules: Array.isArray(_pkg.groups) ? _pkg.groups.length : 0,
         builtInGroupsSkipped: Array.isArray(_pkg.builtInGroupsSkipped) ? _pkg.builtInGroupsSkipped.length : 0,
         applied: _pr.findings.length,
         withheld: _pr.withheld
       };
       extractionNote += ' Signed rule package v' + _pkg.version + ' (key ' + _rulePkgInfo.keyId +
         (_pkg.sha512 ? ', SHA-512 ' + String(_pkg.sha512).slice(0, 16) + '...' : '') + ') applied additively: ' +
-        _pkg.pairs.length + ' phrase-pair rule(s) beyond the built-in detectors, ' + _pr.findings.length +
+        _pkg.pairs.length + ' phrase-pair rule(s) and ' + (Array.isArray(_pkg.groups) ? _pkg.groups.length : 0) + ' co-occurrence group(s) beyond the built-in detectors, ' + _pr.findings.length +
         ' candidate finding(s) raised, ' + _pr.withheld + ' withheld where a built-in detector had already reported the page' +
         (_rulePkgInfo.builtInGroupsSkipped ? '; ' + _rulePkgInfo.builtInGroupsSkipped + ' package group(s) skipped as this engine\'s own vocabulary' : '') + '.';
     }
@@ -4296,6 +4297,7 @@ var VO_PACKAGE_RULE_MAX_SEVERITY = 3;   // Android: MODERATE severity
 var VO_PACKAGE_RULE_WINDOW = 80;        // D01's one-clause window
 var VO_PACKAGE_RULE_MAX_FINDINGS = 25;  // per scan, before the per-type cap
 var VO_PACKAGE_RULE_FALLBACK_TYPE = 'CT43'; // Document Internal Conflict, when a rule names no type
+var VO_PACKAGE_GROUP_WINDOW_PAGES = 3;      // co-occurrence groups: the serial detector's page window
 // The seed package (worker/seed-rules.json v1.0.0) is this engine's own
 // vocabulary exported for the apps: these twelve groups are skipped when a
 // package carries them, because applying them here again would be a looser
@@ -4424,7 +4426,7 @@ function voCompileRulePackage(pkg, meta) {
     var did = /^(D\d{2})/.exec(dk);
     if (did) builtInDetector[did[1]] = true;
   }
-  var pairs = [], terms = [], markers = [], builtIn = [], seenPair = {};
+  var pairs = [], terms = [], markers = [], groups = [], builtIn = [], seenPair = {};
   var fk = Array.isArray(rules.fraud_keywords) ? rules.fraud_keywords : [];
   for (var i = 0; i < fk.length; i++) {
     var entry = fk[i];
@@ -4455,6 +4457,30 @@ function voCompileRulePackage(pkg, meta) {
       var term = voRulesTrimLower(tl[t]);
       if (term) terms.push({ ruleId: ruleId, term: term, produces: produces });
     }
+    // Co-occurrence groups (the shape the curated v1.1.0 rules use): a set of
+    // phrases, each benign alone, that fires only when at least `min` distinct
+    // phrases co-occur. The threshold comes from an explicit `min_cooccur`
+    // field, else from the description's ">= N" / "at least N", else half the
+    // phrases (never below 2).
+    var gl = Array.isArray(entry.groups) ? entry.groups : [];
+    for (var gi = 0; gi < gl.length; gi++) {
+      var gset = gl[gi];
+      if (!Array.isArray(gset)) continue;
+      var phrases = [], seenPh = {};
+      for (var px = 0; px < gset.length; px++) {
+        var ph = voRulesTrimLower(gset[px]);
+        if (!ph || ph.length < 3 || seenPh[ph]) continue;
+        seenPh[ph] = true; phrases.push(ph);
+      }
+      if (phrases.length < 2) continue;
+      var min = parseInt(entry.min_cooccur, 10);
+      if (!isFinite(min) || min < 2) {
+        var dm = /(?:>=|\u2265|at least|minimum of|no fewer than)\s*(\d+)/i.exec(String(entry.description || ''));
+        min = dm ? parseInt(dm[1], 10) : Math.max(2, Math.ceil(phrases.length / 2));
+      }
+      min = Math.max(2, Math.min(min, phrases.length));
+      groups.push({ ruleId: ruleId, name: (typeof entry.group === 'string' ? entry.group.slice(0, 64) : ruleId), phrases: phrases, min: min, produces: produces });
+    }
   }
   var bm = Array.isArray(rules.behavioral_markers) ? rules.behavioral_markers : [];
   for (var m = 0; m < bm.length; m++) {
@@ -4481,6 +4507,7 @@ function voCompileRulePackage(pkg, meta) {
     fetchedFrom: meta.fetchedFrom || null,
     counts: counts,
     pairs: pairs,
+    groups: groups,
     terms: terms,
     markers: markers,
     builtInGroupsSkipped: builtIn
@@ -4523,10 +4550,15 @@ function voRulePagesOf(location) {
 // ascending, first passage per page. Never throws.
 function voRunPackageRules(compiled, textBlocks, existing) {
   var out = { findings: [], withheld: 0 };
-  if (!compiled || !Array.isArray(compiled.pairs) || !compiled.pairs.length) return out;
+  if (!compiled) return out;
+  if (!Array.isArray(compiled.pairs)) compiled.pairs = [];
+  if (!Array.isArray(compiled.groups)) compiled.groups = [];
+  if (!compiled.pairs.length && !compiled.groups.length) return out;
   var blocks = (textBlocks && textBlocks.length) ? textBlocks : [''];
+  // Lower-cased, with hyphen-like characters as spaces so "risk-free" meets
+  // "risk free"; one character for one, so positions still index the page.
   var lower = [];
-  for (var b = 0; b < blocks.length; b++) lower.push(String(blocks[b] || '').toLowerCase());
+  for (var b = 0; b < blocks.length; b++) lower.push(String(blocks[b] || '').toLowerCase().replace(/[-\u2010-\u2015\u00ad]/g, ' '));
   var reported = {};
   var ex = Array.isArray(existing) ? existing : [];
   for (var e = 0; e < ex.length; e++) {
@@ -4580,6 +4612,50 @@ function voRunPackageRules(compiled, textBlocks, existing) {
       reported[type + '@' + pageNo] = true;
     }
   }
+  // Co-occurrence groups: slide the serial detector's page window, count the
+  // DISTINCT phrases present, keep the best (most phrases, earliest) window;
+  // fire once per group when it reaches the group's threshold. Anchored to
+  // the page cluster, like a serial pattern.
+  var nWin = Math.max(1, lower.length - VO_PACKAGE_GROUP_WINDOW_PAGES + 1);
+  for (var gr = 0; gr < compiled.groups.length && out.findings.length < VO_PACKAGE_RULE_MAX_FINDINGS; gr++) {
+    var grp = compiled.groups[gr];
+    if (!grp || !Array.isArray(grp.phrases) || grp.phrases.length < 2) continue;
+    var gType = grp.produces || VO_PACKAGE_RULE_FALLBACK_TYPE;
+    var gCt = voCtById(gType) || voCtById(VO_PACKAGE_RULE_FALLBACK_TYPE);
+    var gSev = Math.min(gCt && gCt.severity ? gCt.severity : 3, VO_PACKAGE_RULE_MAX_SEVERITY);
+    var best = null;
+    for (var w = 0; w < nWin; w++) {
+      var found = [];
+      for (var ph = 0; ph < grp.phrases.length; ph++) {
+        var phrase = grp.phrases[ph];
+        for (var wp = w; wp < Math.min(lower.length, w + VO_PACKAGE_GROUP_WINDOW_PAGES); wp++) {
+          if (lower[wp].indexOf(phrase) >= 0 && voRulePhrasePositions(lower[wp], phrase).length) { found.push({ phrase: phrase, page: wp + 1 }); break; }
+        }
+      }
+      if (!best || found.length > best.found.length) best = { found: found, start: w + 1, end: Math.min(lower.length, w + VO_PACKAGE_GROUP_WINDOW_PAGES) };
+      if (best.found.length === grp.phrases.length) break;
+    }
+    if (!best || best.found.length < grp.min) continue;
+    // Anchor to the pages the phrases actually sit on, not the whole window.
+    var loPg = best.found[0].page, hiPg = best.found[0].page;
+    for (var fp = 1; fp < best.found.length; fp++) { if (best.found[fp].page < loPg) loPg = best.found[fp].page; if (best.found[fp].page > hiPg) hiPg = best.found[fp].page; }
+    var anchorPage = loPg;
+    var gLoc = (lower.length <= 1) ? 'Full document' : (loPg === hiPg ? ('Page ' + loPg) : ('Pages ' + loPg + '-' + hiPg));
+    if (reported[gType + '@' + anchorPage]) { out.withheld++; continue; }
+    var hits = [];
+    for (var hx = 0; hx < best.found.length; hx++) hits.push('"' + best.found[hx].phrase + '" (p. ' + best.found[hx].page + ')');
+    out.findings.push({
+      type: gType,
+      severity: gSev,
+      evidence: 'Signed rule ' + grp.ruleId + ' (package v' + compiled.version + '): ' + best.found.length + ' of ' + grp.phrases.length +
+        ' phrases of the "' + grp.name + '" group co-occur (threshold ' + grp.min + '): ' + hits.join(', ') + '.',
+      location: gLoc,
+      packageRule: grp.ruleId,
+      packageVersion: compiled.version,
+      detectorId: 'DXX_SIGNED_RULE_PACKAGE'
+    });
+    reported[gType + '@' + anchorPage] = true;
+  }
   return out;
 }
 
@@ -4623,6 +4699,7 @@ if (typeof module !== 'undefined' && module.exports) {
     VO_PACKAGE_RULE_CONFIDENCE: VO_PACKAGE_RULE_CONFIDENCE,
     VO_PACKAGE_RULE_MAX_SEVERITY: VO_PACKAGE_RULE_MAX_SEVERITY,
     VO_ENGINE_OWN_RULE_GROUPS: VO_ENGINE_OWN_RULE_GROUPS,
+    VO_PACKAGE_GROUP_WINDOW_PAGES: VO_PACKAGE_GROUP_WINDOW_PAGES,
     voCanonicalJson: voCanonicalJson,
     voSemverNewer: voSemverNewer,
     voRulePackageShape: voRulePackageShape,

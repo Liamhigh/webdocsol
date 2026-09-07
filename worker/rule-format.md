@@ -92,12 +92,26 @@ package yields different findings on different clients — by design, and disclo
 
 | Client | What it applies | How a hit is reported |
 | --- | --- | --- |
-| Website engine (`forensic-engine-page.js`, `voRunPackageRules`) | `fraud_keywords[].pairs` from every group except the seed's twelve (FK01–FK12, its own exported vocabulary) | one finding per page where both phrases sit in one 80-character passage and no built-in finding of the same type reports that page; type = `produces` (else CT43), severity ≤ 3, weight 0.5; the report and findings JSON name the rule and the package version and SHA-512 |
-| Android app (`RuleProvider.kt`, `detectDownloadedFraudPairs`) | `fraud_keywords[].pairs` | a BEHAVIORAL/MODERATE contradiction `DOWNLOADED_RULE_<id>` when two claims sharing an actor or subject contain opposite sides |
+| Website engine (`forensic-engine-page.js`, `voRunPackageRules`) | `fraud_keywords[].pairs` and `fraud_keywords[].groups` (co-occurrence sets) from every group except the seed's twelve (FK01–FK12, its own exported vocabulary) | one finding per page where both phrases sit in one 80-character passage and no built-in finding of the same type reports that page; type = `produces` (else CT43), severity ≤ 3, weight 0.5; the report and findings JSON name the rule and the package version and SHA-512 |
+| Android app (`RuleProvider.kt`, `detectDownloadedFraudPairs`) | `fraud_keywords[].pairs` only — a `groups` rule (v1.1.0's FK13/FK14) is counted, not executed | a BEHAVIORAL/MODERATE contradiction `DOWNLOADED_RULE_<id>` when two claims sharing an actor or subject contain opposite sides |
 | Fraud-firewall (`pipeline/rules.ts`) | `fraud_keywords` phrases/pairs and `behavioral_markers` keywords/patterns | LOW-confidence signals on transaction text (substring match) |
 
 `terms`, `contradiction_patterns`, `serial_patterns` and `case_configs` are parsed and counted
 by the website and the app but not executed; a single keyword is not a contradiction.
+
+### `groups` — co-occurrence sets
+
+```json
+{ "id": "FK14", "group": "guaranteed_return_language", "produces": "CT43", "min_cooccur": 2,
+  "description": "…flag when >=2 phrases from the group co-occur…",
+  "groups": [["guaranteed returns", "risk free", "capital guaranteed", "fixed returns", "high yield"]] }
+```
+
+Each inner array is one set of phrases that are benign alone and meaningful together. A client
+fires the rule once when at least `min_cooccur` distinct phrases of a set co-occur (the website:
+inside a 3-page window, anchored to the pages the phrases sit on). Publish `min_cooccur`
+explicitly; a client without it reads ">= N" / "at least N" from `description`, and failing
+that uses half the phrases (never below 2). Groups with one phrase are ignored.
 
 ## Versioning
 
