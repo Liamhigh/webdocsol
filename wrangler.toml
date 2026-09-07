@@ -95,9 +95,23 @@ SERVICE_VERSION = "1.5.1-20260721-mistral-enhanced"
 # Court-ready narrative (human report) model — keyless Workers AI. Optional external
 # OpenAI-compatible provider via secrets (never here): LLM_API_BASE, LLM_API_KEY, LLM_MODEL.
 HUMAN_REPORT_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
+# The trainer run (auto-curation of signed rule packages from anonymous
+# signals; worker/verum-rules.js runAutoCuration). "off" disables it; the
+# schedule is [triggers] below. Needs RULE_PRIVATE_KEY on the Worker.
+AUTO_CURATE = "on"
 
 [observability]
 enabled = true
+
+# THE TRAINER RUN — Brain 9 improves the engine on a schedule (founder
+# direction 2026-09-07: no servers; contradictions and tactics are not
+# personal information). Weekly, Monday 03:00 UTC: aggregate the anonymous
+# feedback, draft co-occurrence rules for the tactics the AI review found
+# and the engine missed, validate them deterministically, append at most
+# three to the current package, sign, publish, log to /api/v1/rules/changelog.
+# tests/wrangler-config.test.mjs locks this against [env.production.triggers].
+[triggers]
+crons = ["0 3 * * 1"]
 
 # Named "production" environment, mirroring the top level EXACTLY.
 #
@@ -137,9 +151,13 @@ binding = "AI"
 ENVIRONMENT = "production"
 SERVICE_VERSION = "1.5.1-20260721-mistral-enhanced"
 HUMAN_REPORT_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
+AUTO_CURATE = "on"
 
 [env.production.observability]
 enabled = true
+
+[env.production.triggers]
+crons = ["0 3 * * 1"]
 
 # Routing, current era (since 2026-09-07): this Worker is the origin of
 # verumglobal.foundation and www through the two Custom Domains declared at

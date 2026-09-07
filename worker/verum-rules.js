@@ -18,6 +18,9 @@
 //   POST /api/v1/ai/human-report  AI court-ready narrative, one gated section per call
 //   POST /api/v1/ai/sweep         Brain 9 (R&D) sweep of sealed page text: anchored recommendations, never findings
 //   POST /api/v1/ai/curate        admin: AI-drafted rule candidates from feedback
+//   POST /api/v1/admin/curate-publish  admin: run the trainer (auto-curation) now
+//   GET  /api/v1/rules/changelog  what the trainer published, when, from what signals
+//   scheduled (cron)              the trainer run: aggregate -> draft -> validate -> sign -> publish
 //
 // Signing: RSASSA-PKCS1-v1_5 with SHA-512 over the canonical JSON of the
 // package (object keys sorted recursively, compact separators, UTF-8).
@@ -122,11 +125,16 @@ function bytesToBase64(bytes) {
   return btoa(bin);
 }
 
-// RSA key import is cached for the life of the isolate.
+// RSA key import is cached for the life of the isolate, per key material:
+// a rotated RULE_PRIVATE_KEY takes effect without a restart, and a test that
+// signs with more than one throwaway key never signs with the wrong one.
 let _keyPromise = null;
+let _keyMaterial = null;
 function getSigningKey(env) {
-  if (!_keyPromise) {
-    const der = base64ToBytes(env.RULE_PRIVATE_KEY);
+  const material = String(env.RULE_PRIVATE_KEY || '');
+  if (!_keyPromise || _keyMaterial !== material) {
+    _keyMaterial = material;
+    const der = base64ToBytes(material);
     _keyPromise = crypto.subtle.importKey(
       'pkcs8', der,
       { name: 'RSASSA-PKCS1-v1_5', hash: 'SHA-512' },
@@ -2035,52 +2043,9 @@ async function handleAiCurate(request, env) {
   }
 
   // Aggregate feedback buckets from the last CURATE_WINDOW_DAYS days.
-  const cutoff = new Date(Date.now() - CURATE_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
-  let names;
-  try {
-    const listed = await env.RULES_KV.list({ prefix: 'feedback:' });
-    names = (listed.keys || []).map(k => k.name)
-      .filter(n => n.slice('feedback:'.length) >= cutoff)
-      .sort();
-  } catch (e) {
-    return err(500, 'kv_error', 'Could not list feedback buckets.');
-  }
-
-  const byDetectorId = {};
-  const byType = {};
-  const pairs = {};
-  let totalPatterns = 0;
-  const daysUsed = [];
-  for (const name of names) {
-    let bucket;
-    try {
-      const raw = await env.RULES_KV.get(name);
-      if (!raw) continue;
-      bucket = JSON.parse(raw);
-    } catch { continue; }
-    if (!Array.isArray(bucket)) continue;
-    daysUsed.push(name.slice('feedback:'.length));
-    for (const rec of bucket) {
-      const pats = (rec && Array.isArray(rec.patterns)) ? rec.patterns : [];
-      for (const p of pats) {
-        if (!p || typeof p !== 'object') continue;
-        const d = asStr(p.detectorId, 64);
-        const t = asStr(p.type, 64);
-        if (!d && !t) continue;
-        totalPatterns++;
-        if (d) byDetectorId[d] = (byDetectorId[d] || 0) + 1;
-        if (t) byType[t] = (byType[t] || 0) + 1;
-        const pk = d + '|' + t;
-        if (!pairs[pk]) pairs[pk] = { detectorId: d, type: t, count: 0, severitySum: 0 };
-        pairs[pk].count++;
-        pairs[pk].severitySum += asCount(p.severity);
-      }
-    }
-  }
-  const topPatterns = Object.values(pairs)
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 20)
-    .map(p => ({ detectorId: p.detectorId, type: p.type, count: p.count, avgSeverity: Math.round((p.severitySum / p.count) * 100) / 100 }));
+  const agg = await aggregateFeedback(env);
+  if (agg.error) return err(500, 'kv_error', 'Could not list feedback buckets.');
+  const { daysUsed, totalPatterns, byDetectorId, byType, topPatterns } = agg;
   const aggregation = {
     window_days: daysUsed,
     buckets: daysUsed.length,
@@ -2131,6 +2096,354 @@ async function handleAiCurate(request, env) {
   });
 }
 
+// ----------------------- the trainer run (auto-curation) -------------------
+//
+// Founder direction 2026-09-07: improving the engine is automated -- there are
+// no servers, and contradictions, offences and criminals' tactics are not
+// personal information. This is Brain 9's trainer role (Constitution v8
+// §2.10: "train and calibrate all other 8 brains ... suggest additional
+// checks") run by the Worker itself on a schedule (wrangler.toml [triggers])
+// or on demand by an admin. The loop:
+//   anonymous feedback (detectorId, type, severity, pageCount -- never content)
+//   -> aggregateFeedback: per (detectorId|type) support and distinct days
+//   -> selectLearningSignals: AI_IDENTIFIED / B9_RECOMMENDATION types with
+//      support >= AUTO_CURATE_MIN_SUPPORT over >= AUTO_CURATE_MIN_DAYS days,
+//      not already covered by a curated rule
+//   -> the model drafts ONE co-occurrence group per signal (generic, lowercase
+//      phrases; no names, numbers, places) -- a draft, never a rule yet
+//   -> validateAutoRule: deterministic shape, vocabulary and duplicate checks
+//   -> at most AUTO_CURATE_MAX_NEW_RULES appended to the CURRENT package
+//      (existing rules byte-untouched: additive only, like every client),
+//      patch version bumped, signed with the master key, stored as current;
+//      the previous record kept under rules:history:<version>; an entry
+//      written to rules:changelog (public at /api/v1/rules/changelog).
+// A curated rule is applied at candidate tier by every client (severity <= 3,
+// weight 0.5 on the website) -- B9 recommends, it never issues verdicts.
+// Safety valves: AUTO_CURATE = "off" (var) disables the run; an admin can
+// publish a higher version by hand to supersede anything the trainer did.
+const AUTO_CURATE_MIN_SUPPORT = 3;
+const AUTO_CURATE_MIN_DAYS = 2;
+const AUTO_CURATE_MAX_NEW_RULES = 3;
+const AUTO_CURATE_MAX_SIGNALS = 6;
+const AUTO_CURATE_SIGNAL_DETECTORS = ['AI_IDENTIFIED', 'B9_RECOMMENDATION'];
+const AUTO_CURATE_SKIP_TYPE_RE = /^(SERIAL|CLEAN_SCAN|VERIFICATION_OUTCOME|VERIFY_|OTS_|SEAL_FORMAT|UNKNOWN|AI_CANDIDATE|AI_INDICATOR|B9_RECOMMENDATION)/;
+const CHANGELOG_KEY = 'rules:changelog';
+const LAST_RUN_KEY = 'rules:auto-curate:last-run';
+const HISTORY_PREFIX = 'rules:history:';
+const MAX_CHANGELOG_ENTRIES = 200;
+const AUTO_PHRASE_RE = /^[a-z][a-z' -]{1,38}[a-z]$/;
+const AUTO_STOP_PHRASES = new Set(['the', 'and', 'of', 'to', 'in', 'for', 'a', 'an', 'is', 'was', 'not', 'no', 'yes', 'payment', 'invoice', 'contract', 'agreement', 'document', 'email', 'letter', 'date', 'amount', 'money', 'fraud', 'contradiction']);
+
+const AUTO_CURATE_SYSTEM = 'You are Brain 9, the research-and-development brain of the Verum Omnis forensic engine, in its trainer role. ' +
+  'You receive anonymised learning signals: contradiction types or tactics that the AI review found and the deterministic engine missed, with how often and over how many days. ' +
+  'No document content exists and none may be invented. For EACH signal draft ONE co-occurrence rule the deterministic engine can execute: ' +
+  '4 to 8 generic lowercase phrases (1-4 words each) that are each benign alone but together characterise that tactic in a document, and min_cooccur (2 or 3), the number of distinct phrases that must co-occur before the rule fires. ' +
+  'Rules: generic fraud and contract terminology only; never names, numbers, dates, places, organisations, currencies or anything that could identify a person or a case; ' +
+  'precision over recall: if a signal cannot be turned into such phrases, return no rule for it. ' +
+  'Reply ONLY compact JSON: {"rules":[{"type":"<the signal type>","group":"snake_case_name","produces":"CT01-CT46 or null","phrases":["..."],"min_cooccur":2,"rationale":"<=25 words, no digits"}]}';
+
+async function aggregateFeedback(env) {
+  const cutoff = new Date(Date.now() - CURATE_WINDOW_DAYS * 86400000).toISOString().slice(0, 10);
+  let names;
+  try {
+    const listed = await env.RULES_KV.list({ prefix: 'feedback:' });
+    names = (listed.keys || []).map(k => k.name)
+      .filter(n => n.slice('feedback:'.length) >= cutoff)
+      .sort();
+  } catch (e) {
+    return { error: 'kv_error' };
+  }
+  const byDetectorId = {};
+  const byType = {};
+  const pairs = {};
+  let totalPatterns = 0;
+  const daysUsed = [];
+  for (const name of names) {
+    let bucket;
+    try {
+      const raw = await env.RULES_KV.get(name);
+      if (!raw) continue;
+      bucket = JSON.parse(raw);
+    } catch { continue; }
+    if (!Array.isArray(bucket)) continue;
+    const day = name.slice('feedback:'.length);
+    daysUsed.push(day);
+    for (const rec of bucket) {
+      const pats = (rec && Array.isArray(rec.patterns)) ? rec.patterns : [];
+      for (const p of pats) {
+        if (!p || typeof p !== 'object') continue;
+        const d = asStr(p.detectorId, 64);
+        const t = asStr(p.type, 64);
+        if (!d && !t) continue;
+        totalPatterns++;
+        if (d) byDetectorId[d] = (byDetectorId[d] || 0) + 1;
+        if (t) byType[t] = (byType[t] || 0) + 1;
+        const pk = d + '|' + t;
+        if (!pairs[pk]) pairs[pk] = { detectorId: d, type: t, count: 0, severitySum: 0, days: {} };
+        pairs[pk].count++;
+        pairs[pk].severitySum += asCount(p.severity);
+        pairs[pk].days[day] = true;
+      }
+    }
+  }
+  const topPatterns = Object.values(pairs)
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 20)
+    .map(p => ({ detectorId: p.detectorId, type: p.type, count: p.count, days: Object.keys(p.days).length, avgSeverity: Math.round((p.severitySum / p.count) * 100) / 100 }));
+  return { daysUsed, totalPatterns, byDetectorId, byType, pairs, topPatterns };
+}
+
+// Every phrase the current package already carries, lower-cased: a draft may
+// not repeat one (the engine would learn nothing and the rule would double).
+function packagePhraseSet(pkg) {
+  const out = new Set();
+  const rules = (pkg && pkg.rules) || {};
+  for (const fk of (rules.fraud_keywords || [])) {
+    if (!fk || typeof fk !== 'object') continue;
+    for (const pr of (fk.pairs || [])) { if (Array.isArray(pr)) for (const x of pr) if (typeof x === 'string') out.add(x.trim().toLowerCase()); }
+    for (const t of (fk.terms || [])) { if (typeof t === 'string') out.add(t.trim().toLowerCase()); else if (Array.isArray(t)) for (const x of t) if (typeof x === 'string') out.add(x.trim().toLowerCase()); }
+    for (const g of (fk.groups || [])) { if (Array.isArray(g)) for (const x of g) if (typeof x === 'string') out.add(x.trim().toLowerCase()); }
+  }
+  for (const bm of (rules.behavioral_markers || [])) {
+    if (!bm || typeof bm !== 'object') continue;
+    for (const k of (bm.keywords || [])) if (typeof k === 'string') out.add(k.trim().toLowerCase());
+  }
+  return out;
+}
+
+function selectLearningSignals(agg, pkg) {
+  const covered = new Set();
+  const ctNames = {};
+  const rules = (pkg && pkg.rules) || {};
+  for (const fk of (rules.fraud_keywords || [])) {
+    if (fk && fk.curated_from && typeof fk.curated_from.type === 'string') covered.add(fk.curated_from.type.toUpperCase());
+  }
+  for (const ct of (rules.contradiction_patterns || [])) {
+    if (ct && typeof ct.id === 'string') ctNames[ct.id] = { name: ct.name || '', desc: ct.desc || '' };
+  }
+  // Merge the detector ids first: the same miss is reported as AI_IDENTIFIED by
+  // the assess step and as B9_RECOMMENDATION by the sweep, and the threshold
+  // applies to the tactic, not to the reporter.
+  const byType = new Map();
+  for (const p of Object.values(agg.pairs || {})) {
+    const d = String(p.detectorId || '').toUpperCase();
+    const t = String(p.type || '').toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    if (!AUTO_CURATE_SIGNAL_DETECTORS.includes(d)) continue;
+    if (!t || AUTO_CURATE_SKIP_TYPE_RE.test(t)) continue;
+    const have = byType.get(t) || { type: t, detectorIds: [], support: 0, dayset: {}, severitySum: 0 };
+    if (!have.detectorIds.includes(d)) have.detectorIds.push(d);
+    have.support += p.count;
+    have.severitySum += p.severitySum;
+    for (const day of Object.keys(p.days || {})) have.dayset[day] = true;
+    byType.set(t, have);
+  }
+  const out = [];
+  for (const sg of byType.values()) {
+    const days = Object.keys(sg.dayset).length;
+    if (sg.support < AUTO_CURATE_MIN_SUPPORT || days < AUTO_CURATE_MIN_DAYS) continue;
+    if (covered.has(sg.type)) continue;
+    const sig = { type: sg.type, detectorId: sg.detectorIds.sort().join('+'), support: sg.support, days, avgSeverity: Math.round((sg.severitySum / sg.support) * 100) / 100 };
+    if (ctNames[sg.type]) { sig.name = ctNames[sg.type].name; sig.desc = ctNames[sg.type].desc; }
+    out.push(sig);
+  }
+  return out.sort((a, b) => b.support - a.support || a.type.localeCompare(b.type)).slice(0, AUTO_CURATE_MAX_SIGNALS);
+}
+
+// Deterministic gate between a model draft and a rule. Returns { ok, rule, problems }.
+function validateAutoRule(draft, signal, pkg, existingPhrases) {
+  const problems = [];
+  if (!draft || typeof draft !== 'object' || Array.isArray(draft)) return { ok: false, problems: ['not an object'] };
+  const type = String(draft.type || '').toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+  if (!signal || type !== signal.type) problems.push('type does not match a selected signal');
+  // A bad phrase is dropped (and recorded); the rule survives if enough
+  // acceptable phrases remain. Only shape, type and rationale failures are fatal.
+  const rawPhrases = Array.isArray(draft.phrases) ? draft.phrases : [];
+  const phrases = [];
+  const dropped = [];
+  const seen = new Set();
+  for (const raw of rawPhrases) {
+    if (typeof raw !== 'string') { dropped.push('not a string'); continue; }
+    const ph = raw.toLowerCase().replace(/\s+/g, ' ').trim();
+    if (!AUTO_PHRASE_RE.test(ph)) { dropped.push('rejected: ' + ph.slice(0, 40)); continue; }
+    const words = ph.split(' ');
+    if (words.length > 4) { dropped.push('too long: ' + ph.slice(0, 40)); continue; }
+    if (words.length === 1 && AUTO_STOP_PHRASES.has(ph)) { dropped.push('too generic: ' + ph); continue; }
+    if (existingPhrases.has(ph)) { dropped.push('already in the package: ' + ph); continue; }
+    if (seen.has(ph)) continue;
+    seen.add(ph);
+    if (phrases.length < 8) phrases.push(ph); else dropped.push('beyond eight: ' + ph.slice(0, 40));
+  }
+  if (phrases.length < 4) problems.push('needs at least 4 acceptable phrases, has ' + phrases.length + (dropped.length ? ' (dropped: ' + dropped.join('; ').slice(0, 200) + ')' : ''));
+  let min = Number(draft.min_cooccur);
+  if (!Number.isInteger(min)) min = phrases.length <= 4 ? 2 : 3;
+  min = Math.max(2, Math.min(min, Math.max(2, phrases.length - 1)));
+  let produces = null;
+  const ctIds = new Set(((pkg && pkg.rules && pkg.rules.contradiction_patterns) || []).map(c => c && c.id).filter(Boolean));
+  if (/^CT\d{2}$/.test(signal ? signal.type : '')) produces = signal.type;
+  else if (typeof draft.produces === 'string' && /^CT\d{2}$/.test(draft.produces.trim().toUpperCase()) && ctIds.has(draft.produces.trim().toUpperCase())) produces = draft.produces.trim().toUpperCase();
+  let group = String(draft.group || '').toLowerCase().replace(/[^a-z0-9_]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 48);
+  if (!/^[a-z][a-z0-9_]{2,47}$/.test(group)) group = type.toLowerCase().replace(/[^a-z0-9]+/g, '_').slice(0, 48) || 'curated_rule';
+  let rationale = asStr(draft.rationale, 200).replace(/\s+/g, ' ').trim();
+  if (/\d/.test(rationale) || /@/.test(rationale) || /\b[A-Z][a-z]+ [A-Z][a-z]+\b/.test(rationale)) { problems.push('rationale carries digits or a name-like pair'); rationale = ''; }
+  if (!rationale) problems.push('no acceptable rationale');
+  if (problems.length) return { ok: false, problems };
+  return { ok: true, rule: { type, group, produces, phrases, min_cooccur: min, rationale, dropped } };
+}
+
+function bumpPatch(version) {
+  const m = SEMVER_RE.exec(String(version || ''));
+  if (!m) return '1.0.1';
+  return m[1] + '.' + m[2] + '.' + (Number(m[3]) + 1);
+}
+
+function nextRuleId(pkg) {
+  let max = 0;
+  for (const fk of ((pkg && pkg.rules && pkg.rules.fraud_keywords) || [])) {
+    const mm = /^FK(\d+)$/.exec(String((fk && fk.id) || ''));
+    if (mm) max = Math.max(max, Number(mm[1]));
+  }
+  return 'FK' + String(max + 1).padStart(2, '0');
+}
+
+// The changelog is read BEFORE anything is stored (a KV read failure aborts the run with
+// nothing published, and a transient read failure can never overwrite the log with a single
+// entry) and written AFTER the package is current, with one retry. If that write still fails
+// the run is still reported as published — the manifest is the truth, the changelog the log —
+// and the last-run record says the entry is missing (`changelog: "not_written"`).
+async function readChangelog(env) {
+  const raw = await env.RULES_KV.get(CHANGELOG_KEY); // a KV failure throws: the caller aborts before publishing
+  if (!raw) return [];
+  try { const log = JSON.parse(raw); return Array.isArray(log) ? log : []; } catch { return []; }
+}
+
+async function writeChangelog(env, priorLog, entry) {
+  let log = [entry].concat(priorLog);
+  if (log.length > MAX_CHANGELOG_ENTRIES) log = log.slice(0, MAX_CHANGELOG_ENTRIES);
+  const body = JSON.stringify(log);
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try { await env.RULES_KV.put(CHANGELOG_KEY, body); return true; } catch {}
+  }
+  return false;
+}
+
+async function runAutoCuration(env, trigger) {
+  const run = { trigger: trigger || 'cron', started_at: new Date().toISOString(), status: 'started', reason: null, signals: 0, drafted: 0, accepted: 0, rejected: [], published: null, changelog: null, model: null };
+  const finish = async (status, reason) => {
+    run.status = status; run.reason = reason || null; run.finished_at = new Date().toISOString();
+    try { await env.RULES_KV.put(LAST_RUN_KEY, JSON.stringify(run)); } catch {}
+    return run;
+  };
+  // Nothing escapes: an unexpected throw is recorded as a run outcome (the cron has nobody to
+  // report to), and once the package is current the run is never reported as anything but
+  // published.
+  try {
+    return await curate(env, trigger, run, finish);
+  } catch (e) {
+    const msg = (e && e.message) ? String(e.message).slice(0, 120) : 'unknown';
+    return finish(run.published ? 'published' : 'failed', (run.published ? 'published; then: ' : 'unexpected: ') + msg);
+  }
+}
+
+async function curate(env, trigger, run, finish) {
+  if (String(env.AUTO_CURATE || 'on').toLowerCase() === 'off') return finish('disabled', 'AUTO_CURATE is off');
+  if (!env.RULE_PRIVATE_KEY) return finish('skipped', 'no signing key on this service');
+  const cur = await loadCurrent(env);
+  if (!cur || !cur.package || !cur.package.rules) return finish('skipped', 'no published package to extend');
+  const agg = await aggregateFeedback(env);
+  if (agg.error) return finish('failed', 'could not read feedback');
+  const signals = selectLearningSignals(agg, cur.package);
+  run.signals = signals.length;
+  if (!signals.length) return finish('no_change', 'no learning signal reached support ' + AUTO_CURATE_MIN_SUPPORT + ' over ' + AUTO_CURATE_MIN_DAYS + ' days');
+  let drafts = [];
+  try {
+    const text = await callAi(env, AI_MODEL_STRONG, AUTO_CURATE_SYSTEM, JSON.stringify({ signals }),
+      { timeoutMs: AI_TIMEOUT_MS, maxTokens: 1800, temperature: 0, fallbackModel: AI_MODEL_FAST });
+    const parsed = extractJsonObject(text);
+    drafts = (parsed && Array.isArray(parsed.rules)) ? parsed.rules : [];
+    run.model = 'llama-3.3-70b';
+  } catch (e) {
+    return finish('failed', 'model unavailable: ' + ((e && e.message) ? String(e.message).slice(0, 120) : 'unknown'));
+  }
+  run.drafted = drafts.length;
+  const existing = packagePhraseSet(cur.package);
+  const bySignal = new Map(signals.map(sg => [sg.type, sg]));
+  const accepted = [];
+  const usedTypes = new Set();
+  for (const draft of drafts) {
+    const t = String((draft && draft.type) || '').toUpperCase().replace(/[^A-Z0-9_]/g, '_');
+    const sg = bySignal.get(t);
+    const v = validateAutoRule(draft, sg, cur.package, existing);
+    if (!v.ok || usedTypes.has(t)) { run.rejected.push({ type: t || '?', problems: v.problems || ['duplicate type'] }); continue; }
+    usedTypes.add(t);
+    for (const ph of v.rule.phrases) existing.add(ph);
+    accepted.push({ rule: v.rule, signal: sg });
+    if (accepted.length >= AUTO_CURATE_MAX_NEW_RULES) break;
+  }
+  run.accepted = accepted.length;
+  if (!accepted.length) return finish('no_change', 'no draft passed validation');
+  // Build the new package: everything as it was, plus the new groups.
+  const next = JSON.parse(JSON.stringify(cur.package));
+  const added = [];
+  const today = new Date().toISOString().slice(0, 10);
+  for (const a of accepted) {
+    const id = nextRuleId(next);
+    const entry = {
+      id,
+      group: a.rule.group,
+      source_detector: 'B9',
+      produces: a.rule.produces || 'CT43',
+      description: a.rule.rationale + ' Auto-curated ' + today + ' from ' + a.signal.support + ' anonymous reports over ' + a.signal.days + ' days (Brain 9 trainer run); recommendation tier, not a determination.',
+      curated_from: { type: a.signal.type, detectorId: a.signal.detectorId, support: a.signal.support, days: a.signal.days, window_days: agg.daysUsed.length },
+      min_cooccur: a.rule.min_cooccur,
+      groups: [a.rule.phrases]
+    };
+    next.rules.fraud_keywords.push(entry);
+    added.push({ id, group: entry.group, type: a.signal.type, produces: entry.produces, support: a.signal.support, days: a.signal.days, phrases: a.rule.phrases, min_cooccur: a.rule.min_cooccur, dropped_phrases: a.rule.dropped });
+  }
+  const check = constitutionCheck(next.rules);
+  if (check) return finish('failed', 'constitution check: ' + check);
+  next.version = bumpPatch(cur.package.version);
+  next.published_at = new Date().toISOString();
+  let signature;
+  try { signature = await signPackage(env, next); } catch (e) { return finish('failed', 'signing failed'); }
+  const record = { package: next, signature, algorithm: ALGORITHM, publicKeyId: PUBLIC_KEY_ID, stored_at: new Date().toISOString(), published_by: 'trainer:' + (trigger || 'cron') };
+  // Read the changelog first: if KV cannot be read, nothing is published and nothing is lost.
+  let priorLog;
+  try { priorLog = await readChangelog(env); } catch (e) { return finish('failed', 'could not read the changelog; nothing published'); }
+  try {
+    await env.RULES_KV.put(HISTORY_PREFIX + cur.package.version, JSON.stringify(cur));
+    await env.RULES_KV.put(CURRENT_KEY, JSON.stringify(record));
+  } catch (e) { return finish('failed', 'could not store the package'); }
+  // From here the package is current: whatever happens below, this run published.
+  run.published = { version: next.version, previous: cur.package.version, published_at: next.published_at, added };
+  const logged = await writeChangelog(env, priorLog, { version: next.version, previous: cur.package.version, published_at: next.published_at, trigger: run.trigger, model: run.model, signals_considered: signals.length, added, rejected: run.rejected.length });
+  run.changelog = logged ? 'written' : 'not_written';
+  return finish('published', logged ? null : 'published ' + next.version + '; the changelog entry could not be written (the manifest and this run record carry it)');
+}
+
+async function handleRulesChangelog(env) {
+  const cur = await loadCurrent(env);
+  let entries = [], lastRun = null;
+  try { const raw = await env.RULES_KV.get(CHANGELOG_KEY); if (raw) entries = JSON.parse(raw); if (!Array.isArray(entries)) entries = []; } catch { entries = []; }
+  try { const raw = await env.RULES_KV.get(LAST_RUN_KEY); if (raw) lastRun = JSON.parse(raw); } catch { lastRun = null; }
+  return json({
+    ok: true,
+    current: (cur && cur.package) ? { version: cur.package.version, published_at: cur.package.published_at, published_by: cur.published_by || 'admin' } : null,
+    trainer: { schedule: 'weekly (wrangler.toml [triggers])', min_support: AUTO_CURATE_MIN_SUPPORT, min_days: AUTO_CURATE_MIN_DAYS, max_new_rules_per_run: AUTO_CURATE_MAX_NEW_RULES, enabled: String(env.AUTO_CURATE || 'on').toLowerCase() !== 'off' },
+    lastRun,
+    entries
+  });
+}
+
+async function handleAdminCuratePublish(request, env) {
+  if (!env.ADMIN_TOKEN) return err(500, 'not_configured', 'Admin token is not configured on this service.');
+  const token = request.headers.get('x-admin-token');
+  if (!token) return err(401, 'missing_admin_token', 'Provide the x-admin-token header.');
+  if (!tokenMatches(token, env.ADMIN_TOKEN)) return err(403, 'invalid_admin_token', 'The admin token is incorrect.');
+  const run = await runAutoCuration(env, 'admin');
+  return json({ ok: true, run });
+}
+
 // -------------------------------- router ----------------------------------
 
 async function route(request, env) {
@@ -2142,6 +2455,8 @@ async function route(request, env) {
 
   if (path === '/api/v1/status' && request.method === 'GET') return handleStatus(env);
   if (path === '/api/v1/rules/manifest' && request.method === 'GET') return handleManifest(env);
+  if (path === '/api/v1/rules/changelog' && request.method === 'GET') return handleRulesChangelog(env);
+  if (path === '/api/v1/admin/curate-publish' && request.method === 'POST') return handleAdminCuratePublish(request, env);
   if (path === '/api/v1/feedback/patterns' && request.method === 'POST') return handleFeedback(request, env);
   if (path === '/api/v1/admin/publish' && request.method === 'POST') return handleAdminPublish(request, env);
   if (path === '/api/v1/ai/gatekeep' && request.method === 'POST') return handleAiGatekeep(request, env);
@@ -2156,7 +2471,7 @@ async function route(request, env) {
   if (path === '/api/v1/site/health' && request.method === 'GET') return handleSiteHealth(env);
   if (SITE_IMAGES[path] && (request.method === 'GET' || request.method === 'HEAD')) return serveSiteImage(request, env, path);
 
-  const known = ['/api/v1/status', '/api/v1/site/health', '/api/v1/rules/manifest', '/api/v1/feedback/patterns', '/api/v1/admin/publish',
+  const known = ['/api/v1/status', '/api/v1/site/health', '/api/v1/rules/manifest', '/api/v1/rules/changelog', '/api/v1/feedback/patterns', '/api/v1/admin/publish', '/api/v1/admin/curate-publish',
     '/api/v1/ai/gatekeep', '/api/v1/ai/classify', '/api/v1/ai/transcribe', '/api/v1/ai/assess', '/api/v1/ai/narrate', '/api/v1/ai/human-report', '/api/v1/ai/sweep', '/api/v1/ai/curate', '/constitution.pdf', '/docs/constitution.pdf', '/images/logo-full.png', '/images/watermark_portrait.png'];
   if (known.includes(path)) {
     return err(405, 'method_not_allowed', request.method + ' is not supported on ' + path + '.', { allow: path.startsWith('/api/v1/rules') || path === '/api/v1/status' || path === '/api/v1/site/health' || path.endsWith('/constitution.pdf') || path.endsWith('.png') ? 'GET' : 'POST' });
@@ -2183,5 +2498,12 @@ export default {
       // Honest error, never leak internals/stack traces to clients.
       return err(500, 'internal_error', 'An internal error occurred while processing the request.');
     }
+  },
+  // The trainer run (wrangler.toml [triggers] crons). Never throws: every
+  // outcome is recorded under rules:auto-curate:last-run.
+  async scheduled(event, env, ctx) {
+    const p = runAutoCuration(env, 'cron').catch(() => null);
+    if (ctx && typeof ctx.waitUntil === 'function') ctx.waitUntil(p);
+    return p;
   }
 };

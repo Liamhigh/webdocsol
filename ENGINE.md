@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 31 suites, 1887 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 31 suites, 1922 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**31 suites · 1887 assertions.** `tests/run-all.js` is the registry — a new
+**31 suites · 1922 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -534,7 +534,7 @@ test file that is not registered there does not run.
 | `page-boot.test.mjs` | 100 | The seal page still boots when a library is missing |
 | `detector-recall.test.mjs` | 107 | Recall + the §4 false-positive guards, pinned to real bundle strings |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
-| `worker.test.mjs` | 233 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget) |
+| `worker.test.mjs` | 264 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget) |
 | `human-report.test.mjs` | 76 | **The court-ready narrative** (§13): one section contract in three artefacts, opt-in default OFF with honest consent copy, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery |
 | `site-serving.test.mjs` | 54 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
 | `zip-intake.test.mjs` | 25 | **WhatsApp chat exports unpacked on-device** (§12.6a): the page's ZIP reader against real archives (stored, deflated, data-descriptor, folder, macOS cruft, encrypted, garbage), expansion into typed Files, only evidence types admitted, documents inside a voice-note export named for a separate seal, the panel note, the .zip picker entry, the 25-note batch, the home-page copy and locally served photos |
@@ -855,6 +855,47 @@ sealed reports". The website has no chat: this runs inside the seal pipeline.
   disclosure box says the sealed page text is sent in windows and that every suggestion must
   quote the text or is discarded. Privileged matters use "Seal document": nothing leaves the
   device.
+
+### 12.9 The trainer run — the engine improves itself on a schedule (2026-09-07)
+
+Founder direction: improving the engine is automated (there are no servers), and contradictions,
+offences and criminals' tactics are not personal information. The Worker runs Brain 9's trainer
+role (Constitution v8 §2.10: "train and calibrate all other 8 brains… suggest additional
+checks") on a schedule (`wrangler.toml [triggers]`, weekly, Monday 03:00 UTC) or on demand
+(`POST /api/v1/admin/curate-publish`, admin token). `runAutoCuration`:
+
+1. **Aggregate** the anonymous feedback of the last 7 days per `(detectorId, type)` with support
+   and distinct days (`aggregateFeedback`; the four fields only, never content).
+2. **Select learning signals** (`selectLearningSignals`): `AI_IDENTIFIED` and
+   `B9_RECOMMENDATION` types — "the AI review found this and the engine missed it" — with
+   support ≥ 3 over ≥ 2 distinct days, not already covered by a curated rule
+   (`curated_from.type`), never SERIAL / CLEAN_SCAN / verification outcomes; at most 6.
+3. **Draft**: the model (Llama 3.3 70B, temperature 0) drafts ONE co-occurrence group per
+   signal — 4–8 generic lowercase phrases, benign alone, plus `min_cooccur` — from the type
+   and its support only; no document content exists to draw on.
+4. **Validate deterministically** (`validateAutoRule`): each phrase `^[a-z][a-z' -]{1,38}[a-z]$`,
+   1–4 words, not a stop phrase, not already in the package (`packagePhraseSet`); 4–8 phrases;
+   `min_cooccur` clamped to 2…n−1; `produces` the signal's CT id, else a known CT id, else CT43
+   at apply time; rationale ≤ 200 characters with no digits, no `@`, no name-like pair.
+5. **Publish additively**: at most 3 rules appended to the current package as `fraud_keywords`
+   entries (`source_detector: "B9"`, `curated_from`, `min_cooccur`, `groups`), existing rules
+   byte-untouched, constitution check, patch version bumped, signed with the master key, stored
+   as current; the previous record kept under `rules:history:<version>`; an entry written to
+   `rules:changelog`, public at `GET /api/v1/rules/changelog` (current version, trainer
+   settings, last run with its reason, entries with the phrases added and the signal behind each).
+   The changelog is part of the publish transaction: it is read **before** anything is stored
+   (a KV read failure aborts the run with nothing published, and a transient read failure can
+   never overwrite the log with a single entry) and written **after** the package is current,
+   with one retry. If that write still fails the run is still recorded as `published` with
+   `changelog: "not_written"` and the reason — the manifest is the truth, the changelog the log
+   — never as a failure that claims nothing changed. Any unexpected throw anywhere in the run
+   is a recorded outcome (`failed`, `unexpected: …`), never an exception the cron swallows.
+
+Every client then applies the new rule at candidate tier (§12.7: severity ≤ 3, weight 0.5 on
+the website) — Brain 9 recommends, it never issues verdicts. Safety valves: `AUTO_CURATE =
+"off"` disables the run; an admin publish of a higher version supersedes anything the trainer
+did; a run that cannot sign, read feedback or validate a draft records its reason under
+`rules:auto-curate:last-run` and changes nothing.
 
 ### 12.6 The Seal Certificate never carries identity by default
 
