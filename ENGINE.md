@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 32 suites, 1979 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 32 suites, 2004 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**32 suites · 1979 assertions.** `tests/run-all.js` is the registry — a new
+**32 suites · 2004 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -542,7 +542,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `annexure-eb-regression.test.mjs` | 56 | **The annexure EB run** (§12.10): verbatim glyph extraction (R231.3, t/a, (Pty), slashes), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding from that run silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt |
+| `annexure-eb-regression.test.mjs` | 81 | **The annexure EB run** (§12.10): verbatim glyph extraction (R231.3, t/a, (Pty), slashes), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding from that run silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
@@ -943,10 +943,11 @@ is pinned by `tests/annexure-eb-regression.test.mjs`, built from that run's find
      accounts are not a mismatch; a changed-payment-details instruction still is.
 3. **OCR provenance has a consequence.** `voCapOcrFormatFindings`: a character-sensitive
    finding (CT02, CT03, CT08, CT09, CT13, CT18, CT19, CT20, CT23, CT33) whose every cited
-   page was OCR-recovered is held at severity 2 with the reason on the finding (`ocrCapped`).
+   page was OCR-recovered is held at severity 2 with the reason on the finding (`ocrCapped`;
+   the printed words are "weight reduced", never a band name).
    `voOcrRescuePages` now returns `ocrPages` and per-page recogniser `ocrConfidence`; the
-   engine result carries both; the report's OCR-provenance line prints the lowest confidence
-   on the cited pages. `voExcludeFooterOnlyPages`: a page whose only text is a seal footer is
+   engine result carries both; the confidence travels in the findings JSON only (PD1: no
+   percentages in anything a reader sees). `voExcludeFooterOnlyPages`: a page whose only text is a seal footer is
    replaced by a placeholder before scanning (like template pages), so no finding can be
    anchored to a footer; a short signature line is never treated as a footer
    (`VO_FOOTER_ONLY_MASS`).
@@ -968,6 +969,30 @@ is pinned by `tests/annexure-eb-regression.test.mjs`, built from that run's find
    person sealing is asked once (with a time estimate) whether to read them all;
    `window.voOcrContinueAll` overrides the prompt for headless runs. Anything still unread is
    named on the cover and in "Pages the engine could not read".
+
+An adversarial review of the release (four lenses, each finding refuted or reproduced with a
+runnable check) added, before merge: TJ-array kerning spaces (`VO_TJ_SPACE_KERN`: a word space
+drawn as a large negative adjustment between two multi-character chunks, the pdfTeX pattern,
+is a space; letter-spaced single-glyph headings stay one word); C0/C1 control bytes dropped;
+the merge rules refined so a line-end full stop drawn in another font never glues the next
+line's first letter or clause number onto the word, openers carry forward and joiners pull the
+next word on; `voLooksGarbled` treats bullets, pipes, dashes, ordinals, amounts and consonant
+clusters as ordinary typed text; CT20 validates the first whitespace-delimited token (a valid
+number followed by a street number or a year stays valid); CT09 fires only when the SAME
+person carries two identity numbers (a lease naming two people with theirs is ordinary) and
+every pattern needs an identity label; CT18 reads "payable to the Franchisor" as the party,
+never a field label, normalises spellings (`ABC Properties (Pty) Ltd` = `ABC Properties Pty
+Ltd`) and always reports a changed-banking-details instruction; CT08 keeps each document's
+own first definition; CT01 uses the negator nearest the claim word and frees its modifier
+("never made any royalty payment"); footer-only pages are gated on the actual seal-footer
+signature and keep any three-letter word or three-digit run as evidence, and the placeholder's
+mass stays under `VO_NEAR_EMPTY_CHARS` so CT26 still names an unread scanned page; the cap
+note and the report print no band word and no percentage (§15.2, PD1); the pre-flight runs
+before the pipeline starts, times out at eight seconds, retries a dropped connection once,
+names the real reason (no service / unreachable / unhealthy), also guards voice-note batches,
+and shows an on-page notice as well as the alert; `review_status` is `ai_reviewed` only for a
+finding a batch actually answered (a failed batch and anything past the 200-finding cap stay
+`unreviewed`); one range-aware page parser serves the cap, the JSON and the report.
 
 Not adopted from the outside review, and why: a bounding-box `PageMap`, per-word OCR
 confidence gating, CLI flags (`--strict-anchor`, `--trace`, `--resume`) and a module refactor

@@ -42,6 +42,11 @@ ok(extract(['(', 'Pty', ')', ' ', 'Ltd']) === '(Pty) Ltd', 'a glyph run ending i
 ok(extract(['N', 'F', 'O', ' ', 'Ltd']) === 'NFO Ltd', 'letter-spaced runs still merge ("N F O" -> "NFO")');
 ok(extract(['a', 'lease', 'agreement', '.', 'The']) === 'a lease agreement. The', 'a single-letter word beside a kerned word keeps its space');
 ok(extract(['V', ' ', 'alue']) === 'V alue', 'a real space in the stream is never closed up (the "V alue" fragment stays a fragment)');
+ok(extract(['the agreement', '.', 'I have paid']) === 'the agreement. I have paid' && extract(['Lessee', ',', 'a company']) === 'Lessee, a company' && extract(['Ltd', '.', '5 The lessee']) === 'Ltd. 5 The lessee' && extract(['p', 'a', 'i', 'd', '.', 'No payment']) === 'paid. No payment',
+  'a line-end full stop drawn in another font never glues the next line\'s first letter or clause number onto the word');
+ok(extract(['Company', '(', 'Pty', ')', 'Ltd']) === 'Company (Pty) Ltd' && extract(['12', '/', '12', '/', '2018']) === '12/12/2018' && extract(['web', '-', 'based']) === 'web-based' && extract(['O', "'", 'N', 'e', 'i', 'l']) === "O'Neil",
+  'openers carry forward, joiners pull the next word on: (Pty), 12/12/2018, web-based, O\'Neil');
+ok(extract(['\x95Rent', ' ', 'is']) === 'Rent is', 'C1 control bytes (a WinAnsi bullet with no ToUnicode map) are dropped, not sealed');
 
 // ===== 2. CT01 — a shared word is not a shared proposition ==================
 const ct01 = (blocks) => of(DET.D01_DETECT_DIRECT_CONTRADICTION, blocks, 'CT01');
@@ -57,6 +62,14 @@ ok(ct01(['The MOU was signed by both parties on 12 December. The franchisor now 
   'CT01 still fires: "the MOU was signed" vs "the MOU was never signed"');
 ok(ct01(['the resolution was approved by the board on 3 May. the directors later denied that the resolution was approved.']).length === 1,
   'CT01 still fires through "denied that the resolution was approved" (one subject word between negator and claim)');
+ok(ct01(['The Franchisee made the royalty payment on 30 June 2021 as the statement shows. The Franchisee never made any royalty payment during 2021.']).length === 1,
+  'CT01 still fires: "made the royalty payment" vs "never made any royalty payment" (a modifier before the claim word is free)');
+ok(ct01(['The Lessor received the notice of termination on 2 May. It is not disputed that the Lessor never received the notice.']).length === 1,
+  'CT01 still fires through the negator NEAREST the claim word ("never received"), not the leftmost ("not disputed")');
+ok(ct01(['The lease was signed by both parties at Durban on 1 March 2019. The lease was never signed by the Lessee.']).length === 1,
+  'CT01 still fires: "signed by both parties" vs "never signed by the Lessee" ("by" names an agent, not an object)');
+ok(ct01(['The deposit was paid in full on 5 March 2019. The Lessor says the deposit was not paid timeously.']).length >= 1,
+  'CT01 still fires: "paid in full" vs "not paid timeously" (adverbs are not objects)');
 
 // ===== 3. CT09 — rentals are not identities ==================================
 const ct09 = (blocks) => of(DET.D06_DETECT_IDENTITY_CONFLICT, blocks, 'CT09');
@@ -66,10 +79,14 @@ ok(ct09(['Client reference 33503223243 0 on the statement.']).length === 0,
   'CT09 silent: a 12-digit reference is not a 13-digit identity number (F004)');
 ok(ct09(['Ref AB1234567 noted on the invoice.', 'Ref CD7654321 on the credit note.']).length === 0,
   'CT09 silent: lettered codes without an ID/passport label are references');
-ok(ct09(['Applicant ID 8001015009087 on the form.', 'Identity number 7502204567089 given by the same applicant on the affidavit.']).length === 1,
-  'CT09 still fires: two different 13-digit identity numbers led by plausible dates of birth');
-ok(ct09(['Holder ID AB1234567 noted.', 'Other passport CD7654321 recorded.']).length === 1,
-  'CT09 still fires: two labelled lettered identity codes');
+ok(ct09(['Applicant Sipho Dlamini, ID 8001015009087, on the form.', 'Sipho Dlamini gives identity number 7502204567089 on the affidavit.']).length === 1,
+  'CT09 still fires: the SAME person carries two different 13-digit identity numbers');
+ok(ct09(['Holder Jan Botha, ID AB1234567, noted.', 'Jan Botha passport CD7654321 recorded.']).length === 1,
+  'CT09 still fires: the same person with two labelled lettered identity codes');
+ok(ct09(['LEASE between ABC Properties (Pty) Ltd, represented by Johannes Botha, Identity Number 6503125009087 (the Lessor) and Sipho Dlamini, Identity Number 8801015800083 (the Lessee).']).length === 0,
+  'CT09 silent: two people, two identity numbers is the ordinary shape of a lease');
+ok(ct09(['TILL SLIP Item 6001069123456 Milk R31.99 Item 6001240012345 Bread R18.99']).length === 0,
+  'CT09 silent: barcodes without an identity label');
 
 // ===== 4. CT20 — valid formats, VAT numbers and OCR debris ===================
 const ct20 = (blocks) => of(DET.D11_DETECT_REGISTRATION_FAKE, blocks, 'CT20');
@@ -89,6 +106,12 @@ ok(ct20(['RONNIE MOIR TRAVEL CC (Registration NO. CK2000/071982/23) t/a Port Edw
 }
 ok(ct20(['Reg No. 2012/22¢ pu pees = CHL ein sr']).length === 0,
   'CT20 silent on OCR debris around the cue (F008)');
+ok(ct20(['ABC Trading (Pty) Ltd  Registration Number 2019/123456/07 12 Rivonia Road, Sandton']).length === 0 && ct20(['Reg No 2019/123456/07 2020 Annual Return filed']).length === 0,
+  'CT20 silent: a valid number followed by a street number or a year on the same line');
+{
+  const f = ct20(['Tel: 011 123 4567 | Fax: 011 123 4568 | Registration No: 2019/1234/7 | VAT No: 4123456789']);
+  ok(f.length === 1 && f[0].severity === 4, 'CT20 still fires on a pipe-separated letterhead: typographic separators are not OCR debris');
+}
 ok(ct20(['The entity gives its registration number 33348381876106 in the letter.']).length === 1,
   'CT20 still fires on a labelled number in no known format');
 {
@@ -133,6 +156,17 @@ ok(ct08(['"Rental" means the rental payable by the Franchisee pursuant to the Le
 }
 ok(ct08(['the agreement means the entire contract between them.', 'later: the agreement means only the schedule.']).length === 0,
   'CT08 silent on an uncapitalised word: a defined term is Capitalised where it is defined');
+{
+  // Document A defines "Business" once; document B defines it two different ways: B's own conflict must still be found.
+  const A = (n) => 'CALTEX FRANCHISE AGREEMENT  Page ' + n + ' of 4. ', B = (n) => 'LEASE OF PREMISES  Page ' + n + ' of 8. ';
+  const blocks = [A(1) + 'Parties.', A(2) + '"Business" means the franchised fuel retail business conducted from the site.', A(3) + 'Term.', A(4) + 'Signed.',
+    B(1) + 'Parties.', B(2) + '"Business" means the letting and hiring of the premises for a fuel forecourt.', B(3) + 'Rent.', B(4) + 'Term.',
+    B(5) + '"Business" means the supply of lubricants only and nothing else.', B(6) + 'x', B(7) + 'y', B(8) + 'z'];
+  const f = ct08(blocks);
+  ok(f.length === 1 && /letting and hiring/.test(f[0].evidence) && /lubricants/.test(f[0].evidence), 'CT08 keeps each document\'s own first definition and still finds a conflict inside the second document');
+}
+ok(ct08(['1.1 "Premises" means the following: • Shop 4 • Shop 5 • the forecourt.', '9.9 "Premises" means only the forecourt and the canopy, nothing else whatsoever.']).length === 1,
+  'CT08 still fires on a bulleted definition: bullets are typography, not OCR debris');
 
 // ===== 8. CT18 — whose account? ==============================================
 const ct18 = (blocks) => of(DET.D12_DETECT_BANK_DETAIL_MISMATCH, blocks, 'CT18');
@@ -148,11 +182,21 @@ ok(ct18(['Bright Idea Projects (Pty) Ltd banking details: Standard Bank account 
 }
 ok(ct18(['Bank account 62834571902 for payment', 'Please use account no 40190283746 instead']).length === 1,
   'CT18 still fires on a changed-payment-details instruction with no holder named');
+ok(ct18(['FRANCHISE AGREEMENT. Royalties are payable to the Franchisor. Banking details: Nedbank, Branch 198765, Account Number 1234567890.',
+         'LEASE AGREEMENT. Rental is payable to the Lessor. Banking details: Absa, Branch 632005, Account Number 4012345678.']).length === 0,
+  'CT18 silent: "Account Number" is a field label, never a party (franchisor and lessor are different parties)');
+ok(ct18(['Account holder: ABC Properties (Pty) Ltd, Standard Bank, Account 012345678901. Rental payable monthly.',
+         'Kindly note our new banking details with immediate effect. Account holder: ABC Properties Pty Ltd, Nedbank, Account 1987654321.']).length === 1,
+  'CT18 still fires on the classic redirection letter: the same party spelt two ways, and a changed-details cue');
+ok(ct18(['Account Holder: Kwazulu Fuel Distributors CC\nBank: Standard Bank\nAccount Number: 251068749\n', 'Account Holder: Palmbili Property Investments (Pty) Ltd\nBank: FNB\nAccount Number: 62068673493\n']).length === 0,
+  'CT18 silent: two holders on two banking-details blocks (labels and line breaks do not become names)');
 
 // ===== 9. OCR-debris gate ====================================================
 ok(E.voLooksGarbled('Reg No. 2012/22¢ pu pees = CHL ein sr') === true, 'voLooksGarbled: symbol debris');
 ok(E.voLooksGarbled('the rental, if any, payable by the Franchisee') === false, 'voLooksGarbled: clean legal prose is clean');
 ok(E.voLooksGarbled('petrol, diesel, liquefied petroleum gas and any other products') === false, 'voLooksGarbled: technical vocabulary is not debris');
+ok(E.voLooksGarbled('the 1st, 2nd and 3rd floors of the building') === false && E.voLooksGarbled('R5 000 per month plus VAT and a deposit of R7 500') === false && E.voLooksGarbled('the following: • the sale of fuel • the sale of lubricants') === false && E.voLooksGarbled('Twelfths of the Rightsholder\'s Nightshift allowance') === false && E.voLooksGarbled('Tel: 011 123 4567 | Fax: 011 123 4568 | Registration No: 2019/1234/7') === false,
+  'voLooksGarbled: ordinals, amounts, bullets, consonant clusters and pipe separators are ordinary typed text');
 
 // ===== 10. OCR provenance has a consequence ==================================
 {
@@ -176,10 +220,17 @@ ok(E.voIsFooterOnlyPage('the lessor may without notice claim immediate payment o
   'a page with lease text under its footer is evidence');
 ok(E.voIsFooterOnlyPage('Signed at Durban on 12 December 2018. VERUM OMNIS SEALED ORIGINAL | VO-A59C667AFDCE | 83/528') === false,
   'a short signature line is evidence (never excluded as a footer)');
+ok(E.voIsFooterOnlyPage('1,234.56 2,345.67 3,456.78 VERUM OMNIS SEALED ORIGINAL | VO-A59C667AFDCE | 84/528') === false && E.voIsFooterOnlyPage('62068673493 251068749 VERIFY SEAL VERUM OMNIS SEALED ORIGINAL | VO-A59C667AFDCE | 85/528') === false && E.voIsFooterOnlyPage('ANNEXURE A VERIFY SEAL VERUM OMNIS SEALED ORIGINAL | VO-A59C667AFDCE | 86/528') === false,
+  'figures-only pages, account numbers and an "Annexure A" divider are evidence, never footer-only');
+ok(E.voIsFooterOnlyPage('Just an ordinary page with no seal footer on it at all') === false, 'a page without a seal footer is never footer-only');
+ok(E.voContentMass('seal footer only. ') < E.VO_NEAR_EMPTY_CHARS, 'the footer placeholder stays under the near-empty threshold so CT26 still reports an unread scanned page');
+ok(JSON.stringify(E.voRulePagesOf('Page 3, 12-14')) === '[3,12,13,14]', 'voRulePagesOf collects list pages AND ranges');
+ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require('path').join(process.cwd(), 'forensic-engine-page.js'), 'utf8').match(/VO_OCR_CAP_NOTE = '([^']+)'/)[1]),
+  'the OCR cap note carries no severity band word (§15.2)');
 {
   const blocks = ['Clause 1. The parties agree.', 'VERIFY SEAL VERUM OMNIS SEALED ORIGINAL | VO-A59C667AFDCE | 2/3', 'Clause 2. The rental is payable monthly.'];
   const r = E.voExcludeFooterOnlyPages(blocks);
-  ok(r.pages.length === 1 && r.pages[0] === 2 && /no evidential text/.test(blocks[1]) && /Seal-footer pages: 1 page/.test(r.note),
+  ok(r.pages.length === 1 && r.pages[0] === 2 && /seal footer only/.test(blocks[1]) && /Seal-footer pages: 1 page/.test(r.note),
     'footer-only pages are replaced by a placeholder and named in the extraction note');
 }
 
@@ -195,6 +246,23 @@ ok(E.voIsFooterOnlyPage('Signed at Durban on 12 December 2018. VERUM OMNIS SEALE
     'forensic mode pre-flights the service and refuses to produce an unreviewed forensic report on a host with no API');
   ok(/function voOcrAskToContinue/.test(page) && /candidates = candidates\.concat\(cappedIdx\);/.test(page), 'the OCR cap asks once whether to read the remaining scanned pages');
   ok(/findings_json_version: '1\.3\.0'/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page), 'findings JSON v1.3.0 carries review_status and ocr_provenance');
+  // Behavioural: the pre-flight against stubbed answers.
+  const preSrc = page.slice(page.indexOf('var VO_PREFLIGHT_TIMEOUT_MS'), page.indexOf('function voShowPreflightBlock'));
+  const mk = new Function('AbortController', 'setTimeout', 'clearTimeout', preSrc + '\nreturn { voPreflightForensicService, voPreflightMessage };');
+  const P = mk(undefined, setTimeout, clearTimeout);
+  const resp = (status, ct, body) => ({ status, headers: { get: (k) => (k === 'content-type' ? ct : null) }, json: async () => JSON.parse(body) });
+  const run = async () => {
+    const html = await P.voPreflightForensicService(async () => resp(200, 'text/html; charset=utf-8', '<html>'));
+    const m405 = await P.voPreflightForensicService(async () => resp(405, 'text/plain', 'x'));
+    const bad = await P.voPreflightForensicService(async () => resp(200, 'application/json', '{"ok":false}'));
+    const good = await P.voPreflightForensicService(async () => resp(200, 'application/json; charset=utf-8', '{"ok":true}'));
+    let calls = 0; const down = await P.voPreflightForensicService(async () => { calls++; throw new Error('net'); });
+    ok(!html.ok && html.reason === 'no_api_at_this_address' && !m405.ok && m405.reason === 'no_api_at_this_address' && !bad.ok && bad.reason === 'service_unhealthy' && good.ok === true,
+      'pre-flight: HTML, 405 and {ok:false} block; JSON {ok:true} clears');
+    ok(!down.ok && down.reason === 'unreachable' && calls === 2, 'pre-flight: a dropped connection is retried once, then reported as unreachable (not as "no API")');
+    ok(/could not be reached/.test(P.voPreflightMessage(down, 'x')) && /answered with a web page/.test(P.voPreflightMessage(html, 'x')), 'pre-flight wording names the real reason');
+  };
+  await run();
 }
 
 console.log(`\n[annexure-eb] PASS=${pass} FAIL=${fail}`);

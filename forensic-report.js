@@ -615,12 +615,16 @@ function pageNumbers(location) {
   var out = [];
   // Plural-aware for the same reason as pageAnchor: "Pages 11, 12" carries two
   // real page anchors and previously yielded none.
-  var re = /Pages?\s+(\d+(?:\s*(?:,|and|vs\.?)\s*(?:Pages?\s+)?\d+)*)/gi, m;
+  // Ranges ("Pages 12-14") expand to every page in them, so OCR provenance
+  // is judged on the same page set the engine used.
+  var re = /Pages?\s+(\d+(?:\s*[-\u2013]\s*\d+)?(?:\s*(?:,|and|vs\.?)\s*(?:Pages?\s+)?\d+(?:\s*[-\u2013]\s*\d+)?)*)/gi, m;
   while ((m = re.exec(String(location))) !== null) {
-    var parts = m[1].split(/[^0-9]+/);
-    for (var i = 0; i < parts.length; i++) {
-      var n = parseInt(parts[i], 10);
-      if (isFinite(n) && out.indexOf(n) === -1) out.push(n);
+    var rr = /(\d+)(?:\s*[-\u2013]\s*(\d+))?/g, pm;
+    while ((pm = rr.exec(m[1])) !== null) {
+      var lo = parseInt(pm[1], 10), hi = pm[2] ? parseInt(pm[2], 10) : lo;
+      if (!isFinite(lo)) continue;
+      if (!(hi >= lo) || hi - lo > 2000) hi = lo;
+      for (var n = lo; n <= hi; n++) if (out.indexOf(n) === -1) out.push(n);
     }
   }
   return out;
@@ -983,7 +987,8 @@ function drawCover(ctx, data) {
   var upc = data.unreadPages || {};
   var unreadTotal = ((upc.capped || []).length + (upc.noText || []).length + (upc.renderFailed || []).length + (upc.timedOut || []).length);
   if (unreadTotal > 0) cLine('INCOMPLETE READ: ' + unreadTotal + ' page' + (unreadTotal === 1 ? '' : 's') + ' not read — see "Pages the engine could not read"', ctx.f.helvBold, 9, RED, 15);
-  if (data.aiReview && data.aiReview.applied !== true) cLine('AI REVIEW NOT RUN — deterministic engine output, unreviewed', ctx.f.helvBold, 9, RED, 15);
+  var coverFindings = (data.findings && Array.isArray(data.findings.findings)) ? data.findings.findings.length : 0;
+  if (coverFindings > 0 && !(data.aiReview && data.aiReview.applied === true)) cLine('AI REVIEW NOT RUN — deterministic engine output, unreviewed', ctx.f.helvBold, 9, RED, 15);
 
   // Provenance statement (founder ruling): the first page must say what made
   // the findings. They are the output of forensic SOFTWARE — fixed detection
@@ -1786,7 +1791,7 @@ function secMethodology(ctx, data) {
   ctx.bullet('Engine: Verum Omnis Forensic Contradiction Engine v' + ENGINE_VERSION + ' - governed by Constitution v' + CONSTITUTION.governance.version + ', implementing engine operating instrument v' + CONSTITUTION_VERSION + '.', { size: 9.5 });
   ctx.bullet('Detectors run: ' + DETECTOR_COUNT + ' deterministic detectors across ' + CT_COUNT + ' contradiction types, plus ' + SP_COUNT + ' serial-pattern definitions.', { size: 9.5 });
   ctx.bullet('Mode: deterministic — keyword, pattern, numeric and structural heuristics over extracted page text. No generative AI was used to produce findings.', { size: 9.5 });
-  ctx.bullet('AI review (Llama 3.3 70B on Cloudflare Workers AI, 8B fallback; single model, advisory): ' + (data.aiReview && data.aiReview.applied ? 'applied (advisory) — see AI REVIEW section.' : (data.aiReview && data.aiReview.applied === false ? 'NOT RUN (' + (data.aiReview.reason || 'service unavailable') + ') — findings are engine output, unreviewed.' : 'NOT applied — pending.')), { size: 9.5 });
+  ctx.bullet('AI review (Llama 3.3 70B on Cloudflare Workers AI, 8B fallback; single model, advisory): ' + (data.aiReview && data.aiReview.applied ? 'applied (advisory) — see AI REVIEW section.' : (data.aiReview && data.aiReview.applied === false ? 'NOT RUN (' + (data.aiReview.reason || 'service unavailable') + ') — findings are engine output, unreviewed.' : 'NOT RUN (no review was requested, or the engine reported nothing to review) — findings are engine output, unreviewed.')), { size: 9.5 });
   ctx.bullet(rulePackageLine(data), { size: 9.5 });
   ctx.bullet(brain9SweepLine(data), { size: 9.5 });
   ctx.bullet('Text extraction: ' + (data.extractionNotes || 'per-page PDF content-stream decoding with ToUnicode CMaps.'), { size: 9.5 });
@@ -2279,13 +2284,9 @@ function secFindingDetails(ctx, data) {
       factLines.push('Oath context: oath language (affidavit / commissioner-of-oaths formulae) appears on the cited page(s). What a false statement under oath constitutes is reserved to the court.');
     }
     if (ocrTouched(f.location, data.ocrPages)) {
-      var ocrConfLine = '';
-      if (data.ocrConfidence && typeof data.ocrConfidence === 'object') {
-        var pp2 = String(f.location || '').match(/\d+/g) || [], minC = null;
-        for (var pc = 0; pc < pp2.length; pc++) { var cv = data.ocrConfidence[pp2[pc]]; if (typeof cv === 'number' && (minC === null || cv < minC)) minC = cv; }
-        if (minC !== null) ocrConfLine = ' Recogniser confidence on the cited page(s): ' + minC + '%.';
-      }
-      factLines.push('OCR provenance: the text on the cited page(s) was recovered by optical character recognition from a scanned image, not read from a native text layer. Verify the quoted wording against the original page image before relying on exact characters or figures.' + ocrConfLine + (f.ocrCapped ? ' Severity held at Low for this reason.' : ''));
+      // No percentage and no band word here (PD1, §15.2): the recogniser's
+      // per-page confidence travels in the findings JSON only.
+      factLines.push('OCR provenance: the text on the cited page(s) was recovered by optical character recognition from a scanned image, not read from a native text layer. Verify the quoted wording against the original page image before relying on exact characters or figures.' + (f.ocrCapped ? ' The engine reduced this finding\'s weight for that reason until the characters are verified.' : ''));
     }
     for (var k = 0; k < factLines.length; k++) ctx.para(factLines[k], { size: 9, color: NAVY2, after: 1 });
     // Provision the DOCUMENT ITSELF cites (cite-or-stay-silent), distinct from
