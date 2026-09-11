@@ -38,6 +38,7 @@ const suites = [
   'legal-analysis.test.js',
   'greensky-regression.test.js',
   'allfuels-regression.test.js',
+  'annexure-eb-regression.test.mjs',
 ];
 
 let failed = 0;

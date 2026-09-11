@@ -96,6 +96,18 @@ is meant to be identical across the three repositories — an edit here must be 
 - 7 September 2026: **two modes, no switches.** "Seal document" or "Seal document with forensic
   report"; the second runs every AI step and produces the court-ready narrative with the
   technical report automatically (founder direction item 12). The mode card is the disclosure.
+- 11 September 2026: **the annexure EB run and the precision release.** The founder sealed
+  the 528-page AllFuels "annexure EB" bundle with a forensic report and had the outputs
+  reviewed by an outside model. Two facts first: the run was made on the old Pages host, so
+  every AI leg said "NOT RUN (HTTP 405)" — the domain problem again (see the first bullet) —
+  and the engine had misquoted the record ("R231.3 Million" sealed as "R2313 Million")
+  because the extractor dropped punctuation glyphs. Shipped: verbatim glyph extraction;
+  context-aware CT01/CT09/CT20/CT23/CT33/CT08/CT18; OCR provenance with consequences
+  (severity cap, footer-only pages, per-page confidence); honest labels (`NOT REVIEWED`,
+  "engine findings", cover banners); findings JSON v1.3.0 (additive); forensic mode refuses
+  to run on a host with no API; the OCR cap asks before leaving pages unread. `ENGINE.md`
+  §12.10; suite `annexure-eb-regression.test.mjs`. The founder should re-run annexure EB on
+  the Worker address and compare the findings count before/after.
 - 7 September 2026: **Brain 9 reads the sealed text.** Founder direction: the AI must read
   the sealed files so nothing is missed, state what it finds, and the loop must let the engine
   catch it next time; Brain 9 verifies the model's claims are real and in the text. Built as
@@ -153,7 +165,7 @@ before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping 
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **31 suites, 1922 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **32 suites, 1979 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
@@ -365,6 +377,13 @@ seven above:
    tier on every client; `AUTO_CURATE = "off"` stops it; an admin publish of a
    higher version supersedes it. Never let the trainer remove, reweight or
    retitle an existing rule.
+14. **Precision over volume; provenance with consequences (2026-09-11).** After the annexure
+   EB review the founder said "the word" to the fix list: a quote is the record's own
+   characters; a shared word is not a shared proposition; a format check on an OCR page is a
+   Low note until a person has read the page image; a report that was not reviewed says
+   `NOT REVIEWED` and never "verified"; forensic mode does not run where the service is
+   absent. `ENGINE.md` §12.10. Do not re-widen a detector to recover a finding the
+   annexure EB suite pins as false; add a positive control instead.
 
 ### How the Constitution's standing may be described (v8.0 §12)
 

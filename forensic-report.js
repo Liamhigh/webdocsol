@@ -977,6 +977,13 @@ function drawCover(ctx, data) {
   if (data.identity.fullName) cLine('Prepared for: ' + data.identity.fullName, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.parties) cLine('Parties: ' + data.identity.parties, ctx.f.times, 9.5, COVER_TXT, 15);
   if (data.identity.jurisdiction) cLine('Jurisdiction: ' + data.identity.jurisdiction, ctx.f.timesBold, 9.5, GOLD, 15);
+  // Honesty on the cover (annexure EB, 11 Sep 2026): a report whose bundle was
+  // not fully read, or whose advisory AI review did not run, says so where a
+  // reader looks first — not on page 60.
+  var upc = data.unreadPages || {};
+  var unreadTotal = ((upc.capped || []).length + (upc.noText || []).length + (upc.renderFailed || []).length + (upc.timedOut || []).length);
+  if (unreadTotal > 0) cLine('INCOMPLETE READ: ' + unreadTotal + ' page' + (unreadTotal === 1 ? '' : 's') + ' not read — see "Pages the engine could not read"', ctx.f.helvBold, 9, RED, 15);
+  if (data.aiReview && data.aiReview.applied !== true) cLine('AI REVIEW NOT RUN — deterministic engine output, unreviewed', ctx.f.helvBold, 9, RED, 15);
 
   // Provenance statement (founder ruling): the first page must say what made
   // the findings. They are the output of forensic SOFTWARE — fixed detection
@@ -1069,7 +1076,10 @@ function plainLeadLines(fr, data) {
   var docName = (data && data.docName) || 'this document';
   var pageCount = (data && data.pageCount) || 'n/a';
   var plLines = [];
-  plLines.push('The sealed record of "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') contains ' + plVerified.length + ' verified finding' + (plVerified.length === 1 ? '' : 's') + '. The following are established.');
+  // "verified" only once the advisory AI review has run; otherwise these are
+  // engine findings, established by the record's own quoted text, unreviewed.
+  var plReviewed = !!(data && data.aiReview && data.aiReview.applied === true);
+  plLines.push('The sealed record of "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') contains ' + plVerified.length + (plReviewed ? ' verified finding' : ' engine finding') + (plVerified.length === 1 ? '' : 's') + (plReviewed ? '' : ' (deterministic rules; AI review not run on this report)') + '. The following are established.');
   if (plDemoted > 0) {
     plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
   }
@@ -1982,8 +1992,11 @@ function secTripleVerification(ctx, data) {
   ctx.newBodyPage();
   ctx.heading('4. TRIPLE VERIFICATION SUMMARY');
   var ai = data && data.aiReview;
-  var reviewLeg = (ai && ai.applied === true) ? 'RETAINED' : 'ENGINE-VERIFIED';
-  ctx.para('Legs: Detected = deterministic detector fired; Anchored = the anchor rule held (page + quoted text; unanchored observations are demoted to notes and never appear here); Review = ' + ((ai && ai.applied === true) ? 'retained by the advisory AI consensus review.' : 'engine-verified (AI consensus review not run on this report).'), { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+  // "ENGINE-VERIFIED" in the Review column of an unreviewed report read as a
+  // review that had happened (annexure EB, 11 Sep 2026). The leg now says
+  // what it is: NOT REVIEWED until the advisory AI review has actually run.
+  var reviewLeg = (ai && ai.applied === true) ? 'RETAINED' : 'NOT REVIEWED';
+  ctx.para('Legs: Detected = deterministic detector fired; Anchored = the anchor rule held (page + quoted text; unanchored observations are demoted to notes and never appear here); Review = ' + ((ai && ai.applied === true) ? 'retained by the advisory AI consensus review.' : 'NOT REVIEWED — the advisory AI review did not run on this report; every row is deterministic engine output, unreviewed.'), { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   var rows = [];
   var CAP = 16;
   for (var i = 0; i < Math.min(subst.length, CAP); i++) {
@@ -2032,7 +2045,7 @@ function secSealedFindings(ctx, data) {
   ctx.heading('5. SEALED FINDINGS');
   // §15.3 REQUIRED wording, verbatim: "The record contains [X] contradictions.
   // The following are established."
-  ctx.para('The record contains ' + subst.length + ' verified finding' + (subst.length === 1 ? '' : 's') + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
+  ctx.para('The record contains ' + subst.length + ((data && data.aiReview && data.aiReview.applied === true) ? ' verified finding' : ' engine finding') + (subst.length === 1 ? '' : 's') + ((data && data.aiReview && data.aiReview.applied === true) ? '' : ' (deterministic rules; AI review not run on this report)') + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
   var CAP = 20;
   var shown = subst.slice(0, CAP);
   for (var i = 0; i < shown.length; i++) {
@@ -2266,7 +2279,13 @@ function secFindingDetails(ctx, data) {
       factLines.push('Oath context: oath language (affidavit / commissioner-of-oaths formulae) appears on the cited page(s). What a false statement under oath constitutes is reserved to the court.');
     }
     if (ocrTouched(f.location, data.ocrPages)) {
-      factLines.push('OCR provenance: the text on the cited page(s) was recovered by optical character recognition from a scanned image, not read from a native text layer. Verify the quoted wording against the original page image before relying on exact characters or figures.');
+      var ocrConfLine = '';
+      if (data.ocrConfidence && typeof data.ocrConfidence === 'object') {
+        var pp2 = String(f.location || '').match(/\d+/g) || [], minC = null;
+        for (var pc = 0; pc < pp2.length; pc++) { var cv = data.ocrConfidence[pp2[pc]]; if (typeof cv === 'number' && (minC === null || cv < minC)) minC = cv; }
+        if (minC !== null) ocrConfLine = ' Recogniser confidence on the cited page(s): ' + minC + '%.';
+      }
+      factLines.push('OCR provenance: the text on the cited page(s) was recovered by optical character recognition from a scanned image, not read from a native text layer. Verify the quoted wording against the original page image before relying on exact characters or figures.' + ocrConfLine + (f.ocrCapped ? ' Severity held at Low for this reason.' : ''));
     }
     for (var k = 0; k < factLines.length; k++) ctx.para(factLines[k], { size: 9, color: NAVY2, after: 1 });
     // Provision the DOCUMENT ITSELF cites (cite-or-stay-silent), distinct from
@@ -3697,6 +3716,7 @@ async function build(opts) {
     serialLabels: opts.serialLabels || null,
     unreadPages: opts.unreadPages || null,
     ocrPages: opts.ocrPages || null,
+    ocrConfidence: opts.ocrConfidence || null,
     gps: opts.gps || null
   };
 
@@ -3992,6 +4012,7 @@ async function buildNarrative(opts) {
     serialLabels: opts.serialLabels || null,
     unreadPages: opts.unreadPages || null,
     ocrPages: opts.ocrPages || null,
+    ocrConfidence: opts.ocrConfidence || null,
     gps: opts.gps || null
   };
 
@@ -4101,6 +4122,7 @@ async function buildHumanReport(opts) {
     serialLabels: opts.serialLabels || null,
     unreadPages: opts.unreadPages || null,
     ocrPages: opts.ocrPages || null,
+    ocrConfidence: opts.ocrConfidence || null,
     gps: opts.gps || null,
     coverTitle: 'COURT-READY NARRATIVE REPORT',
     coverProvenance: [
@@ -4375,7 +4397,7 @@ async function buildHumanReport(opts) {
   ctx.heading('COURT-READY DECLARATION');
   ctx.subHeading('Sealed findings');
   if (subst.length) {
-    ctx.para('The record contains ' + subst.length + ' verified finding' + (subst.length === 1 ? '' : 's') + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
+    ctx.para('The record contains ' + subst.length + ((data && data.aiReview && data.aiReview.applied === true) ? ' verified finding' : ' engine finding') + (subst.length === 1 ? '' : 's') + ((data && data.aiReview && data.aiReview.applied === true) ? '' : ' (deterministic rules; AI review not run on this report)') + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
     var CAPF = 20;
     for (var d = 0; d < Math.min(subst.length, CAPF); d++) {
       var dq = quoteEvidence(subst[d].evidence);

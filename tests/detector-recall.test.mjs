@@ -129,7 +129,8 @@ ok(!fires(DET.D32_DETECT_SIGNATURE_ANOMALY, ['A power of attorney was granted to
     'D06 does NOT report a single repeated reference code as multiple ID numbers');
 }
 {
-  const f = DET.D06_DETECT_IDENTITY_CONFLICT(['Holder AB1234567 noted.', 'Other CD7654321 recorded.']);
+  // Since the annexure EB run a lettered code counts only when the record labels it (ID / passport).
+  const f = DET.D06_DETECT_IDENTITY_CONFLICT(['Holder ID AB1234567 noted.', 'Other passport CD7654321 recorded.']);
   const ct09 = f.find(x => x.type === 'CT09');
   ok(ct09 && /AB1234567/.test(ct09.evidence) && /CD7654321/.test(ct09.evidence),
     'D06 CT09 cites the actual identity-shaped values (cite-or-stay-silent)');
