@@ -44,7 +44,7 @@ const result = {
 };
 const json = buildFindingsJson(result, 'bundle.pdf', 'a'.repeat(128), 100, { caseName: 'Greensky' });
 
-ok(json.findings_json_version === '1.2.0', 'contract version bumped to 1.2.0 (additive anchor fields)');
+ok(json.findings_json_version === '1.3.0', 'contract version bumped to 1.3.0 (additive review_status / ocr_provenance / ocr_confidence / severity_capped_for_ocr fields)');
 
 // The page block must not redeclare the engine's voCtById(id): two same-named
 // declarations share one global, the later (no-arg) one won, voStatement got a

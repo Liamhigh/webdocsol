@@ -168,8 +168,14 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   const lines = R._plainLeadLines(fr, data);
   const joined = lines.join('\n');
   ok(lines.length > 0, 'plain lead is produced when there are findings');
-  ok(/sealed record of "Wallers Agreement" \(20 pages\) contains 4 verified findings\. The following are established\./.test(joined),
-    'plain lead opens with the sealed record, document name, page count and verified finding count stated as fact');
+  // Since the annexure EB run (11 Sep 2026) an unreviewed report says "engine
+  // findings" and names the fact that the AI review did not run; "verified"
+  // is reserved for a report the advisory AI review actually retained.
+  ok(/sealed record of "Wallers Agreement" \(20 pages\) contains 4 engine findings \(deterministic rules; AI review not run on this report\)\. The following are established\./.test(joined),
+    'plain lead opens with the sealed record, document name, page count and the finding count stated as fact, and says the review did not run');
+  const joinedReviewed = R._plainLeadLines(fr, Object.assign({}, data, { aiReview: { applied: true } })).join('\n');
+  ok(/contains 4 verified findings\. The following are established\./.test(joinedReviewed),
+    'plain lead says "verified findings" only once the AI review has run');
   // An AI-raised item is candidate tier — it must never inflate the verified
   // count, never appear among the established serious findings, and must be
   // disclosed as advisory (PD16).
@@ -177,7 +183,7 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     { source: 'ai', type: 'INCONSISTENT_ENTITLEMENT', severity: 4, rationale: 'franchisor vs franchisee' }
   ]) };
   const joinedAi = R._plainLeadLines(frAi, data).join('\n');
-  ok(/contains 4 verified findings\./.test(joinedAi), 'AI candidate does NOT inflate the verified findings count');
+  ok(/contains 4 engine findings/.test(joinedAi), 'AI candidate does NOT inflate the findings count');
   ok(/raised 1 further candidate item/.test(joinedAi) && /advisory only/.test(joinedAi),
     'AI candidate is disclosed as advisory, outside the established findings');
   ok(/The serious ones, in plain words:/.test(joined), 'plain lead announces the serious findings');

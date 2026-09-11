@@ -584,7 +584,59 @@ var DETECTORS = {
     // whole known claim words kills both problems, and the finding now quotes
     // BOTH the affirming and the negating passage so it is self-explanatory.
     var CLAIM_WORDS = ['paid','payment','owed','signed','countersigned','witnessed','notarised','notarized','valid','agreed','consented','authorised','authorized','received','delivered','renewed','terminated','expired','entitled','breached','disclosed','refunded','cancelled','approved','accepted'];
-    var NEG_BEFORE = /\b(?:no longer|not|never|without|denied|denies|refused to|refuses to|failed to|no)\b(?:\s+\w+){0,5}\s*$/;
+    // The negator must attach to the claim word itself: at most three
+    // intervening words, all from a closed set of auxiliaries and determiners
+    // ("not been paid", "never duly signed", "without any signed waiver").
+    // Under the old "any five words" rule the annexure EB lease's "without
+    // notice claim immediate payment" was read as a negation of "payment" and
+    // sealed as a Direct Statement Contradiction — "without" there qualifies
+    // "notice", and the passage affirms payment twice.
+    var NEG_FILLER = /^(?:been|be|being|is|are|was|were|has|have|had|yet|ever|any|a|an|the|duly|properly|fully|formally|validly|so|then|actually|in|fact|to|by|him|her|them|it|its|such|that|this|these|those|of|at|all|still|even|once|again|now|also|already|make|made|making|makes|effect|effected|render|rendered|give|given|gave|the|his|her|their|our|my|your)$/;
+    var NEG_WORD = /\b(?:no longer|not|never|without|denied|denies|refused to|refuses to|failed to|no)\b/g;
+    // The negator NEAREST the claim word decides ("It is not disputed that the
+    // Lessor never received the notice" negates through "never", not "not");
+    // "denied that the resolution was approved" keeps ONE content word (the
+    // subject) between negator and claim; "without notice claim immediate
+    // payment" keeps three, and is no negation of "payment". The word right
+    // before the claim word is its modifier ("royalty payment") and is free.
+    var NEG_BEFORE = { test: function (pre) {
+      var m, lastM = null;
+      NEG_WORD.lastIndex = 0;
+      while ((m = NEG_WORD.exec(pre)) !== null) lastM = m;
+      if (!lastM) return false;
+      var between = pre.slice(lastM.index + lastM[0].length).trim().split(/\s+/).filter(Boolean);
+      if (between.length > 5) return false;
+      var content = 0;
+      for (var w = 0; w < between.length; w++) {
+        if (NEG_FILLER.test(between[w])) continue;
+        if (w === between.length - 1) continue; // the claim word's own modifier
+        content++;
+      }
+      return content <= 1;
+    } };
+    // Object alignment: the affirmed and the negated occurrence must be about
+    // the same object when both name one. "entitled to effect repairs" and
+    // "not entitled to any compensation" share a word, not a proposition (the
+    // annexure EB lease, sealed as CT01). The first content word after the
+    // claim word, inside the same sentence, is the object; when either side
+    // ends its sentence there, the check stays permissive.
+    var OBJ_SKIP = /^(?:to|of|for|the|a|an|any|all|such|its|his|her|their|be|been|in|on|under|with|was|were|is|are|has|have|had|ever|never|not|both|either|also|then|so|that|which|as|at|from|and|or|during|within|before|after|between|full|part|whole|parties|party|lessor|lessee|franchisor|franchisee|january|february|march|april|may|june|july|august|september|october|november|december)$/;
+    function objectAfter(pos, word) {
+      var seg = fullText.slice(pos + word.length, pos + word.length + 60).split(/[.;:!?]/)[0];
+      var words = seg.replace(/[^a-z' -]/g, ' ').split(/\s+/).filter(Boolean);
+      if (words.length && words[0] === 'by') return null; // "signed by X": an agent, not an object — stay permissive
+      for (var w = 0; w < words.length && w < 6; w++) {
+        if (OBJ_SKIP.test(words[w]) || words[w].length <= 2) continue;
+        if (/ly$/.test(words[w])) continue; // adverb ("timeously")
+        return words[w];
+      }
+      return null;
+    }
+    function objectsAligned(pa, pb, word) {
+      var oa = objectAfter(pa, word), ob = objectAfter(pb, word);
+      if (oa === null || ob === null) return true;
+      return oa === ob;
+    }
     // A negator whose path to the claim word passes through unless/until/
     // except/provided is a CONDITIONAL REQUIREMENT, not a negation: "shall not
     // be valid unless it is approved by X" states a rule about approval — it
@@ -608,7 +660,7 @@ var DETECTORS = {
       var pair = null;
       for (var ai = 0; ai < asserts.length && !pair; ai++) {
         for (var ni = 0; ni < negs.length; ni++) {
-          if (Math.abs(asserts[ai] - negs[ni]) <= 240 && subjectsAligned(asserts[ai], negs[ni])) { pair = [asserts[ai], negs[ni]]; break; }
+          if (Math.abs(asserts[ai] - negs[ni]) <= 240 && subjectsAligned(asserts[ai], negs[ni]) && objectsAligned(asserts[ai], negs[ni], cw)) { pair = [asserts[ai], negs[ni]]; break; }
         }
       }
       if (!pair) continue;
@@ -1171,16 +1223,55 @@ var DETECTORS = {
   D06_DETECT_IDENTITY_CONFLICT: function(textBlocks) {
     var findings = [];
     var idPatterns = [
-      /\b\d{6}\s?\d{4}\s?\d{1}\s?\d{1}\b/g,     // SA ID 13 digits
+      /\b\d{6}\s?\d{4}\s?\d{2}\s?\d\b/g,        // SA ID: 13 digits (YYMMDD SSSS C A Z), spaces tolerated
       /\b[A-Z]{2}\d{7,10}\b/g,                    // Passport patterns
       /\b[A-Z]{1,2}\d{6,8}[A-Z]?\b/g              // Generic ID
     ];
+    // Context, not shape alone. The old 13-digit pattern was one digit short
+    // (it matched 12) and the letter+digits pattern matched Rand amounts: the
+    // annexure EB run reported "R103509, R129749, R2489726, R2653184" — lease
+    // rentals — as "identity-shaped numbers". A currency prefix is never an
+    // identity, a 13-digit value must start with a plausible YYMMDD, and a
+    // lettered code counts only when the record labels it (ID, identity,
+    // passport) within the same passage.
+    var ID_CUE = /\b(?:id|i\.d\.|identity|identification|passport|id no\.?|id number|identity number)\b/i;
+    var CURRENCY_PREFIX = /^(?:R|ZAR|N|P|K|USD|GBP|EUR|AED|Rs)$/;
+    // Whose identity? A lease names the lessor's and the lessee's identity
+    // numbers; an affidavit carries the deponent's and the commissioner's.
+    // Two people, two numbers, is the ordinary shape of a South African
+    // instrument, not a contradiction. The finding fires only when the SAME
+    // person (nearest capitalised name before the value) carries two
+    // different numbers, or when two labelled values with no visible name
+    // sit in one passage.
+    var personRe = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/g;
+    var NOT_PERSON = /^(?:Identity|Passport|Number|South|Department|Republic|Home Affairs|Commissioner|Applicant|Deponent|Lessor|Lessee|Franchisor|Franchisee)/;
+    function personBefore(text, idx) {
+      var pre = text.slice(Math.max(0, idx - 120), idx), m, lastName = null;
+      personRe.lastIndex = 0;
+      while ((m = personRe.exec(pre)) !== null) {
+        var nm = m[1].replace(/^(?:Applicant|Deponent|Holder|Lessor|Lessee|Franchisor|Franchisee|Mr|Mrs|Ms|Dr|Adv|Prof)\s+/, '');
+        if (nm.indexOf(' ') === -1 || NOT_PERSON.test(nm)) continue;
+        lastName = nm;
+      }
+      return lastName ? lastName.toLowerCase() : null;
+    }
     var ids = [];
     for (var i = 0; i < textBlocks.length; i++) {
       for (var p = 0; p < idPatterns.length; p++) {
         var match;
         while ((match = idPatterns[p].exec(textBlocks[i])) !== null) {
-          ids.push({ value: match[0], page: i });
+          var val = match[0];
+          var around = textBlocks[i].slice(Math.max(0, match.index - 60), match.index + val.length + 20);
+          if (!ID_CUE.test(around)) continue; // an unlabelled number is a reference or a barcode, not an identity
+          if (p === 0) {
+            var digits = val.replace(/\s+/g, '');
+            var mm = +digits.slice(2, 4), dd = +digits.slice(4, 6);
+            if (mm < 1 || mm > 12 || dd < 1 || dd > 31) continue; // not a YYMMDD-led identity number
+          } else {
+            var letters = (val.match(/^[A-Z]+/) || [''])[0];
+            if (CURRENCY_PREFIX.test(letters)) continue; // R103509 is money, not a person
+          }
+          ids.push({ value: val, page: i, pos: match.index, who: personBefore(textBlocks[i], match.index) });
         }
       }
     }
@@ -1199,15 +1290,28 @@ var DETECTORS = {
     // finding that cannot say WHICH numbers is not actionable -- cite-or-stay-
     // silent -- so name the values and stay honest that they are ID-*shaped*
     // strings (a Capitec client reference matches the same pattern as an ID).
-    var idVals = ids.map(function(x){ return x.value; });
-    var idUniq = idVals.filter(function(v, ix){ return idVals.indexOf(v) === ix; });
+    var idUniq = [], idPages = [], who = null;
+    for (var a = 0; a < ids.length; a++) {
+      for (var b = a + 1; b < ids.length; b++) {
+        var ea = ids[a], eb = ids[b];
+        if (ea.value.replace(/\s+/g, '') === eb.value.replace(/\s+/g, '')) continue;
+        var same = false;
+        if (ea.who && eb.who) same = (ea.who === eb.who);
+        else if (!ea.who && !eb.who) same = (ea.page === eb.page && Math.abs(ea.pos - eb.pos) <= 200);
+        if (!same) continue;
+        if (idUniq.indexOf(ea.value) === -1) idUniq.push(ea.value);
+        if (idUniq.indexOf(eb.value) === -1) idUniq.push(eb.value);
+        if (idPages.indexOf(ea.page + 1) === -1) idPages.push(ea.page + 1);
+        if (idPages.indexOf(eb.page + 1) === -1) idPages.push(eb.page + 1);
+        if (ea.who && ea.who === eb.who) who = ea.who;
+      }
+    }
     if (idUniq.length >= 2) {
-      var idPages = ids.map(function(x){ return x.page + 1; })
-        .filter(function(v, ix, arr){ return arr.indexOf(v) === ix; });
+      idPages.sort(function (x, y) { return x - y; });
       findings.push({ type: 'CT09', severity: 4,
-        evidence: idUniq.length + ' different identity-shaped numbers appear: ' +
+        evidence: idUniq.length + ' different identity numbers are attributed to ' + (who ? 'the same person (' + who.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }) + ')' : 'one labelled subject in the same passage') + ': ' +
           idUniq.slice(0, 6).join(', ') + (idUniq.length > 6 ? ' …' : '') +
-          ' — confirm which are ID numbers and whose (reference/account codes share the same shape)',
+          ' — confirm which is that person\'s identity number',
         location: 'Pages ' + idPages.join(', ') });
     }
     return findings;
@@ -1449,7 +1553,24 @@ var DETECTORS = {
     // label (the bank reference) never fires; a valid one that recurs never
     // fires. Each malformed value is reported once, anchored to its pages.
     var cueRe = /(?:company\s+)?registration\s+(?:number|no\.?|nr\.?)|reg(?:istration)?\.?\s*(?:number|no\.?|nr\.?)|CIPC/gi;
-    var SA_REG = /^(?:\d{4}\/\d{6}\/\d{2}|CK\d{2}\/\d{5,6}|CK\d{7})$/;
+    // Every SA form: YYYY/NNNNNN/NN (companies), CKYYYY/NNNNNN/NN (close
+    // corporations, e.g. CK2000/071982/23 — the old pattern wanted two digits
+    // after CK and called a valid CC number fake on the annexure EB run), plus
+    // the compact CK forms.
+    var SA_REG = /^(?:\d{4}\/\d{6}\/\d{2}|CK\d{4}\/\d{6}\/\d{2}|CK\d{2}\/\d{5,6}|CK\d{7})$/;
+    // One digit off the SA form (a middle group of 5 or 7): a typing or OCR
+    // slip is far likelier than a forgery — reported as a check, never as fake.
+    var NEAR_SA_REG = /^\d{4}\/\d{5,7}\/\d{2}$/;
+    // A VAT number (10 digits, leading 4) is validated by D10; the cue
+    // "VAT REGISTRATION NUMBER" is not a company registration label.
+    var VAT_SHAPE = /^4\d{9}$/;
+    // A 13-digit value led by a plausible YYMMDD is a natural person's identity
+    // number (a complainant on a CPA form gave one under "registration number").
+    var idShaped = function (v) {
+      if (!/^\d{12,13}$/.test(v)) return false;
+      var mm = +v.slice(2, 4), dd = +v.slice(4, 6);
+      return mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31;
+    };
     // A registration issued by a FOREIGN registry is not supposed to match the
     // SA format. On the Greensky run a RAKEZ (Ras Al Khaimah free-zone) licence
     // number was reported "Registration Number Fake" at severity 4 because it
@@ -1463,15 +1584,26 @@ var DETECTORS = {
       cueRe.lastIndex = 0;
       var cm;
       while ((cm = cueRe.exec(block)) !== null) {
+        var before = block.slice(Math.max(0, cm.index - 12), cm.index);
+        if (/\bvat\s*$/i.test(before)) continue; // "VAT REGISTRATION NUMBER": a VAT number, D10's business
         var after = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 40);
+        if (voLooksGarbled(after)) continue; // unreadable OCR around the cue: nothing to validate
         var tok = after.match(/[A-Z]{0,2}\d[\d\/]{5,19}/);
         if (!tok) continue;
-        var val = tok[0].replace(/\s+/g, '');
-        if (SA_REG.test(val)) continue; // a valid registration format is not "fake"
+        var val = tok[0];
+        if (SA_REG.test(val)) continue; // a valid registration format is not "fake" (and the street number after it is not part of it)
+        // An identity number typed with spaces ("510209 5091 08") reads as a
+        // shorter digit run: take the spaced digits only when the first run is
+        // digits alone and the spaced form is identity-length.
+        if (/^\d+$/.test(val)) {
+          var sp = after.match(/(\d[\d ]{9,16}\d)/);
+          if (sp) { var spv = sp[1].replace(/\s+/g, ''); if (spv.length >= 12 && spv.length <= 13 && spv.indexOf(val) === 0) val = spv; }
+        }
         var context = block.slice(Math.max(0, cm.index - 300), cm.index + cm[0].length + 300);
+        if (VAT_SHAPE.test(val) && /\bvat\b/i.test(context)) continue; // a VAT number under a registration cue on a page that names VAT
         if (!bad[val]) {
           var quote = block.substring(cm.index, cm.index + cm[0].length + 30).replace(/\s+/g, ' ').trim();
-          bad[val] = { pages: [], quote: quote, foreign: false };
+          bad[val] = { pages: [], quote: quote, foreign: false, near: NEAR_SA_REG.test(val), idShaped: idShaped(val) };
         }
         if (FOREIGN_REG_RE.test(context)) bad[val].foreign = true;
         if (bad[val].pages.indexOf(i + 1) === -1) bad[val].pages.push(i + 1);
@@ -1482,6 +1614,14 @@ var DETECTORS = {
       if (bad[v].foreign) {
         findings.push({ type: 'CT20', severity: 2,
           evidence: 'A registration number does not match the SA (CIPC) format, and the surrounding text names a foreign registry (e.g. RAKEZ/UAE) — verify it against that registry, not the SA format: "' + bad[v].quote + '"',
+          location: 'Page ' + bad[v].pages.join(', ') });
+      } else if (bad[v].idShaped) {
+        findings.push({ type: 'CT20', severity: 2,
+          evidence: 'A number labelled as a registration is shaped like a natural person\'s identity number (13 digits led by a date of birth), not a company registration — confirm which the record means: "' + bad[v].quote + '"',
+          location: 'Page ' + bad[v].pages.join(', ') });
+      } else if (bad[v].near) {
+        findings.push({ type: 'CT20', severity: 2,
+          evidence: 'A number labelled as a registration is one digit off the SA (CIPC) format YYYY/NNNNNN/NN — a typing or OCR slip is likelier than a false number; verify against the CIPC record: "' + bad[v].quote + '"',
           location: 'Page ' + bad[v].pages.join(', ') });
       } else {
         findings.push({ type: 'CT20', severity: 4,
@@ -1525,7 +1665,51 @@ var DETECTORS = {
     // here — the matching regex is built from them.
     var VO_ACCOUNT_MIN_DIGITS = 9, VO_ACCOUNT_MAX_DIGITS = 12;
     var numRe = new RegExp('\\b\\d{' + VO_ACCOUNT_MIN_DIGITS + ',' + VO_ACCOUNT_MAX_DIGITS + '}\\b', 'g');
-    var uniqueAccounts = {};
+    // Whose account? A bundle that names several parties carries several
+    // accounts, and that is not a mismatch: the annexure EB run counted the
+    // franchisor's, the landlord's and the operator's own accounts as "4
+    // different bank account numbers" at HIGH. The holder is the nearest
+    // preceding capitalised name (2-5 words, company suffixes allowed) or a
+    // "holder / beneficiary / in the name of" cue. Two accounts conflict only
+    // when the record attributes both to the SAME party, or when a holder is
+    // not visible and the accounts sit in the same payment instruction (same
+    // page, or both beside "pay / deposit / transfer / banking details" — the
+    // changed-bank-details redirection that the detector exists to catch).
+    var PAY_CTX = /\b(?:pay(?:ment|able)?|deposit|transfer|remit|eft|banking details|bank details|use (?:the )?account|new account)\b/i;
+    var BANK_NAME = /\b(?:bank|fnb|absa|nedbank|capitec|investec|standard|branch|swift|iban|first national|tyme|discovery)\b/i;
+    var LABEL_WORDS = /\b(?:account|number|no|holder|name|branch|code|details|banking|swift|iban|reference|type|sort|beneficiary|payee|invoice|statement|rental|total|amount|date|page|january|february|march|april|may|june|july|august|september|october|november|december)\b/i;
+    var ADDRESS_RE = /\b(?:road|street|str|avenue|ave|drive|lane|crescent|close|place|boulevard|highway|suite|floor|building|box)\b/i;
+    // The same party spelt two ways is one party: case, punctuation, company
+    // suffixes and honorifics are not identity.
+    function normHolder(s) {
+      var n = String(s || '').toLowerCase().replace(/\(pty\)|\bpty\b|\bltd\b|\bcc\b|\binc\b|\bt\/a\b|\bmr\b|\bmrs\b|\bms\b|\bdr\b/g, ' ').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+      return n || null;
+    }
+    function holderBefore(text, idx) {
+      var pre = text.slice(Math.max(0, idx - 220), idx);
+      var cue = /\b(?:account\s+holder|account\s+name|holder|beneficiary|in\s+the\s+name\s+of|payee)\b\s*[:\-]?\s*([^\n:;,|]{2,60})/i.exec(pre);
+      if (cue) { var c = normHolder(cue[1]); if (c && !LABEL_WORDS.test(c) && !BANK_NAME.test(c)) return c; }
+      // "payable to the Franchisor", "paid into the account of ABC (Pty) Ltd": the payee is the party.
+      // Names stop at a full stop: "the Lessor. Banking details" is "Lessor".
+      var roleRe = /\b(?:payable|paid|pay|remit(?:ted)?|transfer(?:red)?|deposit(?:ed)?)\s+(?:in\s+full\s+)?(?:to|into)\s+(?:the\s+)?(?:account\s+of\s+(?:the\s+)?)?([A-Z][A-Za-z&'-]*(?:\s+(?:[A-Z][A-Za-z&'-]*|\(Pty\)|Ltd|CC|Inc))*)/g, rm, roleLast = null;
+      while ((rm = roleRe.exec(pre)) !== null) { if (!BANK_NAME.test(rm[1]) && !LABEL_WORDS.test(rm[1])) roleLast = rm[1]; }
+      if (roleLast) { var rc = normHolder(roleLast); if (rc) return rc; }
+      // The nearest capitalised name that is not the bank, a field label or an
+      // address; candidates never cross a line, colon, pipe or semicolon.
+      var segs = pre.split(/[\n:|;]/), last = null;
+      var nameRe = /\b([A-Z][A-Za-z&'-]+(?:\s+(?:[A-Z][A-Za-z&'-]+|\(Pty\)|Ltd|CC|Inc|t\/a)){1,4})\b/g;
+      for (var sg = 0; sg < segs.length; sg++) {
+        var m; nameRe.lastIndex = 0;
+        while ((m = nameRe.exec(segs[sg])) !== null) {
+          if (BANK_NAME.test(m[1]) || LABEL_WORDS.test(m[1]) || ADDRESS_RE.test(m[1])) continue;
+          last = m[1];
+        }
+      }
+      return last ? normHolder(last) : null;
+    }
+    // "Kindly note our new banking details": the redirection letter itself.
+    var CHANGE_CUE = /\b(?:new|changed|updated|amended|revised)\s+(?:bank(?:ing)?\s+details|account(?:\s+number)?)|with\s+immediate\s+effect|please\s+(?:now\s+)?use|no\s+longer\s+use|instead\s+of\s+the\s+(?:previous|old)/i;
+    var entries = [];
     for (var i = 0; i < textBlocks.length; i++) {
       var text = textBlocks[i], match;
       while ((match = numRe.exec(text)) !== null) {
@@ -1534,14 +1718,41 @@ var DETECTORS = {
         // require a banking keyword within 40 chars before the number
         var windowStart = Math.max(0, match.index - 40);
         if (!CONTEXT.test(text.slice(windowStart, match.index))) continue;
-        uniqueAccounts[n] = true;
+        if (entries.some(function (e) { return e.n === n; })) continue;
+        entries.push({ n: n, page: i + 1, holder: holderBefore(text, match.index),
+          pay: PAY_CTX.test(text.slice(Math.max(0, match.index - 80), match.index + 40)),
+          change: CHANGE_CUE.test(text.slice(Math.max(0, match.index - 240), match.index + 60)) });
       }
     }
-    var accountList = Object.keys(uniqueAccounts);
-    if (accountList.length >= 2) {
+    // Unknown holders: the accounts must at least sit in the same document
+    // (the bundle's own page numbering; a bundle without boundaries is one).
+    var segs = voDetectDocuments(textBlocks) || [];
+    var docOf = function (page) {
+      for (var d = 0; d < segs.length; d++) if (page >= segs[d].start && page <= segs[d].end) return d;
+      return -1;
+    };
+    var conflict = [], pages = [], holderNamed = null;
+    for (var a = 0; a < entries.length; a++) {
+      for (var b = a + 1; b < entries.length; b++) {
+        var ea = entries[a], eb = entries[b], qualifies = false;
+        if (ea.change || eb.change) qualifies = true; // a changed-details instruction is the very thing to report
+        else if (ea.holder && eb.holder) qualifies = (ea.holder === eb.holder);
+        else qualifies = (ea.page === eb.page) || (ea.pay && eb.pay) || (segs.length === 0) || (docOf(ea.page) === docOf(eb.page) && docOf(ea.page) !== -1);
+        if (!qualifies) continue;
+        if (conflict.indexOf(ea.n) === -1) conflict.push(ea.n);
+        if (conflict.indexOf(eb.n) === -1) conflict.push(eb.n);
+        if (pages.indexOf(ea.page) === -1) pages.push(ea.page);
+        if (pages.indexOf(eb.page) === -1) pages.push(eb.page);
+        if (ea.holder && ea.holder === eb.holder) holderNamed = ea.holder;
+      }
+    }
+    if (conflict.length >= 2) {
+      pages.sort(function (x, y) { return x - y; });
       findings.push({ type: 'CT18', severity: 4,
-        evidence: accountList.length + ' different bank account numbers found near banking references: ' + accountList.slice(0,3).join(', '),
-        location: 'Multiple pages' });
+        evidence: conflict.length + ' different bank account numbers found near banking references' +
+          (holderNamed ? ' for the same party (' + holderNamed.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }) + ')' : ' in the same payment context') +
+          ': ' + conflict.slice(0, 3).join(', ') + ' — confirm which account the record authorises',
+        location: 'Page ' + pages.join(', ') });
     }
     return findings;
   },
@@ -1823,6 +2034,9 @@ var DETECTORS = {
     while ((match = legalRe.exec(fullText)) !== null) {
       // Flag if section number seems invalid (>500 for most acts)
       var sectionNum = parseInt(match[2]);
+      // "Section 1987 of Illinois" is the Franchise Disclosure Act of 1987: a
+      // year after "Act"/"of" is a date, not a section (annexure EB, CT33).
+      if (sectionNum >= 1900 && sectionNum <= 2100) continue;
       if (sectionNum > 500) {
         findings.push({ type: 'CT33', severity: 3,
           evidence: 'Suspiciously high section number: Section ' + match[2] + ' of ' + match[3],
@@ -2012,7 +2226,16 @@ var DETECTORS = {
       any:1, all:1, such:1, each:1, both:1, either:1, it:1, its:1, is:1, are:1,
       was:1, were:1, be:1, been:1, as:1, so:1, if:1, which:1, who:1, whom:1,
       shall:1, will:1, may:1, must:1, agreement:1, party:1, parties:1, clause:1,
-      section:1, hereto:1, herein:1, hereof:1, thereof:1, herewith:1 };
+      section:1, hereto:1, herein:1, hereof:1, thereof:1, herewith:1,
+      // "by other means", "by similar means", "by whatever means": the noun
+      // "means", not a definition (annexure EB sealed "other" as a term).
+      other:1, others:1, similar:1, appropriate:1, reasonable:1, suitable:1,
+      alternative:1, electronic:1, lawful:1, legal:1, available:1, necessary:1,
+      proper:1, several:1, various:1, whatever:1, following:1, foregoing:1,
+      above:1, below:1, said:1, same:1, certain:1, only:1, also:1, otherwise:1,
+      effective:1, adequate:1, normal:1, usual:1, ordinary:1, general:1,
+      particular:1, specific:1, further:1, additional:1, express:1, implied:1,
+      written:1, sufficient:1, practicable:1, possible:1, prior:1, fair:1 };
     var definitionRe = /("[^"]+"|\b[a-z][a-z'-]{3,})\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
     // "Defined twice" is NOT a contradiction — a definitions chapter restated in
     // an index, or the same agreement bound twice into a bundle, defines every
@@ -2052,6 +2275,18 @@ var DETECTORS = {
       if (ca === cb) return false;
       return (voEditDistance(ca, cb) / shared) > 0.1;
     }
+    // Two DOCUMENTS may define one word differently without contradicting
+    // each other: the franchise agreement's "Business" and a later report's
+    // "business" are two instruments. Definitions are compared within one
+    // document only, using the bundle's own page numbering (voDetectDocuments);
+    // a bundle that states no boundaries is one document.
+    var docSegs = voDetectDocuments(textBlocks) || [];
+    var docOf = function (pageIdx) {
+      for (var d = 0; d < docSegs.length; d++) {
+        if (pageIdx + 1 >= docSegs[d].start && pageIdx + 1 <= docSegs[d].end) return d;
+      }
+      return -1;
+    };
     var definitions = {};
     var reported = {};
     for (var i = 0; i < textBlocks.length; i++) {
@@ -2059,14 +2294,17 @@ var DETECTORS = {
       while ((match = definitionRe.exec(textBlocks[i])) !== null) {
         var quoted = match[1].charAt(0) === '"';
         var term = match[1].toLowerCase().replace(/"/g, '').trim();
-        // Bare (unquoted) words must be plausible defined terms, not boilerplate.
-        if (!quoted && (TERM_STOP[term] || term.length < 4)) continue;
+        // Bare (unquoted) words must be plausible defined terms, not boilerplate:
+        // a defined term is Capitalised in the instrument that defines it.
+        if (!quoted && (TERM_STOP[term] || term.length < 4 || !/^[A-Z]/.test(match[1]))) continue;
         var snippet = String(textBlocks[i]).substr(match.index + match[0].length, 90).replace(/\s+/g, ' ').trim();
+        if (voLooksGarbled(snippet)) continue; // OCR debris is not a definition
         var norm = snippet.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').slice(0, 60);
-        var prev = definitions[term];
+        var dkey = (docSegs.length ? docOf(i) : 0) + ':' + term; // each document keeps its own first definition
+        var prev = definitions[dkey];
         if (prev && prev.page !== i && prev.norm && norm && prev.norm !== norm &&
-            voMateriallyDiffer(prev.snippet, snippet) && !reported[term]) {
-          reported[term] = true;
+            voMateriallyDiffer(prev.snippet, snippet) && !reported[dkey]) {
+          reported[dkey] = true;
           // Severity 2: definitional drift across a long agreement is common
           // boilerplate; on the AllFuels rerun eight CT08 rows at Medium buried
           // the critical findings. The conflict is still reported and quoted.
@@ -2074,7 +2312,7 @@ var DETECTORS = {
             evidence: 'Term "' + term + '" is defined differently in two places: "' + prev.snippet.slice(0, 70) + '" (Page ' + (prev.page + 1) + ') vs "' + snippet.slice(0, 70) + '" (Page ' + (i + 1) + ')',
             location: 'Page ' + (prev.page + 1) + ' and Page ' + (i + 1) });
         }
-        if (!prev) definitions[term] = { page: i, snippet: snippet, norm: norm };
+        if (!prev) definitions[dkey] = { page: i, snippet: snippet, norm: norm };
       }
     }
     return findings;
@@ -2122,15 +2360,21 @@ var DETECTORS = {
     // correspondence that merely discussed a POA. "electronic/digital
     // signature" is dropped too -- it is the ordinary modern method, not an
     // anomaly. Each surviving hit is anchored to its real page with the quote.
-    var sigPatterns = ['/s/', 'signed per pro', 'per procurationem', 'signed on behalf of', 'signed by proxy'];
+    // "signed on behalf of" is how every company executes a contract — it is
+    // dropped. A conformed "/s/" must stand alone: the annexure EB run matched
+    // it inside "All Fue/s/Caltex" (an OCR reading of "Fuels/Caltex").
+    var sigPatterns = ['/s/', 'signed per pro', 'per procurationem', 'signed by proxy'];
     for (var i = 0; i < textBlocks.length; i++) {
       var low = (textBlocks[i] || '').toLowerCase();
       for (var p = 0; p < sigPatterns.length; p++) {
-        var idx = low.indexOf(sigPatterns[p]);
-        if (idx === -1) continue;
-        var quote = textBlocks[i].substring(Math.max(0, idx - 20), idx + sigPatterns[p].length + 20).replace(/\s+/g, ' ').trim();
+        var pat = sigPatterns[p];
+        var sre = new RegExp('(?:^|[^A-Za-z0-9])' + pat.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&') + '(?![A-Za-z0-9])');
+        var sm = sre.exec(low);
+        if (!sm) continue;
+        var idx = sm.index + sm[0].length - pat.length;
+        var quote = textBlocks[i].substring(Math.max(0, idx - 20), idx + pat.length + 20).replace(/\s+/g, ' ').trim();
         findings.push({ type: 'CT23', severity: 3,
-          evidence: 'Non-standard signature method "' + sigPatterns[p] + '": "' + quote + '"',
+          evidence: 'Non-standard signature method "' + pat + '": "' + quote + '"',
           location: 'Page ' + (i + 1) });
       }
     }
@@ -3061,6 +3305,102 @@ function voExcludeTemplatePages(textBlocks) {
 // anchored by the artifact itself and stay; page-span locations ("Pages
 // 12-14") are anchored. Pseudo-locations ("Signature block", "Image
 // sections", "Full document") are NOT anchors and no longer exempt anything.
+// A page whose only text is a seal footer ("VERUM OMNIS SEALED ORIGINAL |
+// VO-… | … | 12/528", "VERIFY SEAL", "Clean Bundle Page 12 of 528") carries
+// no evidence a finding could quote. Such pages are taken out of the scan the
+// way template pages are, so no finding can be anchored to a footer — a
+// reviewer of the annexure EB run reported findings cited to seal-only pages.
+// The placeholder weighs 17 by voContentMass — UNDER VO_NEAR_EMPTY_CHARS — so
+// the CT26 near-empty disclosure ("image-only pages OCR did not capture")
+// still names an unread scanned page; only anchoring is refused.
+var VO_FOOTER_PLACEHOLDER = 'seal footer only. ';
+var VO_SEAL_FOOTER_SIGNATURE = /VERUM\s+OMNIS\s+SEALED\s+(?:ORIGINAL|DOCUMENT)|VERIFY\s+SEAL|clean\s+bundle\s+page\s+\d+\s+of\s+\d+|\bVO-[0-9A-F]{6,}\b/i;
+function voIsFooterOnlyPage(text) {
+  var t = String(text || '');
+  if (!t.trim()) return false;
+  if (!VO_SEAL_FOOTER_SIGNATURE.test(t)) return false; // no seal footer on it: an ordinary page
+  var rest = t.replace(/^\s*\[OCR\]\s*/, '')
+    .replace(VO_SEAL_BOILERPLATE_RE, ' ')
+    .replace(/clean bundle page \d+ of \d+/gi, ' ')
+    .replace(/\bpage \d+ of \d+\b/gi, ' ')
+    .replace(/\bVO-[0-9A-F]{6,}\b/gi, ' ')
+    .replace(/\b(?:SHA-?512|SHA-?256|BLOCKCHAIN ANCHORED|SEALED (?:ORIGINAL|DOCUMENT)|seal-[0-9a-f]{8,})\b/gi, ' ')
+    .replace(/[0-9a-f]{10,}/gi, ' ')
+    .replace(/\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?/g, ' ')
+    .replace(/\b\d{1,4}\s*\/\s*\d{1,4}\b/g, ' ')
+    .replace(/[|\u2026\u2013\u2014]/g, ' ');
+  // Any word of three letters or any run of three digits outside the footer
+  // is evidence: a signature line, a figures-only table, an account number,
+  // an "Annexure A" divider all stay. Only a page with nothing else goes.
+  if (/[a-zA-Z]{3,}/.test(rest) || /\d{3,}/.test(rest)) return false;
+  return true;
+}
+function voExcludeFooterOnlyPages(textBlocks) {
+  var pages = [];
+  if (!textBlocks || textBlocks.length < 2) return { pages: pages, note: null };
+  for (var i = 0; i < textBlocks.length; i++) {
+    if (voIsFooterOnlyPage(textBlocks[i])) { pages.push(i + 1); textBlocks[i] = VO_FOOTER_PLACEHOLDER; }
+  }
+  if (!pages.length) return { pages: pages, note: null };
+  var list = pages.length > 12 ? pages.slice(0, 12).join(', ') + ', … (' + pages.length + ' in total)' : pages.join(', ');
+  return { pages: pages, note: 'Seal-footer pages: ' + pages.length + ' page(s) (' + list + ') carry only a seal footer as machine-readable text (an unread page image or a blank page); no finding can be anchored to them.' };
+}
+
+// Format checks read characters, and OCR guesses characters. A finding of a
+// character-sensitive type (registration, VAT, identity and account numbers,
+// section numbers, definitions, figures, dates, signature marks) whose EVERY
+// cited page was OCR-recovered is held at severity 2 with the reason on the
+// finding, until the quoted characters are verified against the page image.
+var VO_OCR_FORMAT_TYPES = { CT02: 1, CT03: 1, CT08: 1, CT09: 1, CT13: 1, CT18: 1, CT19: 1, CT20: 1, CT23: 1, CT33: 1 };
+var VO_OCR_CAP_NOTE = ' [OCR page: weight reduced until the quoted characters are verified against the page image]';
+function voCapOcrFormatFindings(findings, ocrPages) {
+  var capped = 0, types = [];
+  if (!Array.isArray(findings) || !Array.isArray(ocrPages) || !ocrPages.length) return { capped: 0, types: types };
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i];
+    if (!f || !VO_OCR_FORMAT_TYPES[f.type] || !(f.severity > 2)) continue;
+    var pages = voRulePagesOf(f.location || '');
+    if (!pages.length) continue;
+    var allOcr = true;
+    for (var p = 0; p < pages.length; p++) if (ocrPages.indexOf(pages[p]) === -1) { allOcr = false; break; }
+    if (!allOcr) continue;
+    f.severity = 2;
+    f.ocrCapped = true;
+    if (String(f.evidence || '').indexOf(VO_OCR_CAP_NOTE) === -1) f.evidence = (f.evidence || '') + VO_OCR_CAP_NOTE;
+    capped++;
+    if (types.indexOf(f.type) === -1) types.push(f.type);
+  }
+  return { capped: capped, types: types };
+}
+
+// OCR debris is not evidence. A passage counts as garbled when it carries
+// symbols no typed document uses ("2012/22¢ pu pees = CHL ein sr"), or runs of
+// five consonants, or several short digit-letter fragments — the marks a
+// scanned page leaves when the recogniser guessed. Detectors that validate a
+// FORMAT (registration numbers, definitions) stay silent on such text rather
+// than turn a mis-read into a finding; the page is still named in the report's
+// OCR provenance for a person to read.
+// Typed documents draw bullets, pipes, section signs, dashes and quotes as
+// text; those are not debris. Debris is a character outside the Latin-1 and
+// general-punctuation ranges, a cent sign, a stray "=", a brace or a
+// backslash, a run of six consonants, or a short digit-letter fragment that
+// is not an ordinal (1st), an amount (R5) or a clause reference (12a, a2).
+var VO_GARBLE_SYMBOL = /[^\x20-\x7E\u00A0-\u00FF\u2010-\u2027\u2030-\u205E]|[¢¦^{}\\=]/;
+function voLooksGarbled(text) {
+  var t = String(text || '');
+  if (!t.trim()) return false;
+  var tokens = t.split(/\s+/).filter(Boolean);
+  var bad = 0;
+  for (var i = 0; i < tokens.length; i++) {
+    var w = tokens[i];
+    if (VO_GARBLE_SYMBOL.test(w)) { bad += 1; continue; }
+    var letters = w.replace(/[^a-z]/gi, '');
+    if (/[bcdfghjklmnpqrstvwxz]{6,}/i.test(letters) && !/(?:ghts|ngths|tchs|rths)$/i.test(letters)) { bad += 1; continue; }
+    if (/^(?=.*\d)(?=.*[a-z])[a-z0-9]{2,3}$/i.test(w) && !/^\d+(?:st|nd|rd|th)$/i.test(w) && !/^(?:R|N|P|K|ZAR|USD|GBP|EUR)\d+$/i.test(w) && !/^\d+[a-z]$/i.test(w) && !/^[a-z]\d+$/i.test(w)) bad += 1;
+  }
+  return bad >= 3 || (bad >= 2 && bad / tokens.length > 0.2);
+}
+
 var VO_ANCHOR_EXEMPT_LOC = /metadata|pdf structure|pages \d/i;
 function voEnforceAnchorRule(findings) {
   var kept = [], unanchored = [];
@@ -3744,6 +4084,82 @@ function _voDecodeHexString(hex, cmap) {
   return out;
 }
 
+// Tokenise one text-showing string into glyph tokens for the page buffer.
+// Whitespace becomes a ' ' sentinel; EVERY visible glyph is kept, punctuation
+// included. The old filter dropped any token without a letter or digit, and on
+// a PDF that draws each glyph with its own operator the full stop, slash,
+// brackets and ampersand vanished before the letters were re-joined: the
+// annexure EB cover "Confirmed Losses: R231.3 Million" was sealed into the
+// report as "R2313 Million", "t/a" became "ta", "(Pty)" became "Pty", and a
+// registration number lost its slashes and was then reported as fake. A quote
+// in a sealed report must be the record's own characters (PD2).
+function _voGlyphTokens(t, texts) {
+  if (!t) return;
+  // C0/C1 control bytes (a WinAnsi bullet \225 in a font with no ToUnicode
+  // map) are not characters the record shows; drop them before tokenising.
+  var parts = String(t).replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F-\x9F]/g, '').split(/(\s+)/);
+  for (var q = 0; q < parts.length; q++) {
+    var w = parts[q];
+    if (!w) continue;
+    if (/^\s+$/.test(w)) { texts.push(' '); continue; } // word boundary sentinel
+    texts.push(w);
+  }
+}
+
+// Merge glyph-level tokens into words. Rules, in order:
+//  - a ' ' sentinel ends the current word;
+//  - single-character tokens with nothing between them form one word
+//    ("N","F","O" -> "NFO"; "R","2","3","1",".","3" -> "R231.3");
+//  - a punctuation glyph drawn right after a multi-character token attaches to
+//    it, and the word then continues ("R231" + "." + "3" -> "R231.3",
+//    "agreement" + "." -> "agreement.");
+//  - a glyph run that ends in punctuation attaches to the word drawn right
+//    after it ("(" + "Pty" + ")" -> "(Pty)");
+//  - two multi-character tokens, or a letter/digit glyph beside a word, stay
+//    separate words: kerned words drawn as separate strings keep their space
+//    ("a" + "lease" -> "a lease", exactly as before).
+var VO_TJ_SPACE_KERN = -180; // thousandths of an em; a word space is typically -250 to -333
+var VO_GLYPH_OPENER = /^[(\[{"\u201C\u2018]$/;   // never attaches backward; carried onto the next word
+var VO_GLYPH_JOINER = /[\/\-@&']$/;              // a word ending in one of these pulls the next word onto itself
+function _voMergeGlyphRuns(texts) {
+  var merged = [], run = [], attach = false;
+  var isAlnum = function (c) { return /[a-zA-Z0-9]/.test(c); };
+  var flush = function () { if (run.length) merged.push(run.join('')); run = []; };
+  var last = function () { return merged.length ? merged[merged.length - 1] : ''; };
+  for (var t = 0; t <= texts.length; t++) {
+    var tok = t < texts.length ? texts[t] : null;
+    if (tok === null) { flush(); break; }
+    if (tok === ' ') { flush(); attach = false; continue; } // word boundary
+    var prevTok = t > 0 ? texts[t - 1] : ' ';
+    if (tok.length === 1) {
+      if (attach && merged.length) {
+        // A word is being continued through a punctuation glyph. A letter or
+        // digit continues it only through a joiner of its own class — R231 +
+        // "." + 3, 2012 + "/" + 12, O + "'" + Neil, web + "-" + based. After
+        // "Agreement" + "." a following "I" is the next sentence, not a suffix
+        // (a line-end full stop in another font is drawn as its own glyph).
+        if (isAlnum(tok)) {
+          var w = last();
+          var continues = (/\d[.,\/:\-]$/.test(w) && /\d/.test(tok)) || (/[a-zA-Z]['\-]$/.test(w) && /[a-zA-Z]/.test(tok));
+          if (continues) { merged[merged.length - 1] += tok; continue; }
+          attach = false; run.push(tok); continue;
+        }
+        merged[merged.length - 1] += tok; continue;
+      }
+      if (!run.length && merged.length && !isAlnum(tok) && !attach && prevTok !== ' ' && prevTok.length > 1 && !VO_GLYPH_OPENER.test(tok)) {
+        // punctuation glyph straight after a word: attach it ("agreement.")
+        merged[merged.length - 1] += tok; attach = true; continue;
+      }
+      run.push(tok); continue;
+    }
+    // multi-character token
+    if (run.length && /[(\[{"\u201C\u2018\/\-@&']$/.test(run[run.length - 1])) { run.push(tok); flush(); attach = true; continue; } // "(" + "Pty" -> "(Pty"; "paid." + "No" stays two words
+    if (attach && merged.length && VO_GLYPH_JOINER.test(last()) && prevTok !== ' ') { merged[merged.length - 1] += tok; attach = false; continue; } // "12/" + "12" -> "12/12"
+    flush(); merged.push(tok); attach = false;
+  }
+  return merged;
+}
+
 // `preloadedDoc` is the already-parsed document. Without it this reloaded and
 // re-parsed the whole PDF once per page, making extraction quadratic in
 // document size: a 159-page file meant 159 full parses, which locked up the
@@ -3792,15 +4208,7 @@ async function extractPageText(pdfBytes, pageIndex, preloadedDoc) {
     }
 
     var curFont = null;
-    var pushText = function (t) {
-      if (!t) return;
-      if (!/\S/.test(t)) { texts.push(' '); return; } // word boundary sentinel
-      var tokens = t.split(/\s+/);
-      for (var q = 0; q < tokens.length; q++) {
-        var w = tokens[q];
-        if (w && w.replace(/[^a-zA-Z0-9]/g, '').length >= 1) texts.push(w);
-      }
-    };
+    var pushText = function (t) { _voGlyphTokens(t, texts); };
 
     for (var s = 0; s < streams.length; s++) {
       var st = streams[s];
@@ -3820,35 +4228,28 @@ async function extractPageText(pdfBytes, pageIndex, preloadedDoc) {
         if (m[5] !== undefined) {
           // TJ array: mix of <hex> and (literal) chunks with kerning numbers
           var body = m[5];
-          var chunkRe = /<([0-9A-Fa-f\s]+)>|\(((?:\\.|[^\\()])*)\)/g;
+          // Chunks AND the kerning numbers between them. pdfTeX and many other
+          // producers draw word spaces as a large negative adjustment instead
+          // of a space glyph ([(Confirmed) -333 (Losses:)]); ignoring the
+          // numbers glued such words together. A negative adjustment beyond
+          // VO_TJ_SPACE_KERN between two multi-character chunks is a space;
+          // letter-spaced headings ([(V) -200 (A) -200 (L)…]) are single-
+          // character chunks and stay one word.
+          var chunkRe = /<([0-9A-Fa-f\s]+)>|\(((?:\\.|[^\\()])*)\)|(-?\d+(?:\.\d+)?)/g;
           var cm;
-          var acc = '';
+          var acc = '', lastChunk = '', kern = 0;
           while ((cm = chunkRe.exec(body)) !== null) {
-            if (cm[1] !== undefined) acc += _voDecodeHexString(cm[1], cmap);
-            else acc += _voDecodeParenString(cm[2]);
+            if (cm[3] !== undefined) { kern += parseFloat(cm[3]); continue; }
+            var piece = (cm[1] !== undefined) ? _voDecodeHexString(cm[1], cmap) : _voDecodeParenString(cm[2]);
+            if (kern <= VO_TJ_SPACE_KERN && lastChunk.length > 1 && piece.length > 1 && !/\s$/.test(acc) && !/^\s/.test(piece)) acc += ' ';
+            acc += piece; lastChunk = piece; kern = 0;
           }
           pushText(acc);
         }
       }
     }
-    // Merge letter-spaced runs ("N F O" -> "NFO") within word boundaries only
-    var merged = [];
-    var run = [];
-    for (var t = 0; t <= texts.length; t++) {
-      var tok = t < texts.length ? texts[t] : null;
-      if (tok === ' ' || tok === null) { // word boundary
-        if (run.length >= 2) merged.push(run.join(''));
-        else for (var r2 = 0; r2 < run.length; r2++) merged.push(run[r2]);
-        run = [];
-        if (tok !== null) continue; else break;
-      }
-      if (tok.length === 1 && /[a-zA-Z0-9]/.test(tok)) { run.push(tok); continue; }
-      if (run.length >= 2) merged.push(run.join(''));
-      else for (var r3 = 0; r3 < run.length; r3++) merged.push(run[r3]);
-      run = [];
-      merged.push(tok);
-    }
-    texts = merged;
+    // Merge glyph-level runs into words (see _voMergeGlyphRuns).
+    texts = _voMergeGlyphRuns(texts);
   } catch (e) {}
   return texts;
 }
@@ -3866,6 +4267,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   // Extract text blocks (one per page)
   var textBlocks = [];
   var extractionNote = 'Per-page PDF content-stream decoding with ToUnicode CMaps.';
+  var _ocrPages = [], _ocrConfidence = null;
   try {
     var pages = pdfDoc.getPages();
     for (var i = 0; i < pages.length; i++) {
@@ -3893,6 +4295,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
         if (_ocr && Array.isArray(_ocr.textBlocks) && _ocr.textBlocks.length === textBlocks.length) {
           textBlocks = _ocr.textBlocks;
           if (_ocr.note) extractionNote += ' ' + _ocr.note;
+          // OCR provenance travels with the result: which pages (1-based)
+          // were machine-recovered and, per page, how sure the recogniser was.
+          if (Array.isArray(_ocr.ocrPages)) _ocrPages = _ocr.ocrPages.slice();
+          if (_ocr.ocrConfidence && typeof _ocr.ocrConfidence === 'object') _ocrConfidence = _ocr.ocrConfidence;
         }
       }
     } catch (ocrErr) {
@@ -3913,6 +4319,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   // Template/boilerplate suppression (see voExcludeTemplatePages).
   var templateNote = voExcludeTemplatePages(textBlocks);
   if (templateNote) extractionNote += ' ' + templateNote;
+  var _footer = voExcludeFooterOnlyPages(textBlocks);
+  if (_footer.note) extractionNote += ' ' + _footer.note;
 
   // Run every detector
   var detectors = [
@@ -4078,6 +4486,14 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   // Pin findings to a real page where their evidence resolves to exactly one.
   allFindings = voBackfillPageAnchors(allFindings, textBlocks);
 
+  // OCR provenance has a consequence, not just a footnote (annexure EB): a
+  // FORMAT check whose every cited page came through OCR is held at Low until
+  // a person has read the characters on the page image.
+  var _ocrCap = voCapOcrFormatFindings(allFindings, _ocrPages);
+  if (_ocrCap.capped) {
+    extractionNote += ' OCR provenance: ' + _ocrCap.capped + ' format-check finding(s) anchored only to OCR-recovered pages held at reduced weight pending verification against the page image (' + _ocrCap.types.join(', ') + ').';
+  }
+
   // The anchor rule (see voEnforceAnchorRule): unanchorable content findings
   // move out of the findings into the disclosed engine notes. Skipped when
   // the whole document is one raw-fallback block: page anchors are impossible
@@ -4219,6 +4635,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     contradictionTypesUsed: Object.keys(findingsByType).length,
     serialPatternsDetected: allFindings.filter(function(f){return f.type==='SERIAL';}).length,
     extractionNotes: extractionNote,
+    ocrPages: _ocrPages,
+    ocrConfidence: _ocrConfidence,
+    footerOnlyPages: _footer.pages,
     summary: unreadable
       ? 'UNREADABLE: the document has no usable machine-readable text (scanned or image-only PDF). ' +
         'No contradiction analysis was performed. This is NOT a clean result -- it is an unread document. ' +
@@ -4530,15 +4949,14 @@ function voRulePhrasePositions(text, phrase) {
 function voRulePagesOf(location) {
   var loc = String(location || '');
   var out = [], seen = {};
-  var range = /(\d{1,5})\s*[-\u2013]\s*(\d{1,5})/.exec(loc);
-  if (range) {
-    var lo = parseInt(range[1], 10), hi = parseInt(range[2], 10);
-    if (hi >= lo && hi - lo <= 2000) { for (var pg = lo; pg <= hi; pg++) out.push(pg); return out; }
-  }
-  var re = /(\d{1,5})/g, m;
+  // Every page named: single pages, lists ("Page 3, 12") and ranges
+  // ("Pages 12-14", expanded), in one set.
+  var re = /(\d{1,5})(?:\s*[-\u2013]\s*(\d{1,5}))?/g, m;
   while ((m = re.exec(loc)) !== null) {
-    var n = parseInt(m[1], 10);
-    if (n > 0 && !seen[n]) { seen[n] = true; out.push(n); }
+    var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
+    if (!(lo > 0)) continue;
+    if (!(hi >= lo) || hi - lo > 2000) hi = lo;
+    for (var pg = lo; pg <= hi; pg++) { if (!seen[pg]) { seen[pg] = true; out.push(pg); } }
   }
   return out;
 }
@@ -4706,6 +5124,12 @@ if (typeof module !== 'undefined' && module.exports) {
     voVerifyRulePackage: voVerifyRulePackage,
     voCompileRulePackage: voCompileRulePackage,
     voRunPackageRules: voRunPackageRules,
-    voRulePagesOf: voRulePagesOf
+    voRulePagesOf: voRulePagesOf,
+    _voGlyphTokens: _voGlyphTokens,
+    voLooksGarbled: voLooksGarbled,
+    voIsFooterOnlyPage: voIsFooterOnlyPage,
+    voExcludeFooterOnlyPages: voExcludeFooterOnlyPages,
+    voCapOcrFormatFindings: voCapOcrFormatFindings,
+    _voMergeGlyphRuns: _voMergeGlyphRuns
   };
 }
