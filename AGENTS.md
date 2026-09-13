@@ -131,6 +131,12 @@ is meant to be identical across the three repositories — an edit here must be 
   page-level script for closure-private names. Lesson, in one line: the five inlined
   scripts are closures — page code calls page helpers only, and the headless check must
   read the results panel, not just whether `showResults` was reached.
+  **And the first document sealed after that (PR #206):** a 17-page report printed from
+  Chrome reached the engine as empty pages — Chromium draws Type3 fonts with one-byte codes
+  and the decoder assumed two — and, once readable, a SAPS case number was an "impossible
+  date" and a valid registration number was cut by a 40-character window. Fixed with tests
+  (§15 of the annexure EB suite); an AI-compiled summary is now disclosed as secondary in
+  the extraction notes. `ENGINE.md` §12.11 items 11–16.
 - 7 September 2026: **Brain 9 reads the sealed text.** Founder direction: the AI must read
   the sealed files so nothing is missed, state what it finds, and the loop must let the engine
   catch it next time; Brain 9 verifies the model's claims are real and in the text. Built as
@@ -188,7 +194,7 @@ before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping 
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **32 suites, 2042 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **32 suites, 2054 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.

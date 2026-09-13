@@ -370,6 +370,75 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(/try \{\s*var sizeRow = document\.getElementById\('sizeRow'\);/.test(page), 'the size line can never stop the results panel (wrapped in try/catch)');
 }
 
+// ===== 15. A PDF printed from Chrome reads as empty (13 September 2026) ======
+// "AllFuels_Timeline_Report_Des_to_Current.PDF": 17 native-text pages printed
+// by Chromium (Skia), every font a Type3 font with ONE-BYTE codes and a
+// ToUnicode map. The decoder assumed two-byte codes for any mapped font, read
+// <39> as nothing, and the whole document reached the engine as empty pages
+// (then went to OCR). Also on that file: line ends glued words ("side ofthe
+// same"), a SAPS case number "CAS 96/6/2026" was sealed as an impossible
+// date, and a valid registration number was cut by a 40-character window.
+{
+  const oneByte = E._voParseToUnicode('1 begincodespacerange\n<00> <FF>\nendcodespacerange\n2 beginbfchar\n<05> <0020>\n<3E> <0059>\nendbfchar\n1 beginbfrange\n<26> <2F> <0041>\nendbfrange');
+  const twoByte = E._voParseToUnicode('1 begincodespacerange\n<0000> <FFFF>\nendcodespacerange\n1 beginbfrange\n<0024> <003D> <0041>\nendbfrange');
+  const noSpace = E._voParseToUnicode('2 beginbfchar\n<41> <0041>\n<42> <0042>\nendbfchar');
+  ok(E._voCmapCodeBytes(oneByte) === 1 && E._voCmapCodeBytes(twoByte) === 2 && E._voCmapCodeBytes(noSpace) === 1, 'the code width comes from the codespacerange, or from the keys when there is none');
+  ok(E._voDecodeHexString('26052A', oneByte) === 'A E' && E._voDecodeHexString('00240025', twoByte) === 'AB' && E._voDecodeHexString('4142', noSpace) === 'AB', 'one-byte codes decode as one byte, two-byte as two (Chromium <39> Tj was read as nothing)');
+  ok(E._voMapLiteral(String.fromCharCode(0x26, 0x05, 0x2A), oneByte) === 'A E' && E._voMapLiteral('Hello', twoByte) === 'Hello' && E._voMapLiteral('Hi', null) === 'Hi', 'a literal string under a one-byte map is a run of codes; two-byte maps and no map leave it alone');
+  ok(Object.keys(oneByte).indexOf('__codeBytes') < 0, 'the width is not a mapped code (key counts stay honest)');
+
+  // End to end on a real PDF built here: a one-byte ToUnicode map on a standard
+  // font, hex-string glyphs positioned one by one, and a line move between
+  // "of" and "the" with no space glyph — the Chromium shape.
+  const fs = require('fs'), path = require('path');
+  const g = globalThis; g.window = g; g.self = g;
+  new Function('window', 'self', 'globalThis', fs.readFileSync(path.join(process.cwd(), 'vendor/pdf-lib.min.js'), 'utf8'))(g, g, g);
+  const PDFLib = g.PDFLib;
+  const run = async () => {
+    // pdf-lib writes the font dictionary on save, so build, save, and edit the
+    // loaded copy (the ToUnicode map and the content stream go on that).
+    const draft = await PDFLib.PDFDocument.create();
+    const draftPage = draft.addPage([595, 842]);
+    draftPage.setFont(await draft.embedFont(PDFLib.StandardFonts.Helvetica));
+    const doc = await PDFLib.PDFDocument.load(await draft.save({ useObjectStreams: false }), { ignoreEncryption: true });
+    const page = doc.getPages()[0];
+    const fontsDict = doc.context.lookup(page.node.Resources().get(PDFLib.PDFName.of('Font')));
+    const fname = fontsDict.keys()[0].asString().replace(/^\//, '');
+    const fontDict = doc.context.lookup(fontsDict.get(fontsDict.keys()[0]));
+    // Codes 0x01..: 01=s 02=i 03=d 04=e 05=space 06=o 07=f 08=t 09=h 0A=CAS-digits not needed
+    const cmap = '/CIDInit /ProcSet findresource begin\n12 dict begin\nbegincmap\n1 begincodespacerange\n<00> <FF>\nendcodespacerange\n9 beginbfchar\n<01> <0073>\n<02> <0069>\n<03> <0064>\n<04> <0065>\n<05> <0020>\n<06> <006F>\n<07> <0066>\n<08> <0074>\n<09> <0068>\nendbfchar\nendcmap\nend\nend';
+    const cmapStream = doc.context.stream(cmap);
+    fontDict.set(PDFLib.PDFName.of('ToUnicode'), doc.context.register(cmapStream));
+    // "side of" on one line (glyph by glyph, Td moves along x), then a Tm to the next line and "the".
+    const ops = 'BT /' + fname + ' 12 Tf 1 0 0 -1 40 100 Tm <01> Tj 6 0 Td <02> Tj 3 0 Td <03> Tj 6 0 Td <04> Tj 6 0 Td <05> Tj 3 0 Td <06> Tj 6 0 Td <07> Tj ET\n' +
+      'BT /' + fname + ' 12 Tf 1 0 0 -1 40 116 Tm <08> Tj 4 0 Td <09> Tj 6 0 Td <04> Tj ET';
+    const stream = doc.context.stream(ops);
+    page.node.set(PDFLib.PDFName.of('Contents'), doc.context.register(stream));
+    const bytes = await doc.save({ useObjectStreams: false });
+    const loaded = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+    const text = (await E.extractPageText(bytes, 0, loaded)).join(' ');
+    ok(text === 'side of the', 'a Chromium-shaped page (one-byte codes, per-glyph hex strings, a line move with no space glyph) reads "side of the" (got ' + JSON.stringify(text) + ')');
+    ok(/-/.test(fname), 'the fixture font name carries a hyphen (' + fname + '): a font select with a hyphen, underscore or plus in its name is honoured');
+  };
+  await run();
+
+  // A case number shaped like a date is not a date.
+  const d03 = (b) => DET.D03_DETECT_DATE_INCONSISTENCY(b).filter(f => /Impossible date/.test(f.evidence));
+  ok(d03(['forensic evidence submitted to SAPS (CAS 96/6/2026), attention the investigating officer.']).length === 0 && d03(['Our ref: 13/4/3/5/2026 refers.']).length === 0, '"CAS 96/6/2026" and "Our ref: 13/4/3/5/2026" are not impossible dates');
+  ok(d03(['The lease was signed on 31/02/2021 at Durban.']).length === 1, 'a genuinely impossible date still fires');
+
+  // An AI-compiled summary is disclosed, never excluded.
+  const note = E.voNoteAiCompiledSummary(['Compiled: 13 September 2026 | Compiled by: Claude, from documents in the Drive', 'page two']);
+  ok(note && /AI-compiled summary: page 1 states "Compiled by: Claude"/.test(note) && /verified against the primary documents it cites/.test(note), 'a file that says it was compiled by an AI assistant is disclosed as secondary');
+  ok(E.voNoteAiCompiledSummary(['Franchise agreement between the parties.', 'Clause 1.']) === null && E.voNoteAiCompiledSummary(['x', 'y', 'Compiled by: Claude']) === null, 'no note without the statement on the first two pages');
+
+  // A valid registration number after a cue is read whole, not cut at 40 characters.
+  const ct20b = (b) => of(DET.D11_DETECT_REGISTRATION_FAKE, b, 'CT20');
+  ok(ct20b(['a CIPC company-history search on 2002/059909/23 would settle this.']).length === 0, '"CIPC company-history search on 2002/059909/23" is a valid number, not cut to 2002/059909/2');
+  const bad20 = ct20b(['Registration No: 2002/05990/2 as stated on the letterhead.']);
+  ok(bad20.length === 1 && /2002\/05990\/2/.test(bad20[0].evidence), 'a malformed number after the cue still fires and the quote includes the whole number');
+}
+
 console.log(`\n[annexure-eb] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[annexure-eb] FAILURES'); process.exit(1); }
 console.log('[annexure-eb] ALL GREEN');
