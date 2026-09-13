@@ -16748,6 +16748,14 @@ function addShareButton() {
   grid.parentNode.insertBefore(hint, grid.nextSibling);
 }
 
+// Page-level byte formatter (the inlined report script has its own fmtBytes
+// inside its closure; it is not reachable from here).
+function voFmtBytes(n) {
+  if (typeof n !== 'number' || !isFinite(n)) return 'n/a';
+  if (n < 1024) return n + ' B';
+  if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
+  return (n / 1024 / 1024).toFixed(2) + ' MB';
+}
 function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, forensicResult) {
   document.getElementById('sha256Display').textContent = sha256;
   document.getElementById('sha512Display').textContent = sha512;
@@ -16777,17 +16785,23 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   // page — a few percent of the original. A sealed file far larger than its
   // original was not made so by the seal (the 88 MB annexure EB output came
   // from a 528-page scanned original), and the reader can see that here.
-  var sizeRow = document.getElementById('sizeRow');
-  if (sizeRow) {
-    var origSize = (typeof selectedFile !== 'undefined' && selectedFile && typeof selectedFile.size === 'number') ? selectedFile.size : null;
-    var sealedSize = (sealedBytes && typeof sealedBytes.byteLength === 'number') ? sealedBytes.byteLength : (sealedBytes && sealedBytes.length) || null;
-    if (sealedSize) {
-      var sizeTxt = 'Sealed ' + fmtBytes(sealedSize);
-      if (origSize) sizeTxt = 'Original ' + fmtBytes(origSize) + '  \u2192  ' + sizeTxt + ' (' + (origSize ? (sealedSize >= origSize ? '+' : '\u2212') + fmtBytes(Math.abs(sealedSize - origSize)) + ' for the watermark, QR and footer on every page' : '') + ')';
-      document.getElementById('sizeDisplay').textContent = sizeTxt;
-      sizeRow.style.display = 'block';
-    } else { sizeRow.style.display = 'none'; }
-  }
+  // The report script's fmtBytes lives inside its own closure and is NOT
+  // visible here (the 13 September hotfix: "fmtBytes is not defined" broke
+  // every seal's results panel on the Worker for an hour). The page has its
+  // own formatter, and nothing about the size line may ever stop the results.
+  try {
+    var sizeRow = document.getElementById('sizeRow');
+    if (sizeRow) {
+      var origSize = (typeof selectedFile !== 'undefined' && selectedFile && typeof selectedFile.size === 'number') ? selectedFile.size : null;
+      var sealedSize = (sealedBytes && typeof sealedBytes.byteLength === 'number') ? sealedBytes.byteLength : (sealedBytes && sealedBytes.length) || null;
+      if (sealedSize) {
+        var sizeTxt = 'Sealed ' + voFmtBytes(sealedSize);
+        if (origSize) sizeTxt = 'Original ' + voFmtBytes(origSize) + '  \u2192  ' + sizeTxt + ' (' + (sealedSize >= origSize ? '+' : '\u2212') + voFmtBytes(Math.abs(sealedSize - origSize)) + ' for the watermark, QR and footer on every page)';
+        document.getElementById('sizeDisplay').textContent = sizeTxt;
+        sizeRow.style.display = 'block';
+      } else { sizeRow.style.display = 'none'; }
+    }
+  } catch (sizeErr) { console.warn('[VO] size line skipped:', sizeErr && sizeErr.message ? sizeErr.message : sizeErr); }
 
   // Show forensic report debug info if report wasn't generated
   if (window._voReportDebug && !window._voReportPack) {
