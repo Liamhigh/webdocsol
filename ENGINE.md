@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 32 suites, 2004 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 32 suites, 2039 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**32 suites · 2004 assertions.** `tests/run-all.js` is the registry — a new
+**32 suites · 2039 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -542,7 +542,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `annexure-eb-regression.test.mjs` | 81 | **The annexure EB run** (§12.10): verbatim glyph extraction (R231.3, t/a, (Pty), slashes), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding from that run silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt |
+| `annexure-eb-regression.test.mjs` | 112 | **The annexure EB run and its re-run** (§12.10, §12.11): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
@@ -1025,6 +1025,78 @@ to a country-level jurisdiction and never prints coordinates.
 **Tests:** `crop-normalize.test.mjs` (nine assertions).
 
 ---
+
+### 12.11 The re-run — the engine must not read its own report; one count; no template in AI's clothes (2026-09-13)
+
+The founder re-ran annexure EB on the Worker address (319 pages OCR'd, 15 engine findings
+retained by the AI review, 3 AI candidates, 23 Brain 9 recommendations, the cover quote now
+"Confirmed Losses: R231.3 Milli…") and had the outputs reviewed again. What that review found,
+and what changed — every item pinned by `tests/annexure-eb-regression.test.mjs` §13–14:
+
+1. **The engine read its own earlier report as evidence.** The bundle opens with a 26-page
+   Verum Omnis supplementary report (masthead "VERUM OMNIS FORENSIC REPORT … Report Reference:
+   VO-AF-2026-0523-SUPP"), and the engine sealed that report's own heading "GOODWILL
+   FORFEITURE CONTRADICTION" as a CT45 finding (p.2 vs 3) and its running title "…Unsigned
+   Agreements…" on 40 pages as a CT23 signature finding. `voExcludeSecondaryReportPages` now
+   replaces, in place, every page carrying a Verum Omnis report masthead (`Report Reference:
+   VO-`, or the brand with FORENSIC REPORT / SEALED DOCUMENT / the seal line) and every page
+   carrying that report's own running title, closing one- or two-page gaps inside the run
+   (an OCR miss on the title) and never a wider one. The exclusion is disclosed in the
+   extraction notes like template pages (§12.10 item 3, PD6). A Verum Omnis report is
+   analysis, never evidence; sealing one with a forensic report says "nothing in this file
+   was examined as evidence".
+2. **CT44 aligned the wrong parties.** "The Franchisee is not the owner of the Premises"
+   (p.28) was set against "All Fuels … the Owner/Lessor of the site" (p.112): two parties.
+   D38 now reads the side each phrase is about from the nearest role word (grantee: lessee,
+   tenant, franchisee, licensee; grantor: lessor, landlord, franchisor, licensor,
+   owner/lessor) and pairs a lessee clause only with an ownership line about the same side
+   or one that names no side; "is not the owner" is never itself an ownership line. The
+   franchise-lease fixture ("the FRANCHISOR is not the owner …" vs "Bright Idea Projects …
+   became the registered owner") still fires.
+3. **CT08 read 'Accommodation Rental' and 'All Fuels Computer System Rental' as two
+   definitions of "rental"** (five such rows). `definitionRe` now captures the whole quoted
+   phrase — straight and curly, double and single, an apostrophe inside a word is not a
+   quote — and a run of Capitalised words as one term.
+4. **CT04 linked an expiry to an invoice from another exhibit** (p.326 vs p.412). The
+   invoice must be billing under the expired instrument: the two pages must lie in the same
+   stated document where the bundle states its own boundaries, and the company names printed
+   on the two pages must overlap when both print any. `voDetectDocuments` now ignores the
+   bundle's own running numbering ("Clean Bundle Page 326 of 528" on every page), which had
+   made the whole bundle one document. A page that names no company cannot be excluded on
+   that ground, and the finding still tells the reader to verify the instrument.
+5. **"Agreements &The"**: `&` was a joiner glyph. It is a word of its own.
+6. **The report's lead was the Worker's template, labelled as the AI narrator's.** When the
+   model fails, `/api/v1/ai/narrate` answers with a deterministic template (`model:
+   'template-fallback'`); the template wrote "an integrity score of 41 with a confidence
+   rating of MODERATE" and the client marked any returned text `'ai'`, so the sentence led
+   the report under "Written by the AI narrator". Now: the template prints no score and no
+   band and counts engine-verified findings apart from AI-raised candidates; the client
+   labels template text `'local'` (it goes to the annex, never the lead); the render-time
+   §15.2 gate (`VO_BANNED_SENTENCE_RE`) drops any sentence carrying "integrity/fraud/risk/
+   overall score", "score of N", "confidence rating/band/level" or "high/moderate/low
+   confidence" whoever wrote it.
+7. **One count.** The narrative said "18 substantive contradictions, 7 serious" (it counted
+   the 3 AI candidates), the lead said "16 contradictions established" (the summary was
+   computed on the pre-review list) and the cover said 15. `secNarrative` counts
+   engine-verified findings only and tells AI candidates apart in a separate sentence; the
+   host recomputes `summary` on the retained engine findings after the review.
+8. **Narrator provenance.** Every court-ready section was asked for and every draft was
+   discarded by the server gate, yet the provenance line read "AI narrator: not run". The
+   host passes `sectionsAttempted`; the line now reads "asked for N sections; no draft
+   passed the server's anchor and language gate, so nothing AI-written is printed".
+9. **Brain 9 language.** Recommendations such as "Criminal contradiction" are verdicts, not
+   pointers. `SWEEP_SYSTEM` states the neutral-language rule and `verifySweepItem` discards
+   any item whose type or rationale carries a verdict word (`SWEEP_VERDICT_RE`).
+10. **File size, stated.** The results panel prints "Original N → Sealed M (+Δ for the
+    watermark, QR and footer on every page)". The seal adds 1–4 % to a native PDF and about
+    1 % to a scanned one (measured on the pdf-lib path); an 88 MB output from annexure EB is
+    the size of its OCR-rendered input, not the seal's doing.
+
+Not adopted, with reasons: a bundle-wide page/quote resolver ("AnchorResolver") — every
+finding already carries the page the quote was read from, and `voRulePagesOf` reads ranges;
+excluding every page more than N pages from a finding's partner — distance is not evidence;
+dropping CT45 p.73 vs 249 — the two clauses are on the record and the finding says what
+each states.
 
 ## 13. The court-ready narrative (the "human report")
 

@@ -108,6 +108,22 @@ is meant to be identical across the three repositories — an edit here must be 
   to run on a host with no API; the OCR cap asks before leaving pages unread. `ENGINE.md`
   §12.10; suite `annexure-eb-regression.test.mjs`. The founder should re-run annexure EB on
   the Worker address and compare the findings count before/after.
+- 13 September 2026: **the re-run and the honesty release.** Re-run on the Worker: 15 engine
+  findings retained, 3 AI candidates, 23 Brain 9 recommendations, the cover quote verbatim.
+  The second outside review found the engine had scanned the Verum Omnis supplementary
+  report bound into the bundle as evidence, paired a lessee clause about one party with an
+  ownership line about another (CT44), read distinct quoted terms as one word (CT08), linked
+  an expiry to another exhibit's invoice (CT04), and that the report's lead was the Worker's
+  template ("integrity score of 41 with a confidence rating of MODERATE") labelled as the AI
+  narrator's, with three different finding counts in one report. Shipped: embedded-report
+  exclusion with disclosure; CT44 side alignment; CT08 whole quoted terms; CT04
+  same-instrument link (and `voDetectDocuments` ignores the bundle's own running numbering);
+  the template prints no score or band and is labelled local; the §15.2 gate drops score and
+  band sentences; one count everywhere; the narrator provenance line says "asked for N
+  sections; no draft passed the gate"; Brain 9 neutral language; the results panel states
+  original vs sealed size (the seal adds ~1–4 %; the 88 MB output was the size of the
+  OCR-rendered input). `ENGINE.md` §12.11. Still open: the court-ready narrator's drafts
+  all failed the server gate on this run — a prompt/quality question, not a gate to loosen.
 - 7 September 2026: **Brain 9 reads the sealed text.** Founder direction: the AI must read
   the sealed files so nothing is missed, state what it finds, and the loop must let the engine
   catch it next time; Brain 9 verifies the model's claims are real and in the text. Built as
@@ -165,7 +181,7 @@ before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping 
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **32 suites, 2004 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **32 suites, 2039 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
@@ -384,6 +400,11 @@ seven above:
    `NOT REVIEWED` and never "verified"; forensic mode does not run where the service is
    absent. `ENGINE.md` §12.10. Do not re-widen a detector to recover a finding the
    annexure EB suite pins as false; add a positive control instead.
+15. **The engine never reads a Verum Omnis report as evidence; one count; no template in
+   AI's clothes (2026-09-13).** A prior Verum Omnis report bound into a bundle is excluded
+   from scanning and the exclusion disclosed; every count a reader sees is the
+   engine-verified count, AI candidates told apart; deterministic template text is never
+   labelled as the AI narrator's and never carries a score or band. `ENGINE.md` §12.11.
 
 ### How the Constitution's standing may be described (v8.0 §12)
 

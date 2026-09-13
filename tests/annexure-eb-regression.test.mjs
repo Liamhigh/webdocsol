@@ -265,6 +265,99 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   await run();
 }
 
+// ===== 13. The re-run (13 September 2026): what the second review found =====
+// The precision release was re-run on the Worker (319 pages OCR'd, 15 engine
+// findings retained). A second outside review found the engine had read the
+// Verum Omnis supplementary report bound into the front of the bundle as
+// evidence, matched a lessee clause about one party against an ownership
+// line about another, treated distinct quoted terms as one word, linked an
+// expiry to an invoice from another exhibit, and that the report's lead had
+// been written by the Worker's template ("integrity score of 41 with a
+// confidence rating of MODERATE") while labelled as the AI narrator's.
+{
+  // 13a. A prior Verum Omnis report bound into the bundle is analysis, not evidence.
+  const masthead = 'URGENT - NATIONAL PRIORITY V E R U M O M N I S S E A L E D D O C U M E N T VERUM OMNIS FORENSIC REPORT Bright Idea Projects 66 (Pty) Ltd t/a AllFuels Supplementary Report: Goodwill Theft, Unsigned Agreements & The Petroleum Products Act Confirmed Losses: R231.3 Million Report Reference: VO-AF-2026-0523-SUPP Date: 23 May 2026';
+  const header = 'Bright Idea Projects 66 (Pty) Ltd t/a AllFuels Supplementary Report: Goodwill Theft, Unsigned Agreements &The Petroleum Products Act Confirmed Losses: R231.3 Milli ';
+  const blocks = [masthead, header + '4. THE GARY HIGHCOCK GOODWILL FORFEITURE CONTRADICTION 4.1 The Uncountersigned Goodwill Forfeiture Clause', header + 'operators possess no compensable goodwill interest in those businesses. This proposition', 'ocr noise page with nothing recognisable', header + '10. COURT-READY DECLARATION', 'FRANCHISE AGREEMENT between All Fuels Equipment (Pty) Ltd and Wayne Nel Motors CC. 1. Definitions.', 'Signed at Durban on 12 December 2018 by the Franchisee.'];
+  ok(E.voIsSecondaryReportPage(masthead) === true && E.voIsSecondaryReportPage(blocks[5]) === false && E.voIsSecondaryReportPage('VERIFY SEAL VERUM OMNIS SEALED ORIGINAL | VO-A59C667AFDCE | 316/528 Clean Bundle Page 316 of 528') === false,
+    'a Verum Omnis report masthead is recognised; an exhibit page and a seal footer are not');
+  ok(E.voIsSecondaryReportPage('AFFIDAVIT. I attach the forensic report as annexure C. VERIFY SEAL VERUM OMNIS SEALED ORIGINAL | VO-A59C667AFDCE | 40/528') === false
+    && E.voIsSecondaryReportPage('Verum Omnis Forensic Report Source: annexure EB.PDF 1. Executive summary') === true
+    && E.voIsSecondaryReportPage('V E R U M O M N I S S E A L E D D O C U M E N T VERUM OMNIS FORENSIC REPORT') === true,
+    'an exhibit that mentions "the forensic report" beside a seal footer is evidence; the brand and the kind must sit together');
+  const r = E.voExcludeSecondaryReportPages(blocks);
+  ok(r && JSON.stringify(r.pages) === '[1,2,3,4,5]' && /Prior Verum Omnis report: 5 page/.test(r.note) && /analysis, not evidence/.test(r.note),
+    'the report pages (masthead, running-title pages, a one-page OCR gap inside the run) are excluded and disclosed; the exhibits stay (' + (r && r.pages) + ')');
+  ok(/prior verum omnis report page excluded/.test(blocks[1]) && /FRANCHISE AGREEMENT/.test(blocks[5]) && blocks.length === 7, 'excluded pages are replaced in place; page numbering survives');
+  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, blocks, 'CT45').length === 0 && of(DET.D32_DETECT_SIGNATURE_ANOMALY, blocks, 'CT23').length === 0,
+    'the report\'s "goodwill forfeiture contradiction" and its "Unsigned Agreements" title no longer become CT45/CT23 findings');
+  ok(E.voExcludeSecondaryReportPages(['Lease agreement page one.', 'Lease agreement page two.']) === null, 'a bundle with no Verum Omnis report is untouched');
+  const all = E.voExcludeSecondaryReportPages([masthead, header + 'section 1', header + 'section 2']);
+  ok(all && all.pages.length === 3 && /nothing in this file was examined as evidence/.test(all.note), 'sealing a Verum Omnis report itself says nothing was examined as evidence');
+  // A far page carrying the title (an index entry) is excluded on its own; it does not bridge to the pages between.
+  const far = ['ordinary exhibit page 1', masthead, header + 'p2', 'exhibit A', 'exhibit B', 'exhibit C', 'exhibit D', 'Index: ' + header];
+  const rf = E.voExcludeSecondaryReportPages(far);
+  ok(rf && JSON.stringify(rf.pages) === '[2,3,8]', 'a gap wider than two pages is never bridged (' + (rf && rf.pages) + ')');
+
+  // 13b. CT44: the party denied ownership must be the party shown to have become owner.
+  const d38 = (b) => of(DET.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED, b, 'CT44');
+  ok(d38(['3.2.3 in the event that the Franchisee is not the owner of the Premises, but is the lessee in terms of a Lease with Palmbili Properties, this agreement expires when the lease terminates.', 'All Fuels Equipment (Pty) Ltd, the supplier of fuel and the Owner/Lessor of the site from which the Operator trades.']).length === 0,
+    'CT44 stays silent when the franchisee is the lessee and the FRANCHISOR is the owner/lessor (p.28 vs p.112 of the re-run)');
+  ok(d38(['in the event that the FRANCHISOR is not the owner of the Premises but is the Lessee in terms of a head lease agreement with a third party and such head lease terminates, then this Contract shall be deemed to have terminated or expired.', 'x', 'By 2014 Bright Idea Projects 66 (Pty) Ltd purchased the property and became the registered owner of the premises.']).length === 1,
+    'CT44 still fires when the record shows the clause party itself became owner (franchise-lease fixture)');
+  const same = d38(['if the Franchisee is not the owner of the Premises but is the lessee under a head lease and that lease terminates, this agreement expires.', 'The Franchisee became the registered owner of the premises on 1 March 2019.']);
+  ok(same.length === 1 && same[0].location === 'Page 1 vs Page 2', 'CT44 fires when the same side is denied ownership and later shown as owner');
+
+  // 13c. CT08: a quoted multi-word term is one term; two different terms are not two definitions of one word.
+  const ct08b = (b) => of(DET.D30_DETECT_TERM_DEFINITION_CONFLICT, b, 'CT08');
+  ok(ct08b(["1.1 'Accommodation Rental' means the monthly rental for the residential unit.", "1.2 'All Fuels Computer System Rental' means the fee for the point-of-sale system."]).length === 0,
+    "'Accommodation Rental' and 'All Fuels Computer System Rental' are two terms, not two definitions of \"rental\"");
+  ok(ct08b(['Equipment Rental means the monthly charge for pumps and tanks supplied.', 'Fuel Rental means the deposit held against fuel stock supplied.']).length === 0, 'Capitalised multi-word terms are read whole');
+  ok(ct08b(["1.1 'Accommodation Rental' means the monthly rental for the residential unit payable in advance.", "9.4 'Accommodation Rental' means the annual amount payable for the office premises in arrears."]).length === 1, 'the same quoted term defined differently still fires');
+  ok(ct08b(['1.1 “Premises” means Shop 4 and Shop 5 and the forecourt at Durban.', '9.9 “Premises” means only the forecourt and the canopy, nothing else at all.']).length === 1, 'curly double quotes are read');
+  ok(ct08b(["the Lessee's obligations means nothing here", "the Lessee's duties means nothing else here either"]).length === 0, "an apostrophe inside a word is not an opening quote");
+
+  // 13d. CT04: the invoice must be billing under the expired instrument.
+  const d04 = (b) => DET.D04_DETECT_TEMPORAL_IMPOSSIBILITY(b).filter(f => /Billing after the stated expiry/.test(f.evidence));
+  const pages = Array(30).fill('page text.');
+  pages[5] = 'The lease agreement expired on 28 February 2018 between Chevron South Africa (Pty) Ltd and Highcock Fuels CC.';
+  pages[25] = 'TAX INVOICE date: 19 December 2025 All Fuels Equipment (Pty) Ltd to Wayne Nel Motors CC rental R12,000.';
+  ok(d04(pages).length === 0, 'an invoice between other companies is not billing under the expired lease (p.326 vs p.412 of the re-run)');
+  const shared = pages.slice(); shared[25] = 'TAX INVOICE date: 19 December 2025 Chevron South Africa (Pty) Ltd to Highcock Fuels CC rental R12,000.';
+  ok(d04(shared).length === 1, 'an invoice between the same companies after the expiry still fires');
+  const anon = pages.slice(); anon[25] = 'TAX INVOICE date: 19 December 2025 rental for the premises R12,000 due on presentation.';
+  ok(d04(anon).length === 1, 'a page that names no company cannot be excluded on that ground');
+  const docs = Array.from({ length: 12 }, (_, i) => 'Clean Bundle Page ' + (i + 1) + ' of 12 ' + (i < 6 ? 'Lease Page ' + (i + 1) + ' of 6' : 'Invoice Page ' + (i - 5) + ' of 6'));
+  const segs = E.voDetectDocuments(docs);
+  ok(segs.length === 2 && segs[0].start === 1 && segs[0].end === 6 && segs[1].start === 7, 'a bundle\'s own running numbering ("Clean Bundle Page N of 528") no longer hides the exhibits\' boundaries');
+  const two = docs.slice(); two[2] += ' lease agreement expired on 28 February 2018.'; two[9] += ' TAX INVOICE date: 19 December 2025 rental R12,000.';
+  ok(d04(two).length === 0, 'an invoice in another stated document is not billing under this one');
+
+  // 13e. '&' is a word, not a joiner.
+  ok(extract(['Agreements', ' ', '&', ' ', 'The', ' ', 'Act']) === 'Agreements & The Act' && extract(['12', '/', '12']) === '12/12', '"Agreements & The" keeps its spaces (was "Agreements &The"); "/" still joins');
+}
+
+// ===== 14. Narrator honesty and one count =====================================
+{
+  const fs = require('fs'), path = require('path');
+  const wsrc = fs.readFileSync(path.join(process.cwd(), 'worker/verum-rules.js'), 'utf8');
+  const tmpl = wsrc.slice(wsrc.indexOf('function narrateTemplate'), wsrc.indexOf('async function handleAiNarrate'));
+  ok(!/integrity score|confidence rating|input\.score|input\.confidence/.test(tmpl) && /engine-verified finding/.test(tmpl) && /AI-raised candidate/.test(tmpl),
+    'the Worker\'s template narrative prints no score and no band, and counts engine-verified findings apart from AI-raised candidates');
+  ok(/SWEEP_VERDICT_RE/.test(wsrc) && /Neutral language only/.test(wsrc), 'Brain 9 is told to use neutral language and conclusory items are discarded server-side');
+  const rsrc = fs.readFileSync(path.join(process.cwd(), 'forensic-report.js'), 'utf8');
+  const gate = rsrc.slice(rsrc.indexOf('var VO_BANNED_SENTENCE_RE'), rsrc.indexOf('var VO_MONTH_MAY_RE'));
+  ok(/integrity\|fraud\|risk\|overall\)\\\\s\+score/.test(gate) && /confidence\\\\s\+\(\?:rating\|band\|level\|score\)/.test(gate), 'the §15.2 render gate drops score and confidence-band sentences');
+  const narr = rsrc.slice(rsrc.indexOf('function secNarrative'), rsrc.indexOf('function secNarrative') + 14000);
+  ok(/f\.source !== 'ai' && f\.type !== 'SERIAL'/.test(narr) && /not counted here/.test(narr), 'the narrative counts engine-verified findings only and tells AI candidates apart');
+  ok(/no draft passed the server\\'s anchor and language gate/.test(rsrc), 'the narrator provenance line says when every section was asked for and discarded');
+  const page = fs.readFileSync(path.join(process.cwd(), 'seal-document.html'), 'utf8');
+  ok(/window\._voNarrateTemplate \? 'local' : 'ai'/.test(page) && /res\.model === 'template-fallback'/.test(page), 'template text from the Worker is labelled local, never as the AI narrator\'s writing');
+  ok(/reportFraudResult\.summary = generateSummary\(assessRes\.findings/.test(page), 'the summary sentence is recomputed on the retained engine findings');
+  ok(/sectionsAttempted: hr\.calls/.test(page), 'the human-report provenance carries how many sections were asked for');
+  ok(/id="sizeRow"/.test(page) && /for the watermark, QR and footer on every page/.test(page), 'the results panel states the original and sealed sizes');
+}
+
 console.log(`\n[annexure-eb] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[annexure-eb] FAILURES'); process.exit(1); }
 console.log('[annexure-eb] ALL GREEN');

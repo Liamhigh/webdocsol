@@ -2858,11 +2858,18 @@ function secNarrative(ctx, data, opts) {
 
   // Substantive, human-facing findings only: no structural notes, no raw serial
   // pattern rows (those have their own section). Most serious first.
-  var subst = all.filter(function (f) { return f && f.type !== 'SERIAL' && !isDemoted(f); })
+  // ONE COUNT: the number told here is the engine-verified number the cover
+  // and the declaration print. AI-raised candidates are advisory and are
+  // told apart, never folded in — the annexure EB re-run said "18 substantive
+  // contradictions, 7 serious" against 15 verified findings because three AI
+  // candidates were counted as contradictions.
+  var aiCands = all.filter(function (f) { return f && f.source === 'ai' && f.type !== 'SERIAL' && !isDemoted(f); });
+  var subst = all.filter(function (f) { return f && f.source !== 'ai' && f.type !== 'SERIAL' && !isDemoted(f); })
     .sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
 
   if (subst.length === 0) {
-    ctx.para('Reading these documents together, the engine found no substantive contradictions to narrate. Any items in the tables that follow are routine structural notes, or multi-stage pattern signals covered in their own section.', { size: 10.5, after: 8 });
+    ctx.para('Reading these documents together, the engine found no substantive contradictions to narrate. Any items in the tables that follow are routine structural notes, or multi-stage pattern signals covered in their own section.'
+      + (aiCands.length ? ' The ' + aiCands.length + ' AI-raised candidate item' + (aiCands.length === 1 ? '' : 's') + ' in the AI-Identified Candidates section ' + (aiCands.length === 1 ? 'is' : 'are') + ' advisory only.' : ''), { size: 10.5, after: 8 });
     return;
   }
 
@@ -2886,6 +2893,7 @@ function secNarrative(ctx, data, opts) {
   var lead = 'Reading the ' + (docCount === 1 ? 'document' : 'documents together') + ', ' + subst.length + ' substantive contradiction' + (subst.length === 1 ? '' : 's') + ' stand' + (subst.length === 1 ? 's' : '') + ' out';
   lead += serious.length ? ', ' + serious.length + ' of them serious' : '';
   lead += groups.length < subst.length ? ', following ' + groups.length + ' distinct pattern' + (groups.length === 1 ? '' : 's') + '.' : '.';
+  if (aiCands.length) lead += ' A further ' + aiCands.length + ' AI-raised candidate item' + (aiCands.length === 1 ? '' : 's') + ' ' + (aiCands.length === 1 ? 'is' : 'are') + ' advisory only and ' + (aiCands.length === 1 ? 'is' : 'are') + ' set out in the AI-Identified Candidates section, not counted here.';
   ctx.para(lead, { size: 10.5, after: 4 });
 
   // The thesis, in one breath: what the most serious patterns are, as the
@@ -3081,6 +3089,10 @@ var VO_BANNED_SENTENCE_RE = new RegExp([
   '|indicat(?:es|ed|ing|ive)|consistent\\s+with|I\\s+(?:believe|think|suspect))\\b',
   // prohibited characterisation nouns
   '|\\bred\\s+flags?\\b|\\bindicators?\\b|\\banomal(?:y|ies)\\b',
+  // scores and confidence bands in any dress (PD1, §15.2): "an integrity score
+  // of 41 with a confidence rating of MODERATE" led the annexure EB re-run
+  '|\\b(?:integrity|fraud|risk|overall)\\s+score\\b|\\bscore\\s+of\\s+\\d|\\bconfidence\\s+(?:rating|band|level|score)\\b',
+  '|\\b(?:critical|very\\s+high|high|moderate|medium|low)\\s+confidence\\b|\\bconfidence\\s+(?:is|was|of)\\s+(?:critical|very\\s+high|high|moderate|medium|low)\\b',
   // person-level judgment (verdict belongs to the court)
   '|\\bcredibility\\b|\\bguilt(?:y)?\\b|\\binnocen(?:t|ce)\\b|\\blied\\b|\\bliar\\b',
   // (the noun is spelled in two parts: tests/allfuels-regression locks the
@@ -4427,7 +4439,9 @@ async function buildHumanReport(opts) {
     'Source document: ' + san(data.docName) + ' (' + data.pageCount + ' pages) — SHA-512 ' + truncHash(data.sha512, 24, 12),
     'Sealed technical report: ' + (prov.technicalSealId || 'n/a') + ' — SHA-512 ' + (prov.technicalSha512 ? truncHash(prov.technicalSha512, 24, 12) : 'n/a'),
     'Findings JSON (v' + (prov.findingsJsonVersion || '1.2.0') + '): SHA-512 ' + (prov.findingsJsonSha512 ? truncHash(prov.findingsJsonSha512, 24, 12) : 'n/a'),
-    'AI narrator: ' + san(String(prov.model || 'not run')) + '  |  contract ' + san(String(prov.contract || 'human-v1')) + '  |  temperature 0',
+    'AI narrator: ' + san(String(prov.model || (prov.sectionsAttempted > 0
+      ? 'asked for ' + prov.sectionsAttempted + ' section' + (prov.sectionsAttempted === 1 ? '' : 's') + '; no draft passed the server\'s anchor and language gate, so nothing AI-written is printed'
+      : 'not run'))) + '  |  contract ' + san(String(prov.contract || 'human-v1')) + '  |  temperature 0',
     'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the render-time §15.2 gate: ' + gateDroppedClient,
     'Engine: Forensic Contradiction Engine v' + ENGINE_VERSION + ' — deterministic mode',
     rulePackageLine(data),

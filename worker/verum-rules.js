@@ -1130,6 +1130,8 @@ const SWEEP_SYSTEM = 'You are Brain 9, the research-and-development brain of the
   'Eight deterministic brains have already run; "known" lists the contradiction types they reported on these pages. ' +
   'Your only job: find contradictions, inconsistencies or forensic anomalies on these pages that are NOT in known. ' +
   'You cannot issue findings, verdicts or conclusions: every item is a recommendation for the engine. ' +
+  'Neutral language only: name what the text states and where it conflicts; never characterise conduct or a person ' +
+  '(no "criminal", "fraud", "theft", "guilty", "dishonest", "lied" or similar in type or rationale). Items that do are discarded. ' +
   'For each item give: type (an existing CT01-CT46 type where one fits, otherwise a short UPPER_SNAKE type), ' +
   'severity 1-5, rationale (under 200 characters, a statement of fact, no hedging, no verdict on any person), ' +
   'quote (a fragment under 120 characters copied EXACTLY, character for character, from the page text), and page (the page number the quote is on). ' +
@@ -1137,6 +1139,8 @@ const SWEEP_SYSTEM = 'You are Brain 9, the research-and-development brain of the
   'Be conservative: only clear contradictions or inconsistencies supported by the text. ' +
   'Reply ONLY compact JSON: {"recommendations":[{"type":"CT01|UPPER_SNAKE","severity":1-5,"rationale":"...","quote":"verbatim","page":0}]} ' +
   'and {"recommendations":[]} when nothing was missed.';
+
+const SWEEP_VERDICT_RE = /\b(?:crim(?:e|es|inal|inally)|fraud\w*|theft|thief|thieves|stole\w*|stolen|guilt\w*|innocen\w*|dishonest\w*|lie[ds]?|liar|lying|perjur\w*|corrupt\w*|extort\w*|launder\w*|embezzl\w*|forg(?:ed|ery|eries)|scam\w*|deceit\w*|deceiv\w*|malicious\w*|unlawful\w*|illegal\w*|racketeer\w*)\b/i;
 
 // Whitespace, non-breaking spaces and curly quotes are the usual differences
 // between a model's copy of a fragment and the page text; nothing else is
@@ -1157,6 +1161,10 @@ function verifySweepItem(item, pages) {
   const severity = Math.min(5, Math.max(1, Math.round(sev)));
   const rationale = asStr(item.rationale, 300).trim();
   if (!rationale) return null;
+  // A recommendation is a pointer to a textual conflict, never a verdict on a
+  // person or conduct (Constitution v8 §2.10, §15.2): "Criminal contradiction"
+  // and "fraudulent invoice" items from the annexure EB re-run are discarded.
+  if (SWEEP_VERDICT_RE.test(type.replace(/_/g, ' ')) || SWEEP_VERDICT_RE.test(rationale)) return null;
   const quote = asStr(item.quote, 160).trim();
   if (quote.length < MIN_SWEEP_QUOTE_CHARS) return null;
   const needle = sweepNorm(quote);
@@ -1247,14 +1255,25 @@ async function handleAiSweep(request, env) {
 
 // Deterministic narrative built purely from the structured input. Used when
 // the model fails or its output cannot be trusted (e.g. no valid citation).
+// Constitution v8 §15.2 / PD1: no score, no percentage, no confidence band
+// reaches a reader. The template once wrote "an integrity score of 41 with a
+// confidence rating of MODERATE" (the annexure EB re-run sealed that sentence
+// as the report's lead); the internal score and band are inputs the client
+// still sends for ordering and are never printed. Counts are stated by tier:
+// engine-verified findings and AI-raised candidates are never one number.
 function narrateTemplate(input, kept) {
   const top = kept.slice(0, 3);
+  const engineKept = kept.filter(f => !/AI-RAISED/i.test(String(f.status || ''))).length;
+  const aiKept = kept.length - engineKept;
   let executiveSummary =
     'The document "' + input.documentName + '" (' + input.pageCount + ' page(s)) was analysed by the ' +
-    'Verum Omnis contradiction engine on ' + input.generatedUtc + '. The automated analysis produced an ' +
-    'integrity score of ' + input.score + ' with a confidence rating of ' + input.confidence + '. Following ' +
-    'antithesis review, ' + kept.length + ' finding(s) were retained and ' + input.findingsPruned +
-    ' candidate(s) were pruned as benign. ';
+    'Verum Omnis contradiction engine on ' + input.generatedUtc + '. ' +
+    (kept.length
+      ? (engineKept + ' engine-verified finding' + (engineKept === 1 ? '' : 's') +
+         (aiKept ? ' and ' + aiKept + ' AI-raised candidate' + (aiKept === 1 ? '' : 's') + ' (advisory, pending verification)' : '') +
+         (aiKept ? ' were' : (engineKept === 1 ? ' was' : ' were')) + ' supplied for narrative reporting. ')
+      : 'No findings were supplied for narrative reporting. ') +
+    (input.findingsPruned > 0 ? input.findingsPruned + ' candidate(s) were pruned as benign before this narrative. ' : '');
   if (top.length) {
     executiveSummary += 'The most significant retained findings are identified as ' +
       top.map(f => '[' + f.id + ']').join(', ') + ' and are set out in the critical-evidence narrative. ';
