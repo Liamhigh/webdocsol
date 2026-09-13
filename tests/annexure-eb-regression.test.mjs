@@ -356,6 +356,18 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(/reportFraudResult\.summary = generateSummary\(assessRes\.findings/.test(page), 'the summary sentence is recomputed on the retained engine findings');
   ok(/sectionsAttempted: hr\.calls/.test(page), 'the human-report provenance carries how many sections were asked for');
   ok(/id="sizeRow"/.test(page) && /for the watermark, QR and footer on every page/.test(page), 'the results panel states the original and sealed sizes');
+  // The inlined scripts each run inside their own closure: a helper defined
+  // there (fmtBytes in forensic-report.js) is invisible to the page script.
+  // The size line called it and every seal's results panel died with
+  // "fmtBytes is not defined" on 13 September. Page-level code may only
+  // call page-level helpers.
+  const pageLevel = page.split(/\/\* VO-INLINE:[^*]*:START \*\/[\s\S]*?\/\* VO-INLINE:[^*]*:END \*\//g).join('\n');
+  ok(!/(^|[^A-Za-z0-9_$.])fmtBytes\(/.test(pageLevel) && /function voFmtBytes\(/.test(pageLevel) && /voFmtBytes\(sealedSize\)/.test(pageLevel),
+    'page-level code formats sizes with its own voFmtBytes, never the report closure\'s fmtBytes');
+  const closurePrivate = ['fmtBytes', 'truncHash', 'quoteEvidence', 'fmtLocation', 'narrativeBlocks', 'scrubNarrative', 'voGatePasses'];
+  const leaks = closurePrivate.filter(fn => new RegExp('(^|[^A-Za-z0-9_$.])' + fn + '\\(').test(pageLevel));
+  ok(leaks.length === 0, 'page-level code calls no helper that lives only inside an inlined closure (' + leaks.join(', ') + ')');
+  ok(/try \{\s*var sizeRow = document\.getElementById\('sizeRow'\);/.test(page), 'the size line can never stop the results panel (wrapped in try/catch)');
 }
 
 console.log(`\n[annexure-eb] PASS=${pass} FAIL=${fail}`);

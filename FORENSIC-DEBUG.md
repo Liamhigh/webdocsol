@@ -50,6 +50,7 @@ these reappears, the guard was weakened — find out how before changing anythin
 | **The report's lead says "integrity score of N" or "confidence rating of X"** | the Worker's template narrative reached the reader, or the render gate was loosened | the template prints neither; `VO_BANNED_SENTENCE_RE` drops such sentences whoever wrote them; template text is labelled `local` and never leads. `ENGINE.md` §12.11 |
 | **Three different finding counts in one report** (cover, lead sentence, narrative) | the summary was computed before the AI review, or the narrative counted AI candidates | `reportFraudResult.summary` is recomputed on the retained engine findings; `secNarrative` counts `source !== 'ai'` only and tells candidates apart. `ENGINE.md` §12.11 |
 | **"AI narrator: not run" although the sections were asked for** | `sectionsAttempted` not passed to `humanProvenance` | the provenance line reads "asked for N sections; no draft passed the server's anchor and language gate". `ENGINE.md` §12.11 |
+| **Every seal ends "Sealing Failed — Error: X is not defined" after the pipeline completed** | page-level code called a helper that lives inside one of the five inlined scripts' closures (13 September: `fmtBytes` from forensic-report.js, called by the results panel's size line) | the inlined scripts are closures; the page has its own helpers (`voFmtBytes`). `tests/annexure-eb-regression.test.mjs` §14 scans the page-level script for closure-private names; the results-panel extras are wrapped in try/catch so no decoration can stop the downloads. |
 
 ---
 
