@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 32 suites, 2042 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 32 suites, 2054 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**32 suites · 2042 assertions.** `tests/run-all.js` is the registry — a new
+**32 suites · 2054 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -542,7 +542,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `annexure-eb-regression.test.mjs` | 115 | **The annexure EB run and its re-run** (§12.10, §12.11): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance |
+| `annexure-eb-regression.test.mjs` | 127 | **The annexure EB run and its re-run** (§12.10, §12.11): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
@@ -1091,6 +1091,38 @@ and what changed — every item pinned by `tests/annexure-eb-regression.test.mjs
     watermark, QR and footer on every page)". The seal adds 1–4 % to a native PDF and about
     1 % to a scanned one (measured on the pdf-lib path); an 88 MB output from annexure EB is
     the size of its OCR-rendered input, not the seal's doing.
+
+**The same night, from the first document sealed after the deploy** (`AllFuels_Timeline_
+Report_Des_to_Current.PDF`, 17 native-text pages printed from Chrome; pinned by §15 of the
+same suite):
+
+11. **A PDF printed from Chrome or Edge read as seventeen empty pages.** Chromium/Skia draws
+    text with Type3 fonts, ONE-BYTE character codes (`<39> Tj`) and a ToUnicode map whose
+    codespacerange is `<00> <FF>`. `_voDecodeHexString` assumed two-byte codes for every
+    mapped font, read `<39>` as nothing, and the whole file fell to OCR. `_voParseToUnicode`
+    now records the code width from the codespacerange (or from the mapped keys' length),
+    `_voDecodeHexString` decodes at that width, and `_voMapLiteral` passes literal strings
+    drawn with a one-byte-mapped font through the map (pdfTeX ligatures, custom encodings)
+    keeping any byte the map does not name. Two-byte (Identity-H) fonts are unchanged.
+12. **A font name with a hyphen, underscore or plus was never selected.** The font-select
+    pattern accepted `[A-Za-z0-9]+` only, so `/C2_0 12 Tf` (Acrobat) or `/Helvetica-7098 Tf`
+    (pdf-lib) left the previous font's map in force. Any PDF name is now accepted.
+13. **A line end glued words** ("side ofthe same document"): a producer that positions every
+    glyph itself draws no space at a line end. A text matrix whose vertical position changes,
+    a `Td`/`TD` with a vertical component, `T*`, `'` and `"` now yield a word boundary, as
+    pdf.js does. Hyphenated words split across lines read "Kwa- Zulu"; accepted.
+14. **"CAS 96/6/2026" is a SAPS case number, not an impossible date** (it was sealed at
+    severity 5). D03 skips a date-shaped value whose preceding words are a case, docket,
+    reference, file or matter cue.
+15. **A valid registration number was cut by a 40-character window** ("CIPC company-history
+    search on 2002/059909/23" became `2002/059909/2`, "not a valid SA format"). D11 requires
+    the number to START within 40 characters of the cue but reads it whole, and quotes it
+    whole.
+16. **An AI-compiled summary is disclosed, never excluded.** A file whose first two pages say
+    "Compiled by: Claude" (or another assistant, or "I'm Claude") is analysis of other
+    documents. `voNoteAiCompiledSummary` adds one sentence to the extraction notes: every
+    finding on it describes what the summary says and must be verified against the primary
+    documents it cites. Only Verum Omnis's own reports and the analysis template are excluded.
 
 Not adopted, with reasons: a bundle-wide page/quote resolver ("AnchorResolver") — every
 finding already carries the page the quote was read from, and `voRulePagesOf` reads ranges;
