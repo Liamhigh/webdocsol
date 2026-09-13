@@ -197,6 +197,13 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(r.status === 200, 'narrate accepts the documented payload shape (' + r.status + ')');
   const nb = await r.json().catch(() => null);
   ok(nb && nb.ok === true, 'narrate returns ok:true');
+  ok(nb && nb.model === 'template-fallback' && !/score|confidence/i.test(nb.executiveSummary || '') && /1 engine-verified finding was supplied/.test(nb.executiveSummary || ''),
+    'the template narrative names its provenance and prints no score and no band (' + JSON.stringify(nb && nb.executiveSummary).slice(0, 160) + ')');
+  const mixed = { ...good, findingsKept: good.findingsKept.concat([{ id: 'F2', type: 'CT09', severity: 3, severityOrdinal: 'MEDIUM', status: 'AI-RAISED CANDIDATE - PENDING VERIFICATION', location: 'Page 3', evidence: 'name differs' }]), findingsPruned: 2 };
+  r = await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify(mixed)), env, {});
+  const mb = await r.json().catch(() => null);
+  ok(mb && /1 engine-verified finding and 1 AI-raised candidate \(advisory, pending verification\) were supplied/.test(mb.executiveSummary || '') && /2 candidate\(s\) were pruned/.test(mb.executiveSummary || ''),
+    'the template counts engine-verified findings apart from AI-raised candidates (' + JSON.stringify(mb && mb.executiveSummary).slice(0, 200) + ')');
 
   // The OLD client payload {findings, score, verdict} is the wrong shape and
   // must be rejected -- documents the contract the client now satisfies.
@@ -740,6 +747,15 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(sw.recommendations.length === 1, 'the same quote reported twice (case/severity differing) is one recommendation');
   ok(JSON.stringify(sw.pagesRead) === '[4,5]', 'the reply names the pages read');
   ok(/Constitution v8 §2\.10/.test(sw.note) && /not findings/.test(sw.note), 'the reply says recommendations are not findings');
+  // Neutral language: a verdict on conduct or a person is not a recommendation.
+  r = await sweepPost({ pages, known: [] }, modelSays([
+    { type: 'CRIMINAL_CONTRADICTION', severity: 5, rationale: 'The invoice date conflicts with the revocation date.', quote: 'M. Wellington revoked signature authority', page: 4 },
+    { type: 'CT11', severity: 4, rationale: 'The fraudulent invoice was authorised after revocation.', quote: 'M. Wellington revoked signature authority', page: 4 },
+    { type: 'CT11', severity: 4, rationale: 'The invoice was authorised after the authority was revoked.', quote: 'M. Wellington revoked signature authority', page: 4 }
+  ]));
+  const nl = await r.json();
+  ok(nl.recommendations.length === 1 && nl.recommendations[0].rationale === 'The invoice was authorised after the authority was revoked.', 'items whose type or rationale passes a verdict ("criminal", "fraudulent") are discarded; the neutral statement of the same conflict is kept (' + nl.recommendations.length + ')');
+  ok(/Neutral language only/.test(calls[0].opts.messages[0].content) && /Items that do are discarded/.test(calls[0].opts.messages[0].content), 'the prompt states the neutral-language rule');
   const sys = calls[0].opts.messages[0].content;
   ok(/You are Brain 9, the research-and-development brain/.test(sys) && /cannot issue findings, verdicts or conclusions/.test(sys) && /copied EXACTLY, character for character/.test(sys), 'the prompt is Brain 9: no verdicts, verbatim quotes only');
   const userMsg = JSON.parse(calls[0].opts.messages[1].content);

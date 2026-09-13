@@ -405,6 +405,11 @@ function voDetectDocuments(textBlocks) {
     while ((m = re.exec(String(textBlocks[i] || ''))) !== null) {
       var n = parseInt(m[1], 10), tot = parseInt(m[2], 10);
       if (!isFinite(n) || !isFinite(tot) || tot < 2 || n < 1 || n > tot) continue;
+      // The bundle's OWN running numbering ("Clean Bundle Page 326 of 528" on
+      // every page of a 528-page bundle) states nothing about the documents
+      // inside it; only an exhibit's own "Page 3 of 12" does. Annexure EB's
+      // footer made the whole bundle one document and hid every boundary.
+      if (tot === textBlocks.length && n === i + 1) continue;
       if (!best) best = { n: n, total: tot };
     }
     marks.push(best);
@@ -1177,6 +1182,38 @@ var DETECTORS = {
     var _tl = voTlCollect(textBlocks);
     var expiries = _tl.expiries;
     var invoices = _tl.invoices;
+    // The invoice must be billing under THE EXPIRED INSTRUMENT, not merely a
+    // later date somewhere in the bundle. Annexure EB sealed "agreement expired
+    // 28 Feb 2018" (p.326) against an invoice of 2025 (p.412) from a different
+    // exhibit. Two deterministic links are required where the record offers
+    // them: the pages lie in the same document when the bundle states its own
+    // document boundaries (voDetectDocuments), and the company names printed
+    // on the two pages overlap when both pages print any. A page that names no
+    // company cannot be excluded on that ground; the finding still tells the
+    // reader to verify the instrument.
+    var tlSegs = voDetectDocuments(textBlocks) || [];
+    var tlDocOf = function (pageIdx) {
+      for (var d = 0; d < tlSegs.length; d++) { if (pageIdx + 1 >= tlSegs[d].start && pageIdx + 1 <= tlSegs[d].end) return d; }
+      return -1;
+    };
+    var TL_COMPANY_RE = /\b([A-Z][A-Za-z&'.-]*(?:\s+[A-Z0-9][A-Za-z0-9&'.-]*){0,4})\s+(?:\(Pty\)\s*Ltd|Pty\s*Ltd|\(Proprietary\)\s*Limited|Limited|Ltd|CC|Inc\.?|Incorporated|LLC|PLC)\b/g;
+    var tlCompanies = function (pageIdx) {
+      var out = {}, any = false, m2, txt = String(textBlocks[pageIdx] || '');
+      TL_COMPANY_RE.lastIndex = 0;
+      while ((m2 = TL_COMPANY_RE.exec(txt)) !== null) {
+        var k = m2[1].toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (k.length >= 4) { out[k] = true; any = true; }
+      }
+      return any ? out : null;
+    };
+    var tlLinked = function (a, b) {
+      if (a.page === b.page) return true;
+      if (tlSegs.length && tlDocOf(a.page) !== tlDocOf(b.page)) return false;
+      var ca = tlCompanies(a.page), cb = tlCompanies(b.page);
+      if (!ca || !cb) return true;
+      for (var k in ca) { if (cb[k]) return true; }
+      return false;
+    };
     if (expiries.length && invoices.length) {
       // Conservative under ambiguity: the baseline expiry is the LATEST
       // reading of any stated expiry, and an invoice counts as late only when
@@ -1184,7 +1221,7 @@ var DETECTORS = {
       // date can ever manufacture the finding.
       var lastExp = expiries[0];
       for (var e2 = 1; e2 < expiries.length; e2++) if (expiries[e2].keyMax > lastExp.keyMax) lastExp = expiries[e2];
-      var late = invoices.filter(function (iv) { return iv.keyMin > lastExp.keyMax; });
+      var late = invoices.filter(function (iv) { return iv.keyMin > lastExp.keyMax && tlLinked(lastExp, iv); });
       // Dedupe repeated identical invoice dates; cap the citation list.
       var seenIv = {}, cited = [];
       for (var v2 = 0; v2 < late.length; v2++) {
@@ -2236,7 +2273,13 @@ var DETECTORS = {
       effective:1, adequate:1, normal:1, usual:1, ordinary:1, general:1,
       particular:1, specific:1, further:1, additional:1, express:1, implied:1,
       written:1, sufficient:1, practicable:1, possible:1, prior:1, fair:1 };
-    var definitionRe = /("[^"]+"|\b[a-z][a-z'-]{3,})\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
+    // A defined term is the WHOLE quoted phrase, or a run of Capitalised words:
+    // 'Accommodation Rental' and 'All Fuels Computer System Rental' are two
+    // terms, not two definitions of "rental" (annexure EB sealed five such
+    // CT08 rows: 'rental', 'fees', 'equipment', 'fuel', 'products'). Straight
+    // and curly double and single quotes are all read; an apostrophe inside a
+    // word is not a quote (the opening quote must follow a space or bracket).
+    var definitionRe = /(?:^|[\s(\[])(?:("[^"\n]{2,80}"|\u201C[^\u201D\n]{2,80}\u201D|'[^'\n]{2,80}'|\u2018[^\u2019\n]{2,80}\u2019)|([a-z][a-z'-]{3,}(?:\s+[a-z][a-z'-]{2,}){0,3}))\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
     // "Defined twice" is NOT a contradiction — a definitions chapter restated in
     // an index, or the same agreement bound twice into a bundle, defines every
     // term twice, IDENTICALLY (a real run produced 25 such non-findings from one
@@ -2292,11 +2335,19 @@ var DETECTORS = {
     for (var i = 0; i < textBlocks.length; i++) {
       var match;
       while ((match = definitionRe.exec(textBlocks[i])) !== null) {
-        var quoted = match[1].charAt(0) === '"';
-        var term = match[1].toLowerCase().replace(/"/g, '').trim();
+        var quoted = !!match[1];
+        var rawTerm = quoted ? match[1].slice(1, -1) : match[2];
+        var term = rawTerm.toLowerCase().replace(/\s+/g, ' ').trim();
+        if (!term) continue;
         // Bare (unquoted) words must be plausible defined terms, not boilerplate:
-        // a defined term is Capitalised in the instrument that defines it.
-        if (!quoted && (TERM_STOP[term] || term.length < 4 || !/^[A-Z]/.test(match[1]))) continue;
+        // a defined term is Capitalised in the instrument that defines it — every
+        // word of a multi-word term.
+        if (!quoted) {
+          var words = rawTerm.split(/\s+/);
+          var capOk = true;
+          for (var wI = 0; wI < words.length; wI++) { if (!/^[A-Z]/.test(words[wI])) { capOk = false; break; } }
+          if (!capOk || TERM_STOP[term] || TERM_STOP[words[0].toLowerCase()] || term.length < 4) continue;
+        }
         var snippet = String(textBlocks[i]).substr(match.index + match[0].length, 90).replace(/\s+/g, ' ').trim();
         if (voLooksGarbled(snippet)) continue; // OCR debris is not a definition
         var norm = snippet.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').slice(0, 60);
@@ -2540,8 +2591,56 @@ var DETECTORS = {
       }
       return null;
     }
-    var lessee = pageOf(/not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/);
-    var owner = pageOf(/(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/);
+    // Which PARTY each half is about. Annexure EB sealed "the Franchisee is not
+    // the owner of the Premises" (p.28) against "All Fuels … the Owner/Lessor of
+    // the site" (p.112): two different parties, no trap. The party denied
+    // ownership must be the party the record shows became owner — read as the
+    // side (grantee: lessee/franchisee/tenant/licensee; grantor: lessor/
+    // franchisor/landlord/licensor/owner) named just before each phrase. A half
+    // that names no side stays compatible (the fixture's "Bright Idea Projects
+    // … became the registered owner" names the company, not a role).
+    var SIDE_RE = /\b(sub-?lessee|lessee|tenant|franchisee|licensee|occupier)\b|\b(sub-?lessor|lessor|landlord|franchisor|licensor|owner\s*\/\s*lessor)\b/gi;
+    // The role word nearest the phrase (90 characters before it, the phrase
+    // itself, 20 after) names the side the phrase is about.
+    function sideNear(raw, idx, len) {
+      var from = Math.max(0, idx - 90), w = raw.slice(from, Math.min(raw.length, idx + len + 20));
+      var best = null, bestDist = Infinity, m;
+      SIDE_RE.lastIndex = 0;
+      while ((m = SIDE_RE.exec(w)) !== null) {
+        var pos = from + m.index, dist = pos < idx ? idx - pos : pos - idx;
+        if (dist < bestDist) { bestDist = dist; best = m[1] ? 'grantee' : 'grantor'; }
+      }
+      return best;
+    }
+    function allPagesOf(re) {
+      var out = [];
+      for (var i = 0; i < blocks.length; i++) {
+        var raw = String(blocks[i] || '');
+        var lower = raw.toLowerCase();
+        var g = new RegExp(re.source, 'g'), m;
+        while ((m = g.exec(lower)) !== null) {
+          // "is NOT the owner" is the lessee clause itself, not an ownership record.
+          if (/\bnot\s+(?:the\s+)?$/.test(lower.slice(Math.max(0, m.index - 12), m.index))) continue;
+          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          out.push({ page: i + 1, quote: q, side: sideNear(raw, m.index, m[0].length) });
+          if (out.length > 200) return out;
+        }
+      }
+      return out;
+    }
+    var lesseeHits = allPagesOf(/not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/);
+    var ownerHits = allPagesOf(/(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/);
+    var lessee = null, owner = null;
+    for (var lh = 0; lh < lesseeHits.length && !owner; lh++) {
+      for (var oh = 0; oh < ownerHits.length; oh++) {
+        var lSide = lesseeHits[lh].side, oSide = ownerHits[oh].side;
+        // "the Owner/Lessor" names the grantor as owner: only a grantor-side
+        // lessee clause can contradict it; a grantee-side clause is about
+        // somebody else.
+        if (lSide && oSide && lSide !== oSide) continue;
+        lessee = lesseeHits[lh]; owner = ownerHits[oh]; break;
+      }
+    }
     var invokesTermination = false;
     for (var b = 0; b < blocks.length; b++) {
       if (/(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(String(blocks[b]).toLowerCase())) { invokesTermination = true; break; }
@@ -3291,6 +3390,72 @@ function voExcludeTemplatePages(textBlocks) {
   return 'Template boilerplate: ' + templatePages.length + ' page(s) (' + tpList +
     ') carry the Verum Omnis analysis-template masthead. Their text is instructional boilerplate' +
     ' (worked examples, keyword checklists), not case evidence, and was excluded from contradiction scanning.';
+}
+
+// A PRIOR VERUM OMNIS REPORT bound into the bundle is analysis, not evidence.
+// Annexure EB opened with a 26-page Verum Omnis supplementary report (masthead
+// "VERUM OMNIS FORENSIC REPORT … Report Reference: VO-AF-2026-0523-SUPP"), and
+// the engine read its own earlier narrative as the record: "goodwill forfeiture
+// contradiction" on p.2 was sealed as a CT45 finding against p.3, and the
+// running title "…Unsigned Agreements…" on 40 pages became a CT23 signature
+// finding. The engine must never analyse a Verum Omnis report as evidence, so
+// pages carrying a Verum Omnis report masthead — and pages carrying that
+// report's own running title — are excluded in place (page numbering and
+// counts survive) and the exclusion is disclosed (Prime Directive 6). Pages
+// with a one- or two-page gap inside a run of report pages are treated as
+// report pages too (an OCR miss on the running title), never a wider gap.
+var VO_SECONDARY_REPORT_REF_RE = /Report\s+Reference\s*:\s*VO-/i;
+// The brand and the kind must sit together ("VERUM OMNIS FORENSIC REPORT",
+// "V E R U M O M N I S S E A L E D D O C U M E N T", "VERUM OMNIS SEAL |"):
+// an exhibit inside a Verum-sealed bundle that merely mentions "the forensic
+// report" beside the seal footer is evidence, not a report page.
+var VO_SECONDARY_REPORT_MASTHEAD_RE = /V\s?E\s?R\s?U\s?M\s+O\s?M\s?N\s?I\s?S[\s|\-\u2013\u2014:]{1,40}(?:FORENSIC\s+REPORT|S\s?E\s?A\s?L\s?E\s?D\s+D\s?O\s?C\s?U\s?M\s?E\s?N\s?T|SEAL\s*\|)/i;
+var VO_SECONDARY_REPORT_TITLE_RE = /\b((?:supplementary|forensic|final|interim|preliminary|investigation)\s+report\s*:\s*[^\n]{10,160})/i; // page text is space-joined, so the title is read from the cue, not from a line start
+var VO_SECONDARY_REPORT_PLACEHOLDER = new Array(11).join('prior verum omnis report page excluded. ');
+function voIsSecondaryReportPage(text) {
+  var t = String(text || '');
+  if (VO_SECONDARY_REPORT_REF_RE.test(t)) return true;
+  return VO_SECONDARY_REPORT_MASTHEAD_RE.test(t);
+}
+function voExcludeSecondaryReportPages(textBlocks) {
+  if (!textBlocks || textBlocks.length < 2) return null;
+  var isReport = [], titles = [], i, m;
+  for (i = 0; i < textBlocks.length; i++) {
+    isReport[i] = voIsSecondaryReportPage(textBlocks[i]);
+    if (!isReport[i]) continue;
+    // The report's own title line, so its running header on later pages can be recognised.
+    m = VO_SECONDARY_REPORT_TITLE_RE.exec(String(textBlocks[i] || ''));
+    if (m) {
+      var key = m[1].toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 48);
+      if (key.length >= 16 && titles.indexOf(key) < 0) titles.push(key);
+    }
+  }
+  if (titles.length) {
+    for (i = 0; i < textBlocks.length; i++) {
+      if (isReport[i]) continue;
+      var flat = String(textBlocks[i] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      for (var t = 0; t < titles.length; t++) { if (flat.indexOf(titles[t]) >= 0) { isReport[i] = true; break; } }
+    }
+  }
+  // Close one- or two-page gaps inside a run of report pages (an OCR miss on the running title).
+  var lastHit = -1;
+  for (i = 0; i < textBlocks.length; i++) {
+    if (!isReport[i]) continue;
+    if (lastHit >= 0 && i - lastHit <= 3) { for (var g = lastHit + 1; g < i; g++) isReport[g] = true; }
+    lastHit = i;
+  }
+  var pages = [];
+  for (i = 0; i < textBlocks.length; i++) {
+    if (!isReport[i]) continue;
+    pages.push(i + 1);
+    textBlocks[i] = VO_SECONDARY_REPORT_PLACEHOLDER;
+  }
+  if (!pages.length) return null;
+  if (pages.length === textBlocks.length) {
+    return { pages: pages, note: 'Prior Verum Omnis report: every page (' + pages.length + ') carries a Verum Omnis report masthead or its running title. A Verum Omnis report is analysis, not evidence, and is never scanned for contradictions; nothing in this file was examined as evidence.' };
+  }
+  var list = pages.length > 12 ? pages.slice(0, 12).join(', ') + ', … (' + pages.length + ' in total)' : pages.join(', ');
+  return { pages: pages, note: 'Prior Verum Omnis report: ' + pages.length + ' page(s) (' + list + ') carry a Verum Omnis report masthead or that report\'s running title. A Verum Omnis report bound into a bundle is analysis, not evidence, and was excluded from contradiction scanning; the exhibits that follow it were scanned.' };
 }
 
 // The anchor rule, in full (Constitution v6.0, Prime Directives: "If a
@@ -4120,7 +4285,7 @@ function _voGlyphTokens(t, texts) {
 //    ("a" + "lease" -> "a lease", exactly as before).
 var VO_TJ_SPACE_KERN = -180; // thousandths of an em; a word space is typically -250 to -333
 var VO_GLYPH_OPENER = /^[(\[{"\u201C\u2018]$/;   // never attaches backward; carried onto the next word
-var VO_GLYPH_JOINER = /[\/\-@&']$/;              // a word ending in one of these pulls the next word onto itself
+var VO_GLYPH_JOINER = /[\/\-@']$/;               // a word ending in one of these pulls the next word onto itself ('&' is a word of its own: "Agreements & The")
 function _voMergeGlyphRuns(texts) {
   var merged = [], run = [], attach = false;
   var isAlnum = function (c) { return /[a-zA-Z0-9]/.test(c); };
@@ -4319,6 +4484,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   // Template/boilerplate suppression (see voExcludeTemplatePages).
   var templateNote = voExcludeTemplatePages(textBlocks);
   if (templateNote) extractionNote += ' ' + templateNote;
+  var _secondary = voExcludeSecondaryReportPages(textBlocks);
+  if (_secondary && _secondary.note) extractionNote += ' ' + _secondary.note;
   var _footer = voExcludeFooterOnlyPages(textBlocks);
   if (_footer.note) extractionNote += ' ' + _footer.note;
 
@@ -5092,6 +5259,8 @@ if (typeof module !== 'undefined' && module.exports) {
     voPagesForEvidence: voPagesForEvidence,
     voDigitalForensicsScan: voDigitalForensicsScan,
     voExcludeTemplatePages: voExcludeTemplatePages,
+    voExcludeSecondaryReportPages: voExcludeSecondaryReportPages,
+    voIsSecondaryReportPage: voIsSecondaryReportPage,
     voEnforceAnchorRule: voEnforceAnchorRule,
     voContentMass: voContentMass,
     VO_NEAR_EMPTY_CHARS: VO_NEAR_EMPTY_CHARS,

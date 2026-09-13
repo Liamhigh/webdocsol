@@ -379,7 +379,7 @@ there is not a signal about the change; the build that matters runs on the merge
 one PR check whose red means something. `wrangler deploy` by hand is the fallback for when
 Workers Builds is unavailable, not the normal path.
 
-**Because merge = publish:** run `node tests/run-all.js` (32 suites, 2004 assertions) and
+**Because merge = publish:** run `node tests/run-all.js` (32 suites, 2039 assertions) and
 re-splice the inline copies into `seal-document.html` **before** the PR, not after. A merged
 regression is live within a minute.
 
