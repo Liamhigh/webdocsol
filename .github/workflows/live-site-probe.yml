@@ -23,7 +23,7 @@ jobs:
               echo "===== https://$host$p"
               : > /tmp/body; : > /tmp/hdr
               curl -sS -A 'verum-live-site-probe' -o /tmp/body -D /tmp/hdr -w 'status=%{http_code} type=%{content_type} bytes=%{size_download} time=%{time_total}s\n' "https://$host$p" || echo "curl failed"
-              grep -i -E '^(x-vo-site-source|cf-ray|server|cache-control|content-type|cf-cache-status|location|x-powered-by|etag):' /tmp/hdr | tr -d '\r' || true
+              grep -i -E '^(x-vo-site-source|x-vo-bridge|cf-ray|server|cache-control|content-type|cf-cache-status|location|x-powered-by|etag):' /tmp/hdr | tr -d '\r' || true
               if [ "$p" = "/api/v1/rules/manifest" ] && grep -qi '^content-type: application/json' /tmp/hdr; then
                 # The manifest is large; print its shape, never its full body.
                 jq -c '{version: .package.version, published_at: .package.published_at, rule_counts: ((.package.rules // {}) | map_values(length)), algorithm, publicKeyId, signature_bytes: ((.signature // "") | length), error, message}' /tmp/body 2>/dev/null || head -c 600 /tmp/body; echo
