@@ -87,7 +87,7 @@ The old `verumglobal-static.js` (a second Worker's entry point) was removed on 2
 | `vendor/` | Pinned third-party libraries: `pdf.min.js` + worker (pdf.js), `pdf-lib.min.js`, `qrcode.min.js`, Tesseract OCR core/worker + `eng.traineddata.gz`. **Vendored deliberately** — the app must work offline and must not depend on a CDN. |
 | `seal-module/` | The portable sealing spec (`SPEC.md`) and per-surface implementations (`web`, `android`, `firewall`) so a seal produced anywhere verifies everywhere. |
 | `images/` | Logos and the watermark used in sealed PDFs. |
-| `tests/` | **32 suites, 2054 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
+| `tests/` | **33 suites, 2071 assertions** — run with `node tests/run-all.js`. That file is the registry: a test file not listed in it does not run. See ENGINE.md §10. |
 
 **Root PDFs:** `Verum-Omnis-Briefing.pdf` is the public briefing for law enforcement and
 attorneys (what the platform does, how the sealing service is used, why the record cannot be
@@ -108,7 +108,8 @@ in git history until the founder decides on a purge.
 | `VERUM_OMNIS_SYSTEM_PROMPT.md` | The whole platform (identical in all four repos): nine brains, triple verification, constitutional compliance, per-surface requirements, §12-UI design law. |
 | `VERUM_UI_TOKENS.md` + `verum-ui.css` | Binding design system for every surface. |
 | `CONSTITUTION-v8.md` | The sealed governance charter (v8.0, `VO-9A4F3C5E825C`). |
-| `DEPLOYMENT.md` | Workers Builds deployment, the static-assets bundle, the site-serving chain and `/api/v1/site/health`. |
+| `DEPLOYMENT.md` | Workers Builds deployment, the static-assets bundle, the site-serving chain, `/api/v1/site/health` and the www bridge. |
+| `functions/[[path]].js` | **The www bridge**: a Cloudflare Pages Function (the legacy Pages project still builds this repository and still answers `www`) that hands every request to the `webdocsol` Worker and returns its answer unchanged. Never a Worker asset. Inert once the Custom Domains attach. |
 | `DESIGN_LOCK.md` | Locked visual decisions on the public site. |
 | `FORENSIC-DEBUG.md` | Debugging a scan: what to inspect when findings look wrong. |
 | `AGENTS.md` | **Entry point for code assistants** — the stakes (platform output is evidence in live court proceedings), the seven things most likely to be regressed, the founder rulings that must not be re-litigated, and the never-write list for public claims. |

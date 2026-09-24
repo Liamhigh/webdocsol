@@ -33,6 +33,8 @@ compatibility_flags = ["nodejs_compat"]
 # step AFTER the code has uploaded — the code still ships; the binding waits.
 # Adding the two Custom Domains by hand in webdocsol → Settings → Domains &
 # Routes is equivalent and immediate; the next deploy then finds them in place.
+# Meanwhile (2026-09-24) functions/[[path]].js bridges www: the Pages project
+# hands every request to this Worker (DEPLOYMENT.md "The bridge").
 # tests/wrangler-config.test.mjs pins this list to exactly these two
 # hostnames, both as Custom Domains, in both environments.
 # After any routing change, verify
