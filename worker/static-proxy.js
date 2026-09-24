@@ -33,6 +33,17 @@ export const PAGES = [
  * @param {Request} request
  * @returns {Promise<Response>}
  */
+// The Pages project now carries a bridge (functions/[[path]].js) that hands
+// every request it receives to this Worker. A request THIS Worker makes to the
+// Pages origin must not be bridged back (a loop), so it is marked: the bridge
+// answers a marked request from the static files only.
+export const CHAIN_HEADER = 'X-VO-Chain';
+export function chainHeaders(request) {
+  const h = new Headers(request.headers);
+  h.set(CHAIN_HEADER, 'worker');
+  return h;
+}
+
 export async function serveStatic(request) {
   const url = new URL(request.url);
   let path = url.pathname;
@@ -57,7 +68,7 @@ export async function serveStatic(request) {
   let response = await fetch(
     new Request(target, {
       method: request.method,
-      headers: request.headers,
+      headers: chainHeaders(request),
       body: request.body,
       // Cache successful asset responses only. A flat cacheTtl applies to every
       // status code, so one 404 or 5xx during a redeploy was pinned at the edge
@@ -86,7 +97,7 @@ export async function serveStatic(request) {
     response = await fetch(
       new Request(ORIGIN + path + (url.search ? url.search + '&' : '?') + '_vb=' + Date.now(), {
         method: request.method,
-        headers: request.headers,
+        headers: chainHeaders(request),
         cf: { cacheTtl: 0 },
       })
     );
@@ -147,7 +158,7 @@ export const REPO_RAW_ORIGIN = 'https://raw.githubusercontent.com/Liamhigh/webdo
 
 // Mirror of .assetsignore: what is never a site file, whichever tier answers.
 // tests/site-serving.test.mjs locks the two lists to each other.
-export const SITE_DENY_RE = /^\/(?:\.|worker\/|tests\/|node_modules\/|brand\/|seal-module\/|package(?:-lock)?\.json$|wrangler\.toml$|[^/]*\.md$|.*\/[^/]*\.md$|greensky-ocr-verify\.pdf$|forensic_test_document\.pdf$)/i;
+export const SITE_DENY_RE = /^\/(?:\.|worker\/|tests\/|functions\/|node_modules\/|brand\/|seal-module\/|package(?:-lock)?\.json$|wrangler\.toml$|[^/]*\.md$|.*\/[^/]*\.md$|greensky-ocr-verify\.pdf$|forensic_test_document\.pdf$)/i;
 
 const CONTENT_TYPES = {
   html: 'text/html; charset=utf-8', htm: 'text/html; charset=utf-8',

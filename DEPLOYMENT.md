@@ -54,6 +54,21 @@ Custom Domain), which is immediate; the next deploy finds them in place. Re-run
 `live-site-probe` afterwards: a correct state shows `X-VO-Site-Source` on every answer and JSON
 at `/api/v1/site/health`.
 
+**The bridge (2026-09-24).** Twelve days on, neither dashboard step had been taken and `www`
+still answered from the Pages project. The Pages project builds this repository on every push,
+so the repository now carries a Pages Function, `functions/[[path]].js`, that hands every
+request Pages receives to the Worker (`https://webdocsol.liamhigh78.workers.dev`, the same
+path and query, method, headers and body) and returns the Worker's answer unchanged with an
+`x-vo-bridge: pages-to-worker` header. On `www` the site, the API and the forensic service are
+therefore the Worker's, while the DNS is untouched. Loop guard: the Worker's own Pages tier
+(`serveStatic`) marks its requests `X-VO-Chain: worker`, and the bridge answers a marked
+request from the static files, never by proxying back. An unreachable Worker falls back to the
+static files with `x-vo-bridge: worker-unreachable`. The bridge never ships as a Worker asset
+(`.assetsignore`, `SITE_DENY_RE`). It does nothing for the apex, which is held by
+`verum-omnis-forensic-web` and can only be released in the dashboard or through the API with
+a token. Once the Custom Domains attach, Pages stops answering `www` and the bridge is inert.
+Tests: `tests/pages-bridge.test.mjs`.
+
 **The trainer run (cron).** `wrangler.toml [triggers] crons = ["0 3 * * 1"]` (both environments,
 drift-locked) runs `runAutoCuration` every Monday 03:00 UTC: it needs `RULE_PRIVATE_KEY` on the
 Worker and writes `rules:current`, `rules:history:<version>`, `rules:changelog` and
@@ -204,7 +219,7 @@ answer names its tier in the `X-VO-Site-Source` response header:
 |---|---|---|
 | `assets` | `env.ASSETS` — the files bundled with the deploy | binding present and the file exists |
 | `repo` | `https://raw.githubusercontent.com/Liamhigh/webdocsol/main` — the same files straight from version control | assets missed; the repo is public, `main` is the live site by definition |
-| `pages` | the legacy Cloudflare Pages project (`verumglobal.pages.dev`, `serveStatic`) | repo unreachable; this origin proved stale (it 200-serves its old home page for any missing file), so it is last |
+| `pages` | the legacy Cloudflare Pages project (`verumglobal.pages.dev`, `serveStatic`) | repo unreachable; this origin proved stale (it 200-serves its old home page for any missing file), so it is last. Requests to it carry `X-VO-Chain: worker` so the Pages bridge answers them from static files and never proxies back |
 | `kv`, `embedded` | the two site images only (`/images/logo-full.png`, `/images/watermark_portrait.png`): legacy KV keys, then the copies embedded in `worker/site-assets.js` | nothing upstream had the file — a broken logo cannot ship |
 
 Source, config, docs and fixtures are never site files on any tier
@@ -379,7 +394,7 @@ there is not a signal about the change; the build that matters runs on the merge
 one PR check whose red means something. `wrangler deploy` by hand is the fallback for when
 Workers Builds is unavailable, not the normal path.
 
-**Because merge = publish:** run `node tests/run-all.js` (32 suites, 2054 assertions) and
+**Because merge = publish:** run `node tests/run-all.js` (33 suites, 2071 assertions) and
 re-splice the inline copies into `seal-document.html` **before** the PR, not after. A merged
 regression is live within a minute.
 
