@@ -16,6 +16,12 @@ jobs:
   probe:
     runs-on: ubuntu-latest
     steps:
+      - name: DNS answers (what each hostname resolves to, from outside)
+        run: |
+          for host in verumglobal.foundation www.verumglobal.foundation; do
+            echo "===== dig $host"
+            for t in A AAAA CNAME; do printf '%s: ' "$t"; dig +short "$host" "$t" | tr '\n' ' '; echo; done
+          done
       - name: Probe both hosts
         run: |
           for host in verumglobal.foundation www.verumglobal.foundation webdocsol.liamhigh78.workers.dev; do
@@ -33,6 +39,9 @@ jobs:
                 jq -c '(.package.rules.fraud_keywords // [])[12:]' /tmp/body 2>/dev/null | head -c 4000 || true; echo
               elif grep -qi '^content-type: application/json' /tmp/hdr; then
                 head -c 2000 /tmp/body; echo
+              elif [ "$(stat -c %s /tmp/body)" -lt 4000 ] && grep -qi '^content-type: text/html' /tmp/hdr; then
+                # A small HTML answer is a shell or a redirect page: print it whole (control characters made visible).
+                echo "--- small HTML body, raw:"; cat -v /tmp/body | head -c 2500; echo; echo "--- end"
               else
                 head -c 300 /tmp/body | tr -d '\0' | sed 's/<[^>]*>/ /g' | tr -s ' \n\t' ' '; echo
               fi
