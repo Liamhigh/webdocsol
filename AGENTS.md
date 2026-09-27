@@ -153,6 +153,18 @@ is meant to be identical across the three repositories — an edit here must be 
   zone's Workers Routes page before theorising about Custom Domains, and print small bodies
   whole in the probe. Still with the founder: `RULE_PRIVATE_KEY` on the Worker (the trainer
   skipped again on 27 September), rolling the API token pasted into chat on the 24th.
+- 27 September 2026, later: **the evidence-bundle-2-docs run.** An outside review of a
+  sealed 68-page bundle of previously sealed exhibits found three false findings (CT02 on
+  "R116" vs "R 8000" across two customers' letters; CT18 on a case reference and two mobile
+  numbers; CT37 on "multiple email domains") and a narrative that repeated them. Underneath:
+  the embedded-report rule from 13 September had excluded the first 38 pages on the
+  platform's own sealed-document footer, and every seal footer decoded as CJK. Fixed in
+  `ENGINE.md` §12.12 (eleven items, `tests/annexure-eb-regression.test.mjs` §16, which now
+  renders the technical report and the court-ready narrative and reads them back). Lesson,
+  in the founder's own rule 14: a shared word is not a shared proposition — a label word
+  ("amount") across two exhibits is not one figure, and a footer that names this platform
+  is not a report. The one finding that survives on that bundle is real: a lookalike
+  domain, `standandbank.co.za`, on p.48.
 - 7 September 2026: **Brain 9 reads the sealed text.** Founder direction: the AI must read
   the sealed files so nothing is missed, state what it finds, and the loop must let the engine
   catch it next time; Brain 9 verifies the model's claims are real and in the text. Built as
@@ -210,7 +222,7 @@ before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping 
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **33 suites, 2071 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **33 suites, 2107 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
