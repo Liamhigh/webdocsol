@@ -54,6 +54,19 @@ Custom Domain), which is immediate; the next deploy finds them in place. Re-run
 `live-site-probe` afterwards: a correct state shows `X-VO-Site-Source` on every answer and JSON
 at `/api/v1/site/health`.
 
+**Resolved (2026-09-27).** The apex was never a Custom Domain. The probe, once it printed the
+apex's small HTML body whole, showed the March mock-up shell (scripts from `kimi.page`) served
+by the July Worker `verum-omnis-verify-production` through the zone route
+`verumglobal.foundation/*`. The founder re-pointed that route to `webdocsol` in the zone's
+**Workers Routes** page and added `www.verumglobal.foundation/*` beside it; no DNS record
+changed. Confirmed from outside the same hour: JSON at `/api/v1/site/health` on both hostnames,
+the seal page redirect from the Worker, no `x-vo-bridge` header (a route runs before the DNS
+target, so Pages no longer sees `www`). `wrangler.toml` now declares exactly those two routes
+(`zone_name = "verumglobal.foundation"`) so every deploy re-asserts the live state; the Custom
+Domain declaration it replaces never bound. The narrower `verumglobal.foundation/api/v1/ai/*`
+route on the same Worker is redundant and harmless. The bridge below stays as a dormant
+fallback.
+
 **The bridge (2026-09-24).** Twelve days on, neither dashboard step had been taken and `www`
 still answered from the Pages project. The Pages project builds this repository on every push,
 so the repository now carries a Pages Function, `functions/[[path]].js`, that hands every
