@@ -439,6 +439,160 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(bad20.length === 1 && /2002\/05990\/2/.test(bad20[0].evidence), 'a malformed number after the cue still fires and the quote includes the whole number');
 }
 
+// ---- §16 The evidence-bundle-2-docs run (2026-09-27) --------------------------
+// A 68-page bundle of previously sealed exhibits (a customer's email chain,
+// statements, an affidavit, two banks' outcome letters). An outside review
+// found three false findings and a narrative that repeated them; the engine
+// had also excluded the first 38 pages as a "prior Verum Omnis report" on the
+// strength of the platform's own sealed-document footer, and read every seal
+// footer as a run of CJK characters. Each item below is pinned with the
+// bundle's own text.
+{
+  const foot = (id, n, tot, extra) => ' PRIVATE SEAL -- FREE TIER VERUM OMNIS SEALED ORIGINAL | Seal: ' + id + ' | SHA-512: 65c44f59360eb272... | 04/08/2026 12:41:58 Africa/Johannesburg | ' + n + '/' + tot + (extra || '') + ' verumglobal.foundation | OpenTimestamps | Patent Pending VERUM OMNIS SEALED ORIGINAL scan the code or verify at verumglobal.foundation/verify.html';
+
+  // 16a. Sealed EVIDENCE is not a report: only a report masthead excludes a page.
+  const sealedEvidence = 'Dear Standard Bank Fraud Department, I refer to my ongoing fraud claim and my previous correspondence. Verum Omnis Sealed Document Source: Fwd_ Urgent request re_ case number 16686059.PDF Page 1 of 4 VERIFY SEAL VERUM OMNIS SEAL | seal-66b31b35d0acfb7ea04e0d61 | 66b31b35...498ed789 | v5.2.7 | Verum Omnis | AI Forensics | Constitution | 1' + foot('VO-65C44F59360E', 1, 61);
+  ok(E.voIsSecondaryReportPage(sealedEvidence) === false, 'a previously sealed exhibit ("Verum Omnis Sealed Document", "VERUM OMNIS SEAL |") is evidence, never a report page');
+  ok(E.voIsSecondaryReportPage('Verum Omnis Court-Ready Narrative Source: evidence-bundle-2-docs.pdf 1. EXECUTIVE SUMMARY') === true
+    && E.voIsSecondaryReportPage('CONFIDENTIAL — LAW ENFORCEMENT SENSITIVE FORENSIC EVIDENCE REPORT evidence-bundle-2-docs Report Reference: VO-WEB-20260927-7AC6') === true
+    && E.voIsSecondaryReportPage('Verum Omnis Forensic Report Source: evidence-bundle-2-docs.pdf EXECUTIVE SUMMARY') === true,
+    'the court-ready narrative, the forensic evidence report cover and the technical report\'s running header are still recognised as report pages');
+  const sealedBundle = [sealedEvidence, 'page two of the letter.' + foot('VO-65C44F59360E', 2, 61), 'page three.' + foot('VO-65C44F59360E', 3, 61)];
+  ok(E.voExcludeSecondaryReportPages(sealedBundle) === null && /Dear Standard Bank/.test(sealedBundle[0]), 'a bundle of sealed exhibits loses no page');
+
+  // 16b. The platform's own seal footer states each exhibit's page count, so a bundle of
+  // sealed exhibits states its boundaries; the smallest stated total on a page is the
+  // exhibit; the footer's date ("04/08/2026") is never read as a page marker.
+  const nested = [];
+  for (let p = 1; p <= 5; p++) nested.push('exhibit A page ' + p + '.' + foot('VO-AAAAAAAAAAAA', p, 5) + (p >= 2 ? foot('VO-CCCCCCCCCCCC', p - 1, 7, ' | Chain: 1 prev') : ''));
+  for (let p = 1; p <= 3; p++) nested.push('exhibit B page ' + p + '.' + foot('VO-BBBBBBBBBBBB', p, 3) + foot('VO-CCCCCCCCCCCC', p + 4, 7, ' | Chain: 1 prev'));
+  const segs = E.voDetectDocuments(nested);
+  ok(segs.length === 2 && segs[0].start === 1 && segs[0].end === 5 && segs[0].statedTotal === 5 && segs[1].start === 6 && segs[1].end === 8 && segs[1].statedTotal === 3,
+    'seal footers state the boundaries (exhibit A 1-5, exhibit B 6-8); the seven-page chain seal and the footer date are not documents (' + JSON.stringify(segs.map(x => [x.start, x.end, x.statedTotal])) + ')');
+
+  // 16c. CT02: "R116 124.00" is R116 124, not R116; a column header is not a stated amount;
+  // two exhibits never restate one figure.
+  const d02 = (b) => of(DET.D02_DETECT_NUMERICAL_DISCREPANCY, b, 'CT02');
+  const barnard = 'From the reported transactions, an amount of R116 124.00 has been secured and should be reimbursed to you by Hollywoodbets within 15 working days from the date of this letter.';
+  const liebenberg = 'Summary of Disputed Transactions Transaction date Posting date Time Amount Merchant 2026/06/25 2026/06/27 R 8000.00 Makro Riversands 2026/06/25 2026/06/27 R 9850.60 Makro Riversands';
+  ok(d02([barnard, liebenberg]).length === 0, 'the Barnard letter\'s "amount of R116 124.00" and the Liebenberg table\'s "Amount Merchant … R 8000.00" are not one figure stated twice');
+  const sp = d02(['an amount of R116 124.00 was secured.', 'an amount of R118 000.00 was secured.']);
+  ok(sp.length === 1 && /R116 124\.00/.test(sp[0].evidence) && /R118 000\.00/.test(sp[0].evidence) && /variance: 2%/.test(sp[0].evidence),
+    'a space-grouped figure is read whole and quoted whole (' + (sp[0] && sp[0].evidence) + ')');
+  ok(d02(['Total: R450,000 is payable.', 'schedule.', 'Total: R470,000 is payable.']).length === 1, 'the same label restated inside one document still fires');
+  const twoDocs = [];
+  for (let p = 1; p <= 3; p++) twoDocs.push((p === 1 ? 'Total: R450,000 is payable.' : 'schedule page ' + p + '.') + foot('VO-AAAAAAAAAAAA', p, 3));
+  for (let p = 1; p <= 3; p++) twoDocs.push((p === 1 ? 'Total: R470,000 is payable.' : 'schedule page ' + p + '.') + foot('VO-BBBBBBBBBBBB', p, 3));
+  ok(d02(twoDocs).length === 0, 'the same label in two stated documents is two subjects, never compared');
+
+  // 16d. CT18: a bank's case reference and a mobile number are not accounts; every
+  // number counted is listed.
+  ok(ct18(['The Standard Bank of South Africa Limited - Outcome of your fraud claim investigation, Case Ref: 2026-1099145183. Subject: Standard Bank Fraud Case: 2026-1099145183',
+    'Universal Banker Modimolle Branch Tel +27(014)7179088/ Mobile +27 638230461/ Esther.moloatsi@standardbank.co.za Team Leader Branch Modimolle Branch Tel +27(014) 7361411/ Mobile +27 649761561/']).length === 0,
+    '"Case Ref: 2026-1099145183" and "Mobile +27 638230461" are not bank accounts');
+  const four = ct18(['Please pay into bank account 1111111111 or bank account 2222222222 or bank account 3333333333 or bank account 4444444444 for this payment.']);
+  ok(four.length === 1 && /^4 different/.test(four[0].evidence) && (four[0].evidence.match(/\b\d{10}\b/g) || []).length === 4,
+    'the count equals the numbers listed (' + (four[0] && four[0].evidence) + ')');
+  ok(ct18(['Please pay into our bank account number 1234567890 (Nedbank).', 'Kindly note our new banking details: account 0987654321, FNB.']).length === 1, 'a changed-details instruction still fires');
+
+  // 16e. CT37: a lookalike domain is the finding; many domains are not.
+  const d25 = (b) => of(DET.D25_DETECT_CONTACT_MISMATCH, b, 'CT37');
+  ok(d25(['From: Nicky Liebenberg <nix.liebenberg@gmail.com> To: cardfraudinvestigations@standardbank.co.za', 'To: nicky@harmonyclinic.co.za Cc: liam@verumglobal.foundation From: rediscoveryounl@gmail.com', 'Esther.moloatsi@mweb.co.za']).length === 0,
+    'a correspondence bundle\'s many email domains are not a contradiction');
+  const look = d25(['E-mail: Kerusha.moonsamy@standandbank.co.za Escalations 1st level', 'E-mail: Aabidah.Khan@standardbank.co.za www.standardbank.com']);
+  ok(look.length === 1 && /"standandbank\.co\.za" \(p\. 1\)/.test(look[0].evidence) && /"standardbank\.co\.za" \(p\. 2\)/.test(look[0].evidence) && /1 character apart/.test(look[0].evidence) && look[0].location === 'Page 1, 2',
+    'standandbank.co.za beside standardbank.co.za is a lookalike, anchored to both pages (' + (look[0] && look[0].evidence) + ')');
+  ok(d25(['[OCR] E-mail: Esther.moloatsi@standardoankco.za', 'E-mail: Aabidah.Khan@standardbank.co.za']).length === 0, 'a domain read by OCR never forms a lookalike');
+  ok(d25(['write to x@standardbank.co for help', 'y@standardbank.co.za']).length === 0, 'a truncated domain that prefixes another is the same domain');
+  ok(d25(['VERUM OMNIS SEALED ORIGINAL scan the code or verify at verumglobal.foundation/verify.html a@verumglobal.foundation', 'b@verumglobal.foundatlon']).length === 0, 'the seal footer\'s own domain is boilerplate, never a contact');
+
+  // 16f. Parties: OCR garbage and a statement line are not parties.
+  ok(!E.voLooksLikePerson('HOLL YWoODBETS') && !E.voLooksLikePerson('Hot YooDRETS') && !E.voLooksLikePerson('Banas TT JT ETE') && !E.voLooksLikePerson('PAYMENT TO HOLLYWOODBETS'),
+    '"HOLL YWoODBETS", "Hot YooDRETS", "Banas TT JT ETE" and "PAYMENT TO HOLLYWOODBETS" are not parties');
+  ok(E.voLooksLikePerson('Barnie Barnard') && E.voLooksLikePerson('NMC Nyembezi') && E.voLooksLikePerson('E de Waal') && E.voLooksLikePerson('Ronald McDonald') && E.voLooksLikePerson('Nicola NJ Liebenberg'),
+    'real names, initials groups and case-flipped surnames still pass');
+  const textPage = 'Dear Mr Gerhardus Barnard, we write about your matter. Gerhardus Barnard reported the incident and Gerhardus Barnard was contacted on the number given, which is a page of ordinary text.';
+  const ocrStatement = '[OCR] 27 jun debit Holl Widogrets 12.00 debit Holl Widogrets 15.00 debit Holl Widogrets 9.00';
+  const rosterMixed = E.voBuildNameRoster([ocrStatement, '[OCR] debit Holl Widogrets 4.00 again on a scanned statement', textPage]).map(x => x.name);
+  ok(rosterMixed.indexOf('Gerhardus Barnard') >= 0 && rosterMixed.indexOf('Holl Widogrets') < 0, 'a name seen only on OCR pages is not a roster party when the bundle has text pages (' + rosterMixed.join('; ') + ')');
+  const rosterOcr = E.voBuildNameRoster([ocrStatement, '[OCR] debit Holl Widogrets 4.00 again']).map(x => x.name);
+  ok(rosterOcr.indexOf('Holl Widogrets') >= 0, 'a wholly scanned bundle keeps its OCR-read names');
+
+  // 16g. The summary prints no band word.
+  const summ = E.generateSummary([{ type: 'CT02' }, { type: 'CT18' }], 66);
+  ok(/2 page-anchored findings established/.test(summ) && !/severity is|\b(?:moderate|high|critical)\b/i.test(summ), 'the short summary states the count and no severity band (' + summ + ')');
+
+  // 16h. Footer-only: the newer footer (slash date and time, a chain line, the verify line).
+  ok(E.voIsFooterOnlyPage('PRIVATE SEAL -- FREE TIER VERUM OMNIS SEALED ORIGINAL | Seal: VO-12A18F7CF129 | SHA-512: 12a18f7cf1296317... | 27/07/2026 12:57:50 Africa/Johannesburg | 1/2 verumglobal.foundation | OpenTimestamps | Patent Pending PRIVATE SEAL -- FREE TIER | Chain: 1 prev VERUM OMNIS SEALED ORIGINAL | Seal: VO-DD6E103B29EA | SHA-512: dd6e103b29eabfa6... | 04/08/2026 12:40:55 Africa/Johannesburg | 1/7 | Chain: 1 prev verumglobal.foundation | OpenTimestamps | Patent Pending VERUM OMNIS SEALED ORIGINAL scan the code or verify at verumglobal.foundation/verify.html PRIVATE SEAL — FREE TIER verumglobal.foundation | OpenTimestamps | Patent Pending VERUM OMNIS SEALED ORIGINAL | Seal: VO-52DEE57A7AC6 | SHA-512: 52dee57a7ac66fdd... | 27/09/2026 08:23:04 Africa/Johannesburg | 62/68') === true,
+    'a page carrying only nested seal footers is a footer-only page');
+  ok(E.voIsFooterOnlyPage('Signed at Durban on 12 December 2018 by the Franchisee.' + foot('VO-65C44F59360E', 9, 61)) === false, 'a signature line beside a footer is evidence');
+
+  // 16i–j. Extraction and the report, end to end, on PDFs built here with pdf-lib's
+  // standard fonts (Type1, WinAnsi, no ToUnicode — the shape of every seal footer).
+  const fs = require('fs'), path = require('path');
+  const g = globalThis; g.window = g; g.self = g;
+  if (!g.PDFLib) new Function('window', 'self', 'globalThis', fs.readFileSync(path.join(process.cwd(), 'vendor/pdf-lib.min.js'), 'utf8'))(g, g, g);
+  const PDFLib = g.PDFLib;
+  const pageText = async (bytes) => {
+    const loaded = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+    const parts = [];
+    for (let i = 0; i < loaded.getPageCount(); i++) parts.push((await E.extractPageText(bytes, i, loaded)).join(' '));
+    return parts.join(' \n ').replace(/[ \t]+/g, ' ');
+  };
+  const run = async () => {
+    const d = await PDFLib.PDFDocument.create();
+    const pg = d.addPage([595, 842]);
+    const helv = await d.embedFont(PDFLib.StandardFonts.Helvetica);
+    const line = 'VERUM OMNIS SEALED ORIGINAL | Seal: VO-65C44F59360E | SHA-512: 65c44f59360eb272... | 39/61';
+    pg.drawText(line, { x: 20, y: 800, size: 8, font: helv });
+    pg.drawText('PRIVATE SEAL — FREE TIER “quoted” 04/08/2026', { x: 20, y: 780, size: 8, font: helv });
+    const t = await pageText(await d.save({ useObjectStreams: false }));
+    ok(t.indexOf(line) >= 0 && !/[　-鿿]/.test(t), 'a standard-font footer of even length decodes as text, never as CJK (' + JSON.stringify(t.slice(0, 80)) + ')');
+    ok(/PRIVATE SEAL — FREE TIER “quoted”/.test(t), 'WinAnsi dashes and curly quotes survive the one-byte decode');
+
+    // The report: two engine findings and one AI candidate; a prior report excluded; OCR pages.
+    const R = require('../forensic-report.js');
+    const findings = [
+      { type: 'CT02', severity: 4, evidence: '"total" is stated as R450,000 and as R470,000 (variance: 4%)', location: 'Page 2 vs Page 5', anchor: { where: [2, 5], who: [], when: [] } },
+      { type: 'CT18', severity: 4, evidence: '2 different bank account numbers found near banking references in the same payment context: 1234567890, 0987654321 — confirm which account the record authorises', location: 'Page 3, 6', anchor: { where: [3, 6], who: [], when: [] } },
+      { type: 'DOMAIN_TYPO', severity: 3, source: 'ai', evidence: 'standandbank', rationale: 'Typo in domain name', location: 'Page 48', anchor: { where: [48], who: [], when: [] } }
+    ];
+    const opts = {
+      documents: [{ name: 'evidence-bundle-2-docs.pdf', pageCount: 68, sha512: 'ab'.repeat(64), sealId: 'VO-52DEE57A7AC6' }],
+      findings: { clean: false, overallScore: 30, confidence: 'LOW', totalFindings: 3, findings: findings, summary: '2 page-anchored findings established.', contradictionTypesUsed: 2 },
+      aiReview: { applied: true, retained: 2, assessed: 2, added: 1, narrative: '' },
+      extractionNotes: 'Per-page PDF content-stream decoding with ToUnicode CMaps. Prior Verum Omnis report: 5 page(s) (1, 2, 3, 4, 5) carry a Verum Omnis report masthead or that report\'s running title. A Verum Omnis report bound into a bundle is analysis, not evidence, and was excluded from contradiction scanning; the exhibits that follow it were scanned.',
+      ocrPages: [7, 8], images: {}, generatedAt: '2026-09-27T06:23:53.572Z'
+    };
+    const quiet = console.log; console.log = () => {};
+    let T, N;
+    try {
+      T = await pageText(await R.build(opts));
+      N = await pageText(await R.buildHumanReport(Object.assign({}, opts, { humanSections: {}, humanProvenance: { sectionsAttempted: 7 } })));
+    } finally { console.log = quiet; }
+    // Headings also appear in the table of contents: read from the LAST occurrence (the section itself).
+    const slice = (from, to) => { const a = T.lastIndexOf(from); const b = to ? T.indexOf(to, a + 1) : -1; return a < 0 ? '' : T.slice(a, b > a ? b : undefined); };
+    ok(/TRIPLE VERIFICATION SUMMARY/.test(T) && !/DOMAIN_TYPO/.test(slice('TRIPLE VERIFICATION SUMMARY', 'SEALED FINDINGS')) && /Numerical Discrepancy/.test(slice('TRIPLE VERIFICATION SUMMARY', 'SEALED FINDINGS')),
+      'the Triple Verification table carries engine findings only — an AI candidate never reads "Detected: PASS"');
+    ok(!/DOMAIN_TYPO/.test(slice('Top liabilities', 'Recommended next steps')), 'an AI candidate is never a "top liability"');
+    ok(!/DOMAIN_TYPO/.test(slice('NINE-BRAIN EXTRACTION FINDINGS', 'TRIPLE VERIFICATION SUMMARY')), 'an AI candidate is never a brain\'s finding');
+    ok(/AI candidate, advisory — DOMAIN_TYPO/.test(T) && /AI candidate:\s+DOMAIN_TYPO/.test(T), 'where a candidate is listed beside findings it is labelled as one (type summary, evidence appendix)');
+    ok(/matched by at least one anchored finding of a type that can evidence it/.test(T) && !/is evidenced in the record/.test(T) && !/: EVIDENCED/.test(T),
+      'the offence-elements block says a matching finding is on the record, never that the element is evidenced');
+    ok(/set aside before contradiction scanning/.test(T) && !/Every page of this bundle was read\./.test(T) && /Prior Verum Omnis report: 5 page/.test(T),
+      'excluded pages are disclosed on the unread-pages page; "every page was read" is never printed beside an exclusion');
+    ok(!/[　-鿿]/.test(T), 'the report\'s own text reads back through the extractor without CJK');
+    ok(/COURT-READY NARRATIVE REPORT/.test(N) && (N.match(/PAGES READ THROUGH OCR/g) || []).length === 1, 'the court-ready narrative prints the OCR-provenance block once (' + (N.match(/PAGES READ THROUGH OCR/g) || []).length + ')');
+    const nAnchor = N.slice(N.lastIndexOf('STATUTORY ANCHORING'), N.lastIndexOf('CANDIDATE OFFENCE MATRIX'));
+    ok(nAnchor.length > 0 && !/DOMAIN_TYPO/.test(nAnchor) && /Numerical Discrepancy/.test(nAnchor) && /AI candidate:\s+DOMAIN_TYPO/.test(N),
+      'the narrative maps engine findings to candidate law and labels the AI candidate in its appendix');
+    // 16k. A dot glued to a letter is inside a token, whatever the quote pairing around it.
+    const joined = R._splitSentences('Finding F1 (CT02, severity 4), recorded at Page 45 vs Page 64, states: ""amount" is stated as R116 and as R 8000 (variance: 194%)" [F1]. Finding F3 (CT37, severity 2), recorded at Pages 39, 44, states: "Multiple email domains: standardbank.co.za, gmail.com, verumglobal.foundation" [F3].').join(' | ');
+    ok(/standardbank\.co\.za, gmail\.com, verumglobal\.foundation/.test(joined), 'domain names survive the sentence split beside a nested straight quote (' + joined.slice(-120) + ')');
+  };
+  await run();
+}
+
 console.log(`\n[annexure-eb] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[annexure-eb] FAILURES'); process.exit(1); }
 console.log('[annexure-eb] ALL GREEN');

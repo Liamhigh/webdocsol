@@ -43,7 +43,7 @@ var VO_ENGINE_VERSION = '5.3.5-web';
 // seal-document.html) must stay >= this value, or the engine names a gap it
 // never tried to close. Exported and drift-locked by tests/ocr-rescue.
 var VO_NEAR_EMPTY_CHARS = 40;
-var VO_SEAL_BOILERPLATE_RE = /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL|PRIVATE\s+SEAL(?:\s*[-\u2013\u2014]+\s*FREE\s+TIER)?|VERIFY\s+SEAL|verumglobal\.foundation|OpenTimestamps|Patent\s+Pending|Africa\/Johannesburg|AI\s+FORENSICS\s+FOR\s+TRUTH|Founder,?\s+Verum\s+Omnis|\bVerum\s+Omnis\b|\bSeal:\s*|\bUTC\b|\bFREE\s+TIER\b/gi;
+var VO_SEAL_BOILERPLATE_RE = /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL|PRIVATE\s+SEAL(?:\s*[-\u2013\u2014]+\s*FREE\s+TIER)?|VERIFY\s+SEAL|scan\s+the\s+code\s+or\s+verify\s+at|verumglobal\.foundation(?:\/verify\.html)?|OpenTimestamps|Patent\s+Pending|Africa\/Johannesburg|AI\s+FORENSICS\s+FOR\s+TRUTH|Founder,?\s+Verum\s+Omnis|\bVerum\s+Omnis\b|\bSeal:\s*|\bChain:\s*\d+\s*prev\b|\bUTC\b|\bFREE\s+TIER\b/gi;
 function voContentMass(t) {
   var s = String(t || '').toLowerCase()
     .replace(VO_SEAL_BOILERPLATE_RE, ' ')
@@ -396,22 +396,53 @@ var CONTRADICTION_TYPES = {
 // — "Page N of M" markers share an M within one document, and N restarts at 1
 // when the next begins. Deterministic, text-only, no guessing: a boundary is
 // reported only where the record states its own numbering.
+// Levenshtein distance for short strings (domains, names); deterministic.
+function voEditDistance(a, b) {
+  a = String(a || ''); b = String(b || '');
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  var prev = [], cur = [], i, j;
+  for (j = 0; j <= b.length; j++) prev[j] = j;
+  for (i = 1; i <= a.length; i++) {
+    cur[0] = i;
+    for (j = 1; j <= b.length; j++) {
+      var cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    var tmp = prev; prev = cur; cur = tmp;
+  }
+  return prev[b.length];
+}
+
 function voDetectDocuments(textBlocks) {
   if (!textBlocks || textBlocks.length < 6) return [];
   var marks = [];
   for (var i = 0; i < textBlocks.length; i++) {
-    var re = /\b(?:page|p\.?|pg)\s*(\d{1,4})\s*(?:of|\/)\s*(\d{1,4})\b/gi;
-    var m, best = null;
-    while ((m = re.exec(String(textBlocks[i] || ''))) !== null) {
-      var n = parseInt(m[1], 10), tot = parseInt(m[2], 10);
-      if (!isFinite(n) || !isFinite(tot) || tot < 2 || n < 1 || n > tot) continue;
+    var txt = String(textBlocks[i] || '');
+    var best = null;
+    var consider = function (n, tot) {
+      if (!isFinite(n) || !isFinite(tot) || tot < 2 || n < 1 || n > tot) return;
       // The bundle's OWN running numbering ("Clean Bundle Page 326 of 528" on
       // every page of a 528-page bundle) states nothing about the documents
       // inside it; only an exhibit's own "Page 3 of 12" does. Annexure EB's
       // footer made the whole bundle one document and hid every boundary.
-      if (tot === textBlocks.length && n === i + 1) continue;
-      if (!best) best = { n: n, total: tot };
-    }
+      if (tot === textBlocks.length && n === i + 1) return;
+      // Nested numberings on one page (a two-page letter sealed on its own,
+      // bound into a seven-page compilation, bound into the bundle): the
+      // smallest stated total is the document the sealer treated as a unit.
+      if (!best || tot < best.total) best = { n: n, total: tot };
+    };
+    var re = /\b(?:page|p\.?|pg)\s*(\d{1,4})\s*(?:of|\/)\s*(\d{1,4})\b/gi, m;
+    while ((m = re.exec(txt)) !== null) consider(parseInt(m[1], 10), parseInt(m[2], 10));
+    // This platform's own seal footer states each sealed exhibit's page count
+    // ("VERUM OMNIS SEALED ORIGINAL | Seal: VO-65C44F59360E | SHA-512: … |
+    // 04/08/2026 12:41:58 Africa/Johannesburg | 45/61"), so a bundle of
+    // previously sealed exhibits states its boundaries even when the exhibits
+    // print no "Page x of y" of their own. The n/N sits after the last pipe;
+    // the date's "04/08" is followed by "/2026" and is never read as one.
+    var sealRe = /\bVO-[0-9A-F]{6,}\b(?:\s*\|[^|]{0,90}){0,3}?\s*\|\s*(\d{1,4})\/(\d{1,4})(?![\/\d])/gi;
+    while ((m = sealRe.exec(txt)) !== null) consider(parseInt(m[1], 10), parseInt(m[2], 10));
     marks.push(best);
   }
   // Walk the bundle, cutting where the stated total changes or the stated page
@@ -778,7 +809,28 @@ var DETECTORS = {
     // with its decimal and magnitude stripped). One or two decimals allowed
     // when a magnitude word follows; bare amounts keep the strict two-decimal
     // rule so reference numbers are not misread as money.
-    var AMOUNT_RE = /(?:[R$€£]\s*)\d+(?:[.,]\d{1,2})?\s*(?:million|billion|m|bn)\b|(?:[R$€£]\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)\d+(?:\.\d{2})?/i;
+    // Thousands may be grouped by a space as well as a comma ("R116 124.00"
+    // in a bank's outcome letter); a space-grouped figure needs its currency
+    // symbol so that two unrelated numbers are never joined into one amount.
+    // The evidence-bundle-2-docs run read "R116 124.00" as R116.
+    var AMOUNT_RE = /(?:[R$€£]\s*)\d+(?:[.,]\d{1,2})?\s*(?:million|billion|m|bn)\b|(?:[R$€£]\s*)\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)\d+(?:\.\d{2})?/i;
+    // The amount must follow its label directly, through at most a short
+    // connector ("Total: R…", "an amount of R…", "purchase price (excl. VAT)
+    // R…"). A label followed by other words is not stating that figure: the
+    // column header "Amount Merchant" above a table row "R 8000.00 Makro" was
+    // read as "amount = R8000" and set against "an amount of R116 124.00" in
+    // another letter.
+    var CONNECTOR_RE = /^[\s.:=\-\u2013\u2014(]*(?:of|is|was|be|at|to|due|payable|paid|owing|outstanding|\([^)]{0,40}\))?[\s.:=\-\u2013\u2014]*(?:of\s*)?$/i;
+    // A labelled figure is restated only inside ONE document. Where the bundle
+    // states its own boundaries (an exhibit's "Page x of y", a sealed
+    // exhibit's footer), entries from different documents are never compared:
+    // "an amount of R116 124.00" in one customer's outcome letter and an
+    // "Amount" in another customer's are two subjects, not one figure.
+    var d02Segs = voDetectDocuments(textBlocks) || [];
+    var d02DocOf = function (pageIdx) {
+      for (var d = 0; d < d02Segs.length; d++) { if (pageIdx + 1 >= d02Segs[d].start && pageIdx + 1 <= d02Segs[d].end) return d; }
+      return -1;
+    };
 
     // How far after a label an amount may sit and still belong to it.
     var MAX_LOOKAHEAD = 40;
@@ -810,9 +862,10 @@ var DETECTORS = {
 
         var am = block.slice(from, to).match(AMOUNT_RE);
         if (!am) continue;
+        if (!CONNECTOR_RE.test(block.slice(from, from + am.index))) continue;
         var magM = am[0].match(/(million|billion|m|bn)\b\s*$/i);
         var numPart = magM ? am[0].slice(0, magM.index) : am[0];
-        var value = parseFloat(numPart.replace(/,(?=\d{3}\b)/g, '').replace(/[^0-9.,]/g, '').replace(',', '.'));
+        var value = parseFloat(numPart.replace(/[, \u00a0\u202f](?=\d{3}\b)/g, '').replace(/[^0-9.,]/g, '').replace(',', '.'));
         if (magM) value *= /^b/i.test(magM[1]) ? 1e9 : 1e6;
         if (isNaN(value) || value <= 100) continue;
 
@@ -858,6 +911,8 @@ var DETECTORS = {
         seenVals[cur.value] = true;
         // Different explicit qualifiers = different subjects, never a restatement.
         if (base.qual && cur.qual && base.qual !== cur.qual) continue;
+        // Different stated documents = different subjects (see d02Segs above).
+        if (d02Segs.length && (d02DocOf(base.page) !== d02DocOf(cur.page) || d02DocOf(base.page) === -1)) continue;
         var diff = cur.value - base.value;
         var avg = (cur.value + base.value) / 2;
         // For the SAME label restated at two/three values, any material
@@ -1757,12 +1812,22 @@ var DETECTORS = {
     }
     // "Kindly note our new banking details": the redirection letter itself.
     var CHANGE_CUE = /\b(?:new|changed|updated|amended|revised)\s+(?:bank(?:ing)?\s+details|account(?:\s+number)?)|with\s+immediate\s+effect|please\s+(?:now\s+)?use|no\s+longer\s+use|instead\s+of\s+the\s+(?:previous|old)/i;
+    // A telephone number is not an account: "Mobile +27 638230461", "Tel:
+    // 011 636 9112", "Cell 0824583886". The cue, or a country code, sits
+    // right before the digits.
+    var PHONE_CUE = /(?:\b(?:tel|telephone|mobile|mob|cell|cellphone|phone|fax|whatsapp|contact)\b\.?\s*(?:no\.?|number|#)?\s*[:.\-]?\s*|\+\s?\d{1,3}\s*(?:\(0\))?\s*)$/i;
     var entries = [];
     for (var i = 0; i < textBlocks.length; i++) {
       var text = textBlocks[i], match;
       while ((match = numRe.exec(text)) !== null) {
         var n = match[0];
         if (looksLikeDateOrYears(n)) continue;
+        // Part of a longer reference, not a number of its own: "Case Ref:
+        // 2026-1099145183" (a bank's case number) was counted as an account.
+        var pre1 = text.slice(Math.max(0, match.index - 2), match.index);
+        var post1 = text.slice(match.index + n.length, match.index + n.length + 2);
+        if (/[A-Za-z0-9][\-\/.]$/.test(pre1) || /^[\-\/][A-Za-z0-9]/.test(post1)) continue;
+        if (PHONE_CUE.test(text.slice(Math.max(0, match.index - 24), match.index))) continue;
         // require a banking keyword within 40 chars before the number
         var windowStart = Math.max(0, match.index - 40);
         if (!CONTEXT.test(text.slice(windowStart, match.index))) continue;
@@ -1796,10 +1861,13 @@ var DETECTORS = {
     }
     if (conflict.length >= 2) {
       pages.sort(function (x, y) { return x - y; });
+      // Every number counted is listed: "4 different … : a, b, c" named four
+      // and printed three on the evidence-bundle-2-docs run.
+      var listed = conflict.slice(0, 6).join(', ') + (conflict.length > 6 ? ' and ' + (conflict.length - 6) + ' more' : '');
       findings.push({ type: 'CT18', severity: 4,
         evidence: conflict.length + ' different bank account numbers found near banking references' +
           (holderNamed ? ' for the same party (' + holderNamed.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }) + ')' : ' in the same payment context') +
-          ': ' + conflict.slice(0, 3).join(', ') + ' — confirm which account the record authorises',
+          ': ' + listed + ' — confirm which account the record authorises',
         location: 'Page ' + pages.join(', ') });
     }
     return findings;
@@ -2145,26 +2213,51 @@ var DETECTORS = {
     return findings;
   },
 
+  // A correspondence bundle always carries many email domains (the bank's,
+  // the customer's, a clinic's, a webmail provider's): listing them was not a
+  // contradiction, and the evidence-bundle-2-docs run sealed "Multiple email
+  // domains: standardbank.co.za, gmail.com, …" as a finding, with the seal
+  // footer's own domain among them. The signal that IS a contact-detail
+  // mismatch is a LOOKALIKE: a domain one or two characters from another in
+  // the same record ("standandbank.co.za" beside "standardbank.co.za"),
+  // which is how an impersonation address is built. Guards: both domains must
+  // be read from a text page (OCR manufactures lookalikes by mis-reading
+  // characters); the platform's own seal footer is boilerplate, never a
+  // contact; a domain that merely prefixes another is a truncated read of it.
   D25_DETECT_CONTACT_MISMATCH: function(textBlocks) {
     var findings = [];
-    var emailRe = /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/g;
-    var emails = [];
+    var emailRe = /\b[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g;
+    var byDomain = {};
     for (var i = 0; i < textBlocks.length; i++) {
+      var raw = String(textBlocks[i] || '');
+      var isOcr = /^\s*\[OCR\]/.test(raw);
+      var t = raw.replace(VO_SEAL_BOILERPLATE_RE, ' ');
       var match;
-      while ((match = emailRe.exec(textBlocks[i])) !== null) {
-        emails.push({ value: match[0].toLowerCase(), page: i });
+      emailRe.lastIndex = 0;
+      while ((match = emailRe.exec(t)) !== null) {
+        var dom = match[1].toLowerCase().replace(/^www\./, '').replace(/\.+$/, '');
+        var d = byDomain[dom] || (byDomain[dom] = { pages: [], text: false });
+        if (d.pages.indexOf(i + 1) === -1) d.pages.push(i + 1);
+        if (!isOcr) d.text = true;
       }
     }
-    var domains = {};
-    for (var j = 0; j < emails.length; j++) {
-      var domain = emails[j].value.split('@')[1];
-      domains[domain] = true;
-    }
-    var domainList = Object.keys(domains);
-    if (domainList.length >= 2) {
-      findings.push({ type: 'CT37', severity: 2,
-        evidence: 'Multiple email domains: ' + domainList.join(', '),
-        location: 'Multiple pages' });
+    var domains = Object.keys(byDomain).sort();
+    var fmtPages = function (pgs) { return pgs.length > 4 ? pgs.slice(0, 4).join(', ') + ' and ' + (pgs.length - 4) + ' more' : pgs.join(', '); };
+    for (var a = 0; a < domains.length; a++) {
+      for (var b = a + 1; b < domains.length; b++) {
+        var da = domains[a], db = domains[b];
+        if (!byDomain[da].text || !byDomain[db].text) continue;
+        if (da.length < 8 || db.length < 8) continue;
+        if (db.indexOf(da) === 0 || da.indexOf(db) === 0) continue;
+        var dist = voEditDistance(da, db);
+        if (dist < 1 || dist > 2) continue;
+        var union = byDomain[da].pages.concat(byDomain[db].pages.filter(function (p) { return byDomain[da].pages.indexOf(p) === -1; }))
+          .sort(function (x, y) { return x - y; });
+        findings.push({ type: 'CT37', severity: 3,
+          evidence: 'Lookalike email domain: "' + da + '" (p. ' + fmtPages(byDomain[da].pages) + ') beside "' + db + '" (p. ' + fmtPages(byDomain[db].pages) + ') — ' +
+            dist + ' character' + (dist === 1 ? '' : 's') + ' apart; confirm which is genuine before relying on messages from either',
+          location: 'Page ' + (union.length > 8 ? union.slice(0, 8).join(', ') + ' and ' + (union.length - 8) + ' more' : union.join(', ')) });
+      }
     }
     return findings;
   },
@@ -3416,11 +3509,17 @@ function voExcludeTemplatePages(textBlocks) {
 // with a one- or two-page gap inside a run of report pages are treated as
 // report pages too (an OCR miss on the running title), never a wider gap.
 var VO_SECONDARY_REPORT_REF_RE = /Report\s+Reference\s*:\s*VO-/i;
-// The brand and the kind must sit together ("VERUM OMNIS FORENSIC REPORT",
-// "V E R U M O M N I S S E A L E D D O C U M E N T", "VERUM OMNIS SEAL |"):
-// an exhibit inside a Verum-sealed bundle that merely mentions "the forensic
-// report" beside the seal footer is evidence, not a report page.
-var VO_SECONDARY_REPORT_MASTHEAD_RE = /V\s?E\s?R\s?U\s?M\s+O\s?M\s?N\s?I\s?S[\s|\-\u2013\u2014:]{1,40}(?:FORENSIC\s+REPORT|S\s?E\s?A\s?L\s?E\s?D\s+D\s?O\s?C\s?U\s?M\s?E\s?N\s?T|SEAL\s*\|)/i;
+// The brand and the KIND OF REPORT must sit together ("VERUM OMNIS FORENSIC
+// REPORT", "Verum Omnis Court-Ready Narrative"): an exhibit inside a
+// Verum-sealed bundle that merely mentions "the forensic report" beside the
+// seal footer is evidence, not a report page. A SEALED DOCUMENT is not a
+// report either: "Verum Omnis Sealed Document | Source: … | Page 1 of 4" and
+// "VERUM OMNIS SEAL | seal-…" are the footers this platform prints on the
+// EVIDENCE it seals, and a bundle of previously sealed exhibits is the common
+// case. The 27 Sep 2026 evidence-bundle-2-docs run excluded its first 38
+// pages (an email chain, statements, an affidavit) on those footers alone and
+// then reported that every page had been read.
+var VO_SECONDARY_REPORT_MASTHEAD_RE = /V\s?E\s?R\s?U\s?M\s+O\s?M\s?N\s?I\s?S[\s|\-\u2013\u2014:]{1,40}(?:FORENSIC\s+(?:EVIDENCE\s+)?REPORT|COURT-?\s?READY\s+NARRATIVE|NARRATIVE\s+REPORT)/i;
 var VO_SECONDARY_REPORT_TITLE_RE = /\b((?:supplementary|forensic|final|interim|preliminary|investigation)\s+report\s*:\s*[^\n]{10,160})/i; // page text is space-joined, so the title is read from the cue, not from a line start
 var VO_SECONDARY_REPORT_PLACEHOLDER = new Array(11).join('prior verum omnis report page excluded. ');
 function voIsSecondaryReportPage(text) {
@@ -3525,6 +3624,7 @@ function voIsFooterOnlyPage(text) {
     .replace(/\b(?:SHA-?512|SHA-?256|BLOCKCHAIN ANCHORED|SEALED (?:ORIGINAL|DOCUMENT)|seal-[0-9a-f]{8,})\b/gi, ' ')
     .replace(/[0-9a-f]{10,}/gi, ' ')
     .replace(/\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?/g, ' ')
+    .replace(/\b\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?/g, ' ') // the footer's own "04/08/2026 12:41:58"
     .replace(/\b\d{1,4}\s*\/\s*\d{1,4}\b/g, ' ')
     .replace(/[|\u2026\u2013\u2014]/g, ' ');
   // Any word of three letters or any run of three digits outside the footer
@@ -3719,6 +3819,8 @@ var VO_NON_PERSON_TOK = (function () {
     // Case', 'Legal Relevance', 'Hong Kong Legal Relevance'. 'Case' can be a
     // rare surname; losing it is the safe direction for a forensic index.
     'confidential case legal relevance matter notice correspondence whatsapp screenshot screenshots email emails ' +
+    // A statement line ("PAYMENT TO HOLLYWOODBETS") is a transaction, not a party.
+    'payment payments to debit credit fee fees purchase transfer ' +
     // AllFuels run: 'Cnr' (corner, address furniture) and 'Dispossession'
     // (heading language) were bound into party names.
     'cnr dispossession ' +
@@ -3781,12 +3883,21 @@ function voLooksLikePerson(name) {
   if (toks.length < 2 || toks.length > 4) return false;
   // Whole-phrase furniture (a scanned contract's defined terms / schedule cells).
   if (VO_NON_PERSON_PHRASE[toks.join(' ').toLowerCase()]) return false;
+  var initials = 0;
   for (var i = 0; i < toks.length; i++) {
     var bare = toks[i].replace(/[.'’-]+$/, '');
     if (!bare) return false;
     if (VO_NON_PERSON_TOK[bare.toLowerCase()]) return false;
     if (i < toks.length - 1 && /\.$/.test(toks[i]) && bare.length > 1) return false; // sentence end mid-run
+    // OCR garbage is not a party: a case flip inside a word ("YWoODBETS",
+    // "YooDRETS" — a scanned statement's "HOLLYWOODBETS"), a word of four or
+    // more letters with no vowel, or more than one bare initials group
+    // ("Banas TT JT ETE"). "McDonald", "de Waal" and "NMC Nyembezi" pass.
+    if (/[a-z][A-Z]{2}/.test(bare) || /[A-Z]{2,}[a-z]+[A-Z]/.test(bare)) return false;
+    if (bare.length >= 4 && /^[A-Za-z]+$/.test(bare) && !/[aeiouyAEIOUY]/.test(bare)) return false;
+    if (/^[A-Z]{2,3}$/.test(bare)) initials++;
   }
+  if (initials > 1) return false;
   return true;
 }
 function voExtractParties(text) {
@@ -3882,22 +3993,32 @@ function voBuildNameRoster(blocks, minMentions) {
   // A long bundle repeats a real party many times; a short one may name them
   // only twice, so the bar scales rather than silently excluding short documents.
   var min = minMentions || (list.length >= 10 ? 3 : 2);
-  var counts = {}, display = {};
+  // OCR guesses characters, and a scanned statement's mis-read merchant
+  // lines recur just like a name does. In a bundle that has text pages, a
+  // roster name must be printed on at least one of them; a wholly scanned
+  // bundle (annexure EB) keeps its OCR-only names, because there is nothing
+  // else to read them from.
+  var counts = {}, textCounts = {}, display = {}, anyTextPage = false;
   var re = VO_ROSTER_NAME_RE;
   for (var b = 0; b < list.length; b++) {
-    var s = String(list[b] || '').replace(VO_SEAL_BOILERPLATE_RE, ' ');
+    var raw = String(list[b] || '');
+    var isOcr = /^\s*\[OCR\]/.test(raw);
+    var s = raw.replace(VO_SEAL_BOILERPLATE_RE, ' ');
+    if (!isOcr && s.replace(/\s+/g, '').length > 60) anyTextPage = true;
     var m; re.lastIndex = 0;
     while ((m = re.exec(s)) !== null) {
       var n = voCleanPersonName(m[1].replace(/\s+/g, ' '));
       if (!voLooksLikePerson(n)) continue;
       var k = n.toLowerCase();
       counts[k] = (counts[k] || 0) + 1;
+      if (!isOcr) textCounts[k] = (textCounts[k] || 0) + 1;
       if (!display[k]) display[k] = n;
     }
   }
   var out = [];
   for (var k2 in counts) {
     if (!Object.prototype.hasOwnProperty.call(counts, k2)) continue;
+    if (anyTextPage && !textCounts[k2]) continue;
     if (counts[k2] >= min) out.push({ name: display[k2], count: counts[k2] });
   }
   out.sort(function (a, b) { return (b.count - a.count) || a.name.localeCompare(b.name); });
@@ -4288,9 +4409,23 @@ function _voDecodeParenString(raw) {
   return out;
 }
 
-function _voDecodeHexString(hex, cmap) {
+// WinAnsiEncoding 0x80-0x9F (the part that differs from Latin-1); '' = unassigned.
+var VO_WINANSI_HIGH = ['\u20AC', '', '\u201A', '\u0192', '\u201E', '\u2026', '\u2020', '\u2021', '\u02C6', '\u2030', '\u0160', '\u2039', '\u0152', '', '\u017D', '',
+  '', '\u2018', '\u2019', '\u201C', '\u201D', '\u2022', '\u2013', '\u2014', '\u02DC', '\u2122', '\u0161', '\u203A', '\u0153', '', '\u017E', '\u0178'];
+function _voDecodeHexString(hex, cmap, simpleFont) {
   hex = hex.replace(/\s+/g, '');
   var out = '';
+  if (!(cmap && Object.keys(cmap).length > 0) && simpleFont) {
+    // A simple font with no ToUnicode map: one byte per glyph, read as
+    // WinAnsi (the standard-14 fonts' encoding; 0x80-0x9F carry the curly
+    // quotes, dashes and ellipsis a report prints). Never UTF-16.
+    for (var sb = 0; sb + 2 <= hex.length; sb += 2) {
+      var sv = parseInt(hex.substring(sb, sb + 2), 16);
+      if (sv >= 0x80 && sv <= 0x9F) { var wa = VO_WINANSI_HIGH[sv - 0x80]; if (wa) out += wa; continue; }
+      if (sv >= 32 && sv !== 127 && sv <= 255) out += String.fromCharCode(sv);
+    }
+    return out;
+  }
   if (cmap && Object.keys(cmap).length > 0) {
     // Codes are as wide as the CMap says (Identity-H: 2 bytes; Chromium's
     // Type3 fonts and most simple fonts with a ToUnicode: 1 byte).
@@ -4409,8 +4544,15 @@ async function extractPageText(pdfBytes, pageIndex, preloadedDoc) {
     var page = doc.getPages()[pageIndex];
     if (!page) return texts;
 
-    // Build per-font ToUnicode maps from page resources
-    var fontMaps = {};
+    // Build per-font ToUnicode maps from page resources. A font's Subtype
+    // decides how wide its codes are: a simple font (Type1, TrueType, Type3,
+    // MMType1) draws ONE byte per glyph whatever its strings look like; only
+    // a composite (Type0) font draws multi-byte codes. pdf-lib's standard
+    // Helvetica carries no ToUnicode map and draws hex strings, and an
+    // even-length one was being guessed as UTF-16 — every seal footer on a
+    // previously sealed page ("VERUM OMNIS SEALED ORIGINAL | Seal: VO-… |
+    // … | 39/61") came out as a run of CJK characters.
+    var fontMaps = {}, fontSimple = {};
     try {
       var res = doc.context.lookup(page.node.get(PDFLib.PDFName.of('Resources')));
       var fontsRef = res && res.get(PDFLib.PDFName.of('Font'));
@@ -4421,6 +4563,11 @@ async function extractPageText(pdfBytes, pageIndex, preloadedDoc) {
           var fname = entries[e][0].asString().replace(/^\//, '');
           var fobj = doc.context.lookup(entries[e][1]);
           var cmap = null;
+          try {
+            var subObj = fobj && fobj.get && fobj.get(PDFLib.PDFName.of('Subtype'));
+            var subName = subObj && (typeof subObj.asString === 'function' ? subObj.asString() : String(subObj));
+            fontSimple[fname] = /^\/?(?:Type1|TrueType|Type3|MMType1)$/.test(String(subName || ''));
+          } catch (eSub) {}
           try {
             var tuRef = fobj && fobj.get(PDFLib.PDFName.of('ToUnicode'));
             var tuObj = tuRef && doc.context.lookup(tuRef);
@@ -4474,8 +4621,9 @@ async function extractPageText(pdfBytes, pageIndex, preloadedDoc) {
         if (m[0] === 'T*') { pushText(' '); continue; }
         if (m[3] === "'" || m[3] === '"') pushText(' ');
         var cmap = curFont ? fontMaps[curFont] : null;
+        var simple = !!(curFont && fontSimple[curFont]);
         if (m[2] !== undefined) { pushText(_voMapLiteral(_voDecodeParenString(m[2]), cmap)); continue; }
-        if (m[4] !== undefined) { pushText(_voDecodeHexString(m[4], cmap)); continue; }
+        if (m[4] !== undefined) { pushText(_voDecodeHexString(m[4], cmap, simple)); continue; }
         if (m[5] !== undefined) {
           // TJ array: mix of <hex> and (literal) chunks with kerning numbers
           var body = m[5];
@@ -4491,7 +4639,7 @@ async function extractPageText(pdfBytes, pageIndex, preloadedDoc) {
           var acc = '', lastChunk = '', kern = 0;
           while ((cm = chunkRe.exec(body)) !== null) {
             if (cm[3] !== undefined) { kern += parseFloat(cm[3]); continue; }
-            var piece = (cm[1] !== undefined) ? _voDecodeHexString(cm[1], cmap) : _voMapLiteral(_voDecodeParenString(cm[2]), cmap);
+            var piece = (cm[1] !== undefined) ? _voDecodeHexString(cm[1], cmap, simple) : _voMapLiteral(_voDecodeParenString(cm[2]), cmap);
             if (kern <= VO_TJ_SPACE_KERN && lastChunk.length > 1 && piece.length > 1 && !/\s$/.test(acc) && !/^\s/.test(piece)) acc += ' ';
             acc += piece; lastChunk = piece; kern = 0;
           }
@@ -4930,9 +5078,11 @@ function generateSummary(findings, score) {
   // statements of what the record contains; the internal score only selects
   // which statement fits.
   if (findings.length > 0 && findings.length <= 3) {
+    // No band word here either: "per-finding severity is moderate" is a
+    // confidence band in a sentence (§15.2), and it led the annex summary of
+    // the evidence-bundle-2-docs report.
     return findings.length + ' page-anchored finding' + (findings.length === 1 ? '' : 's') +
-      ' established. Per-finding severity is ' + (score >= 60 ? 'high' : 'moderate') +
-      ' and the finding count is low for the document — read each finding on its cited page.';
+      ' established. The finding count is low for the document — read each finding on its cited page.';
   }
   if (score >= 80) {
     return findings.length + ' contradictions established across multiple categories. ' +
@@ -5352,6 +5502,7 @@ function voRunPackageRules(compiled, textBlocks, existing) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
+    generateSummary: generateSummary, voEditDistance: voEditDistance,
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,
     CONTRADICTION_TYPES: CONTRADICTION_TYPES,
     DETECTORS: DETECTORS,

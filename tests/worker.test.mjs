@@ -199,6 +199,8 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(nb && nb.ok === true, 'narrate returns ok:true');
   ok(nb && nb.model === 'template-fallback' && !/score|confidence/i.test(nb.executiveSummary || '') && /1 engine-verified finding was supplied/.test(nb.executiveSummary || ''),
     'the template narrative names its provenance and prints no score and no band (' + JSON.stringify(nb && nb.executiveSummary).slice(0, 160) + ')');
+  ok(nb && /states: \u201csignature mismatch\u201d \[F1\]/.test(nb.criticalEvidence || ''),
+    'the template wraps a finding\'s evidence in typographic quotes, so evidence that itself opens with a straight-quoted word cannot desynchronise the report\'s sentence gate');
   const mixed = { ...good, findingsKept: good.findingsKept.concat([{ id: 'F2', type: 'CT09', severity: 3, severityOrdinal: 'MEDIUM', status: 'AI-RAISED CANDIDATE - PENDING VERIFICATION', location: 'Page 3', evidence: 'name differs' }]), findingsPruned: 2 };
   r = await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify(mixed)), env, {});
   const mb = await r.json().catch(() => null);

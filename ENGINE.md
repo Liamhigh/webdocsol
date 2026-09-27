@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2071 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2107 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**33 suites · 2071 assertions.** `tests/run-all.js` is the registry — a new
+**33 suites · 2107 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -543,7 +543,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `annexure-eb-regression.test.mjs` | 127 | **The annexure EB run and its re-run** (§12.10, §12.11): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note |
+| `annexure-eb-regression.test.mjs` | 162 | **The annexure EB run, its re-run and the evidence-bundle-2-docs run** (§12.10, §12.11, §12.12): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
@@ -1130,6 +1130,103 @@ finding already carries the page the quote was read from, and `voRulePagesOf` re
 excluding every page more than N pages from a finding's partner — distance is not evidence;
 dropping CT45 p.73 vs 249 — the two clauses are on the record and the finding says what
 each states.
+
+### 12.12 The evidence-bundle-2-docs run — sealed exhibits are evidence; the engine reads its own footers (2026-09-27)
+
+The founder sealed a 68-page bundle of previously sealed exhibits (a customer's email chain
+to a bank's fraud department, card-statement screenshots, voice-note transcripts, an
+affidavit, two banks' outcome letters) with the forensic report and the court-ready
+narrative, and had the three PDFs reviewed. The review found three false findings and a
+narrative that repeated them; the engine run in Node on the same file found the causes
+underneath. Every item is pinned by `tests/annexure-eb-regression.test.mjs` §16 with the
+bundle's own text.
+
+1. **The engine excluded the first 38 pages as a "prior Verum Omnis report".** §12.11 item 1
+   taught `voExcludeSecondaryReportPages` to recognise the brand beside FORENSIC REPORT — and
+   also beside "SEALED DOCUMENT" and "SEAL |". Those two are the footers this platform prints
+   on the EVIDENCE it seals ("Verum Omnis Sealed Document | Source: … | Page 1 of 4", "VERUM
+   OMNIS SEAL | seal-…"), so every previously sealed exhibit was excluded, the report said
+   "Every page of this bundle was read", and the reviewer noted that the engine "missed the
+   actual fraud evidence" — it had never scanned it. Only a report masthead excludes now:
+   the brand beside FORENSIC (EVIDENCE) REPORT, COURT-READY NARRATIVE or NARRATIVE REPORT, or
+   `Report Reference: VO-`. When pages ARE excluded, the unread-pages section prints the
+   exclusion sentence and never "every page was read".
+2. **Every seal footer read as CJK.** pdf-lib's standard Helvetica (Type1, WinAnsi, no
+   ToUnicode) draws hex strings, and `_voDecodeHexString` guessed UTF-16 for any even-length
+   one, so "VERUM OMNIS SEALED ORIGINAL | Seal: VO-… | … | 39/61" became 噅剕䴠位义匠… on
+   every sealed page (the odd-length "PRIVATE SEAL -- FREE TIER" decoded). The extractor now
+   passes each font's Subtype: a simple font (Type1, TrueType, Type3, MMType1) draws ONE byte
+   per glyph, read as WinAnsi (curly quotes, dashes and the ellipsis included); only Type0
+   fonts take the CMap's width. `voIsFooterOnlyPage` and `VO_SEAL_BOILERPLATE_RE` strip the
+   footer's slash date and time, "Chain: N prev" and the "scan the code or verify at …" line,
+   so a footer-only page is still one.
+3. **CT02 "amount is stated as R116 and as R 8000 (variance: 194%)".** Two defects: "R116
+   124.00" (space-grouped thousands) was read as R116, and "an amount of R116 124.00" in one
+   customer's outcome letter (p.45) was paired with the column header "Amount Merchant" above
+   another customer's disputed-transaction table (p.64). D02 now reads space-grouped
+   thousands (currency symbol required), pairs a label only with an amount joined to it by a
+   short connector ("of", ":", "(excl. VAT)"), and never compares entries from different
+   stated documents. `voDetectDocuments` now reads this platform's own seal footer ("Seal:
+   VO-… | … | 45/61") as a document boundary — a bundle of sealed exhibits states its
+   boundaries even when the exhibits print no "Page x of y" — and, where one page carries
+   nested numberings, takes the smallest stated total as the exhibit.
+4. **CT18 "4 different bank account numbers … 022355359, 1099145183, 638230461".** The first
+   was an OCR fragment, the second the tail of "Case Ref: 2026-1099145183", the third a
+   "Mobile +27 638230461"; the count said four and the list three. D12 skips a run joined by
+   `-`, `/` or `.` to other characters and a run preceded by a telephone cue or a country
+   code, and lists every number it counts.
+5. **CT37 "Multiple email domains: standardbank.co.za, gmail.com, verumglobal.foundation…".**
+   A correspondence bundle always carries many domains, and the seal footer's own was among
+   them. D25 now reports one thing: a LOOKALIKE domain — one or two characters from another
+   in the record ("standandbank.co.za" beside "standardbank.co.za", the shape of an
+   impersonation address) — with both domains' pages. Both must be read from text pages (OCR
+   manufactures lookalikes), a domain that prefixes another is a truncated read of it, and
+   seal boilerplate is stripped first. On this bundle that is the one finding that survives,
+   and it is real: p.48 prints `Kerusha.moonsamy@standandbank.co.za`.
+6. **One count, again.** The one AI candidate (DOMAIN_TYPO) was a Triple Verification row
+   ("Detected: PASS", "ACCEPTED"), a "top liability", a B1 Contradiction Brain finding, a row
+   in Statutory Anchoring and Findings in Detail, and a count in the offence and dishonesty
+   matrices, while the cover said three verified findings. `isEngineFinding` (not demoted,
+   not SERIAL, not `source === 'ai'`) filters every table that counts, ranks or maps findings
+   to law; where a candidate is listed beside findings (the type summary, the evidence
+   appendix, the evidence map) it is labelled "AI candidate".
+7. **"Every documentary element of common-law fraud is evidenced in the record."** The
+   offence-elements block maps finding TYPES to elements; that a finding of a matching type
+   exists is a fact, that it evidences the element is an assessment. The block now says
+   "matched by at least one anchored finding of a type that can evidence it. Whether those
+   findings establish the element is for counsel to assess".
+8. **Parties: "HOLL YWoODBETS", "Hot YooDRETS", "Banas TT JT ETE", "PAYMENT TO
+   HOLLYWOODBETS".** OCR garbage from a scanned statement, bound as parties by recurrence.
+   `voLooksLikePerson` rejects a case flip inside a word, a vowel-less word of four or more
+   letters and more than one bare initials group; "payment", "debit", "credit", "fee" and
+   "to" are not name tokens; and `voBuildNameRoster` requires a roster name to be printed on
+   at least one text page when the bundle has any (a wholly scanned bundle keeps its
+   OCR-read names).
+9. **The narrative printed "standardbank. co. za".** The Worker's template wraps a finding's
+   evidence in quotes, and a CT02 evidence begins with a quoted word (`"amount" is stated
+   as …`), so the nested straight quotes desynchronised `splitSentences`' quote masking and
+   every dot in the next finding's domain list became a sentence end. A dot followed directly
+   by a letter, digit, `@`, `_` or `-` is now inside a token whatever the quote pairing, and
+   the template wraps evidence in typographic quotes.
+10. **"Per-finding severity is moderate"** in the annex summary is a band word in a
+    sentence; `generateSummary` states the count and no band.
+11. **The narrative's last page carried "PAGES READ THROUGH OCR" twice** (the unread-pages
+    section prints the block and the annex called it again). `secOcrProvenance` prints once
+    per document.
+
+What the deterministic engine still does not do, stated plainly for the founder: it does not
+read that "we will not be in a position to reimburse you" and a later goodwill settlement
+offer are in tension, that an OTP was used to provision Apple Pay, or that a customer's
+R632,000 claim sits against the bank's "authorised eCommerce" position. Those are semantic
+readings across documents; Brain 9 may raise them as recommendations, and the rule loop can
+turn a recurring one into a phrase-pair rule. The engine's contribution on this bundle is
+the lookalike domain and a clean, disclosed read of all 68 pages — not the three findings it
+sealed on 27 September.
+
+Not adopted: a "same local part at two domains" finding (people keep several addresses);
+excluding OCR pages from every detector (the OCR cap, §12.10, already holds format findings
+on them at severity 2); a semantic "settlement offer contradicts refusal" detector (a phrase
+pair the rule loop can carry once it recurs, not a built-in).
 
 ## 13. The court-ready narrative (the "human report")
 

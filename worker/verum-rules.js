@@ -1286,8 +1286,11 @@ function narrateTemplate(input, kept) {
   let criticalEvidence;
   if (top.length) {
     criticalEvidence = top.map(f =>
+      // Typographic quotes around the evidence: a finding's own text may
+      // begin with a straight-quoted word ("amount" is stated as …), and
+      // nesting straight quotes desynchronised the report's sentence gate.
       'Finding ' + f.id + ' (' + f.type + ', severity ' + f.severity + '), recorded at ' +
-      (f.location || 'an unspecified location') + ', states: "' + f.evidence + '" [' + f.id + '].'
+      (f.location || 'an unspecified location') + ', states: \u201c' + f.evidence + '\u201d [' + f.id + '].'
     ).join(' ') +
       ' The findings quoted above are the highest-severity findings established in the sealed record. ' +
       'No facts beyond the supplied findings are asserted. ' + CLOSING_SENTENCE;
