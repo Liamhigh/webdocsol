@@ -102,28 +102,24 @@ ok(kv(envAssets, 'binding') === kv(topAssets, 'binding'), 'assets binding identi
 ok((kv(topAssets, 'run_worker_first') || '').includes('"/api/*"'), 'the API keeps running the Worker first');
 ok(kv(envAssets, 'run_worker_first') === kv(topAssets, 'run_worker_first'), 'run_worker_first identical in both environments');
 
-// The domain binding is two Custom Domains — the apex and www — with this
-// Worker as their origin. History: the list began as a narrow zone route
-// (the transcribe path, then /api/v1/ai/*) reclaiming traffic from a stale
-// dashboard route on the retired "verum-rules" Worker; on 2026-09-06 the
-// retired Workers were deleted and their routes with them, so the file
-// declared the catch-all routes `verumglobal.foundation/*` and (2026-09-07)
-// `www.verumglobal.foundation/*`. The outside probe then showed neither
-// route in effect — the apex answered by the March mock-up Worker's Custom
-// Domain, www by the Pages project's custom domain — because a zone route
-// only runs in front of a proxied DNS record it does not create. A Custom
-// Domain is the documented replacement for a `/*` route: Cloudflare creates
-// the record and the certificate and every deploy re-asserts the binding.
-// The drift this lock guards against: the list narrowing (one host orphaned
-// again), widening, or quietly reverting to zone routes that never bound.
+// The domain binding is two ZONE ROUTES — `verumglobal.foundation/*` and
+// `www.verumglobal.foundation/*` — with this Worker as their target, in both
+// environments. Resolved 2026-09-27: the bare domain had been held by the
+// same `/*` route on the July Worker `verum-omnis-verify-production` (never
+// a Custom Domain), the founder re-pointed it and added www in the zone's
+// Workers Routes page, and this file now declares exactly that live state
+// (the Custom Domain declaration it replaces never bound: every deploy's
+// triggers step failed on the existing DNS records). The drift this lock
+// guards against: the list narrowing (one host orphaned again), widening,
+// a pattern that is not the whole host, or a quiet return to Custom Domains.
 {
   const routeLines = toml.split(/\r?\n/).filter(l => /^\s*\{\s*pattern\s*=/.test(l));
-  ok(routeLines.length === 4, 'exactly two hostnames, declared in both environments (' + routeLines.length + ')');
+  ok(routeLines.length === 4, 'exactly two routes, declared in both environments (' + routeLines.length + ')');
   const patterns = routeLines.map(l => (l.match(/pattern\s*=\s*"([^"]+)"/) || [])[1]).sort();
-  ok(patterns.join(',') === 'verumglobal.foundation,verumglobal.foundation,www.verumglobal.foundation,www.verumglobal.foundation',
-    'the declared hostnames are the apex and www, nothing narrower or wider (' + patterns.join(' ') + ')');
-  for (const l of routeLines) ok(l.includes('custom_domain = true'), 'each hostname is a Custom Domain, this Worker its origin: ' + l.trim());
-  for (const l of routeLines) ok(!/zone_name|\/\*/.test(l), 'no zone route survives beside the Custom Domains: ' + l.trim());
+  ok(patterns.join(',') === 'verumglobal.foundation/*,verumglobal.foundation/*,www.verumglobal.foundation/*,www.verumglobal.foundation/*',
+    'the declared routes are the whole apex and the whole www host, nothing narrower or wider (' + patterns.join(' ') + ')');
+  for (const l of routeLines) ok(/zone_name\s*=\s*"verumglobal\.foundation"/.test(l), 'each route names its zone: ' + l.trim());
+  for (const l of routeLines) ok(!/custom_domain/.test(l), 'no Custom Domain declaration survives beside the routes (they never bound): ' + l.trim());
 }
 
 console.log(`\n[wrangler-config] PASS=${pass} FAIL=${fail}`);

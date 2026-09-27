@@ -145,6 +145,14 @@ is meant to be identical across the three repositories — an edit here must be 
   service without any DNS change; the apex still needs the founder (release it from
   `verum-omnis-forensic-web` in the dashboard, or give this session a Cloudflare API token
   as an environment secret). `DEPLOYMENT.md` "The bridge"; `tests/pages-bridge.test.mjs`.
+- 27 September 2026: **the domain, resolved.** The apex was held by the zone route
+  `verumglobal.foundation/*` on the July Worker `verum-omnis-verify-production` (not by a
+  Custom Domain, which is why the dashboard showed none to remove). The founder re-pointed
+  it to `webdocsol` and added `www.verumglobal.foundation/*`; no DNS change. Both hostnames
+  now serve the Worker directly; `wrangler.toml` declares those two routes. Lesson: read the
+  zone's Workers Routes page before theorising about Custom Domains, and print small bodies
+  whole in the probe. Still with the founder: `RULE_PRIVATE_KEY` on the Worker (the trainer
+  skipped again on 27 September), rolling the API token pasted into chat on the 24th.
 - 7 September 2026: **Brain 9 reads the sealed text.** Founder direction: the AI must read
   the sealed files so nothing is missed, state what it finds, and the loop must let the engine
   catch it next time; Brain 9 verifies the model's claims are real and in the text. Built as

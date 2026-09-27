@@ -8,8 +8,21 @@ main = "worker/verum-rules.js"
 compatibility_date = "2024-11-07"
 compatibility_flags = ["nodejs_compat"]
 
-# THE DOMAIN, AS CUSTOM DOMAINS — both hostnames, this Worker as their origin.
-# History: this list began as a surgical exception to "routes stay in the
+# THE DOMAIN, AS ZONE ROUTES — both hostnames, every path, this Worker.
+# RESOLVED 2026-09-27. The outside probe (printing the apex's small HTML body
+# whole) showed what actually held the bare domain: not a Custom Domain but
+# the zone route `verumglobal.foundation/*` on the July Worker
+# `verum-omnis-verify-production`, whose static shell loaded the March Kimi
+# mock-up. The founder re-pointed that route to this Worker in the zone's
+# Workers Routes page and added `www.verumglobal.foundation/*` beside it; no
+# DNS record changed (both hostnames were already proxied records). This file
+# now declares exactly those two routes so every deploy re-asserts the live
+# state, and tests/wrangler-config.test.mjs pins them. The Pages bridge
+# (functions/[[path]].js) stays as a dormant fallback: a route runs before the
+# DNS target, so Pages no longer sees www traffic.
+#
+# History (kept because every line of it was once the live state): this list
+# began as a surgical exception to "routes stay in the
 # dashboard" (one transcribe path, then /api/v1/ai/*), winning traffic back
 # from a stale dashboard route on the retired "verum-rules" Worker. On
 # 2026-09-06 the retired "verum-rules" and "verumglobal-static" Workers were
@@ -35,8 +48,9 @@ compatibility_flags = ["nodejs_compat"]
 # Routes is equivalent and immediate; the next deploy then finds them in place.
 # Meanwhile (2026-09-24) functions/[[path]].js bridges www: the Pages project
 # hands every request to this Worker (DEPLOYMENT.md "The bridge").
-# tests/wrangler-config.test.mjs pins this list to exactly these two
-# hostnames, both as Custom Domains, in both environments.
+# (The Custom Domain attempt above never bound: the deploy's triggers step
+# failed on the existing records every time. Zone routes need no record
+# changes and were what the dashboard held all along.)
 # After any routing change, verify
 # https://verumglobal.foundation/api/v1/rules/manifest still answers: the
 # Android app (1verum Constitution.kt) and the fraud-firewall rule updater
@@ -54,8 +68,8 @@ compatibility_flags = ["nodejs_compat"]
 # confused. Same Worker, same bindings, same code.
 workers_dev = true
 routes = [
-  { pattern = "verumglobal.foundation", custom_domain = true },
-  { pattern = "www.verumglobal.foundation", custom_domain = true }
+  { pattern = "verumglobal.foundation/*", zone_name = "verumglobal.foundation" },
+  { pattern = "www.verumglobal.foundation/*", zone_name = "verumglobal.foundation" }
 ]
 
 # THE SITE SHIPS WITH THE WORKER — Workers Static Assets. The Cloudflare
@@ -133,8 +147,8 @@ crons = ["0 3 * * 1"]
 [env.production]
 workers_dev = true
 routes = [
-  { pattern = "verumglobal.foundation", custom_domain = true },
-  { pattern = "www.verumglobal.foundation", custom_domain = true }
+  { pattern = "verumglobal.foundation/*", zone_name = "verumglobal.foundation" },
+  { pattern = "www.verumglobal.foundation/*", zone_name = "verumglobal.foundation" }
 ]
 
 [env.production.assets]
