@@ -2515,17 +2515,22 @@ var DETECTORS = {
     // opened and never closed (a closer OCR dropped: `"Astron Motor Fuel
     // means …`)? Counted from the last clause boundary; no lookbehind.
     function voInsideOpenQuote(span) {
-      var t = String(span || '');
-      var cut = Math.max(t.lastIndexOf(';'), t.lastIndexOf('\n'), t.lastIndexOf('. '));
+      // A term may wrap onto the next line, so a line break is folded, not
+      // a boundary; the clause ends at ";" or ". ". OCR draws an opener as
+      // two apostrophes, a backtick, or an apostrophe before a space.
+      var t = String(span || '').replace(/\s+/g, ' ');
+      var cut = Math.max(t.lastIndexOf(';'), t.lastIndexOf('. '));
       t = t.slice(cut + 1);
       var open = 0;
       for (var k = 0; k < t.length; k++) {
         var c = t.charAt(k), prev = k > 0 ? t.charAt(k - 1) : ' ', next = k + 1 < t.length ? t.charAt(k + 1) : ' ';
+        var next2 = k + 2 < t.length ? t.charAt(k + 2) : ' ';
         if (c === '"') { open = open > 0 ? open - 1 : open + 1; continue; }
-        if (c === '\u201C') { open++; continue; }
+        if (c === '\u201C' || c === '`') { open++; continue; }
         if (c === '\u201D') { if (open > 0) open--; continue; }
         if (c === "'" || c === '\u2018' || c === '\u2019') {
-          if (/[\s(\[]/.test(prev) && /[A-Za-z]/.test(next)) { open++; continue; }   // an opener
+          if (/[\s(\[]/.test(prev) && (c === "'" && next === "'")) { open++; k++; continue; } // '' drawn for "
+          if (/[\s(\[]/.test(prev) && (/[A-Za-z]/.test(next) || (next === ' ' && /[A-Za-z]/.test(next2)))) { open++; continue; } // an opener
           if (/[A-Za-z]/.test(prev) && !/[A-Za-z]/.test(next) && open > 0) { open--; continue; } // a closer (not a possessive)
         }
       }
