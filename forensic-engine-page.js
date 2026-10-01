@@ -1710,21 +1710,30 @@ var DETECTORS = {
     // as "1", a dropped slash, one digit misread) is an OCR reading of a known
     // number, not a false number: the evidence-bundle-4 run sealed
     // "20121226353/07" beside the clean "2012/226353/07" on another page.
-    var cleanRegs = {};
+    // Clean numbers are harvested from native-text pages first (an OCR page's
+    // own misread can pass the format); only a bundle with no text page falls
+    // back to every page. The nearest twin wins, not the first in page order.
+    var cleanRegs = {}, cleanRegsAll = {};
     var cleanRe = /\b(?:CK)?\d{4}\/\d{6}\/\d{2}\b/g;
     for (var ci = 0; ci < textBlocks.length; ci++) {
-      var cmm; cleanRe.lastIndex = 0;
-      while ((cmm = cleanRe.exec(textBlocks[ci] || '')) !== null) cleanRegs[cmm[0].replace(/\D/g, '')] = cmm[0];
+      var cmm, isOcrBlock = /^\s*\[OCR\]/.test(textBlocks[ci] || ''); cleanRe.lastIndex = 0;
+      while ((cmm = cleanRe.exec(textBlocks[ci] || '')) !== null) {
+        cleanRegsAll[cmm[0].replace(/\D/g, '')] = cmm[0];
+        if (!isOcrBlock) cleanRegs[cmm[0].replace(/\D/g, '')] = cmm[0];
+      }
     }
+    if (!Object.keys(cleanRegs).length) cleanRegs = cleanRegsAll;
     var cleanDigits = Object.keys(cleanRegs);
     var ocrVariantOf = function (v) {
       var d = String(v).replace(/\D/g, '');
       if (d.length < 10 || d.length > 15) return null;
+      var best = null, bestDist = 3;
       for (var k = 0; k < cleanDigits.length; k++) {
         if (Math.abs(cleanDigits[k].length - d.length) > 2) continue;
-        if (cleanDigits[k] === d || voEditDistance(cleanDigits[k], d) <= 2) return cleanRegs[cleanDigits[k]];
+        var dist = cleanDigits[k] === d ? 0 : voEditDistance(cleanDigits[k], d);
+        if (dist < bestDist) { bestDist = dist; best = cleanRegs[cleanDigits[k]]; }
       }
-      return null;
+      return best;
     };
     // "ID/Registration number" on a complaint form is one field for either
     // number; a value that starts with a plausible date of birth is the
@@ -1776,17 +1785,24 @@ var DETECTORS = {
         // printed exactly these characters: "1911/0001154/07" beside
         // "1911/001154/07" in the same pleading is a one-digit discrepancy
         // the Low check below reports as before.
-        if (ocrPage) {
+        // Under an "ID/Registration" cue a date-of-birth-shaped value is the
+        // person's identity number and is never "repaired" into a company
+        // number; under a plain registration cue a 12-digit run within two
+        // edits of a clean company number is that number with its slashes
+        // dropped (2002/059909/23 read as 200205930923), twin first.
+        var isIdField = idField && (idShaped(val) || idShapedLoose(val));
+        if (ocrPage && !isIdField) {
           var cleanTwin = ocrVariantOf(val);
-          if (cleanTwin) { repaired.push(val + ' (p.' + (i + 1) + ') reads as ' + cleanTwin); continue; }
-          if (!(idShaped(val) || (idField && idShapedLoose(val)) || FOREIGN_REG_RE.test(context))) {
-            unreadable.push('"' + block.substring(cm.index, cm.index + cm[0].length + tok.index + val.length).replace(/\s+/g, ' ').trim() + '" (p.' + (i + 1) + ')');
+          if (cleanTwin) { var rep1 = val + ' (p.' + (i + 1) + ') reads as ' + cleanTwin; if (repaired.indexOf(rep1) === -1) repaired.push(rep1); continue; }
+          if (!idShaped(val) && !FOREIGN_REG_RE.test(context)) {
+            var unr = '"' + block.substring(cm.index, cm.index + cm[0].length + tok.index + val.length).replace(/\s+/g, ' ').trim() + '" (p.' + (i + 1) + ')';
+            if (unreadable.indexOf(unr) === -1) unreadable.push(unr);
             continue;
           }
         }
         if (!bad[val]) {
           var quote = block.substring(cm.index, cm.index + cm[0].length + tok.index + val.length).replace(/\s+/g, ' ').trim();
-          bad[val] = { pages: [], quote: quote, foreign: false, near: NEAR_SA_REG.test(val), idShaped: idShaped(val) || (idField && idShapedLoose(val)) };
+          bad[val] = { pages: [], quote: quote, foreign: false, near: NEAR_SA_REG.test(val), idShaped: idShaped(val) || isIdField };
         }
         if (FOREIGN_REG_RE.test(context)) bad[val].foreign = true;
         if (bad[val].pages.indexOf(i + 1) === -1) bad[val].pages.push(i + 1);
@@ -2491,7 +2507,34 @@ var DETECTORS = {
     // term and set them against the real "Motor Fuel" definition. Any opener
     // (after a space or bracket), any closer, no inner quote except a
     // possessive apostrophe; the key drops the quotes and the spaces inside.
-    var definitionRe = /(?:^|[\s(\[])(?:(["\u201C'\u2018]\s?(?:[^"\u201C\u201D'\u2018\u2019\n]|['\u2019](?=[A-Za-z])){2,80}["\u201D'\u2019])|([a-z][a-z'-]{3,}(?:\s+[a-z][a-z'-]{2,}){0,3}))\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
+    // A matched double-quote pair is read first, whatever it holds inside
+    // ("Shareholders' Agreement", "Lessees' Improvements" — a plural
+    // possessive is not a closing quote); the mixed pair follows.
+    var definitionRe = /(?:^|[\s(\[])(?:("[^"\u201C\u201D\n]{2,80}"|\u201C[^"\u201C\u201D\n]{2,80}\u201D|["\u201C'\u2018]\s?(?:[^"\u201C\u201D'\u2018\u2019\n]|['\u2019](?=[A-Za-z])){2,80}["\u201D'\u2019])|([a-z][a-z'-]{3,}(?:\s+[a-z][a-z'-]{2,}){0,3}))\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
+    // Is the position at the end of `span` inside a quoted phrase that was
+    // opened and never closed (a closer OCR dropped: `"Astron Motor Fuel
+    // means …`)? Counted from the last clause boundary; no lookbehind.
+    function voInsideOpenQuote(span) {
+      var t = String(span || '');
+      var cut = Math.max(t.lastIndexOf(';'), t.lastIndexOf('\n'), t.lastIndexOf('. '));
+      t = t.slice(cut + 1);
+      var open = 0;
+      for (var k = 0; k < t.length; k++) {
+        var c = t.charAt(k), prev = k > 0 ? t.charAt(k - 1) : ' ', next = k + 1 < t.length ? t.charAt(k + 1) : ' ';
+        if (c === '"') { open = open > 0 ? open - 1 : open + 1; continue; }
+        if (c === '\u201C') { open++; continue; }
+        if (c === '\u201D') { if (open > 0) open--; continue; }
+        if (c === "'" || c === '\u2018' || c === '\u2019') {
+          if (/[\s(\[]/.test(prev) && /[A-Za-z]/.test(next)) { open++; continue; }   // an opener
+          if (/[A-Za-z]/.test(prev) && !/[A-Za-z]/.test(next) && open > 0) { open--; continue; } // a closer (not a possessive)
+        }
+      }
+      return open > 0;
+    }
+    // A definition the page CITES from another instrument ("In terms of
+    // clause 1.36 of the Franchise Agreement, "Goodwill" means …" in a
+    // pleading) is not this document's own definition.
+    var CITED_DEFINITION_RE = /\b(?:in\s+terms\s+of|pursuant\s+to|under|per|as\s+defined\s+in|as\s+per|defines?|definition\s+(?:in|of|at))\b[^;\n]{0,60}\b(?:clause|section|paragraph|annexure|agreement|schedule|deed|lease|mou)\b[^;\n]{0,40}$/i;
     // "Defined twice" is NOT a contradiction — a definitions chapter restated in
     // an index, or the same agreement bound twice into a bundle, defines every
     // term twice, IDENTICALLY (a real run produced 25 such non-findings from one
@@ -2551,9 +2594,10 @@ var DETECTORS = {
         var rawTerm = quoted ? match[1].slice(1, -1) : match[2];
         var term = rawTerm.toLowerCase().replace(/^["\u201C\u201D'\u2018\u2019\s]+|["\u201C\u201D'\u2018\u2019\s]+$/g, '').replace(/\s+/g, ' ').trim();
         if (!term) continue;
-        // An unquoted run that starts right after an opening quote is the
-        // inside of a quoted term, never a term of its own.
-        if (!quoted && /["\u201C'\u2018]\s*$/.test(textBlocks[i].slice(Math.max(0, match.index - 1), match.index + 1))) continue;
+        // An unquoted run inside a quoted phrase whose closer was dropped is
+        // the inside of that term, never a term of its own.
+        if (!quoted && voInsideOpenQuote(textBlocks[i].slice(Math.max(0, match.index - 200), match.index + 1))) continue;
+        if (CITED_DEFINITION_RE.test(textBlocks[i].slice(Math.max(0, match.index - 120), match.index + 1))) continue;
         // Bare (unquoted) words must be plausible defined terms, not boilerplate:
         // a defined term is Capitalised in the instrument that defines it — every
         // word of a multi-word term.
@@ -3895,12 +3939,16 @@ function voCapOcrFormatFindings(findings, ocrPages) {
   if (!Array.isArray(findings) || !Array.isArray(ocrPages) || !ocrPages.length) return { capped: 0, types: types };
   for (var i = 0; i < findings.length; i++) {
     var f = findings[i];
-    if (!f || !VO_OCR_FORMAT_TYPES[f.type] || !(f.severity > 2)) continue;
+    if (!f) continue;
     var pages = voRulePagesOf(f.location || '');
     if (!pages.length) continue;
     var allOcr = true;
     for (var p = 0; p < pages.length; p++) if (ocrPages.indexOf(pages[p]) === -1) { allOcr = false; break; }
     if (!allOcr) continue;
+    // Every finding anchored only on OCR-recovered pages is marked, whatever
+    // its type or severity: the report counts such findings apart.
+    f.ocrAnchored = true;
+    if (!VO_OCR_FORMAT_TYPES[f.type] || !(f.severity > 2)) continue;
     f.severity = 2;
     f.ocrCapped = true;
     if (String(f.evidence || '').indexOf(VO_OCR_CAP_NOTE) === -1) f.evidence = (f.evidence || '') + VO_OCR_CAP_NOTE;

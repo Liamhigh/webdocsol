@@ -684,16 +684,23 @@ function isEngineFinding(f) { return !!(f && !isDemoted(f) && f.type !== 'SERIAL
 // or commentary prepared after the fact). Counted apart wherever a count of
 // "verified findings" is printed: the evidence-bundle-4 cover said "44
 // verified findings" while 25 of them carried "weight reduced until verified".
-function isReducedWeight(f) {
-  return !!(f && (f.ocrCapped || f.secondaryCapped || /\[OCR page: weight reduced|\[secondary source on p\./.test(String(f.evidence || ''))));
+function isReducedWeight(f, ocrPages) {
+  if (!f) return false;
+  if (f.ocrCapped || f.secondaryCapped || f.ocrAnchored || /\[OCR page: weight reduced|\[secondary source on p\./.test(String(f.evidence || ''))) return true;
+  // A finding whose every cited page was OCR-recovered, whatever its type.
+  if (Array.isArray(ocrPages) && ocrPages.length) {
+    var pages = pageNumbers(f.location || '');
+    if (pages.length) { var all = true; for (var p = 0; p < pages.length; p++) if (ocrPages.indexOf(pages[p]) === -1) { all = false; break; } if (all) return true; }
+  }
+  return false;
 }
-function voCountPhrase(list, reviewed) {
+function voCountPhrase(list, reviewed, ocrPages) {
   var n = list.length, reduced = 0;
-  for (var i = 0; i < n; i++) if (isReducedWeight(list[i])) reduced++;
+  for (var i = 0; i < n; i++) if (isReducedWeight(list[i], ocrPages)) reduced++;
   var word = reviewed ? ' verified finding' : ' engine finding';
   if (!reduced) return n + word + (n === 1 ? '' : 's') + (reviewed ? '' : ' (deterministic rules; AI review not run on this report)');
   var firm = n - reduced;
-  return n + ' finding' + (n === 1 ? '' : 's') + ': ' + firm + (reviewed ? ' verified' : ' established by the record') + ' on native text' +
+  return n + ' finding' + (n === 1 ? '' : 's') + ': ' + firm + (reviewed ? ' verified' : ' established by the record') + ' at full weight' +
     (reviewed ? '' : ' (deterministic rules; AI review not run on this report)') + ', and ' + reduced +
     ' anchored on OCR-recovered pages or on a secondary source and held at reduced weight until verified against the page image or the primary document';
 }
@@ -1130,7 +1137,7 @@ function plainLeadLines(fr, data) {
   // "verified" only once the advisory AI review has run; otherwise these are
   // engine findings, established by the record's own quoted text, unreviewed.
   var plReviewed = !!(data && data.aiReview && data.aiReview.applied === true);
-  plLines.push('The sealed record of "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') contains ' + voCountPhrase(plVerified, plReviewed) + '. The following are established.');
+  plLines.push('The sealed record of "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') contains ' + voCountPhrase(plVerified, plReviewed, data && data.ocrPages) + '. The following are established.');
   if (plDemoted > 0) {
     plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
   }
@@ -2098,7 +2105,7 @@ function secSealedFindings(ctx, data) {
   ctx.heading('5. SEALED FINDINGS');
   // §15.3 REQUIRED wording, verbatim: "The record contains [X] contradictions.
   // The following are established."
-  ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true)) + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
+  ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
   var CAP = 20;
   var shown = subst.slice(0, CAP);
   for (var i = 0; i < shown.length; i++) {
@@ -4289,11 +4296,13 @@ async function buildHumanReport(opts) {
     var sec = hs[id];
     if (sec && sec.provenance === 'ai' && sec.text) {
       var scrub = (id === 'counter_narratives') ? scrubRebuttals(sec.text) : scrubNarrative(sec.text);
+      // The server's count is a fact about the draft whether or not the
+      // section is printed (Sourcery, PR #212): accumulate it first.
+      var serverDropped = (sec.gate && sec.gate.dropped) || 0;
+      gateDroppedServer += serverDropped;
       if (voGatePasses(scrub)) {
         renderBlocks(scrub.text);
         gateDroppedClient += scrub.dropped;
-        var serverDropped = (sec.gate && sec.gate.dropped) || 0;
-        gateDroppedServer += serverDropped;
         var note = 'Written by the AI narrator from the sealed findings';
         var removed = scrub.dropped + serverDropped;
         if (removed) note += ' — ' + removed + ' sentence' + (removed === 1 ? '' : 's') + ' removed by the §15.2 language and anchor gate';
@@ -4507,7 +4516,7 @@ async function buildHumanReport(opts) {
   ctx.heading('COURT-READY DECLARATION');
   ctx.subHeading('Sealed findings');
   if (subst.length) {
-    ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true)) + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
+    ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
     var CAPF = 20;
     for (var d = 0; d < Math.min(subst.length, CAPF); d++) {
       var dq = quoteEvidence(subst[d].evidence);

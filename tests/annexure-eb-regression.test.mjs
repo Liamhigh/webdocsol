@@ -645,6 +645,10 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   const garbled = DET.D11_DETECT_REGISTRATION_FAKE(['[OCR] Registration number 1991 1 G25755/ as read from the scan', '[OCR] Registration number 1991/ 025755 (Pty) Ltd', 'Registration Number 2002/059909/23']);
   ok(garbled.filter(f => !f.contextOnly).length === 0 && garbled.some(f => f.contextOnly && /could not be read reliably/.test(f.evidence) && /1991 1 G25755/.test(f.evidence)), 'a garbled number on an OCR page with no clean twin is an unreadable note, never a finding');
   ok(ct20(['Registration No: 2002/05990/2 as stated on the letterhead.']).length === 1, 'a malformed number on a native-text page with no clean twin still fires');
+  const idOcr = DET.D11_DETECT_REGISTRATION_FAKE(['[OCR] ID/Registration number of complainant 2012226353071', 'Registration Number 2012/226353/07']);
+  ok(idOcr.some(f => !f.contextOnly && f.severity === 2 && /identity number/.test(f.evidence)) && !idOcr.some(f => f.contextOnly && /reads as/.test(f.evidence)), 'an identity number under an ID/Registration field is never "repaired" into a nearby company number');
+  const nearest = DET.D11_DETECT_REGISTRATION_FAKE(['[OCR] Registration Number 2012/226353/01', '[OCR] Reg No. 20121226353/07 and again Reg No. 20121226353/07', 'Registration Number 2012/226353/07']).filter(f => f.contextOnly);
+  ok(nearest.length === 1 && /20121226353\/07 \(p\.2\) reads as 2012\/226353\/07/.test(nearest[0].evidence) && (nearest[0].evidence.match(/reads as/g) || []).length === 1, 'the twin is the nearest clean number from a text page, listed once (' + (nearest[0] && nearest[0].evidence) + ')');
 
   // 17c. CT08: a typeset quote pair, and the inside of a quoted term.
   ok(ct08(['1.1.24 "Astron Motor Fuel\' means each Motor Fuel supplied by the Franchisor to the Franchisee, or made available for supply to the Franchisee, from time to time under this Agreement;', '1.1.58 " Motor Fuel\' means petrol, diesel, liquefied petroleum gas and any other products which are or may be used in propelling road vehicles;']).length === 0,
@@ -655,6 +659,11 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(exp.length === 1 && /expiration date/.test(exp[0].evidence), 'a term defined twice with different wording still fires through a mismatched quote pair');
   const poss = ct08(['"Franchisee\'s Equipment" means the pumps, tanks and dispensers installed by the Franchisee at its own cost', '"Franchisee\'s Equipment" means only the signage supplied by the Franchisor under schedule B of the agreement']);
   ok(poss.length === 1 && /franchisee's equipment/.test(poss[0].evidence), 'a possessive apostrophe inside a quoted term does not close it (' + (poss[0] && poss[0].evidence.slice(0, 60)) + ')');
+  const plural = ct08(['1.1 "Shareholders\' Agreement" means the agreement between the shareholders dated 1 March 2019 governing voting and transfers.', '9.4 "Shareholders\' Agreement" means only the memorandum of incorporation and nothing signed between the shareholders.']);
+  const curly = ct08(['1.1 \u201CLessees\u2019 Improvements\u201D means every structure the lessees erected on the premises at their own cost.', '9.4 \u201CLessees\u2019 Improvements\u201D means only the signage the lessor approved in writing under annexure B.']);
+  ok(plural.length === 1 && /shareholders' agreement/.test(plural[0].evidence) && curly.length === 1 && /lessees\u2019 improvements/.test(curly[0].evidence), 'a plural possessive inside a matched quote pair is not a closing quote (straight and curly)');
+  ok(ct08(['1.1.24 "Astron Motor Fuel means each Motor Fuel supplied by the Franchisor to the Franchisee from time to time;', '1.1.58 "Motor Fuel\' means petrol, diesel, liquefied petroleum gas and any other products used in propelling road vehicles;']).length === 0, 'a dropped closing quote does not turn the inside of a term into a term of its own');
+  ok(ct08(['In terms of clause 1.36 of the Franchise Agreement, "Goodwill" means the goodwill arising out of the use of the Franchised Business by the Franchisor and all Caltex outlets.', '1.1.50 "Goodwill\' means the established reputation of a business regarded as a quantifiable asset and calculated as part of its value when it is sold.']).length === 0, 'a definition a pleading cites from another instrument is not the document\'s own definition');
 
   // 17d. CT44: the ownership half is about the premises, the same side, the same document.
   const ct44 = (b) => of(DET.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED, b, 'CT44');
@@ -727,6 +736,9 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(/Common law of contract/.test(ct44Law) && /Petroleum Products Act/.test(ct44Law) && !/Rental Housing|racketeering/.test(ct44Law), 'a contract finding names no residential-tenancy statute and no racketeering provision');
   ok(/held at reduced weight/.test(R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x' }, { type: 'CT03', severity: 2, evidence: 'y [OCR page: weight reduced until the quoted characters are verified against the page image]' }], true)) && R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x' }], true) === '1 verified finding',
     'the count phrase tells reduced-weight findings apart and is unchanged when there are none');
+  ok(/2 findings: 1 verified at full weight, and 1 anchored on OCR-recovered pages/.test(R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x', location: 'Page 2' }, { type: 'CT20', severity: 2, evidence: 'identity number', location: 'Page 7' }], true, [7])),
+    'a severity-2 finding anchored only on an OCR page is counted apart even without the cap tag');
+  ok(E.voCapOcrFormatFindings([{ type: 'CT20', severity: 2, location: 'Page 7', evidence: 'identity number' }], [7]).capped === 0, 'the cap leaves a severity-2 finding alone');
   const run = async () => {
     const findings = [
       { type: 'CT44', severity: 5, evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner): "the FRANCHISOR is not the owner of the Premises but is the Lessee" — yet the record shows the party had become the owner of the premises: "became the registered owner of the premises"', location: 'Page 2 vs Page 5', anchor: { where: [2, 5], who: [], when: [] } },
@@ -744,7 +756,11 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     try {
       T = await pageText(await R.build(opts));
       N = await pageText(await R.buildHumanReport(Object.assign({}, opts, {
-        humanSections: { counter_narratives: { provenance: 'ai', text: 'The respondent may have signed the lease under pressure from the franchisor.\nThis account conflicts with the record at p. 7, which states "Commencement Date 1/8/2001". Assessment: contradicted by the record at p. 7.\nThe franchisor states that the lease commenced on 1 August 2001 and ran its full term.\nThis account conflicts with the record at p. 9, which states "commenced 1/8/2003". Assessment: contradicted by the record at p. 9.', gate: { dropped: 1 } } },
+        humanSections: {
+          counter_narratives: { provenance: 'ai', text: 'The respondent may have signed the lease under pressure from the franchisor.\nThis account conflicts with the record at p. 7, which states "Commencement Date 1/8/2001". Assessment: contradicted by the record at p. 7.\nThe franchisor states that the lease commenced on 1 August 2001 and ran its full term.\nThis account conflicts with the record at p. 9, which states "commenced 1/8/2003". Assessment: contradicted by the record at p. 9.', gate: { dropped: 1 } },
+          // a section the render-time gate rejects whole: its server-gate count still counts (Sourcery, PR #212)
+          legal_framework: { provenance: 'ai', text: 'This may constitute fraud. It could indicate dishonesty by the franchisor.', gate: { dropped: 2 } }
+        },
         humanProvenance: { sectionsAttempted: 7, model: 'test-narrator' }
       })));
     } finally { console.log = quiet; }
@@ -752,10 +768,10 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ok(/Franchise \/ Lease & Goodwill/.test(slice('FINDINGS & CONTRADICTION MATRIX', 'Finding type summary')), 'the findings matrix carries the Franchise / Lease & Goodwill category (CT44/CT45 were missing from it)');
     ok(/The review dropped 3 engine findings as unsupported/.test(T), 'the Triple Verification table says how many findings the review dropped');
     ok(!/cannot be changed, altered, or deleted/.test(T) && /any change to them is detectable/.test(T), 'the seal is described as tamper-evident, never as preventing change');
-    ok(/3 findings: 2 verified on native text, and 1 anchored on OCR-recovered pages or on a secondary source and held at reduced weight/.test(T), 'the cover count tells the OCR-held finding apart (' + (T.match(/contains [^.]{0,200}/) || [''])[0] + ')');
+    ok(/3 findings: 2 verified at full weight, and 1 anchored on OCR-recovered pages or on a secondary source and held at reduced weight/.test(T), 'the cover count tells the OCR-held finding apart (' + (T.match(/contains [^.]{0,200}/) || [''])[0] + ')');
     ok(!/Organised Crime/.test(slice('Person → Contradiction → Page → Candidate law', 'CANDIDATE OFFENCE MATRIX')) || /CT18/.test(slice('Person → Contradiction → Page → Candidate law', 'CANDIDATE OFFENCE MATRIX')), 'the arithmetic finding\'s row cites no money-laundering provision');
     ok(/lease commenced on 1 August 2001/.test(N) && /p\. 9, which states/.test(N) && !/p\. 7, which states/.test(N), 'a rebuttal whose claim the gate removed is dropped whole; the kept claim keeps its rebuttal');
-    ok(/server's anchor and language gate: 1/.test(N) && /render-time §15\.2 gate: 3/.test(N), 'the provenance box prints both gate counters (server 1; render-time 3 = the hedged claim and its two orphaned sentences)');
+    ok(/server's anchor and language gate: 3/.test(N) && /render-time §15\.2 gate: 3/.test(N), 'the provenance box prints both gate counters (server 1 + 2 from the section the render gate rejected; render-time 3 = the hedged claim and its two orphaned sentences)');
   };
   await run();
 }
