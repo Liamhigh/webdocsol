@@ -7922,7 +7922,7 @@ var DETECTORS = {
         // An unquoted run inside a quoted phrase whose closer was dropped is
         // the inside of that term, never a term of its own.
         if (!quoted && voInsideOpenQuote(textBlocks[i].slice(Math.max(0, match.index - 200), match.index + 1))) continue;
-        if (CITED_DEFINITION_RE.test(textBlocks[i].slice(Math.max(0, match.index - 120), match.index + 1))) continue;
+        if (CITED_DEFINITION_RE.test(textBlocks[i].slice(Math.max(0, match.index - 120), match.index + 1).replace(/\s+/g, ' '))) continue; // the citation may wrap onto the next line
         // Bare (unquoted) words must be plausible defined terms, not boilerplate:
         // a defined term is Capitalised in the instrument that defines it — every
         // word of a multi-word term.
