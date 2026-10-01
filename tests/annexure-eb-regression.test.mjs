@@ -593,6 +593,173 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   await run();
 }
 
+// ---- §17 The evidence-bundle-4-docs run (2026-10-01) ----------------------------
+// A 651-page bundle of previously sealed exhibits (franchise agreements, an
+// MOU, affidavits, a consumer complaint, extracts prepared on the seal date).
+// The sealed report carried 44 findings; an outside review could support one.
+// Underneath: the platform's own seal footer read as a stated date on every
+// page, OCR variants of clean registration numbers, a typeset quote pair the
+// definition detector could not read, an "owner of certain Intellectual
+// Property" paired with a lessee clause, pleading-form admissions, an OCR'd
+// invoice's arithmetic, and an extract prepared after the fact read as the
+// record. Each item below is pinned with the bundle's own text.
+{
+  const d03 = (b) => DET.D03_DETECT_DATE_INCONSISTENCY(b).filter(f => /Impossible date/.test(f.evidence));
+  const foot = (id, n, tot, extra) => ' PRIVATE SEAL -- FREE TIER VERUM OMNIS SEALED ORIGINAL | Seal: ' + id + ' | SHA-512: 65c44f59360eb272... | 30/09/2026 15:41:47 Africa/Johannesburg | ' + n + '/' + tot + (extra || '') + ' verumglobal.foundation | OpenTimestamps | Patent Pending VERUM OMNIS SEALED ORIGINAL scan the code or verify at verumglobal.foundation/verify.html';
+
+  // 17a. Seal furniture is not evidence.
+  const footer = 'VERUM OMNIS SEALED ORIGINAL — scan the code or verify at verumglobal.foundation/verify.html PRIVATE SEAL — FREE TIER verumglobal.foundation | OpenTimestamps | Patent Pending VERUM OMNIS SEALED ORIGINAL | Seal: VO-BDAC81AC7522 | SHA-512: bdac81ac75228843... | 30/09/2026 15:41:47 Africa/Johannesburg | 36/388';
+  const stripped = E.voStripSealFurniture('Clause 3 applies. ' + footer + ' Clause 4 applies.');
+  ok(!/30\/09\/2026|VO-BDAC|Johannesburg|VERIFY|PRIVATE SEAL|verify\.html|OpenTimestamps|Patent Pending/.test(stripped) && /Clause 3 applies\.\s+Clause 4 applies\./.test(stripped),
+    'the seal footer (seal id, hash, date and time, page count, verify line, tier line) is removed and the record\'s own words stay (' + JSON.stringify(stripped) + ')');
+  const so = E.voStripSealFurniture('[OCR] VERUM OMNIS SEALED ORIGINAL I Seal: VO-BDAC81AC7522 I SHA-512: bdac81ac75228843... I 0/09/2026 15:41:47 Africa/Johannesburg I 36/388 Dear Sir, the lease commenced on 1/8/2001.');
+  ok(/^\[OCR\]/.test(so) && !/0\/09\/2026|Johannesburg/.test(so) && /commenced on 1\/8\/2001/.test(so), 'an OCR-mangled stamp ("0/09/2026 15:41:47", pipes read as I) goes too; the [OCR] prefix and the record\'s own date stay');
+  ok(d03(['[OCR] printed 0/09/2026 15:41:47 by the seal']).length === 0 && d03(['[OCR] VO-BDAC81AC7522 I SHA-512: bdac81ac75228843... I 30/0/2026 l5:41:47 Africa/Johanne5burg']).length === 0 && d03(['Signed on 31/02/2021 at Durban.']).length === 1,
+    'a date with a zero day or month is OCR damage, not an impossible date, whatever OCR did to the clock time; a real impossible date still fires');
+  ok(d03(['From: fraud@bank.co.za Sent: 31/02/2024 14:32 To: client Subject: Your account']).length === 1, 'an impossible date in the record\'s own timestamped line (a forged email header) is still a finding — only a seal stamp is skipped');
+  const bankLine = E.voStripSealFurniture('15/03/2024 10:30 POS purchase R1 250.00 Makro; sealed VERUM OMNIS SEALED ORIGINAL | Seal: VO-BDAC81AC7522 | SHA-512: bdac81ac75228843... | 30/09/2026 15:41:47 Africa/Johannesburg | 36/388');
+  ok(/15\/03\/2024 10:30 POS purchase/.test(bankLine) && !/30\/09\/2026/.test(bankLine), 'stripping takes the seal stamp and leaves the record\'s own timestamped line');
+  ok(E.voIsStampContext('x | SHA-512: bdac81ac75228843... | 30/09/2026 15:41:47 Africa/Johannesburg', 44, 10) === true && E.voIsStampContext('Sent: 31/02/2024 14:32 To: client', 6, 10) === false, 'stamp context is the footer\'s own words, not any clock time');
+  const nested = [];
+  for (let p = 1; p <= 5; p++) nested.push('exhibit A page ' + p + '.' + foot('VO-AAAAAAAAAAAA', p, 5));
+  for (let p = 1; p <= 3; p++) nested.push('exhibit B page ' + p + '.' + foot('VO-BBBBBBBBBBBB', p, 3));
+  const segsBefore = E.voCacheDocSegs(nested);
+  const changed = E.voStripSealFurnitureBlocks(nested);
+  ok(segsBefore.length === 2 && changed === 8 && E.voDetectDocuments(nested) === segsBefore && !/VO-AAAA|30\/09\/2026/.test(nested[0]) && /exhibit A page 1\./.test(nested[0]),
+    'the boundaries are read from the footers before the footers go, and the same array returns them from the cache afterwards');
+  ok(E.voExtractDates('Seal: VO-BDAC81AC7522 | SHA-512: bdac81ac75228843... | 30/09/2026 15:41:47 Africa/Johannesburg and signed on 12/08/2024').join('|') === '12/08/2024' && E.voExtractDates('Sent: 12/03/2024 09:15 and signed on 12/08/2024').join('|') === '12/03/2024|12/08/2024',
+    'the date extractor skips a seal stamp and keeps the record\'s own timestamped dates');
+
+  // 17b. CT20: an identity field, and OCR variants of a clean number.
+  const ct20 = (b) => of(DET.D11_DETECT_REGISTRATION_FAKE, b, 'CT20').filter(f => !f.contextOnly);
+  const idF = ct20(['ID/Registration number of complainant 510209 5091087']);
+  const idT = ct20(['ID/Registration number of complainant 510209 5091 0']);
+  ok(idF.length === 1 && idF[0].severity === 2 && /identity number/.test(idF[0].evidence) && idT.length === 1 && idT[0].severity === 2 && /identity number/.test(idT[0].evidence),
+    '"ID/Registration number of complainant 510209 5091087" is an identity number (sev 2 note), even when OCR cut it short — never "not a valid format"');
+  const twins = ['MEMORANDUM OF UNDERSTANDING BRIGHT IDEA PROJECTS 66 PTY (LTD) t/a ALL FUELS Registration Number 2012/226353/07 (Represented herein by Zeyd Timol duly authorised)', '[OCR] Registration number 20121226353/07 as per the letterhead; CIPC 200205930923; Reg. No. 1811100115407', 'Registration Number 2002/059909/23 and Registration Number 1911/001154/07'];
+  ok(ct20(twins).length === 0, 'OCR variants of numbers printed cleanly elsewhere in the bundle are not findings');
+  const repairs = DET.D11_DETECT_REGISTRATION_FAKE(twins).filter(f => f.contextOnly);
+  ok(repairs.length === 1 && /20121226353\/07 \(p\.2\) reads as 2012\/226353\/07/.test(repairs[0].evidence) && /1811100115407 \(p\.2\) reads as 1911\/001154\/07/.test(repairs[0].evidence), 'the repairs are disclosed as a note (' + (repairs[0] && repairs[0].evidence) + ')');
+  const nearText = ct20(['Chevron South Africa (Proprietary) Limited Registration Number 1911/001154/07.', 'SUBJECT to the following condition, imposed by and in favour of Chevron South Africa (Proprietary) Limited Registration Number 1911/0001154/07 (Transferor)']);
+  ok(nearText.length === 1 && nearText[0].severity === 2 && /one digit off/.test(nearText[0].evidence), 'on native-text pages a one-digit discrepancy beside the clean number is still the Low "one digit off" check — the record printed those characters');
+  const garbled = DET.D11_DETECT_REGISTRATION_FAKE(['[OCR] Registration number 1991 1 G25755/ as read from the scan', '[OCR] Registration number 1991/ 025755 (Pty) Ltd', 'Registration Number 2002/059909/23']);
+  ok(garbled.filter(f => !f.contextOnly).length === 0 && garbled.some(f => f.contextOnly && /could not be read reliably/.test(f.evidence) && /1991 1 G25755/.test(f.evidence)), 'a garbled number on an OCR page with no clean twin is an unreadable note, never a finding');
+  ok(ct20(['Registration No: 2002/05990/2 as stated on the letterhead.']).length === 1, 'a malformed number on a native-text page with no clean twin still fires');
+
+  // 17c. CT08: a typeset quote pair, and the inside of a quoted term.
+  ok(ct08(['1.1.24 "Astron Motor Fuel\' means each Motor Fuel supplied by the Franchisor to the Franchisee, or made available for supply to the Franchisee, from time to time under this Agreement;', '1.1.58 " Motor Fuel\' means petrol, diesel, liquefied petroleum gas and any other products which are or may be used in propelling road vehicles;']).length === 0,
+    '"Astron Motor Fuel\' and " Motor Fuel\' (opening " closing \') are two terms, not two definitions of "motor fuel\'"');
+  ok(ct08(['1.1.47 "Franchised Business" means the conduct of a Astron Motor Fuel Franchise for the sale and/or provision of Motor Fuel and Lubricants', '"Market Value of the Franchised Business\' means the price a willing independent arm\'s-length purchaser is prepared to pay for the Franchised Business']).length === 0,
+    'the inside of a longer quoted term ("Market Value of the Franchised Business") is not the term "franchised business"');
+  const exp = ct08(['"Expiration Date\' means 31 December 2024, the day on which the lease ends and the premises are vacated', '"Expiration Date" means 30 June 2025 or such later date as the parties agree in writing']);
+  ok(exp.length === 1 && /expiration date/.test(exp[0].evidence), 'a term defined twice with different wording still fires through a mismatched quote pair');
+  const poss = ct08(['"Franchisee\'s Equipment" means the pumps, tanks and dispensers installed by the Franchisee at its own cost', '"Franchisee\'s Equipment" means only the signage supplied by the Franchisor under schedule B of the agreement']);
+  ok(poss.length === 1 && /franchisee's equipment/.test(poss[0].evidence), 'a possessive apostrophe inside a quoted term does not close it (' + (poss[0] && poss[0].evidence.slice(0, 60)) + ')');
+
+  // 17d. CT44: the ownership half is about the premises, the same side, the same document.
+  const ct44 = (b) => of(DET.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED, b, 'CT44');
+  const headLease = 'in the event that the FRANCHISOR is not the owner of the Premises but is the Lessee in terms of a head lease agreement with a third party and such head lease terminates, then this Contract shall be deemed to have terminated or expired.';
+  ok(ct44([headLease, 'Astron carries on business in the Area, and is the owner of certain Intellectual Property used in the Franchised Business.']).length === 0, '"is the owner of certain Intellectual Property" is not ownership of the premises');
+  ok(ct44([headLease, 'By 2014 Bright Idea Projects 66 (Pty) Ltd purchased the property and became the registered owner of the premises.']).length === 1, 'the franchise-lease control still fires');
+  ok(ct44(['3.5 The Franchisee is not the owner of the Premises, but is the lessee in terms of a Lease with Palmbili Properties Investments (Pty) Ltd. Accordingly, should the Lease terminate for any reason, then this Agreement shall terminate.', 'BRIGHT IDEA PROJECTS 66 (PTY) LTD t/a ALL FUELS (hereinafter referred to as THE FRANCHISOR/OWNER) is: a duly appointed Branded Marketer of Astron and a wholesaler and distributor of petroleum products carrying the Astron Energy/Caltex brand and logo, AND the owner of the immovable property described as Erf 123 Port Edward']).length === 0,
+    'a franchisee\'s lessee clause and a recital that the franchisor owns a property are two sides, not a trap');
+  const twoDocs = [];
+  for (let p = 1; p <= 3; p++) twoDocs.push((p === 1 ? headLease : 'schedule page ' + p + '.') + foot('VO-AAAAAAAAAAAA', p, 3));
+  for (let p = 1; p <= 3; p++) twoDocs.push((p === 1 ? 'By 2014 Bright Idea Projects 66 (Pty) Ltd purchased the property and became the registered owner of the premises.' : 'annexure page ' + p + '.') + foot('VO-BBBBBBBBBBBB', p, 3));
+  ok(ct44(twoDocs).length === 0, 'a lessee clause in one stated document and an ownership line in another are never paired');
+
+  // 17e. CT01: a pleading admits paragraphs, not facts.
+  ok(ct01(['AD PARAGRAPH 13 190. I admit the contents of this paragraph. AD PARAGRAPH 14 191. The Respondent admits the opening sentence of this paragraph. On the remainder I have no knowledge.']).length === 0, '"I admit the contents of this paragraph" is the form of an answering affidavit, not an admission of fact');
+  ok(ct01(['In my affidavit I admit that I signed the second agreement on 3 March 2019 without reading it, and I was wrong to do so.']).length === 1, 'a first-person admission of fact still fires');
+
+  // 17f. CT15/CT22: one page, plausible figures, OCR cap.
+  const d13 = (b) => DET.D13_DETECT_CALCULATION_ERROR(b);
+  const badInv = d13(['Subtotal: R1161950 VAT: R1 Total: R1.08']);
+  ok(badInv.filter(f => !f.contextOnly).length === 0 && badInv.some(f => f.contextOnly && /could not be read as an invoice/.test(f.evidence)), '"subtotal R1161950, VAT R1, total R1.08" is an unreadable invoice (a note), not an amount discrepancy');
+  ok(d13(['Subtotal: R1,000.00 VAT: R150.00 Total: R1,250.00']).filter(f => f.type === 'CT15').length === 1, 'a plausible invoice whose total does not add up still fires');
+  ok(d13(['Subtotal: R1,000.00 for the goods', 'VAT: R150.00 Total: R1,250.00']).filter(f => !f.contextOnly).length === 0, 'figures on different pages are never combined into one invoice');
+  ok(E.voCapOcrFormatFindings([{ type: 'CT15', severity: 5, location: 'Page 397', evidence: 'Total mismatch' }, { type: 'CT22', severity: 4, location: 'Page 397', evidence: 'VAT mismatch' }], [397]).capped === 2, 'an invoice\'s arithmetic on an OCR page is held at reduced weight like every other figure');
+
+  // 17g. A secondary source is an account of the record, not the record.
+  const segs2 = [{ start: 1, end: 3, title: 'Franchise Agreement between Bright Idea Projects and Wayne Nel Motors' }, { start: 4, end: 6, title: 'Extract prepared 30 Sept 2026 - pages reproduced from the MOU' }];
+  const secPages = E.voSecondaryPages(segs2, ['', '', '', 'Extract prepared 30 Sept 2026 - pages reproduced', '', '']);
+  ok(JSON.stringify(secPages) === '[4,5,6]', 'a document titled as an extract prepared after the fact is secondary (' + JSON.stringify(secPages) + ')');
+  const demo = E.voDemoteSecondarySource([
+    { type: 'CT23', severity: 4, location: 'Page 5', evidence: 'The record states a signature is missing ("uncountersigned")' },
+    { type: 'CT45', severity: 5, location: 'Page 2 vs Page 5', evidence: 'Goodwill recognised — yet denied' },
+    { type: 'CT02', severity: 4, location: 'Page 2', evidence: '"total" is stated as R1 and as R2' }
+  ], secPages);
+  ok(demo.leads.length === 1 && demo.leads[0].type === 'CT23' && demo.kept.length === 2 && demo.kept[0].type === 'CT45' && demo.kept[0].severity === 2 && /secondary source on p\. 5/.test(demo.kept[0].evidence) && demo.kept[1].severity === 4,
+    'a finding wholly on the extract is a lead, a mixed one is held at reduced weight and tagged, an unrelated one is untouched');
+  ok(E.voSecondaryPages([{ start: 1, end: 3, title: 'Lease agreement prepared by the Lessor\'s attorneys' }], ['Lease agreement prepared by the Lessor\'s attorneys. 1. Parties.', '', '']).length === 0, 'a primary instrument that says who prepared it is not an extract');
+
+  // 17h. A finding is dated by its own words or by the quote\'s own sentence, never by the rest of the page.
+  const blocksD = new Array(10).fill('');
+  blocksD[2] = 'The lease commenced on 1 August 2001 and runs for ten years. The goodwill of the business is a quantifiable asset recognised by both parties. Signed at Durban on 12 December 2018 before a commissioner.';
+  const fA = [{ type: 'CT45', severity: 5, evidence: 'Goodwill recognised: "The goodwill of the business is a quantifiable asset recognised by both parties" — yet denied elsewhere', location: 'Page 3' }];
+  E.voAnchorEnrich(fA, blocksD);
+  ok(JSON.stringify(fA[0].anchor.when) === '[]', 'a quote whose own sentence carries no date gets no date from the rest of the page (' + JSON.stringify(fA[0].anchor.when) + ')');
+  const fC = [{ type: 'CT04', severity: 4, evidence: 'Billing after expiry: "runs for ten years" — yet invoices continue', location: 'Page 3' }];
+  E.voAnchorEnrich(fC, blocksD);
+  ok(fC[0].anchor.when.length === 1 && fC[0].anchor.when[0] === '1 August 2001', 'the quote\'s own sentence may date it, once (' + JSON.stringify(fC[0].anchor.when) + ')');
+
+  // 17i. Parties.
+  ok(!E.voLooksLikePerson('Supreme Court') && !E.voLooksLikePerson('Service Station') && !E.voLooksLikePerson('Timol de') && !E.voLooksLikePerson('Auditors Name Postal Address') && E.voLooksLikePerson('Zeyd Timol') && E.voLooksLikePerson('E de Waal'),
+    '"Supreme Court", "Service Station", "Timol de" and "Auditors Name Postal Address" are not parties; "Zeyd Timol" and "E de Waal" are');
+
+  // 17j. The report and the narrative, rendered and read back.
+  const fs = require('fs'), path = require('path');
+  const g = globalThis; g.window = g; g.self = g;
+  if (!g.PDFLib) new Function('window', 'self', 'globalThis', fs.readFileSync(path.join(process.cwd(), 'vendor/pdf-lib.min.js'), 'utf8'))(g, g, g);
+  const PDFLib = g.PDFLib;
+  const R = require('../forensic-report.js');
+  const pageText = async (bytes) => {
+    const loaded = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+    const parts = [];
+    for (let i = 0; i < loaded.getPageCount(); i++) parts.push((await E.extractPageText(bytes, i, loaded)).join(' '));
+    return parts.join(' \n ').replace(/[ \t]+/g, ' ');
+  };
+  const jur0 = { home: 'ZA', foreign: [], isCrossBorder: false };
+  const ct22Law = R._statutesForFinding({ type: 'CT22' }, jur0).map(x => x.provisions.join('; ')).join(' ');
+  const ct18Law = R._statutesForFinding({ type: 'CT18' }, jur0).map(x => x.provisions.join('; ')).join(' ');
+  const ct44Law = R._statutesForFinding({ type: 'CT44' }, jur0).map(x => x.provisions.join('; ')).join(' ');
+  ok(/theft/.test(ct22Law) && !/Organised Crime|Financial Intelligence|Corrupt/.test(ct22Law) && /Organised Crime/.test(ct18Law), 'an arithmetic finding is not money laundering; a bank-detail finding keeps the diversion statutes');
+  ok(/Common law of contract/.test(ct44Law) && /Petroleum Products Act/.test(ct44Law) && !/Rental Housing|racketeering/.test(ct44Law), 'a contract finding names no residential-tenancy statute and no racketeering provision');
+  ok(/held at reduced weight/.test(R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x' }, { type: 'CT03', severity: 2, evidence: 'y [OCR page: weight reduced until the quoted characters are verified against the page image]' }], true)) && R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x' }], true) === '1 verified finding',
+    'the count phrase tells reduced-weight findings apart and is unchanged when there are none');
+  const run = async () => {
+    const findings = [
+      { type: 'CT44', severity: 5, evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner): "the FRANCHISOR is not the owner of the Premises but is the Lessee" — yet the record shows the party had become the owner of the premises: "became the registered owner of the premises"', location: 'Page 2 vs Page 5', anchor: { where: [2, 5], who: [], when: [] } },
+      { type: 'CT20', severity: 2, ocrCapped: true, evidence: 'A number labelled as a registration is not a valid SA registration format (expected YYYY/NNNNNN/NN or CK…): "Registration number 12AB" [OCR page: weight reduced until the quoted characters are verified against the page image]', location: 'Page 7', anchor: { where: [7], who: [], when: [] } },
+      { type: 'CT22', severity: 4, evidence: 'VAT mismatch: calculated R150.00 but stated R120.00', location: 'Page 9', anchor: { where: [9], who: [], when: [] } }
+    ];
+    const opts = {
+      documents: [{ name: 'evidence-bundle-4-docs.pdf', pageCount: 651, sha512: 'cd'.repeat(64), sealId: 'VO-A301D0F8A06F' }],
+      findings: { clean: false, overallScore: 40, confidence: 'LOW', totalFindings: 3, findings: findings, summary: '3 page-anchored findings established.', contradictionTypesUsed: 3 },
+      aiReview: { applied: true, retained: 3, assessed: 6, dropped: 3, added: 0, narrative: '' },
+      extractionNotes: 'Per-page PDF content-stream decoding with ToUnicode CMaps.', ocrPages: [7], images: {}, generatedAt: '2026-09-30T20:59:16.000Z'
+    };
+    const quiet = console.log; console.log = () => {};
+    let T, N;
+    try {
+      T = await pageText(await R.build(opts));
+      N = await pageText(await R.buildHumanReport(Object.assign({}, opts, {
+        humanSections: { counter_narratives: { provenance: 'ai', text: 'The respondent may have signed the lease under pressure from the franchisor.\nThis account conflicts with the record at p. 7, which states "Commencement Date 1/8/2001". Assessment: contradicted by the record at p. 7.\nThe franchisor states that the lease commenced on 1 August 2001 and ran its full term.\nThis account conflicts with the record at p. 9, which states "commenced 1/8/2003". Assessment: contradicted by the record at p. 9.', gate: { dropped: 1 } } },
+        humanProvenance: { sectionsAttempted: 7, model: 'test-narrator' }
+      })));
+    } finally { console.log = quiet; }
+    const slice = (from, to) => { const a = T.lastIndexOf(from); const b = to ? T.indexOf(to, a + 1) : -1; return a < 0 ? '' : T.slice(a, b > a ? b : undefined); };
+    ok(/Franchise \/ Lease & Goodwill/.test(slice('FINDINGS & CONTRADICTION MATRIX', 'Finding type summary')), 'the findings matrix carries the Franchise / Lease & Goodwill category (CT44/CT45 were missing from it)');
+    ok(/The review dropped 3 engine findings as unsupported/.test(T), 'the Triple Verification table says how many findings the review dropped');
+    ok(!/cannot be changed, altered, or deleted/.test(T) && /any change to them is detectable/.test(T), 'the seal is described as tamper-evident, never as preventing change');
+    ok(/3 findings: 2 verified on native text, and 1 anchored on OCR-recovered pages or on a secondary source and held at reduced weight/.test(T), 'the cover count tells the OCR-held finding apart (' + (T.match(/contains [^.]{0,200}/) || [''])[0] + ')');
+    ok(!/Organised Crime/.test(slice('Person → Contradiction → Page → Candidate law', 'CANDIDATE OFFENCE MATRIX')) || /CT18/.test(slice('Person → Contradiction → Page → Candidate law', 'CANDIDATE OFFENCE MATRIX')), 'the arithmetic finding\'s row cites no money-laundering provision');
+    ok(/lease commenced on 1 August 2001/.test(N) && /p\. 9, which states/.test(N) && !/p\. 7, which states/.test(N), 'a rebuttal whose claim the gate removed is dropped whole; the kept claim keeps its rebuttal');
+    ok(/server's anchor and language gate: 1/.test(N) && /render-time §15\.2 gate: 3/.test(N), 'the provenance box prints both gate counters (server 1; render-time 3 = the hedged claim and its two orphaned sentences)');
+  };
+  await run();
+}
+
 console.log(`\n[annexure-eb] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[annexure-eb] FAILURES'); process.exit(1); }
 console.log('[annexure-eb] ALL GREEN');

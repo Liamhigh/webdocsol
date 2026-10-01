@@ -190,8 +190,8 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(/On p\. 11, .*goodwill/i.test(joined), 'plain lead NAMES the CT45 serious finding in plain words, anchored to its page');
   ok(/date does not add up/.test(joined), 'plain lead NAMES the CT03 serious finding in plain words');
   ok(!/CT45|CT03/.test(joined), 'plain lead contains no CT codes (everyday language only)');
-  ok(/sealed under SHA-512/.test(joined) && /cannot be changed, altered, or deleted/.test(joined) && /verdict on any named person is for the court/.test(joined),
-    'plain lead states the seal certainty and reserves the verdict for the court (PD16) - no score language');
+  ok(/sealed under SHA-512/.test(joined) && /any change to them is detectable/.test(joined) && !/cannot be changed, altered, or deleted/.test(joined) && /verdict on any named person is for the court/.test(joined),
+    'plain lead states what the seal establishes (any change is detectable; a hash proves tampering, it does not prevent it) and reserves the verdict for the court (PD16) - no score language');
   ok(!/\/100/.test(joined) && !/[Cc]onfidence band/.test(joined),
     'plain lead carries NO 0-100 score and NO confidence band (Ordinal Confidence: never percentages)');
   // Unreadable / failed scans must NOT produce a plain "all clear".

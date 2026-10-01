@@ -160,7 +160,8 @@ var CT_DETECTOR = {
   CT38: 'D26', CT39: 'D27', CT40: 'D28', CT23: 'D32', CT28: 'D33', CT16: 'D34', CT30: 'D35',
   CT32: 'D36', CT43: 'D37'
 };
-var CATEGORY_ORDER = ['STATEMENTAL', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL'];
+// FRANCHISE_LEASE (CT44/CT45) was missing here, so the findings matrix of the evidence-bundle-4 run summed to 41 of 44.
+var CATEGORY_ORDER = ['STATEMENTAL', 'FRANCHISE_LEASE', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL'];
 // Plain-English section names lead; the engine's technical category name is
 // kept in the explainer line below each heading so nothing is lost for experts.
 var CATEGORY_LABEL = {
@@ -310,10 +311,13 @@ var STATUTES = {
     AE: ['Evidentiary - corroborate against independent records (no specific statute asserted)']
   },
   CONTRACT: {
+    // The Rental Housing Act governs residential tenancies and a petrol-station
+    // lease is not one; a "pattern of racketeering" is a serial-pattern
+    // consideration (the Serial Patterns section names POCA), not candidate
+    // law for one contract finding (outside review, evidence-bundle-4 run).
     ZA: ['Common law of contract (misrepresentation, breach, rectification)',
-         'For leases: common-law lease principles; Rental Housing Act 50 of 1999 (residential tenancies)',
-         'Petroleum Products Act 120 of 1977 - s12B (unfair or unreasonable contractual practices in petroleum retail; referral to arbitration by the Controller)',
-         'Prevention of Organised Crime Act 121 of 1998 - s1 (a "pattern of racketeering activity" where 2+ related offences recur across operators)'],
+         'For leases: common-law lease principles',
+         'Petroleum Products Act 120 of 1977 - s12B (unfair or unreasonable contractual practices in petroleum retail; referral to arbitration by the Controller)'],
     AE: ['Civil Transactions Law (Federal Law 5 of 1985) - contract formation & good faith (Art 246)',
          'Commercial Transactions Law (Federal Decree-Law 50 of 2022)']
   }
@@ -389,6 +393,22 @@ function detectJurisdictions(data) {
 
 // Candidate provisions for a finding's legal subject across the active
 // jurisdictions (home first, then each foreign leg).
+// Candidate law for ONE finding: the subject's list, trimmed by the finding's
+// type. An invoice whose arithmetic does not add up (CT13/CT14/CT15/CT22) is
+// not, on its own, money laundering, a FICA reporting failure or corruption;
+// those stay for diverted payments and changed bank details (CT16–CT18).
+var VO_ARITHMETIC_TYPES = { CT13: 1, CT14: 1, CT15: 1, CT22: 1 };
+var VO_NOT_FOR_ARITHMETIC_RE = /Organised Crime|Financial Intelligence|Corrupt Activities|Money Laundering|Commercial Fraud/i;
+function statutesForFinding(f, jur) {
+  var list = statutesForSubject(subjectOf(f), jur);
+  if (!f || !VO_ARITHMETIC_TYPES[f.type]) return list;
+  var out = [];
+  for (var i = 0; i < list.length; i++) {
+    var provs = (list[i].provisions || []).filter(function (p) { return !VO_NOT_FOR_ARITHMETIC_RE.test(typeof p === 'string' ? p : JSON.stringify(p)); });
+    if (provs.length) out.push({ jur: list[i].jur, provisions: provs });
+  }
+  return out;
+}
 function statutesForSubject(subject, jur) {
   var s = STATUTES[subject] || STATUTES.CONTRADICTION;
   var codes = [jur.home].concat(jur.foreign);
@@ -659,6 +679,24 @@ function isDemoted(f) { return DEMOTED_TAG_RE.test(String((f && f.evidence) || '
 // Verification row (Detected: PASS), a "top liability", a B1 Contradiction
 // Brain finding and a count in the offence matrix.
 function isEngineFinding(f) { return !!(f && !isDemoted(f) && f.type !== 'SERIAL' && f.source !== 'ai'); }
+// A finding held at reduced weight: anchored only on OCR-recovered pages (the
+// characters are the recogniser's guess) or on a secondary source (an extract
+// or commentary prepared after the fact). Counted apart wherever a count of
+// "verified findings" is printed: the evidence-bundle-4 cover said "44
+// verified findings" while 25 of them carried "weight reduced until verified".
+function isReducedWeight(f) {
+  return !!(f && (f.ocrCapped || f.secondaryCapped || /\[OCR page: weight reduced|\[secondary source on p\./.test(String(f.evidence || ''))));
+}
+function voCountPhrase(list, reviewed) {
+  var n = list.length, reduced = 0;
+  for (var i = 0; i < n; i++) if (isReducedWeight(list[i])) reduced++;
+  var word = reviewed ? ' verified finding' : ' engine finding';
+  if (!reduced) return n + word + (n === 1 ? '' : 's') + (reviewed ? '' : ' (deterministic rules; AI review not run on this report)');
+  var firm = n - reduced;
+  return n + ' finding' + (n === 1 ? '' : 's') + ': ' + firm + (reviewed ? ' verified' : ' established by the record') + ' on native text' +
+    (reviewed ? '' : ' (deterministic rules; AI review not run on this report)') + ', and ' + reduced +
+    ' anchored on OCR-recovered pages or on a secondary source and held at reduced weight until verified against the page image or the primary document';
+}
 function stripDemotedTag(ev) { return String(ev || '').replace(DEMOTED_TAG_RE, '').replace(/\s{2,}/g, ' ').trim(); }
 
 // Anchor-quote hygiene. When the analysed document is itself a sealed bundle,
@@ -1092,7 +1130,7 @@ function plainLeadLines(fr, data) {
   // "verified" only once the advisory AI review has run; otherwise these are
   // engine findings, established by the record's own quoted text, unreviewed.
   var plReviewed = !!(data && data.aiReview && data.aiReview.applied === true);
-  plLines.push('The sealed record of "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') contains ' + plVerified.length + (plReviewed ? ' verified finding' : ' engine finding') + (plVerified.length === 1 ? '' : 's') + (plReviewed ? '' : ' (deterministic rules; AI review not run on this report)') + '. The following are established.');
+  plLines.push('The sealed record of "' + docName + '" (' + pageCount + ' page' + (pageCount === 1 ? '' : 's') + ') contains ' + voCountPhrase(plVerified, plReviewed) + '. The following are established.');
   if (plDemoted > 0) {
     plLines.push(plDemoted + ' of these are routine structural notes - page-numbering and cross-reference quirks that are expected when many separate documents are compiled into one bundle. They are grouped at the end of each findings table and are NOT, by themselves, signs of tampering.');
   }
@@ -1123,7 +1161,7 @@ function plainLeadLines(fr, data) {
   }
   if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern match' + (plSerial === 1 ? '' : 'es') + ' also recorded - see the Serial Pattern Analysis section.');
   if (plAiCands > 0) plLines.push('The optional AI review raised ' + plAiCands + ' further candidate item' + (plAiCands === 1 ? '' : 's') + ' - advisory only, recorded in its own section, and not counted among the established findings until verified.');
-  plLines.push('These findings are sealed under SHA-512 and anchored to the Bitcoin blockchain: they cannot be changed, altered, or deleted. The verdict on any named person is for the court.');
+  plLines.push('These findings are sealed under SHA-512 and anchored to the Bitcoin blockchain: any change to them is detectable, because the fingerprint would no longer match, and the timestamp fixes when they existed. The verdict on any named person is for the court.');
   return plLines;
 }
 
@@ -2009,7 +2047,9 @@ function secTripleVerification(ctx, data) {
   // review that had happened (annexure EB, 11 Sep 2026). The leg now says
   // what it is: NOT REVIEWED until the advisory AI review has actually run.
   var reviewLeg = (ai && ai.applied === true) ? 'RETAINED' : 'NOT REVIEWED';
-  ctx.para('Legs: Detected = deterministic detector fired; Anchored = the anchor rule held (page + quoted text; unanchored observations are demoted to notes and never appear here); Review = ' + ((ai && ai.applied === true) ? 'retained by the advisory AI consensus review.' : 'NOT REVIEWED — the advisory AI review did not run on this report; every row is deterministic engine output, unreviewed.'), { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+  var aiDropped = (ai && ai.applied === true) ? (ai.dropped | 0) : 0;
+  ctx.para('Legs: Detected = deterministic detector fired; Anchored = the anchor rule held (page + quoted text; unanchored observations are demoted to notes and never appear here); Review = ' + ((ai && ai.applied === true) ? 'retained by the advisory AI consensus review.' : 'NOT REVIEWED — the advisory AI review did not run on this report; every row is deterministic engine output, unreviewed.') +
+    (aiDropped > 0 ? ' The review dropped ' + aiDropped + ' engine finding' + (aiDropped === 1 ? '' : 's') + ' as unsupported; ' + (aiDropped === 1 ? 'it is' : 'they are') + ' not rows here, so every row below is one the review kept.' : ''), { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   var rows = [];
   var CAP = 16;
   for (var i = 0; i < Math.min(subst.length, CAP); i++) {
@@ -2058,7 +2098,7 @@ function secSealedFindings(ctx, data) {
   ctx.heading('5. SEALED FINDINGS');
   // §15.3 REQUIRED wording, verbatim: "The record contains [X] contradictions.
   // The following are established."
-  ctx.para('The record contains ' + subst.length + ((data && data.aiReview && data.aiReview.applied === true) ? ' verified finding' : ' engine finding') + (subst.length === 1 ? '' : 's') + ((data && data.aiReview && data.aiReview.applied === true) ? '' : ' (deterministic rules; AI review not run on this report)') + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
+  ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true)) + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
   var CAP = 20;
   var shown = subst.slice(0, CAP);
   for (var i = 0; i < shown.length; i++) {
@@ -2071,7 +2111,7 @@ function secSealedFindings(ctx, data) {
     ctx.para('+ ' + (subst.length - CAP) + ' further finding(s) in the annexes, ordered most serious first.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   }
   ctx.gap(4);
-  ctx.para('These findings are sealed under SHA-512 and anchored via OpenTimestamps. They cannot be changed.', { size: 9, font: ctx.f.timesBold, color: NAVY2 });
+  ctx.para('These findings are sealed under SHA-512 and anchored via OpenTimestamps. Any change to them is detectable.', { size: 9, font: ctx.f.timesBold, color: NAVY2 });
 }
 
 // ---- §15.4 section 6: Verdict Reservation --------------------------------
@@ -2190,7 +2230,7 @@ function secStatutoryAnchoring(ctx, data) {
         : '(unattributed)';
     }
     var name = CT_NAMES[f.type] || (f.source === 'ai' ? 'AI-identified' : (f.type || 'Contradiction'));
-    var stat = statutesForSubject(subjectOf(f), jur);
+    var stat = statutesForFinding(f, jur);
     var lawCell = stat.map(function (s) { return (JURIS_LABEL[s.jur] || s.jur) + ': ' + s.provisions.join('; '); }).join('\n');
     rows.push({
       party: who,
@@ -2307,7 +2347,7 @@ function secFindingDetails(ctx, data) {
     if (f.source === 'ai' && f.rationale) ctx.para('AI rationale: ' + san(f.rationale), { size: 9.5, after: 4 });
     ctx.para('Quoted record:', { size: 9, font: ctx.f.timesBold, color: NAVY2, after: 2 });
     ctx.box('', [cleanQuote(f.evidence) || '(no verbatim text captured)'], { titleColor: NAVY2, size: 9 });
-    var stat = statutesForSubject(subj, jur);
+    var stat = statutesForFinding(f, jur);
     if (stat.length) {
       ctx.para('Candidate law (for counsel to confirm):', { size: 9, font: ctx.f.timesBold, color: NAVY2, after: 2 });
       for (var s = 0; s < stat.length; s++) {
@@ -2977,7 +3017,7 @@ function secNarrative(ctx, data, opts) {
       ctx.para('What to check next: ' + checkHint, { size: 9.5, indent: 14, after: 3 });
     }
     // Candidate law: the single most relevant provision per active jurisdiction.
-    var stat = statutesForSubject(subjectOf(f), jur);
+    var stat = statutesForFinding(f, jur);
     if (stat.length) {
       var lawBits = stat.map(function (s) { return (JURIS_LABEL[s.jur] || s.jur) + ' — ' + s.provisions[0]; });
       ctx.para('Candidate law (for counsel to confirm): ' + lawBits.join('; ') + '.', { size: 9, font: ctx.f.timesItalic, color: GRAY, indent: 14, after: 8 });
@@ -4191,10 +4231,33 @@ async function buildHumanReport(opts) {
   var candidates = (fr.findings || []).filter(function (f) { return f && f.source === 'ai'; });
   var jur = detectJurisdictions(data);
 
-  var sectionsAi = 0, sectionsAll = 0, gateDroppedClient = 0;
+  var sectionsAi = 0, sectionsAll = 0, gateDroppedClient = 0, gateDroppedServer = 0;
+
+  // A rebuttal whose claim sentence the gate removed is an orphan ("This
+  // account conflicts with the record at p. 7 … Assessment: …" with nothing
+  // it answers); the block goes whole, and its sentences are counted.
+  var REBUTTAL_OPEN_RE = /^\s*(?:this account conflicts|assessment\s*:)/i;
+  function scrubRebuttals(text) {
+    var paras = String(text || '').split(/\n+/), out = [], kept = 0, dropped = 0, prevClaimKept = false;
+    for (var i = 0; i < paras.length; i++) {
+      var para = paras[i];
+      if (!para.trim()) continue;
+      var sc = scrubNarrative(para);
+      if (REBUTTAL_OPEN_RE.test(para)) {
+        if (!prevClaimKept) { dropped += sc.kept + sc.dropped; continue; }
+      } else if (REBUTTAL_OPEN_RE.test(sc.text)) {
+        dropped += sc.kept + sc.dropped; prevClaimKept = false; continue;
+      } else {
+        prevClaimKept = sc.kept > 0;
+      }
+      if (sc.text.trim()) { out.push(sc.text); kept += sc.kept; }
+      dropped += sc.dropped;
+    }
+    return { text: out.join('\n'), kept: kept, dropped: dropped };
+  }
 
   function provisionsText(f) {
-    var list = statutesForSubject(subjectOf(f), jur);
+    var list = statutesForFinding(f, jur);
     var parts = [];
     for (var i = 0; i < list.length; i++) {
       var provs = list[i].provisions || [];
@@ -4225,11 +4288,12 @@ async function buildHumanReport(opts) {
     sectionsAll++;
     var sec = hs[id];
     if (sec && sec.provenance === 'ai' && sec.text) {
-      var scrub = scrubNarrative(sec.text);
+      var scrub = (id === 'counter_narratives') ? scrubRebuttals(sec.text) : scrubNarrative(sec.text);
       if (voGatePasses(scrub)) {
         renderBlocks(scrub.text);
         gateDroppedClient += scrub.dropped;
         var serverDropped = (sec.gate && sec.gate.dropped) || 0;
+        gateDroppedServer += serverDropped;
         var note = 'Written by the AI narrator from the sealed findings';
         var removed = scrub.dropped + serverDropped;
         if (removed) note += ' — ' + removed + ' sentence' + (removed === 1 ? '' : 's') + ' removed by the §15.2 language and anchor gate';
@@ -4443,7 +4507,7 @@ async function buildHumanReport(opts) {
   ctx.heading('COURT-READY DECLARATION');
   ctx.subHeading('Sealed findings');
   if (subst.length) {
-    ctx.para('The record contains ' + subst.length + ((data && data.aiReview && data.aiReview.applied === true) ? ' verified finding' : ' engine finding') + (subst.length === 1 ? '' : 's') + ((data && data.aiReview && data.aiReview.applied === true) ? '' : ' (deterministic rules; AI review not run on this report)') + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
+    ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true)) + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
     var CAPF = 20;
     for (var d = 0; d < Math.min(subst.length, CAPF); d++) {
       var dq = quoteEvidence(subst[d].evidence);
@@ -4455,7 +4519,7 @@ async function buildHumanReport(opts) {
     ctx.para('No contradictions were detected. Every detector ran; none triggered.', { size: 10, after: 8 });
   }
   ctx.gap(4);
-  ctx.para('These findings are sealed under SHA-512 and anchored to the Bitcoin blockchain via OpenTimestamps: they cannot be changed, altered, or deleted. The verdict on any named person is for the court.', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 10 });
+  ctx.para('These findings are sealed under SHA-512 and anchored to the Bitcoin blockchain via OpenTimestamps: any change to them is detectable, because the fingerprint would no longer match, and the timestamp fixes when they existed. The verdict on any named person is for the court.', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 10 });
   ctx.subHeading('Verdict reservation');
   ctx.para('The verdict on any named person is reserved for the court. This narrative records what the sealed documents state and measure — it makes no determination of guilt, liability, or wrongdoing.', { size: 10.5, after: 8 });
   ctx.subHeading('Certification');
@@ -4475,7 +4539,7 @@ async function buildHumanReport(opts) {
     'AI narrator: ' + san(String(prov.model || (prov.sectionsAttempted > 0
       ? 'asked for ' + prov.sectionsAttempted + ' section' + (prov.sectionsAttempted === 1 ? '' : 's') + '; no draft passed the server\'s anchor and language gate, so nothing AI-written is printed'
       : 'not run'))) + '  |  contract ' + san(String(prov.contract || 'human-v1')) + '  |  temperature 0',
-    'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the render-time §15.2 gate: ' + gateDroppedClient,
+    'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the server\'s anchor and language gate: ' + gateDroppedServer + '  |  by the render-time §15.2 gate: ' + gateDroppedClient,
     'Engine: Forensic Contradiction Engine v' + ENGINE_VERSION + ' — deterministic mode',
     rulePackageLine(data),
     brain9SweepLine(data),
@@ -4515,7 +4579,7 @@ var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buil
   _docsForLocation: docsForLocation, _crossDocNote: crossDocNote, _ocrTouched: ocrTouched,
   _documentParties: documentParties, _effectiveParties: effectiveParties,
   _effectivePartiesWithRoles: effectivePartiesWithRoles,
-  _splitSentences: splitSentences, _samePartyName: samePartyName, _isEngineFinding: isEngineFinding,
+  _splitSentences: splitSentences, _samePartyName: samePartyName, _isEngineFinding: isEngineFinding, _isReducedWeight: isReducedWeight, _voCountPhrase: voCountPhrase, _statutesForFinding: statutesForFinding,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;
