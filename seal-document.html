@@ -9308,17 +9308,49 @@ function voStripSealFurnitureBlocks(textBlocks) {
 // page sits in a secondary document is a LEAD — it moves to the engine notes
 // and is never a finding; one with some pages there keeps its anchor at
 // reduced weight, tagged, until the primary document is produced.
-var VO_SECONDARY_TITLE_RE = /\b(?:extracts?|summary|synopsis|commentary|chronology|analysis|notes?|digest)\b[^.]{0,60}?\b(?:prepared|compiled|drafted|reproduced|annotated)\b|\bpages\s+reproduced\b|\bprepared\s+(?:by|on|for)\b[^.]{0,40}\b20\d{2}\b/i;
+// A secondary document names itself as an account of the record: an extract,
+// summary, synopsis, commentary, chronology or digest that was prepared,
+// compiled, drafted, reproduced or annotated, or "pages reproduced". The
+// primary record describes itself in the same words — a tax invoice "prepared
+// for ABC Motors on 12 March 2024", a quotation "prepared for Mr Nel", annual
+// financial statements "prepared on the historical cost basis", "notes to the
+// financial statements" — and is never secondary: "prepared by/on/for + a
+// date" on its own is not a title, "notes" and "analysis" count only as
+// "notes on" and "analysis of", and a secondary noun that follows the name of
+// a primary record ("Summary of significant accounting policies … prepared")
+// is a heading inside that record.
+var VO_SECONDARY_TITLE_RE = /\b(?:extracts?|summary|synopsis|commentary|chronology|digest|notes?\s+on|analysis\s+of)\b[^.]{0,60}?\b(?:prepared|compiled|drafted|reproduced|annotated)\b|\bpages\s+reproduced\b/i;
+var VO_PRIMARY_RECORD_RE = /\b(?:tax\s+invoice|invoice\s+no|quotation|statement\s+of\s+account|bank\s+statement|financial\s+statements|accounting\s+polic|historical\s+cost|going\s+concern|deed\s+of|title\s+deed|certificate\s+of|valuation\s+report|affidavit|agreement|lease)\b/i;
+function voIsSecondaryHead(text) {
+  var m = VO_SECONDARY_TITLE_RE.exec(String(text || ''));
+  if (!m) return false;
+  return !VO_PRIMARY_RECORD_RE.test(String(text).slice(0, m.index));
+}
 var VO_SECONDARY_NOTE = function (pages) { return ' [secondary source on p. ' + pages.join(', ') + ': an extract or commentary prepared after the fact, not the primary record — verify against the primary document]'; };
-function voSecondaryPages(segs, textBlocks) {
+function voSecondarySegments(segs, textBlocks) {
   var out = [], list = segs || [];
   for (var d = 0; d < list.length; d++) {
     var seg = list[d];
     var head = String((textBlocks && textBlocks[seg.start - 1]) || '').replace(/\s+/g, ' ').slice(0, 300);
-    if (!(VO_SECONDARY_TITLE_RE.test(String(seg.title || '')) || VO_SECONDARY_TITLE_RE.test(head))) continue;
-    for (var p = seg.start; p <= seg.end; p++) out.push(p);
+    if (!(voIsSecondaryHead(seg.title) || voIsSecondaryHead(head))) continue;
+    out.push({ start: seg.start, end: seg.end, title: String(seg.title || head).replace(/\s+/g, ' ').trim().slice(0, 80) });
   }
   return out;
+}
+function voSecondaryPages(segs, textBlocks) {
+  var out = [], list = voSecondarySegments(segs, textBlocks);
+  for (var d = 0; d < list.length; d++) for (var p = list[d].start; p <= list[d].end; p++) out.push(p);
+  return out;
+}
+// The note names each secondary document and its page range, so a reader can
+// see which pages the leads sit on: ' (p. 540-580: "Extract prepared …")'.
+function voSecondaryWhere(secSegs) {
+  var parts = [];
+  for (var d = 0; d < (secSegs || []).length; d++) {
+    var g = secSegs[d];
+    parts.push('p. ' + (g.start === g.end ? g.start : g.start + '-' + g.end) + ': "' + g.title + '"');
+  }
+  return parts.length ? ' (' + parts.join('; ') + ')' : '';
 }
 function voDemoteSecondarySource(findings, secondaryPages) {
   var leads = [], kept = [], capped = 0;
@@ -10491,6 +10523,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   var _docSegs = voCacheDocSegs(textBlocks);
   var _furniture = voStripSealFurnitureBlocks(textBlocks);
   if (_furniture) extractionNote += ' Seal furniture: this platform\'s own seal footers (seal id, hash, date and time, page count) were removed from ' + _furniture + ' page(s) before detection; a seal stamp is not a statement of the record.';
+  var _secondarySegs = voSecondarySegments(_docSegs, textBlocks);
   var _secondaryPages = voSecondaryPages(_docSegs, textBlocks);
 
   // Run every detector
@@ -10671,7 +10704,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   if (_sec.leads.length || _sec.capped) {
     var _secTexts = [];
     for (var sl = 0; sl < _sec.leads.length; sl++) _secTexts.push('[' + _sec.leads[sl].type + '] ' + String(_sec.leads[sl].evidence || '').replace(/\s+/g, ' ').slice(0, 300) + ' (' + _sec.leads[sl].location + ')');
-    extractionNote += ' Secondary sources: ' + (_secondaryPages.length) + ' page(s) belong to a document that describes itself as an extract, summary or commentary prepared after the fact; ' +
+    extractionNote += ' Secondary sources: ' + (_secondaryPages.length) + ' page(s) belong to a document that describes itself as an extract, summary or commentary prepared after the fact' + voSecondaryWhere(_secondarySegs) + '; ' +
       (_sec.leads.length ? _sec.leads.length + ' observation(s) sit entirely on those pages and are recorded here as leads to verify against the primary record, NOT as findings: ' + _secTexts.join(' | ') + (_sec.capped ? '; ' : '') : '') +
       (_sec.capped ? _sec.capped + ' finding(s) with one half on those pages held at reduced weight.' : '.');
   }
@@ -11265,7 +11298,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     generateSummary: generateSummary, voEditDistance: voEditDistance,
     voStripSealFurniture: voStripSealFurniture, voStripSealFurnitureBlocks: voStripSealFurnitureBlocks, voCacheDocSegs: voCacheDocSegs,
-    voSecondaryPages: voSecondaryPages, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voIsStampContext: voIsStampContext,
+    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voIsStampContext: voIsStampContext,
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,
     CONTRADICTION_TYPES: CONTRADICTION_TYPES,
     DETECTORS: DETECTORS,

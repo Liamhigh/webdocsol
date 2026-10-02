@@ -752,6 +752,17 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(demo.leads.length === 1 && demo.leads[0].type === 'CT23' && demo.kept.length === 2 && demo.kept[0].type === 'CT45' && demo.kept[0].severity === 2 && /secondary source on p\. 5/.test(demo.kept[0].evidence) && demo.kept[1].severity === 4,
     'a finding wholly on the extract is a lead, a mixed one is held at reduced weight and tagged, an unrelated one is untouched');
   ok(E.voSecondaryPages([{ start: 1, end: 3, title: 'Lease agreement prepared by the Lessor\'s attorneys' }], ['Lease agreement prepared by the Lessor\'s attorneys. 1. Parties.', '', '']).length === 0, 'a primary instrument that says who prepared it is not an extract');
+  // The primary record describes itself in the same words and is never secondary.
+  const secOf = (title, head) => E.voSecondaryPages([{ start: 1, end: 3, title }], [head, '', '']).length;
+  ok(secOf('TAX INVOICE No. 4471', 'TAX INVOICE No. 4471 Prepared for ABC Motors (Pty) Ltd on 12 March 2024. Subtotal: R1,000.00 VAT: R150.00 Total: R1,250.00') === 0, 'a tax invoice "prepared for … on 12 March 2024" is the record, not an extract');
+  ok(secOf('QUOTATION Q-2024-118 prepared for Mr W Nel, 3 June 2024', 'QUOTATION Q-2024-118 prepared for Mr W Nel, 3 June 2024. Item 1 …') === 0, 'a quotation "prepared for" a customer is the record');
+  ok(secOf('WAYNE NEL MOTORS (PTY) LTD ACCOUNTING POLICIES AND NOTES', 'WAYNE NEL MOTORS (PTY) LTD ACCOUNTING POLICIES AND NOTES The annual financial statements have been prepared on the historical cost basis.') === 0, '"accounting policies and notes … prepared on the historical cost basis" is the record');
+  ok(secOf('SUMMARY OF SIGNIFICANT ACCOUNTING POLICIES', 'ANNUAL FINANCIAL STATEMENTS 2024. SUMMARY OF SIGNIFICANT ACCOUNTING POLICIES The financial statements have been prepared in accordance with IFRS') === 0, 'a "summary of significant accounting policies" inside financial statements is a heading of the record');
+  ok(secOf('Notes on the record prepared by counsel, 30 September 2026', 'Notes on the record prepared by counsel, 30 September 2026. 1. The MOU …') === 3, '"notes on the record prepared by counsel" is secondary');
+  ok(secOf('Chronology compiled by the complainant', 'Chronology compiled by the complainant. 2014: …') === 3 && secOf('Extract prepared 30 Sept 2026 - pages reproduced from the Deed of Lease', 'Extract prepared 30 Sept 2026 - pages reproduced from the Deed of Lease') === 3, 'a chronology compiled by a party and an extract reproducing pages of a deed are secondary (the deed named after the extract does not make it primary)');
+  ok(secOf('Valuation report prepared by XYZ Valuers on 3 March 2024', 'Valuation report prepared by XYZ Valuers on 3 March 2024 for the premises at Erf 123') === 0, 'a valuation report prepared on a date is the record');
+  const secSegs = E.voSecondarySegments(segs2, ['', '', '', 'Extract prepared 30 Sept 2026 - pages reproduced', '', '']);
+  ok(secSegs.length === 1 && secSegs[0].start === 4 && secSegs[0].end === 6 && /^Extract prepared 30 Sept 2026/.test(secSegs[0].title) && E.voSecondaryWhere(secSegs) === ' (p. 4-6: "Extract prepared 30 Sept 2026 - pages reproduced from the MOU")', 'the engine note names the secondary document and its page range (' + E.voSecondaryWhere(secSegs) + ')');
 
   // 17h. A finding is dated by its own words or by the quote\'s own sentence, never by the rest of the page.
   const blocksD = new Array(10).fill('');
