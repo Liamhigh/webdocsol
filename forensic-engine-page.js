@@ -415,7 +415,19 @@ function voEditDistance(a, b) {
   return prev[b.length];
 }
 
+// Document boundaries are read from the seal footers (below), and the footers
+// are removed from the text before the detectors run (voStripSealFurniture):
+// the boundaries are therefore computed once, on the unstripped blocks, and
+// returned from this cache for the same array afterwards.
+var _voDocSegsCache = null;
+function voCacheDocSegs(textBlocks) {
+  _voDocSegsCache = null;
+  var segs = voDetectDocuments(textBlocks);
+  _voDocSegsCache = { blocks: textBlocks, segs: segs };
+  return segs;
+}
 function voDetectDocuments(textBlocks) {
+  if (_voDocSegsCache && _voDocSegsCache.blocks === textBlocks) return _voDocSegsCache.segs;
   if (!textBlocks || textBlocks.length < 6) return [];
   var marks = [];
   for (var i = 0; i < textBlocks.length; i++) {
@@ -717,18 +729,39 @@ var DETECTORS = {
       'i acknowledge that', 'we acknowledge that', 'i accept that', 'we accept that',
       'i was wrong', 'we were wrong', 'i misled', 'we misled',
       'admitted under oath', 'admission of guilt'];
+    // A pleading admits paragraphs, not facts: "AD PARAGRAPH 13 … I admit the
+    // contents of this paragraph" is the form of an answering affidavit, and
+    // the evidence-bundle-4 run sealed eight pages of it as a contradiction.
+    // The form test reads the cue's own sentence in the pleading grammar
+    // ("admit the contents/allegations contained in/of this/sub-/paragraph
+    // 13.2", "admit the correctness of the contents of this paragraph", "admit
+    // the contents hereof", "admit paragraph 13"). An AD PARAGRAPH heading on
+    // its own never suppresses a sentence — "AD PARAGRAPH 7: I admit that I
+    // signed the deed of suretyship" is an admission of fact — and every
+    // occurrence of a cue on a page is read, so a form sentence never hides a
+    // later sentence of fact.
+    var PLEADING_ADMISSION_RE = /\badmit(?:s|ted)?\s+(?:only\s+)?(?:the\s+)?(?:(?:contents?|allegations?|averments?|correctness|opening\s+sentence|first\s+sentence|remainder|balance|rest)\s+(?:of\s+the\s+(?:contents?|allegations?|averments?)\s+)?(?:contained\s+in\s+|set\s+out\s+in\s+|of\s+|in\s+)?(?:(?:this|the|these|that|said|each)\s+(?:said\s+|aforesaid\s+)?(?:sub-?)?para(?:graph)?s?\b|(?:sub-?)?para(?:graph)?s?\s+\d)|(?:contents?|allegations?|averments?)\s+(?:hereof|thereof|herein|therein)\b|(?:sub-?)?para(?:graph)?s?\s+\d)/i;
     var admPages = [], admQuote = null, admCue = null;
     for (var ap = 0; ap < textBlocks.length; ap++) {
       var lowA = (textBlocks[ap] || '').toLowerCase();
-      for (var ac = 0; ac < admissionCues.length; ac++) {
+      var admCounted = false;
+      for (var ac = 0; ac < admissionCues.length && !admCounted; ac++) {
         var atA = lowA.indexOf(admissionCues[ac]);
-        if (atA === -1) continue;
-        admPages.push(ap + 1);
-        if (!admQuote) {
-          admCue = admissionCues[ac];
-          admQuote = textBlocks[ap].substring(Math.max(0, atA - 40), atA + admissionCues[ac].length + 120).replace(/\s+/g, ' ').trim();
+        while (atA !== -1) {
+          // The cue's own sentence: from the cue to the next sentence end (a
+          // clause number's "13.2" has no space after its point).
+          var sentA = lowA.slice(atA, atA + 200).split(/[.;!?]\s|\n/)[0];
+          if (!PLEADING_ADMISSION_RE.test(sentA)) {
+            admPages.push(ap + 1);
+            if (!admQuote) {
+              admCue = admissionCues[ac];
+              admQuote = textBlocks[ap].substring(Math.max(0, atA - 40), atA + admissionCues[ac].length + 120).replace(/\s+/g, ' ').trim();
+            }
+            admCounted = true; // one count per page
+            break;
+          }
+          atA = lowA.indexOf(admissionCues[ac], atA + admissionCues[ac].length);
         }
-        break; // one count per page
       }
     }
     // CONDUCT ADMISSION — a party, in their own words, explaining WHY the
@@ -1001,7 +1034,8 @@ var DETECTORS = {
       for (var p = 0; p < datePatterns.length; p++) {
         var match;
         while ((match = datePatterns[p].exec(textBlocks[i])) !== null) {
-          dates.push({ raw: match[0], page: i, text: textBlocks[i].substring(Math.max(0, match.index-30), match.index+30) });
+          dates.push({ raw: match[0], page: i, idx: match.index, text: textBlocks[i].substring(Math.max(0, match.index-30), match.index+30),
+            after: textBlocks[i].substring(match.index + match[0].length, match.index + match[0].length + 12) });
         }
       }
     }
@@ -1031,6 +1065,17 @@ var DETECTORS = {
       var before = String(dates[d].text || '').slice(0, Math.max(0, String(dates[d].text || '').indexOf(dates[d].raw)));
       if (VO_CASE_CUE.test(before)) continue;
       var a = parseInt(dd[1]), b = parseInt(dd[2]), year = parseInt(dd[3]);
+      // A day or month of 0 is not a date anyone wrote: it is a digit OCR
+      // lost ("0/09/2026" for "30/09/2026" on this platform's own seal
+      // footer, 25 findings on the evidence-bundle-4 run). Not a claim of
+      // the record, so not an impossible date; the OCR provenance names the
+      // page for a person to read.
+      if (a === 0 || b === 0) continue;
+      // A date followed by a clock time in the company of a seal footer's
+      // other words (hash, seal id, zone name, page marker) is the stamp. An
+      // email header's or a till slip's own timestamp is the record's and
+      // is still checked.
+      if (/^\s*\d{1,2}[:.]\d{2}/.test(String(dates[d].after || '')) && voIsStampContext(textBlocks[dates[d].page], dates[d].idx, dates[d].raw.length)) continue;
       var okDMY = voValidMD(b, a, year); // day=a, month=b  (DD/MM/YYYY)
       var okMDY = voValidMD(a, b, year); // month=a, day=b  (MM/DD/YYYY)
       if (!okDMY && !okMDY) {
@@ -1676,14 +1721,55 @@ var DETECTORS = {
     // format mismatch. When the text around the cue names a foreign registry,
     // the finding downgrades to a verification note against THAT registry.
     var FOREIGN_REG_RE = /\brakez\b|ras\s+al\s+khaimah|free\s*zone|fz-?llc|\bfze\b|\bfzco\b|\buae\b|united arab emirates|dubai|abu dhabi|sharjah|ajman|\bdifc\b|\badgm\b|\bjafza\b|\bdmcc\b|companies house|\bein\b|delaware/i;
-    var bad = {};
+    // Every clean SA registration number printed anywhere in the bundle, by its
+    // digits. A malformed token within two edits of one of them (a slash read
+    // as "1", a dropped slash, one digit misread) is an OCR reading of a known
+    // number, not a false number: the evidence-bundle-4 run sealed
+    // "20121226353/07" beside the clean "2012/226353/07" on another page.
+    // Clean numbers are harvested from native-text pages first (an OCR page's
+    // own misread can pass the format); only a bundle with no text page falls
+    // back to every page. The nearest twin wins, not the first in page order.
+    var cleanRegs = {}, cleanRegsAll = {};
+    var cleanRe = /\b(?:CK)?\d{4}\/\d{6}\/\d{2}\b/g;
+    for (var ci = 0; ci < textBlocks.length; ci++) {
+      var cmm, isOcrBlock = /^\s*\[OCR\]/.test(textBlocks[ci] || ''); cleanRe.lastIndex = 0;
+      while ((cmm = cleanRe.exec(textBlocks[ci] || '')) !== null) {
+        cleanRegsAll[cmm[0].replace(/\D/g, '')] = cmm[0];
+        if (!isOcrBlock) cleanRegs[cmm[0].replace(/\D/g, '')] = cmm[0];
+      }
+    }
+    if (!Object.keys(cleanRegs).length) cleanRegs = cleanRegsAll;
+    var cleanDigits = Object.keys(cleanRegs);
+    var ocrVariantOf = function (v) {
+      var d = String(v).replace(/\D/g, '');
+      if (d.length < 10 || d.length > 15) return null;
+      var best = null, bestDist = 3;
+      for (var k = 0; k < cleanDigits.length; k++) {
+        if (Math.abs(cleanDigits[k].length - d.length) > 2) continue;
+        var dist = cleanDigits[k] === d ? 0 : voEditDistance(cleanDigits[k], d);
+        if (dist < bestDist) { bestDist = dist; best = cleanRegs[cleanDigits[k]]; }
+      }
+      return best;
+    };
+    // "ID/Registration number" on a complaint form is one field for either
+    // number; a value that starts with a plausible date of birth is the
+    // person's identity number (OCR may have dropped a digit or two).
+    var idShapedLoose = function (v) {
+      var d = String(v).replace(/\D/g, '');
+      if (d.length < 10 || d.length > 13) return false;
+      var mm = +d.slice(2, 4), dd = +d.slice(4, 6);
+      return mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31;
+    };
+    var bad = {}, repaired = [], unreadable = [];
     for (var i = 0; i < textBlocks.length; i++) {
       var block = textBlocks[i] || '';
+      var ocrPage = /^\s*\[OCR\]/.test(block);
       cueRe.lastIndex = 0;
       var cm;
       while ((cm = cueRe.exec(block)) !== null) {
         var before = block.slice(Math.max(0, cm.index - 12), cm.index);
         if (/\bvat\s*$/i.test(before)) continue; // "VAT REGISTRATION NUMBER": a VAT number, D10's business
+        var idField = /\b(?:id|identity(?:\s+number)?)\s*(?:\/|or|\|)\s*$/i.test(before);
         // The number must START within 40 characters of the cue but may run
         // past that window: "CIPC company-history search on 2002/059909/23"
         // was cut to "2002/059909/2" by a fixed 40-character slice and then
@@ -1700,17 +1786,53 @@ var DETECTORS = {
         // digits alone and the spaced form is identity-length.
         if (/^\d+$/.test(val)) {
           var sp = after.match(/(\d[\d ]{9,16}\d)/);
-          if (sp) { var spv = sp[1].replace(/\s+/g, ''); if (spv.length >= 12 && spv.length <= 13 && spv.indexOf(val) === 0) val = spv; }
+          if (sp) {
+            var spv = sp[1].replace(/\s+/g, '');
+            if (spv.length >= 12 && spv.length <= 13 && spv.indexOf(val) === 0) val = spv;
+            else if (idField && spv.indexOf(val) === 0 && idShapedLoose(spv)) val = spv; // an identity number OCR cut short
+          }
         }
         var context = block.slice(Math.max(0, cm.index - 300), cm.index + cm[0].length + 300);
         if (VAT_SHAPE.test(val) && /\bvat\b/i.test(context)) continue; // a VAT number under a registration cue on a page that names VAT
+        // On an OCR page the characters are the recogniser's guess: a token
+        // within two edits of a clean number is a reading of it, and any other
+        // malformed token is unreadable — a note naming the page, never a
+        // finding (founder direction 14). On a native-text page the record
+        // printed exactly these characters: "1911/0001154/07" beside
+        // "1911/001154/07" in the same pleading is a one-digit discrepancy
+        // the Low check below reports as before.
+        // Under an "ID/Registration" cue a date-of-birth-shaped value is the
+        // person's identity number and is never "repaired" into a company
+        // number; under a plain registration cue a 12-digit run within two
+        // edits of a clean company number is that number with its slashes
+        // dropped (2002/059909/23 read as 200205930923), twin first.
+        var isIdField = idField && (idShaped(val) || idShapedLoose(val));
+        if (ocrPage && !isIdField) {
+          var cleanTwin = ocrVariantOf(val);
+          if (cleanTwin) { var rep1 = val + ' (p.' + (i + 1) + ') reads as ' + cleanTwin; if (repaired.indexOf(rep1) === -1) repaired.push(rep1); continue; }
+          if (!idShaped(val) && !FOREIGN_REG_RE.test(context)) {
+            var unr = '"' + block.substring(cm.index, cm.index + cm[0].length + tok.index + val.length).replace(/\s+/g, ' ').trim() + '" (p.' + (i + 1) + ')';
+            if (unreadable.indexOf(unr) === -1) unreadable.push(unr);
+            continue;
+          }
+        }
         if (!bad[val]) {
           var quote = block.substring(cm.index, cm.index + cm[0].length + tok.index + val.length).replace(/\s+/g, ' ').trim();
-          bad[val] = { pages: [], quote: quote, foreign: false, near: NEAR_SA_REG.test(val), idShaped: idShaped(val) };
+          bad[val] = { pages: [], quote: quote, foreign: false, near: NEAR_SA_REG.test(val), idShaped: idShaped(val) || isIdField };
         }
         if (FOREIGN_REG_RE.test(context)) bad[val].foreign = true;
         if (bad[val].pages.indexOf(i + 1) === -1) bad[val].pages.push(i + 1);
       }
+    }
+    if (repaired.length) {
+      findings.push({ type: 'CT20', severity: 0, contextOnly: true,
+        evidence: 'Registration numbers read by OCR as variants of a number printed cleanly elsewhere in the bundle, not reported as findings: ' + repaired.slice(0, 8).join('; ') + (repaired.length > 8 ? ' and ' + (repaired.length - 8) + ' more' : ''),
+        location: 'Multiple pages' });
+    }
+    if (unreadable.length) {
+      findings.push({ type: 'CT20', severity: 0, contextOnly: true,
+        evidence: 'Registration numbers on OCR-recovered pages that could not be read reliably, not reported as findings until a person has read the page image: ' + unreadable.slice(0, 8).join('; ') + (unreadable.length > 8 ? ' and ' + (unreadable.length - 8) + ' more' : ''),
+        location: 'Multiple pages' });
     }
     for (var v in bad) {
       if (!Object.prototype.hasOwnProperty.call(bad, v)) continue;
@@ -1873,36 +1995,77 @@ var DETECTORS = {
     return findings;
   },
 
+  // An invoice's arithmetic is checked on ONE page at a time (the first
+  // subtotal, VAT and total anywhere in a 651-page bundle were being combined
+  // across pages), and only when the figures could be an invoice at all: a
+  // VAT line between zero and a quarter of the subtotal, a total between half
+  // and twice it. "subtotal R1161950, VAT R1, total R1.08" is an OCR reading
+  // of a scanned invoice, not a finding; it is noted for a person to read the
+  // page image.
   D13_DETECT_CALCULATION_ERROR: function(textBlocks) {
     var findings = [];
-    var calcRe = /(subtotal|total|vat|tax|amount)\s*[:=]?\s*[R$€£]?\s*([\d,.]+)/gi;
-    var amounts = [];
+    // A labelled amount: the label, an optional rate written before the
+    // amount ("VAT 15% R150.00", "VAT (@15%) R150.00"), an optional colon, an
+    // optional currency sign and the figure. Figures are read as this
+    // country's documents print them: thousands grouped by spaces or commas,
+    // decimals after a point or a comma ("R 1 161 950,00", "R1,336,242.50").
+    // A figure followed by "%" is a rate, never an amount; "Tax Invoice No.
+    // 1234" carries no amount at all.
+    var calcRe = /\b(sub-?\s?total|total|vat|tax)\b\s*(?:\(?\s*@?\s*1[45](?:[.,]5)?\s*%\s*\)?\s*)?[:=]?\s*(?:\(?\s*@?\s*1[45](?:[.,]5)?\s*%\s*\)?\s*)?[R$€£]?\s*(\d{1,3}(?:[  ,.]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?!\s*%|\d)/gi;
+    // A discount, delivery or credit line between the subtotal and the VAT
+    // or total changes the sum and the VAT base; the page is then not checked.
+    var betweenRe = /\b(?:discount|delivery|shipping|less|credit|deposit|rounding|freight|handling)\b/i;
+    function parseAmount(tok) {
+      var t = String(tok).replace(/[\s ]/g, '');
+      var m = /^(.*?)([.,])(\d{1,2})$/.exec(t);
+      var whole = (m ? m[1] : t).replace(/[.,]/g, '');
+      return parseFloat(whole + (m ? '.' + m[3] : ''));
+    }
     for (var i = 0; i < textBlocks.length; i++) {
-      var match;
-      while ((match = calcRe.exec(textBlocks[i])) !== null) {
-        var val = parseFloat(match[2].replace(/,/g, ''));
-        if (!isNaN(val)) amounts.push({ label: match[1].toLowerCase(), value: val, page: i });
+      var text = String(textBlocks[i] || '');
+      var ocrPage = /^\s*\[OCR\]/.test(text);
+      var amounts = [], match;
+      calcRe.lastIndex = 0;
+      while ((match = calcRe.exec(text)) !== null) {
+        var val = parseAmount(match[2]);
+        if (!isNaN(val)) amounts.push({ label: match[1].toLowerCase().replace(/[-\s]/g, ''), value: val, index: match.index });
       }
-    }
-    // Check if VAT is approximately 15% of subtotal
-    var subtotal = amounts.find(function(a){return a.label==='subtotal';});
-    var vat = amounts.find(function(a){return a.label==='vat'||a.label==='tax';});
-    var total = amounts.find(function(a){return a.label==='total';});
-    if (subtotal && vat) {
-      var expectedVat = subtotal.value * 0.15;
-      var vatDiff = Math.abs(vat.value - expectedVat);
-      if (vatDiff > subtotal.value * 0.005) {  // 0.5% tolerance
+      var subtotal = amounts.find(function(a){return a.label==='subtotal';});
+      var vat = amounts.find(function(a){return a.label==='vat'||a.label==='tax';});
+      var total = amounts.find(function(a){return a.label==='total';});
+      if (!subtotal || !vat || !(subtotal.value > 0)) continue;
+      // Figures that could not be an invoice are a parse of the wrong figure
+      // far more often than an invoice: a VAT line that is neither zero
+      // (zero-rated) nor within a tenth to a quarter of the subtotal, or a
+      // total outside half to twice the subtotal. A note names the page and
+      // the figures; it claims OCR damage only on an OCR-recovered page.
+      var vatPlausible = vat.value === 0 || (vat.value >= subtotal.value * 0.10 && vat.value <= subtotal.value * 0.25);
+      var totalPlausible = !total || (total.value >= subtotal.value * 0.5 && total.value <= subtotal.value * 2);
+      if (!vatPlausible || !totalPlausible) {
+        findings.push({ type: 'CT22', severity: 0, contextOnly: true,
+          evidence: 'Figures on page ' + (i + 1) + ' do not read as one invoice (subtotal R' + subtotal.value + ', VAT R' + vat.value + (total ? ', total R' + total.value : '') + '): ' + (ocrPage ? 'the OCR may have broken the numbers; read the page image' : 'the text layer may have separated or mislabelled the figures; read the page') + ' before relying on any of them',
+          location: 'Page ' + (i + 1) });
+        continue;
+      }
+      var lo = Math.min(subtotal.index, vat.index, total ? total.index : subtotal.index);
+      var hi = Math.max(subtotal.index, vat.index, total ? total.index : subtotal.index);
+      if (betweenRe.test(text.slice(lo, hi))) continue;
+      // The standard rate is 15 per cent since 1 April 2018 and was 14 per cent
+      // before it; a zero VAT line is zero-rated. The printed words carry no
+      // percentage (PD1), only the two computed amounts.
+      var tol = subtotal.value * 0.005;  // 0.5% tolerance
+      if (vat.value !== 0 && Math.abs(vat.value - subtotal.value * 0.15) > tol && Math.abs(vat.value - subtotal.value * 0.14) > tol) {
         findings.push({ type: 'CT22', severity: 4,
-          evidence: 'VAT mismatch: calculated R' + expectedVat.toFixed(2) + ' but stated R' + vat.value.toFixed(2),
-          location: 'Page ' + (subtotal.page + 1) });
+          evidence: 'VAT mismatch: calculated R' + (subtotal.value * 0.15).toFixed(2) + ' at the standard rate (R' + (subtotal.value * 0.14).toFixed(2) + ' at the rate in force before April 2018) but stated R' + vat.value.toFixed(2),
+          location: 'Page ' + (i + 1) });
       }
-    }
-    if (subtotal && vat && total) {
-      var expectedTotal = subtotal.value + vat.value;
-      if (Math.abs(total.value - expectedTotal) > 0.01) {
-        findings.push({ type: 'CT15', severity: 5,
-          evidence: 'Total mismatch: ' + subtotal.label + '(R' + subtotal.value + ') + ' + vat.label + '(R' + vat.value + ') = R' + expectedTotal + ' but stated R' + total.value,
-          location: 'Page ' + (subtotal.page + 1) });
+      if (total) {
+        var expectedTotal = subtotal.value + vat.value;
+        if (Math.abs(total.value - expectedTotal) > 0.01) {
+          findings.push({ type: 'CT15', severity: 5,
+            evidence: 'Total mismatch: ' + subtotal.label + '(R' + subtotal.value + ') + ' + vat.label + '(R' + vat.value + ') = R' + expectedTotal + ' but stated R' + total.value,
+            location: 'Page ' + (i + 1) });
+        }
       }
     }
     return findings;
@@ -2383,7 +2546,45 @@ var DETECTORS = {
     // CT08 rows: 'rental', 'fees', 'equipment', 'fuel', 'products'). Straight
     // and curly double and single quotes are all read; an apostrophe inside a
     // word is not a quote (the opening quote must follow a space or bracket).
-    var definitionRe = /(?:^|[\s(\[])(?:("[^"\n]{2,80}"|\u201C[^\u201D\n]{2,80}\u201D|'[^'\n]{2,80}'|\u2018[^\u2019\n]{2,80}\u2019)|([a-z][a-z'-]{3,}(?:\s+[a-z][a-z'-]{2,}){0,3}))\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
+    // The opening and closing quote need not match: a typeset agreement opens
+    // with " and closes with ' ("Astron Motor Fuel' means …), and the
+    // evidence-bundle-4 run then read the inner words "Motor Fuel'" as the
+    // term and set them against the real "Motor Fuel" definition. Any opener
+    // (after a space or bracket), any closer, no inner quote except a
+    // possessive apostrophe; the key drops the quotes and the spaces inside.
+    // A matched double-quote pair is read first, whatever it holds inside
+    // ("Shareholders' Agreement", "Lessees' Improvements" — a plural
+    // possessive is not a closing quote); the mixed pair follows.
+    var definitionRe = /(?:^|[\s(\[])(?:("[^"\u201C\u201D\n]{2,80}"|\u201C[^"\u201C\u201D\n]{2,80}\u201D|["\u201C'\u2018]\s?(?:[^"\u201C\u201D'\u2018\u2019\n]|['\u2019](?=[A-Za-z])){2,80}["\u201D'\u2019])|([a-z][a-z'-]{3,}(?:\s+[a-z][a-z'-]{2,}){0,3}))\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
+    // Is the position at the end of `span` inside a quoted phrase that was
+    // opened and never closed (a closer OCR dropped: `"Astron Motor Fuel
+    // means …`)? Counted from the last clause boundary; no lookbehind.
+    function voInsideOpenQuote(span) {
+      // A term may wrap onto the next line, so a line break is folded, not
+      // a boundary; the clause ends at ";" or ". ". OCR draws an opener as
+      // two apostrophes, a backtick, or an apostrophe before a space.
+      var t = String(span || '').replace(/\s+/g, ' ');
+      var cut = Math.max(t.lastIndexOf(';'), t.lastIndexOf('. '));
+      t = t.slice(cut + 1);
+      var open = 0;
+      for (var k = 0; k < t.length; k++) {
+        var c = t.charAt(k), prev = k > 0 ? t.charAt(k - 1) : ' ', next = k + 1 < t.length ? t.charAt(k + 1) : ' ';
+        var next2 = k + 2 < t.length ? t.charAt(k + 2) : ' ';
+        if (c === '"') { open = open > 0 ? open - 1 : open + 1; continue; }
+        if (c === '\u201C' || c === '`') { open++; continue; }
+        if (c === '\u201D') { if (open > 0) open--; continue; }
+        if (c === "'" || c === '\u2018' || c === '\u2019') {
+          if (/[\s(\[]/.test(prev) && (c === "'" && next === "'")) { open++; k++; continue; } // '' drawn for "
+          if (/[\s(\[]/.test(prev) && (/[A-Za-z]/.test(next) || (next === ' ' && /[A-Za-z]/.test(next2)))) { open++; continue; } // an opener
+          if (/[A-Za-z]/.test(prev) && !/[A-Za-z]/.test(next) && open > 0) { open--; continue; } // a closer (not a possessive)
+        }
+      }
+      return open > 0;
+    }
+    // A definition the page CITES from another instrument ("In terms of
+    // clause 1.36 of the Franchise Agreement, "Goodwill" means …" in a
+    // pleading) is not this document's own definition.
+    var CITED_DEFINITION_RE = /\b(?:in\s+terms\s+of|pursuant\s+to|under|per|as\s+defined\s+in|as\s+per|defines?|definition\s+(?:in|of|at))\b[^;\n]{0,60}\b(?:clause|section|paragraph|annexure|agreement|schedule|deed|lease|mou)\b[^;\n]{0,40}$/i;
     // "Defined twice" is NOT a contradiction — a definitions chapter restated in
     // an index, or the same agreement bound twice into a bundle, defines every
     // term twice, IDENTICALLY (a real run produced 25 such non-findings from one
@@ -2441,8 +2642,12 @@ var DETECTORS = {
       while ((match = definitionRe.exec(textBlocks[i])) !== null) {
         var quoted = !!match[1];
         var rawTerm = quoted ? match[1].slice(1, -1) : match[2];
-        var term = rawTerm.toLowerCase().replace(/\s+/g, ' ').trim();
+        var term = rawTerm.toLowerCase().replace(/^["\u201C\u201D'\u2018\u2019\s]+|["\u201C\u201D'\u2018\u2019\s]+$/g, '').replace(/\s+/g, ' ').trim();
         if (!term) continue;
+        // An unquoted run inside a quoted phrase whose closer was dropped is
+        // the inside of that term, never a term of its own.
+        if (!quoted && voInsideOpenQuote(textBlocks[i].slice(Math.max(0, match.index - 200), match.index + 1))) continue;
+        if (CITED_DEFINITION_RE.test(textBlocks[i].slice(Math.max(0, match.index - 120), match.index + 1).replace(/\s+/g, ' '))) continue; // the citation may wrap onto the next line
         // Bare (unquoted) words must be plausible defined terms, not boilerplate:
         // a defined term is Capitalised in the instrument that defines it — every
         // word of a multi-word term.
@@ -2704,10 +2909,17 @@ var DETECTORS = {
     // that names no side stays compatible (the fixture's "Bright Idea Projects
     // … became the registered owner" names the company, not a role).
     var SIDE_RE = /\b(sub-?lessee|lessee|tenant|franchisee|licensee|occupier)\b|\b(sub-?lessor|lessor|landlord|franchisor|licensor|owner\s*\/\s*lessor)\b/gi;
-    // The role word nearest the phrase (90 characters before it, the phrase
-    // itself, 20 after) names the side the phrase is about.
+    // The role word nearest the phrase names the side the phrase is about:
+    // read back to the start of the phrase's own sentence (at most 300
+    // characters — a recital runs long: "BRIGHT IDEA PROJECTS … (hereinafter
+    // referred to as THE FRANCHISOR/OWNER) is: a duly appointed Branded
+    // Marketer … AND the owner of the immovable property", where the role sat
+    // 120 characters before "the owner"), the phrase itself, and 20 after.
     function sideNear(raw, idx, len) {
-      var from = Math.max(0, idx - 90), w = raw.slice(from, Math.min(raw.length, idx + len + 20));
+      var from = Math.max(0, idx - 300);
+      var stop = raw.lastIndexOf('. ', idx);
+      if (stop >= from) from = stop + 2;
+      var w = raw.slice(from, Math.min(raw.length, idx + len + 20));
       var best = null, bestDist = Infinity, m;
       SIDE_RE.lastIndex = 0;
       while ((m = SIDE_RE.exec(w)) !== null) {
@@ -2716,7 +2928,28 @@ var DETECTORS = {
       }
       return best;
     }
-    function allPagesOf(re) {
+    // The ownership half must be about the premises: "is the owner of certain
+    // Intellectual Property" (evidence-bundle-4, p.16) is not the property the
+    // lessee clause is about. The FIRST object the clause names decides, read
+    // to the sentence end: "owns the premises, the equipment and the stock"
+    // and "the owner of property on which the business was operated" (p.78)
+    // are about immovable property; "the owner of all right, title and
+    // interest in and to the Intellectual Property" is not, however far out
+    // the words sit. OCR's "lntellectual | Property" reads as the same words
+    // (column rules are dropped, l/1 for I accepted). A deed of transfer, a
+    // title deed or a deeds-registry number names immovable property by itself.
+    var OWNER_OBJECT_RE = /\b(?:premises|property|site|land|erf|erven|building|immovable|farm|stand|plot|portion|deed\s+of\s+transfer|title\s+deeds?|deeds\s+(?:registry|office)|t\d{3,6}\/(?:19|20)\d{2})\b/i;
+    var OWNER_NOT_RE = /\b(?:[il1]nte[il1]{2}ectua[il1]\s+propert(?:y|ies)|trade\s*marks?|copyright|goodwill|shares?|equipment|vehicles?|goods|stock|brand|business(?!\s+premises))\b/i;
+    function ownerObjectOk(phrase, tail) {
+      var clause = (phrase + tail).replace(/[|*_]+/g, ' ').replace(/\s+/g, ' ');
+      var stop = clause.search(/[.;!?]\s/);
+      if (stop !== -1) clause = clause.slice(0, stop);
+      var obj = OWNER_OBJECT_RE.exec(clause);
+      if (!obj) return false;
+      var not = OWNER_NOT_RE.exec(clause);
+      return !(not && not.index <= obj.index);
+    }
+    function allPagesOf(re, objectCheck) {
       var out = [];
       for (var i = 0; i < blocks.length; i++) {
         var raw = String(blocks[i] || '');
@@ -2725,6 +2958,7 @@ var DETECTORS = {
         while ((m = g.exec(lower)) !== null) {
           // "is NOT the owner" is the lessee clause itself, not an ownership record.
           if (/\bnot\s+(?:the\s+)?$/.test(lower.slice(Math.max(0, m.index - 12), m.index))) continue;
+          if (objectCheck && !ownerObjectOk(m[0], lower.slice(m.index + m[0].length, m.index + m[0].length + 120))) continue;
           var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
           out.push({ page: i + 1, quote: q, side: sideNear(raw, m.index, m[0].length) });
           if (out.length > 200) return out;
@@ -2733,16 +2967,47 @@ var DETECTORS = {
       return out;
     }
     var lesseeHits = allPagesOf(/not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/);
-    var ownerHits = allPagesOf(/(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/);
-    var lessee = null, owner = null;
-    for (var lh = 0; lh < lesseeHits.length && !owner; lh++) {
-      for (var oh = 0; oh < ownerHits.length; oh++) {
-        var lSide = lesseeHits[lh].side, oSide = ownerHits[oh].side;
-        // "the Owner/Lessor" names the grantor as owner: only a grantor-side
-        // lessee clause can contradict it; a grantee-side clause is about
-        // somebody else.
-        if (lSide && oSide && lSide !== oSide) continue;
-        lessee = lesseeHits[lh]; owner = ownerHits[oh]; break;
+    var ownerHits = allPagesOf(/(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/, true);
+    // Whose ownership the half records. A half on the clause's own side
+    // ("THE FRANCHISOR/OWNER … is the owner of the immovable property") pairs
+    // with the clause wherever it sits in the record: the proof that the
+    // clause's party owns the premises lives in another instrument (a deed,
+    // a recital, a letter), never in the clause itself. A half with no side
+    // word ("Caltex was also the owner of property on which the business was
+    // operated") does not say which party it is about, so it pairs only
+    // within the same stated document and the same passage of the record
+    // (twenty pages); further away it is a note, not a finding — an MOU's
+    // recital that somebody else owns another site is two instruments, not a
+    // trap. Same-side pairs are preferred; a pair across two documents, or
+    // one made where no document boundaries could be read and the halves sit
+    // far apart, is one step down and tagged for the reader to verify.
+    var VO_D38_NEAR = 20;
+    var d38Segs = voDetectDocuments(blocks) || [];
+    var d38DocOf = function (page) {
+      for (var d = 0; d < d38Segs.length; d++) { if (page >= d38Segs[d].start && page <= d38Segs[d].end) return d; }
+      return -1;
+    };
+    var d38SameDoc = function (a, b) { return !d38Segs.length || (d38DocOf(a) !== -1 && d38DocOf(a) === d38DocOf(b)); };
+    var lessee = null, owner = null, farHalf = null;
+    for (var pass = 0; pass < 2 && !owner; pass++) {
+      for (var lh = 0; lh < lesseeHits.length && !owner; lh++) {
+        for (var oh = 0; oh < ownerHits.length; oh++) {
+          var lSide = lesseeHits[lh].side, oSide = ownerHits[oh].side;
+          // "the Owner/Lessor" names the grantor as owner: only a grantor-side
+          // lessee clause can contradict it; a grantee-side clause is about
+          // somebody else.
+          if (lSide && oSide && lSide !== oSide) continue;
+          var sameSide = !!(lSide && oSide);
+          if (pass === 0) { if (!sameSide) continue; }
+          else {
+            if (sameSide || !d38SameDoc(lesseeHits[lh].page, ownerHits[oh].page)) continue;
+            if (Math.abs(lesseeHits[lh].page - ownerHits[oh].page) > VO_D38_NEAR) {
+              if (!farHalf) farHalf = { lessee: lesseeHits[lh], owner: ownerHits[oh] };
+              continue;
+            }
+          }
+          lessee = lesseeHits[lh]; owner = ownerHits[oh]; break;
+        }
       }
     }
     var invokesTermination = false;
@@ -2750,9 +3015,17 @@ var DETECTORS = {
       if (/(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(String(blocks[b]).toLowerCase())) { invokesTermination = true; break; }
     }
     if (lessee && owner && invokesTermination) {
-      findings.push({ type: 'CT44', severity: 5,
-        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner): "' + lessee.quote + '" — yet the record shows the party had become the owner of the premises: "' + owner.quote + '". The clause\'s precondition never occurred. Its legal characterisation is for the court.',
+      var crossDoc = d38Segs.length > 0 && !d38SameDoc(lessee.page, owner.page);
+      var farApart = !d38Segs.length && Math.abs(lessee.page - owner.page) > VO_D38_NEAR;
+      findings.push({ type: 'CT44', severity: (crossDoc || farApart) ? 4 : 5,
+        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner): "' + lessee.quote + '" — yet the record shows the party had become the owner of the premises: "' + owner.quote + '". The clause\'s precondition never occurred. Its legal characterisation is for the court.' +
+          (crossDoc ? ' [the two halves sit in different documents of the record: verify that they concern the same party, the same premises and the same period]' :
+           farApart ? ' [the record\'s document boundaries could not be read and the two halves sit ' + Math.abs(lessee.page - owner.page) + ' pages apart: verify that they concern the same party, the same premises and the same period]' : ''),
         location: (lessee.page === owner.page) ? 'Page ' + lessee.page : 'Page ' + lessee.page + ' vs Page ' + owner.page });
+    } else if (!owner && farHalf && invokesTermination) {
+      findings.push({ type: 'CT44', severity: 0, contextOnly: true,
+        evidence: 'A lessee-only clause on page ' + farHalf.lessee.page + ' ("' + farHalf.lessee.quote + '") and a statement of ownership on page ' + farHalf.owner.page + ' ("' + farHalf.owner.quote + '") sit ' + Math.abs(farHalf.lessee.page - farHalf.owner.page) + ' pages apart, and the statement names no party role; whose ownership it records is not stated, so the two were not paired. Read both before relying on either.',
+        location: 'Page ' + farHalf.lessee.page + ' vs Page ' + farHalf.owner.page });
     }
     return findings;
   },
@@ -3644,24 +3917,134 @@ function voExcludeFooterOnlyPages(textBlocks) {
   return { pages: pages, note: 'Seal-footer pages: ' + pages.length + ' page(s) (' + list + ') carry only a seal footer as machine-readable text (an unread page image or a blank page); no finding can be anchored to them.' };
 }
 
+// ===================== SEAL FURNITURE =====================
+// This platform prints a seal footer on every page it seals, and a bundle of
+// previously sealed exhibits carries one on every page — with the seal's own
+// date and time. Left in the text, the stamp reads as a date the document
+// states ("30/09/2026 15:41:47", and "0/09/2026" once OCR drops the leading
+// digit: 25 "impossible date" findings on the evidence-bundle-4 run), the
+// timeline pins findings to the seal date, and the footer's words sit in
+// every window the AI reads. The furniture is removed from every block AFTER
+// the document boundaries have been read from it (voCacheDocSegs) and after
+// footer-only pages have been recognised (voExcludeFooterOnlyPages). The
+// "[OCR] " provenance prefix is kept. The last two patterns are backstops for
+// a footer the recogniser mangled: a date-shaped token followed by a clock
+// time is a stamp, never a stated date.
+var VO_SEAL_FURNITURE_RES = [
+  /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL\s*(?:[|—–-]\s*)?(?:Seal:\s*)?VO-[0-9A-F]{6,}[\s\S]{0,220}?\|\s*\d{1,4}\s*\/\s*\d{1,4}(?![\/\d])(?:\s*\|\s*Chain:\s*\d+\s*prev)?/gi,
+  /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL\s*[—–-]*\s*scan\s+the\s+code\s+or\s+verify\s+at\s+verumglobal\.foundation\/verify\.html/gi,
+  /Verum\s+Omnis\s+Sealed\s+Document\s+Source:[\s\S]{0,160}?Page\s+\d+\s+of\s+\d+\s+VERIFY\s+SEAL\s+VERUM\s+OMNIS\s+SEAL\s*\|[\s\S]{0,240}?\|\s*Constitution\s*\|\s*\d+/gi,
+  /Blockchain\s+timestamping\s+via\s+OpenTimestamps\s+is\s+in\s+progress[^.]*\.(?:\s*[^.]*registration\s+pending\.)?/gi,
+  /PRIVATE\s+SEAL\s*[-–—]+\s*FREE\s+TIER(?:\s*\|\s*Chain:\s*\d+\s*prev)?/gi,
+  /verumglobal\.foundation\s*\|\s*OpenTimestamps\s*\|\s*Patent\s+Pending/gi,
+  /\b20\d{2}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+UTC\b/g,
+  // the brand line as OCR renders it (E read as 3, I as 1 or l, O as 0), through to the page marker, the tier line or the zone name
+  /V[E3]RUM\s*[O0]MN[I1l]S\s*S[E3]AL[E3]D\s*[O0]R[I1l]G[I1l]NAL[\s\S]{0,230}?(?:\|\s*\d{1,4}\s*\/\s*\d{1,4}(?![\/\d])|Patent\s+Pending|Johannesburg)/gi,
+  /\bAfrica\/Johannesburg\b/g,
+  /\bVERIFY\s+SEAL\b/g
+];
+// A date-shaped token (the day may have lost a digit to OCR) followed by a
+// clock time: a stamp ONLY in the company of the footer's other words — the
+// hash, the seal id, the zone name, the page marker. A bank line
+// ("15/03/2024 10:30 POS purchase"), an email header ("Sent: 31/02/2024
+// 14:32") or a till slip keeps its date: those are the record's own
+// timestamps, and D03/D04 read them.
+var VO_STAMP_RE = /(^|[^\d\/])(\d{0,2}\/\d{1,2}\/20\d{2}\s+\d{1,2}[:.]\d{2}(?:[:.]\d{2})?)/g;
+var VO_FOOTER_CONTEXT_RE = /sha[\s-]*512|[0-9a-f]{12,}\.{2,3}|\bVO-[0-9A-Z]{4,}|africa\s*\/\s*johannes|s[e3]al[e3]d\s+[o0]r[i1l]g[i1l]nal|v[e3]rum\s+[o0]mn[i1l]s|opentimestamps|patent\s+pending|\|\s*\d{1,4}\s*\/\s*\d{1,4}\b/i;
+function voIsStampContext(text, idx, len) {
+  var t = String(text || '');
+  return VO_FOOTER_CONTEXT_RE.test(t.slice(Math.max(0, idx - 100), Math.min(t.length, idx + len + 60)));
+}
+function voStripSealFurniture(text) {
+  var s = String(text == null ? '' : text);
+  for (var i = 0; i < VO_SEAL_FURNITURE_RES.length; i++) s = s.replace(VO_SEAL_FURNITURE_RES[i], ' ');
+  s = s.replace(VO_STAMP_RE, function (m, pre, stamp, offset) {
+    return voIsStampContext(s, offset + pre.length, stamp.length) ? pre + ' ' : m;
+  });
+  return s;
+}
+function voStripSealFurnitureBlocks(textBlocks) {
+  var changed = 0;
+  if (!textBlocks) return 0;
+  for (var i = 0; i < textBlocks.length; i++) {
+    var before = String(textBlocks[i] || '');
+    var after = voStripSealFurniture(before);
+    if (after !== before) { textBlocks[i] = after; changed++; }
+  }
+  return changed;
+}
+
+// ===================== SECONDARY SOURCES =====================
+// A document that describes itself as an extract, summary or commentary
+// prepared after the fact ("Extract prepared 30 Sept 2026 - pages
+// reproduced…") is somebody's account of the record, not the record. The
+// evidence-bundle-4 run sealed a "signature missing" finding and a goodwill
+// denial on the words of such an extract (p.557). A finding whose every cited
+// page sits in a secondary document is a LEAD — it moves to the engine notes
+// and is never a finding; one with some pages there keeps its anchor at
+// reduced weight, tagged, until the primary document is produced.
+var VO_SECONDARY_TITLE_RE = /\b(?:extracts?|summary|synopsis|commentary|chronology|analysis|notes?|digest)\b[^.]{0,60}?\b(?:prepared|compiled|drafted|reproduced|annotated)\b|\bpages\s+reproduced\b|\bprepared\s+(?:by|on|for)\b[^.]{0,40}\b20\d{2}\b/i;
+var VO_SECONDARY_NOTE = function (pages) { return ' [secondary source on p. ' + pages.join(', ') + ': an extract or commentary prepared after the fact, not the primary record — verify against the primary document]'; };
+function voSecondaryPages(segs, textBlocks) {
+  var out = [], list = segs || [];
+  for (var d = 0; d < list.length; d++) {
+    var seg = list[d];
+    var head = String((textBlocks && textBlocks[seg.start - 1]) || '').replace(/\s+/g, ' ').slice(0, 300);
+    if (!(VO_SECONDARY_TITLE_RE.test(String(seg.title || '')) || VO_SECONDARY_TITLE_RE.test(head))) continue;
+    for (var p = seg.start; p <= seg.end; p++) out.push(p);
+  }
+  return out;
+}
+function voDemoteSecondarySource(findings, secondaryPages) {
+  var leads = [], kept = [], capped = 0;
+  if (!Array.isArray(findings)) return { kept: findings, leads: leads, capped: capped };
+  if (!Array.isArray(secondaryPages) || !secondaryPages.length) return { kept: findings, leads: leads, capped: capped };
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i];
+    if (!f) continue;
+    var pages = voRulePagesOf(f.location || '');
+    if (!pages.length || f.contextOnly) { kept.push(f); continue; }
+    var sec = [];
+    for (var p = 0; p < pages.length; p++) if (secondaryPages.indexOf(pages[p]) !== -1) sec.push(pages[p]);
+    if (!sec.length) { kept.push(f); continue; }
+    if (sec.length === pages.length) { f.secondaryLead = true; leads.push(f); continue; }
+    if (f.severity > 2) f.severity = 2;
+    f.secondaryCapped = true;
+    if (String(f.evidence || '').indexOf('[secondary source on p.') === -1) f.evidence = (f.evidence || '') + VO_SECONDARY_NOTE(sec);
+    capped++;
+    kept.push(f);
+  }
+  return { kept: kept, leads: leads, capped: capped };
+}
+
 // Format checks read characters, and OCR guesses characters. A finding of a
 // character-sensitive type (registration, VAT, identity and account numbers,
 // section numbers, definitions, figures, dates, signature marks) whose EVERY
 // cited page was OCR-recovered is held at severity 2 with the reason on the
 // finding, until the quoted characters are verified against the page image.
-var VO_OCR_FORMAT_TYPES = { CT02: 1, CT03: 1, CT08: 1, CT09: 1, CT13: 1, CT18: 1, CT19: 1, CT20: 1, CT23: 1, CT33: 1 };
+// CT15/CT22 (an invoice's own arithmetic) are figures too: the
+// evidence-bundle-4 run sealed "stated R1.08" from an OCR'd invoice at full
+// weight because they were missing here.
+var VO_OCR_FORMAT_TYPES = { CT02: 1, CT03: 1, CT08: 1, CT09: 1, CT13: 1, CT15: 1, CT18: 1, CT19: 1, CT20: 1, CT22: 1, CT23: 1, CT33: 1 };
 var VO_OCR_CAP_NOTE = ' [OCR page: weight reduced until the quoted characters are verified against the page image]';
 function voCapOcrFormatFindings(findings, ocrPages) {
   var capped = 0, types = [];
   if (!Array.isArray(findings) || !Array.isArray(ocrPages) || !ocrPages.length) return { capped: 0, types: types };
   for (var i = 0; i < findings.length; i++) {
     var f = findings[i];
-    if (!f || !VO_OCR_FORMAT_TYPES[f.type] || !(f.severity > 2)) continue;
+    if (!f) continue;
     var pages = voRulePagesOf(f.location || '');
     if (!pages.length) continue;
     var allOcr = true;
     for (var p = 0; p < pages.length; p++) if (ocrPages.indexOf(pages[p]) === -1) { allOcr = false; break; }
     if (!allOcr) continue;
+    // Every finding anchored only on OCR-recovered pages is marked, whatever
+    // its type or severity: the report counts such findings apart.
+    f.ocrAnchored = true;
+    // A signed-package phrase rule matched words, not characters: the cap's
+    // reason does not apply to it, and the report still counts it apart.
+    if (f.packageRule) continue;
+    if (!VO_OCR_FORMAT_TYPES[f.type] || !(f.severity > 2)) continue;
     f.severity = 2;
     f.ocrCapped = true;
     if (String(f.evidence || '').indexOf(VO_OCR_CAP_NOTE) === -1) f.evidence = (f.evidence || '') + VO_OCR_CAP_NOTE;
@@ -3821,6 +4204,9 @@ var VO_NON_PERSON_TOK = (function () {
     'confidential case legal relevance matter notice correspondence whatsapp screenshot screenshots email emails ' +
     // A statement line ("PAYMENT TO HOLLYWOODBETS") is a transaction, not a party.
     'payment payments to debit credit fee fees purchase transfer ' +
+    // A court, a trade, a form label: "Supreme Court", "Service Station",
+    // "Auditors Name Postal Address" were parties on the evidence-bundle-4 run.
+    'court supreme high magistrate magistrates station auditors auditor postal address physical landline cellphone fax ' +
     // AllFuels run: 'Cnr' (corner, address furniture) and 'Dispossession'
     // (heading language) were bound into party names.
     'cnr dispossession ' +
@@ -3898,6 +4284,8 @@ function voLooksLikePerson(name) {
     if (/^[A-Z]{2,3}$/.test(bare)) initials++;
   }
   if (initials > 1) return false;
+  // A name that ends on a surname particle is cut short ("Timol de").
+  if (/^(?:de|van|der|den|du|le|la|von|bin|al)$/i.test(toks[toks.length - 1].replace(/[.'\u2019-]+$/, ''))) return false;
   return true;
 }
 function voExtractParties(text) {
@@ -4030,10 +4418,29 @@ function voExtractDates(text) {
   var s = String(text == null ? '' : text), out = [], seen = {}, m;
   VO_DATE_TOKEN_RE.lastIndex = 0;
   while ((m = VO_DATE_TOKEN_RE.exec(s)) !== null) {
+    // A date followed by a clock time among a seal footer's words is the stamp, not a stated date.
+    if (/^\s*\d{1,2}[:.]\d{2}/.test(s.slice(m.index + m[0].length, m.index + m[0].length + 8)) && voIsStampContext(s, m.index, m[0].length)) continue;
     var v = m[0].replace(/\s+/g, ' ').trim(), k = v.toLowerCase();
     if (!seen[k]) { seen[k] = true; out.push(v); }
   }
   return out;
+}
+
+// The sentence of `text` that contains `needle` (case- and space-insensitive
+// on a short prefix of the needle), bounded to 400 characters each way; null
+// when the needle is not on the page.
+function voSentenceAround(text, needle) {
+  var s = String(text == null ? '' : text), n = String(needle == null ? '' : needle).replace(/\s+/g, ' ').trim();
+  if (n.length < 12) return null;
+  var key = n.slice(0, 60).toLowerCase();
+  var flat = s.replace(/\s+/g, ' ');
+  var at = flat.toLowerCase().indexOf(key);
+  if (at === -1) return null;
+  var start = Math.max(0, at - 400), end = Math.min(flat.length, at + key.length + 400);
+  var seg = flat.slice(start, end), rel = at - start;
+  var sb = seg.lastIndexOf('. ', rel); if (sb === -1) sb = seg.lastIndexOf('; ', rel);
+  var se = seg.indexOf('. ', rel + key.length); if (se === -1) se = seg.length;
+  return seg.slice(sb === -1 ? 0 : sb + 2, se);
 }
 
 function voExtractQuotes(text) {
@@ -4119,8 +4526,20 @@ function voAnchorEnrich(findings, textBlocks) {
     // "VERUM OMNIS SEALED ORIGINAL", "OpenTimestamps"). Left in, it gets indexed
     // as a party. Strip it before any party scan — the seal is not a person.
     var ctxParties = ctx.replace(VO_SEAL_BOILERPLATE_RE, ' ');
+    // WHEN: a date the finding's own words carry; failing that, one date from
+    // the sentence on the cited page that holds the quote. Never a date from
+    // elsewhere on the page — the evidence-bundle-4 timeline dated a
+    // registration-number finding "1 October 2005" from an unrelated line and
+    // pinned others to the seal stamp.
     var dates = voExtractDates(ev);
-    if (!dates.length) dates = voExtractDates(ctx).slice(0, 2);
+    if (!dates.length) {
+      var pageTxt = ctx.slice(ev.length);
+      var qs = voExtractQuotes(ev);
+      for (var qi = 0; qi < qs.length && !dates.length; qi++) {
+        var sent = voSentenceAround(pageTxt, qs[qi]);
+        if (sent) dates = voExtractDates(sent).slice(0, 1);
+      }
+    }
     var law = voExtractCitations(ev);
     if (!law.length) law = voExtractCitations(ctx);
     // Parties: the evidence snippet first (tightest link to the contradiction),
@@ -4742,6 +5161,12 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   if (_aiCompiled) extractionNote += ' ' + _aiCompiled;
   var _footer = voExcludeFooterOnlyPages(textBlocks);
   if (_footer.note) extractionNote += ' ' + _footer.note;
+  // The bundle's stated boundaries are read from the seal footers, so they are
+  // computed now and cached; then the furniture goes (voStripSealFurniture).
+  var _docSegs = voCacheDocSegs(textBlocks);
+  var _furniture = voStripSealFurnitureBlocks(textBlocks);
+  if (_furniture) extractionNote += ' Seal furniture: this platform\'s own seal footers (seal id, hash, date and time, page count) were removed from ' + _furniture + ' page(s) before detection; a seal stamp is not a statement of the record.';
+  var _secondaryPages = voSecondaryPages(_docSegs, textBlocks);
 
   // Run every detector
   var detectors = [
@@ -4913,6 +5338,17 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   var _ocrCap = voCapOcrFormatFindings(allFindings, _ocrPages);
   if (_ocrCap.capped) {
     extractionNote += ' OCR provenance: ' + _ocrCap.capped + ' format-check finding(s) anchored only to OCR-recovered pages held at reduced weight pending verification against the page image (' + _ocrCap.types.join(', ') + ').';
+  }
+  // A secondary document (an extract or commentary prepared after the fact)
+  // is an account of the record, not the record (see voDemoteSecondarySource).
+  var _sec = voDemoteSecondarySource(allFindings, _secondaryPages);
+  allFindings = _sec.kept;
+  if (_sec.leads.length || _sec.capped) {
+    var _secTexts = [];
+    for (var sl = 0; sl < _sec.leads.length; sl++) _secTexts.push('[' + _sec.leads[sl].type + '] ' + String(_sec.leads[sl].evidence || '').replace(/\s+/g, ' ').slice(0, 300) + ' (' + _sec.leads[sl].location + ')');
+    extractionNote += ' Secondary sources: ' + (_secondaryPages.length) + ' page(s) belong to a document that describes itself as an extract, summary or commentary prepared after the fact; ' +
+      (_sec.leads.length ? _sec.leads.length + ' observation(s) sit entirely on those pages and are recorded here as leads to verify against the primary record, NOT as findings: ' + _secTexts.join(' | ') + (_sec.capped ? '; ' : '') : '') +
+      (_sec.capped ? _sec.capped + ' finding(s) with one half on those pages held at reduced weight.' : '.');
   }
 
   // The anchor rule (see voEnforceAnchorRule): unanchorable content findings
@@ -5503,6 +5939,8 @@ function voRunPackageRules(compiled, textBlocks, existing) {
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     generateSummary: generateSummary, voEditDistance: voEditDistance,
+    voStripSealFurniture: voStripSealFurniture, voStripSealFurnitureBlocks: voStripSealFurnitureBlocks, voCacheDocSegs: voCacheDocSegs,
+    voSecondaryPages: voSecondaryPages, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voIsStampContext: voIsStampContext,
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,
     CONTRADICTION_TYPES: CONTRADICTION_TYPES,
     DETECTORS: DETECTORS,
