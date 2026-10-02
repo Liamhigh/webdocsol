@@ -822,12 +822,33 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   const fE = [{ type: 'CT01', severity: 4, evidence: 'The document both affirms and negates "goodwill": "\u2026tive attorneys, provides that goodwill of R3,800,000 is recognised as payab\u2026" vs "\u2026see. No goodwill shall be payable to the Lessee per clause 4.5.2.\u2026"', location: 'Page 3' }];
   E.voAnchorEnrich(fE, blocksE);
   ok(fE[0].anchor.when.length === 1 && fE[0].anchor.when[0] === '12 March 2018', 'a quote wrapped in ellipses (the D01/D09/D27 shape) still keys on its own sentence for the date (' + JSON.stringify(fE[0].anchor.when) + ')');
+  // Clause numbers are not dates, and a clause number never blocks the sentence fallback.
+  ok(JSON.stringify(E.voExtractDates('see clause 7.2.19 and clause 12.3.2017 and C 1.1.50 and item 3.4.2019')) === '[]' && JSON.stringify(E.voExtractDates('The payment of 12.3.2017 was late')) === '["12.3.2017"]', '"clause 12.3.2017" and "C 1.1.50" are references; a bare dotted date with a four-digit year stands');
+  const blocksF = ['', 'C 1.1.50 Goodwill means the goodwill of the business as valued on 3 August 2018 by the parties. Nothing else.'];
+  const fF = [{ type: 'CT45', severity: 5, evidence: 'Goodwill recognised: "C 1.1.50 Goodwill means the goodwill of the business as valued" — yet denied', location: 'Page 2' }];
+  E.voAnchorEnrich(fF, blocksF);
+  ok(JSON.stringify(fF[0].anchor.when) === '["3 August 2018"]', 'a clause number in the evidence is not the finding\'s date and does not block the sentence fallback (' + JSON.stringify(fF[0].anchor.when) + ')');
+  // A form page with no sentence boundary: the window closes to 160 characters each side.
+  const form = 'Annexure E Regulation 35 National Consumer Commission Form ' + 'field value '.repeat(8) + 'ID/Registration number of complainant 510209 5091087 5 BEREA ROAD ' + 'field value '.repeat(40) + 'Date 25 JANUARY 2017 ' + 'field value '.repeat(10);
+  const win = E.voSentenceAround(form, 'Registration number of complainant 510209');
+  ok(win && win.length <= 380 && !/25 JANUARY 2017/.test(win), 'on a form page with no sentence boundary the quote\'s window is bounded and a far-off form date is not in it (' + (win && win.length) + ')');
+  // The stamp's clock as OCR leaves it.
+  for (const st of ['… | 30/09/2026 1S:41:47 Africa/Johannesburg | 12/388', '… | 30/09/2026 15 41 47 Africa/Johannesburg | 12/388', '… | 30/09/2026 l5.41.47 Africa/Johannesburg | 12/388', 'SHA-512: abcdef123456… | 30/09/2026 | 15:41:47 | 12/388', 'Seal: VO-BDAC81AC7522 30/09/2026 Africa/Johannesburg 12/388'])
+    ok(JSON.stringify(E.voExtractDates(st)) === '[]', 'a stamp date is never a date however OCR left its clock: "' + st + '"');
+  ok(JSON.stringify(E.voExtractDates('Sent: 12/03/2024 09:15 From: x@y.co')) === '["12/03/2024"]', 'a timestamped email header outside the footer keeps its date');
+  ok(of(DET.D03_DETECT_DATE_INCONSISTENCY, ['[OCR] clause text. Seal: VO-BDAC81AC7522 | SHA-512: ab12cd34ef567890… | 31/02/2026 1S:41:47 Africa/Johannesburg | 7/388'], 'CT03').length === 0 && of(DET.D03_DETECT_DATE_INCONSISTENCY, ['Signed 31/02/2024 by hand.'], 'CT03').length === 1, 'D03 skips a stamp whose clock OCR garbled ("1S:41:47") and still reads an impossible date in the body');
 
   // 17i. Parties.
   ok(!E.voLooksLikePerson('Supreme Court') && !E.voLooksLikePerson('Service Station') && !E.voLooksLikePerson('Timol de') && !E.voLooksLikePerson('Auditors Name Postal Address') && E.voLooksLikePerson('Zeyd Timol') && E.voLooksLikePerson('E de Waal'),
     '"Supreme Court", "Service Station", "Timol de" and "Auditors Name Postal Address" are not parties; "Zeyd Timol" and "E de Waal" are');
   ok(E.voLooksLikePerson('Margaret Court') && E.voLooksLikePerson('Thanh Le') && E.voLooksLikePerson('Li Bin') && E.voLooksLikePerson('Johan Van Der Merwe') && !E.voLooksLikePerson('Johan Van Der') && !E.voLooksLikePerson('Robert De') && !E.voLooksLikePerson('High Court') && !E.voLooksLikePerson('Court Order') && !E.voLooksLikePerson('Constitutional Court'),
     '"Margaret Court", "Thanh Le", "Li Bin" and "Johan Van Der Merwe" are people; "Johan Van Der", "Robert De", "High Court", "Court Order" and "Constitutional Court" are not');
+  // The sealed report's other false parties: labels, OCR variants, case titles, addresses, headings, defined terms.
+  for (const bad of ['Registration Number', 'VAT REGISTRATION NUMBER', 'Limited Registration Number', 'Audifors Name Posts', 'Audifors Posts', 'Service Statlon', 'ADD DISBURSEMENTS I R', 'V BRIGHT IDEA PROJECTS', 'CENTURY CITY', 'Crompton Street', 'Franchise Interest', 'AD PARAGRAPH', 'Associates Tel', 'AS WITNESSES', 'Protection Act', 'Trade Secrets', 'Accounting Period', 'Approved Supplier', 'Branded Marketer', 'RAS Retail Margin', 'Operating Expenses Margin', 'BEREA ROAD', 'Derby Place', 'Lakeside Office Park', 'Zulu Natal', 'All Fuel'])
+    ok(!E.voLooksLikePerson(bad), 'not a party: "' + bad + '"');
+  for (const good of ['J. P. Smith', 'Linda Park', 'Barnie Barnard', 'E de Waal', 'Sipho Dlamini'])
+    ok(E.voLooksLikePerson(good), 'still a party: "' + good + '"');
+  ok(E.voExtractParties('Seton Smith & Associates\n\nTel 021 556 2322').every(p => p.name !== 'Associates Tel') && E.voExtractParties('1.1.59 "New to All Fue/s/Caltex" means an All Fuel outlet').every(p => !/^All Fue/.test(p.name)), 'a name never spans a line break, and one cut by a slash is a fragment');
   const ptys = E.voExtractParties('Johan Van Der Merwe signed for the Lessee and Margaret Court for the Lessor.');
   ok(ptys.some(p => p.name === 'Johan Van Der Merwe') && ptys.some(p => p.name === 'Margaret Court'), 'a four-token particle name and a surname that is also a word are bound from the evidence (' + JSON.stringify(ptys) + ')');
 

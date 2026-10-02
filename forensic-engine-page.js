@@ -1075,7 +1075,7 @@ var DETECTORS = {
       // other words (hash, seal id, zone name, page marker) is the stamp. An
       // email header's or a till slip's own timestamp is the record's and
       // is still checked.
-      if (/^\s*\d{1,2}[:.]\d{2}/.test(String(dates[d].after || '')) && voIsStampContext(textBlocks[dates[d].page], dates[d].idx, dates[d].raw.length)) continue;
+      if (VO_CLOCK_AFTER_RE.test(String(dates[d].after || '')) && voIsStampContext(textBlocks[dates[d].page], dates[d].idx, dates[d].raw.length)) continue;
       var okDMY = voValidMD(b, a, year); // day=a, month=b  (DD/MM/YYYY)
       var okMDY = voValidMD(a, b, year); // month=a, day=b  (MM/DD/YYYY)
       if (!okDMY && !okMDY) {
@@ -3949,7 +3949,10 @@ var VO_SEAL_FURNITURE_RES = [
 // ("15/03/2024 10:30 POS purchase"), an email header ("Sent: 31/02/2024
 // 14:32") or a till slip keeps its date: those are the record's own
 // timestamps, and D03/D04 read them.
-var VO_STAMP_RE = /(^|[^\d\/])(\d{0,2}\/\d{1,2}\/20\d{2}\s+\d{1,2}[:.]\d{2}(?:[:.]\d{2})?)/g;
+// The clock after a stamp date as OCR leaves it: "15:41:47", "1S:41:47",
+// "15 41 47", "l5.41.47", "| 15:41:47". Only ever read in footer context.
+var VO_CLOCK_AFTER_RE = /^\s*\|?\s*[\dOlIS]{1,2}[:. ]?[\dOlIS]{2}(?:[:. ][\dOlIS]{2})?/;
+var VO_STAMP_RE = /(^|[^\d\/])(\d{0,2}\/\d{1,2}\/20\d{2}\s*\|?\s*[\dOlIS]{1,2}[:. ]?[\dOlIS]{2}(?:[:. ][\dOlIS]{2})?)/g;
 var VO_FOOTER_CONTEXT_RE = /sha[\s-]*512|[0-9a-f]{12,}\.{2,3}|\bVO-[0-9A-Z]{4,}|africa\s*\/\s*johannes|s[e3]al[e3]d\s+[o0]r[i1l]g[i1l]nal|v[e3]rum\s+[o0]mn[i1l]s|opentimestamps|patent\s+pending|\|\s*\d{1,4}\s*\/\s*\d{1,4}\b/i;
 function voIsStampContext(text, idx, len) {
   var t = String(text || '');
@@ -4297,7 +4300,14 @@ var VO_NON_PERSON_TOK = (function () {
     // From the AllFuels/Des Caltex franchise-agreement OCR: a scanned contract's
     // "Yes/No" schedule cells were bound as a party ("Yes No"). "Yes"/"No" are
     // never person names; losing them is costless.
-    'yes no').split(' ');
+    'yes no ' +
+    // evidence-bundle-4 critique: the detector's own label ("Registration
+    // Number"), form and address words, headings and defined terms were
+    // parties ("ADD DISBURSEMENTS I R", "Franchise Interest", "AS WITNESSES",
+    // "Associates Tel", "CENTURY CITY", "Crompton Street"). None is a name.
+    'registration number vat name tel telephone cell mobile witnesses witness act period supplier margin ' +
+    'street road avenue boulevard city office disbursements paragraph interest add all fuel franchise ' +
+    'retail operating accounting approved branded secrets marketer expenses').split(' ');
   for (var i = 0; i < words.length; i++) m[words[i]] = 1;
   return m;
 })();
@@ -4332,7 +4342,11 @@ var VO_NON_PERSON_PHRASE = (function () {
     // English surname ("Margaret Court"), so the court is stopped as a
     // phrase, never as a token.
     'supreme court|high court|magistrates court|magistrate court|constitutional court|' +
-    'labour court|court order|court roll|court of appeal|court file').split('|');
+    'labour court|court order|court roll|court of appeal|court file|' +
+    'registration number|vat registration number|limited registration number|company registration number|' +
+    'franchise interest|trade secrets|accounting period|approved supplier|branded marketer|retail margin|' +
+    'ras retail margin|operating expenses margin|office park|lakeside office park|derby place|century city|' +
+    'zulu natal|kwazulu natal|kwa zulu natal|as witnesses|ad paragraph|consumer protection act|protection act').split('|');
   for (var i = 0; i < phrases.length; i++) m[phrases[i]] = 1;
   return m;
 })();
@@ -4345,6 +4359,14 @@ var VO_NON_PERSON_PHRASE = (function () {
 function voCleanPersonName(n) {
   return String(n == null ? '' : n).replace(/[\u2019']s$/i, '').replace(/[\s.,;:]+$/, '').trim();
 }
+var VO_NON_PERSON_TOK6 = (function () { var out = []; for (var k in VO_NON_PERSON_TOK) if (k.length >= 6) out.push(k); return out; })();
+function voNearNonPersonTok(tok) {
+  for (var i = 0; i < VO_NON_PERSON_TOK6.length; i++) {
+    var k = VO_NON_PERSON_TOK6[i];
+    if (Math.abs(k.length - tok.length) <= 1 && voEditDistance(tok, k) <= 1) return true;
+  }
+  return false;
+}
 function voLooksLikePerson(name) {
   var toks = String(name == null ? '' : name).split(/\s+/).filter(Boolean);
   if (toks.length < 2 || toks.length > 4) return false;
@@ -4355,6 +4377,15 @@ function voLooksLikePerson(name) {
     var bare = toks[i].replace(/[.'’-]+$/, '');
     if (!bare) return false;
     if (VO_NON_PERSON_TOK[bare.toLowerCase()]) return false;
+    // OCR's "Audifors", "Statlon", "Posts": a token of six letters or more
+    // within one edit of a stop token is that stop token.
+    if (bare.length >= 6 && /^[A-Za-z]+$/.test(bare) && voNearNonPersonTok(bare.toLowerCase())) return false;
+    // A single letter after the first token is a case title's "v" or an
+    // invoice column ("ADD DISBURSEMENTS I R"), unless written as an initial
+    // with its period ("J. P. Smith"); a single first letter before an
+    // all-caps word is "V BRIGHT IDEA PROJECTS".
+    if (bare.length === 1 && i > 0 && !/\.$/.test(toks[i])) return false;
+    if (bare.length === 1 && i === 0 && toks.length > 1 && /^[A-Z]{2,}$/.test(toks[1].replace(/[.'’-]+$/, ''))) return false;
     if (i < toks.length - 1 && /\.$/.test(toks[i]) && bare.length > 1) return false; // sentence end mid-run
     // OCR garbage is not a party: a case flip inside a word ("YWoODBETS",
     // "YooDRETS" — a scanned statement's "HOLLYWOODBETS"), a word of four or
@@ -4388,8 +4419,12 @@ function voExtractParties(text) {
   // match end before the accent ("Marius Nortj"). Unicode-aware lookarounds.
   // Up to four tokens, so a Title-Case particle name ("Johan Van Der Merwe")
   // is read whole rather than cut to a rejected "Johan Van Der".
-  var nameRe = new RegExp("(?<![" + VO_NAME_ANY + "])([" + VO_NAME_UC + "][a-z\u00DF-\u024F]{1,}(?:\\s+[" + VO_NAME_UC + "][a-z\u00DF-\u024F'\u2019.]+){1,3})(?![" + VO_NAME_ANY + "])", "g"), nm;
+  // A name never spans a line break ("Seton Smith & Associates\n\nTel 021"
+  // is not "Associates Tel"), and one cut by a slash or a digit ("All Fue/s")
+  // is a fragment.
+  var nameRe = new RegExp("(?<![" + VO_NAME_ANY + "])([" + VO_NAME_UC + "][a-z\u00DF-\u024F]{1,}(?:[ \\t]+[" + VO_NAME_UC + "][a-z\u00DF-\u024F'\u2019.]+){1,3})(?![" + VO_NAME_ANY + "])", "g"), nm;
   while ((nm = nameRe.exec(s)) !== null) {
+    if (/[\/\d]/.test(s.charAt(nm.index + nm[0].length))) continue;
     if (VO_NAME_STOP[nm[1].split(/\s+/)[0]]) continue;
     if (!voLooksLikePerson(nm[1])) continue; // seal boilerplate / OCR garbage
     add(nm[1], 'name');
@@ -4501,13 +4536,22 @@ function voBuildNameRoster(blocks, minMentions) {
   return out.slice(0, VO_ROSTER_MAX);
 }
 
-var VO_DATE_TOKEN_RE = /\b(?:\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-.]\d{1,2}[\/\-.]\d{2,4})\b/gi;
+// A dotted triple is a date only with a four-digit year: "1.1.50" and
+// "2.3.12" are clause numbers in legal text. A numeric token that follows a
+// clause, paragraph, section or item cue ("clause 12.3.2017") is a reference,
+// and a date within forty characters before the footer's "Johannesburg" is
+// the stamp however OCR left the clock.
+var VO_DATE_TOKEN_RE = /\b(?:\d{1,2}\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?,?\s+\d{4}|(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\.?\s+\d{1,2},?\s+\d{4}|\d{4}-\d{2}-\d{2}|\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}|\d{1,2}\.\d{1,2}\.\d{4})\b/gi;
+var VO_CLAUSE_CUE_RE = /(?:\b(?:clause|cl|para|paragraph|section|sec|item|annexure|schedule)\.?|\bC)\s*$/i;
 function voExtractDates(text) {
   var s = String(text == null ? '' : text), out = [], seen = {}, m;
   VO_DATE_TOKEN_RE.lastIndex = 0;
   while ((m = VO_DATE_TOKEN_RE.exec(s)) !== null) {
+    var after = s.slice(m.index + m[0].length, m.index + m[0].length + 60);
     // A date followed by a clock time among a seal footer's words is the stamp, not a stated date.
-    if (/^\s*\d{1,2}[:.]\d{2}/.test(s.slice(m.index + m[0].length, m.index + m[0].length + 8)) && voIsStampContext(s, m.index, m[0].length)) continue;
+    if (VO_CLOCK_AFTER_RE.test(after.slice(0, 14)) && voIsStampContext(s, m.index, m[0].length)) continue;
+    if (/^[^.]{0,40}?johannesburg/i.test(after)) continue;
+    if (/^\d/.test(m[0]) && VO_CLAUSE_CUE_RE.test(s.slice(Math.max(0, m.index - 12), m.index))) continue;
     var v = m[0].replace(/\s+/g, ' ').trim(), k = v.toLowerCase();
     if (!seen[k]) { seen[k] = true; out.push(v); }
   }
@@ -4529,9 +4573,13 @@ function voSentenceAround(text, needle) {
   if (at === -1) return null;
   var start = Math.max(0, at - 400), end = Math.min(flat.length, at + key.length + 400);
   var seg = flat.slice(start, end), rel = at - start;
+  // No sentence boundary on a form or OCR page: the window closes to 160
+  // characters each side, so a letterhead date never dates the quote.
   var sb = seg.lastIndexOf('. ', rel); if (sb === -1) sb = seg.lastIndexOf('; ', rel);
-  var se = seg.indexOf('. ', rel + key.length); if (se === -1) se = seg.length;
-  return seg.slice(sb === -1 ? 0 : sb + 2, se);
+  var se = seg.indexOf('. ', rel + key.length);
+  var from = sb === -1 ? Math.max(0, rel - 160) : sb + 2;
+  var to = se === -1 ? Math.min(seg.length, rel + key.length + 160) : se;
+  return seg.slice(from, to);
 }
 
 function voExtractQuotes(text) {
@@ -4622,7 +4670,7 @@ function voAnchorEnrich(findings, textBlocks) {
     // elsewhere on the page — the evidence-bundle-4 timeline dated a
     // registration-number finding "1 October 2005" from an unrelated line and
     // pinned others to the seal stamp.
-    var dates = voExtractDates(ev);
+    var dates = voExtractDates(ev).filter(function (d) { return voDateSortKey(d) !== null; });
     if (!dates.length) {
       var pageTxt = ctx.slice(ev.length);
       var qs = voExtractQuotes(ev);
