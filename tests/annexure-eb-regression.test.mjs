@@ -245,7 +245,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(/async function voPreflightForensicService/.test(page) && /var _pre = await voPreflightForensicService\(\);/.test(page) && /no forensic report was produced and nothing was sealed/.test(page),
     'forensic mode pre-flights the service and refuses to produce an unreviewed forensic report on a host with no API');
   ok(/function voOcrAskToContinue/.test(page) && /candidates = candidates\.concat\(cappedIdx\);/.test(page), 'the OCR cap asks once whether to read the remaining scanned pages');
-  ok(/findings_json_version: '1\.3\.0'/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page), 'findings JSON v1.3.0 carries review_status and ocr_provenance');
+  ok(/findings_json_version: '1\.4\.0'/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page) && /secondary_capped: /.test(page) && /ocr_anchored: /.test(page), 'findings JSON v1.4.0 carries review_status, ocr_provenance, secondary_capped and ocr_anchored');
   // Behavioural: the pre-flight against stubbed answers.
   const preSrc = page.slice(page.indexOf('var VO_PREFLIGHT_TIMEOUT_MS'), page.indexOf('function voShowPreflightBlock'));
   const mk = new Function('AbortController', 'setTimeout', 'clearTimeout', preSrc + '\nreturn { voPreflightForensicService, voPreflightMessage };');
@@ -915,7 +915,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
       T = await pageText(await R.build(opts));
       N = await pageText(await R.buildHumanReport(Object.assign({}, opts, {
         humanSections: {
-          counter_narratives: { provenance: 'ai', text: 'The respondent may have signed the lease under pressure from the franchisor.\nThis account conflicts with the record at p. 7, which states "Commencement Date 1/8/2001". Assessment: contradicted by the record at p. 7.\nThe franchisor states that the lease commenced on 1 August 2001 and ran its full term.\nRecord:\nThis account conflicts with the record at p. 9, which states "commenced 1/8/2003". Assessment: contradicted by the record at p. 9.\nThe respondent may have paid the deposit in cash.\nThe record at p. 11 states "no deposit received". Assessment: contradicted by the record at p. 11.', gate: { dropped: 1 } },
+          counter_narratives: { provenance: 'ai', text: 'The respondent may have signed the lease under pressure from the franchisor.\n\nThis account conflicts with the record at p. 7, which states "Commencement Date 1/8/2001". Assessment: contradicted by the record at p. 7.\n\nThe franchisor states that the lease commenced on 1 August 2001 and ran its full term.\n\nRecord:\n\nThis account conflicts with the record at p. 9, which states "commenced 1/8/2003". Assessment: contradicted by the record at p. 9.\n\nThe respondent may have paid the deposit in cash. (p. 20)\n\nThe record at p. 11 states "no deposit received". Assessment: contradicted by the record at p. 11.', gate: { dropped: 1 } },
           // a section the render-time gate rejects whole: its server-gate count still counts (Sourcery, PR #212)
           legal_framework: { provenance: 'ai', text: 'This may constitute fraud. It could indicate dishonesty by the franchisor.', gate: { dropped: 2 } }
         },
@@ -943,6 +943,11 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ok(!/can alter it afterwards|preserves, forever|CANNOT BE ALTERED|immutable instrument/.test(T + N) && /HOW ANY CHANGE TO THIS RECORD IS DETECTED/.test(T + N), 'no page says the record cannot be altered or is immutable; the seal section says how a change is detected');
     ok(!/\b\d+ verified findings? (?:are|is|stands?)\b/.test(T + N) && /Recorded below:\s+3 findings:\s+2 verified at full weight/.test(T) && /On the record above:\s+3 findings:\s+2 verified at full weight/.test(T), 'every count of findings tells the OCR-anchored one apart: the executive summary and the summary trailer too, and no undivided "N verified findings" sentence remains (' + JSON.stringify([(T.match(/Recorded below[^.]{0,80}/) || [''])[0], ((T + N).match(/\b\d+ verified findings? (?:are|is|stands?)\b[^.]{0,60}/) || [''])[0]]) + ')');
     ok(/Contract, Lease & Franchise/.test(T) && !/Legal subject: CONTRACT\b/.test(T), 'the CONTRACT subject prints its label, never the raw key');
+    ok(!/\(p\. 20\)/.test(N), 'a removed claim leaves no stray page cite behind, and the cite does not keep its rebuttal alive');
+    const srFx = 'Mr X states: "I signed the lease on 3 May 2020." (p. 12)\n\nThis account conflicts with the record at p. 7. Assessment: contradicted by the record at p. 7.\n\nRecord:\n\nMs Z states that the rent was paid in full. (p. 14)\n\nThis account conflicts with the record at p. 9. Assessment: contradicted by the record at p. 9.';
+    const sr = R._scrubRebuttals(srFx);
+    const srBlocks = R._narrativeBlocks(sr.text);
+    ok(sr.text.split('\n\n').length === 5 && /\(p\. 12\)$/m.test(sr.text) && srBlocks.some(b => b.kind === 'heading' && b.text === 'Record') && srBlocks.filter(b => b.kind === 'para').length === 4, 'the rebuttal scrub keeps the server\'s paragraphs and headings: five blocks, "Record" a heading, each claim and rebuttal its own paragraph, the page cite kept with its claim (' + JSON.stringify(srBlocks.map(b => b.kind)) + ')');
     const ct20Law = R._statutesForFinding({ type: 'CT20', severity: 2 }, jur0).map(x => x.provisions.join('; ')).join(' ');
     ok(/Common-law fraud/.test(ct20Law) && !/Corrupt Activities|Consumer Protection/.test(ct20Law) && !/Corrupt Activities/.test(R._statutesForFinding({ type: 'CT02', severity: 2 }, jur0).map(x => x.provisions.join('; ')).join(' ')), 'a registration-number note and any Low finding carry no corruption or consumer statute');
   };

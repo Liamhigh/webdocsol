@@ -2128,7 +2128,7 @@ function secSealedFindings(ctx, data) {
   if (subst.length === 0) return;
   ctx.newBodyPage();
   ctx.heading('5. SEALED FINDINGS');
-  // §15.3 REQUIRED wording, verbatim: "The record contains [X] contradictions.
+  // §15.3 REQUIRED wording (the shape; the count now reads through voCountPhrase): "The record contains [X] contradictions.
   // The following are established."
   ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
   var CAP = 20;
@@ -3246,6 +3246,48 @@ function scrubNarrative(text) {
 }
 
 
+// A rebuttal whose claim sentence the gate removed is an orphan ("This
+// account conflicts with the record at p. 7 … Assessment: …" with nothing it
+// answers); the block goes whole, and its sentences are counted apart from
+// the gate's removals. A rebuttal is recognised in the narrator's own
+// vocabulary, with a bullet or emphasis marker; a heading-shaped line
+// ("Record:") between a claim and its rebuttal keeps the claim's flag; a
+// trailing page cite "(p. 20)" is not a sentence of its own, so a removed
+// claim never leaves a stray cite behind to keep its rebuttal alive. The
+// server's paragraphing survives: paragraphs stay split by blank lines (the
+// renderer splits on them), lines inside a paragraph by single newlines.
+var REBUTTAL_OPEN_RE = /^\s*(?:[-\u2022*]|\d{1,2}[.)])?\s*\**\s*(?:this (?:account|statement|version) conflicts|the record (?:at p\.|states|it conflicts)|assessment\s*[:\u2014\u2013-])/i;
+var REBUTTAL_ASSESS_RE = /\bassessment\s*[:\u2014\u2013-]\s*\**\s*(?:contradicted|not contradicted)/i;
+var TRAILING_CITE_RE = /\s*[\(\[]\s*pp?\.\s*\d[\d\s,\u2013-]*[\)\]]\s*$/;
+function isRebuttal(t) { return REBUTTAL_OPEN_RE.test(t) || REBUTTAL_ASSESS_RE.test(t); }
+function scrubRebuttals(text) {
+  var paras = String(text || '').split(/\n{2,}/), out = [], kept = 0, dropped = 0, orphaned = 0, prevClaimKept = false;
+  for (var p = 0; p < paras.length; p++) {
+    var lines = paras[p].split(/\n/), keptLines = [];
+    for (var i = 0; i < lines.length; i++) {
+      var line = lines[i];
+      if (!line.trim()) continue;
+      var cite = '', mc = line.match(TRAILING_CITE_RE);
+      if (mc) { cite = mc[0].trim(); line = line.slice(0, mc.index); }
+      var sc = scrubNarrative(line);
+      if (isRebuttal(line)) {
+        if (!prevClaimKept) { orphaned += sc.kept; dropped += sc.dropped; continue; }
+      } else if (isRebuttal(sc.text)) {
+        orphaned += sc.kept; dropped += sc.dropped; prevClaimKept = false; continue;
+      } else if (sc.kept > 0) {
+        prevClaimKept = true;
+      } else if (sc.dropped > 0) {
+        prevClaimKept = false;
+      }
+      if (sc.text.trim()) { keptLines.push(sc.text + (cite ? ' ' + cite : '')); kept += sc.kept; }
+      dropped += sc.dropped;
+    }
+    if (keptLines.length) out.push(keptLines.join('\n'));
+  }
+  return { text: out.join('\n\n'), kept: kept, dropped: dropped, orphaned: orphaned };
+}
+
+
 // Two spellings of the same party? Prefix match ("Marius Nortj" /
 // "Marius Nortje"), or the same surname with agreeing first initial
 // ("L. Highcock" declared vs "Liam Highcock" read from the record).
@@ -4321,35 +4363,6 @@ async function buildHumanReport(opts) {
 
   var sectionsAi = 0, sectionsAll = 0, gateDroppedClient = 0, gateDroppedServer = 0, gateOrphaned = 0;
 
-  // A rebuttal whose claim sentence the gate removed is an orphan ("This
-  // account conflicts with the record at p. 7 … Assessment: …" with nothing
-  // it answers); the block goes whole, and its sentences are counted.
-  // A heading-shaped line ("Record:") between a claim and its rebuttal keeps
-  // the claim's flag; only a prose paragraph resets it. Orphaned sentences
-  // the gate itself passed are counted apart from the gate's removals.
-  var REBUTTAL_OPEN_RE = /^\s*(?:[-\u2022*]|\d{1,2}[.)])?\s*\**\s*(?:this (?:account|statement|version) conflicts|the record (?:at p\.|states|it conflicts)|assessment\s*[:\u2014\u2013-])/i;
-  var REBUTTAL_ASSESS_RE = /\bassessment\s*[:\u2014\u2013-]\s*\**\s*(?:contradicted|not contradicted)/i;
-  var isRebuttal = function (t) { return REBUTTAL_OPEN_RE.test(t) || REBUTTAL_ASSESS_RE.test(t); };
-  function scrubRebuttals(text) {
-    var paras = String(text || '').split(/\n+/), out = [], kept = 0, dropped = 0, orphaned = 0, prevClaimKept = false;
-    for (var i = 0; i < paras.length; i++) {
-      var para = paras[i];
-      if (!para.trim()) continue;
-      var sc = scrubNarrative(para);
-      if (isRebuttal(para)) {
-        if (!prevClaimKept) { orphaned += sc.kept; dropped += sc.dropped; continue; }
-      } else if (isRebuttal(sc.text)) {
-        orphaned += sc.kept; dropped += sc.dropped; prevClaimKept = false; continue;
-      } else if (sc.kept > 0) {
-        prevClaimKept = true;
-      } else if (sc.dropped > 0) {
-        prevClaimKept = false;
-      }
-      if (sc.text.trim()) { out.push(sc.text); kept += sc.kept; }
-      dropped += sc.dropped;
-    }
-    return { text: out.join('\n'), kept: kept, dropped: dropped, orphaned: orphaned };
-  }
 
   function provisionsText(f) {
     var list = statutesForFinding(f, jur);
@@ -4673,7 +4686,7 @@ var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buil
   _listPhrase: listPhrase, _narrativeMeaning: narrativeMeaning,
   _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
   _narrativeBlocks: narrativeBlocks, _pageRanges: pageRanges,
-  _fmtLocation: fmtLocation, _pageNumbers: pageNumbers, _scrubNarrative: scrubNarrative,
+  _fmtLocation: fmtLocation, _pageNumbers: pageNumbers, _scrubNarrative: scrubNarrative, _scrubRebuttals: scrubRebuttals,
   _contradictionSides: contradictionSides, _establishesOf: establishesOf,
   _docsForLocation: docsForLocation, _crossDocNote: crossDocNote, _ocrTouched: ocrTouched,
   _documentParties: documentParties, _effectiveParties: effectiveParties,
