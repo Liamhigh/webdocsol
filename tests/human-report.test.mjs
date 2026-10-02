@@ -175,7 +175,7 @@ ok(report.indexOf('.replace(/\\b(?:pp?|pgs?)\\.(?=\\s*\\d)/gi') >= 0, 'the share
   ok(wMis && wMis === rMis, 'the misrepresentation pillar takes exactly the elements table\'s misrepresentation types (' + wMis + ' | ' + rMis + ')');
   ok(wLoss && wLoss === rLoss, 'the loss pillar takes exactly the elements table\'s prejudice types (' + wLoss + ' | ' + rLoss + ')');
   ok(/knowledge: \[\]/.test(worker) && /inducement: \[\]/.test(worker), 'no finding type evidences knowledge or inducement: those pillars are INSUFFICIENT');
-  ok(/section === 'four_pillars' \? idType : null/.test(worker), 'the pillar test runs on the four-pillars section only');
+  ok(/humanGate\(raw, ids, pages, corpusNorm, idType, section === 'four_pillars'\)/.test(worker) && /HUMAN_PILLAR_CLAIM_RE/.test(worker), 'the full pillar test runs on four pillars; elsewhere a sentence that claims a pillar is evidenced is held to the same types');
 }
 
 console.log(`\n[human-report] PASS=${pass} FAIL=${fail}`);

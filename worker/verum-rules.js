@@ -1851,13 +1851,14 @@ function humanGate(text, ctxIds, ctxPages, corpusNorm, idType, pillarMode) {
     }
     const lines = trimmed.split(/\n/);
     const keptLines = [];
+    let paraPillars = null; // an inline label's pillar, for this paragraph only
     for (const rawLine of lines) {
-      if (pillarMode && humanPillarHeading(rawLine)) { curPillars = humanPillarHeading(rawLine); keptLines.push(rawLine.replace(/[*_#`]/g, '').trim()); continue; }
+      if (pillarMode && humanPillarHeading(rawLine)) { curPillars = humanPillarHeading(rawLine); paraPillars = null; keptLines.push(rawLine.replace(/[*_#`]/g, '').trim()); continue; }
       const bm = rawLine.match(/^\s*(?:[-•*]|\d{1,2}[.)])\s+(.*\S)\s*$/);
       const body = bm ? bm[1] : rawLine;
       // An inline label ("Loss: the stated total …") opens its pillar for the
       // rest of the paragraph.
-      if (pillarMode) { const lab = body.match(/^\s*(?:\*\*|__)?([^:*_]{3,60}?)(?:\*\*|__)?\s*:\s+\S/); if (lab && humanPillarHeading(lab[1])) curPillars = humanPillarHeading(lab[1]); }
+      if (pillarMode) { const lab = body.match(/^\s*(?:\*\*|__)?([^:*_]{3,60}?)(?:\*\*|__)?\s*:\s+\S/); if (lab && humanPillarHeading(lab[1])) paraPillars = humanPillarHeading(lab[1]); }
       const sentences = humanSplitSentences(body);
       const keptHere = [];
       for (const sentence of sentences) {
@@ -1878,7 +1879,7 @@ function humanGate(text, ctxIds, ctxPages, corpusNorm, idType, pillarMode) {
           }
         }
         if (!bad && humanSentenceBanned(s)) bad = 'language';
-        if (!bad && humanPillarBad(s, curPillars, types, pillarMode)) bad = 'pillar';
+        if (!bad && humanPillarBad(s, paraPillars || curPillars, types, pillarMode)) bad = 'pillar';
         if (!bad && !exact && !ac.anchored && !quoted && !humanAnchorFree(s)) bad = 'anchor';
         if (bad) { stats.dropped++; stats[bad]++; continue; }
         stats.kept++;

@@ -245,7 +245,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(/async function voPreflightForensicService/.test(page) && /var _pre = await voPreflightForensicService\(\);/.test(page) && /no forensic report was produced and nothing was sealed/.test(page),
     'forensic mode pre-flights the service and refuses to produce an unreviewed forensic report on a host with no API');
   ok(/function voOcrAskToContinue/.test(page) && /candidates = candidates\.concat\(cappedIdx\);/.test(page), 'the OCR cap asks once whether to read the remaining scanned pages');
-  ok(/findings_json_version: '1\.6\.0'/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page) && /secondary_capped: /.test(page) && /ocr_anchored: /.test(page) && /ocr_held: /.test(page), 'findings JSON v1.5.0 carries review_status, ocr_provenance, secondary_capped, ocr_anchored and ocr_held');
+  ok(/findings_json_version: '1\.6\.0'/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page) && /secondary_capped: /.test(page) && /ocr_anchored: /.test(page) && /ocr_held: /.test(page), 'findings JSON v1.6.0 carries review_status, ocr_provenance, secondary_capped, ocr_anchored and ocr_held');
   // Behavioural: the pre-flight against stubbed answers.
   const preSrc = page.slice(page.indexOf('var VO_PREFLIGHT_TIMEOUT_MS'), page.indexOf('function voShowPreflightBlock'));
   const mk = new Function('AbortController', 'setTimeout', 'clearTimeout', preSrc + '\nreturn { voPreflightForensicService, voPreflightMessage };');
@@ -1147,12 +1147,14 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
         },
         humanProvenance: { sectionsAttempted: 3, model: 'test-narrator' }
       })));
-      D = await pageText(await R.build(Object.assign({}, opts, { identity: { parties: 'Sanarth Fuels (Respondent)' } })));
+      // Declared, and named in the finding's own words: the party it concerns.
+      D = await pageText(await R.build(Object.assign({}, opts, { identity: { parties: 'Sanarth Fuels (Respondent)' },
+        findings: Object.assign({}, opts.findings, { findings: opts.findings.findings.concat([{ type: 'CT14', severity: 5, location: 'Page 19', evidence: 'Conflicting entity-status claims: "Sanarth Fuels (Pty) Ltd is registered and active" (registered, page 19) vs "Sanarth Fuels (Pty) Ltd is deregistered" (deregistered, page 20)', anchor: { where: [19, 20], who: sanarth, when: [], quote: [] } }]) }) })));
       L = await pageText(await R.build(Object.assign({}, opts, { aiNarrative: 'Finding F1 (CT14), recorded at Page 13, states the status twice [F1]. The findings quoted above are the highest-ranked of the findings supplied for narrative reporting [F1].', aiNarrativeSource: 'local' })));
     } finally { console.log = quiet; }
     const TN = T + N;
     ok(!/It concerns Sanarth/.test(TN) && /Named on the cited page[s]? \(descriptive, not an attribution\):[^.]{0,80}Sanarth Fuels/.test(T), 'a company the engine found on the page is named descriptively, never as the party a finding concerns (' + ((T.match(/Named on the cited page[^.]{0,120}/) || [''])[0]) + ')');
-    ok(/It concerns Sanarth Fuels/.test(D), 'a party the case details declare, and the finding names, is still the party it concerns');
+    ok(/It concerns Sanarth Fuels/.test(D) && (D.match(/It concerns Sanarth Fuels/g) || []).length === 1, 'a party the case details declare is the party a finding concerns only when the finding\'s own words name it (once here: the CT14 naming Sanarth Fuels, not the findings that only share its page)');
     ok(!/Sanarth Fuels — the record states/.test(N), 'the counter-narratives never quote the author\'s words as a named company\'s own statement');
     ok(!/TAMPER FOUND/.test(T) && /INTEGRITY SIGNAL FOUND/.test(T) && /CONTACT CONFLICT FOUND/.test(T) && !/COMMUNICATION GAP FOUND/.test(T), 'the Nine-Brain blocks say what each detector measures: no "TAMPER FOUND" over a sentence about an unsigned agreement, no message-gap header over a contact conflict');
     ok(!/Behavioural Scorecard|Top liabilities|top liabilities/.test(TN) && /Parties named on the pages carrying findings/.test(T) && /Most serious findings:/.test(T), 'no "scorecard" over the people a record names, and no "liabilities"');
@@ -1186,13 +1188,76 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(/merged\.discarded = \(merged\.discarded \|\| 0\) \+ 1/.test(pageSrc), 'a critical-evidence batch the server\'s gate discarded is counted');
   const certSrc = pageSrc.slice(pageSrc.indexOf('async function buildAnchorCertificate('), pageSrc.indexOf('async function buildAnchorCertificate(') + 12000);
   ok(!/no one can edit or delete|not even Verum Omnis|is anchored to the Bitcoin blockchain|cannot be forged|unique signature|investigator’s assessment|no need to trust Verum Omnis/.test(certSrc), 'the anchor certificate claims no permanent record, no forgery-proof signature and no trust-free check while its header says PENDING');
-  ok(/ORIGINAL UPLOAD SHA-512 \(BEFORE THE SEAL WAS APPLIED\)/.test(certSrc) && /SEALED FILE SHA-512 \(THE FILE AS DELIVERED\)/.test(certSrc) && /OTS DIGEST \(SHA-256 OF THE ORIGINAL SHA-512 HEX TEXT\)/.test(certSrc) && /sealedSha512: window\._voSealedFileHash \|\| null/.test(pageSrc),
-    'the certificate says which bytes each fingerprint belongs to, and prints the sealed file\'s own fingerprint');
-  ok(/existed no later than that block\\'s time/.test(certSrc) && /the sealing device\\'s clock; the anchor does not prove it/.test(certSrc) && /Upload the sealed PDF \(not this certificate\)/.test(certSrc), 'the certificate says what the Bitcoin block proves (an upper bound, not the device clock) and which file to upload');
+  ok(/ORIGINAL UPLOAD SHA-512 \(BEFORE THE SEAL WAS APPLIED\)/.test(certSrc) && /DELIVERED FILE SHA-512 \(THE SEALED FILE AS DELIVERED\)/.test(certSrc) && /DELIVERED FILE SHA-512 \(THE PASSWORD-PROTECTED COPY SENT\)/.test(certSrc) && /OTS DIGEST \(SHA-256 OF THE ORIGINAL SHA-512 HEX TEXT\)/.test(certSrc)
+    && /sealedSha512: \(password && encryptedBytes\) \? await computeSHA512\(encryptedBytes\) : \(sealedBytes \? await computeSHA512\(sealedBytes\) : null\)/.test(pageSrc) && !/sealedSha512: window\._voSealedFileHash/.test(pageSrc),
+    'the certificate says which bytes each fingerprint belongs to, and prints the delivered file\'s real SHA-512 (as sha512sum computes it; the password-protected copy when one was sent), never the VO-SEAL2 self-check value');
+  ok(/existed no later than that block\\'s time/.test(certSrc) && /the sealing device\\'s clock; the anchor does not prove it/.test(certSrc) && /Upload this certificate there to check the anchor status of its digest/.test(certSrc) && /the password-protected copy must be opened with its password first/.test(certSrc) && /hs \? ' The delivered file/.test(certSrc), 'the certificate says what the Bitcoin block proves (an upper bound, not the device clock), which file to upload for which check, and mentions the delivered fingerprint only when it prints one');
   const vsrc = fs.readFileSync(path.join(process.cwd(), 'verify.html'), 'utf8');
   ok(!/court-ready and admissible|OpenTimestamps verified'|\(OTS-anchored\)|'ANCHORED — Bitcoin confirmation pending'|Seal Verified — Genuine|blockchain-anchored, timestamped read-receipt/.test(vsrc), 'verify.html claims no admissibility, no "OTS-anchored" hash and no "anchored" custody event before Bitcoin confirms');
   ok(/cannot tell a deliberately altered copy that was re-sealed from the original/.test(vsrc), 'verify.html says what the self-integrity check cannot show');
   ok(/function parseAnchorCertSubject/.test(vsrc) && /seal\.scheme === 'anchorcert'/.test(vsrc) && /meta\.otsDigest = seal\.otsDigest/.test(vsrc), 'verify.html recognises the anchor certificate and checks its digest instead of showing "No Seal Found"');
+}
+
+// ---- §18i The verification pass over §18 (2026-10-02) ----------------------
+// Five adversarial lenses re-ran the §18 change set against counterexamples;
+// each confirmed defect is pinned here with the reviewer's own reproduction.
+{
+  const fs = require('fs'), path = require('path');
+  const R = require('../forensic-report.js');
+  // Engine.
+  const cover = ['Submission to the Public Protector on the AllFuels matter. The lease was earlier sealed (Seal ID: VO-210B029F1A0B).', 'Annexure A From: accounts@standardbank.co.za The company XYZ Fuels (Pty) Ltd is registered and active.', 'From: payments@standandbank.co.za Please pay.', 'Tax Invoice 12 XYZ Fuels (Pty) Ltd is deregistered according to CIPC.'];
+  const cs = E.voSecondarySegments([], cover);
+  ok(cs.length === 1 && cs[0].start === 1 && cs[0].end === 1 && cs[0].submission === true, 'a cover submission in front of its annexures is secondary on its own pages only; the annexures stay the record (' + JSON.stringify(cs) + ')');
+  ok(E.voSecondarySegments([], ['Response to Plea IN THE HIGH COURT OF SOUTH AFRICA CASE NO 123/2026', 'the sealed lease (Seal ID: VO-210B029F1A0B).']).length === 0 && E.voSecondarySegments([], ['Reply to the plea of the defendant', 'the sealed lease (Seal ID: VO-210B029F1A0B).']).length === 0, 'a pleading (a court caption, a "Reply") is a primary record');
+  const dq = (t) => E.voDatedAfterReference([t], '2026-10-02T20:11:36Z');
+  ok(dq('Lease. Date: 14 August 2026 Commencement Date: 1 March 2027 Expiry Date: 28 February 2032').length === 0 && dq('Invoice Date: 25 September 2026 Due Date: 25 October 2026').length === 0 && dq('Notice of set down. Hearing Date: 9 November 2026').length === 0 && dq('Referred to: DG Date: 3 October 2026').length === 1,
+    'a commencement, expiry, due or hearing date is a date the document names, not its date; the plain "Date:" still notes');
+  ok(E.voDatedAfterReference(['Covering letter. Date: 1 October 2026', 'Minutes. Date: 3 October 2026'], '2026-10-02T20:11:36Z').length === 0 && E.voDatedAfterReference(['Covering letter. Date: 1 October 2026', 'Minutes. Date: 3 October 2026'], '2026-10-02T20:11:36Z', [1, 2]).length === 1, 'only a document\'s first page is read for its date (page 1, and each stated document\'s start)');
+  const csPage = 'The original MOU was countersigned by both parties on 1 March 2018 at the head office in Durban. The 2020 addendum that raised the rental was never countersigned by the operator, yet the lessor relied on it and demanded payment.';
+  ok(/^The 2020 addendum/.test(E.voSentenceAround(csPage, 'never countersigned') || '') && /^The 2020 addendum/.test(E.voSentenceAround(csPage, 'never countersigned by the operator') || ''), 'a whole-word lowercase cue is keyed as it stands: "never countersigned" is never shortened to "countersigned" and dated by the sentence that says the MOU WAS countersigned');
+  ok(/^On 4 May 2021/.test(E.voSentenceAround('On 4 May 2021 the lessor wrote to the tenant through Mr. Smith and stated that i was wrong to bill under section 12B.', 'ugh Mr. Smith and stated that i was wrong') || '') && E.voFragmentCut('ugh Mr. Smith and stated') === -1 && E.voFragmentCut('ication. The contradiction') === 7, 'an abbreviation ("Mr.", "no.", "s.") is not a sentence end; a real boundary inside a fragment still is');
+  const c23 = (b) => (DET.D32_DETECT_SIGNATURE_ANOMALY(b) || []).filter(f => f.type === 'CT23');
+  ok(c23(['Sanarth Fuels invoiced Mr Smith R45 000 under the unsigned agreements dated 1 March 2019 and 1 March 2020.']).length === 1 && c23(['The franchisor demands payment of rental under both unsigned leases for the sites.']).length === 1 && c23(['a common scheme involving unsigned agreements', 'Goodwill forfeiture clauses in unsigned agreements']).length === 0,
+    'a plural that names specific instruments ("the unsigned agreements dated …", "both unsigned leases") still fires; a category of documents does not');
+  const c37 = (a, b) => (DET.D25_DETECT_CONTACT_MISMATCH(['x@' + a + ' here', 'y@' + b + ' there']) || []).filter(f => f.type === 'CT37').length;
+  ok(c37('dmre.gov.za', 'dmpr.gov.za') === 0 && c37('justice.gov.za', 'justice.gov.uk') === 0 && c37('sars.gov.za', 'sars.go.za') === 1 && c37('sars.gov.za', 'sars.gov.io') === 1 && c37('nta.go.jp', 'nta.go.to') === 1 && c37('hmrc.gov.uk', 'hmrc.gov.us') === 1 && c37('canada.gc.ca', 'canada.go.ca') === 1 && c37('abcd.gov.io', 'abce.gov.io') === 1,
+    'only two domains under listed restricted government suffixes are exempt: a lookalike under an unrestricted or non-existent suffix ("go.za", "gov.io", "go.to", "gov.us") still fires');
+  const nm = (t) => E.voExtractParties(t).filter(x => x.kind === 'name').map(x => x.name);
+  ok(JSON.stringify(nm('Maria Campos signed.')) === '["Maria Campos"]' && JSON.stringify(nm('Texas Instruments')) === '["Texas Instruments"]' && JSON.stringify(nm('Pan African Resources plc')) === '["Pan African Resources"]' && nm('Trevenna Campus').length === 0 && nm('Petroleum Resources department').length === 0 && nm('Critical Point').length === 0,
+    'the submission\'s headings are stopped as phrases, so "Campos", "Instruments" and "… Resources" names survive');
+  ok(JSON.stringify(nm('Director General Jacob Mbele')) === '["Jacob Mbele"]' && nm('The Director General Jacob Mbele wrote.').every(n => !/^General/.test(n)) && JSON.stringify(nm('Assistant Commissioner Thabo Nkosi said')) === '["Thabo Nkosi"]' && JSON.stringify(nm('General Motors South Africa')) === '["General Motors"]',
+    '"Director General" is a role before a name; a cut window never binds "General Jacob"; "General" on its own is a word');
+  const hdr = E.voExtractPersonsFromContext('From Gary Highcock <gary@allfuels.co.za> Sent Monday To Rabia Seedat Cc Amrit Singh, Mohamed Ally Subject Lease', 8).map(x => x.name);
+  ok(['Gary Highcock', 'Rabia Seedat', 'Amrit Singh', 'Mohamed Ally'].every(n => hdr.indexOf(n) !== -1) && hdr.length === 4 && JSON.stringify(E.voExtractPersonsFromContext('Yours faithfully SMITH & PARTNERS INC Per J Smith', 8).map(x => x.name)) === '["J Smith"]',
+    'a colon-free email header (with an address or a header word close after it) and an attorney\'s "Per J Smith" sign-off still bind their names (' + JSON.stringify(hdr) + ')');
+  ok(of(DET.D09_DETECT_ENTITY_STATUS_FAKE, ['XYZ Fuels (Pty) Ltd is non‑compliant with the licence.', 'XYZ Fuels (Pty) Ltd is non-compliant with its returns.'], 'CT14').length === 0 && of(DET.D09_DETECT_ENTITY_STATUS_FAKE, ['XYZ Fuels (Pty) Ltd is compliant with the licence.', 'XYZ Fuels (Pty) Ltd is non‑compliant with its returns.'], 'CT14').length === 1, 'a Word-made "non‑compliant" (U+2011) is the negation too, and still pairs with a genuine "compliant"');
+  const qp = E.voExtractQuotes('Conflicting entity-status claims: "…Bright Idea Projects 66 (Pty) Ltd ("the Lessor") is compliant with the lease of Erf 12 ("the Premises") to Sanarth Fuels…" (compliant, page 3) vs "…is non-compliant…" (non-compliant, page 4)');
+  ok(qp.length === 2 && /\("the Lessor"\) is compliant/.test(qp[0]) && /\("the Premises"\) to Sanarth Fuels/.test(qp[0]), 'a parenthesised defined term ("the Lessor") stays inside the passage');
+  const leakEv = ['Conflicting entity-status claims: "…the franchisee that “Bright Fuels (Pty) Ltd is registered as an active company and remains…" (registered, page 1) vs "…Bright Fuels (Pty) Ltd is deregistered…" (deregistered, page 2)',
+    'Direct contradiction: "…spondent wrote: "The deed was signed by both parties at the office in durba…" vs "the deed was never signed by the seller"'];
+  for (const ev of leakEv) {
+    const eq = E.voExtractQuotes(ev), rq = R._anchorQuotes({ type: 'CT01', evidence: ev });
+    ok(eq.length === 2 && rq.length === 2 && !eq.concat(rq).some(q => /\(page|\(registered| vs |— yet|beside/.test(q)), 'a record quotation the window cut open never swallows the engine\'s own words, in the engine or the report (' + JSON.stringify(rq) + ')');
+  }
+  // Report.
+  ok(R._speakerOf('The applicant states that Sanarth Fuels is deregistered', { identity: { parties: 'Respondent: Sanarth Fuels' } }) === null && R._speakerOf('Sanarth Fuels states that the lease ended in 2020', { identity: { parties: 'Respondent: Sanarth Fuels' } }) === 'Sanarth Fuels' && R._speakerOf('Sanarth Fuels\' position: the operator is errant', { identity: { parties: 'Respondent: Sanarth Fuels' } }) === 'Sanarth Fuels',
+    'a statement is quoted as a party\'s own words only when the party is its speaker, never when another person states something about the party');
+  ok(R._partyStronglyNamed('Standard Bank', 'the bank confirmed that the deposit was paid') === false && R._partyStronglyNamed('Standard Bank', 'Standard Bank confirmed it') === true && R._partyStronglyNamed('Sanarth Fuels', 'the licence of Sanarth was cancelled') === true && R._partyStronglyNamed('Sanarth Fuels', 'the fuels were delivered') === false,
+    'a generic company word ("bank", "fuels") never on its own shows that a passage names the party');
+  ok(R._humanNumberable({ type: 'CT41', severity: 4, location: 'PDF structure', evidence: 'incremental update after signing' }) === false && R._humanNumberable({ type: 'CT01', severity: 3, location: 'Page 2', evidence: 'x said "a" vs "b"' }) === true, 'a page-less engine finding is not numbered F#: the narrator, the court-ready narrative and Findings in Detail share one numbering');
+  ok(/^"abc .*\.\.\.$/.test(R._capText('"abc def ghi jkl mno pqr stu vwx yz', 25)) && R._capText('"abc def ghi jkl mno pqr stu vwx yz', 25).length <= 26 && /"$/.test(R._capText('"abc def ghi jkl mno pqr stu vwx yz"', 25)), 'a display cap closes only a mark the cut opened, never the record\'s own unbalanced one');
+  ok(R._aiSectionName({ aiNarrative: 'The record states x [F1]. The record states y [F1]. It may be fraud. It could indicate a crime. It seems so. It appears likely. It suggests dishonesty.', aiNarrativeSource: 'ai' }) === 'AI REVIEW', 'a draft that is mostly prohibited language is not printed under FORENSIC NARRATIVE, and no reference points to that heading');
+  ok(R._findingName({ type: 'CT23', evidence: 'The record states a signature is missing ("unsigned agreement"): "x"' }) === 'Unsigned Agreement Stated' && R._findingName({ type: 'CT23', evidence: 'Non-standard signature method "/s/": "x"' }) === 'Signature Mismatch', 'the unsigned-agreement shape has its own name, never "Signature Mismatch"');
+  ok(R._hasTwoSidedFinding({ findings: { findings: [{ type: 'CT02', severity: 4, location: 'Page 2', evidence: '"purchase price" is stated as R450,000 and as R470,000' }] } }) === true && R._hasTwoSidedFinding({ findings: { findings: [{ type: 'CT37', severity: 3, location: 'Page 4', evidence: 'Lookalike email domain: "a.co.za" (p. 4) beside "b.co.za" (p. 4)' }] } }) === false, 'a restated figure is two statements by its type; a lookalike domain is one observation');
+  const page = fs.readFileSync(path.join(process.cwd(), 'seal-document.html'), 'utf8');
+  ok(/window\.VerumReport\._humanNumberable/.test(page) && /if \(!anyAi && merged\.reason !== 'gate_failed'\) merged\.reason = 'time_budget'/.test(page), 'the page numbers with the report\'s predicate, and a discarded batch is not relabelled "time budget"');
+  ok(!/anchored to the Bitcoin blockchain, so it cannot be altered|permanent public record that it existed at the sealed date and time/.test(page) && /submitted to OpenTimestamps for anchoring to the Bitcoin blockchain/.test(page), 'the share texts sent at sealing say "submitted", never "anchored" or "permanent"');
+  ok(/return await certDoc\.save\(\{ useObjectStreams: false \}\)/.test(page.slice(page.indexOf('async function buildAnchorCertificate('), page.indexOf('async function buildAnchorCertificate(') + 14000)), 'the anchor certificate keeps its Info dictionary readable to verify.html\'s raw scan');
+  const vs = fs.readFileSync(path.join(process.cwd(), 'verify.html'), 'utf8');
+  ok(/window\.requestPasswordFromSender = requestPasswordFromSender/.test(vs) && /could not be reached, so it was not submitted for anchoring/.test(vs), 'the password request is reachable from its button, and says when the receipt was not submitted');
+  ok(/'Seal Present — OTS Format'/.test(vs) && !/'Seal Verified — OTS Format'/.test(vs) && !/Pending confirmation \(1-2 hours typical\)/.test(vs) && /seal\.scheme === 'OTS' && \/\^\[0-9a-fA-F\]\{128\}\$\/\.test/.test(vs), 'an OTS-format footer is a seal present, never verified, and its digest is resolved for the anchor check');
+  ok(/pdfSeal\.scheme === 'anchorcert' \|\| pdfSeal\.scheme === 'sealcert'\) && seal && \(seal\.scheme === 'v2' \|\| seal\.scheme === 'legacy'\)/.test(vs), 'a certificate Subject added to a sealed file never replaces the seal the raw scan found');
+  ok(/\.custody-badge\.anchor_certificate/.test(vs) && /lastSeal\.scheme === 'anchorcert' \? '' : '; the seal/.test(vs) && /the sealing device's clock; once Bitcoin confirms/.test(vs), 'the certificate verdict is styled and claims no integrity verdict, and the custody caption says what the seal time is');
 }
 
 console.log(`\n[annexure-eb] PASS=${pass} FAIL=${fail}`);

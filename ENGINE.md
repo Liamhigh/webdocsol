@@ -555,7 +555,7 @@ test file that is not registered there does not run.
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 25 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.mjs` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
-| `digital-forensics.test.mjs` / `findings-json.test.mjs` / `narrate-excerpt.test.mjs` | 16 each | PDF structure · JSON contract v1.1.0 · AI excerpt building |
+| `digital-forensics.test.mjs` / `findings-json.test.mjs` / `narrate-excerpt.test.mjs` | 16 each | PDF structure · JSON contract v1.6.0 · AI excerpt building |
 | `franchise-lease.test.mjs` | 15 | D38/D39 (CT44/CT45) |
 | `wrangler-config.test.mjs` / `role-capacity.test.mjs` | 13 each | Deploy config drift · D40/CT46, no hardcoded parties |
 | `ai-assess-batch.test.mjs` | 11 | Client batching under the worker's body limit |

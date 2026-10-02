@@ -2413,11 +2413,11 @@ var DETECTORS = {
   // contact; a domain that merely prefixes another is a truncated read of it.
   D25_DETECT_CONTACT_MISMATCH: function(textBlocks) {
     var findings = [];
-    // Registration under these suffixes is restricted to government bodies.
-    // Two domains are exempt only when they SHARE one of them, so the
-    // difference lies to the left of a restricted suffix ("dmre.gov.za" /
-    // "dmpr.gov.za"); "sars.gov.za" beside "sars.go.za" or "sars.gov.io" still
-    // fires, because those suffixes are not the same or not restricted.
+    // Registration under these suffixes is restricted to government bodies,
+    // so a fraudster cannot hold a lookalike under one of them. Two domains are
+    // exempt only when BOTH sit under a listed restricted suffix ("dmre.gov.za"
+    // / "dmpr.gov.za"); "sars.gov.za" beside "sars.go.za", "sars.gov.io" or
+    // "nta.go.to" still fires, because the second suffix is not restricted.
     var VO_GOV_SUFFIX = { 'gov.za': 1, 'mil.za': 1, 'gov.uk': 1, 'gc.ca': 1, 'gov.au': 1, 'govt.nz': 1, 'gov.in': 1, 'gov.ng': 1, 'go.ke': 1, 'go.jp': 1, 'gov.sg': 1, 'gouv.fr': 1, 'gob.mx': 1, 'gob.es': 1, 'gov.br': 1, 'gov.ae': 1, 'gov.cn': 1, 'gov.il': 1, 'gov.ie': 1, 'gov.bw': 1, 'gov.na': 1, 'gov.zw': 1, 'gov.zm': 1, 'gov.ls': 1, 'gov.sz': 1, 'gov.mz': 1, 'go.tz': 1, 'go.ug': 1 };
     var voGovSuffix = function (dom) {
       var parts = dom.split('.');
@@ -2448,11 +2448,10 @@ var DETECTORS = {
         if (!byDomain[da].text || !byDomain[db].text) continue;
         if (da.length < 8 || db.length < 8) continue;
         if (db.indexOf(da) === 0 || da.indexOf(db) === 0) continue;
-        // Two domains under one shared restricted government suffix are never a
+        // Two domains under restricted government suffixes are never a
         // fraudster's lookalike: "dmre.gov.za" and "dmpr.gov.za" are one renamed
         // department, listed together for one mailbox.
-        var gsa = voGovSuffix(da);
-        if (gsa && gsa === voGovSuffix(db)) continue;
+        if (voGovSuffix(da) && voGovSuffix(db)) continue;
         var dist = voEditDistance(da, db);
         if (dist < 1 || dist > 2) continue;
         var union = byDomain[da].pages.concat(byDomain[db].pages.filter(function (p) { return byDomain[da].pages.indexOf(p) === -1; }))

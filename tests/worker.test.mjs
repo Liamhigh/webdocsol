@@ -683,15 +683,67 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
       'four pillars: a contradiction under misrepresentation, a financial finding under loss and a stated gap are kept (' + JSON.stringify(pj.text) + ')');
     ok(!/\[F2\]/.test(pj.text) && !/invoice \[F3\]/.test(pj.text) && pj.gate.pillar === 4,
       'four pillars: an unsigned-agreement finding under misrepresentation (by heading or by name) or inducement, and a financial finding under misrepresentation, are dropped and counted (' + JSON.stringify(pj.gate) + ')');
-    const ej = await (await hPost({ ...pBody, section: 'executive_summary' }, mockAI('The record evidences inducement or reliance [F2] (p. 6). The record states the operator is non-compliant [F1] (p. 13).'))).json();
-    ok(ej.generated === true && /\[F2\]/.test(ej.text) && !ej.gate.pillar, 'the pillar test applies to the four-pillars section only');
+    const ej = await (await hPost({ ...pBody, section: 'executive_summary' }, mockAI('The record evidences inducement or reliance [F2] (p. 6). The record states the operator is non-compliant [F1] (p. 13). The same page records the status a second time [F1] (p. 13).'))).json();
+    ok(ej.generated === true && !/\[F2\]/.test(ej.text) && ej.gate.pillar === 1, 'a sentence claiming a pillar is evidenced is held to the pillar types in every section, not only in four pillars (' + JSON.stringify(ej.gate) + ')');
+    const ej2 = await (await hPost({ ...pBody, section: 'executive_summary' }, mockAI('The agreement is unsigned [F2] (p. 6). The record states the operator is non-compliant [F1] (p. 13).'))).json();
+    ok(ej2.generated === true && /\[F2\]/.test(ej2.text) && !ej2.gate.pillar, 'a plain statement of a finding outside four pillars is untouched');
+  }
+  // The verification pass: pillar claims anchored only by a page or a quote,
+  // headings in any dress, held findings, state-of-mind words, scoped labels.
+  {
+    const vF = [
+      { id: 'F1', type: 'CT14', name: 'Entity status', severity: 5, page: 13, pages: [13], evidence: 'the operator is non-compliant', quote: 'the operator is non-compliant' },
+      { id: 'F2', type: 'CT23', name: 'Signature', severity: 2, page: 6, pages: [6], evidence: 'a common scheme involving an unsigned agreement', quote: 'an unsigned agreement' },
+      { id: 'F3', type: 'CT15', name: 'Invoice total', severity: 4, page: 9, pages: [9], evidence: 'total R100 vs parts R90', quote: 'total R100' },
+      { id: 'F4', type: 'CT01', name: 'Contradiction', severity: 4, page: 3, pages: [3, 4], evidence: 'no loss was suffered vs a loss of R2 million', quote: 'no loss was suffered' },
+      { id: 'F5', type: 'CT14', name: 'Held', severity: 3, page: 13, pages: [13], evidence: 'the company is dissolved [secondary source on p. 13: an extract]', quote: 'dissolved' }
+    ];
+    const vBody = { section: 'four_pillars', pageCount: 20, findings: vF, excerpt: '[Page 13] the operator is non-compliant [Page 6] x [Page 4] y' };
+    const vPad = 'The record states the operator is non-compliant [F1] (p. 13). The same page records the status a second time [F1] (p. 13).\n\n';
+    const vKept = async (text) => { const j = await (await hPost(vBody, mockAI(vPad + text))).json(); const last = text.split('\n\n').pop(); return !!(j.text && j.text.indexOf(last.slice(0, 30)) >= 0); };
+    for (const [t, want, why] of [
+      ['INDUCEMENT OR RELIANCE\n\nThe record evidences inducement or reliance (p. 6).', false, 'a reliance claim anchored only by a page'],
+      ['KNOWLEDGE\n\nThe record evidences that the operator knew it was non-compliant (p. 13).', false, 'a knowledge claim anchored only by a page'],
+      ['The buyer relied on "the operator is non-compliant" as written.', false, 'a reliance claim anchored only by a quotation'],
+      ['LOSS\n\nThe record evidences a loss of R2 million (p. 4).', false, 'a loss claim with no financial finding cited'],
+      ['MISREPRESENTATION\n\nThe record states on one page that no loss was suffered and on the next that a loss of R2 million was suffered [F4] (p. 3).', true, 'a contradiction under misrepresentation, though its words mention loss'],
+      ['KNOWLEDGE\n\nINSUFFICIENT: finding F1 records a statement, not what any person knew.', true, 'a stated gap under knowledge'],
+      ['MISREPRESENTATION AND LOSS\n\nThe stated total differs from its parts [F3] (p. 9).', true, 'a heading naming two pillars accepts a finding of either'],
+      ['Inducement or Reliance\n\nThe record states an unsigned agreement under this pillar [F2] (p. 6).', false, 'a title-case pillar heading'],
+      ['1. Inducement or reliance\n\nThe record states an unsigned agreement under this pillar [F2] (p. 6).', false, 'a numbered pillar heading'],
+      ['**Inducement or reliance**\n\nThe record states an unsigned agreement under this pillar [F2] (p. 6).', false, 'a bold markdown pillar heading'],
+      ['Loss: the stated total differs from its parts [F3] (p. 9). The invoice lists the parts separately [F3] (p. 9).', true, 'an inline label opens its pillar for its paragraph'],
+      ['MISREPRESENTATION\n\nKnowing that it was non-compliant, the operator issued the statement [F1] (p. 13).', false, 'a state-of-mind claim under misrepresentation'],
+      ['MISREPRESENTATION\n\nThe record evidences a misrepresentation: it states the company is dissolved [F5] (p. 13).', false, 'a finding held at reduced weight (secondary source) evidences no pillar']
+    ]) ok((await vKept(t)) === want, 'four pillars, ' + (want ? 'kept' : 'dropped') + ': ' + why);
+    const lj = await (await hPost(vBody, mockAI(vPad + 'MISREPRESENTATION\n\nThe record states the operator is non-compliant [F1] (p. 13).\n\nLoss: the stated total differs from its parts [F3] (p. 9).\n\nThe invoice states the total again [F3] (p. 9).'))).json();
+    ok(lj.text && !/states the total again/.test(lj.text) && lj.gate.pillar === 1, 'an inline label\'s pillar ends with its paragraph: the next paragraph is under the heading again');
+  }
+  // The template quotes engine findings only.
+  {
+    const nb = await (await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify({ documentName: 'd.pdf', pageCount: 9, score: 0, confidence: 'n/a', generatedUtc: '2026-10-02T00:00:00Z', findingsPruned: 0,
+      findingsKept: [{ id: 'F1', type: 'CT14', severity: 5, status: 'ENGINE-VERIFIED', location: 'Page 13', evidence: 'status twice' }, { id: 'C1', type: 'CT09', severity: 3, status: 'AI-RAISED CANDIDATE - PENDING VERIFICATION', location: 'Page 3', evidence: 'name differs' }, { id: 'P1', type: 'SERIAL', severity: 3, status: 'ENGINE-VERIFIED', location: '', evidence: 'serial pattern' }] })), env, {})).json();
+    const all = (nb.executiveSummary || '') + ' ' + (nb.criticalEvidence || '');
+    ok(/\[F1\]/.test(all) && !/\[C1\]|Finding C1|name differs|Finding P1|serial pattern/.test(all) && /1 engine-verified finding and 1 AI-raised candidate/.test(all) && /AI-raised candidates are not quoted here/.test(all) && !/\(CT14\)/.test(all),
+      'the template states as fact only engine findings, quotes no candidate or pattern, and prints no raw engine code (' + all.slice(0, 260) + ')');
+    const nz = await (await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify({ documentName: 'd.pdf', pageCount: 9, score: 0, confidence: 'n/a', generatedUtc: '2026-10-02T00:00:00Z', findingsPruned: 0, findingsKept: [] })), env, {})).json();
+    const allz = (nz.executiveSummary || '') + ' ' + (nz.criticalEvidence || '');
+    ok(!/These findings are stated as fact/.test(allz) && (allz.match(/No findings were/g) || []).length <= 1, 'with nothing supplied, the template does not repeat itself or call absent findings fact');
   }
   // Court-recognition paraphrases are banned language (tightened).
   for (const t of ['The court has recognised the platform\'s validity [F1] (p. 2).', 'The platform was recognised by the court [F1] (p. 2).', 'The platform is court-accepted [F1] (p. 2).',
-    'The seal was accepted by the Magistrate\'s Court [F1] (p. 2).', 'The sealed record is admissible in court [F1] (p. 2).', 'The Port Shepstone Magistrate\'s Court has already recognised this [F1] (p. 2).']) {
+    'The seal was accepted by the Magistrate\'s Court [F1] (p. 2).', 'The sealed record is admissible in court [F1] (p. 2).', 'The Port Shepstone Magistrate\'s Court has already recognised this [F1] (p. 2).',
+    'The court noted that the evidence was applied in good faith and in the interest of justice [F1] (p. 2).', 'The court never questioned their authenticity [F1] (p. 2).', 'The Constitutional Court is currently considering evidence produced through this platform [F1] (p. 2).',
+    'The court has held that the seal is authentic [F1] (p. 2).', 'The court has already formally recognised this [F1] (p. 2).', 'The Magistrate\'s Court at Port Shepstone has recognised the file [F1] (p. 2).',
+    'The court, in H208/25, recognised the file [F1] (p. 2).', 'The court admitted the sealed report into evidence [F1] (p. 2).', 'The platform is court\u2011accepted [F1] (p. 2).',
+    'It was accepted by the Port Shepstone Regional Magistrate\'s Court [F1] (p. 2).', 'The platform is judicially recognised [F1] (p. 2).']) {
     ok(!(await kept(t)), 'court-recognition paraphrase dropped: ' + t);
   }
   ok(await kept('The provision governs the admissibility of data messages [F1] (p. 2).'), '"admissibility" as a statute\'s subject is not the banned adjective');
+  for (const t of ['Section 15 of the Electronic Communications and Transactions Act provides that a data message is admissible in evidence [F1] (p. 2).', 'The settlement was accepted by the respondent\'s court-appointed curator [F1] (p. 2).',
+    'The bundle was recognised by the parties as the court file [F1] (p. 2).', 'The Magistrate\'s Court summons states the defendant admitted the debt [F1] (p. 2).']) {
+    ok(await kept(t), 'legitimate prose about a statute or the record is kept: ' + t);
+  }
 }
 
 // --- the signed rule-package loop: publish -> manifest -> the website verifies.
