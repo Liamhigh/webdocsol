@@ -1700,7 +1700,8 @@ var DETECTORS = {
     // corporations, e.g. CK2000/071982/23 — the old pattern wanted two digits
     // after CK and called a valid CC number fake on the annexure EB run), plus
     // the compact CK forms.
-    var SA_REG = /^(?:\d{4}\/\d{6}\/\d{2}|CK\d{4}\/\d{6}\/\d{2}|CK\d{2}\/\d{5,6}|CK\d{7})$/;
+    // CK YY/NNNNN/NN is the classic close-corporation form ("CK 91/25755/23").
+    var SA_REG = /^(?:\d{4}\/\d{6}\/\d{2}|CK\d{4}\/\d{6}\/\d{2}|CK\d{2}\/\d{5,6}\/\d{2}|CK\d{2}\/\d{5,6}|CK\d{7})$/;
     // One digit off the SA form (a middle group of 5 or 7): a typing or OCR
     // slip is far likelier than a forgery — reported as a check, never as fake.
     var NEAR_SA_REG = /^\d{4}\/\d{5,7}\/\d{2}$/;
@@ -1730,24 +1731,38 @@ var DETECTORS = {
     // own misread can pass the format); only a bundle with no text page falls
     // back to every page. The nearest twin wins, not the first in page order.
     var cleanRegs = {}, cleanRegsAll = {};
-    var cleanRe = /\b(?:CK)?\d{4}\/\d{6}\/\d{2}\b/g;
+    var cleanRe = /\b(?:CK)?\d{4}\/\d{6}\/\d{2}\b|\bCK\s?\d{2}\/\d{5}\/\d{2}\b/g;
+    // A CK YY/NNNNN/NN number's twin is its long form 19YY/0NNNNN/NN, so an
+    // OCR reading "1991 1 G25755/" of "CK 91/25755/23" is repaired too.
+    var regDigits = function (v) {
+      var ck = /^CK\s?(\d{2})\/(\d{5})\/(\d{2})$/.exec(v);
+      return ck ? ['19' + ck[1] + '0' + ck[2] + ck[3], v.replace(/\D/g, '')] : [v.replace(/\D/g, '')];
+    };
     for (var ci = 0; ci < textBlocks.length; ci++) {
       var cmm, isOcrBlock = /^\s*\[OCR\]/.test(textBlocks[ci] || ''); cleanRe.lastIndex = 0;
       while ((cmm = cleanRe.exec(textBlocks[ci] || '')) !== null) {
-        cleanRegsAll[cmm[0].replace(/\D/g, '')] = cmm[0];
-        if (!isOcrBlock) cleanRegs[cmm[0].replace(/\D/g, '')] = cmm[0];
+        var rds = regDigits(cmm[0]);
+        for (var rd = 0; rd < rds.length; rd++) { cleanRegsAll[rds[rd]] = cmm[0]; if (!isOcrBlock) cleanRegs[rds[rd]] = cmm[0]; }
       }
     }
     if (!Object.keys(cleanRegs).length) cleanRegs = cleanRegsAll;
     var cleanDigits = Object.keys(cleanRegs);
-    var ocrVariantOf = function (v) {
+    // A short garbled token ("G25755/", "025755") is compared through every
+    // digit in the 40-character window after the cue ("1991 1 G25755/" reads
+    // 1991125755), and a reading OCR cut short is matched against the twin's
+    // leading digits.
+    var ocrVariantOf = function (v, win) {
       var d = String(v).replace(/\D/g, '');
-      if (d.length < 10 || d.length > 15) return null;
+      var wd = String(win || '').replace(/\D/g, '');
+      if (d.length < 10 && wd.length >= 8) d = wd;
+      if (d.length < 8 || d.length > 15) return null;
       var best = null, bestDist = 3;
       for (var k = 0; k < cleanDigits.length; k++) {
-        if (Math.abs(cleanDigits[k].length - d.length) > 2) continue;
-        var dist = cleanDigits[k] === d ? 0 : voEditDistance(cleanDigits[k], d);
-        if (dist < bestDist) { bestDist = dist; best = cleanRegs[cleanDigits[k]]; }
+        var full = cleanDigits[k], dist = 3;
+        if (Math.abs(full.length - d.length) <= 2) dist = full === d ? 0 : voEditDistance(full, d);
+        // A reading OCR cut short is matched against the twin's leading digits.
+        if (full.length > d.length) { var head = full.slice(0, d.length); var hd = head === d ? 0 : voEditDistance(head, d); if (hd < dist) dist = hd; }
+        if (dist < bestDist) { bestDist = dist; best = cleanRegs[full]; }
       }
       return best;
     };
@@ -1777,9 +1792,10 @@ var DETECTORS = {
         var after = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 40);
         if (voLooksGarbled(after)) continue; // unreadable OCR around the cue: nothing to validate
         var afterFull = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 70);
-        var tok = afterFull.match(/[A-Z]{0,2}\d[\d\/]{5,19}/);
+        // "CK 91/25755/23" is written with a space after the prefix.
+        var tok = afterFull.match(/[A-Z]{0,2}\s?\d[\d\/]{5,19}/);
         if (!tok || tok.index >= 40) continue;
-        var val = tok[0];
+        var val = tok[0].replace(/\s+/g, '');
         if (SA_REG.test(val)) continue; // a valid registration format is not "fake" (and the street number after it is not part of it)
         // An identity number typed with spaces ("510209 5091 08") reads as a
         // shorter digit run: take the spaced digits only when the first run is
@@ -1808,16 +1824,16 @@ var DETECTORS = {
         // dropped (2002/059909/23 read as 200205930923), twin first.
         var isIdField = idField && (idShaped(val) || idShapedLoose(val));
         if (ocrPage && !isIdField) {
-          var cleanTwin = ocrVariantOf(val);
+          var cleanTwin = ocrVariantOf(val, after);
           if (cleanTwin) { var rep1 = val + ' (p.' + (i + 1) + ') reads as ' + cleanTwin; if (repaired.indexOf(rep1) === -1) repaired.push(rep1); continue; }
           if (!idShaped(val) && !FOREIGN_REG_RE.test(context)) {
-            var unr = '"' + block.substring(cm.index, cm.index + cm[0].length + tok.index + val.length).replace(/\s+/g, ' ').trim() + '" (p.' + (i + 1) + ')';
+            var unr = '"' + block.substring(cm.index, cm.index + cm[0].length + tok.index + tok[0].length).replace(/\s+/g, ' ').trim() + '" (p.' + (i + 1) + ')';
             if (unreadable.indexOf(unr) === -1) unreadable.push(unr);
             continue;
           }
         }
         if (!bad[val]) {
-          var quote = block.substring(cm.index, cm.index + cm[0].length + tok.index + val.length).replace(/\s+/g, ' ').trim();
+          var quote = block.substring(cm.index, cm.index + cm[0].length + tok.index + tok[0].length).replace(/\s+/g, ' ').trim();
           bad[val] = { pages: [], quote: quote, foreign: false, near: NEAR_SA_REG.test(val), idShaped: idShaped(val) || isIdField };
         }
         if (FOREIGN_REG_RE.test(context)) bad[val].foreign = true;
@@ -2894,7 +2910,7 @@ var DETECTORS = {
         var raw = String(blocks[i] || '');
         var m = re.exec(raw.toLowerCase());
         if (m) {
-          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          var q = voSnapWindow(raw, m.index - 10, m.index + m[0].length + 40);
           return { page: i + 1, quote: q };
         }
       }
@@ -2959,7 +2975,7 @@ var DETECTORS = {
           // "is NOT the owner" is the lessee clause itself, not an ownership record.
           if (/\bnot\s+(?:the\s+)?$/.test(lower.slice(Math.max(0, m.index - 12), m.index))) continue;
           if (objectCheck && !ownerObjectOk(m[0], lower.slice(m.index + m[0].length, m.index + m[0].length + 120))) continue;
-          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          var q = voSnapWindow(raw, m.index - 10, m.index + m[0].length + 40);
           out.push({ page: i + 1, quote: q, side: sideNear(raw, m.index, m[0].length) });
           if (out.length > 200) return out;
         }
@@ -3010,10 +3026,12 @@ var DETECTORS = {
         }
       }
     }
-    var invokesTermination = false;
-    for (var b = 0; b < blocks.length; b++) {
-      if (/(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(String(blocks[b]).toLowerCase())) { invokesTermination = true; break; }
-    }
+    // The termination language must sit on the lessee clause's own page: in
+    // a 651-page contract bundle some block always says "terminate", and a
+    // head-lease recital with no termination consequence is not the trap.
+    var VO_TERMINATION_RE = /(effluxion|deemed to have terminated|expires?|expiry|terminat)/;
+    var invokesTerm = function (hit) { return !!(hit && VO_TERMINATION_RE.test(String(blocks[hit.page - 1] || '').toLowerCase())); };
+    var invokesTermination = invokesTerm(lessee);
     if (lessee && owner && invokesTermination) {
       var crossDoc = d38Segs.length > 0 && !d38SameDoc(lessee.page, owner.page);
       var farApart = !d38Segs.length && Math.abs(lessee.page - owner.page) > VO_D38_NEAR;
@@ -3022,7 +3040,7 @@ var DETECTORS = {
           (crossDoc ? ' [the two halves sit in different documents of the record: verify that they concern the same party, the same premises and the same period]' :
            farApart ? ' [the record\'s document boundaries could not be read and the two halves sit ' + Math.abs(lessee.page - owner.page) + ' pages apart: verify that they concern the same party, the same premises and the same period]' : ''),
         location: (lessee.page === owner.page) ? 'Page ' + lessee.page : 'Page ' + lessee.page + ' vs Page ' + owner.page });
-    } else if (!owner && farHalf && invokesTermination) {
+    } else if (!owner && farHalf && invokesTerm(farHalf.lessee)) {
       findings.push({ type: 'CT44', severity: 0, contextOnly: true,
         evidence: 'A lessee-only clause on page ' + farHalf.lessee.page + ' ("' + farHalf.lessee.quote + '") and a statement of ownership on page ' + farHalf.owner.page + ' ("' + farHalf.owner.quote + '") sit ' + Math.abs(farHalf.lessee.page - farHalf.owner.page) + ' pages apart, and the statement names no party role; whose ownership it records is not stated, so the two were not paired. Read both before relying on either.',
         location: 'Page ' + farHalf.lessee.page + ' vs Page ' + farHalf.owner.page });
@@ -3046,7 +3064,7 @@ var DETECTORS = {
         var raw = String(blocks[i] || '');
         var m = re.exec(raw.toLowerCase());
         if (m) {
-          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          var q = voSnapWindow(raw, m.index - 10, m.index + m[0].length + 40);
           return { page: i + 1, quote: q };
         }
       }
@@ -3120,7 +3138,7 @@ var DETECTORS = {
         var raw = String(blocks[i] || '');
         var m = re.exec(raw.toLowerCase());
         if (m) {
-          var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
+          var q = voSnapWindow(raw, m.index - 10, m.index + m[0].length + 40);
           return { page: i + 1, quote: q };
         }
       }
@@ -3223,7 +3241,7 @@ var DETECTORS = {
     // contextOnly routes it into the extraction notes, out of the findings.
     if (typeCount >= 8) {
       findings.push({ type: 'CT43', severity: 0, contextOnly: true,
-        evidence: 'Breadth note: ' + typeCount + ' different finding types were triggered across the document — a high count reflects variety of checks, not a determination of wrongdoing.',
+        evidence: 'Breadth note: ' + typeCount + ' different finding types were triggered across the document by the engine run, before the advisory review and before any note or lead was set aside — a high count reflects variety of checks, not a determination of wrongdoing.',
         location: 'Full document' });
     }
     return findings;
@@ -4106,6 +4124,14 @@ function voDemoteSecondarySource(findings, secondaryPages) {
 // weight because they were missing here.
 var VO_OCR_FORMAT_TYPES = { CT02: 1, CT03: 1, CT08: 1, CT09: 1, CT13: 1, CT15: 1, CT18: 1, CT19: 1, CT20: 1, CT22: 1, CT23: 1, CT33: 1 };
 var VO_OCR_CAP_NOTE = ' [OCR page: weight reduced until the quoted characters are verified against the page image]';
+// A contradiction anchored only on OCR-recovered pages (CT01, CT44, CT45 …)
+// is held below the serious line (severity 3) until a person has read the
+// page image: an OCR-recovered contradiction never heads the executive
+// summary (evidence-bundle-4 critique, founder direction 14 applied to
+// every type, not only the format checks).
+// Below this recogniser confidence (0-100) an invoice's figures are a note.
+var VO_OCR_FIGURE_MIN_CONFIDENCE = 60;
+var VO_OCR_HELD_NOTE = ' [OCR-recovered pages only: held below serious until the quoted wording is verified against the page image]';
 function voCapOcrFormatFindings(findings, ocrPages) {
   var capped = 0, types = [];
   if (!Array.isArray(findings) || !Array.isArray(ocrPages) || !ocrPages.length) return { capped: 0, types: types };
@@ -4123,7 +4149,17 @@ function voCapOcrFormatFindings(findings, ocrPages) {
     // A signed-package phrase rule matched words, not characters: the cap's
     // reason does not apply to it, and the report still counts it apart.
     if (f.packageRule) continue;
-    if (!VO_OCR_FORMAT_TYPES[f.type] || !(f.severity > 2)) continue;
+    if (!VO_OCR_FORMAT_TYPES[f.type]) {
+      if (!(f.severity > 3)) continue;
+      f.severity = 3;
+      f.ocrCapped = true;
+      f.ocrHeld = true;
+      if (String(f.evidence || '').indexOf(VO_OCR_HELD_NOTE) === -1) f.evidence = (f.evidence || '') + VO_OCR_HELD_NOTE;
+      capped++;
+      if (types.indexOf(f.type) === -1) types.push(f.type);
+      continue;
+    }
+    if (!(f.severity > 2)) continue;
     f.severity = 2;
     f.ocrCapped = true;
     if (String(f.evidence || '').indexOf(VO_OCR_CAP_NOTE) === -1) f.evidence = (f.evidence || '') + VO_OCR_CAP_NOTE;
@@ -4307,7 +4343,10 @@ var VO_NON_PERSON_TOK = (function () {
     // "Associates Tel", "CENTURY CITY", "Crompton Street"). None is a name.
     'registration number vat name tel telephone cell mobile witnesses witness act period supplier margin ' +
     'street road avenue boulevard city office disbursements paragraph interest add all fuel franchise ' +
-    'retail operating accounting approved branded secrets marketer expenses').split(' ');
+    'retail operating accounting approved branded secrets marketer expenses ' +
+    // A pleading role is a role, never a surname ("First Respondent"); a
+    // manual is a document.
+    'respondent respondents applicant applicants plaintiff plaintiffs defendant defendants appellant complainant accused manual').split(' ');
   for (var i = 0; i < words.length; i++) m[words[i]] = 1;
   return m;
 })();
@@ -4438,6 +4477,9 @@ function voLooksLikePerson(name) {
     // ("Banas TT JT ETE"). "McDonald", "de Waal" and "NMC Nyembezi" pass.
     if (/[a-z][A-Z]{2}/.test(bare) || /[A-Z]{2,}[a-z]+[A-Z]/.test(bare)) return false;
     if (bare.length >= 4 && /^[A-Za-z]+$/.test(bare) && !/[aeiouyAEIOUY]/.test(bare)) return false;
+    // OCR debris: a Title-case three-letter token with no vowel ("Mls Eanes
+    // Rear"); courtesy titles are the exception.
+    if (bare.length === 3 && /^[A-Z][a-z]{2}$/.test(bare) && !/[aeiouy]/i.test(bare) && !/^(?:Mr|Mrs|Ms|Dr|St|Jr|Sr)$/.test(bare)) return false;
     if (/^[A-Z]{2,3}$/.test(bare)) initials++;
   }
   if (initials > 1) return false;
@@ -5549,6 +5591,23 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
   // OCR provenance has a consequence, not just a footnote (annexure EB): a
   // FORMAT check whose every cited page came through OCR is held at Low until
   // a person has read the characters on the page image.
+  // An invoice's arithmetic read by OCR at low confidence is a note, not a
+  // finding: the recogniser's own per-page confidence is in hand
+  // (evidence-bundle-4 critique, item 8b).
+  if (_ocrConfidence && typeof _ocrConfidence === 'object') {
+    var _lowConf = [];
+    for (var lc = 0; lc < allFindings.length; lc++) {
+      var lf = allFindings[lc];
+      if (!lf || (lf.type !== 'CT15' && lf.type !== 'CT22') || lf.contextOnly) continue;
+      var lps = voFindingPages(lf), lowest = null;
+      for (var lp = 0; lp < lps.length; lp++) { var c = _ocrConfidence[lps[lp]]; if (typeof c === 'number' && (lowest === null || c < lowest)) lowest = c; }
+      if (lowest !== null && lowest < VO_OCR_FIGURE_MIN_CONFIDENCE) {
+        _voContextNotes.push({ type: lf.type, location: lf.location || '', text: 'Figures on ' + (lf.location || 'the cited page') + ' were read by OCR at low confidence and are not reported as a finding until a person has read the page image: ' + String(lf.evidence || '').replace(/\s+/g, ' ').slice(0, 200) });
+        _lowConf.push(lc);
+      }
+    }
+    for (var li = _lowConf.length - 1; li >= 0; li--) allFindings.splice(_lowConf[li], 1);
+  }
   var _ocrCap = voCapOcrFormatFindings(allFindings, _ocrPages);
   if (_ocrCap.capped) {
     extractionNote += ' OCR provenance: ' + _ocrCap.capped + ' format-check finding(s) anchored only to OCR-recovered pages held at reduced weight pending verification against the page image (' + _ocrCap.types.join(', ') + ').';
@@ -6030,6 +6089,16 @@ function voFindingPages(f) {
   }
   return voRulePagesOf((f && f.location) || '');
 }
+// A quote window snapped to word boundaries, so a quoted record never starts
+// or ends mid-word ("CHISOR is not the owner … agreement wi").
+function voSnapWindow(raw, from, to) {
+  var s = String(raw || '');
+  from = Math.max(0, from); to = Math.min(s.length, to);
+  var a = from, b = to;
+  while (a > 0 && a > from - 20 && /\S/.test(s.charAt(a - 1))) a--;
+  while (b < s.length && b < to + 20 && /\S/.test(s.charAt(b))) b++;
+  return s.substring(a, b).replace(/\s+/g, ' ').trim();
+}
 function voRulePagesOf(location) {
   // "… and 3 more" is a count, "(clause 7)" a qualifier: neither is a page.
   var loc = String(location || '').replace(/\s+and\s+\d+\s+more\b/gi, ' ').replace(/\([^)]*\)/g, ' ');
@@ -6166,7 +6235,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     generateSummary: generateSummary, voEditDistance: voEditDistance,
     voStripSealFurniture: voStripSealFurniture, voStripSealFurnitureBlocks: voStripSealFurnitureBlocks, voCacheDocSegs: voCacheDocSegs,
-    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voIsStampContext: voIsStampContext,
+    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSnapWindow: voSnapWindow, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voIsStampContext: voIsStampContext,
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,
     CONTRADICTION_TYPES: CONTRADICTION_TYPES,
     DETECTORS: DETECTORS,

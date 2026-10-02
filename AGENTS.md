@@ -177,7 +177,7 @@ is meant to be identical across the three repositories — an edit here must be 
   findings dated from unrelated lines, court and form-label "parties", the missing
   FRANCHISE_LEASE matrix category, candidate law trimmed by finding type, "cannot be changed"
   replaced by "any change is detectable", reduced-weight findings counted apart.
-  `ENGINE.md` §12.13; `tests/annexure-eb-regression.test.mjs` §17 (188 assertions).
+  `ENGINE.md` §12.13; `tests/annexure-eb-regression.test.mjs` §17 (208 assertions).
 - 7 September 2026: **Brain 9 reads the sealed text.** Founder direction: the AI must read
   the sealed files so nothing is missed, state what it finds, and the loop must let the engine
   catch it next time; Brain 9 verifies the model's claims are real and in the text. Built as
@@ -235,7 +235,7 @@ before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping 
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **33 suites, 2299 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **33 suites, 2319 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.

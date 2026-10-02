@@ -206,10 +206,10 @@ ok(E.voLooksGarbled('the 1st, 2nd and 3rd floors of the building') === false && 
     { type: 'CT45', severity: 5, location: 'Page 227', evidence: 'goodwill recognised then denied' }
   ];
   const r = E.voCapOcrFormatFindings(fs, [227, 360]);
-  ok(r.capped === 1 && fs[0].severity === 2 && fs[0].ocrCapped === true && /verified against the page image/.test(fs[0].evidence),
+  ok(r.capped === 2 && fs[0].severity === 2 && fs[0].ocrCapped === true && /verified against the page image/.test(fs[0].evidence),
     'a format check anchored only to OCR pages is held at Low with the reason on the finding');
   ok(fs[1].severity === 4, 'a format check with one native page keeps its severity');
-  ok(fs[2].severity === 5, 'a substantive contradiction (CT45) on an OCR page keeps its severity: only character-sensitive checks are capped');
+  ok(fs[2].severity === 3 && fs[2].ocrHeld === true && /held below serious until the quoted wording is verified/.test(fs[2].evidence), 'a substantive contradiction (CT45) anchored only on OCR pages is held below serious (3) until the page image is read; a format check goes to Low (2)');
   ok(E.voCapOcrFormatFindings(fs, []).capped === 0, 'nothing is capped when no page came through OCR');
 }
 
@@ -631,6 +631,9 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     'the date extractor skips a seal stamp and keeps the record\'s own timestamped dates');
 
   // 17b. CT20: an identity field, and OCR variants of a clean number.
+  ok(of(DET.D11_DETECT_REGISTRATION_FAKE, ['Registration number CK 91/25755/23 of the close corporation.'], 'CT20').length === 0, 'the close-corporation short form CK YY/NNNNN/NN is a valid registration number');
+  const ckTwin = DET.D11_DETECT_REGISTRATION_FAKE(['Caltex Oil (SA) (Pty) Ltd, registration number CK 91/25755/23, trading as Wallers Garage.', '[OCR] Registration number 1991 1 G25755/ as printed on the invoice.']);
+  ok(ckTwin.filter(f => !f.contextOnly).length === 0 && ckTwin.some(f => f.contextOnly && /variants of a number printed cleanly elsewhere/.test(f.evidence)), 'an OCR reading of a CK number is repaired against its long-form twin (' + ckTwin.map(f => (f.contextOnly ? 'NOTE ' : 'FIND ') + f.evidence.slice(0, 60)).join(' | ') + ')');
   const ct20 = (b) => of(DET.D11_DETECT_REGISTRATION_FAKE, b, 'CT20').filter(f => !f.contextOnly);
   const idF = ct20(['ID/Registration number of complainant 510209 5091087']);
   const idT = ct20(['ID/Registration number of complainant 510209 5091 0']);
@@ -699,6 +702,10 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(xd.length === 1 && xd[0].severity === 4 && xd[0].location === 'Page 1 vs Page 4' && /different documents of the record: verify that they concern the same party/.test(xd[0].evidence), 'a recital in another document that the clause\'s own side (THE FRANCHISOR/OWNER) owns the premises pairs across documents, one step down and tagged to verify');
   ok(ct44([headLease, 'x', 'By 2014 Bright Idea Projects 66 (Pty) Ltd purchased the property and became the registered owner of the premises.'])[0].severity === 5 && !/different documents/.test(ct44([headLease, 'x', 'By 2014 Bright Idea Projects 66 (Pty) Ltd purchased the property and became the registered owner of the premises.'])[0].evidence), 'a pair within one document keeps its severity and carries no tag');
   ok(ct44([headLease, 'The Franchisee is the owner of the goodwill attaching to the premises.']).length === 0 && ct44([headLease, 'The Franchisee is the owner. The premises are let to it by the landlord.']).length === 0, 'goodwill is not premises, and the object must sit in the ownership sentence itself');
+  // The termination language must sit on the clause's own page.
+  const recitalOnly = 'the FRANCHISOR is not the owner of the Premises but is the Lessee in terms of a head lease agreement with a third party.';
+  ok(ct44([recitalOnly, 'The agreement terminates on 31 July 2016.', 'By 2014 Bright Idea Projects 66 (Pty) Ltd purchased the property and became the registered owner of the premises.']).length === 0 && ct44([headLease, 'x', 'By 2014 Bright Idea Projects 66 (Pty) Ltd purchased the property and became the registered owner of the premises.']).length === 1, 'a head-lease recital with no termination consequence on its page is not the trap, even when another page says "terminates"');
+  ok(E.voSnapWindow('The FRANCHISOR is not the owner of the Premises, but is the Lessee in terms of a head lease agreement with', 6, 60) === 'FRANCHISOR is not the owner of the Premises, but is the Lessee', 'a quote window never starts or ends mid-word (' + E.voSnapWindow('The FRANCHISOR is not the owner of the Premises, but is the Lessee in terms of a head lease agreement with', 6, 60) + ')');
   // No document boundaries: a side-less ownership line pairs only within twenty pages; further away it is a note.
   const farSideless = [headLease]; for (let p = 2; p <= 30; p++) farSideless.push('page ' + p + ' text.'); farSideless.push('Caltex Oil (SA) (Pty) Ltd was also the owner of property on which the business was operated.');
   const fs1 = DET.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED(farSideless);
@@ -725,6 +732,11 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(d13(['Subtotal: R1,000.00 VAT: R150.00 Total: R1,250.00']).filter(f => f.type === 'CT15').length === 1, 'a plausible invoice whose total does not add up still fires');
   ok(d13(['Subtotal: R1,000.00 for the goods', 'VAT: R150.00 Total: R1,250.00']).filter(f => !f.contextOnly).length === 0, 'figures on different pages are never combined into one invoice');
   ok(E.voCapOcrFormatFindings([{ type: 'CT15', severity: 5, location: 'Page 397', evidence: 'Total mismatch' }, { type: 'CT22', severity: 4, location: 'Page 397', evidence: 'VAT mismatch' }], [397]).capped === 2, 'an invoice\'s arithmetic on an OCR page is held at reduced weight like every other figure');
+  // Any contradiction anchored only on OCR-recovered pages is held below serious.
+  const ocrOnly = [{ type: 'CT44', severity: 5, location: 'Page 9 vs Page 16', evidence: 'lessee vs owner' }, { type: 'CT01', severity: 4, location: 'Page 453, 462', evidence: 'admission' }, { type: 'CT37', severity: 3, location: 'Page 9', evidence: 'lookalike domain' }];
+  const ocrOnlyRes = E.voCapOcrFormatFindings(ocrOnly, [9, 16, 453, 462]);
+  ok(ocrOnlyRes.capped === 2 && ocrOnly[0].severity === 3 && ocrOnly[0].ocrCapped === true && /held below serious until the quoted wording is verified/.test(ocrOnly[0].evidence) && ocrOnly[1].severity === 3 && ocrOnly[2].severity === 3 && !ocrOnly[2].ocrCapped && ocrOnly[2].ocrAnchored === true, 'a CT44 or CT01 anchored only on OCR pages is held at severity 3 and tagged; a severity-3 finding is only counted apart');
+  ok(E.voCapOcrFormatFindings([{ type: 'CT44', severity: 5, location: 'Page 9 vs Page 204', evidence: 'x' }], [9]).capped === 0, 'a contradiction with one half on a text page keeps its severity');
   // The VAT bound: a VAT line is zero or within a tenth to a quarter of the subtotal, whatever the total reads.
   ok(d13(['Subtotal R1161950.00 VAT R1 Total R1,336,242.50']).every(f => f.contextOnly) && d13(['Subtotal R1161950.00 VAT R1 Amount due R1,336,242.50']).every(f => f.contextOnly), '"VAT R1" against a subtotal of R1 161 950 is a note whether the total was read intact or not at all');
   // Figures as this country's documents print them.
@@ -855,6 +867,8 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   // The sealed report's other false parties: labels, OCR variants, case titles, addresses, headings, defined terms.
   for (const bad of ['Registration Number', 'VAT REGISTRATION NUMBER', 'Limited Registration Number', 'Audifors Name Posts', 'Audifors Posts', 'Service Statlon', 'ADD DISBURSEMENTS I R', 'V BRIGHT IDEA PROJECTS', 'CENTURY CITY', 'Crompton Street', 'Franchise Interest', 'AD PARAGRAPH', 'Associates Tel', 'AS WITNESSES', 'Protection Act', 'Trade Secrets', 'Accounting Period', 'Approved Supplier', 'Branded Marketer', 'RAS Retail Margin', 'Operating Expenses Margin', 'BEREA ROAD', 'Derby Place', 'Lakeside Office Park', 'Zulu Natal', 'All Fuel'])
     ok(!E.voLooksLikePerson(bad), 'not a party: "' + bad + '"');
+  for (const bad2 of ['First Respondent', 'Second Applicant', 'ASTRON MANUAL', 'Mls Eanes Rear']) ok(!E.voLooksLikePerson(bad2), 'not a party: "' + bad2 + '"');
+  ok(E.voLooksLikePerson('Mrs Smith') && E.voLooksLikePerson('Dr Nel'), 'courtesy titles are not OCR debris');
   for (const good of ['J. P. Smith', 'Linda Park', 'Barnie Barnard', 'E de Waal', 'Sipho Dlamini'])
     ok(E.voLooksLikePerson(good), 'still a party: "' + good + '"');
   ok(E.voExtractParties('Seton Smith & Associates\n\nTel 021 556 2322').every(p => p.name !== 'Associates Tel') && E.voExtractParties('1.1.59 "New to All Fue/s/Caltex" means an All Fuel outlet').every(p => !/^All Fue/.test(p.name)), 'a name never spans a line break, and one cut by a slash is a fragment');
@@ -903,7 +917,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ];
     const opts = {
       documents: [{ name: 'evidence-bundle-4-docs.pdf', pageCount: 651, sha512: 'cd'.repeat(64), sealId: 'VO-A301D0F8A06F' }],
-      findings: { clean: false, overallScore: 40, confidence: 'LOW', totalFindings: 3, findings: findings, summary: '3 page-anchored findings established.', contradictionTypesUsed: 3 },
+      findings: { clean: false, overallScore: 40, confidence: 'LOW', totalFindings: 3, findings: findings, summary: '3 page-anchored findings established.', contradictionTypesUsed: 3, footerOnlyPages: [43, 45] },
       aiReview: { applied: true, retained: 3, assessed: 6, dropped: 3, added: 0, narrative: '' },
       extractionNotes: 'Per-page PDF content-stream decoding with ToUnicode CMaps. Anchor rule: 1 observation(s) could not be pinned to a page and are recorded here as unanchored observations, NOT as findings (no anchor, no sentence): [CT15] 5 of 6 amounts are suspiciously round (multiples of 1000) Engine notes (1): Page 397: Figures recognised on page 397 do not read as one invoice (subtotal R1161950, VAT R1, total R1.08): read the page image before relying on any of them Score calibration: confidence-weighted.',
       contextNotes: [{ type: 'CT22', location: 'Page 397', text: 'Figures recognised on page 397 do not read as one invoice (subtotal R1161950, VAT R1, total R1.08): read the page image before relying on any of them' }],
@@ -948,6 +962,19 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     const sr = R._scrubRebuttals(srFx);
     const srBlocks = R._narrativeBlocks(sr.text);
     ok(sr.text.split('\n\n').length === 5 && /\(p\. 12\)$/m.test(sr.text) && srBlocks.some(b => b.kind === 'heading' && b.text === 'Record') && srBlocks.filter(b => b.kind === 'para').length === 4, 'the rebuttal scrub keeps the server\'s paragraphs and headings: five blocks, "Record" a heading, each claim and rebuttal its own paragraph, the page cite kept with its claim (' + JSON.stringify(srBlocks.map(b => b.kind)) + ')');
+    // The gaps pass: the blockchain is never "anchored" before it is; the verbatim columns print the record's words, never the engine's; counts and tables.
+    ok(R._anchorPhrase({ ots: { submitted: true } }).indexOf('pending') !== -1 && /^recorded without a blockchain anchor/.test(R._anchorPhrase({})) && /^anchored to the Bitcoin blockchain/.test(R._anchorPhrase({ ots: { confirmed: true } })), 'the anchor phrase says what the seal can truthfully say at the moment of writing');
+    ok(!/anchored to the Bitcoin blockchain/.test(T + N) && /recorded without a blockchain anchor/.test(T), 'a report sealed without an OpenTimestamps record never claims a Bitcoin anchor');
+    ok(R._anchorQuote({ evidence: 'The document both affirms and negates "goodwill": "\u2026tive attorneys, provides that goodwill of R3,800,000 is recognised as payab\u2026" vs "\u2026see. No goodwill"' }).indexOf('tive attorneys') !== -1 && R._anchorQuote({ evidence: 'VAT mismatch: calculated R150.00 but stated R120.00' }) === null, 'the anchor quote is the first quoted span of the record; a computation has none');
+    ok(/engine observation, no verbatim passage/.test(T) && T.indexOf('MONETARY FIGURES REFERENCED') === -1, 'the evidence appendix marks an engine computation as such, and no computed amount is listed as a figure appearing in the record');
+    ok(/Pages 43, 45[^.]{0,80}carry only a seal footer/.test(N) || /Page 43[^.]{0,120}carry only a seal footer/.test(N), 'the court-ready narrative lists footer-only pages among the pages the engine could not read (' + ((N.match(/[^.]{0,60}carry only a seal footer[^.]{0,40}/) || [''])[0]) + ')');
+    const tocText = T.slice(T.indexOf('TABLE OF CONTENTS')).replace(/(?:\.\s){3,}/g, ' ').replace(/\s+/g, ' ').slice(0, 6000);
+    ok(/EVIDENCE APPENDIX[^\d]{0,30}\d+/.test(tocText) && /METHODOLOGY[^\d]{0,40}\d+/.test(tocText) && /7\. CERTIFICATION \d+ 8\. ANNEXES/.test(tocText), 'the table of contents reaches the last sections and the numbering continues after the constitutional block (' + tocText.slice(0, 400) + ')');
+    ok(R._docTitle('OCR BEE & x)') === '(title unreadable in the OCR text)' && R._docTitle('Franchise Agreement between Bright Idea Projects and Wayne Nel Motors') !== '(title unreadable in the OCR text)' && R._docTitle('') === '(untitled in the record)', 'OCR debris is never printed as a document\'s own name');
+    const merged = R._mergePersonIndex([{ name: 'Crompton Street Motors', kind: 'name', mentionCount: 7, pages: [29], mentions: [1] }, { name: 'CROMPTON STREET MOTORS CC', kind: 'name', mentionCount: 6, pages: [59], mentions: [2] }, { name: 'Bright Idea', kind: 'name', mentionCount: 7, pages: [3], mentions: [3] }, { name: 'Bright Idea Projects', kind: 'name', mentionCount: 5, pages: [4], mentions: [4] }]);
+    ok(merged.length === 2 && merged[0].mentionCount === 13 && merged[0].name === 'CROMPTON STREET MOTORS CC' && merged[1].mentionCount === 12 && merged[1].name === 'Bright Idea Projects', 'the person index merges name variants the way the scorecard does (' + JSON.stringify(merged.map(m => m.name + ':' + m.mentionCount)) + ')');
+    const pageSrc = require('fs').readFileSync(require('path').join(process.cwd(), 'seal-document.html'), 'utf8');
+    ok(/voBuildTimeline\(retainedEngine\)/.test(pageSrc) && /voBuildPersonIndex\(retainedEngine\)/.test(pageSrc) && /contradictionTypesUsed = Object\.keys\(rbt\)\.length/.test(pageSrc), 'the page recomputes the timeline, the person index and the type count on the retained findings after the review');
     const ct20Law = R._statutesForFinding({ type: 'CT20', severity: 2 }, jur0).map(x => x.provisions.join('; ')).join(' ');
     ok(/Common-law fraud/.test(ct20Law) && !/Corrupt Activities|Consumer Protection/.test(ct20Law) && !/Corrupt Activities/.test(R._statutesForFinding({ type: 'CT02', severity: 2 }, jur0).map(x => x.provisions.join('; ')).join(' ')), 'a registration-number note and any Low finding carry no corruption or consumer statute');
   };
