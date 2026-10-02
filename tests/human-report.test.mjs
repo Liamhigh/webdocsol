@@ -62,7 +62,7 @@ ok(/nothing here is machine-written/.test(bodyBH), 'a deterministic fallback is 
 ok(/COURT-READY NARRATIVE REPORT/.test(bodyBH) && !/VERUM OMNIS FORENSIC REPORT/.test(bodyBH),
   'the document is titled as a narrative report, never as the constitutional forensic report');
 ok(/The verdict on any named person is reserved for the court\./.test(bodyBH), 'verdict reservation sentence is printed');
-ok(/sealed under SHA-512 and anchored to the Bitcoin blockchain via OpenTimestamps/.test(bodyBH), 'certification sentence is printed');
+ok(/sealed under SHA-512 and ' \+ anchorPhrase\(data\) \+ '/.test(bodyBH) && /function anchorPhrase/.test(report), 'certification sentence is printed');
 ok(/No language-model verification of the findings is claimed/.test(bodyBH), 'provenance disclaims model verification of findings');
 ok(/f\.source === 'ai'\) return false/.test(bodyBH), 'AI candidates never enter the sealed findings list');
 ok(/No account on record/.test(bodyBH) && /No oath language was found/.test(bodyBH) && /None identified/.test(bodyBH),

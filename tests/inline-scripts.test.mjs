@@ -47,7 +47,12 @@ function objLiteral(src, name) {
 }
 {
   const report = readFileSync('forensic-report.js', 'utf8');
-  const pairs = [['CT_NAMES', 'CTNAME'], ['CT_CATEGORY', 'CTCAT']];
+  const pairs = [['CT_NAMES', 'CTNAME'], ['CT_CATEGORY', 'CTCAT'], ['CATEGORY_LABEL', 'CATLAB']];
+  // The category ORDER is an array literal: compared whole, so a category
+  // added to the renderer (FRANCHISE_LEASE, evidence-bundle-4) cannot be
+  // missed by the on-device narrative again.
+  const arrLiteral = (src, name) => { const m = src.match(new RegExp('var ' + name + '\\s*=\\s*(\\[[^\\]]*\\])\\s*;')); return m ? m[1].replace(/\s+/g, '') : null; };
+  ok(arrLiteral(report, 'CATEGORY_ORDER') && arrLiteral(report, 'CATEGORY_ORDER') === arrLiteral(html, 'CATORD'), 'CATORD matches CATEGORY_ORDER (' + arrLiteral(html, 'CATORD') + ')');
   for (const [srcName, copyName] of pairs) {
     const canonical = objLiteral(report, srcName);
     const copy = objLiteral(html, copyName);

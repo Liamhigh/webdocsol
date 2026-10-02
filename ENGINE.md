@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2197 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2324 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -321,8 +321,15 @@ breathalyzer prints a reading without pronouncing a conviction.
 | A verdict on a named person | Belongs exclusively to the court |
 
 **Required:**
-- Opening: `The sealed record of "<doc>" (N pages) contains N verified findings. The following are established.`
-- Closing: `These findings are sealed under SHA-512 and anchored to the Bitcoin blockchain: they cannot be changed, altered, or deleted. The verdict on any named person is for the court.`
+- Opening: `The sealed record of "<doc>" (N pages) contains <count>. The following are established.` — the count
+  is `voCountPhrase`'s: `N verified findings`, or, where some are anchored only on OCR-recovered pages or on a
+  secondary source, `N findings: K verified at full weight, and M anchored only on OCR-recovered pages or on a
+  secondary source, whose quoted wording is to be verified against the page image or the primary document
+  before it is relied on (C of them held at reduced weight by the engine)`.
+- Closing: `These findings are sealed under SHA-512 and anchored to the Bitcoin blockchain: any change to them is
+  detectable, because the fingerprint would no longer match, and the timestamp fixes when they existed. The
+  verdict on any named person is for the court.` (never "cannot be changed, altered, or deleted": a hash proves
+  tampering, it does not prevent it)
 - Clean result: `No contradictions were detected. Every detector ran; none triggered.`
 - Every finding anchored to quoted text and a page.
 
@@ -524,7 +531,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**33 suites · 2197 assertions.** `tests/run-all.js` is the registry — a new
+**33 suites · 2324 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -535,7 +542,7 @@ test file that is not registered there does not run.
 | `detector-recall.test.mjs` | 107 | Recall + the §4 false-positive guards, pinned to real bundle strings |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
 | `worker.test.mjs` | 264 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget) |
-| `human-report.test.mjs` | 76 | **The court-ready narrative** (§13): one section contract in three artefacts, opt-in default OFF with honest consent copy, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery |
+| `human-report.test.mjs` | 77 | **The court-ready narrative** (§13): one section contract in three artefacts, opt-in default OFF with honest consent copy, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery |
 | `site-serving.test.mjs` | 54 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
 | `pages-bridge.test.mjs` | 16 | **The www bridge** (DEPLOYMENT.md "The bridge"): the Pages Function hands every request to the Worker at the same path and query with method, headers and body; redirects pass through; a request marked `X-VO-Chain` is served from static files (no loop); an unreachable Worker falls back to static with an honest header; `functions/` never ships as a Worker asset |
 | `zip-intake.test.mjs` | 25 | **WhatsApp chat exports unpacked on-device** (§12.6a): the page's ZIP reader against real archives (stored, deflated, data-descriptor, folder, macOS cruft, encrypted, garbage), expansion into typed Files, only evidence types admitted, documents inside a voice-note export named for a separate seal, the panel note, the .zip picker entry, the 25-note batch, the home-page copy and locally served photos |
@@ -543,10 +550,10 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `annexure-eb-regression.test.mjs` | 252 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run and the evidence-bundle-4-docs run** (§12.10–§12.13): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans |
+| `annexure-eb-regression.test.mjs` | 375 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run and the evidence-bundle-4-docs run** (§12.10–§12.13): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
-| `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
+| `inline-scripts.test.mjs` | 25 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.mjs` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
 | `digital-forensics.test.mjs` / `findings-json.test.mjs` / `narrate-excerpt.test.mjs` | 16 each | PDF structure · JSON contract v1.1.0 · AI excerpt building |
 | `franchise-lease.test.mjs` | 15 | D38/D39 (CT44/CT45) |
@@ -960,6 +967,9 @@ is pinned by `tests/annexure-eb-regression.test.mjs`, built from that run's find
    Findings JSON v1.3.0 adds `review_status` (`unreviewed` / `ai_reviewed` /
    `ai_raised_candidate`), `ocr_provenance` (true / 'partial' / false), `ocr_confidence` and
    `severity_capped_for_ocr` — additive; `verification_status` is unchanged for the contract.
+   Findings JSON v1.4.0 (evidence-bundle-4 critique) adds `secondary_capped` and `ocr_anchored`, so
+   the reduced-weight flags travel with the finding and a consumer need not depend on the
+   evidence-string tags.
 5. **Forensic mode pre-flights the service.** `voPreflightForensicService` fetches
    `/api/v1/site/health`; anything but JSON `{ok:true}` means the address has no forensic
    service (the annexure EB run was made on the old Pages host, which answers every POST
@@ -1309,35 +1319,114 @@ sealed four days after §12.12 shipped, so everything there held; what follows i
    that the page's figures do not read as one invoice, which blames OCR only on an OCR page.
    Both standard rates since 2018 are accepted, a zero VAT line is zero-rated, and a
    discount, delivery or credit line between the subtotal and the total leaves the page
-   unchecked. The printed words carry no percentage (PD1). CT15/CT22 join the OCR cap
-   (§12.10); a signed-package phrase rule is never capped — it matched words, not
-   characters — but is still counted apart (`ocrAnchored`).
+   unchecked. The trade-off is stated: a VAT line below a tenth of the subtotal is a note,
+   not a finding. The printed words carry no percentage (PD1), and the note states the
+   recognised figures as a fact ("Figures recognised on page 397 do not read as one invoice
+   (…): read the page image before relying on any of them"), never a guess about why.
+   CT15/CT22 join the OCR cap (§12.10); a signed-package phrase rule is never capped — it
+   matched words, not characters — but is still counted apart (`ocrAnchored`).
 7. **An extract prepared on the seal date read as the record.** A stated document whose title
-   or first page says it is an extract, summary or commentary prepared after the fact
-   (`VO_SECONDARY_TITLE_RE`) is secondary: a finding whose every cited page sits in it moves
+   or first page says it is an extract, summary, synopsis, commentary, chronology or digest
+   prepared, compiled, drafted, reproduced or annotated after the fact, or "pages reproduced"
+   (`VO_SECONDARY_TITLE_RE`), is secondary: a finding whose every cited page sits in it moves
    to the engine notes as a lead to verify against the primary record; one with some pages
    there is held at severity 2 and tagged. The "uncountersigned" line and the "Goodwill: N/A"
-   half on p.557 were such leads.
+   half on p.557 were such leads. The primary record describes itself in the same words and
+   is never secondary: a tax invoice or quotation "prepared for … on 12 March 2024", financial
+   statements "prepared on the historical cost basis", a valuation report "prepared by";
+   "prepared by/on/for + a date" on its own is not a title, "notes" and "analysis" count only
+   as "notes on" and "analysis of", and a secondary noun that follows the name of a primary
+   record ("Summary of significant accounting policies … prepared") is a heading inside that
+   record (`VO_PRIMARY_RECORD_RE`, read from the secondary noun to a little past the verb — a
+   primary noun BEFORE the noun names the extract's source: "Franchise Agreement — Extract
+   prepared …" is secondary; an auxiliary before the verb, "the financial statements have been
+   prepared", is the record; `voIsSecondaryHead`). The gap between noun and verb tolerates an
+   abbreviation period ("Extract from Mr. Bentz's affidavit, prepared"); a participle needs no
+   verb ("Extracted pages", "Summarised by counsel", "Commentary on the MOU"). A quotation note
+   ("Here is the exact wording of the relevant portions of the Franchise Agreement", p.444) and a
+   page compiled by an AI assistant are accounts of the record too (`VO_QUOTATION_NOTE_RE`,
+   `VO_AI_COMPILED_RE` on every document head). Pages no stated document covers — a
+   one-document file, a run shorter than three pages, an orphan page between two documents —
+   are tested by their own head, so an extract sealed on its own is secondary from its first
+   page to its last. A finding of two halves ("Page 12 vs Page 557") with either half on a
+   secondary page is a contradiction between the record and an account of the record, not of
+   the record: a lead, never a reduced-weight finding; only a list finding with some pages
+   there is held at severity 2. "… and 3 more" and "(clause 7)" in a location are not pages
+   (`voRulePagesOf`); a finding that lists more than eight pages carries them all in `f.pages`
+   and every page test reads it (`voFindingPages`), so a ten-page finding wholly on an extract
+   is a lead and never counts as native text. The reach on the sealed bundle is stated and
+   pinned: three consecutive stated documents headed "Extract prepared 30 Sept 2026 - pages
+   reproduced…" (p.450–575) are secondary — the signature lead on p.557 and the two goodwill
+   pairs are leads, the eight-page admission is held at reduced weight. The demotion runs before
+   the signed rule package and the per-type cap, so a lead neither blocks a package rule nor
+   consumes a type's budget, and before the OCR cap, so a lead carries no cap tag; each lead goes
+   to the engine notes with its page, where both reports print it (§12.13 item 11). The engine
+   note names each secondary document and its page range (`voSecondaryWhere`), so a reader can
+   see which pages the leads sit on.
 8. **Findings dated from unrelated lines.** `voAnchorEnrich` took up to two dates from
    anywhere on the cited page, so a registration-number finding was dated "1 October 2005".
    WHEN now comes from the finding's own words or, failing that, one date from the sentence on
    the page that holds the quote (`voSentenceAround`).
+   A quote that D01, D09 or D27 wrap in ellipses ("…tive attorneys, provides that…") is keyed
+   on its own words, so its sentence still dates it. A dotted triple is a date only with a
+   four-digit year ("1.1.50" is a clause), a numeric token after a clause, paragraph, section or
+   item cue is a reference, and only a date the timeline can order reaches `anchor.when`, so a
+   clause number never blocks the sentence fallback. On a form or OCR page with no sentence
+   boundary the window closes to 160 characters each side, so a letterhead date never dates
+   the quote. The stamp's clock is read as OCR leaves it ("1S:41:47", "15 41 47", "| 15:41:47",
+   `VO_CLOCK_AFTER_RE`) and a date within forty characters before the footer's "Johannesburg"
+   is the stamp whatever the clock looks like. A term in single quotes ('Astron Motor Fuel'
+   means …) is a quote too, so a definition finding is dated by its sentence; the anchor reads
+   the full page array of a finding whose location prints "… and N more".
 9. **Parties "Supreme Court", "Service Station", "Timol de", "Auditors Name Postal
    Address".** Court, trade and form-label tokens join `VO_NON_PERSON_TOK`; a name ending on a
    surname particle is cut short and rejected.
+   A final particle rejects a name only when written lowercase ("Timol de") or when it never
+   stands alone (Van, Der, Den, Von, De, Al): "Thanh Le", "Li Bin" and "Margaret Court" are
+   people, so "court" is a stop phrase ("Supreme Court", "High Court", "Court Order"), never a
+   stop token; a Title-Case four-token name ("Johan Van Der Merwe") is read whole. The sealed
+   report's other false parties are stopped too: the detector's own label ("Registration
+   Number"), form and address words (tel, street, road, city, office), headings ("AD
+   PARAGRAPH", "AS WITNESSES"), the franchise agreement's defined terms ("Franchise Interest",
+   "Approved Supplier", "RAS Retail Margin"), a case title's "v" and an invoice column ("ADD
+   DISBURSEMENTS I R": a single letter after the first token, unless an initial with its
+   period), an OCR variant of a stop word ("Audifors", "Statlon": six letters or more within
+   one edit), a name spanning a line break ("Associates Tel") and one cut by a slash ("All
+   Fue/s"). A run that carries a stop word is trimmed to the name before it, never dropped
+   whole (`voTrimPersonName`): "Name: Zeyd Timol Postal Address" binds "Zeyd Timol", "Zeyd
+   Timol de" at a line end binds "Zeyd Timol", a lone surname binds nothing; "high" and
+   "station" are phrases ("High Court", "Service Station"), since "Jennifer High" is a person.
 10. **The report.** `FRANCHISE_LEASE` was missing from `CATEGORY_ORDER`, so CT44/CT45 were
-    absent from the findings matrix (41 of 44 listed). Candidate law: the Rental Housing Act
-    (residential tenancies) and the POCA "pattern of racketeering" entry leave the CONTRACT
-    list; an arithmetic finding (CT13/CT14/CT15/CT22) no longer carries money-laundering, FICA
-    or corruption provisions (`statutesForFinding`). "They cannot be changed, altered, or
-    deleted" became "any change to them is detectable" — a hash proves tampering, it does not
-    prevent it. Wherever a count of verified findings is printed, findings held at reduced
-    weight (OCR-only anchors, whatever their type; secondary sources) are counted apart
-    (`voCountPhrase`: "N findings: K verified at full weight, and M anchored on OCR-recovered
-    pages or on a secondary source and held at reduced weight"). The
+    absent from the findings matrix (41 of 44 listed); the CONTRACT subject now has a label
+    ("Contract, Lease & Franchise") and key points, and the dishonesty matrix reads the subject
+    through `subjectOf`, so a CT44 sits under one subject in every table. Candidate law: the
+    Rental Housing Act (residential tenancies) and the POCA "pattern of racketeering" entry
+    leave the CONTRACT list; an arithmetic finding (CT15/CT22, the D13/D14 output — never CT13
+    or CT14, which are title and entity-status findings) carries no money-laundering, FICA or
+    corruption provision; a registration-number finding (CT20) and any Low finding carry no
+    corruption, consumer or commercial-fraud statute, common-law misrepresentation at most
+    (`statutesForFinding`). "They cannot be changed, altered, or deleted" became "any change
+    to them is detectable" — a hash proves tampering, it does not prevent it — and so did the
+    legal-elements seal paragraph ("no party can alter it afterwards", "forever"), the section
+    title ("HOW ANY CHANGE TO THIS RECORD IS DETECTED") and the Constitution line ("a sealed
+    instrument whose fingerprint is anchored"). Every count of findings goes through
+    `voCountPhrase` — the cover, the executive summary, the summary trailer and the narrative
+    opener — which tells apart findings anchored only on OCR-recovered pages or on a secondary
+    source and says what the engine did: their quoted wording is to be verified, and only
+    those whose severity the engine lowered are "held at reduced weight" (an uncapped CT01 or
+    CT44 on a scanned page keeps its severity, and the report never says otherwise). The
     Triple Verification table says how many findings the review dropped. The narrative's
-    provenance prints both gate counters, and a rebuttal whose claim the gate removed is
-    dropped whole instead of printed as an orphan (`scrubRebuttals`).
+    provenance prints both gate counters and, apart from them, the rebuttal sentences dropped
+    with a claim the gate removed; a rebuttal is recognised in the narrator's own vocabulary
+    ("The record at p. N states …", "Assessment: contradicted …", with a bullet or emphasis
+    marker), and a heading-shaped line between a claim and its rebuttal keeps the claim's
+    standing; the scrub keeps the server's paragraphing (blank lines between blocks, which the
+    renderer splits on), and a trailing page cite "(p. 20)" is not a sentence of its own, so a
+    removed claim leaves no stray cite that would keep its rebuttal alive (`scrubRebuttals`,
+    module-level, exported as `_scrubRebuttals`). The on-device fallback narrative
+    (`buildLocalNarrative` in `seal-document.html`) carries `FRANCHISE_LEASE` in its own
+    category tables, and `tests/inline-scripts.test.mjs` now compares `CATLAB`/`CATORD` with
+    `CATEGORY_LABEL`/`CATEGORY_ORDER` so a category added to the renderer cannot be missed again.
 
 Not adopted, with reasons: renaming CT20 "Registration Number Fake" — the name is the
 Constitution's taxonomy (v8.0 FINAL, test-locked) and the "What it means" line is already
@@ -1345,6 +1434,62 @@ neutral; reserving "verified" for human-confirmed items — the Constitution sta
 fact, and the split count now says which ones rest on OCR or a secondary source; a build that
 fails when the advisory review retains a known artefact — the suites pin the artefacts at the
 detector level, where they are removed, and the review is advisory.
+11. **Engine notes misfiled.** A detector's `contextOnly` note (figures that do not read as one
+   invoice, registration numbers OCR could not read, an ownership line not paired) was
+   appended to the extraction notes as unlabelled text, so the technical report filed it
+   under "items it could not pin to a specific page" and the court-ready narrative dropped
+   it. The engine now returns them structurally (`contextNotes: [{type, location, text}]`)
+   and under a labelled "Engine notes (n):" segment; both reports print them under their own
+   heading with their page (`engineNotes`, `secEngineNotes`), never as a finding.
+12. **The gaps pass.** The critique's last agent read the whole sealed output against the plan and
+    found what no rule covered. Adopted: review-dropped findings no longer feed the timeline, the
+    person index or the type count (the page recomputes them on the retained findings, so
+    "Contradiction types triggered" and "distinct patterns" agree); every contradiction anchored
+    only on OCR-recovered pages is held below serious (severity 3, `ocrHeld`) until a person has
+    read the page image, with the format checks still at Low; an invoice's figures read by OCR
+    below a recogniser confidence of 60 are a note (`VO_OCR_FIGURE_MIN_CONFIDENCE`); the report
+    says "anchored to the Bitcoin blockchain" only when the OpenTimestamps proof is confirmed —
+    at sealing it is submitted and the confirmation pending, and the report says so
+    (`anchorPhrase`, `timestampClause`); the "verbatim" columns ("Quoted record", "What the
+    document says", the evidence appendix, the monetary figures) print the passage the finding
+    quotes (`anchorQuote`) and mark an engine computation as the engine's observation, never as
+    the record's words; "Party implicated" is said only of a party the case declared and never on
+    a format check, a name the engine found on the page is stated descriptively; a finding held at
+    reduced weight satisfies no offence element; an AI candidate with no page stays out of the
+    evidence appendix, the evidence map and the type summary; the CT15/CT22 plain-language lines
+    describe arithmetic, not two statements of one amount; CT45 has its own next step; the
+    "pages the engine could not read" section lists footer-only pages; the document map names
+    pages no stated document covers and never prints OCR debris as a title; the person index
+    counts findings and merges name variants as the scorecard does; the contents page scales to
+    fit and the section counter continues after the constitutional block; the narrative edition
+    is not printed piecemeal when fewer than half the narrator's sections pass the gates; D38's
+    termination language must sit on the clause's own page; quote windows snap to word
+    boundaries; the close-corporation short form CK YY/NNNNN/NN is valid and its OCR readings
+    are repaired through the window's digits; pleading roles, "manual" and a Title-case
+    three-letter token with no vowel are not names; the breadth note states its basis; the
+    methodology no longer claims per-severity totals it does not print, and the review is a
+    single model. Deferred, with reasons: collapsing identical findings into one row (each page
+    is a separate anchor by design, and the engine's dedup already collapses exact duplicates);
+    the narrator's selection of the findings it quotes (server-side); a dictionary for OCR-debris
+    names; a context-keyed redesign of the statute lists; tuning the advisory review leg.
+    A second verification pass (three adversarial lenses over the commit) then corrected it:
+    `anchorQuotes` returns every passage the record states (both halves of a contradiction)
+    and never a label ('"purchase price" is stated as …') or the engine's cue
+    ('("i acknowledge that")'); a numerical, currency or banking discrepancy returns its stated
+    figures minus the computed variance, and the two-sided executive-summary lines say "the
+    engine observed" when a side carries no quote; D38 tests the termination language per lessee
+    hit on its page or the next, so a recital before the clause never shadows it and a clause
+    split by a page break still fires; `docTitle` scores debris (a vowel-less token that is not
+    an acronym or a company suffix, a letterless token, a stray symbol) rather than grammar, and
+    says "in the OCR text" only of an OCR page; the party line decides "declared" on the
+    normalised party list and lists each name once; the person index merges spelling, spacing
+    and suffix variants only (`sameNameVariant`), never two different people, and counts a
+    finding once however many spellings name the party; two further "anchored via
+    OpenTimestamps" sentences go through `anchorPhrase`; footer-only pages are listed once; a
+    sanctioned one-line narrator answer counts as passing and the suppression note prints once;
+    the OCR-provenance note counts format checks held at Low apart from contradictions held
+    below serious; findings JSON v1.5.0 adds `ocr_held`.
+
 
 ## 13. The court-ready narrative (the "human report")
 

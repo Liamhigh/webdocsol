@@ -515,7 +515,7 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   // Both halves of a two-sided finding must survive. A single truncation
   // window cut the "owner" quote off the Lessee/Owner trap, leaving only the
   // "lessee" half — the reader lost the half that makes the finding.
-  ok(/var sidesE = contradictionSides\(f\.evidence\)/.test(es) && /and also states: ' \+ B/.test(es),
+  ok(/var sidesE = contradictionSides\(f\.evidence\)/.test(es) && /and also states: "?' \+ B/.test(es),
     'a two-sided finding prints both halves, each with its own budget');
   ok(/\(unreadN === 1 \? 'it' : 'them'\)/.test(es),
     'the unread-page instruction agrees in number ("1 unread page ... nothing on IT")');
