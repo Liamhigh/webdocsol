@@ -664,6 +664,34 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     finally { globalThis.fetch = origFetch; }
     ok(g.generated === false && g.reason === 'timeout', 'an aborted external provider call reports timeout, not ai_unavailable');
   }
+  // FOUR PILLARS: a finding is cited under a pillar only when its type
+  // evidences that pillar (Public Protector submission run: "The record
+  // evidences inducement or reliance [F2]" for an unsigned-agreement finding
+  // passed the gate because [F2] was a valid id).
+  {
+    const pFindings = [
+      { id: 'F1', type: 'CT14', name: 'Entity status', severity: 5, page: 13, pages: [13], evidence: 'the operator is non-compliant', quote: 'the operator is non-compliant' },
+      { id: 'F2', type: 'CT23', name: 'Signature', severity: 2, page: 6, pages: [6], evidence: 'a common scheme involving an unsigned agreement', quote: 'an unsigned agreement' },
+      { id: 'F3', type: 'CT15', name: 'Invoice total', severity: 4, page: 9, pages: [9], evidence: 'total R100 vs parts R90', quote: 'total R100' }
+    ];
+    const pDraft = 'MISREPRESENTATION\n\nThe record states the operator is non-compliant [F1] (p. 13). The same page records the status a second time [F1] (p. 13).\n\nThe record evidences an unsigned agreement under this pillar [F2] (p. 6).\n\n' +
+      'Another misrepresentation is found in the unsigned agreements [F2] (p. 6).\n\nThe record evidences inducement or reliance [F2] (p. 6).\n\n' +
+      'Knowledge: INSUFFICIENT.\n\nLoss: the stated total differs from its parts [F3] (p. 9).\n\nThe misrepresentation is stated again in the invoice [F3] (p. 9).';
+    const pBody = { section: 'four_pillars', pageCount: 20, findings: pFindings, excerpt: '[Page 13] the operator is non-compliant' };
+    const pj = await (await hPost(pBody, mockAI(pDraft))).json();
+    ok(pj.generated === true && /non-compliant \[F1\]/.test(pj.text) && /parts \[F3\]/.test(pj.text) && /Knowledge: INSUFFICIENT/.test(pj.text),
+      'four pillars: a contradiction under misrepresentation, a financial finding under loss and a stated gap are kept (' + JSON.stringify(pj.text) + ')');
+    ok(!/\[F2\]/.test(pj.text) && !/invoice \[F3\]/.test(pj.text) && pj.gate.pillar === 4,
+      'four pillars: an unsigned-agreement finding under misrepresentation (by heading or by name) or inducement, and a financial finding under misrepresentation, are dropped and counted (' + JSON.stringify(pj.gate) + ')');
+    const ej = await (await hPost({ ...pBody, section: 'executive_summary' }, mockAI('The record evidences inducement or reliance [F2] (p. 6). The record states the operator is non-compliant [F1] (p. 13).'))).json();
+    ok(ej.generated === true && /\[F2\]/.test(ej.text) && !ej.gate.pillar, 'the pillar test applies to the four-pillars section only');
+  }
+  // Court-recognition paraphrases are banned language (tightened).
+  for (const t of ['The court has recognised the platform\'s validity [F1] (p. 2).', 'The platform was recognised by the court [F1] (p. 2).', 'The platform is court-accepted [F1] (p. 2).',
+    'The seal was accepted by the Magistrate\'s Court [F1] (p. 2).', 'The sealed record is admissible in court [F1] (p. 2).', 'The Port Shepstone Magistrate\'s Court has already recognised this [F1] (p. 2).']) {
+    ok(!(await kept(t)), 'court-recognition paraphrase dropped: ' + t);
+  }
+  ok(await kept('The provision governs the admissibility of data messages [F1] (p. 2).'), '"admissibility" as a statute\'s subject is not the banned adjective');
 }
 
 // --- the signed rule-package loop: publish -> manifest -> the website verifies.

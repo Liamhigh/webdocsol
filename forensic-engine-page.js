@@ -1637,13 +1637,17 @@ var DETECTORS = {
         while ((m = re.exec(t)) !== null) {
           var win = t.substring(Math.max(0, m.index - 90), Math.min(t.length, m.index + m[0].length + 90));
           var pre = t.substring(Math.max(0, m.index - 40), m.index);
+          // "compliant" inside "non-compliant" is the negation itself, read a
+          // second time (\b falls at the hyphen): the Public Protector
+          // submission run paired one "non-compliant" with itself.
+          if (/\bnon[-\s]?$/i.test(pre)) continue;
           var excluded = ((word === 'registered') && NOT_STATUS_REGISTERED.test(win)) ||
                          NOT_STATUS_PROVISION_BEFORE.test(pre) ||
                          NOT_STATUS_PROVISION_NEAR.test(win) ||
                          NOT_STATUS_CONDITIONAL.test(win) ||
                          NOT_STATUS_EVENT_MENU.test(win);
           if (!excluded && ENTITY_NEAR.test(win)) {
-            return { page: b + 1, snippet: win.replace(/\s+/g, ' ').trim() };
+            return { page: b + 1, idx: m.index, snippet: voSnapWindow(t, m.index - 90, m.index + m[0].length + 90) };
           }
         }
       }
@@ -1653,7 +1657,10 @@ var DETECTORS = {
       var uses = [];
       for (var j = 0; j < statusClaims[i].length; j++) {
         var u = findStatusUse(statusClaims[i][j]);
-        if (u) uses.push({ word: statusClaims[i][j], page: u.page, snippet: u.snippet });
+        if (!u) continue;
+        // Two status words at one place in the text are one claim, not two.
+        var overlaps = uses.some(function (x) { return x.page === u.page && Math.abs(x.idx - u.idx) < 24; });
+        if (!overlaps) uses.push({ word: statusClaims[i][j], page: u.page, idx: u.idx, snippet: u.snippet });
       }
       if (uses.length > 1) {
         var a = uses[0], c = uses[1];
@@ -2405,6 +2412,7 @@ var DETECTORS = {
   // contact; a domain that merely prefixes another is a truncated read of it.
   D25_DETECT_CONTACT_MISMATCH: function(textBlocks) {
     var findings = [];
+    var VO_GOV_DOMAIN_RE = /(?:^|\.)(?:gov|govt|gouv|gob|go|mil|gc)\.[a-z]{2}$|\.(?:gov|mil)$/;
     var emailRe = /\b[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g;
     var byDomain = {};
     for (var i = 0; i < textBlocks.length; i++) {
@@ -2428,6 +2436,11 @@ var DETECTORS = {
         if (!byDomain[da].text || !byDomain[db].text) continue;
         if (da.length < 8 || db.length < 8) continue;
         if (db.indexOf(da) === 0 || da.indexOf(db) === 0) continue;
+        // Registration under a government suffix (gov.za, gov.uk, .gov, .mil,
+        // gc.ca …) is restricted to government bodies, so two such domains are
+        // never a fraudster's lookalike: "dmre.gov.za" and "dmpr.gov.za" are one
+        // renamed department, listed together for one mailbox.
+        if (VO_GOV_DOMAIN_RE.test(da) && VO_GOV_DOMAIN_RE.test(db)) continue;
         var dist = voEditDistance(da, db);
         if (dist < 1 || dist > 2) continue;
         var union = byDomain[da].pages.concat(byDomain[db].pages.filter(function (p) { return byDomain[da].pages.indexOf(p) === -1; }))
@@ -2778,16 +2791,24 @@ var DETECTORS = {
     // AllFuels rerun produced 25 scattered CT23 rows that buried the fact
     // instead of stating it once. Every page stating the same absence is one
     // fact of the record: report it once, cite every page.
-    var unsignedPages = [], unsignedQuote = null, unsignedCue = null, unsignedRelied = false;
+    var unsignedPages = [], unsignedQuote = null, unsignedCue = null, unsignedRelied = false, unsignedQuotePage = 0;
     for (var u = 0; u < textBlocks.length; u++) {
       var lowU = (textBlocks[u] || '').toLowerCase();
       for (var q = 0; q < unsignedCues.length; q++) {
         var at = lowU.indexOf(unsignedCues[q]);
+        // "unsigned agreements" in the plural names a category of documents
+        // ("a common scheme involving unsigned agreements", a party's own
+        // submission), not one instrument's execution: only a specific
+        // instrument counts.
+        while (at !== -1 && /^unsigned /.test(unsignedCues[q]) && /^s\b/.test(lowU.slice(at + unsignedCues[q].length))) at = lowU.indexOf(unsignedCues[q], at + 1);
         if (at === -1) continue;
         unsignedPages.push(u + 1);
         if (!unsignedQuote) {
           unsignedCue = unsignedCues[q];
-          unsignedQuote = textBlocks[u].substring(Math.max(0, at - 60), at + unsignedCues[q].length + 60).replace(/\s+/g, ' ').trim();
+          // Snapped to whole words: a raw 60-character window began "nd Smith"
+          // for "Desmond Smith" (Public Protector submission run).
+          unsignedQuote = voSnapWindow(textBlocks[u], at - 60, at + unsignedCues[q].length + 60);
+          unsignedQuotePage = u + 1;
         }
         var ctxWin = textBlocks[u].substring(Math.max(0, at - 200), at + unsignedCues[q].length + 200);
         if (VO_UNSIGNED_RELIANCE_RE.test(ctxWin)) unsignedRelied = true;
@@ -2800,7 +2821,8 @@ var DETECTORS = {
         : unsignedPages.join(', ');
       findings.push({ type: 'CT23', severity: unsignedRelied ? 4 : 2,
         evidence: 'The record states a signature is missing ("' + unsignedCue + '"): "' + unsignedQuote + '"' +
-          (unsignedPages.length > 1 ? ' — stated on ' + unsignedPages.length + ' pages (' + upList + ')' : '') +
+          // The quote is from one page; the location lists every page.
+          (unsignedPages.length > 1 ? ' (quoted from p. ' + unsignedQuotePage + ') — stated on ' + unsignedPages.length + ' pages (' + upList + ')' : '') +
           ' — verify execution against the signature pages of the original',
         location: 'Page ' + upList, pages: unsignedPages.slice() });
     }
@@ -4051,6 +4073,21 @@ function voIsSecondaryHead(text) {
   var window = t.slice(m.index, Math.min(t.length, m.index + m[0].length + 60));
   return !VO_PRIMARY_RECORD_RE.test(window);
 }
+// A party's own submission about other sealed records ("Response to Public
+// Protector Referral …", which quotes "the sealed Thongasi-AllFuels contract
+// (Seal ID: VO-210B029F1A0B)") is an account of those records, not the
+// record: its author's characterisations were sealed as three findings on the
+// Public Protector submission run. Both cues are required — a submission
+// title on the document's first page AND a citation of another Verum seal in
+// its body (the document's own seal footer is stripped before this runs and
+// reads "Seal:", never "Seal ID:").
+var VO_SUBMISSION_HEAD_RE = /^\s*(?:response|reply|submissions?|representations|written\s+representations|heads\s+of\s+argument)\s+(?:to|on|regarding|for|in\s+(?:response|reply)\s+to)\b/i;
+var VO_CITES_SEAL_RE = /\bseal(?:ed)?\s+(?:id|as|no\.?|number)\s*:?\s*VO-\s?[0-9A-F]{4}|\bquote\s+from\s+sealed\s+evidence\b/i;
+function voIsSubmissionOnSealed(head, blocks, start, end) {
+  if (!VO_SUBMISSION_HEAD_RE.test(String(head || ''))) return false;
+  for (var p = start; p <= end; p++) if (VO_CITES_SEAL_RE.test(String(blocks[p - 1] || '').replace(/\s+/g, ' '))) return true;
+  return false;
+}
 var VO_SECONDARY_NOTE = function (pages) { return ' [secondary source on p. ' + pages.join(', ') + ': an extract or commentary prepared after the fact, not the primary record — verify against the primary document]'; };
 // Stated documents are tested by title and first-page head. Pages no stated
 // document covers (a one-document file, a run shorter than three pages, an
@@ -4063,10 +4100,10 @@ function voSecondarySegments(segs, textBlocks) {
     var seg = list[d];
     for (var c = seg.start; c <= seg.end; c++) covered[c] = true;
     var head = headOf(seg.start);
-    if (!(voIsSecondaryHead(seg.title) || voIsSecondaryHead(head))) continue;
+    if (!(voIsSecondaryHead(seg.title) || voIsSecondaryHead(head) || voIsSubmissionOnSealed(head, blocks, seg.start, seg.end))) continue;
     out.push({ start: seg.start, end: seg.end, title: String(seg.title || head).replace(/\s+/g, ' ').trim().slice(0, 80) });
   }
-  if (!list.length && blocks.length && voIsSecondaryHead(headOf(1))) {
+  if (!list.length && blocks.length && (voIsSecondaryHead(headOf(1)) || voIsSubmissionOnSealed(headOf(1), blocks, 1, blocks.length))) {
     return [{ start: 1, end: blocks.length, title: headOf(1).trim().slice(0, 80) }];
   }
   for (var p = 1; p <= blocks.length; p++) {
@@ -4352,7 +4389,14 @@ var VO_NON_PERSON_TOK = (function () {
     'retail operating accounting approved branded secrets marketer expenses ' +
     // A pleading role is a role, never a surname ("First Respondent"); a
     // manual is a document.
-    'respondent respondents applicant applicants plaintiff plaintiffs defendant defendants appellant complainant accused manual').split(' ');
+    'respondent respondents applicant applicants plaintiff plaintiffs defendant defendants appellant complainant accused manual ' +
+    // Public Protector submission run: a title ("Mr Jacob Mbele Director-General",
+    // "… Department"), a running page header ("Systemic Unfair Practices"),
+    // and headings and phrase starts bound as names ("Petroleum Resources",
+    // "Trevenna Campus", "Personal Assistant", "Concerns Regarding",
+    // "Critical Point", "Instrument Does").
+    'director director-general department systemic unfair practices practice ' +
+    'resources campus assistant personal concerns regarding critical point instrument does').split(' ');
   for (var i = 0; i < words.length; i++) m[words[i]] = 1;
   return m;
 })();
@@ -4394,7 +4438,10 @@ var VO_NON_PERSON_PHRASE = (function () {
     'zulu natal|kwazulu natal|kwa zulu natal|as witnesses|ad paragraph|consumer protection act|protection act|' +
     // "High" and "Station" are surnames ("Jennifer High"); the court and the
     // forecourt are phrases.
-    'service station|police station|filling station|petrol station|fuel station|station commander').split('|');
+    'service station|police station|filling station|petrol station|fuel station|station commander|' +
+    // Public Protector submission run: the product's own heading ("Verum Omnis
+    // Forensic Platform") recurred into the roster as "Forensic Platform".
+    'forensic platform|verum omnis forensic platform').split('|');
   for (var i = 0; i < phrases.length; i++) m[phrases[i]] = 1;
   return m;
 })();
@@ -4405,7 +4452,10 @@ var VO_NON_PERSON_PHRASE = (function () {
 // "Kevin Lappeman\u2019s" and "Kevin Lappeman" are one party: strip a trailing
 // possessive before validity checks and dedupe, so both forms collapse.
 function voCleanPersonName(n) {
-  return String(n == null ? '' : n).replace(/[\u2019']s$/i, '').replace(/[\s.,;:]+$/, '').trim();
+  // A courtesy title before a full name is not part of it ("Mr Jacob Mbele" is
+  // "Jacob Mbele"); "Mrs Smith" keeps it, or one token would be left.
+  return String(n == null ? '' : n).replace(/[\u2019']s$/i, '').replace(/[\s.,;:]+$/, '').trim()
+    .replace(/^(?:Mr|Mrs|Ms|Miss|Dr|Adv|Prof|Advocate)\.?\s+(?=\S+\s+\S)/, '');
 }
 var VO_NON_PERSON_TOK6 = (function () { var out = []; for (var k in VO_NON_PERSON_TOK) if (k.length >= 6) out.push(k); return out; })();
 function voNearNonPersonTok(tok) {
@@ -4437,8 +4487,23 @@ function voNearNonPersonPhrase(toks) {
 // it, never dropped whole: "Zeyd Timol Postal Address" is "Zeyd Timol", and
 // "Zeyd Timol de" (a particle cut at a line end) is "Zeyd Timol". A single
 // remaining token is not a party.
+// A role or title in front of a name ("Director Andy Mothibi", "The National
+// Director Andy Mothibi", "First Respondent Wayne Nel") is skipped, so the
+// stop word does not cut the name away with it; a role with no name after it
+// ("First Respondent") still binds nothing.
+var VO_ROLE_PREAMBLE_TOK = { the: 1, national: 1, first: 1, second: 1, third: 1, fourth: 1, acting: 1, deputy: 1, chief: 1, senior: 1, executive: 1, personal: 1 };
+var VO_ROLE_LEAD_TOK = { director: 1, 'director-general': 1, assistant: 1, respondent: 1, applicant: 1, plaintiff: 1, defendant: 1, appellant: 1, complainant: 1, accused: 1 };
 function voTrimPersonName(name) {
   var toks = String(name == null ? '' : name).replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  // An address opens with "Corner" ("Corner Francis Baard and Meintjies
+  // Streets"); as a last token it can be a surname, so only the lead is stopped.
+  if (toks.length && /^(?:corner|cnr)$/i.test(toks[0].replace(/[.,]+$/, ''))) return '';
+  var lead = 0, low = function (t) { return t.replace(/[.,:;'\u2019]+$/, '').toLowerCase(); };
+  while (lead < toks.length && VO_ROLE_PREAMBLE_TOK[low(toks[lead])]) lead++;
+  if (lead < toks.length && VO_ROLE_LEAD_TOK[low(toks[lead])]) {
+    while (lead < toks.length && VO_ROLE_LEAD_TOK[low(toks[lead])]) lead++;
+    if (toks.length - lead >= 2) toks = toks.slice(lead);
+  }
   var keep = toks.length;
   for (var i = 0; i < toks.length; i++) {
     var bare = toks[i].replace(/[.'\u2019-]+$/, '').toLowerCase();
@@ -4459,6 +4524,7 @@ function voTrimPersonName(name) {
 function voLooksLikePerson(name) {
   var toks = String(name == null ? '' : name).split(/\s+/).filter(Boolean);
   if (toks.length < 2 || toks.length > 4) return false;
+  if (/^corner$/i.test(toks[0])) return false; // an address, never a person
   // Whole-phrase furniture (a scanned contract's defined terms / schedule cells).
   if (VO_NON_PERSON_PHRASE[toks.join(' ').toLowerCase()]) return false;
   if (voNearNonPersonPhrase(toks)) return false;
@@ -4534,7 +4600,10 @@ function voExtractParties(text) {
 // (From/To/Cc), salutations and sign-offs, signature and attestation lines, and
 // courtesy titles. On the AllFuels bundle these are precisely where the OCR'd
 // email chain names Gary Highcock, Rabia Seedat, Amrit Singh and Mohamed Ally.
-var VO_PERSON_MARKER_RE = /(?:^|[\s>|;])(?:from|to|cc|bcc|dear|regards|sincerely|attention|attn|signed\s+by|per|deponent|witnessed\s+by|witness)\s*:?\s+/gi;
+// "from", "to", "cc", "bcc" and "per" are prepositions in prose ("the licence
+// issued to Sanarth Fuels", "the email to Astron Energy"): as header markers
+// they need their colon. Salutations and sign-offs stay colon-free.
+var VO_PERSON_MARKER_RE = /(?:^|[\s>|;])(?:(?:from|to|cc|bcc|per)\s*:|(?:dear|regards|sincerely|attention|attn|signed\s+by|deponent|witnessed\s+by|witness)\s*:?)\s+/gi;
 // A name token is a capitalised word/initial, or a surname particle (de, van
 // der, du …) so "E de Waal" survives. Separators are spaces/tabs ONLY — using
 // \s let a name run across a line break and swallow the next email header
@@ -4661,6 +4730,14 @@ function voExtractDates(text) {
 // would begin with "…" and never match the page.
 function voSentenceAround(text, needle) {
   var s = String(text == null ? '' : text), n = String(needle == null ? '' : needle).replace(/\s+/g, ' ').replace(/^[\u2026.\s]+|[\u2026.\s]+$/g, '').trim();
+  // A quote that starts mid-word ("ication. The contradiction is stark …")
+  // begins in the previous sentence: key it on its own sentence, or, with no
+  // boundary in sight, on the words after the fragment.
+  if (/^[a-z]/.test(n)) {
+    var cutF = n.search(/[.!?;:]\s+(?=[A-Z0-9"\u201C(])/);
+    if (cutF !== -1 && cutF < 60) n = n.slice(cutF + 1).trim();
+    else n = n.replace(/^\S+\s+/, '');
+  }
   if (n.length < 12) return null;
   var key = n.slice(0, 60).toLowerCase();
   var flat = s.replace(/\s+/g, ' ');
@@ -4677,14 +4754,40 @@ function voSentenceAround(text, needle) {
   return seg.slice(from, to);
 }
 
+// Nesting-aware: the record's own quotation marks inside a quoted passage
+// ('The operator is "errant" and non-compliant') stay inside it. A flat
+// /"([^"]+)"/ closed the passage at the record's inner opening mark, so the
+// anchor quote lost "errant" and came back in pieces, each one twice (Public
+// Protector submission run). Inside an open passage, a mark after a space and
+// before a word opens an inner quotation and the next mark closes it; a
+// passage cut before its closing mark ends at the last mark seen. The report's
+// voQuoteSpans reads quotes the same way.
 function voExtractQuotes(text) {
-  var s = String(text == null ? '' : text), out = [], m;
-  var qRe = /["“”]([^"“”]{6,})["“”]/g;
-  while ((m = qRe.exec(s)) !== null) out.push(m[1].replace(/\s+/g, ' ').trim());
+  var s = String(text == null ? '' : text), out = [], seen = {}, m, n = s.length, i = 0;
+  var push = function (q) { q = q.replace(/\s+/g, ' ').trim(); if (q.length >= 6 && !seen[q]) { seen[q] = true; out.push(q); } };
+  while (i < n) {
+    var o = -1;
+    for (var a = i; a < n; a++) { var ca = s.charAt(a); if (ca === '"' || ca === '\u201C' || ca === '\u201D') { o = a; break; } }
+    if (o === -1) break;
+    var depth = 0, close = -1, last = -1;
+    for (var b = o + 1; b < n; b++) {
+      var c = s.charAt(b);
+      if (c !== '"' && c !== '\u201C' && c !== '\u201D') continue;
+      last = b;
+      var prevSp = /\s/.test(s.charAt(b - 1)), nextWord = b + 1 < n && /[A-Za-z0-9\u00C0-\u024F]/.test(s.charAt(b + 1));
+      if (c === '\u201C' || (c === '"' && depth === 0 && prevSp && nextWord && b > o + 1)) { depth++; continue; }
+      if (depth > 0) { depth--; continue; }
+      close = b; break;
+    }
+    if (close === -1) close = last;
+    if (close <= o) break;
+    push(s.slice(o + 1, close));
+    i = close + 1;
+  }
   // A term in single quotes ('Astron Motor Fuel' means …) with no inner
   // apostrophe and at least twelve characters is a quote too.
   var sRe = /(?:^|[\s(\[:,])['\u2018]([^'\u2018\u2019\n]{12,})['\u2019](?=[\s.,;:)\]]|$)/g;
-  while ((m = sRe.exec(s)) !== null) out.push(m[1].replace(/\s+/g, ' ').trim());
+  while ((m = sRe.exec(s)) !== null) push(m[1]);
   return out;
 }
 
@@ -4708,6 +4811,41 @@ function voParsePages(loc) {
 // A sortable calendar key (YYYYMMDD) for a date token, or null if unparseable.
 // Numeric DD/MM/YYYY is read day-first (South African convention).
 var VO_MON = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+// "Date: 3 October 2026" on a page, later than the calendar day (Africa/
+// Johannesburg, UTC+2, no daylight saving) of the instant the caller passes
+// as the analysis reference. The engine never reads the clock: the instant is
+// an input (non-negotiable 5), and without one this returns nothing. The
+// Public Protector submission was dated 3 October and sealed at 22:11 on
+// 2 October; nothing read the date against the seal.
+var VO_DATE_LABEL_HEAD_RE = /(?:^|[\s|>(])Date\s*:\s*/g;
+function voDatedAfterReference(textBlocks, referenceTime) {
+  var t = referenceTime ? Date.parse(String(referenceTime)) : NaN;
+  if (!isFinite(t)) return [];
+  var sast = new Date(t + 2 * 3600 * 1000);
+  var refKey = sast.getUTCFullYear() * 10000 + (sast.getUTCMonth() + 1) * 100 + sast.getUTCDate();
+  var MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+  var refTxt = sast.getUTCDate() + ' ' + MON[sast.getUTCMonth()] + ' ' + sast.getUTCFullYear();
+  var byDate = {}, order = [];
+  for (var b = 0; b < (textBlocks || []).length; b++) {
+    var s = String(textBlocks[b] || '').replace(VO_SEAL_BOILERPLATE_RE, ' '), m;
+    VO_DATE_LABEL_HEAD_RE.lastIndex = 0;
+    while ((m = VO_DATE_LABEL_HEAD_RE.exec(s)) !== null) {
+      var head = s.slice(m.index + m[0].length, m.index + m[0].length + 40);
+      var ds = voExtractDates(head);
+      if (!ds.length || head.toLowerCase().indexOf(ds[0].toLowerCase()) !== 0) continue;
+      var key = voDateSortKey(ds[0]);
+      if (key === null || key <= refKey) continue;
+      if (!byDate[ds[0]]) { byDate[ds[0]] = []; order.push(ds[0]); }
+      if (byDate[ds[0]].indexOf(b + 1) === -1) byDate[ds[0]].push(b + 1);
+    }
+  }
+  return order.slice(0, 3).map(function (d) {
+    var pg = byDate[d];
+    return { type: 'CT03', location: 'Page ' + pg.join(', '),
+      text: 'The document is dated "' + d + '" (p. ' + pg.join(', ') + '), later than the day it was analysed for sealing (' + refTxt + ', Africa/Johannesburg): confirm the date it was signed or sent. Recorded, not scored.' };
+  });
+}
+
 function voDateSortKey(str) {
   var s = String(str == null ? '' : str).toLowerCase().trim(), m;
   if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return (+m[1]) * 10000 + (+m[2]) * 100 + (+m[3]);
@@ -4778,8 +4916,21 @@ function voAnchorEnrich(findings, textBlocks) {
         if (sent) dates = voExtractDates(sent).slice(0, 1);
       }
     }
+    // LAW: a provision the finding's own words cite; failing that, the
+    // provisions in the sentence on the cited page that holds the quote. The
+    // whole page put the Public Protector Notice's "paragraph 3.3" on an
+    // email-domain finding and Petroleum Products Act s12B on a signature
+    // finding, under "Provision cited in the document".
     var law = voExtractCitations(ev);
-    if (!law.length) law = voExtractCitations(ctx);
+    if (!law.length) {
+      var lawPage = ctx.slice(ev.length), lawQs = voExtractQuotes(ev), lawSeen = {};
+      for (var lq = 0; lq < lawQs.length; lq++) {
+        var lawSent = voSentenceAround(lawPage, lawQs[lq]);
+        if (!lawSent) continue;
+        var lc = voExtractCitations(lawSent);
+        for (var lci = 0; lci < lc.length; lci++) if (!lawSeen[lc[lci]]) { lawSeen[lc[lci]] = true; law.push(lc[lci]); }
+      }
+    }
     // Parties: the evidence snippet first (tightest link to the contradiction),
     // then the people the CITED PAGE names via email headers / signature lines.
     // The old form was `ev.length > 20 ? ev : ctx`, and detector evidence is
@@ -5335,7 +5486,7 @@ function _voYield() {
 
 // ===================== MAIN FORENSIC ENGINE =====================
 
-async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
+async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   var allFindings = [];
 
   // Extract text blocks (one per page)
@@ -5483,6 +5634,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     return kept;
   };
   allFindings = _voSplitContext(allFindings);
+  // A document dated after the day it was analysed for sealing: recorded as a
+  // note, never scored (a letter dated for its delivery day is ordinary).
+  var _voDatedAfter = voDatedAfterReference(textBlocks, opts && opts.referenceTime);
+  for (var dan = 0; dan < _voDatedAfter.length; dan++) _voContextNotes.push(_voDatedAfter[dan]);
 
   // Run catch-all detector (needs other findings)
   try {
@@ -5774,6 +5929,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
     serialPatternsDetected: allFindings.filter(function(f){return f.type==='SERIAL';}).length,
     extractionNotes: extractionNote,
     contextNotes: _voContextNotes,
+    // The analysis instant the caller passed (null when none): recorded so the
+    // dated-after note is reproducible from the findings JSON.
+    referenceTime: (opts && opts.referenceTime) ? String(opts.referenceTime) : null,
     ocrPages: _ocrPages,
     ocrConfidence: _ocrConfidence,
     footerOnlyPages: _footer.pages,
@@ -6243,7 +6401,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     generateSummary: generateSummary, voEditDistance: voEditDistance,
     voStripSealFurniture: voStripSealFurniture, voStripSealFurnitureBlocks: voStripSealFurnitureBlocks, voCacheDocSegs: voCacheDocSegs,
-    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSnapWindow: voSnapWindow, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voIsStampContext: voIsStampContext,
+    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSnapWindow: voSnapWindow, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voIsSubmissionOnSealed: voIsSubmissionOnSealed, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voDatedAfterReference: voDatedAfterReference, voIsStampContext: voIsStampContext,
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,
     CONTRADICTION_TYPES: CONTRADICTION_TYPES,
     DETECTORS: DETECTORS,

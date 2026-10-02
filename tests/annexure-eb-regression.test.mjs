@@ -245,7 +245,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(/async function voPreflightForensicService/.test(page) && /var _pre = await voPreflightForensicService\(\);/.test(page) && /no forensic report was produced and nothing was sealed/.test(page),
     'forensic mode pre-flights the service and refuses to produce an unreviewed forensic report on a host with no API');
   ok(/function voOcrAskToContinue/.test(page) && /candidates = candidates\.concat\(cappedIdx\);/.test(page), 'the OCR cap asks once whether to read the remaining scanned pages');
-  ok(/findings_json_version: '1\.5\.0'/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page) && /secondary_capped: /.test(page) && /ocr_anchored: /.test(page) && /ocr_held: /.test(page), 'findings JSON v1.5.0 carries review_status, ocr_provenance, secondary_capped, ocr_anchored and ocr_held');
+  ok(/findings_json_version: '1\.6\.0'/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page) && /secondary_capped: /.test(page) && /ocr_anchored: /.test(page) && /ocr_held: /.test(page), 'findings JSON v1.5.0 carries review_status, ocr_provenance, secondary_capped, ocr_anchored and ocr_held');
   // Behavioural: the pre-flight against stubbed answers.
   const preSrc = page.slice(page.indexOf('var VO_PREFLIGHT_TIMEOUT_MS'), page.indexOf('function voShowPreflightBlock'));
   const mk = new Function('AbortController', 'setTimeout', 'clearTimeout', preSrc + '\nreturn { voPreflightForensicService, voPreflightMessage };');
@@ -574,7 +574,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     const slice = (from, to) => { const a = T.lastIndexOf(from); const b = to ? T.indexOf(to, a + 1) : -1; return a < 0 ? '' : T.slice(a, b > a ? b : undefined); };
     ok(/TRIPLE VERIFICATION SUMMARY/.test(T) && !/DOMAIN_TYPO/.test(slice('TRIPLE VERIFICATION SUMMARY', 'SEALED FINDINGS')) && /Numerical Discrepancy/.test(slice('TRIPLE VERIFICATION SUMMARY', 'SEALED FINDINGS')),
       'the Triple Verification table carries engine findings only — an AI candidate never reads "Detected: PASS"');
-    ok(!/DOMAIN_TYPO/.test(slice('Top liabilities', 'Recommended next steps')), 'an AI candidate is never a "top liability"');
+    ok(!/DOMAIN_TYPO/.test(slice('Most serious findings:', 'Recommended next steps')), 'an AI candidate is never among the most serious findings');
     ok(!/DOMAIN_TYPO/.test(slice('NINE-BRAIN EXTRACTION FINDINGS', 'TRIPLE VERIFICATION SUMMARY')), 'an AI candidate is never a brain\'s finding');
     ok(/AI candidate, advisory — DOMAIN_TYPO/.test(T) && /AI candidate:\s+DOMAIN_TYPO/.test(T), 'where a candidate is listed beside findings it is labelled as one (type summary, evidence appendix)');
     ok(/matched by at least one anchored finding of a type that can evidence it/.test(T) && !/is evidenced in the record/.test(T) && !/: EVIDENCED/.test(T),
@@ -985,6 +985,214 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ok(/Common-law fraud/.test(ct20Law) && !/Corrupt Activities|Consumer Protection/.test(ct20Law) && !/Corrupt Activities/.test(R._statutesForFinding({ type: 'CT02', severity: 2 }, jur0).map(x => x.provisions.join('; ')).join(' ')), 'a registration-number note and any Low finding carry no corruption or consumer statute');
   };
   await run();
+}
+
+// ---- §18 The Public Protector submission run (2026-10-02) -------------------
+// The founder sealed his own 20-page submission ("Response to Public Protector
+// Referral & Recommendations for Industry Reform", addressed to the DMPR's
+// Director-General and the NDPP). It is advocacy about other sealed records,
+// not an evidence bundle. The sealed report carried three findings and all
+// three were false: "compliant" read inside "non-compliant" and paired with
+// itself (CT14), two genuine government domains of one renamed department
+// read as a lookalike (CT37), and the plural "unsigned agreements" in the
+// author's own allegation read as a statement about one instrument (CT23).
+// The reports then attributed the author's words to a company named on the
+// page, filed the unsigned-agreement sentence under tampering and forgery law,
+// and the anchor certificate claimed a permanent blockchain record while its
+// own header said PENDING. Each item below is pinned with the submission's own
+// text; beside each false case, a genuine case of the same type still fires.
+{
+  const fs = require('fs'), path = require('path');
+  const g = globalThis; g.window = g; g.self = g;
+  if (!g.PDFLib) new Function('window', 'self', 'globalThis', fs.readFileSync(path.join(process.cwd(), 'vendor/pdf-lib.min.js'), 'utf8'))(g, g, g);
+  const PDFLib = g.PDFLib;
+  const R = require('../forensic-report.js');
+  const p4 = '2.1 Acknowledgment of Referral The complainant acknowledges receipt of the Public Protector\'s Notice dated 30 September 2026 (Reference: CMS-88490/2026), issued in terms of Section 6(4)(c)(ii) of the Public Protector Act, 1994. The complainant notes that the matter has been referred to: Mr Jacob Mbele Director-General Department of Mineral and Petroleum Resources 71 Trevenna Campus, Corner Francis Baard and Meintjies Streets Pretoria, 0001 Personal Assistant: Ms Mamabefu Modipa Telephone: 012 444 3880 Email: Mamabefu.Modipa@dmre.gov.za; Mamabefu.Modipa@dmpr.gov.za The complainant notes that the closure of the Public Protector\'s file (paragraph 3.3 of the Notice) raises concerns.';
+  const p6 = 'Racketeering: A pattern of systematic deprivation of goodwill from multiple operators (Gary Highcock, Wayne Nel, Desmond Smith, Clayton Bester) through a common scheme involving unsigned agreements, omitted protective clauses, and licence manipulation. Theft: The seizure of business goodwill without payment.';
+  const p8 = 'Practice Description Victims Goodwill forfeiture clauses in unsigned agreements Imposing terms that operators never agreed to in writing Gary Highcock, Wayne Nel';
+  const p13 = 'The DMPR\'s position — as recorded in the Fakroodeen and Randeree letter of 29 September 2026 — that the old operator\'s licence "has terminated and/or expired" is therefore questionable and requires independent verification. The contradiction is stark: AllFuels\' position: The operator is "errant" and non-compliant. The facts: AllFuels obtained a new licence for a related entity while the original licence remains active. This means the new retail licence issued to Sanarth Fuels (Pty) Ltd at the Port Edward and Thongasi sites may not be validly operative.';
+
+  // 18a. CT14: a status word inside its own negation is not a second claim.
+  const ct14 = (b) => of(DET.D09_DETECT_ENTITY_STATUS_FAKE, b, 'CT14');
+  ok(ct14([p13]).length === 0, 'D09: "non-compliant" is one claim, never "compliant" paired with itself (' + JSON.stringify(ct14([p13]).map(f => f.evidence.slice(0, 80))) + ')');
+  ok(ct14(['The company is non compliant with the licence conditions of the Department.']).length === 0, 'D09: "non compliant" (no hyphen) is the negation too');
+  const ct14g = ct14(['The company is compliant with all licence conditions of the Department.', 'The company is non-compliant with its licence conditions, and the business is under review.']);
+  ok(ct14g.length === 1 && /page 1/.test(ct14g[0].evidence) && /page 2/.test(ct14g[0].evidence), 'D09: a company called compliant on one page and non-compliant on another still fires (' + JSON.stringify(ct14g.map(f => f.evidence.slice(0, 120))) + ')');
+  ok(ct14g.length === 1 && !/^\S*[a-z]…|"\w{1,3}\s/.test(ct14g[0].evidence.split('"')[1] || ''), 'D09: each quoted passage is snapped to whole words');
+
+  // 18b. CT37: two government domains are never a lookalike; a commercial lookalike still is.
+  const ct37 = (b) => of(DET.D25_DETECT_CONTACT_MISMATCH, b, 'CT37');
+  ok(ct37([p4]).length === 0, 'D25: dmre.gov.za beside dmpr.gov.za (one renamed department, one mailbox) is not a lookalike domain');
+  ok(ct37(['Reply to accounts@astronenergy.co.za for statements.', 'Send payment advice to accounts@astron-energy.co.za today.']).length === 1, 'D25: a commercial lookalike (astronenergy.co.za / astron-energy.co.za) still fires');
+  ok(ct37(['Queries: refunds@sars.gov.za', 'Your refund: refunds@sars.gev.za']).length === 1, 'D25: a lookalike OF a government domain ("sars.gev.za") still fires — only two government suffixes are exempt');
+  ok(ct37(['Contact info@justice.gov.za', 'or info@justice.gov.uk']).length === 0 && ct37(['Mail ops@army.mil', 'or ops@navy.mil']).length === 0, 'D25: gov.za / gov.uk and .mil pairs are exempt');
+
+  // 18c. CT23: the plural names a category, not one instrument; the quote is whole words and says its page.
+  const ct23 = (b) => of(DET.D32_DETECT_SIGNATURE_ANOMALY, b, 'CT23');
+  ok(ct23([p6, p8]).length === 0, 'D32: "a common scheme involving unsigned agreements" (the author\'s allegation, plural) is not a statement about one instrument');
+  const ct23g = ct23(['The schedule lists the operators (Gary Highcock, Wayne Nel, Desmond Smith, Clayton Bester) and the Respondent relies on an unsigned agreement to claim payment of the goodwill.', 'The Respondent relies on an unsigned agreement for the rental.']);
+  ok(ct23g.length === 1 && /^The record states a signature is missing \("unsigned agreement"\)/.test(ct23g[0].evidence) && ct23g[0].severity === 4, 'D32: a specific unsigned agreement relied on for payment still fires, at the enforcement severity (' + JSON.stringify(ct23g.map(f => [f.severity, f.evidence.slice(0, 90)])) + ')');
+  ok(ct23g.length === 1 && !/"[a-z]{1,4} Smith/.test(ct23g[0].evidence) && /\(quoted from p\. 1\) — stated on 2 pages \(1, 2\)/.test(ct23g[0].evidence), 'D32: the quote starts on a word ("nd Smith" was printed for "Desmond Smith") and names the page it is quoted from (' + (ct23g[0] && ct23g[0].evidence) + ')');
+
+  // 18d. Parties: titles, addresses and headings are not names.
+  ok(E.voCleanPersonName('Mr Jacob Mbele') === 'Jacob Mbele' && E.voCleanPersonName('Ms Mamabefu Modipa') === 'Mamabefu Modipa' && E.voCleanPersonName('Mrs Smith') === 'Mrs Smith' && E.voCleanPersonName('Justice Thabo Mokoena') === 'Justice Thabo Mokoena',
+    'a courtesy title before a full name is dropped ("Mr Jacob Mbele" is "Jacob Mbele"); "Mrs Smith" keeps it; "Justice" (also a first name) is never stripped');
+  ok(E.voTrimPersonName('Corner Francis Baard') === '' && E.voTrimPersonName('James Corner') === 'James Corner' && E.voTrimPersonName('Jacob Mbele Director-General Department') === 'Jacob Mbele' && !E.voLooksLikePerson('Corner Francis Baard') && E.voLooksLikePerson('James Corner'),
+    'an address opening "Corner …" is not a party; "Corner" as a surname is; a title after a name is cut');
+  const lead = (t) => E.voExtractParties(t).filter(x => x.kind === 'name').map(x => x.name);
+  ok(JSON.stringify(lead('Director Andy Mothibi signed.')) === '["Andy Mothibi"]' && JSON.stringify(lead('Personal Assistant Sipho Dlamini called.')) === '["Sipho Dlamini"]' && JSON.stringify(lead('First Respondent Wayne Nel admits it.')) === '["Wayne Nel"]' && lead('First Respondent admits it.').length === 0,
+    'a role or title before a name is skipped, never cutting the name away with it; a role with no name binds no name (' + JSON.stringify([lead('Director Andy Mothibi signed.'), lead('First Respondent Wayne Nel admits it.')]) + ')');
+  for (const bad of ['Systemic Unfair Practices', 'Petroleum Resources', 'Trevenna Campus', 'Personal Assistant', 'Concerns Regarding', 'Critical Point', 'Instrument Does', 'Forensic Platform'])
+    ok(!E.voLooksLikePerson(bad), 'not a party: "' + bad + '"');
+  const p4names = E.voExtractParties(p4).filter(x => x.kind === 'name').map(x => x.name);
+  ok(p4names.filter(n => /Mbele/.test(n)).length === 1 && p4names.indexOf('Jacob Mbele') !== -1 && !p4names.some(n => /Corner|Campus|Assistant|Resources|Director/.test(n)), 'page 4 binds "Jacob Mbele" once and no address, heading or title (' + JSON.stringify(p4names) + ')');
+  const roster = E.voBuildNameRoster(['Systemic Unfair Practices. Verum Omnis Forensic Platform. Wayne Nel.', 'Systemic Unfair Practices. Verum Omnis Forensic Platform. Wayne Nel.', 'Systemic Unfair Practices. Verum Omnis Forensic Platform. Wayne Nel.']).map(x => x.name);
+  ok(roster.indexOf('Wayne Nel') !== -1 && !roster.some(n => /Systemic|Forensic Platform/.test(n)), 'a running page header and the product\'s own heading never enter the name roster (' + JSON.stringify(roster) + ')');
+  const ctxP = E.voExtractPersonsFromContext('the new retail licence issued to Sanarth Fuels (Pty) Ltd, and the Timol email to Astron Energy.', 6).map(x => x.name);
+  const ctxH = E.voExtractPersonsFromContext('From: Zeyd Timol\nTo: Wayne Nel\nDear Gary Highcock', 6).map(x => x.name);
+  ok(ctxP.length === 0 && ['Zeyd Timol', 'Wayne Nel', 'Gary Highcock'].every(n => ctxH.indexOf(n) !== -1), '"to" and "from" in prose are prepositions, not header markers; a "To:" header and a salutation still bind (' + JSON.stringify([ctxP, ctxH]) + ')');
+
+  // 18e. Quotes, sentences, dates and provisions read the record as written.
+  const qs = E.voExtractQuotes('Conflicting entity-status claims: "…The operator is "errant" and non-compliant. The facts…" (compliant, page 13) vs "…The operator is "errant" and non-compliant. The facts…" (non-compliant, page 13)');
+  ok(qs.length === 1 && qs[0] === '…The operator is "errant" and non-compliant. The facts…', 'the record\'s own quotation marks stay inside the passage, and a passage quoted twice is listed once (' + JSON.stringify(qs) + ')');
+  const sent = E.voSentenceAround(p13, 'ication. The contradiction is stark: AllFuels\' position');
+  ok(sent && /^The contradiction is stark/.test(sent) && !/29 September/.test(sent), 'a quote that starts mid-word is keyed on its own sentence, never the one before (' + sent + ')');
+  const f14 = [{ type: 'CT14', severity: 5, location: 'Page 1', evidence: 'Conflicting entity-status claims: "…ication. The contradiction is stark: AllFuels\' position: The operator is "errant" and non-compliant. The facts…" (compliant, page 1) vs "…The operator is "errant" and non-compliant. The facts: AllFuels obtained a new licence…" (non-compliant, page 1)' }];
+  E.voAnchorEnrich(f14, [p13]);
+  ok(f14[0].anchor && f14[0].anchor.when.length === 0, 'the finding is not dated by the attorneys\' letter in the sentence before it (' + JSON.stringify(f14[0].anchor && f14[0].anchor.when) + ')');
+  ok(f14[0].anchor && f14[0].anchor.quote.length === 2 && f14[0].anchor.quote.every(q => /"errant"/.test(q)), 'the anchor quote keeps "errant" and lists each passage once (' + JSON.stringify(f14[0].anchor && f14[0].anchor.quote) + ')');
+  const f37 = [{ type: 'CT37', severity: 3, location: 'Page 1', evidence: 'Lookalike email domain: "dmre.gov.za" (p. 1) beside "dmpr.gov.za" (p. 1) — 1 character apart; confirm which is genuine before relying on messages from either' }];
+  E.voAnchorEnrich(f37, [p4]);
+  ok(f37[0].anchor && f37[0].anchor.law.length === 0, 'an email-domain finding carries no provision from elsewhere on its page ("paragraph 3.3", "Section 6(4)(c)(ii)" were printed under "Provision cited in the document") (' + JSON.stringify(f37[0].anchor && f37[0].anchor.law) + ')');
+  const fLaw = [{ type: 'CT02', severity: 4, location: 'Page 1', evidence: '"purchase price" is stated twice: "the price payable in terms of clause 4.2 is R1,250,000" and "R1,520,000"' }];
+  E.voAnchorEnrich(fLaw, ['The parties agree that the price payable in terms of clause 4.2 is R1,250,000. Section 12 of the Act applies elsewhere.']);
+  ok(fLaw[0].anchor && fLaw[0].anchor.law.indexOf('clause 4.2') !== -1 && !fLaw[0].anchor.law.some(l => /Section 12/.test(l)), 'a provision in the finding\'s own words is still cited, and one elsewhere on the page is not (' + JSON.stringify(fLaw[0].anchor && fLaw[0].anchor.law) + ')');
+  const p1 = 'Response to Public Protector Referral & Recommendations for Industry Reform References: CMS-88490/2026 Date: 3 October 2026 Prepared by: Liam Highcock';
+  const da = E.voDatedAfterReference([p1], '2026-10-02T20:11:36.233Z');
+  ok(da.length === 1 && da[0].type === 'CT03' && da[0].location === 'Page 1' && /dated "3 October 2026" \(p\. 1\), later than the day it was analysed for sealing \(2 October 2026, Africa\/Johannesburg\)/.test(da[0].text) && /Recorded, not scored/.test(da[0].text),
+    'a document dated the day after its analysis is recorded as an engine note (' + JSON.stringify(da) + ')');
+  ok(E.voDatedAfterReference([p1], '2026-10-02T22:30:00Z').length === 0 && E.voDatedAfterReference([p1]).length === 0 && E.voDatedAfterReference(['The letter dated 5 October 2026 is attached.'], '2026-10-02T20:00:00Z').length === 0,
+    'no note once the Johannesburg day has turned, none without a reference instant (the engine never reads the clock), and none for an unlabelled date in prose');
+  const engSrc = fs.readFileSync(path.join(process.cwd(), 'forensic-engine-page.js'), 'utf8');
+  const fnBody = engSrc.slice(engSrc.indexOf('function voDatedAfterReference('), engSrc.indexOf('function voDateSortKey('));
+  ok(!/Date\.now\(\)|new Date\(\)|Math\.random\(\)/.test(fnBody) && /async function runForensicEngine\(pdfBytes, pdfDoc, onProgress, opts\)/.test(engSrc), 'the dated-after note reads no clock: the instant is the caller\'s input');
+  const pageSrc = fs.readFileSync(path.join(process.cwd(), 'seal-document.html'), 'utf8');
+  ok(/\{ referenceTime: new Date\(\)\.toISOString\(\) \}\);/.test(pageSrc), 'the seal page passes the analysis instant into the engine');
+
+  // 18f. A submission about other sealed records is an account of them, not the record.
+  const sub = [p1, 'This is documented in the sealed Thongasi-AllFuels contract (Seal ID: VO- 210B029F1A0B) and the Timol email.', p13];
+  const ss = E.voSecondarySegments([], sub);
+  ok(ss.length === 1 && ss[0].start === 1 && ss[0].end === 3, 'a "Response to …" that cites another Verum seal is secondary from its first page to its last (' + JSON.stringify(ss) + ')');
+  ok(E.voSecondarySegments([], [p1, p13]).length === 0, 'a submission title alone is not enough: the body must cite another seal');
+  ok(E.voSecondarySegments([], ['MEMORANDUM OF AGREEMENT OF LEASE between the parties', 'The lease annexure was sealed as VO-210B029F1A0B by the lessor.']).length === 0, 'a primary record that mentions a seal is not secondary without a submission title');
+  const demoted = E.voDemoteSecondarySource([{ type: 'CT14', severity: 5, location: 'Page 3', evidence: 'x' }], E.voSecondaryPages([], sub));
+  ok(demoted.kept.length === 0 && demoted.leads.length === 1, 'a finding on the submission becomes a lead in the engine notes, never a finding');
+
+  // 18g. The report: what each finding is, who it concerns, its law, its next step.
+  const jur0 = { home: 'ZA', foreign: [], isCrossBorder: false };
+  const unsigned2 = { type: 'CT23', severity: 2, location: 'Page 6', evidence: 'The record states a signature is missing ("unsigned agreement"): "the Respondent relies on an unsigned agreement for the rental" — verify execution against the signature pages of the original' };
+  const unsigned4 = Object.assign({}, unsigned2, { severity: 4 });
+  const slashS = { type: 'CT23', severity: 3, location: 'Page 2', evidence: 'Non-standard signature method "/s/": "Signed /s/ J Smith for the Lessor"' };
+  const lawOf = (f) => R._statutesForFinding(f, jur0).map(x => x.provisions.join('; ')).join(' ');
+  ok(R._isUnsignedStatement(unsigned2) && !R._isUnsignedStatement(slashS), 'D32\'s two CT23 shapes are told apart');
+  ok(/^Common law of contract/.test(lawOf(unsigned2)) && !/Cybercrimes|forgery|Electronic Communications/.test(lawOf(unsigned2)) && /Cybercrimes/.test(lawOf(slashS)), 'an unsigned agreement is a contract question (no Cybercrimes Act, no forgery); a surrogate signature keeps the forgery provisions (' + lawOf(unsigned2) + ')');
+  ok(R._narrativeMeaning(unsigned2) === 'the record states that an agreement it refers to was never signed or countersigned' && !/unusual way/.test(R._narrativeMeaning(unsigned2)), 'the plain meaning says what the record states, not "signed in an unusual way"');
+  ok(/signed original/.test(R._hintFor(unsigned2)) && !/native|metadata/i.test(R._hintFor(unsigned2)), 'the next step is the signed original, never a request for native files and metadata');
+  ok(/Whether, and when, it was executed/.test(R._establishesOf(unsigned2)) && !/being used to enforce/.test(R._establishesOf(unsigned2)) && /cannot carry the obligation it is being used to enforce/.test(R._establishesOf(unsigned4)) && /conformed or surrogate signature/.test(R._establishesOf(slashS)) && /cannot carry the obligation/.test(R._establishesOf({ type: 'CT23' })),
+    'what it establishes: no enforcement claimed without enforcement language; enforcement wording where the record bills under it; the surrogate-signature shape has its own');
+  ok(/CIPC companies register/.test(R._hintFor({ type: 'CT14' })) && !/impersonation/.test(R._hintFor({ type: 'CT14' })), 'an entity-status finding is checked at the companies register');
+  ok(R._declaredPartyFor({ type: 'CT14', severity: 5, evidence: 'Sanarth Fuels is stated as active vs dissolved', anchor: { who: [{ name: 'Sanarth Fuels' }] } }, { identity: { parties: '' } }) === null
+    && R._declaredPartyFor({ type: 'CT14', severity: 5, evidence: 'Sanarth Fuels is stated as active vs dissolved', anchor: { who: [{ name: 'Sanarth Fuels' }] } }, { identity: { parties: 'Sanarth Fuels (Respondent)' } }) === 'Sanarth Fuels',
+    'a finding concerns a party only when the case details declare it');
+  ok(JSON.stringify(R._namedOnPages({ anchor: { who: [{ name: 'Sanarth Fuels' }, { name: 'SANARTH FUELS' }, 'Wayne Nel'] } })) === '["Sanarth Fuels","Wayne Nel"]', 'the names on the cited pages are listed once each');
+  const longSides = R._contradictionSides('Conflicting entity-status claims: "' + 'word '.repeat(60) + 'end" (compliant, page 13) — yet "the company is compliant with its licence" (non-compliant, page 2)');
+  ok(longSides && longSides.b === 'the company is compliant with its licence' && longSides.bQuoted === true && !/^"|"$/.test(longSides.a), 'a long first side no longer cuts off the second (the length cap applies per side), and an unquoted side keeps no stray quote mark (' + JSON.stringify(longSides) + ')');
+  ok(JSON.stringify(R._narrativeBlocks('**Misrepresentation**: the record states x [F1].\n\n__Loss__: INSUFFICIENT.').map(b => b.text)) === '["Misrepresentation: the record states x [F1].","Loss: INSUFFICIENT."]', 'a narrator\'s markdown emphasis is not printed');
+  ok(JSON.stringify(R._anchorQuotes({ type: 'CT14', evidence: f14[0].evidence })) === JSON.stringify(['…ication. The contradiction is stark: AllFuels\' position: The operator is "errant" and non-compliant. The facts…', '…The operator is "errant" and non-compliant. The facts: AllFuels obtained a new licence…']), 'the verbatim columns print the record\'s quoted word ("errant"), not "The operator is … and non-compliant"');
+
+  // 18h. Rendered and read back: the technical report, the court-ready narrative, the worker template, the certificate.
+  const pageText = async (bytes) => {
+    const loaded = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+    const parts = [];
+    for (let i = 0; i < loaded.getPageCount(); i++) parts.push((await E.extractPageText(bytes, i, loaded)).join(' '));
+    return parts.join(' \n ').replace(/[ \t]+/g, ' ');
+  };
+  const sanarth = [{ name: 'Sanarth Fuels', kind: 'name' }, { name: 'Gary Highcock', kind: 'name' }];
+  const findings = [
+    Object.assign({}, f14[0], { location: 'Page 13', anchor: { where: [13], who: sanarth, when: [], quote: [] } }),
+    Object.assign({}, unsigned4, { anchor: { where: [6], who: sanarth, when: [], quote: [] } }),
+    { type: 'CT37', severity: 3, location: 'Page 4', evidence: 'Lookalike email domain: "accounts.example.co.za" (p. 4) beside "acc0unts.example.co.za" (p. 4) — 1 character apart; confirm which is genuine before relying on messages from either', anchor: { where: [4], who: [], when: [], quote: [] } },
+    { type: 'LICENCE_INCONSISTENCY', severity: 4, source: 'ai', rationale: 'Inconsistent licence status', location: '', anchor: { where: [], who: [], when: [] } }
+  ];
+  const opts = {
+    documents: [{ name: 'response-to-public-protector.pdf', pageCount: 20, sha512: 'ab'.repeat(64), sealId: 'VO-807F1D932D9A' }],
+    findings: { clean: false, overallScore: 40, confidence: 'LOW', totalFindings: 3, findings: findings, summary: '3 findings.', contradictionTypesUsed: 3,
+      timeline: { events: [{ date: '29 September 2026', who: ['Sanarth Fuels'], evidence: 'The operator is "errant"', page: 13, type: 'CT14' }] } },
+    classification: { documentClass: 'Other', confidence: 'low' },
+    aiReview: { applied: true, retained: 3, assessed: 3, dropped: 0, added: 0, narrative: '' },
+    identity: { parties: '' },
+    ots: { submitted: true },
+    ocrPages: [], images: {}, generatedAt: '2026-10-02T20:12:00.000Z'
+  };
+  const run18 = async () => {
+    const quiet = console.log; console.log = () => {};
+    let T, N, D, L;
+    try {
+      T = await pageText(await R.build(opts));
+      N = await pageText(await R.buildHumanReport(Object.assign({}, opts, {
+        humanSections: {
+          counter_narratives: { provenance: 'none', reason: 'not_generated' },
+          critical_evidence: { provenance: 'none', reason: 'gate_failed', gate: { kept: 1, dropped: 3 } },
+          legal_framework: { provenance: 'none', reason: 'gate_failed', gate: { kept: 0, dropped: 2 } }
+        },
+        humanProvenance: { sectionsAttempted: 3, model: 'test-narrator' }
+      })));
+      D = await pageText(await R.build(Object.assign({}, opts, { identity: { parties: 'Sanarth Fuels (Respondent)' } })));
+      L = await pageText(await R.build(Object.assign({}, opts, { aiNarrative: 'Finding F1 (CT14), recorded at Page 13, states the status twice [F1]. The findings quoted above are the highest-ranked of the findings supplied for narrative reporting [F1].', aiNarrativeSource: 'local' })));
+    } finally { console.log = quiet; }
+    const TN = T + N;
+    ok(!/It concerns Sanarth/.test(TN) && /Named on the cited page[s]? \(descriptive, not an attribution\):[^.]{0,80}Sanarth Fuels/.test(T), 'a company the engine found on the page is named descriptively, never as the party a finding concerns (' + ((T.match(/Named on the cited page[^.]{0,120}/) || [''])[0]) + ')');
+    ok(/It concerns Sanarth Fuels/.test(D), 'a party the case details declare, and the finding names, is still the party it concerns');
+    ok(!/Sanarth Fuels — the record states/.test(N), 'the counter-narratives never quote the author\'s words as a named company\'s own statement');
+    ok(!/TAMPER FOUND/.test(T) && /INTEGRITY SIGNAL FOUND/.test(T) && /CONTACT CONFLICT FOUND/.test(T) && !/COMMUNICATION GAP FOUND/.test(T), 'the Nine-Brain blocks say what each detector measures: no "TAMPER FOUND" over a sentence about an unsigned agreement, no message-gap header over a contact conflict');
+    ok(!/Behavioural Scorecard|Top liabilities|top liabilities/.test(TN) && /Parties named on the pages carrying findings/.test(T) && /Most serious findings:/.test(T), 'no "scorecard" over the people a record names, and no "liabilities"');
+    ok(!/\(confidence:/.test(TN) && /Document classification \(AI, advisory\): Other/.test(T), 'the classification prints no confidence band');
+    ok(!/Highest severity/.test(T) && !/\bSev\.\s/.test(T), 'no severity column in the matrix, for engine findings or AI candidates');
+    ok(/A candidate marked "unanchored" has no quote in the sealed text/.test(T), 'an unanchored AI candidate is called a question, not a lead to a page');
+    ok(/The operator is "errant" and non-compliant/.test(T), 'the evidence prints the record\'s own word in its quotation marks');
+    const dish = T.slice(T.lastIndexOf('2. DISHONESTY DETECTION MATRIX'), T.indexOf('3. NINE-BRAIN', T.lastIndexOf('2. DISHONESTY DETECTION MATRIX')));
+    ok(dish.length > 50 && !/Evasion \/ Deflection/.test(dish) && dish.indexOf('Contradictions') !== -1 && (dish.indexOf('Selective Omissions') === -1 || dish.indexOf('Contradictions') < dish.indexOf('Selective Omissions')), 'a contact conflict is a contradiction, not evasion, and rows are ordered by their most serious finding (' + dish.slice(0, 300).replace(/\s+/g, ' ') + ')');
+    ok(!/Cybercrimes/.test(T.slice(T.lastIndexOf('STATUTORY ANCHORING'), T.lastIndexOf('CANDIDATE OFFENCE MATRIX'))) && /Common law of contract/.test(T), 'the unsigned-agreement finding carries contract law, never the Cybercrimes Act');
+    ok(!/native\/original files/.test(T), 'no "request native files and metadata" step for a sentence about an unsigned agreement');
+    ok(/the names on the cited page \(descriptive, not an attribution\)/.test(T) && /Named on the page/.test(N), 'the timeline and the chronology say whose names they print');
+    ok(!/again\.\.\./.test(TN) && !/\b[a-z]{1,4}\.\.\. — Anchor/.test(TN), 'no list entry is cut mid-word');
+    ok(/see the AI REVIEW section/.test(T) && !/see AI REVIEW section/.test(T), 'the methodology names the AI section that is printed');
+    ok(/ENGINE SUMMARY/.test(L) && /The AI narrator did not answer: this summary is built from the findings by a fixed template/.test(L) && /see the ENGINE SUMMARY section/.test(L), 'the worker\'s template fallback is headed and described as a fixed template, and every reference names that heading');
+    ok(!/investigator.s assessment/.test(T) && /Findings are produced by the deterministic engine from the sealed text/.test(T), 'the methodology says who produces the findings');
+    ok(!/LAW ENFORCEMENT SENSITIVE/.test(TN) && /CONFIDENTIAL/.test(T), 'the cover implies no law-enforcement origin');
+    ok(!/SHA-512 anchored/.test(TN) && !/permanent, tamper-evident/.test(TN) && /SHA-512 fingerprinted and submitted for anchoring/.test(TN), 'no "SHA-512 anchored" and no "permanent" record while the Bitcoin confirmation is pending');
+    ok(!/fix when (?:they|it) existed|fixes the moment/.test(TN) && /the latest time by which/.test(TN), 'OpenTimestamps fixes the latest time by which the files existed, never "when"');
+    ok(!/the only place a Verum seal is verified/.test(N) && /an OpenTimestamps client can check the Bitcoin block independently/.test(N), 'the provenance record says what verify.html checks and how to check Bitcoin independently');
+    ok(/drafts the server's gate discarded whole: 2/.test(N) && /server's anchor and language gate: 5/.test(N) && !/removed and counted\./.test(N), 'the provenance record counts drafts the server\'s gate discarded whole and their dropped sentences (' + ((N.match(/Sections written by the AI narrator[^\n]{0,260}/) || [''])[0]) + ')');
+    ok(/No language-model verification of the findings is claimed beyond the advisory AI review recorded in the technical report/.test(N), 'with the AI review applied, "no language-model verification" says what the review is, so it never contradicts "verified" on the same page');
+    const one = await pageText(await (async () => { const q = console.log; console.log = () => {}; try { return await R.build(Object.assign({}, opts, { findings: Object.assign({}, opts.findings, { findings: [findings[1], findings[2]], totalFindings: 2 }) })); } finally { console.log = q; } })());
+    ok(!/cannot all be true at the same time/.test(one) && /cannot all be true at the same time/.test(T), '"the documents cannot all be true at once" is printed only when a finding has two sides');
+  };
+  await run18();
+  const wsrc = fs.readFileSync(path.join(process.cwd(), 'worker/verum-rules.js'), 'utf8');
+  const tmpl = wsrc.slice(wsrc.indexOf('function narrateTemplate('), wsrc.indexOf('function narrateTemplate(') + 3000);
+  ok(!/severity ' \+ f\.severity/.test(tmpl) && !/critical-evidence narrative/.test(tmpl) && /highest-ranked/.test(tmpl), 'the worker\'s template prints no severity number and refers to no section that does not exist');
+  ok(/var hl = voHumanFindingList\(list\)/.test(pageSrc) && /ordered\.push\(\{ id: 'P' \+ \(ri \+ 1\), f: rest\[ri\] \}\)/.test(pageSrc), 'the narrator\'s [F#] numbering is the court-ready narrative\'s (engine findings by severity), so F2 is the same finding in every section');
+  ok(/merged\.discarded = \(merged\.discarded \|\| 0\) \+ 1/.test(pageSrc), 'a critical-evidence batch the server\'s gate discarded is counted');
+  const certSrc = pageSrc.slice(pageSrc.indexOf('async function buildAnchorCertificate('), pageSrc.indexOf('async function buildAnchorCertificate(') + 12000);
+  ok(!/no one can edit or delete|not even Verum Omnis|is anchored to the Bitcoin blockchain|cannot be forged|unique signature|investigator’s assessment|no need to trust Verum Omnis/.test(certSrc), 'the anchor certificate claims no permanent record, no forgery-proof signature and no trust-free check while its header says PENDING');
+  ok(/ORIGINAL UPLOAD SHA-512 \(BEFORE THE SEAL WAS APPLIED\)/.test(certSrc) && /SEALED FILE SHA-512 \(THE FILE AS DELIVERED\)/.test(certSrc) && /OTS DIGEST \(SHA-256 OF THE ORIGINAL SHA-512 HEX TEXT\)/.test(certSrc) && /sealedSha512: window\._voSealedFileHash \|\| null/.test(pageSrc),
+    'the certificate says which bytes each fingerprint belongs to, and prints the sealed file\'s own fingerprint');
+  ok(/existed no later than that block\\'s time/.test(certSrc) && /the sealing device\\'s clock; the anchor does not prove it/.test(certSrc) && /Upload the sealed PDF \(not this certificate\)/.test(certSrc), 'the certificate says what the Bitcoin block proves (an upper bound, not the device clock) and which file to upload');
+  const vsrc = fs.readFileSync(path.join(process.cwd(), 'verify.html'), 'utf8');
+  ok(!/court-ready and admissible|OpenTimestamps verified'|\(OTS-anchored\)|'ANCHORED — Bitcoin confirmation pending'|Seal Verified — Genuine|blockchain-anchored, timestamped read-receipt/.test(vsrc), 'verify.html claims no admissibility, no "OTS-anchored" hash and no "anchored" custody event before Bitcoin confirms');
+  ok(/cannot tell a deliberately altered copy that was re-sealed from the original/.test(vsrc), 'verify.html says what the self-integrity check cannot show');
+  ok(/function parseAnchorCertSubject/.test(vsrc) && /seal\.scheme === 'anchorcert'/.test(vsrc) && /meta\.otsDigest = seal\.otsDigest/.test(vsrc), 'verify.html recognises the anchor certificate and checks its digest instead of showing "No Seal Found"');
 }
 
 console.log(`\n[annexure-eb] PASS=${pass} FAIL=${fail}`);

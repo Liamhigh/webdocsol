@@ -883,6 +883,24 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     return { scheme: 'sealcert', embeddedHash: parts[1].toLowerCase(), sealId: parts[2] };
   }
 
+  // ANCHOR-CERT|<otsDigest>|<sealId> — the blockchain anchor certificate the
+  // sealer issues beside a sealed document. It is not the sealed document: it
+  // names the OpenTimestamps digest that was submitted, so the anchor status of
+  // that digest is checked, and no integrity verdict is computed on the
+  // certificate itself. Before this, uploading the certificate as it directed
+  // showed a red "No Seal Found" (Public Protector submission run review).
+  var VO_ANCHORCERT_PREFIX = 'ANCHOR-CERT|';
+  function parseAnchorCertSubject(subject) {
+    if (!subject) return null;
+    if (subject.charCodeAt(0) === 0xFEFF) subject = subject.substring(1);
+    if (subject.indexOf(VO_ANCHORCERT_PREFIX) !== 0) return null;
+    var parts = subject.split('|');
+    if (parts.length < 3) return null;
+    if (!/^[0-9a-fA-F]{64}$/.test(parts[1])) return null;
+    if (!/^VO-[0-9A-Za-z-]+$/.test(parts[2])) return null;
+    return { scheme: 'anchorcert', otsDigest: parts[1].toLowerCase(), sealId: parts[2] };
+  }
+
   // Raw fast paths over the latin1-decoded bytes (no PDF parser required).
   function detectSealRaw(text) {
     var mCert = text.indexOf(voUtf16Hex(VO_SEALCERT_PREFIX));
@@ -902,6 +920,15 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       var parsedLit = parseSealSubject(mLit[0]);
       if (parsedLit) { console.debug('Seal detected via raw literal fast path (legacy VO-SEAL).'); return parsedLit; }
     }
+    // The anchor certificate is tested after every seal subject: a sealed
+    // file's own VO-SEAL2 / VO-SEAL subject always wins.
+    var mAnc = text.indexOf(voUtf16Hex(VO_ANCHORCERT_PREFIX));
+    if (mAnc !== -1) {
+      var parsedAnc = parseAnchorCertSubject(voUtf16HexDecode(text.substring(mAnc, mAnc + 800)));
+      if (parsedAnc) return parsedAnc;
+    }
+    var mAncLit = text.match(/ANCHOR-CERT\|[0-9a-fA-F]{64}\|VO-[0-9A-Za-z-]+/);
+    if (mAncLit) { var parsedAncLit = parseAnchorCertSubject(mAncLit[0]); if (parsedAncLit) return parsedAncLit; }
     // OTS Format: "Seal: VO-AF07AD93E861 | SHA-512: af07ad93e... | ... | OpenTimestamps"
     var mOts = text.match(/Seal:\s*(VO-[0-9A-Za-z]+)\s*\|\s*SHA-512:\s*([0-9a-fA-F]+)/);
     if (mOts) {
@@ -931,6 +958,11 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       } catch (me) { console.debug('getMetadata failed (continuing with text scan):', me && me.message ? me.message : me); }
       out.keywords = info.Keywords || null;
       out.producer = info.Producer || null;
+      var parsedAnchor = parseAnchorCertSubject(info.Subject || '');
+      if (parsedAnchor) {
+        out.scheme = parsedAnchor.scheme; out.sealId = parsedAnchor.sealId; out.otsDigest = parsedAnchor.otsDigest;
+        return out;
+      }
       var parsedCert = parseSealCertSubject(info.Subject || '');
       if (parsedCert) {
         out.scheme = parsedCert.scheme; out.sealId = parsedCert.sealId; out.embeddedHash = parsedCert.embeddedHash;
@@ -1086,7 +1118,15 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var verdict = 'NO_SEAL';
     var sealVersion = null;
 
-    if (seal && seal.scheme === 'sealcert') {
+    if (seal && seal.scheme === 'anchorcert') {
+      sealVersion = 'ANCHOR-CERT';
+      meta = meta || {};
+      meta.sealId = seal.sealId;
+      meta.otsDigest = seal.otsDigest;
+      meta.version = 'ANCHOR-CERT';
+      verdict = 'ANCHOR_CERTIFICATE';
+      showAnchorCertificate(meta, hashHex);
+    } else if (seal && seal.scheme === 'sealcert') {
       // ---- SEAL-CERT: standalone certificate PDF attesting a seal of ANOTHER
       // document. The hash in its Subject is the CERTIFIED DOCUMENT's hash, not
       // this file's, so no tamper verdict is computed on the certificate file
@@ -1243,12 +1283,17 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     resultBox.className = 'result-box visible result-verified';
     document.getElementById('statusIcon').innerHTML = '&#9989;';
     if (scheme === 'v2') {
-      document.getElementById('statusTitle').textContent = 'Seal Verified — Genuine';
-      document.getElementById('statusMessage').textContent = 'This sealed file\'s own SHA-512 matches the hash embedded in its seal (VO-SEAL2 self-integrity check over the final sealed bytes). The document has not been altered since sealing.' +
+      // What the self-integrity check can and cannot show: anyone can recompute
+      // a hash, so a deliberately altered copy re-sealed with its own hash also
+      // matches itself. The check detects change since the seal was written; a
+      // re-seal is caught by comparing the sealed-file fingerprint with the one
+      // the sender recorded (Public Protector submission run review).
+      document.getElementById('statusTitle').textContent = 'Seal Verified — File Matches Its Seal';
+      document.getElementById('statusMessage').textContent = 'This sealed file\'s own SHA-512 matches the hash embedded in its seal (VO-SEAL2 self-integrity check over the final sealed bytes): the file has not changed since that seal was written. The check cannot tell a deliberately altered copy that was re-sealed from the original, so compare the sealed-file SHA-512 shown here with the one the sender recorded.' +
         (meta && meta.chain ? ' This is a chained seal: the document was sealed again after an earlier seal — this seal chains to previous seal ' + meta.chain + '.' : '');
     } else {
       document.getElementById('statusTitle').textContent = 'Seal Verified';
-      document.getElementById('statusMessage').textContent = 'This document\'s SHA-512 hash matches the embedded seal. The document has not been altered since sealing.';
+      document.getElementById('statusMessage').textContent = 'This document\'s SHA-512 hash matches the embedded seal: the file has not changed since that seal was written. Compare the fingerprint with the one the sender recorded to rule out a re-seal.';
     }
     document.getElementById('timestamp').textContent = 'Sealed: ' + (meta.timestamp ? new Date(meta.timestamp).toLocaleString() : 'Unknown');
 
@@ -1271,7 +1316,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (voSafeMeta(meta.sealId) || 'N/A') + '</p></div>';
     if (scheme === 'v2') {
       metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (verified)</h4><p>' + voSafeMeta(hashHex) + '</p></div>';
-      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + voSafeMeta(meta.originalHash) + '</p></div>';
+      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (submitted to OpenTimestamps)</h4><p>' + voSafeMeta(meta.originalHash) + '</p></div>';
     } else {
       metaHtml += '<div class="meta-card"><h4>Document SHA-512</h4><p>' + voSafeMeta(hashHex) + '</p></div>';
       if (originalHashHex) metaHtml += '<div class="meta-card"><h4>Original Content Hash</h4><p>' + voSafeMeta(originalHashHex) + '</p></div>';
@@ -1327,7 +1372,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     if (scheme === 'v2') {
       metaHtml += '<div class="meta-card"><h4>Recomputed Sealed-File Hash</h4><p style="color:#F87171">' + (recomputedHash || hashHex) + '</p></div>';
       metaHtml += '<div class="meta-card"><h4>Embedded Sealed-File Hash</h4><p style="color:#4ADE80">' + (storedHash || 'N/A') + '</p></div>';
-      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + meta.originalHash + '</p></div>';
+      if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (submitted to OpenTimestamps)</h4><p>' + meta.originalHash + '</p></div>';
     } else {
       metaHtml += '<div class="meta-card"><h4>Current Hash</h4><p style="color:#F87171">' + hashHex + '</p></div>';
       metaHtml += '<div class="meta-card"><h4>Embedded Hash</h4><p style="color:#4ADE80">' + (storedHash || 'N/A') + '</p></div>';
@@ -1344,13 +1389,15 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     resultBox.className = 'result-box visible result-verified';
     document.getElementById('statusIcon').textContent = '✓';
     document.getElementById('statusTitle').textContent = 'Seal Verified — OTS Format';
-    document.getElementById('statusMessage').textContent = 'This PDF carries a Verum Omnis seal anchored to the Bitcoin blockchain via OpenTimestamps. The embedded SHA-512 hash is cryptographically sealed and time-anchored. This document is court-ready and admissible.';
-    document.getElementById('timestamp').textContent = 'OpenTimestamps verified';
+    // No admissibility claim (AGENTS.md) and no "anchored" before Bitcoin
+    // confirms: this branch reads the footer, not the proof.
+    document.getElementById('statusMessage').textContent = 'This PDF carries a Verum Omnis OpenTimestamps-format seal. Its embedded SHA-512 was submitted to OpenTimestamps for anchoring to the Bitcoin blockchain; whether Bitcoin has confirmed it is shown in the anchor status.';
+    document.getElementById('timestamp').textContent = 'OpenTimestamps seal format';
 
     var metaHtml = '<div class="meta-grid">';
     metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
-    metaHtml += '<div class="meta-card"><h4>Document SHA-512 (OTS-anchored)</h4><p>' + (meta.embeddedHash || hashHex) + '</p></div>';
-    metaHtml += '<div class="meta-card"><h4>Seal Format</h4><p>VO-OTS (OpenTimestamps Bitcoin-anchored)</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Document SHA-512 (submitted to OpenTimestamps)</h4><p>' + (meta.embeddedHash || hashHex) + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Seal Format</h4><p>VO-OTS (OpenTimestamps)</p></div>';
     metaHtml += '<div class="meta-card"><h4>Blockchain Status</h4><p>Pending confirmation (1-2 hours typical)</p></div>';
     metaHtml += '</div>';
     metaSection.innerHTML = metaHtml;
@@ -1368,7 +1415,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
 
     var metaHtml = '<div class="meta-grid">';
     metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
-    metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (embedded, OTS-anchored)</h4><p>' + (meta.originalHash || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (embedded, submitted to OpenTimestamps)</h4><p>' + (meta.originalHash || 'N/A') + '</p></div>';
     metaHtml += '<div class="meta-card"><h4>Sealed File SHA-512 (informational)</h4><p>' + hashHex + '</p></div>';
     metaHtml += '<div class="meta-card"><h4>Seal Format</h4><p>VO-SEAL (legacy — pre-v1.3)</p></div>';
     metaHtml += '</div>';
@@ -1424,7 +1471,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var metaHtml = '<div class="meta-grid">';
     metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
     if (meta.sealedHash) metaHtml += '<div class="meta-card"><h4>Embedded Sealed-File SHA-512</h4><p>' + meta.sealedHash + '</p></div>';
-    if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (OTS-anchored)</h4><p>' + meta.originalHash + '</p></div>';
+    if (meta.originalHash) metaHtml += '<div class="meta-card"><h4>Original Content SHA-512 (submitted to OpenTimestamps)</h4><p>' + meta.originalHash + '</p></div>';
     metaHtml += '<div class="meta-card"><h4>Uploaded File SHA-512</h4><p>' + hashHex + '</p></div>';
     metaHtml += '</div>';
     metaSection.innerHTML = metaHtml;
@@ -1454,6 +1501,22 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   // sealed document. Blue/neutral styling -- never green (nothing about the
   // certified document's current state was checked) and never red (the
   // certificate file's own hash legitimately differs from the certified hash).
+  function showAnchorCertificate(meta, hashHex) {
+    resultBox.className = 'result-box visible result-legacy';
+    document.getElementById('statusIcon').innerHTML = '&#128220;';
+    document.getElementById('statusTitle').textContent = 'Anchor Certificate';
+    document.getElementById('statusMessage').textContent = 'This PDF is a Verum Omnis blockchain anchor certificate for seal ' + (meta.sealId || 'the named seal') + '. It is not the sealed document: it records that the digest below was submitted to OpenTimestamps, and the anchor status of that digest is checked below. Upload the sealed PDF itself for an integrity verdict.';
+    document.getElementById('timestamp').textContent = '';
+    var metaHtml = '<div class="meta-grid">';
+    // Both values passed parseAnchorCertSubject's hex / VO-id patterns, so
+    // they carry no markup.
+    metaHtml += '<div class="meta-card"><h4>Seal ID</h4><p>' + (meta.sealId || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>OTS Digest (submitted)</h4><p>' + (meta.otsDigest || 'N/A') + '</p></div>';
+    metaHtml += '<div class="meta-card"><h4>Certificate File SHA-512 (informational)</h4><p>' + hashHex + '</p></div>';
+    metaHtml += '</div>';
+    metaSection.innerHTML = metaHtml;
+  }
+
   function showCertificate(meta, hashHex, seal) {
     resultBox.className = 'result-box visible result-legacy';
     document.getElementById('statusIcon').innerHTML = '&#128220;';
@@ -1882,7 +1945,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     prevEl.title = receipt.prevCustodyDigest === 'GENESIS' ? 'First verification of this document on this device' : receipt.prevCustodyDigest;
     var otsEl = document.getElementById('custodyOts');
     if (receipt.ots.status === 'PENDING') {
-      otsEl.textContent = 'ANCHORED — Bitcoin confirmation pending';
+      otsEl.textContent = 'SUBMITTED — Bitcoin confirmation pending';
       otsEl.className = 'custody-value custody-ots-anchored';
     } else {
       otsEl.textContent = 'OFFLINE — not anchored';
@@ -1967,7 +2030,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         'Document fingerprint (SHA-512): ' + shortHash + '\n' +
         'Received / verified (UTC): ' + r.verifiedAtUtc + gpsLine + '\n' +
         'Read-receipt custody digest (SHA-256' + otsLine + '): ' + r.custodyDigest + '\n\n' +
-        'This request is itself a blockchain-anchored, timestamped read-receipt — proof I received the document at the time' +
+        'This request is itself a timestamped read-receipt, submitted to the public OpenTimestamps calendars for anchoring to the Bitcoin blockchain — a record that I received the document at the time' +
         (loc.captured ? ' and place' : '') + ' above. The full receipt (JSON) is attached, and anyone can verify it at https://verumglobal.foundation/verify.html\n\n' +
         'Please reply with the password.';
       // Download the receipt so the user can attach it to the email/message.
@@ -2149,10 +2212,10 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var badge = '', caption = '';
     if (view.state === 'confirmed') {
       badge = '<span class="custody-badge match">ANCHORED — Bitcoin blockchain</span>';
-      caption = 'The Bitcoin anchor proves the sealed hash existed at a point in time — it does not prove the truth of the document\'s contents. A Verum Omnis seal proves two things only: integrity and time.';
+      caption = 'The Bitcoin anchor proves the fingerprint of the original upload existed no later than the time of its Bitcoin block — it does not prove the truth of the document\'s contents. A Verum Omnis seal proves two things only: integrity and time.';
     } else if (view.state === 'pending') {
       badge = '<span class="custody-badge no_seal">PENDING — submitted to calendars, Bitcoin confirmation typically 1–2 hours</span>';
-      caption = 'The digest is with the public OpenTimestamps calendars awaiting its Bitcoin block. Re-check this seal later to upgrade to a confirmed proof. The anchor proves the sealed hash existed at a point in time — it does not prove the truth of the document\'s contents. A Verum Omnis seal proves two things only: integrity and time.';
+      caption = 'The digest is with the public OpenTimestamps calendars awaiting its Bitcoin block. Re-check this seal later to upgrade to a confirmed proof. Once confirmed, the anchor proves the fingerprint of the original upload existed no later than the time of its Bitcoin block — it does not prove the truth of the document\'s contents. A Verum Omnis seal proves two things only: integrity and time.';
     } else if (view.state === 'offline') {
       badge = '<span class="custody-badge seal_found">OFFLINE — could not reach calendars; the seal\'s hash integrity verdict is unaffected</span>';
       caption = 'The OpenTimestamps calendars could not be reached from this device, so the blockchain anchor status is unknown.';

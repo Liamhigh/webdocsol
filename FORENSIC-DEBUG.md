@@ -88,6 +88,12 @@ these reappears, the guard was weakened — find out how before changing anythin
 | **The narrative's rebuttal section opens "This account conflicts with the record…" with no claim above it** | the claim sentence failed the §15.2 gate and its rebuttal was printed alone | `scrubRebuttals` drops the rebuttal with its claim and counts the sentences; the provenance box prints both gate counters. `ENGINE.md` §12.13 item 10 |
 | **Words glued across a line end in a quote** ("side ofthe same") | the producer drew no space glyph at the line end and the line move was ignored | `Tm` with a changed y, `Td`/`TD` with a vertical component, `T*`, `'`, `"` are word boundaries. `ENGINE.md` §12.11 item 13 |
 | **"Impossible date: 96/6/2026" on a page that says "CAS 96/6/2026"** | the case-number cue guard in D03 removed | a case, docket, reference, file or matter cue before a date-shaped value means it is not a date. `ENGINE.md` §12.11 item 14 |
+| **"Conflicting entity-status claims" quoting one passage twice ("compliant" and "non-compliant" on the same page)** | `\bcompliant\b` matched inside "non-compliant" | a status word after "non-" is the negation; two status words at one place are one claim. `ENGINE.md` §12.14 item 1 |
+| **A lookalike-domain finding on two gov.za addresses** | a renamed department lists both domains for one mailbox | two government-suffix domains are exempt; a lookalike of one still fires. `ENGINE.md` §12.14 item 2 |
+| **"It concerns <company>" or "<company> — the record states:" for the author's own words** | a name found on the page was treated as the party | only a declared party is the party a finding concerns; others are "named on the cited page (descriptive)". `ENGINE.md` §12.14 item 4 |
+| **"The operator is … and non-compliant" in a verbatim column** | the record's own quotation marks closed the engine's quote | nesting-aware quote reading (`voExtractQuotes`, `voQuoteSpans`). `ENGINE.md` §12.14 item 7 |
+| **A party's submission sealed with findings about its own allegations** | the submission read as the primary record | a submission title plus a citation of another Verum seal makes it secondary: leads, not findings. `ENGINE.md` §12.14 item 6 |
+| **verify.html shows "No Seal Found" for an anchor certificate** | the `ANCHOR-CERT|` subject was not recognised | it is, and its digest's anchor is checked; upload the sealed PDF for an integrity verdict. `ENGINE.md` §12.14 item 11 |
 
 ---
 

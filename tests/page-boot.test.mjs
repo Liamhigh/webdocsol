@@ -227,8 +227,8 @@ for (const page of PAGES) {
      html.includes('5. SEALED FINDINGS') && html.includes('6. VERDICT RESERVATION') &&
      html.includes('7. CERTIFICATION'),
     'all seven §15.4 section headings render');
-  ok(html.includes('Behavioural Scorecard') && html.includes('Actionable Output'),
-    'party analysis annex keeps the scorecard and actionable output');
+  ok(html.includes('Parties named on the pages carrying findings') && html.includes('Actionable Output') && !html.includes('Behavioural Scorecard'),
+    'party analysis annex keeps the named-parties table (no longer a "scorecard") and actionable output');
   // B10 plain-language narrative builder stays inlined and exported (the annex
   // path and its tests use it) …
   ok(html.includes('async function buildNarrative'), 'B10 buildNarrative builder is inlined');

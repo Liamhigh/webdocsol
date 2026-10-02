@@ -1275,8 +1275,8 @@ function narrateTemplate(input, kept) {
       : 'No findings were supplied for narrative reporting. ') +
     (input.findingsPruned > 0 ? input.findingsPruned + ' candidate(s) were pruned as benign before this narrative. ' : '');
   if (top.length) {
-    executiveSummary += 'The most significant retained findings are identified as ' +
-      top.map(f => '[' + f.id + ']').join(', ') + ' and are set out in the critical-evidence narrative. ';
+    executiveSummary += 'The highest-ranked findings supplied are identified as ' +
+      top.map(f => '[' + f.id + ']').join(', ') + ' and are quoted below. ';
   } else {
     executiveSummary += 'No findings were retained for narrative reporting. ';
   }
@@ -1289,10 +1289,12 @@ function narrateTemplate(input, kept) {
       // Typographic quotes around the evidence: a finding's own text may
       // begin with a straight-quoted word ("amount" is stated as …), and
       // nesting straight quotes desynchronised the report's sentence gate.
-      'Finding ' + f.id + ' (' + f.type + ', severity ' + f.severity + '), recorded at ' +
+      // No severity number in reader-facing text: the report states that
+      // no band or score is printed, and the order carries the rank.
+      'Finding ' + f.id + ' (' + f.type + '), recorded at ' +
       (f.location || 'an unspecified location') + ', states: \u201c' + f.evidence + '\u201d [' + f.id + '].'
     ).join(' ') +
-      ' The findings quoted above are the highest-severity findings established in the sealed record. ' +
+      ' The findings quoted above are the highest-ranked of the findings supplied for narrative reporting. ' +
       'No facts beyond the supplied findings are asserted. ' + CLOSING_SENTENCE;
   } else {
     criticalEvidence = 'No findings were supplied for narrative reporting and no factual claims can ' +
@@ -1511,6 +1513,8 @@ const HUMAN_SECTION_RULES = {
     'Section: FOUR PILLARS OF FRAUD. 200-450 words.\n' +
     'Pillars: misrepresentation; knowledge; inducement or reliance; loss.\n' +
     'Per pillar: what the record evidences, anchored [F#] (p. N).\n' +
+    'Cite under a pillar only a finding whose type evidences it: misrepresentation takes a contradiction of the record; loss takes a financial finding.\n' +
+    'Knowledge, and inducement or reliance: no engine finding evidences them; write INSUFFICIENT.\n' +
     'A pillar the record does not evidence: write INSUFFICIENT.\n' +
     'Intent is for the court. Never a person-level verdict.',
   critical_evidence:
@@ -1657,7 +1661,12 @@ const HUMAN_BANNED_RES = [
   /\bhow\s+to\s+(?:read|use)\s+this\s+report\b/i,
   /\b(?:committed|is\s+guilty\s+of|has\s+committed)\s+(?:fraud|perjury|theft|a\s+crime|an?\s+offence)\b/i,
   // institutional-engagement honesty (AGENTS.md): no court adopted, accepted, found or ruled on anything
-  /court[- ]recogni[sz]ed|judicially\s+validated|\baccepted\b[^.]{0,40}\b(?:as\s+evidence|into\s+(?:the\s+)?record|as\s+proof|as\s+admissible)\b|\baccepted\s+by\s+(?:the\s+|a\s+)?courts?\b|reassessed\s+as\s+criminal|charges?\s+(?:has|have)\s+been\s+laid|verified\s+charge|\bhigh\s+court\b|\bcourts?\s+(?:adopted|endorsed|validated|accredited|accepted|recogni[sz]ed|found|held|ruled|determined)\b/i
+  /court[- ]recogni[sz]ed|judicially\s+validated|\baccepted\b[^.]{0,40}\b(?:as\s+evidence|into\s+(?:the\s+)?record|as\s+proof|as\s+admissible)\b|\baccepted\s+by\s+(?:the\s+|a\s+)?courts?\b|reassessed\s+as\s+criminal|charges?\s+(?:has|have)\s+been\s+laid|verified\s+charge|\bhigh\s+court\b|\bcourts?\s+(?:adopted|endorsed|validated|accredited|accepted|recogni[sz]ed|found|held|ruled|determined)\b/i,
+  // ... and its common paraphrases, which the Public Protector submission
+  // carried ("The Port Shepstone Magistrate's Court has already recognised
+  // this", "a proven, court-accepted technological solution"): tightened,
+  // never loosened.
+  /court[- ]accepted|\b(?:recogni[sz]ed|accepted|validated|endorsed)\s+by\s+(?:the\s+|a\s+)?(?:[\w'\u2019]+\s+){0,3}courts?\b|\bcourts?\s+(?:has|have|had)\s+(?:already\s+)?(?:recogni[sz]ed|accepted|validated|endorsed|adopted)\b|\badmissible\b/i
 ];
 // "may constitute" is the one sanctioned use of "may" (candidate-law framing);
 // "perjury" is allowed only inside that framing.
@@ -1736,9 +1745,41 @@ function humanNorm(s) {
 // "GUILTY OF FRAUD" in capitals is a verdict, not a heading. Failures are
 // DROPPED and counted — never rewritten, because rewriting a model's sentence
 // could change what it asserts.
-function humanGate(text, ctxIds, ctxPages, corpusNorm) {
+// FOUR PILLARS: the finding types that can evidence each pillar, the same
+// lists as the report's deterministic elements table (forensic-report.js
+// OFFENCE_ELEMENTS; a test pins them equal). Knowledge and inducement or
+// reliance have none: a document records statements, not a state of mind or
+// a decision to rely. The Public Protector submission run printed "The record
+// evidences inducement or reliance [F2]" for an unsigned-agreement finding,
+// and the gate passed it because [F2] was a valid id.
+const HUMAN_PILLAR_TYPES = {
+  misrepresentation: ['CT01', 'CT02', 'CT03', 'CT06', 'CT09', 'CT10', 'CT11', 'CT12', 'CT13', 'CT14', 'CT44', 'CT45', 'CT46'],
+  loss: ['CT02', 'CT15', 'CT16', 'CT17', 'CT18', 'CT19', 'CT20', 'CT21', 'CT22'],
+  knowledge: [],
+  inducement: []
+};
+const HUMAN_PILLAR_RE = {
+  misrepresentation: /\bmisrepresent/i,
+  knowledge: /\bknowledge\b|\bknew\b|\baware(?:ness)?\b/i,
+  inducement: /\binduc|\breli(?:ance|ed)\b|\brel(?:y|ies|ying)\b/i,
+  loss: /\blosse?s?\b|\bprejudice|\bdamages?\b/i
+};
+function humanPillarsOf(s) { return Object.keys(HUMAN_PILLAR_RE).filter(k => HUMAN_PILLAR_RE[k].test(s)); }
+// A sentence under a pillar may cite only findings of a type that evidences
+// every pillar it names (or, naming none, the pillar its heading opened);
+// a candidate evidences no pillar.
+function humanPillarBad(s, pillars, idType) {
+  const refs = [];
+  const refRe = new RegExp(HUMAN_REF_RE.source, 'gi');
+  let m;
+  while ((m = refRe.exec(s)) !== null) refs.push((m[1] || m[2] || m[3] || '').toUpperCase());
+  if (!refs.length || !pillars.length) return false;
+  return refs.some(id => id[0] !== 'F' || pillars.some(p => HUMAN_PILLAR_TYPES[p].indexOf(idType.get(id)) < 0));
+}
+function humanGate(text, ctxIds, ctxPages, corpusNorm, pillarTypes) {
   const out = [];
-  const stats = { kept: 0, dropped: 0, language: 0, anchor: 0, quote: 0, exact: 0 };
+  const stats = { kept: 0, dropped: 0, language: 0, anchor: 0, quote: 0, exact: 0, pillar: 0 };
+  let curPillars = [];
   const paras = String(text || '').replace(/\r\n?/g, '\n').split(/\n{2,}/);
   for (const para of paras) {
     const trimmed = para.trim();
@@ -1748,6 +1789,7 @@ function humanGate(text, ctxIds, ctxPages, corpusNorm) {
       const hc = humanAnchorCheck(trimmed, ctxIds, ctxPages);
       const hbad = hc.bad || (humanSentenceBanned(trimmed) ? 'language' : null);
       if (hbad) { stats.dropped++; stats[hbad]++; continue; }
+      if (pillarTypes) curPillars = humanPillarsOf(trimmed);
       out.push(trimmed);
       continue;
     }
@@ -1776,6 +1818,10 @@ function humanGate(text, ctxIds, ctxPages, corpusNorm) {
           }
         }
         if (!bad && humanSentenceBanned(s)) bad = 'language';
+        if (!bad && pillarTypes) {
+          const named = humanPillarsOf(s);
+          if (humanPillarBad(s, named.length ? named : curPillars, pillarTypes)) bad = 'pillar';
+        }
         if (!bad && !exact && !ac.anchored && !quoted && !humanAnchorFree(s)) bad = 'anchor';
         if (bad) { stats.dropped++; stats[bad]++; continue; }
         stats.kept++;
@@ -1946,7 +1992,8 @@ async function handleAiHumanReport(request, env) {
   const raw = asStr(parsed.text, 24000).trim();
   if (!raw) return humanFail(section, 'empty', modelName);
 
-  const gated = humanGate(raw, ids, pages, corpusNorm);
+  const idType = new Map(findings.concat(candidates).map(f => [f.id, f.type]));
+  const gated = humanGate(raw, ids, pages, corpusNorm, section === 'four_pillars' ? idType : null);
   if (!humanGatePasses(gated.stats)) {
     return json({ ok: true, contract: HUMAN_CONTRACT, section, generated: false, machineGenerated: false,
       reason: 'gate_failed', model: modelName, gate: gated.stats });

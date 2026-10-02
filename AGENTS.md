@@ -178,6 +178,21 @@ is meant to be identical across the three repositories — an edit here must be 
   FRANCHISE_LEASE matrix category, candidate law trimmed by finding type, "cannot be changed"
   replaced by "any change is detectable", reduced-weight findings counted apart.
   `ENGINE.md` §12.13; `tests/annexure-eb-regression.test.mjs` §17 (213 assertions).
+- 2 October 2026: **the Public Protector submission run.** The founder sealed his own 20-page
+  submission to the DMPR and the NDPP; all three sealed findings were false ("compliant" read
+  inside "non-compliant"; two genuine gov.za domains of one renamed department read as a
+  lookalike; the plural "unsigned agreements" in the author's allegation read as one unsigned
+  instrument), and the reports attributed the author's words to a company named on the page and
+  filed an unsigned-agreement sentence under forgery law. The engine now treats a party's
+  submission that cites other Verum seals as a secondary source (leads, never findings); a finding
+  concerns only a declared party; quotes keep the record's own quotation marks; a document dated
+  after its analysis is an engine note. The anchor certificate no longer claims a permanent
+  blockchain record before Bitcoin confirms, labels each fingerprint by its bytes, and verify.html
+  recognises it. Open with the founder: the VO-SEAL2 hash is self-referential (a re-sealed altered
+  copy matches itself; the fix is architectural); "verified" is earned by the advisory review
+  alone; AGENTS.md and `constitution.json`/`llms.txt` disagree on who said "in good faith and in
+  the interest of justice" in H208/25. `ENGINE.md` §12.14; `tests/annexure-eb-regression.test.mjs`
+  §18 (82 assertions).
 - 7 September 2026: **Brain 9 reads the sealed text.** Founder direction: the AI must read
   the sealed files so nothing is missed, state what it finds, and the loop must let the engine
   catch it next time; Brain 9 verifies the model's claims are real and in the text. Built as
@@ -235,7 +250,7 @@ before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping 
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **33 suites, 2324 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **33 suites, 2420 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.

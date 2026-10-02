@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2324 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2420 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -52,7 +52,7 @@ PDF bytes
    findings JSON  →  forensic-report.js build()  →  sealed PDF (seal())
 ```
 
-`runForensicEngine(bytes, pdfDoc, onProgress)` is the single entry point. It is **pure and
+`runForensicEngine(bytes, pdfDoc, onProgress, opts)` is the single entry point (`opts.referenceTime`, an ISO instant the caller passes, dates the "document dated after its analysis" note; the engine never reads the clock). It is **pure and
 deterministic**: no `Date.now()`, no `Math.random()`, no network, no hidden state. Same input →
 same findings, on any device, forever. This is Prime Directive 4 and it is what makes a sealed
 report reproducible years later.
@@ -531,26 +531,26 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**33 suites · 2324 assertions.** `tests/run-all.js` is the registry — a new
+**33 suites · 2420 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
 |---|---|---|
 | `forensic-engine.test.js` | 328 | Core engine behaviour, extraction quality and OCR regressions |
 | `legal-analysis.test.js` | 216 | Party extraction, legal subjects, **PD16 language**, the §15.2 narrative gate, sentence splitting, page anchors, executive summary and SEALED FINDINGS integrity, OCR provenance (PD6) |
-| `page-boot.test.mjs` | 100 | The seal page still boots when a library is missing |
+| `page-boot.test.mjs` | 101 | The seal page still boots when a library is missing |
 | `detector-recall.test.mjs` | 107 | Recall + the §4 false-positive guards, pinned to real bundle strings |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
-| `worker.test.mjs` | 264 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget) |
-| `human-report.test.mjs` | 77 | **The court-ready narrative** (§13): one section contract in three artefacts, opt-in default OFF with honest consent copy, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery |
-| `site-serving.test.mjs` | 54 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
+| `worker.test.mjs` | 279 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, opt-in consent lock), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget) |
+| `human-report.test.mjs` | 81 | **The court-ready narrative** (§13): one section contract in three artefacts, opt-in default OFF with honest consent copy, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery |
+| `site-serving.test.mjs` | 56 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
 | `pages-bridge.test.mjs` | 16 | **The www bridge** (DEPLOYMENT.md "The bridge"): the Pages Function hands every request to the Worker at the same path and query with method, headers and body; redirects pass through; a request marked `X-VO-Chain` is served from static files (no loop); an unreachable Worker falls back to static with an honest header; `functions/` never ships as a Worker asset |
 | `zip-intake.test.mjs` | 25 | **WhatsApp chat exports unpacked on-device** (§12.6a): the page's ZIP reader against real archives (stored, deflated, data-descriptor, folder, macOS cruft, encrypted, garbage), expansion into typed Files, only evidence types admitted, documents inside a voice-note export named for a separate seal, the panel note, the .zip picker entry, the 25-note batch, the home-page copy and locally served photos |
 | `greensky-regression.test.js` | 55 | The Greensky bundle: D01 conduct admission (§4.11) and `voDetectDocuments` (§4.15) |
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `annexure-eb-regression.test.mjs` | 375 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run and the evidence-bundle-4-docs run** (§12.10–§12.13): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans |
+| `annexure-eb-regression.test.mjs` | 457 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run, the evidence-bundle-4-docs run and the Public Protector submission run** (§12.10–§12.14): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 25 | Inline copies byte-identical to source |
@@ -1490,6 +1490,132 @@ detector level, where they are removed, and the review is advisory.
     the OCR-provenance note counts format checks held at Low apart from contradictions held
     below serious; findings JSON v1.5.0 adds `ocr_held`.
 
+
+### 12.14 The Public Protector submission run — a party's own submission is not the record; what the seal and its certificate can say (2026-10-02)
+
+The founder sealed his own 20-page submission, "Response to Public Protector Referral &
+Recommendations for Industry Reform" (CMS-88490/2026 and CMS-88494/2026, to the DMPR's
+Director-General and the NDPP), with the forensic report, the court-ready narrative and the
+anchor certificate. It is advocacy about other sealed records, not an evidence bundle. The
+sealed report carried three findings and all three were false; a three-lens review of the run
+(engine, reports, certificate and honesty contracts) found the rest.
+`tests/annexure-eb-regression.test.mjs` §18 pins each item with the submission's own text,
+`tests/worker.test.mjs` the narrator gate and `tests/human-report.test.mjs` the pillar map.
+On the fixed engine the submission yields no finding; were any detector to fire on it, the
+finding would be a secondary-source lead (item 6).
+
+1. **CT14 paired "non-compliant" with itself.** D09's `\bcompliant\b` matches at the hyphen of
+   "non-compliant", so one passage on p.13 ("AllFuels' position: The operator is "errant" and
+   non-compliant") was read as two status claims. A status word preceded by "non-"/"non " is the
+   negation, and two status words at one place in the text are one claim; each passage is
+   snapped to whole words. A company called compliant on one page and non-compliant on another
+   still fires.
+2. **CT37 read one renamed department as a lookalike.** "dmre.gov.za" and "dmpr.gov.za" are two
+   genuine domains listed for one mailbox. Two domains under government suffixes (gov.xx, govt,
+   gouv, gob, go, mil, gc, .gov, .mil) are never a fraudster's lookalike, because registration
+   there is restricted; a commercial lookalike, and a lookalike OF a government domain
+   ("sars.gev.za"), still fire.
+3. **CT23 fired on a category.** "a common scheme involving unsigned agreements" is the author's
+   allegation about documents in general; the cue "unsigned agreement" now skips the plural. The
+   quote is snapped to whole words ("nd Smith" was printed for "Desmond Smith") and names the page
+   it is quoted from when the location lists several. In the report, D32's two CT23 shapes are told
+   apart (`isUnsignedStatement`): an unsigned agreement is a contract question (common law of
+   contract only, no Cybercrimes Act, no forgery), filed under Selective Omissions, with "obtain
+   the signed original" as its next step and no claim of enforcement unless the record bills under
+   it; the "/s/" shape keeps the forgery provisions and its own "what this establishes".
+4. **The author's words were attributed to a company named on the page.** "It concerns Sanarth
+   Fuels", the Statutory Anchoring party column and the counter-narrative fallback ("Sanarth Fuels
+   — the record states:") all took a name the engine found on the page as the party a finding
+   concerns. A finding now concerns a party only when the case details declare it
+   (`declaredPartyFor`); otherwise the names on its cited pages are stated descriptively ("Named on
+   the cited page (descriptive, not an attribution)"); a counter-narrative quotes a party's own
+   statement only when that party is declared and named in the quoted side. Two engine paths fed
+   the name: `VO_PERSON_MARKER_RE` read prose prepositions as headers ("issued to Sanarth Fuels")
+   — from/to/cc/bcc/per now need their colon — and the name roster.
+5. **False parties.** A courtesy title before a full name is dropped ("Mr Jacob Mbele" is "Jacob
+   Mbele"; "Mrs Smith" keeps it; "Justice", also a first name, is never stripped); an address
+   opening "Corner …" is not a party; titles, a running page header ("Systemic Unfair Practices"),
+   headings bound as names ("Trevenna Campus", "Personal Assistant", "Critical Point") and the
+   product's own heading ("Forensic Platform") are stopped.
+6. **A submission about other sealed records is secondary.** A first page titled as a party's
+   submission ("Response to …", "Submission on …", "Representations …", "Heads of argument …") AND
+   a body that cites another Verum seal ("Seal ID: VO-…", "sealed as VO-…", "Quote from Sealed
+   Evidence") make the document secondary from its first page to its last
+   (`voIsSubmissionOnSealed`): its author's characterisations go to the engine notes as leads, never
+   to the findings. Both cues are required; the document's own seal footer is stripped first and
+   reads "Seal:", never "Seal ID:".
+7. **Quotes, dates and provisions read the record as written.** The record's own quotation marks
+   inside a quoted passage ('The operator is "errant" and non-compliant') closed the engine's quote
+   at the inner mark, so every verbatim column printed "The operator is … and non-compliant";
+   `voExtractQuotes` (engine) and `voQuoteSpans` (report) now read quotes nesting-aware, and the
+   anchor quote lists each passage once. A quote that starts mid-word ("…ication. The
+   contradiction…") was keyed in the previous sentence, which dated the finding by an attorneys'
+   letter: `voSentenceAround` keys it on its own sentence. "Provision cited in the document" took
+   every provision on the cited page (the Public Protector Notice's "paragraph 3.3" on an
+   email-domain finding): provisions now come from the finding's own words or the quote's own
+   sentence, the same discipline as WHEN.
+8. **A document dated after its analysis.** The submission is dated 3 October and was sealed at
+   22:11 on 2 October. `runForensicEngine(pdfBytes, pdfDoc, onProgress, opts)` takes
+   `opts.referenceTime` from the seal page (the engine never reads the clock); a labelled
+   "Date: …" later than that instant's Africa/Johannesburg day is an engine note, recorded and not
+   scored (a letter dated for its delivery day is ordinary); the instant is returned as
+   `referenceTime` and recorded in findings JSON v1.6.0 as `analysis_reference_utc`, so a re-run
+   reproduces the note. The timeline's "no date
+   inconsistencies were detected" no longer reads as an assurance.
+9. **The reports.** A per-side length cap in `contradictionSides` (the whole-evidence cap cut the
+   second side off); every display cap cuts at a word and closes a quote it cut (`capText`); no
+   classification confidence band; no severity column for AI candidates and no empty "Highest
+   severity" column; a narrator's `**markdown**` is not printed; the Nine-Brain blocks are headed
+   "INTEGRITY SIGNAL FOUND" (B2) and "CONTACT CONFLICT FOUND" (B3), since Constitution v8 §2.3
+   states tampering only where the file structure proves it and §2.4's gap block is a message
+   thread's; a contact conflict is a contradiction, not evasion, and the dishonesty rows are ordered
+   by their most serious finding; "Parties named on the pages carrying findings" and "Most serious
+   findings" replace "Behavioural Scorecard" and "Top liabilities"; the methodology names the
+   section actually printed, and the worker's template fallback is headed "ENGINE SUMMARY" and
+   described as a fixed template; the platform role says the engine produces the findings; the
+   cover banner is "CONFIDENTIAL" (no law-enforcement origin implied); "SHA-512 anchored",
+   "permanent" and "fixes the moment it existed" are gone (OpenTimestamps fixes the latest time by
+   which a file existed); "the documents cannot all be true at once" prints only when a finding has
+   two sides; the provenance record counts drafts the server's gate discarded whole, and "no
+   language-model verification" says what the advisory review is when it ran. The narrator's [F#]
+   numbering is the court-ready narrative's (engine findings by severity), so F2 is one finding in
+   every section; the worker template prints no severity number and names no section that does not
+   exist.
+10. **The narrator gate.** Four pillars: a sentence may cite under a pillar only a finding whose
+    type evidences it — misrepresentation and loss take exactly the elements table's types
+    (`OFFENCE_ELEMENTS`, pinned equal), knowledge and inducement or reliance take none — so "The
+    record evidences inducement or reliance [F2]" for an unsigned-agreement finding is dropped and
+    counted (`gate.pillar`). Court-recognition paraphrases are banned language ("court-accepted",
+    "recognised by the … Court", "the Court has already recognised", "admissible"); tightened, never
+    loosened.
+11. **The anchor certificate and verify.html.** The certificate said the fingerprint "is anchored
+    to the Bitcoin blockchain … a public ledger that no one can edit or delete … not even Verum
+    Omnis" under its own "PENDING CONFIRMATION" header, called the hash a signature that "cannot be
+    forged", labelled the original upload's hash "DOCUMENT SHA-512" and said it was "computed from
+    these exact bytes", and sent the reader to a trust-free check against the blockchain. It now
+    labels each fingerprint by the bytes it belongs to (original upload; the sealed file as
+    delivered, newly printed; the OTS digest as SHA-256 of the original SHA-512 hex text), says the
+    Bitcoin block proves existence no later than its time and not the device clock, and says to
+    upload the sealed PDF (not the certificate) to verify.html, which asks the calendars for the
+    proof, or to run an OpenTimestamps client against a Bitcoin node. verify.html recognises the
+    certificate (`ANCHOR-CERT|`) and checks its digest instead of showing "No Seal Found"; it no
+    longer says "court-ready and admissible", "OpenTimestamps verified" or "OTS-anchored" before
+    Bitcoin confirms, and its VO-SEAL2 match says what the self-integrity check cannot show.
+
+**Open, with the founder (not fixed here):** (a) the VO-SEAL2 hash is self-referential — anyone
+can alter a sealed copy and re-seal it with its own hash, keeping the seal ID and ORIG, and
+verify.html shows a match; the fix is architectural (anchor the sealed-file hash too, or sign it)
+and touches the verify contract, so the copy now says what the check cannot show; (b) the reports
+call engine findings "verified" when the single-model advisory review retained them — a
+vocabulary decision for the founder (the review leg is constitutional, §15.4); (c) the repository
+disagrees with itself on "in good faith and in the interest of justice" in H208/25: AGENTS.md says
+it records the respondent's own affidavit, `constitution.json` and `llms.txt` say the Court found
+the conduct good-faith — the founder holds the judgment; (d) D16 (font anomaly) measures
+line-length variance and never fires on production blocks, which carry no line breaks — it must
+not be revived by restoring newlines; (e) a single-token trading name ("AllFuels", "Bright Idea
+Projects 66 (Pty) Ltd t/a AllFuels") can never be a party, and one person tied to two different
+sites (Wayne Nel at Thongasi throughout, "Southbroom Service Station" in Recommendation 1) has no
+detector; both are candidate rules, not shipped on one example.
 
 ## 13. The court-ready narrative (the "human report")
 
