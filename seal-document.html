@@ -16560,7 +16560,11 @@ async function aiNarrateReport(findings, score, verdict) {
   var hl = voHumanFindingList(list), inHl = [];
   var ordered = hl.findings.concat(hl.candidates);
   for (var oi = 0; oi < ordered.length; oi++) inHl.push(ordered[oi].f);
-  var rest = list.filter(function (f) { return inHl.indexOf(f) === -1; });
+  // P#: engine findings without a number (by severity, as the technical
+  // report lists them), then serial patterns.
+  var rest = list.filter(function (f) { return inHl.indexOf(f) === -1; }).sort(function (a, b) {
+    return ((a.type === 'SERIAL') - (b.type === 'SERIAL')) || ((b.severity || 0) - (a.severity || 0));
+  });
   for (var ri = 0; ri < rest.length; ri++) ordered.push({ id: 'P' + (ri + 1), f: rest[ri] });
   var findingsKept = ordered.map(function (o) {
     var f = o.f;
@@ -16717,7 +16721,11 @@ function voHumanPages(f) {
 function voHumanFindingList(findings) {
   var list = Array.isArray(findings) ? findings.filter(Boolean) : [];
   var cq = (window.VerumReport && window.VerumReport._cleanQuote) ? window.VerumReport._cleanQuote : function (s) { return String(s || ''); };
+  // One predicate with the technical report's FINDINGS IN DETAIL
+  // (VerumReport._humanNumberable), so [F#] means one finding in every section.
+  var numberable = (window.VerumReport && window.VerumReport._humanNumberable) ? window.VerumReport._humanNumberable : null;
   var verified = list.filter(function (f) {
+    if (numberable) return numberable(f);
     if (f.source === 'ai' || f.type === 'SERIAL') return false;
     if (/\[bundle context:/i.test(String(f.evidence || ''))) return false;
     return cq(String(f.evidence || '')).replace(/["'\s.,;:—-]/g, '').length > 0 && voHumanPages(f).length > 0;
@@ -16859,7 +16867,7 @@ async function aiHumanReport(findings, ctxIn) {
       var anyAi = false, texts = [];
       for (var b = 0; b < fp.length; b += VO_HUMAN_CRITICAL_BATCH) {
         step++; progress(step, total, section);
-        if (overBudget()) { if (!anyAi) merged.reason = 'time_budget'; continue; }
+        if (overBudget()) { if (!anyAi && merged.reason !== 'gate_failed') merged.reason = 'time_budget'; continue; }
         var batch = fp.slice(b, b + VO_HUMAN_CRITICAL_BATCH);
         var r;
         // one failed batch never discards the batches already written
