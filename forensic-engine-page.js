@@ -3004,9 +3004,20 @@ var DETECTORS = {
       return -1;
     };
     var d38SameDoc = function (a, b) { return !d38Segs.length || (d38DocOf(a) !== -1 && d38DocOf(a) === d38DocOf(b)); };
+    // The termination language must sit on the lessee clause's own page or
+    // the next (a clause split by a page break): in a 651-page contract
+    // bundle some block always says "terminate", and a head-lease recital
+    // with no termination consequence is not the trap. Tested per lessee hit,
+    // so a recital that precedes the clause never shadows it.
+    var VO_TERMINATION_RE = /(effluxion|deemed to have terminated|expires?|expiry|terminat)/;
+    var invokesTerm = function (hit) {
+      if (!hit) return false;
+      return VO_TERMINATION_RE.test(String(blocks[hit.page - 1] || '').toLowerCase()) || VO_TERMINATION_RE.test(String(blocks[hit.page] || '').toLowerCase());
+    };
     var lessee = null, owner = null, farHalf = null;
     for (var pass = 0; pass < 2 && !owner; pass++) {
       for (var lh = 0; lh < lesseeHits.length && !owner; lh++) {
+        if (!invokesTerm(lesseeHits[lh])) continue;
         for (var oh = 0; oh < ownerHits.length; oh++) {
           var lSide = lesseeHits[lh].side, oSide = ownerHits[oh].side;
           // "the Owner/Lessor" names the grantor as owner: only a grantor-side
@@ -3026,11 +3037,6 @@ var DETECTORS = {
         }
       }
     }
-    // The termination language must sit on the lessee clause's own page: in
-    // a 651-page contract bundle some block always says "terminate", and a
-    // head-lease recital with no termination consequence is not the trap.
-    var VO_TERMINATION_RE = /(effluxion|deemed to have terminated|expires?|expiry|terminat)/;
-    var invokesTerm = function (hit) { return !!(hit && VO_TERMINATION_RE.test(String(blocks[hit.page - 1] || '').toLowerCase())); };
     var invokesTermination = invokesTerm(lessee);
     if (lessee && owner && invokesTermination) {
       var crossDoc = d38Segs.length > 0 && !d38SameDoc(lessee.page, owner.page);
@@ -4133,8 +4139,8 @@ var VO_OCR_CAP_NOTE = ' [OCR page: weight reduced until the quoted characters ar
 var VO_OCR_FIGURE_MIN_CONFIDENCE = 60;
 var VO_OCR_HELD_NOTE = ' [OCR-recovered pages only: held below serious until the quoted wording is verified against the page image]';
 function voCapOcrFormatFindings(findings, ocrPages) {
-  var capped = 0, types = [];
-  if (!Array.isArray(findings) || !Array.isArray(ocrPages) || !ocrPages.length) return { capped: 0, types: types };
+  var capped = 0, types = [], held = 0, heldTypes = [];
+  if (!Array.isArray(findings) || !Array.isArray(ocrPages) || !ocrPages.length) return { capped: 0, types: types, held: 0, heldTypes: heldTypes };
   for (var i = 0; i < findings.length; i++) {
     var f = findings[i];
     if (!f) continue;
@@ -4155,8 +4161,8 @@ function voCapOcrFormatFindings(findings, ocrPages) {
       f.ocrCapped = true;
       f.ocrHeld = true;
       if (String(f.evidence || '').indexOf(VO_OCR_HELD_NOTE) === -1) f.evidence = (f.evidence || '') + VO_OCR_HELD_NOTE;
-      capped++;
-      if (types.indexOf(f.type) === -1) types.push(f.type);
+      held++;
+      if (heldTypes.indexOf(f.type) === -1) heldTypes.push(f.type);
       continue;
     }
     if (!(f.severity > 2)) continue;
@@ -4166,7 +4172,7 @@ function voCapOcrFormatFindings(findings, ocrPages) {
     capped++;
     if (types.indexOf(f.type) === -1) types.push(f.type);
   }
-  return { capped: capped, types: types };
+  return { capped: capped, types: types, held: held, heldTypes: heldTypes };
 }
 
 // OCR debris is not evidence. A passage counts as garbled when it carries
@@ -5602,15 +5608,17 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress) {
       var lps = voFindingPages(lf), lowest = null;
       for (var lp = 0; lp < lps.length; lp++) { var c = _ocrConfidence[lps[lp]]; if (typeof c === 'number' && (lowest === null || c < lowest)) lowest = c; }
       if (lowest !== null && lowest < VO_OCR_FIGURE_MIN_CONFIDENCE) {
-        _voContextNotes.push({ type: lf.type, location: lf.location || '', text: 'Figures on ' + (lf.location || 'the cited page') + ' were read by OCR at low confidence and are not reported as a finding until a person has read the page image: ' + String(lf.evidence || '').replace(/\s+/g, ' ').slice(0, 200) });
+        _voContextNotes.push({ type: lf.type, location: lf.location || '', text: 'Figures on ' + (lf.location || 'the cited page') + ' were read by OCR below the engine\'s confidence threshold and are not reported as a finding until a person has read the page image: ' + String(lf.evidence || '').replace(/\s+/g, ' ').slice(0, 200) });
         _lowConf.push(lc);
       }
     }
     for (var li = _lowConf.length - 1; li >= 0; li--) allFindings.splice(_lowConf[li], 1);
   }
   var _ocrCap = voCapOcrFormatFindings(allFindings, _ocrPages);
-  if (_ocrCap.capped) {
-    extractionNote += ' OCR provenance: ' + _ocrCap.capped + ' format-check finding(s) anchored only to OCR-recovered pages held at reduced weight pending verification against the page image (' + _ocrCap.types.join(', ') + ').';
+  if (_ocrCap.capped || _ocrCap.held) {
+    extractionNote += ' OCR provenance: ' + (_ocrCap.capped ? _ocrCap.capped + ' format-check finding(s) anchored only to OCR-recovered pages held at Low pending verification against the page image (' + _ocrCap.types.join(', ') + ')' : '') +
+      (_ocrCap.capped && _ocrCap.held ? '; ' : '') +
+      (_ocrCap.held ? _ocrCap.held + ' contradiction(s) anchored only on OCR-recovered pages held below serious until the page image is read (' + _ocrCap.heldTypes.join(', ') + ')' : '') + '.';
   }
 
   // The anchor rule (see voEnforceAnchorRule): unanchorable content findings
