@@ -4285,7 +4285,7 @@ var VO_NON_PERSON_TOK = (function () {
     'payment payments to debit credit fee fees purchase transfer ' +
     // A court, a trade, a form label: "Supreme Court", "Service Station",
     // "Auditors Name Postal Address" were parties on the evidence-bundle-4 run.
-    'supreme high magistrate magistrates station auditors auditor postal address physical landline cellphone fax ' +
+    'supreme magistrate magistrates auditors auditor postal address physical landline cellphone fax ' +
     // AllFuels run: 'Cnr' (corner, address furniture) and 'Dispossession'
     // (heading language) were bound into party names.
     'cnr dispossession ' +
@@ -4346,7 +4346,10 @@ var VO_NON_PERSON_PHRASE = (function () {
     'registration number|vat registration number|limited registration number|company registration number|' +
     'franchise interest|trade secrets|accounting period|approved supplier|branded marketer|retail margin|' +
     'ras retail margin|operating expenses margin|office park|lakeside office park|derby place|century city|' +
-    'zulu natal|kwazulu natal|kwa zulu natal|as witnesses|ad paragraph|consumer protection act|protection act').split('|');
+    'zulu natal|kwazulu natal|kwa zulu natal|as witnesses|ad paragraph|consumer protection act|protection act|' +
+    // "High" and "Station" are surnames ("Jennifer High"); the court and the
+    // forecourt are phrases.
+    'service station|police station|filling station|petrol station|fuel station|station commander').split('|');
   for (var i = 0; i < phrases.length; i++) m[phrases[i]] = 1;
   return m;
 })();
@@ -4367,11 +4370,53 @@ function voNearNonPersonTok(tok) {
   }
   return false;
 }
+// A stop phrase as OCR leaves it ("Service Statlon"): the same number of
+// tokens, each equal or, at six letters or more, within one edit.
+var VO_NON_PERSON_PHRASE_TOKS = (function () { var out = []; for (var k in VO_NON_PERSON_PHRASE) out.push(k.split(' ')); return out; })();
+function voNearNonPersonPhrase(toks) {
+  var low = [];
+  for (var t = 0; t < toks.length; t++) low.push(toks[t].replace(/[.'\u2019-]+$/, '').toLowerCase());
+  for (var i = 0; i < VO_NON_PERSON_PHRASE_TOKS.length; i++) {
+    var ph = VO_NON_PERSON_PHRASE_TOKS[i];
+    if (ph.length !== low.length) continue;
+    var all = true;
+    for (var j = 0; j < ph.length && all; j++) {
+      if (low[j] === ph[j]) continue;
+      if (!(low[j].length >= 6 && Math.abs(low[j].length - ph[j].length) <= 1 && voEditDistance(low[j], ph[j]) <= 1)) all = false;
+    }
+    if (all) return true;
+  }
+  return false;
+}
+// A capitalised run that carries a stop word is trimmed to the name before
+// it, never dropped whole: "Zeyd Timol Postal Address" is "Zeyd Timol", and
+// "Zeyd Timol de" (a particle cut at a line end) is "Zeyd Timol". A single
+// remaining token is not a party.
+function voTrimPersonName(name) {
+  var toks = String(name == null ? '' : name).replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
+  var keep = toks.length;
+  for (var i = 0; i < toks.length; i++) {
+    var bare = toks[i].replace(/[.'\u2019-]+$/, '').toLowerCase();
+    var stop = !!VO_NON_PERSON_TOK[bare] || (bare.length >= 6 && /^[a-z]+$/.test(bare) && voNearNonPersonTok(bare));
+    for (var len = 3; len >= 2 && !stop; len--) {
+      if (i + len <= toks.length && VO_NON_PERSON_PHRASE[toks.slice(i, i + len).join(' ').toLowerCase().replace(/[.,;:]+$/, '')]) stop = true;
+    }
+    if (stop) { keep = i; break; }
+  }
+  toks = toks.slice(0, keep);
+  while (toks.length) {
+    var last = toks[toks.length - 1].replace(/[.'\u2019-]+$/, '');
+    if (/^(?:de|van|der|den|du|le|la|von|bin|al)$/.test(last) || /^(?:Van|Der|Den|Von|De|Al)$/.test(last)) { toks.pop(); continue; }
+    break;
+  }
+  return toks.length >= 2 ? toks.join(' ') : '';
+}
 function voLooksLikePerson(name) {
   var toks = String(name == null ? '' : name).split(/\s+/).filter(Boolean);
   if (toks.length < 2 || toks.length > 4) return false;
   // Whole-phrase furniture (a scanned contract's defined terms / schedule cells).
   if (VO_NON_PERSON_PHRASE[toks.join(' ').toLowerCase()]) return false;
+  if (voNearNonPersonPhrase(toks)) return false;
   var initials = 0;
   for (var i = 0; i < toks.length; i++) {
     var bare = toks[i].replace(/[.'’-]+$/, '');
@@ -4425,9 +4470,11 @@ function voExtractParties(text) {
   var nameRe = new RegExp("(?<![" + VO_NAME_ANY + "])([" + VO_NAME_UC + "][a-z\u00DF-\u024F]{1,}(?:[ \\t]+[" + VO_NAME_UC + "][a-z\u00DF-\u024F'\u2019.]+){1,3})(?![" + VO_NAME_ANY + "])", "g"), nm;
   while ((nm = nameRe.exec(s)) !== null) {
     if (/[\/\d]/.test(s.charAt(nm.index + nm[0].length))) continue;
-    if (VO_NAME_STOP[nm[1].split(/\s+/)[0]]) continue;
-    if (!voLooksLikePerson(nm[1])) continue; // seal boilerplate / OCR garbage
-    add(nm[1], 'name');
+    var cand = voTrimPersonName(nm[1]);
+    if (!cand) continue;
+    if (VO_NAME_STOP[cand.split(' ')[0]]) continue;
+    if (!voLooksLikePerson(cand)) continue; // seal boilerplate / OCR garbage
+    add(cand, 'name');
   }
   return out;
 }
@@ -4455,7 +4502,7 @@ function voExtractPersonsFromContext(text, cap) {
   var s = String(text == null ? '' : text);
   var out = [], seen = {}, lim = cap || 8, m;
   var add = function (n) {
-    n = voCleanPersonName(String(n || '').replace(/\s+/g, ' '));
+    n = voTrimPersonName(voCleanPersonName(String(n || '').replace(/\s+/g, ' ')));
     if (!n) return;
     if (VO_NAME_STOP[n.split(' ')[0]]) return;
     if (!voLooksLikePerson(n)) return; // seal boilerplate / OCR garbage
@@ -4518,8 +4565,8 @@ function voBuildNameRoster(blocks, minMentions) {
     if (!isOcr && s.replace(/\s+/g, '').length > 60) anyTextPage = true;
     var m; re.lastIndex = 0;
     while ((m = re.exec(s)) !== null) {
-      var n = voCleanPersonName(m[1].replace(/\s+/g, ' '));
-      if (!voLooksLikePerson(n)) continue;
+      var n = voTrimPersonName(voCleanPersonName(m[1].replace(/\s+/g, ' ')));
+      if (!n || !voLooksLikePerson(n)) continue;
       var k = n.toLowerCase();
       counts[k] = (counts[k] || 0) + 1;
       if (!isOcr) textCounts[k] = (textCounts[k] || 0) + 1;
@@ -4586,6 +4633,10 @@ function voExtractQuotes(text) {
   var s = String(text == null ? '' : text), out = [], m;
   var qRe = /["“”]([^"“”]{6,})["“”]/g;
   while ((m = qRe.exec(s)) !== null) out.push(m[1].replace(/\s+/g, ' ').trim());
+  // A term in single quotes ('Astron Motor Fuel' means …) with no inner
+  // apostrophe and at least twelve characters is a quote too.
+  var sRe = /(?:^|[\s(\[:,])['\u2018]([^'\u2018\u2019\n]{12,})['\u2019](?=[\s.,;:)\]]|$)/g;
+  while ((m = sRe.exec(s)) !== null) out.push(m[1].replace(/\s+/g, ' ').trim());
   return out;
 }
 
@@ -4658,7 +4709,7 @@ function voAnchorEnrich(findings, textBlocks) {
     var f = findings[i];
     if (!f) continue;
     var ev = String(f.evidence || '');
-    var pages = voParsePages(f.location);
+    var pages = voFindingPages(f);
     var ctx = ev;
     for (var p = 0; p < pages.length; p++) { var b = blocks[pages[p] - 1]; if (b) ctx += ' ' + b; }
     // Verum's own seal footer repeats on every sealed page ("PRIVATE SEAL",
@@ -6115,7 +6166,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     generateSummary: generateSummary, voEditDistance: voEditDistance,
     voStripSealFurniture: voStripSealFurniture, voStripSealFurnitureBlocks: voStripSealFurnitureBlocks, voCacheDocSegs: voCacheDocSegs,
-    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voFindingPages: voFindingPages, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voIsStampContext: voIsStampContext,
+    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voIsStampContext: voIsStampContext,
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,
     CONTRADICTION_TYPES: CONTRADICTION_TYPES,
     DETECTORS: DETECTORS,

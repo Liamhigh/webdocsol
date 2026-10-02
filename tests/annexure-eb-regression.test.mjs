@@ -836,6 +836,15 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   for (const st of ['… | 30/09/2026 1S:41:47 Africa/Johannesburg | 12/388', '… | 30/09/2026 15 41 47 Africa/Johannesburg | 12/388', '… | 30/09/2026 l5.41.47 Africa/Johannesburg | 12/388', 'SHA-512: abcdef123456… | 30/09/2026 | 15:41:47 | 12/388', 'Seal: VO-BDAC81AC7522 30/09/2026 Africa/Johannesburg 12/388'])
     ok(JSON.stringify(E.voExtractDates(st)) === '[]', 'a stamp date is never a date however OCR left its clock: "' + st + '"');
   ok(JSON.stringify(E.voExtractDates('Sent: 12/03/2024 09:15 From: x@y.co')) === '["12/03/2024"]', 'a timestamped email header outside the footer keeps its date');
+  // Single-quoted evidence can be dated by its sentence; the anchor reads the full page array.
+  ok(JSON.stringify(E.voExtractQuotes("Term 'Franchised Business' defined twice: 'Astron Motor Fuel' means")) === '["Franchised Business","Astron Motor Fuel"]', 'single-quoted terms are quotes too (' + JSON.stringify(E.voExtractQuotes("Term 'Franchised Business' defined twice: 'Astron Motor Fuel' means")) + ')');
+  const blocksG = ['', "The term 'Astron Motor Fuel' means fuel supplied under the agreement commencing on 1 August 2001. Another sentence."];
+  const fG = [{ type: 'CT08', severity: 3, evidence: "Term defined twice: 'Astron Motor Fuel' means fuel supplied under the agreement", location: 'Page 2' }];
+  E.voAnchorEnrich(fG, blocksG);
+  ok(JSON.stringify(fG[0].anchor.when) === '["1 August 2001"]', 'a single-quoted term is dated by its sentence (' + JSON.stringify(fG[0].anchor.when) + ')');
+  const fH = [{ type: 'CT01', severity: 4, evidence: 'admission on ten pages', location: 'Page 4, 5, 6, 7, 8, 9, 10, 11 and 2 more', pages: [4, 5, 6, 7, 8, 9, 10, 11, 12, 13] }];
+  E.voAnchorEnrich(fH, Array(14).fill('page text.'));
+  ok(JSON.stringify(fH[0].anchor.where) === '[4,5,6,7,8,9,10,11,12,13]', 'the anchor reads the full page array of a truncated location (' + JSON.stringify(fH[0].anchor.where) + ')');
   ok(of(DET.D03_DETECT_DATE_INCONSISTENCY, ['[OCR] clause text. Seal: VO-BDAC81AC7522 | SHA-512: ab12cd34ef567890… | 31/02/2026 1S:41:47 Africa/Johannesburg | 7/388'], 'CT03').length === 0 && of(DET.D03_DETECT_DATE_INCONSISTENCY, ['Signed 31/02/2024 by hand.'], 'CT03').length === 1, 'D03 skips a stamp whose clock OCR garbled ("1S:41:47") and still reads an impossible date in the body');
 
   // 17i. Parties.
@@ -849,6 +858,13 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   for (const good of ['J. P. Smith', 'Linda Park', 'Barnie Barnard', 'E de Waal', 'Sipho Dlamini'])
     ok(E.voLooksLikePerson(good), 'still a party: "' + good + '"');
   ok(E.voExtractParties('Seton Smith & Associates\n\nTel 021 556 2322').every(p => p.name !== 'Associates Tel') && E.voExtractParties('1.1.59 "New to All Fue/s/Caltex" means an All Fuel outlet').every(p => !/^All Fue/.test(p.name)), 'a name never spans a line break, and one cut by a slash is a fragment');
+  // A run with a stop word is trimmed to the name, never dropped whole.
+  const trimA = E.voExtractParties('Name: Zeyd Timol Postal Address: 12 Main Road');
+  ok(trimA.some(p => p.name === 'Zeyd Timol') && !trimA.some(p => /Main Road|Postal/.test(p.name)), '"Name: Zeyd Timol Postal Address: 12 Main Road" binds "Zeyd Timol" and nothing else (' + JSON.stringify(trimA.map(p => p.name)) + ')');
+  ok(E.voExtractParties('Zeyd Timol Supreme Court application').some(p => p.name === 'Zeyd Timol') && E.voExtractParties('Name: Zeyd Timol Postal Code 4001').some(p => p.name === 'Zeyd Timol'), '"Zeyd Timol Supreme Court" and "Zeyd Timol Postal Code" bind "Zeyd Timol"');
+  ok(E.voTrimPersonName('Zeyd Timol de') === 'Zeyd Timol' && E.voTrimPersonName('Timol de') === '' && E.voTrimPersonName('Johan Van Der Merwe') === 'Johan Van Der Merwe' && E.voTrimPersonName('Zeyd Timol Service Station') === 'Zeyd Timol', 'a particle cut at a line end is trimmed, a stop phrase is cut, a lone surname is not a party');
+  ok(E.voExtractPersonsFromContext('From: Zeyd Timol de\nVilliers <z@x.com>', 6).some(p => p.name === 'Zeyd Timol'), 'a line-wrapped particle name still binds its first two tokens from an email header');
+  ok(E.voLooksLikePerson('Jennifer High') && E.voLooksLikePerson('Peter Station') && !E.voLooksLikePerson('Service Station') && !E.voLooksLikePerson('Police Station') && !E.voLooksLikePerson('High Court'), '"high" and "station" are stop phrases, not tokens: "Jennifer High" and "Peter Station" are people');
   const ptys = E.voExtractParties('Johan Van Der Merwe signed for the Lessee and Margaret Court for the Lessor.');
   ok(ptys.some(p => p.name === 'Johan Van Der Merwe') && ptys.some(p => p.name === 'Margaret Court'), 'a four-token particle name and a surname that is also a word are bound from the evidence (' + JSON.stringify(ptys) + ')');
 
