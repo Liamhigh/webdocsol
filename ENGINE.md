@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2286 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2293 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**33 suites · 2286 assertions.** `tests/run-all.js` is the registry — a new
+**33 suites · 2293 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -543,7 +543,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `annexure-eb-regression.test.mjs` | 341 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run and the evidence-bundle-4-docs run** (§12.10–§12.13): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans |
+| `annexure-eb-regression.test.mjs` | 348 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run and the evidence-bundle-4-docs run** (§12.10–§12.13): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
@@ -1387,18 +1387,30 @@ sealed four days after §12.12 shipped, so everything there held; what follows i
    Timol de" at a line end binds "Zeyd Timol", a lone surname binds nothing; "high" and
    "station" are phrases ("High Court", "Service Station"), since "Jennifer High" is a person.
 10. **The report.** `FRANCHISE_LEASE` was missing from `CATEGORY_ORDER`, so CT44/CT45 were
-    absent from the findings matrix (41 of 44 listed). Candidate law: the Rental Housing Act
-    (residential tenancies) and the POCA "pattern of racketeering" entry leave the CONTRACT
-    list; an arithmetic finding (CT13/CT14/CT15/CT22) no longer carries money-laundering, FICA
-    or corruption provisions (`statutesForFinding`). "They cannot be changed, altered, or
-    deleted" became "any change to them is detectable" — a hash proves tampering, it does not
-    prevent it. Wherever a count of verified findings is printed, findings held at reduced
-    weight (OCR-only anchors, whatever their type; secondary sources) are counted apart
-    (`voCountPhrase`: "N findings: K verified at full weight, and M anchored on OCR-recovered
-    pages or on a secondary source and held at reduced weight"). The
+    absent from the findings matrix (41 of 44 listed); the CONTRACT subject now has a label
+    ("Contract, Lease & Franchise") and key points, and the dishonesty matrix reads the subject
+    through `subjectOf`, so a CT44 sits under one subject in every table. Candidate law: the
+    Rental Housing Act (residential tenancies) and the POCA "pattern of racketeering" entry
+    leave the CONTRACT list; an arithmetic finding (CT15/CT22, the D13/D14 output — never CT13
+    or CT14, which are title and entity-status findings) carries no money-laundering, FICA or
+    corruption provision; a registration-number finding (CT20) and any Low finding carry no
+    corruption, consumer or commercial-fraud statute, common-law misrepresentation at most
+    (`statutesForFinding`). "They cannot be changed, altered, or deleted" became "any change
+    to them is detectable" — a hash proves tampering, it does not prevent it — and so did the
+    legal-elements seal paragraph ("no party can alter it afterwards", "forever"), the section
+    title ("HOW ANY CHANGE TO THIS RECORD IS DETECTED") and the Constitution line ("a sealed
+    instrument whose fingerprint is anchored"). Every count of findings goes through
+    `voCountPhrase` — the cover, the executive summary, the summary trailer and the narrative
+    opener — which tells apart findings anchored only on OCR-recovered pages or on a secondary
+    source and says what the engine did: their quoted wording is to be verified, and only
+    those whose severity the engine lowered are "held at reduced weight" (an uncapped CT01 or
+    CT44 on a scanned page keeps its severity, and the report never says otherwise). The
     Triple Verification table says how many findings the review dropped. The narrative's
-    provenance prints both gate counters, and a rebuttal whose claim the gate removed is
-    dropped whole instead of printed as an orphan (`scrubRebuttals`).
+    provenance prints both gate counters and, apart from them, the rebuttal sentences dropped
+    with a claim the gate removed; a rebuttal is recognised in the narrator's own vocabulary
+    ("The record at p. N states …", "Assessment: contradicted …", with a bullet or emphasis
+    marker), and a heading-shaped line between a claim and its rebuttal keeps the claim's
+    standing (`scrubRebuttals`).
 
 Not adopted, with reasons: renaming CT20 "Registration Number Fake" — the name is the
 Constitution's taxonomy (v8.0 FINAL, test-locked) and the "What it means" line is already

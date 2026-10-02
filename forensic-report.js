@@ -221,9 +221,11 @@ var LEGAL_SUBJECT_LABEL = {
   TAMPERING: 'Document Integrity & Tampering',
   WITNESS: 'Evidence Handling & Witnesses',
   PROCEDURAL: 'Procedural & Legal-Reference Gaps',
-  LOCATION: 'Location & Contact Conflicts'
+  LOCATION: 'Location & Contact Conflicts',
+  CONTRACT: 'Contract, Lease & Franchise'
 };
 var LEGAL_SUBJECT_KEYPOINTS = {
+  CONTRACT: 'A clause is invoked on a precondition the record shows never occurred, or an asset is recognised in one place and denied in another - the pattern of a lease, franchise or goodwill dispute.',
   CONTRADICTION: 'The document asserts opposing facts, figures or dates in different places - the signature of a claim that cannot all be true.',
   FINANCIAL: 'Amounts, bank details, VAT/registration numbers or currencies conflict - the pattern that accompanies invoice fraud, diversion or fabricated accounts.',
   MISREP: 'Names, roles, authority or company status do not line up - a common marker of misrepresentation or acting beyond mandate.',
@@ -394,17 +396,26 @@ function detectJurisdictions(data) {
 // Candidate provisions for a finding's legal subject across the active
 // jurisdictions (home first, then each foreign leg).
 // Candidate law for ONE finding: the subject's list, trimmed by the finding's
-// type. An invoice whose arithmetic does not add up (CT13/CT14/CT15/CT22) is
-// not, on its own, money laundering, a FICA reporting failure or corruption;
-// those stay for diverted payments and changed bank details (CT16–CT18).
-var VO_ARITHMETIC_TYPES = { CT13: 1, CT14: 1, CT15: 1, CT22: 1 };
+// type. An invoice whose arithmetic does not add up (CT15/CT22, the D13/D14
+// output) is not, on its own, money laundering, a FICA reporting failure or
+// corruption; those stay for diverted payments and changed bank details
+// (CT16–CT18). CT13 (title inconsistency) and CT14 (entity status
+// contradiction, a misrepresentation) are not arithmetic and keep their list.
+var VO_ARITHMETIC_TYPES = { CT15: 1, CT22: 1 };
 var VO_NOT_FOR_ARITHMETIC_RE = /Organised Crime|Financial Intelligence|Corrupt Activities|Money Laundering|Commercial Fraud/i;
+// A registration-number finding (CT20: a format check, or an identity number
+// in a shared field) and any Low finding name no corruption, consumer or
+// commercial-fraud statute: common-law misrepresentation at most.
+var VO_NOT_FOR_LIGHT_RE = /Corrupt Activities|Consumer Protection|Commercial Fraud|Penal Code|Organised Crime|Financial Intelligence|Money Laundering/i;
 function statutesForFinding(f, jur) {
   var list = statutesForSubject(subjectOf(f), jur);
-  if (!f || !VO_ARITHMETIC_TYPES[f.type]) return list;
+  if (!f) return list;
+  var arith = !!VO_ARITHMETIC_TYPES[f.type];
+  var light = f.type === 'CT20' || (typeof f.severity === 'number' && f.severity <= 2);
+  if (!arith && !light) return list;
   var out = [];
   for (var i = 0; i < list.length; i++) {
-    var provs = (list[i].provisions || []).filter(function (p) { return !VO_NOT_FOR_ARITHMETIC_RE.test(typeof p === 'string' ? p : JSON.stringify(p)); });
+    var provs = (list[i].provisions || []).filter(function (p) { var t = typeof p === 'string' ? p : JSON.stringify(p); return !(arith && VO_NOT_FOR_ARITHMETIC_RE.test(t)) && !(light && VO_NOT_FOR_LIGHT_RE.test(t)); });
     if (provs.length) out.push({ jur: list[i].jur, provisions: provs });
   }
   return out;
@@ -697,15 +708,26 @@ function isReducedWeight(f, ocrPages) {
   }
   return false;
 }
+// A finding whose severity the engine lowered (the OCR cap, a secondary
+// source): "held at reduced weight" is said only of these.
+function isCappedWeight(f) {
+  return !!(f && (f.ocrCapped || f.secondaryCapped || /\[OCR page: weight reduced|\[secondary source on p\./.test(String(f.evidence || ''))));
+}
+// The count tells apart findings anchored only on OCR-recovered pages or on
+// a secondary source, and says what the engine did: their quoted wording is
+// to be verified, and only those whose severity was lowered are "held at
+// reduced weight" (an uncapped CT01 or CT44 on a scanned page keeps its
+// severity, and the report never says otherwise).
 function voCountPhrase(list, reviewed, ocrPages) {
-  var n = list.length, reduced = 0;
-  for (var i = 0; i < n; i++) if (isReducedWeight(list[i], ocrPages)) reduced++;
+  var n = list.length, reduced = 0, capped = 0;
+  for (var i = 0; i < n; i++) { if (isReducedWeight(list[i], ocrPages)) { reduced++; if (isCappedWeight(list[i])) capped++; } }
   var word = reviewed ? ' verified finding' : ' engine finding';
   if (!reduced) return n + word + (n === 1 ? '' : 's') + (reviewed ? '' : ' (deterministic rules; AI review not run on this report)');
   var firm = n - reduced;
   return n + ' finding' + (n === 1 ? '' : 's') + ': ' + firm + (reviewed ? ' verified' : ' established by the record') + ' at full weight' +
     (reviewed ? '' : ' (deterministic rules; AI review not run on this report)') + ', and ' + reduced +
-    ' anchored on OCR-recovered pages or on a secondary source and held at reduced weight until verified against the page image or the primary document';
+    ' anchored only on OCR-recovered pages or on a secondary source, whose quoted wording is to be verified against the page image or the primary document before it is relied on' +
+    (capped ? ' (' + capped + ' of them held at reduced weight by the engine)' : '');
 }
 function stripDemotedTag(ev) { return String(ev || '').replace(DEMOTED_TAG_RE, '').replace(/\s{2,}/g, ' ').trim(); }
 
@@ -1220,10 +1242,10 @@ function secExecSummary(ctx, data) {
   // never inside the verified total or its severity counts (PD16).
   var fbCounts = { 5: 0, 4: 0, 3: 0, 2: 0, 1: 0 };
   var fbAll = fr.findings || [];
-  var fbVerified = 0, fbAiCands = 0;
+  var fbVerified = 0, fbAiCands = 0, fbList = [];
   for (var fb = 0; fb < fbAll.length; fb++) {
     if (fbAll[fb] && fbAll[fb].source === 'ai') { fbAiCands++; continue; }
-    fbVerified++;
+    fbVerified++; fbList.push(fbAll[fb]);
     var fbs = Math.max(1, Math.min(5, fbAll[fb].severity || 1)); fbCounts[fbs]++;
   }
   var boxH = 86;
@@ -1249,7 +1271,7 @@ function secExecSummary(ctx, data) {
   if (fr.scanFailed) ctx.para('NOTE: the deterministic scan could not complete on this file. Counts shown are not meaningful; the seal itself is unaffected.', { size: 9.5, font: ctx.f.timesBold, color: RED, after: 8 });
   if (fr.summary) ctx.para(fr.summary, { size: 10, after: 10 });
   if (!fr.clean) {
-    ctx.para(fbVerified + ' verified finding' + (fbVerified === 1 ? ' is' : 's are') + ' recorded below. Each is a fact anchored to the sealed record — a contradiction, anomaly, or integrity signal the engine measured. What the facts establish in law, and any verdict on a named person, is for the court.'
+    ctx.para('Recorded below: ' + voCountPhrase(fbList, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) + '. Each is a fact anchored to the sealed record — a contradiction, anomaly, or integrity signal the engine measured. What the facts establish in law, and any verdict on a named person, is for the court.'
       + (fbAiCands > 0 ? ' The ' + fbAiCands + ' AI-raised candidate item' + (fbAiCands === 1 ? '' : 's') + ' appear' + (fbAiCands === 1 ? 's' : '') + ' in the AI-Identified Candidates section, advisory only.' : ''), { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 12 });
   }
 
@@ -1819,7 +1841,7 @@ function brain9SweepLine(data) {
 function secConstitution(ctx, data) {
   ctx.newBodyPage();
   ctx.heading('CONSTITUTION & AI GOVERNANCE');
-  ctx.para('This report is generated under the Verum Omnis Constitution v' + CONSTITUTION.governance.version + ' ("' + CONSTITUTION.governance.title + '") - the constitutional governance law of the Verum Omnis platform - and implements its engine operating instrument, Constitution v' + CONSTITUTION_VERSION + ' ("' + CONSTITUTION.title + '"). The Constitution is a sealed, immutable instrument, cryptographically anchored as follows:', { size: 10, after: 8 });
+  ctx.para('This report is generated under the Verum Omnis Constitution v' + CONSTITUTION.governance.version + ' ("' + CONSTITUTION.governance.title + '") - the constitutional governance law of the Verum Omnis platform - and implements its engine operating instrument, Constitution v' + CONSTITUTION_VERSION + ' ("' + CONSTITUTION.title + '"). The Constitution is a sealed instrument whose fingerprint is anchored as follows, so any change to it is detectable:', { size: 10, after: 8 });
   ctx.bullet('Seal ID: ' + CONSTITUTION.sealId + ' - sealed ' + CONSTITUTION.sealedAt + '.', { size: 9.5 });
   ctx.bullet('SHA-512: ' + truncHash(CONSTITUTION.sha512, 32, 16) + ' (full fingerprint published at ' + CONSTITUTION.url + ').', { size: 9.5 });
   ctx.bullet('Blockchain anchor: ' + CONSTITUTION.anchor + '.', { size: 9.5 });
@@ -1908,7 +1930,7 @@ function voLegalPrelude(data) {
   var substantive = all.filter(isEngineFinding);
   var bySubject = {};
   for (var i = 0; i < substantive.length; i++) {
-    var subj = LEGAL_SUBJECT_OF[substantive[i].type] || 'CONTRADICTION';
+    var subj = subjectOf(substantive[i]);
     (bySubject[subj] = bySubject[subj] || []).push(substantive[i]);
   }
   return { fr: fr, substantive: substantive, bySubject: bySubject };
@@ -1920,9 +1942,9 @@ function secCriticalSubjects(ctx, data) {
   ctx.newBodyPage();
   ctx.heading('1. CRITICAL LEGAL SUBJECTS');
   ctx.para('Findings grouped by legal subject. Every entry is a fact anchored to quoted text. What it establishes in law — and any verdict on a named person — is for the court to decide.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
-  var subjRows = [];
-  for (var so = 0; so < LEGAL_SUBJECT_ORDER.length; so++) {
-    var sk = LEGAL_SUBJECT_ORDER[so];
+  var subjRows = [], dmOrder = LEGAL_SUBJECT_ORDER.concat(['CONTRACT']);
+  for (var so = 0; so < dmOrder.length; so++) {
+    var sk = dmOrder[so];
     var list = L.bySubject[sk];
     if (!list || !list.length) continue;
     list.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
@@ -2187,8 +2209,8 @@ function secPartyAnalysis(ctx, data) {
   }
   ctx.gap(4);
   var jur = (data.identity && data.identity.jurisdiction) ? data.identity.jurisdiction : null;
-  var saVerified = (fr.findings || []).filter(function (f) { return !(f && f.source === 'ai'); }).length;
-  ctx.para(saVerified + ' verified finding' + (saVerified === 1 ? ' stands' : 's stand') + ' on the record above, each anchored to its page. A single verified contradiction can be decisive.', { size: 9, after: 6 });
+  var saList = (fr.findings || []).filter(function (f) { return !(f && f.source === 'ai'); });
+  ctx.para('On the record above: ' + voCountPhrase(saList, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) + ', each anchored to its page. A single verified contradiction can be decisive.', { size: 9, after: 6 });
   ctx.para('Recommended next steps' + (jur ? ' (jurisdiction: ' + jur + ')' : '') + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   ctx.bullet('Have a legal practitioner review the top liabilities above against the applicable law' + (jur ? ' of ' + jur : ' of the relevant jurisdiction') + '. Candidate statutory provisions are set out in the Statutory Anchoring annex - they are starting points for counsel to confirm, not a legal conclusion.', { size: 9 });
   ctx.bullet('Preserve the sealed original and this report unaltered; both are SHA-512 anchored and independently verifiable at verumglobal.foundation/verify.html.', { size: 9 });
@@ -2603,7 +2625,7 @@ function secOffenceMatrix(ctx, data) {
   // A sealed finding is a record, not an accusation. Saying so here matters:
   // the seal is what makes the measurement permanent and party-proof.
   if (anyElementsBlock) {
-    ctx.para('These findings are sealed under SHA-512 and anchored to the Bitcoin blockchain via OpenTimestamps: a permanent, tamper-evident record of what the documents evidence, fixed at the moment of sealing. No party — including the person who sealed it — can alter it afterwards. A sealed finding is a record, not an accusation: it asserts nothing about guilt; it preserves, forever, what the documents show.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+    ctx.para('These findings are sealed under SHA-512 and anchored to the Bitcoin blockchain via OpenTimestamps: a tamper-evident record of what the documents evidence, fixed at the moment of sealing. Any change to it afterwards is detectable — the fingerprint would no longer match, and the timestamp fixes when it existed. A sealed finding is a record, not an accusation: it asserts nothing about guilt; it preserves what the documents showed when they were sealed.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   }
 }
 
@@ -3885,7 +3907,7 @@ async function build(opts) {
   secShortVersion(ctx, data);
   secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' });
   secUnreadPages(ctx, data);
-  secSealExplainer(ctx, data, { label: 'WHY THIS RECORD CANNOT BE ALTERED' });
+  secSealExplainer(ctx, data, { label: 'HOW ANY CHANGE TO THIS RECORD IS DETECTED' });
   // ---- PART 2 — THE EVIDENCE (for investigators and lawyers) ------------
   // TOC placeholder page (drawn last with real page numbers).
   var tocPage = doc.addPage([PW, PH]);
@@ -4105,7 +4127,7 @@ async function seal(reportBytes, sealOpts) {
 // it never invents facts, loss figures, or conclusions.
 function secSealExplainer(ctx, data, opts) {
   ctx.newBodyPage();
-  ctx.heading('WHY THIS RECORD CANNOT BE ALTERED', opts && opts.label ? { label: opts.label } : undefined);
+  ctx.heading('HOW ANY CHANGE TO THIS RECORD IS DETECTED', opts && opts.label ? { label: opts.label } : undefined);
   ctx.para('Every document and this report carry a SHA-512 fingerprint — a 128-character code computed from the file\'s exact contents. Change a single character anywhere and the fingerprint changes completely. The fingerprint is anchored to the Bitcoin blockchain through OpenTimestamps, which fixes the moment it existed in a public record no one — including Verum Omnis — can edit.', { size: 10, after: 8 });
   ctx.bullet('Anyone can verify this report at verumglobal.foundation/verify.html — no account, no permission needed.', { size: 9.5 });
   ctx.bullet('If a single word of the sealed record were altered, verification would fail.', { size: 9.5 });
@@ -4176,7 +4198,7 @@ async function buildNarrative(opts) {
   if (identity.caseName) ctx.para('Matter: ' + san(identity.caseName), { size: 11, after: 2 });
   ctx.para('Report reference: ' + reference + '    |    ' + fmtDate(generatedAt), { size: 10, color: GRAY, after: 12 });
   var nSub = (fr.findings || []).filter(isEngineFinding).length;
-  ctx.para('This is the plain-language telling of the sealed forensic report: ' + nSub + ' verified finding' + (nSub === 1 ? '' : 's') + ', each anchored to the page it comes from. Nothing here goes beyond what the sealed record states; the verdict on any named person is for the court.', { size: 10.5, after: 4 });
+  ctx.para('This is the plain-language telling of the sealed forensic report: ' + voCountPhrase((fr.findings || []).filter(isEngineFinding), !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) + ', each anchored to the page it comes from. Nothing here goes beyond what the sealed record states; the verdict on any named person is for the court.', { size: 10.5, after: 4 });
   ctx.para('The findings are produced by forensic software — fixed deterministic detection rules, applied identically to every document — not by a generative AI. Any optional AI-review item is labelled as such, and is advisory only.', { size: 9, font: fonts.timesItalic, color: GRAY, after: 8 });
   secExecutiveSummary(ctx, data);
 
@@ -4297,29 +4319,36 @@ async function buildHumanReport(opts) {
   var candidates = (fr.findings || []).filter(function (f) { return f && f.source === 'ai'; });
   var jur = detectJurisdictions(data);
 
-  var sectionsAi = 0, sectionsAll = 0, gateDroppedClient = 0, gateDroppedServer = 0;
+  var sectionsAi = 0, sectionsAll = 0, gateDroppedClient = 0, gateDroppedServer = 0, gateOrphaned = 0;
 
   // A rebuttal whose claim sentence the gate removed is an orphan ("This
   // account conflicts with the record at p. 7 … Assessment: …" with nothing
   // it answers); the block goes whole, and its sentences are counted.
-  var REBUTTAL_OPEN_RE = /^\s*(?:this account conflicts|assessment\s*:)/i;
+  // A heading-shaped line ("Record:") between a claim and its rebuttal keeps
+  // the claim's flag; only a prose paragraph resets it. Orphaned sentences
+  // the gate itself passed are counted apart from the gate's removals.
+  var REBUTTAL_OPEN_RE = /^\s*(?:[-\u2022*]|\d{1,2}[.)])?\s*\**\s*(?:this (?:account|statement|version) conflicts|the record (?:at p\.|states|it conflicts)|assessment\s*[:\u2014\u2013-])/i;
+  var REBUTTAL_ASSESS_RE = /\bassessment\s*[:\u2014\u2013-]\s*\**\s*(?:contradicted|not contradicted)/i;
+  var isRebuttal = function (t) { return REBUTTAL_OPEN_RE.test(t) || REBUTTAL_ASSESS_RE.test(t); };
   function scrubRebuttals(text) {
-    var paras = String(text || '').split(/\n+/), out = [], kept = 0, dropped = 0, prevClaimKept = false;
+    var paras = String(text || '').split(/\n+/), out = [], kept = 0, dropped = 0, orphaned = 0, prevClaimKept = false;
     for (var i = 0; i < paras.length; i++) {
       var para = paras[i];
       if (!para.trim()) continue;
       var sc = scrubNarrative(para);
-      if (REBUTTAL_OPEN_RE.test(para)) {
-        if (!prevClaimKept) { dropped += sc.kept + sc.dropped; continue; }
-      } else if (REBUTTAL_OPEN_RE.test(sc.text)) {
-        dropped += sc.kept + sc.dropped; prevClaimKept = false; continue;
-      } else {
-        prevClaimKept = sc.kept > 0;
+      if (isRebuttal(para)) {
+        if (!prevClaimKept) { orphaned += sc.kept; dropped += sc.dropped; continue; }
+      } else if (isRebuttal(sc.text)) {
+        orphaned += sc.kept; dropped += sc.dropped; prevClaimKept = false; continue;
+      } else if (sc.kept > 0) {
+        prevClaimKept = true;
+      } else if (sc.dropped > 0) {
+        prevClaimKept = false;
       }
       if (sc.text.trim()) { out.push(sc.text); kept += sc.kept; }
       dropped += sc.dropped;
     }
-    return { text: out.join('\n'), kept: kept, dropped: dropped };
+    return { text: out.join('\n'), kept: kept, dropped: dropped, orphaned: orphaned };
   }
 
   function provisionsText(f) {
@@ -4362,9 +4391,11 @@ async function buildHumanReport(opts) {
       if (voGatePasses(scrub)) {
         renderBlocks(scrub.text);
         gateDroppedClient += scrub.dropped;
+        gateOrphaned += scrub.orphaned || 0;
         var note = 'Written by the AI narrator from the sealed findings';
         var removed = scrub.dropped + serverDropped;
         if (removed) note += ' — ' + removed + ' sentence' + (removed === 1 ? '' : 's') + ' removed by the §15.2 language and anchor gate';
+        if (scrub.orphaned) note += ' — ' + scrub.orphaned + ' sentence' + (scrub.orphaned === 1 ? '' : 's') + ' dropped with a claim the gate removed';
         ctx.para(note + '.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
         sectionsAi++;
         return true;
@@ -4607,7 +4638,7 @@ async function buildHumanReport(opts) {
     'AI narrator: ' + san(String(prov.model || (prov.sectionsAttempted > 0
       ? 'asked for ' + prov.sectionsAttempted + ' section' + (prov.sectionsAttempted === 1 ? '' : 's') + '; no draft passed the server\'s anchor and language gate, so nothing AI-written is printed'
       : 'not run'))) + '  |  contract ' + san(String(prov.contract || 'human-v1')) + '  |  temperature 0',
-    'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the server\'s anchor and language gate: ' + gateDroppedServer + '  |  by the render-time §15.2 gate: ' + gateDroppedClient,
+    'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the server\'s anchor and language gate: ' + gateDroppedServer + '  |  by the render-time §15.2 gate: ' + gateDroppedClient + (gateOrphaned ? '  |  rebuttal sentences dropped with a removed claim: ' + gateOrphaned : ''),
     'Engine: Forensic Contradiction Engine v' + ENGINE_VERSION + ' — deterministic mode',
     rulePackageLine(data),
     brain9SweepLine(data),
@@ -4647,7 +4678,7 @@ var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buil
   _docsForLocation: docsForLocation, _crossDocNote: crossDocNote, _ocrTouched: ocrTouched,
   _documentParties: documentParties, _effectiveParties: effectiveParties,
   _effectivePartiesWithRoles: effectivePartiesWithRoles,
-  _splitSentences: splitSentences, _samePartyName: samePartyName, _isEngineFinding: isEngineFinding, _isReducedWeight: isReducedWeight, _voCountPhrase: voCountPhrase, _statutesForFinding: statutesForFinding, _engineNotes: engineNotes,
+  _splitSentences: splitSentences, _samePartyName: samePartyName, _isEngineFinding: isEngineFinding, _isReducedWeight: isReducedWeight, _isCappedWeight: isCappedWeight, _voCountPhrase: voCountPhrase, _statutesForFinding: statutesForFinding, _engineNotes: engineNotes,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;
