@@ -94,6 +94,9 @@ these reappears, the guard was weakened — find out how before changing anythin
 | **"The operator is … and non-compliant" in a verbatim column** | the record's own quotation marks closed the engine's quote | nesting-aware quote reading (`voExtractQuotes`, `voQuoteSpans`). `ENGINE.md` §12.14 item 7 |
 | **A party's submission sealed with findings about its own allegations** | the submission read as the primary record | a submission title plus a citation of another Verum seal makes it secondary: leads, not findings. `ENGINE.md` §12.14 item 6 |
 | **verify.html shows "No Seal Found" for an anchor certificate** | the `ANCHOR-CERT|` subject was not recognised | it is, and its digest's anchor is checked; upload the sealed PDF for an integrity verdict. `ENGINE.md` §12.14 item 11 |
+| **An annexure behind a cover submission recorded as a secondary-source lead** | the submission cue ran to the last page | the submission ends before the first page that opens a new record (annexure, email header, invoice, "Page 1 of"); a captioned pleading is never a submission. `ENGINE.md` §12.14, verification pass |
+| **"The document is dated <a commencement / due / hearing date>" in the engine notes** | a qualified "… Date:" label read as the document's date | qualified labels are skipped and only a document's first page is read. `ENGINE.md` §12.14, verification pass |
+| **The certificate's "sealed file SHA-512" differs from `sha512sum` of the delivered file** | the VO-SEAL2 self-check value was printed | the certificate prints the delivered file's real SHA-512 (the protected copy when a password was set). `ENGINE.md` §12.14, verification pass |
 
 ---
 
