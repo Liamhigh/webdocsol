@@ -720,8 +720,8 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   // 17f. CT15/CT22: one page, plausible figures, OCR cap.
   const d13 = (b) => DET.D13_DETECT_CALCULATION_ERROR(b);
   const badInv = d13(['Subtotal: R1161950 VAT: R1 Total: R1.08']);
-  ok(badInv.filter(f => !f.contextOnly).length === 0 && badInv.some(f => f.contextOnly && /do not read as one invoice/.test(f.evidence) && /text layer may have separated/.test(f.evidence)), '"subtotal R1161950, VAT R1, total R1.08" is an unreadable invoice (a note), not an amount discrepancy; on a native page the note blames the text layer, not OCR');
-  ok(d13(['[OCR] Subtotal: R1161950 VAT: R1 Total: R1.08']).some(f => f.contextOnly && /the OCR may have broken the numbers/.test(f.evidence)), 'the same figures on an OCR page say so (p.397)');
+  ok(badInv.filter(f => !f.contextOnly).length === 0 && badInv.some(f => f.contextOnly && /^Figures on page 1 do not read as one invoice \(subtotal R1161950, VAT R1, total R1\.08\): read the page before relying on any of them$/.test(f.evidence)), '"subtotal R1161950, VAT R1, total R1.08" is an unreadable invoice (a note stating the recognised figures, no guess about why), not an amount discrepancy');
+  ok(d13(['[OCR] Subtotal: R1161950 VAT: R1 Total: R1.08']).some(f => f.contextOnly && /^Figures recognised on page 1 do not read as one invoice .*: read the page image before relying on any of them$/.test(f.evidence)), 'on an OCR page the note says the figures were recognised and sends the reader to the page image (p.397)');
   ok(d13(['Subtotal: R1,000.00 VAT: R150.00 Total: R1,250.00']).filter(f => f.type === 'CT15').length === 1, 'a plausible invoice whose total does not add up still fires');
   ok(d13(['Subtotal: R1,000.00 for the goods', 'VAT: R150.00 Total: R1,250.00']).filter(f => !f.contextOnly).length === 0, 'figures on different pages are never combined into one invoice');
   ok(E.voCapOcrFormatFindings([{ type: 'CT15', severity: 5, location: 'Page 397', evidence: 'Total mismatch' }, { type: 'CT22', severity: 4, location: 'Page 397', evidence: 'VAT mismatch' }], [397]).capped === 2, 'an invoice\'s arithmetic on an OCR page is held at reduced weight like every other figure');
@@ -747,10 +747,11 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   const demo = E.voDemoteSecondarySource([
     { type: 'CT23', severity: 4, location: 'Page 5', evidence: 'The record states a signature is missing ("uncountersigned")' },
     { type: 'CT45', severity: 5, location: 'Page 2 vs Page 5', evidence: 'Goodwill recognised — yet denied' },
+    { type: 'CT01', severity: 4, location: 'Page 2, 5', evidence: 'admission language appears on 2 pages' },
     { type: 'CT02', severity: 4, location: 'Page 2', evidence: '"total" is stated as R1 and as R2' }
   ], secPages);
-  ok(demo.leads.length === 1 && demo.leads[0].type === 'CT23' && demo.kept.length === 2 && demo.kept[0].type === 'CT45' && demo.kept[0].severity === 2 && /secondary source on p\. 5/.test(demo.kept[0].evidence) && demo.kept[1].severity === 4,
-    'a finding wholly on the extract is a lead, a mixed one is held at reduced weight and tagged, an unrelated one is untouched');
+  ok(demo.leads.length === 2 && demo.leads[0].type === 'CT23' && demo.leads[1].type === 'CT45' && demo.kept.length === 2 && demo.kept[0].type === 'CT01' && demo.kept[0].severity === 2 && /secondary source on p\. 5/.test(demo.kept[0].evidence) && demo.kept[1].severity === 4,
+    'a finding wholly on the extract is a lead, a two-half finding with its denial on the extract is a lead (p.12 vs p.557), a list finding with one page there is held at reduced weight and tagged, an unrelated one is untouched');
   ok(E.voSecondaryPages([{ start: 1, end: 3, title: 'Lease agreement prepared by the Lessor\'s attorneys' }], ['Lease agreement prepared by the Lessor\'s attorneys. 1. Parties.', '', '']).length === 0, 'a primary instrument that says who prepared it is not an extract');
   // The primary record describes itself in the same words and is never secondary.
   const secOf = (title, head) => E.voSecondaryPages([{ start: 1, end: 3, title }], [head, '', '']).length;
@@ -761,6 +762,50 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(secOf('Notes on the record prepared by counsel, 30 September 2026', 'Notes on the record prepared by counsel, 30 September 2026. 1. The MOU …') === 3, '"notes on the record prepared by counsel" is secondary');
   ok(secOf('Chronology compiled by the complainant', 'Chronology compiled by the complainant. 2014: …') === 3 && secOf('Extract prepared 30 Sept 2026 - pages reproduced from the Deed of Lease', 'Extract prepared 30 Sept 2026 - pages reproduced from the Deed of Lease') === 3, 'a chronology compiled by a party and an extract reproducing pages of a deed are secondary (the deed named after the extract does not make it primary)');
   ok(secOf('Valuation report prepared by XYZ Valuers on 3 March 2024', 'Valuation report prepared by XYZ Valuers on 3 March 2024 for the premises at Erf 123') === 0, 'a valuation report prepared on a date is the record');
+  // Variants of the sealed title; a primary noun before the extract names its source.
+  for (const v of ['Franchise Agreement — Extract prepared 30 Sept 2026 - pages reproduced', 'Annexure FA7 to the Founding Affidavit: Extract prepared 30 Sept 2026 - pages reproduced from the MOU', 'Extract from Mr. Bentz\'s affidavit, prepared 30 Sept 2026', 'Extract of pp. 12-15 reproduced from the Deed of Lease', 'Commentary on the MOU, 30 September 2026', 'Extracted pages, prepared 30 Sept 2026', 'Summarised by counsel on 30 September 2026'])
+    ok(secOf(v, v + '. 1. …') === 3, 'secondary: "' + v + '"');
+  ok(secOf('Account summary', 'STANDARD BANK Account summary prepared on 2024-01-01 for account 123') === 0 && secOf('Basis of preparation', 'SUMMARY OF ACCOUNTING POLICIES Summary prepared on the historical cost basis') === 0, 'an account summary on a bank statement and a policies summary "prepared on the historical cost basis" are the record');
+  // A quotation note and an AI-compiled page are accounts of the record (Document 5, p.444-449).
+  ok(secOf('Here is the exact wording of the relevant portions of the Franchise Agreement', 'Here is the exact wording of the relevant portions of the Franchise Agreement: 3.5 The Franchisee …') === 3, '"Here is the exact wording of the relevant portions of …" is a quotation note, not the record');
+  ok(secOf('Compiled by: Claude', 'Compiled by: Claude — the MOU in short. 1. …') === 3, 'a page compiled by an AI assistant is secondary wherever it sits in the bundle');
+  // No stated documents: the file is tested from its first page; uncovered pages by their own head.
+  const solo = E.voSecondarySegments([], ['Extract prepared 30 Sept 2026 - pages reproduced from the MOU', 'clause 7 … uncountersigned', 'clause 9']);
+  ok(solo.length === 1 && solo[0].start === 1 && solo[0].end === 3, 'an extract sealed on its own is secondary from its first page to its last (' + JSON.stringify(solo) + ')');
+  const orphan = E.voSecondarySegments([{ start: 1, end: 3, title: 'Deed of Lease' }, { start: 5, end: 7, title: 'MOU' }], ['Deed of Lease', '', '', 'Extract prepared 30 Sept 2026 - pages reproduced', 'MOU', '', '']);
+  ok(orphan.length === 1 && orphan[0].start === 4 && orphan[0].end === 4, 'an orphan page between two documents is tested by its own head (' + JSON.stringify(orphan) + ')');
+  ok(E.voSecondarySegments([], ['Lease agreement. 1. Parties', 'p2', 'Extract prepared 30 Sept 2026 - pages reproduced', 'Extract prepared 30 Sept 2026 - pages reproduced | 2', 'p5']).map(g => g.start + '-' + g.end).join(',') === '3-4', 'in a one-document file whose first page is primary, pages that announce themselves as an extract are secondary one by one');
+  // A finding of two halves with either half on a secondary page is a lead; a list finding is capped.
+  const twoHalf = E.voDemoteSecondarySource([{ type: 'CT45', severity: 4, location: 'Page 12 vs Page 557', evidence: 'recognised vs denied' }], [557]);
+  ok(twoHalf.leads.length === 1 && twoHalf.kept.length === 0, '"Page 12 vs Page 557" with the denial on the extract is a lead, not a reduced-weight finding');
+  const listed = E.voDemoteSecondarySource([{ type: 'CT01', severity: 4, location: 'Page 453, 462, 557', evidence: 'admission' }], [557]);
+  ok(listed.kept.length === 1 && listed.kept[0].severity === 2 && listed.leads.length === 0, 'a list finding with one page on the extract is held at reduced weight');
+  ok(JSON.stringify(E.voRulePagesOf('Page 451, 455 and 3 more')) === '[451,455]' && JSON.stringify(E.voRulePagesOf('Page 557 (clause 7)')) === '[557]', '"and 3 more" and "(clause 7)" are not pages');
+  // A finding that lists more than eight pages carries them all in f.pages; every page test reads them.
+  const tenPages = [4, 5, 6, 7, 8, 9, 10, 11, 12, 13];
+  const trunc = (pages) => ({ type: 'CT01', severity: 4, location: 'Page 4, 5, 6, 7, 8, 9, 10, 11 and 2 more', pages, evidence: 'admission language appears on 10 pages' });
+  ok(JSON.stringify(E.voFindingPages(trunc(tenPages))) === JSON.stringify(tenPages) && JSON.stringify(E.voFindingPages({ location: 'Page 4, 5 and 2 more' })) === '[4,5]', 'voFindingPages reads the full page array when the location is truncated');
+  ok(E.voDemoteSecondarySource([trunc(tenPages)], tenPages).leads.length === 1, 'a ten-page finding wholly on the extract is a lead although its location prints only eight pages');
+  const mixedTrunc = E.voDemoteSecondarySource([trunc([2].concat(tenPages.slice(0, 9)))], tenPages);
+  ok(mixedTrunc.kept.length === 1 && mixedTrunc.kept[0].severity === 2, 'a hidden primary page among the ten keeps it a reduced-weight finding, not a lead');
+  const ocrTrunc = [trunc(tenPages)];
+  E.voCapOcrFormatFindings(ocrTrunc, tenPages);
+  ok(ocrTrunc[0].ocrAnchored === true, 'the OCR anchor test reads the full page array too');
+  const RP = require('../forensic-report.js');
+  ok(JSON.stringify(RP._pageNumbers('Page 453, 462 and 2 more')) === '[453,462]' && RP._isReducedWeight({ type: 'CT01', location: 'Page 453, 462 and 2 more', pages: [453, 462, 621, 637], evidence: 'x' }, [453, 462, 621, 637]) === true && RP._isReducedWeight({ type: 'CT01', location: 'Page 453, 462 and 2 more', pages: [453, 462, 621, 637], evidence: 'x' }, [453, 462, 621]) === false, 'the report\'s page parser drops "and 2 more" and prefers the full page array');
+  // The reach on the sealed bundle: three consecutive stated documents headed "Extract prepared …" are secondary; F8 → lead, F2/F3 → leads, F5 → reduced weight.
+  const reach = [];
+  const seals = ['VO-AAAAAAAAAAAA', 'VO-BBBBBBBBBBBB', 'VO-CCCCCCCCCCCC', 'VO-DDDDDDDDDDDD'];
+  for (let d = 0; d < 4; d++) for (let p = 1; p <= 3; p++) reach.push((p === 1 ? (d === 0 ? 'Deed of Lease between Bright Idea Projects and Wayne Nel Motors.' : 'Extract prepared 30 Sept 2026 - pages reproduced from the MOU.') : 'page ' + p + ' text, Goodwill: N/A, uncountersigned.') + foot(seals[d], p, 3));
+  const reachSegs = E.voCacheDocSegs(reach);
+  const reachSec = E.voSecondarySegments(reachSegs, reach);
+  ok(reachSegs.length === 4 && reachSec.length === 3 && reachSec[0].start === 4 && reachSec[2].end === 12, 'three consecutive extract documents behind one deed are secondary from p.4 to p.12 (' + JSON.stringify(reachSec.map(g => g.start + '-' + g.end)) + ')');
+  const reachDemo = E.voDemoteSecondarySource([
+    { type: 'CT23', severity: 4, location: 'Page 8', evidence: 'uncountersigned' },
+    { type: 'CT45', severity: 5, location: 'Page 2 vs Page 8', evidence: 'recognised vs denied' },
+    { type: 'CT01', severity: 4, location: 'Page 2, 8', evidence: 'admission on 2 pages' }
+  ], E.voSecondaryPages(reachSegs, reach));
+  ok(reachDemo.leads.length === 2 && reachDemo.kept.length === 1 && reachDemo.kept[0].type === 'CT01' && reachDemo.kept[0].severity === 2, 'on that reach the signature lead and the goodwill pair are leads and the two-page admission is held at reduced weight');
   const secSegs = E.voSecondarySegments(segs2, ['', '', '', 'Extract prepared 30 Sept 2026 - pages reproduced', '', '']);
   ok(secSegs.length === 1 && secSegs[0].start === 4 && secSegs[0].end === 6 && /^Extract prepared 30 Sept 2026/.test(secSegs[0].title) && E.voSecondaryWhere(secSegs) === ' (p. 4-6: "Extract prepared 30 Sept 2026 - pages reproduced from the MOU")', 'the engine note names the secondary document and its page range (' + E.voSecondaryWhere(secSegs) + ')');
 
@@ -773,10 +818,18 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   const fC = [{ type: 'CT04', severity: 4, evidence: 'Billing after expiry: "runs for ten years" — yet invoices continue', location: 'Page 3' }];
   E.voAnchorEnrich(fC, blocksD);
   ok(fC[0].anchor.when.length === 1 && fC[0].anchor.when[0] === '1 August 2001', 'the quote\'s own sentence may date it, once (' + JSON.stringify(fC[0].anchor.when) + ')');
+  const blocksE = ['', '', 'The agreement concluded between the parties at Durban on 12 March 2018, after lengthy negotiation between their respective attorneys, provides that goodwill of R3,800,000 is recognised as payable to the Lessee. No goodwill shall be payable to the Lessee per clause 4.5.2.'];
+  const fE = [{ type: 'CT01', severity: 4, evidence: 'The document both affirms and negates "goodwill": "\u2026tive attorneys, provides that goodwill of R3,800,000 is recognised as payab\u2026" vs "\u2026see. No goodwill shall be payable to the Lessee per clause 4.5.2.\u2026"', location: 'Page 3' }];
+  E.voAnchorEnrich(fE, blocksE);
+  ok(fE[0].anchor.when.length === 1 && fE[0].anchor.when[0] === '12 March 2018', 'a quote wrapped in ellipses (the D01/D09/D27 shape) still keys on its own sentence for the date (' + JSON.stringify(fE[0].anchor.when) + ')');
 
   // 17i. Parties.
   ok(!E.voLooksLikePerson('Supreme Court') && !E.voLooksLikePerson('Service Station') && !E.voLooksLikePerson('Timol de') && !E.voLooksLikePerson('Auditors Name Postal Address') && E.voLooksLikePerson('Zeyd Timol') && E.voLooksLikePerson('E de Waal'),
     '"Supreme Court", "Service Station", "Timol de" and "Auditors Name Postal Address" are not parties; "Zeyd Timol" and "E de Waal" are');
+  ok(E.voLooksLikePerson('Margaret Court') && E.voLooksLikePerson('Thanh Le') && E.voLooksLikePerson('Li Bin') && E.voLooksLikePerson('Johan Van Der Merwe') && !E.voLooksLikePerson('Johan Van Der') && !E.voLooksLikePerson('Robert De') && !E.voLooksLikePerson('High Court') && !E.voLooksLikePerson('Court Order') && !E.voLooksLikePerson('Constitutional Court'),
+    '"Margaret Court", "Thanh Le", "Li Bin" and "Johan Van Der Merwe" are people; "Johan Van Der", "Robert De", "High Court", "Court Order" and "Constitutional Court" are not');
+  const ptys = E.voExtractParties('Johan Van Der Merwe signed for the Lessee and Margaret Court for the Lessor.');
+  ok(ptys.some(p => p.name === 'Johan Van Der Merwe') && ptys.some(p => p.name === 'Margaret Court'), 'a four-token particle name and a surname that is also a word are bound from the evidence (' + JSON.stringify(ptys) + ')');
 
   // 17j. The report and the narrative, rendered and read back.
   const fs = require('fs'), path = require('path');
@@ -811,7 +864,9 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
       documents: [{ name: 'evidence-bundle-4-docs.pdf', pageCount: 651, sha512: 'cd'.repeat(64), sealId: 'VO-A301D0F8A06F' }],
       findings: { clean: false, overallScore: 40, confidence: 'LOW', totalFindings: 3, findings: findings, summary: '3 page-anchored findings established.', contradictionTypesUsed: 3 },
       aiReview: { applied: true, retained: 3, assessed: 6, dropped: 3, added: 0, narrative: '' },
-      extractionNotes: 'Per-page PDF content-stream decoding with ToUnicode CMaps.', ocrPages: [7], images: {}, generatedAt: '2026-09-30T20:59:16.000Z'
+      extractionNotes: 'Per-page PDF content-stream decoding with ToUnicode CMaps. Anchor rule: 1 observation(s) could not be pinned to a page and are recorded here as unanchored observations, NOT as findings (no anchor, no sentence): [CT15] 5 of 6 amounts are suspiciously round (multiples of 1000) Engine notes (1): Page 397: Figures recognised on page 397 do not read as one invoice (subtotal R1161950, VAT R1, total R1.08): read the page image before relying on any of them Score calibration: confidence-weighted.',
+      contextNotes: [{ type: 'CT22', location: 'Page 397', text: 'Figures recognised on page 397 do not read as one invoice (subtotal R1161950, VAT R1, total R1.08): read the page image before relying on any of them' }],
+      ocrPages: [7], images: {}, generatedAt: '2026-09-30T20:59:16.000Z'
     };
     const quiet = console.log; console.log = () => {};
     let T, N;
@@ -829,6 +884,15 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     const slice = (from, to) => { const a = T.lastIndexOf(from); const b = to ? T.indexOf(to, a + 1) : -1; return a < 0 ? '' : T.slice(a, b > a ? b : undefined); };
     ok(/Franchise \/ Lease & Goodwill/.test(slice('FINDINGS & CONTRADICTION MATRIX', 'Finding type summary')), 'the findings matrix carries the Franchise / Lease & Goodwill category (CT44/CT45 were missing from it)');
     ok(/The review dropped 3 engine findings as unsupported/.test(T), 'the Triple Verification table says how many findings the review dropped');
+    // Engine page notes: their own heading in both reports, never "could not pin to a page", never dropped from the narrative.
+    const pinPara = slice('could not pin to a specific page', 'Engine notes');
+    ok(/suspiciously round/.test(pinPara) && !/Figures recognised/.test(pinPara) && !/Engine notes/.test(pinPara), 'the "could not pin to a specific page" paragraph carries the anchor-rule items only, not a note about page 397 (' + pinPara.slice(0, 160).replace(/\s+/g, ' ') + ')');
+    ok(/Engine notes\s+—\s+pages the engine read but could not turn into a finding/.test(T) && /Page 397:\s+Figures\s+recognised\s+on\s+page\s+397\s+do\s+not\s+read\s+as\s+one\s+invoice/.test(T), 'the technical report prints the engine note under its own heading with its page');
+    ok(/could not turn what it found there into a finding/.test(N) && /Page 397:\s+Figures\s+recognised\s+on\s+page\s+397/.test(N), 'the court-ready narrative prints the engine note with its page (it was dropped before)');
+    const enS = R._engineNotes({ extractionNotes: 'x. Anchor rule: 1 observation(s) … Engine notes (2): Page 74: Registration numbers read by OCR as variants \u2022 Page 80: A number one digit off Score calibration: y' });
+    ok(enS.length === 2 && enS[0].location === 'Page 74' && /^Registration numbers/.test(enS[0].text) && enS[1].location === 'Page 80', 'engine notes are parsed from the labelled segment when no structure is present (' + JSON.stringify(enS) + ')');
+    const enC = R._engineNotes({ findings: { contextNotes: [{ type: 'CT38', location: '', text: 'Context: multiple jurisdictions are referenced' }, { type: 'CT20', location: 'Page 74', text: 'ID/Registration number' }] } });
+    ok(enC.length === 1 && enC[0].type === 'CT20', 'structured notes win, and a cross-border Context note is not a page note');
     ok(!/cannot be changed, altered, or deleted/.test(T) && /any change to them is detectable/.test(T), 'the seal is described as tamper-evident, never as preventing change');
     ok(/3 findings: 2 verified at full weight, and 1 anchored on OCR-recovered pages or on a secondary source and held at reduced weight/.test(T), 'the cover count tells the OCR-held finding apart (' + (T.match(/contains [^.]{0,200}/) || [''])[0] + ')');
     ok(!/Organised Crime/.test(slice('Person → Contradiction → Page → Candidate law', 'CANDIDATE OFFENCE MATRIX')) || /CT18/.test(slice('Person → Contradiction → Page → Candidate law', 'CANDIDATE OFFENCE MATRIX')), 'the arithmetic finding\'s row cites no money-laundering provision');

@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2205 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2236 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**33 suites · 2205 assertions.** `tests/run-all.js` is the registry — a new
+**33 suites · 2236 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -543,7 +543,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `annexure-eb-regression.test.mjs` | 260 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run and the evidence-bundle-4-docs run** (§12.10–§12.13): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans |
+| `annexure-eb-regression.test.mjs` | 291 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run and the evidence-bundle-4-docs run** (§12.10–§12.13): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
@@ -1309,9 +1309,12 @@ sealed four days after §12.12 shipped, so everything there held; what follows i
    that the page's figures do not read as one invoice, which blames OCR only on an OCR page.
    Both standard rates since 2018 are accepted, a zero VAT line is zero-rated, and a
    discount, delivery or credit line between the subtotal and the total leaves the page
-   unchecked. The printed words carry no percentage (PD1). CT15/CT22 join the OCR cap
-   (§12.10); a signed-package phrase rule is never capped — it matched words, not
-   characters — but is still counted apart (`ocrAnchored`).
+   unchecked. The trade-off is stated: a VAT line below a tenth of the subtotal is a note,
+   not a finding. The printed words carry no percentage (PD1), and the note states the
+   recognised figures as a fact ("Figures recognised on page 397 do not read as one invoice
+   (…): read the page image before relying on any of them"), never a guess about why.
+   CT15/CT22 join the OCR cap (§12.10); a signed-package phrase rule is never capped — it
+   matched words, not characters — but is still counted apart (`ocrAnchored`).
 7. **An extract prepared on the seal date read as the record.** A stated document whose title
    or first page says it is an extract, summary, synopsis, commentary, chronology or digest
    prepared, compiled, drafted, reproduced or annotated after the fact, or "pages reproduced"
@@ -1324,16 +1327,45 @@ sealed four days after §12.12 shipped, so everything there held; what follows i
    "prepared by/on/for + a date" on its own is not a title, "notes" and "analysis" count only
    as "notes on" and "analysis of", and a secondary noun that follows the name of a primary
    record ("Summary of significant accounting policies … prepared") is a heading inside that
-   record (`VO_PRIMARY_RECORD_RE`, `voIsSecondaryHead`). The engine note names each secondary
-   document and its page range (`voSecondaryWhere`), so a reader can see which pages the leads
-   sit on.
+   record (`VO_PRIMARY_RECORD_RE`, read from the secondary noun to a little past the verb — a
+   primary noun BEFORE the noun names the extract's source: "Franchise Agreement — Extract
+   prepared …" is secondary; an auxiliary before the verb, "the financial statements have been
+   prepared", is the record; `voIsSecondaryHead`). The gap between noun and verb tolerates an
+   abbreviation period ("Extract from Mr. Bentz's affidavit, prepared"); a participle needs no
+   verb ("Extracted pages", "Summarised by counsel", "Commentary on the MOU"). A quotation note
+   ("Here is the exact wording of the relevant portions of the Franchise Agreement", p.444) and a
+   page compiled by an AI assistant are accounts of the record too (`VO_QUOTATION_NOTE_RE`,
+   `VO_AI_COMPILED_RE` on every document head). Pages no stated document covers — a
+   one-document file, a run shorter than three pages, an orphan page between two documents —
+   are tested by their own head, so an extract sealed on its own is secondary from its first
+   page to its last. A finding of two halves ("Page 12 vs Page 557") with either half on a
+   secondary page is a contradiction between the record and an account of the record, not of
+   the record: a lead, never a reduced-weight finding; only a list finding with some pages
+   there is held at severity 2. "… and 3 more" and "(clause 7)" in a location are not pages
+   (`voRulePagesOf`); a finding that lists more than eight pages carries them all in `f.pages`
+   and every page test reads it (`voFindingPages`), so a ten-page finding wholly on an extract
+   is a lead and never counts as native text. The reach on the sealed bundle is stated and
+   pinned: three consecutive stated documents headed "Extract prepared 30 Sept 2026 - pages
+   reproduced…" (p.450–575) are secondary — the signature lead on p.557 and the two goodwill
+   pairs are leads, the eight-page admission is held at reduced weight. The demotion runs before
+   the signed rule package and the per-type cap, so a lead neither blocks a package rule nor
+   consumes a type's budget, and before the OCR cap, so a lead carries no cap tag; each lead goes
+   to the engine notes with its page, where both reports print it (§12.13 item 11). The engine
+   note names each secondary document and its page range (`voSecondaryWhere`), so a reader can
+   see which pages the leads sit on.
 8. **Findings dated from unrelated lines.** `voAnchorEnrich` took up to two dates from
    anywhere on the cited page, so a registration-number finding was dated "1 October 2005".
    WHEN now comes from the finding's own words or, failing that, one date from the sentence on
    the page that holds the quote (`voSentenceAround`).
+   A quote that D01, D09 or D27 wrap in ellipses ("…tive attorneys, provides that…") is keyed
+   on its own words, so its sentence still dates it.
 9. **Parties "Supreme Court", "Service Station", "Timol de", "Auditors Name Postal
    Address".** Court, trade and form-label tokens join `VO_NON_PERSON_TOK`; a name ending on a
    surname particle is cut short and rejected.
+   A final particle rejects a name only when written lowercase ("Timol de") or when it never
+   stands alone (Van, Der, Den, Von, De, Al): "Thanh Le", "Li Bin" and "Margaret Court" are
+   people, so "court" is a stop phrase ("Supreme Court", "High Court", "Court Order"), never a
+   stop token; a Title-Case four-token name ("Johan Van Der Merwe") is read whole.
 10. **The report.** `FRANCHISE_LEASE` was missing from `CATEGORY_ORDER`, so CT44/CT45 were
     absent from the findings matrix (41 of 44 listed). Candidate law: the Rental Housing Act
     (residential tenancies) and the POCA "pattern of racketeering" entry leave the CONTRACT
@@ -1354,6 +1386,13 @@ neutral; reserving "verified" for human-confirmed items — the Constitution sta
 fact, and the split count now says which ones rest on OCR or a secondary source; a build that
 fails when the advisory review retains a known artefact — the suites pin the artefacts at the
 detector level, where they are removed, and the review is advisory.
+11. **Engine notes misfiled.** A detector's `contextOnly` note (figures that do not read as one
+   invoice, registration numbers OCR could not read, an ownership line not paired) was
+   appended to the extraction notes as unlabelled text, so the technical report filed it
+   under "items it could not pin to a specific page" and the court-ready narrative dropped
+   it. The engine now returns them structurally (`contextNotes: [{type, location, text}]`)
+   and under a labelled "Engine notes (n):" segment; both reports print them under their own
+   heading with their page (`engineNotes`, `secEngineNotes`), never as a finding.
 
 ## 13. The court-ready narrative (the "human report")
 

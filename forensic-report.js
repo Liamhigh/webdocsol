@@ -633,6 +633,8 @@ function fmtLocation(location) {
 function pageNumbers(location) {
   if (!location) return [];
   var out = [];
+  // "… and 3 more" is a count and "(clause 7)" a qualifier, never a page.
+  location = String(location).replace(/\s+and\s+\d+\s+more\b/gi, ' ').replace(/\([^)]*\)/g, ' ');
   // Plural-aware for the same reason as pageAnchor: "Pages 11, 12" carries two
   // real page anchors and previously yielded none.
   // Ranges ("Pages 12-14") expand to every page in them, so OCR provenance
@@ -689,7 +691,8 @@ function isReducedWeight(f, ocrPages) {
   if (f.ocrCapped || f.secondaryCapped || f.ocrAnchored || /\[OCR page: weight reduced|\[secondary source on p\./.test(String(f.evidence || ''))) return true;
   // A finding whose every cited page was OCR-recovered, whatever its type.
   if (Array.isArray(ocrPages) && ocrPages.length) {
-    var pages = pageNumbers(f.location || '');
+    // A finding that lists more than eight pages carries them all in f.pages.
+    var pages = (Array.isArray(f.pages) && f.pages.length) ? f.pages : pageNumbers(f.location || '');
     if (pages.length) { var all = true; for (var p = 0; p < pages.length; p++) if (ocrPages.indexOf(pages[p]) === -1) { all = false; break; } if (all) return true; }
   }
   return false;
@@ -3040,13 +3043,24 @@ function secNarrative(ctx, data, opts) {
   // the findings), cross-border context, and any unread/OCR-gap disclosure.
   var notes = String(data.extractionNotes || '');
   var alsoBits = [];
-  var mAnchor = notes.match(/Anchor rule:[^]*?(?=(?:\s+Context:|\s+Score calibration|$))/);
+  var mAnchor = notes.match(/Anchor rule:[^]*?(?=(?:\s+Context:|\s+Engine notes|\s+Score calibration|$))/);
   if (mAnchor) alsoBits.push(mAnchor[0].trim());
-  var mCtx = notes.match(/Context:[^]*?(?=(?:\s+Score calibration|$))/);
+  var mCtx = notes.match(/Context:[^]*?(?=(?:\s+Engine notes|\s+Score calibration|$))/);
   if (mCtx) alsoBits.push(mCtx[0].trim());
   // (Unread/OCR pages have their own first-pages section now — not repeated here.)
   if (alsoBits.length) {
     ctx.para('The engine also noted items it could not pin to a specific page. These are leads for follow-up, never verified findings: ' + alsoBits.join(' '), { size: 9.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
+  // Page notes: material the engine read on a named page but could not turn
+  // into a finding (figures that do not read as one invoice, registration
+  // numbers OCR could not read, an ownership line not paired). Each names its
+  // page; none is a finding. Printed under their own heading, never as an
+  // item "that could not be pinned to a page".
+  var engNotes = engineNotes(data);
+  if (engNotes.length) {
+    ctx.para('Engine notes — pages the engine read but could not turn into a finding. Each names its page; none is a finding, and each is to be read on the page before anything is relied on:', { size: 9.5, font: ctx.f.timesItalic, color: GRAY, after: 4 });
+    for (var en = 0; en < engNotes.length; en++) ctx.bullet((engNotes[en].location ? engNotes[en].location + ': ' : '') + engNotes[en].text, { size: 9, after: 3 });
+    ctx.gap(2);
   }
   ctx.para('In short, the documents cannot all be true at the same time on the points above. Each contradiction is anchored to the quoted text and its page location, so it can be checked directly against the originals. What these inconsistencies mean in law is for a legal practitioner to determine — this report identifies them; it does not decide their consequences.', { size: 10.5, after: 6 });
 }
@@ -3599,6 +3613,47 @@ function pageRanges(pages) {
   return out.join(', ');
 }
 
+// The engine's page notes, structured when the engine result carries them
+// (contextNotes: [{type, location, text}]), else parsed from the "Engine notes
+// (n): a • b" segment of the extraction notes. A cross-border "Context:" note
+// is not a page note.
+function engineNotes(data) {
+  var out = [];
+  var src = (data && Array.isArray(data.contextNotes)) ? data.contextNotes
+    : (data && data.findings && !Array.isArray(data.findings) && Array.isArray(data.findings.contextNotes)) ? data.findings.contextNotes : null;
+  if (src) {
+    for (var i = 0; i < src.length; i++) {
+      var n = src[i];
+      if (!n || !n.text || /^\s*Context:/.test(n.text)) continue;
+      out.push({ type: String(n.type || ''), location: String(n.location || ''), text: String(n.text).replace(/\s+/g, ' ').trim() });
+    }
+    return out;
+  }
+  var notes = String((data && data.extractionNotes) || (data && data.findings && data.findings.extractionNotes) || '');
+  var m = notes.match(/Engine notes \(\d+\):\s*([^]*?)(?=(?:\s+Score calibration|$))/);
+  if (!m) return out;
+  var items = m[1].split(/\s+\u2022\s+/);
+  for (var k = 0; k < items.length; k++) {
+    var it = items[k].replace(/\s+/g, ' ').trim();
+    if (!it) continue;
+    var loc = it.match(/^((?:Page|p\.)\s[^:]{1,40}):\s+/);
+    out.push({ type: '', location: loc ? loc[1] : '', text: loc ? it.slice(loc[0].length) : it });
+  }
+  return out;
+}
+
+// Court-ready narrative: the same notes in plain words, after the unread-pages
+// disclosure, so a reader sees which pages the engine read but could not use.
+function secEngineNotes(ctx, data, ownHeading) {
+  var list = engineNotes(data);
+  if (!list.length) return;
+  if (ownHeading) { ctx.newBodyPage(); ctx.heading('PAGES THE ENGINE COULD NOT USE', { label: 'PAGES THE ENGINE COULD NOT USE' }); }
+  else ctx.gap(4);
+  ctx.para('The engine read the following pages but could not turn what it found there into a finding. Each note names its page; none is a finding, and each page should be read by a person before anything on it is relied on:', { size: 10.5, after: 6 });
+  for (var i = 0; i < list.length; i++) ctx.bullet((list[i].location ? list[i].location + ': ' : '') + list[i].text, { size: 10, after: 4 });
+  ctx.gap(2);
+}
+
 function secUnreadPages(ctx, data) {
   var up = data.unreadPages || {};
   var groups = [];
@@ -3634,6 +3689,9 @@ function secUnreadPages(ctx, data) {
           ctx.para('Every page of this bundle was read.', { size: 10.5, after: 6 });
         }
         secOcrProvenance(ctx, data);
+        secEngineNotes(ctx, data, false);
+      } else {
+        secEngineNotes(ctx, data, true);
       }
       return;
     }
@@ -3654,6 +3712,7 @@ function secUnreadPages(ctx, data) {
   ctx.para('These pages MUST be reviewed by a human.', { size: 11, font: ctx.f.timesBold, color: NAVY2, after: 4 });
   ctx.para('No finding in this report comes from an unread page, and the absence of a finding on an unread page means nothing — the page may hold material evidence (a contract, a schedule, an annexure) that this analysis never saw. Have the listed pages read by a person, or re-scanned at higher quality / transcribed and sealed again, before any conclusion about them is drawn.', { size: 10, after: 6 });
   secOcrProvenance(ctx, data);
+  secEngineNotes(ctx, data, false);
 }
 
 // PD6 disclosure, second half: pages that WERE read, but through OCR. These
@@ -4588,7 +4647,7 @@ var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buil
   _docsForLocation: docsForLocation, _crossDocNote: crossDocNote, _ocrTouched: ocrTouched,
   _documentParties: documentParties, _effectiveParties: effectiveParties,
   _effectivePartiesWithRoles: effectivePartiesWithRoles,
-  _splitSentences: splitSentences, _samePartyName: samePartyName, _isEngineFinding: isEngineFinding, _isReducedWeight: isReducedWeight, _voCountPhrase: voCountPhrase, _statutesForFinding: statutesForFinding,
+  _splitSentences: splitSentences, _samePartyName: samePartyName, _isEngineFinding: isEngineFinding, _isReducedWeight: isReducedWeight, _voCountPhrase: voCountPhrase, _statutesForFinding: statutesForFinding, _engineNotes: engineNotes,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;
