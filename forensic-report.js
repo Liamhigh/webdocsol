@@ -866,6 +866,40 @@ var VO_RECORD_FIGURE_TYPES = { CT02: 1, CT16: 1, CT18: 1 };
 // Inside an open span, a mark after a space and before a word opens an inner
 // quotation, and the next mark closes it; any other mark closes the span. A
 // span cut before its closing mark ends at the last mark seen.
+// Where a quoted passage that opens at `o` closes. Inside it, a straight
+// mark after a space or "(" and before a word opens an inner quotation only
+// when the next straight mark closes it inside the passage, and a curly “
+// only when its ” comes first; otherwise the mark is the record's own
+// unbalanced quotation, cut by the snippet window, and is a literal
+// character. A straight mark followed by the engine's own structure (" (",
+// " vs ", " — ", the end) always closes the passage, so engine text never
+// leaks into the verbatim record (verification of this run).
+function voQuoteClose(s, o) {
+  var n = s.length, depth = 0, last = -1;
+  var isQ = function (ch) { return ch === '"' || ch === '“' || ch === '”'; };
+  var outerClose = function (b) { return /^(?:\s*$|\s*\(|\s+(?:vs\.?|versus|beside|yet|and\s+["“])(?=[\s"“]|$)|\s*[—–]|\s*[.;,]\s*(?:$|["“(]))/.test(s.slice(b + 1, b + 24)); };
+  for (var b = o + 1; b < n; b++) {
+    var c = s.charAt(b);
+    if (!isQ(c)) continue;
+    last = b;
+    if (c === '"' && depth > 0 && outerClose(b)) return { close: b, last: last };
+    if (c === '“') {
+      var cc = s.indexOf('”', b + 1), stop = -1;
+      for (var k = b + 1; k < n; k++) if (s.charAt(k) === '"' && outerClose(k)) { stop = k; break; }
+      if (cc !== -1 && (stop === -1 || cc < stop)) depth++;
+      continue;
+    }
+    var prev = s.charAt(b - 1), nextWord = b + 1 < n && /[A-Za-z0-9À-ɏ]/.test(s.charAt(b + 1));
+    if (c === '"' && depth === 0 && b > o + 1 && nextWord && (/\s/.test(prev) || prev === '(' || prev === '[')) {
+      var m1 = s.indexOf('"', b + 1);
+      if (m1 !== -1 && !outerClose(m1)) depth++;
+      continue;
+    }
+    if (depth > 0) { depth--; continue; }
+    return { close: b, last: last };
+  }
+  return { close: -1, last: last };
+}
 function voQuoteSpans(s) {
   s = String(s || '');
   var out = [], i = 0, n = s.length;
@@ -873,17 +907,7 @@ function voQuoteSpans(s) {
     var o = -1;
     for (var a = i; a < n; a++) { if (s[a] === '"' || s[a] === '\u201C') { o = a; break; } }
     if (o === -1) break;
-    var depth = 0, close = -1, last = -1;
-    for (var b = o + 1; b < n; b++) {
-      var c = s[b];
-      if (c !== '"' && c !== '\u201C' && c !== '\u201D') continue;
-      last = b;
-      var prevSp = b === 0 || /\s/.test(s[b - 1]), nextWord = b + 1 < n && /[A-Za-z0-9\u00C0-\u024F]/.test(s[b + 1]);
-      if (c === '\u201C' || (c === '"' && depth === 0 && prevSp && nextWord && b > o + 1)) { depth++; continue; }
-      if (depth > 0) { depth--; continue; }
-      close = b; break;
-    }
-    if (close === -1) close = last;
+    var qc = voQuoteClose(s, o), close = qc.close === -1 ? qc.last : qc.close;
     if (close <= o) break;
     out.push({ span: s.slice(o + 1, close), start: o, end: close + 1 });
     i = close + 1;

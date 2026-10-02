@@ -1629,7 +1629,8 @@ var DETECTORS = {
     function findStatusUse(word) {
       // First occurrence of `word` used as an entity status; returns
       // { page, snippet } or null.
-      var re = new RegExp('\\b' + word.replace(/ /g, '\\s+') + '\\b', 'gi');
+      // A Word-made "non‑compliant" carries U+2010-U+2013 or a soft hyphen.
+      var re = new RegExp('\\b' + word.replace(/ /g, '\\s+').replace(/-/g, '[-\\u2010-\\u2013\\u00AD]') + '\\b', 'gi');
       for (var b = 0; b < textBlocks.length; b++) {
         var t = textBlocks[b] || '';
         var m;
@@ -1640,7 +1641,7 @@ var DETECTORS = {
           // "compliant" inside "non-compliant" is the negation itself, read a
           // second time (\b falls at the hyphen): the Public Protector
           // submission run paired one "non-compliant" with itself.
-          if (/\bnon[-\s]?$/i.test(pre)) continue;
+          if (/\bnon[-\u2010-\u2013\u00AD\s]?$/i.test(pre)) continue;
           var excluded = ((word === 'registered') && NOT_STATUS_REGISTERED.test(win)) ||
                          NOT_STATUS_PROVISION_BEFORE.test(pre) ||
                          NOT_STATUS_PROVISION_NEAR.test(win) ||
@@ -2412,7 +2413,18 @@ var DETECTORS = {
   // contact; a domain that merely prefixes another is a truncated read of it.
   D25_DETECT_CONTACT_MISMATCH: function(textBlocks) {
     var findings = [];
-    var VO_GOV_DOMAIN_RE = /(?:^|\.)(?:gov|govt|gouv|gob|go|mil|gc)\.[a-z]{2}$|\.(?:gov|mil)$/;
+    // Registration under these suffixes is restricted to government bodies.
+    // Two domains are exempt only when they SHARE one of them, so the
+    // difference lies to the left of a restricted suffix ("dmre.gov.za" /
+    // "dmpr.gov.za"); "sars.gov.za" beside "sars.go.za" or "sars.gov.io" still
+    // fires, because those suffixes are not the same or not restricted.
+    var VO_GOV_SUFFIX = { 'gov.za': 1, 'mil.za': 1, 'gov.uk': 1, 'gc.ca': 1, 'gov.au': 1, 'govt.nz': 1, 'gov.in': 1, 'gov.ng': 1, 'go.ke': 1, 'go.jp': 1, 'gov.sg': 1, 'gouv.fr': 1, 'gob.mx': 1, 'gob.es': 1, 'gov.br': 1, 'gov.ae': 1, 'gov.cn': 1, 'gov.il': 1, 'gov.ie': 1, 'gov.bw': 1, 'gov.na': 1, 'gov.zw': 1, 'gov.zm': 1, 'gov.ls': 1, 'gov.sz': 1, 'gov.mz': 1, 'go.tz': 1, 'go.ug': 1 };
+    var voGovSuffix = function (dom) {
+      var parts = dom.split('.');
+      if (parts.length >= 2 && (parts[parts.length - 1] === 'gov' || parts[parts.length - 1] === 'mil')) return parts[parts.length - 1];
+      var two = parts.slice(-2).join('.');
+      return VO_GOV_SUFFIX[two] ? two : null;
+    };
     var emailRe = /\b[A-Za-z0-9._%+-]+@([A-Za-z0-9.-]+\.[A-Za-z]{2,})\b/g;
     var byDomain = {};
     for (var i = 0; i < textBlocks.length; i++) {
@@ -2436,11 +2448,11 @@ var DETECTORS = {
         if (!byDomain[da].text || !byDomain[db].text) continue;
         if (da.length < 8 || db.length < 8) continue;
         if (db.indexOf(da) === 0 || da.indexOf(db) === 0) continue;
-        // Registration under a government suffix (gov.za, gov.uk, .gov, .mil,
-        // gc.ca …) is restricted to government bodies, so two such domains are
-        // never a fraudster's lookalike: "dmre.gov.za" and "dmpr.gov.za" are one
-        // renamed department, listed together for one mailbox.
-        if (VO_GOV_DOMAIN_RE.test(da) && VO_GOV_DOMAIN_RE.test(db)) continue;
+        // Two domains under one shared restricted government suffix are never a
+        // fraudster's lookalike: "dmre.gov.za" and "dmpr.gov.za" are one renamed
+        // department, listed together for one mailbox.
+        var gsa = voGovSuffix(da);
+        if (gsa && gsa === voGovSuffix(db)) continue;
         var dist = voEditDistance(da, db);
         if (dist < 1 || dist > 2) continue;
         var union = byDomain[da].pages.concat(byDomain[db].pages.filter(function (p) { return byDomain[da].pages.indexOf(p) === -1; }))
@@ -2800,7 +2812,16 @@ var DETECTORS = {
         // ("a common scheme involving unsigned agreements", a party's own
         // submission), not one instrument's execution: only a specific
         // instrument counts.
-        while (at !== -1 && /^unsigned /.test(unsignedCues[q]) && /^s\b/.test(lowU.slice(at + unsignedCues[q].length))) at = lowU.indexOf(unsignedCues[q], at + 1);
+        // A plural with a determiner or count before it ("the unsigned
+        // agreements dated …", "both unsigned leases"), or a date or annexure
+        // after it, names specific instruments and still counts.
+        var voCategoryPlural = function (pos, cue) {
+          if (!/^unsigned /.test(cue) || !/^s\b/.test(lowU.slice(pos + cue.length))) return false;
+          if (/\b(?:the|both|two|three|four|these|those|its|their|his|her|our|said|such)\s+$/.test(lowU.slice(Math.max(0, pos - 24), pos))) return false;
+          if (/\b(?:dated|annexures?|marked|signed\s+on)\b/.test(lowU.slice(pos + cue.length + 1, pos + cue.length + 61))) return false;
+          return true;
+        };
+        while (at !== -1 && voCategoryPlural(at, unsignedCues[q])) at = lowU.indexOf(unsignedCues[q], at + 1);
         if (at === -1) continue;
         unsignedPages.push(u + 1);
         if (!unsignedQuote) {
@@ -4081,13 +4102,30 @@ function voIsSecondaryHead(text) {
 // title on the document's first page AND a citation of another Verum seal in
 // its body (the document's own seal footer is stripped before this runs and
 // reads "Seal:", never "Seal ID:").
-var VO_SUBMISSION_HEAD_RE = /^\s*(?:response|reply|submissions?|representations|written\s+representations|heads\s+of\s+argument)\s+(?:to|on|regarding|for|in\s+(?:response|reply)\s+to)\b/i;
+var VO_SUBMISSION_HEAD_RE = /^\s*(?:response|submissions?|representations|written\s+representations|heads\s+of\s+argument)\s+(?:to|on|regarding|for|in\s+(?:response|reply)\s+to)\b/i;
+// A pleading carries a court caption and is a primary record.
+var VO_COURT_CAPTION_RE = /\bIN\s+THE\s+(?:HIGH|MAGISTRATES?'?|CONSTITUTIONAL|LABOUR|SUPREME|REGIONAL|DISTRICT|LAND|EQUALITY|TAX|COMPETITION)\b|\bCASE\s+(?:NO|NUMBER)\b/i;
+// A page whose head opens a new record ends a cover submission: what follows
+// (an annexure, an email, an invoice, a fresh "Page 1 of") is the record.
+var VO_NEW_RECORD_HEAD_RE = /^\s*(?:annexure|annex|exhibit|appendix|schedule)\s+[A-Z0-9]|^\s*(?:from|sent)\s*:|^\s*tax\s+invoice\b|\bpage\s+1\s+of\s+\d+\b/i;
 var VO_CITES_SEAL_RE = /\bseal(?:ed)?\s+(?:id|as|no\.?|number)\s*:?\s*VO-\s?[0-9A-F]{4}|\bquote\s+from\s+sealed\s+evidence\b/i;
-function voIsSubmissionOnSealed(head, blocks, start, end) {
-  if (!VO_SUBMISSION_HEAD_RE.test(String(head || ''))) return false;
-  for (var p = start; p <= end; p++) if (VO_CITES_SEAL_RE.test(String(blocks[p - 1] || '').replace(/\s+/g, ' '))) return true;
-  return false;
+// The last page of a party's submission that starts at `start` (0 when the
+// head is not one): the submission runs to the page before the first page
+// that opens a new record, and must cite another seal within that span. A
+// cover submission in front of its annexures is secondary; the annexures are
+// not (verification of this run: a whole bundle was demoted by its cover).
+function voSubmissionSpan(blocks, start, end) {
+  var head = String(blocks[start - 1] || '').replace(/\s+/g, ' ').slice(0, 300);
+  if (!VO_SUBMISSION_HEAD_RE.test(head) || VO_COURT_CAPTION_RE.test(head)) return 0;
+  var last = start;
+  for (var p = start + 1; p <= end; p++) {
+    if (VO_NEW_RECORD_HEAD_RE.test(String(blocks[p - 1] || '').replace(/\s+/g, ' ').slice(0, 300))) break;
+    last = p;
+  }
+  for (var q = start; q <= last; q++) if (VO_CITES_SEAL_RE.test(String(blocks[q - 1] || '').replace(/\s+/g, ' '))) return last;
+  return 0;
 }
+function voIsSubmissionOnSealed(head, blocks, start, end) { return voSubmissionSpan(blocks, start, end) > 0; }
 var VO_SECONDARY_NOTE = function (pages) { return ' [secondary source on p. ' + pages.join(', ') + ': an extract or commentary prepared after the fact, not the primary record — verify against the primary document]'; };
 // Stated documents are tested by title and first-page head. Pages no stated
 // document covers (a one-document file, a run shorter than three pages, an
@@ -4100,11 +4138,22 @@ function voSecondarySegments(segs, textBlocks) {
     var seg = list[d];
     for (var c = seg.start; c <= seg.end; c++) covered[c] = true;
     var head = headOf(seg.start);
-    if (!(voIsSecondaryHead(seg.title) || voIsSecondaryHead(head) || voIsSubmissionOnSealed(head, blocks, seg.start, seg.end))) continue;
+    if (!(voIsSecondaryHead(seg.title) || voIsSecondaryHead(head))) {
+      var subEnd = voSubmissionSpan(blocks, seg.start, seg.end);
+      if (subEnd) out.push({ start: seg.start, end: subEnd, title: String(seg.title || head).replace(/\s+/g, ' ').trim().slice(0, 80), submission: true });
+      continue;
+    }
     out.push({ start: seg.start, end: seg.end, title: String(seg.title || head).replace(/\s+/g, ' ').trim().slice(0, 80) });
   }
-  if (!list.length && blocks.length && (voIsSecondaryHead(headOf(1)) || voIsSubmissionOnSealed(headOf(1), blocks, 1, blocks.length))) {
+  if (!list.length && blocks.length && voIsSecondaryHead(headOf(1))) {
     return [{ start: 1, end: blocks.length, title: headOf(1).trim().slice(0, 80) }];
+  }
+  if (!list.length && blocks.length) {
+    var subEnd1 = voSubmissionSpan(blocks, 1, blocks.length);
+    if (subEnd1) {
+      out.push({ start: 1, end: subEnd1, title: headOf(1).trim().slice(0, 80), submission: true });
+      for (var sc = 1; sc <= subEnd1; sc++) covered[sc] = true;
+    }
   }
   for (var p = 1; p <= blocks.length; p++) {
     if (covered[p]) continue;
@@ -4395,8 +4444,11 @@ var VO_NON_PERSON_TOK = (function () {
     // and headings and phrase starts bound as names ("Petroleum Resources",
     // "Trevenna Campus", "Personal Assistant", "Concerns Regarding",
     // "Critical Point", "Instrument Does").
-    'director director-general department systemic unfair practices practice ' +
-    'resources campus assistant personal concerns regarding critical point instrument does').split(' ');
+    // Only words that are never part of a name are tokens; the headings are
+    // whole phrases below, so "Maria Campos", "Exxaro Resources" and "Texas
+    // Instruments" survive (a token also stops its one-edit neighbours).
+    // Header words end a colon-free header value ("Rabia Seedat Cc Amrit").
+    'director director-general department assistant regarding does cc bcc subject sent').split(' ');
   for (var i = 0; i < words.length; i++) m[words[i]] = 1;
   return m;
 })();
@@ -4441,7 +4493,10 @@ var VO_NON_PERSON_PHRASE = (function () {
     'service station|police station|filling station|petrol station|fuel station|station commander|' +
     // Public Protector submission run: the product's own heading ("Verum Omnis
     // Forensic Platform") recurred into the roster as "Forensic Platform".
-    'forensic platform|verum omnis forensic platform').split('|');
+    'forensic platform|verum omnis forensic platform|' +
+    'petroleum resources|mineral resources|mineral and petroleum resources|trevenna campus|personal assistant|' +
+    'critical point|instrument does|concerns regarding|systemic unfair practices|unfair practices|unfair business practices|' +
+    'documented unfair practices|practice description victims|practice description|systemic unfair').split('|');
   for (var i = 0; i < phrases.length; i++) m[phrases[i]] = 1;
   return m;
 })();
@@ -4492,7 +4547,7 @@ function voNearNonPersonPhrase(toks) {
 // stop word does not cut the name away with it; a role with no name after it
 // ("First Respondent") still binds nothing.
 var VO_ROLE_PREAMBLE_TOK = { the: 1, national: 1, first: 1, second: 1, third: 1, fourth: 1, acting: 1, deputy: 1, chief: 1, senior: 1, executive: 1, personal: 1 };
-var VO_ROLE_LEAD_TOK = { director: 1, 'director-general': 1, assistant: 1, respondent: 1, applicant: 1, plaintiff: 1, defendant: 1, appellant: 1, complainant: 1, accused: 1 };
+var VO_ROLE_LEAD_TOK = { director: 1, 'director-general': 1, assistant: 1, commissioner: 1, respondent: 1, applicant: 1, plaintiff: 1, defendant: 1, appellant: 1, complainant: 1, accused: 1 };
 function voTrimPersonName(name) {
   var toks = String(name == null ? '' : name).replace(/\s+/g, ' ').trim().split(' ').filter(Boolean);
   // An address opens with "Corner" ("Corner Francis Baard and Meintjies
@@ -4501,8 +4556,11 @@ function voTrimPersonName(name) {
   var lead = 0, low = function (t) { return t.replace(/[.,:;'\u2019]+$/, '').toLowerCase(); };
   while (lead < toks.length && VO_ROLE_PREAMBLE_TOK[low(toks[lead])]) lead++;
   if (lead < toks.length && VO_ROLE_LEAD_TOK[low(toks[lead])]) {
-    while (lead < toks.length && VO_ROLE_LEAD_TOK[low(toks[lead])]) lead++;
+    // "General" belongs to the role only directly after "Director" ("Director
+    // General Jacob Mbele"); on its own it is a word ("General Motors").
+    while (lead < toks.length && (VO_ROLE_LEAD_TOK[low(toks[lead])] || (low(toks[lead]) === 'general' && lead > 0 && low(toks[lead - 1]) === 'director'))) lead++;
     if (toks.length - lead >= 2) toks = toks.slice(lead);
+    else if (lead > 0 && low(toks[lead - 1]) === 'general') return ''; // the window cut the name: bind nothing rather than "General Jacob"
   }
   var keep = toks.length;
   for (var i = 0; i < toks.length; i++) {
@@ -4603,7 +4661,11 @@ function voExtractParties(text) {
 // "from", "to", "cc", "bcc" and "per" are prepositions in prose ("the licence
 // issued to Sanarth Fuels", "the email to Astron Energy"): as header markers
 // they need their colon. Salutations and sign-offs stay colon-free.
-var VO_PERSON_MARKER_RE = /(?:^|[\s>|;])(?:(?:from|to|cc|bcc|per)\s*:|(?:dear|regards|sincerely|attention|attn|signed\s+by|deponent|witnessed\s+by|witness)\s*:?)\s+/gi;
+// Page text carries no line breaks in production, so a colon-free "From",
+// "To" or "Cc" counts only in header company (an email address or another
+// header word close after it), and a colon-free "Per" only after a sign-off.
+var VO_PERSON_MARKER_RE = /(?:^|[\s>|;])(from|to|cc|bcc|per|dear|regards|sincerely|attention|attn|signed\s+by|deponent|witnessed\s+by|witness)\s*(:?)\s+/gi;
+var VO_HEADER_COMPANY_RE = /<[^>\s]*@|\b[\w.+-]+@[\w-]+\.[a-z]{2,}|\b(?:sent|subject|date|cc|bcc|to|from)\s*:|\b(?:sent|subject)\b/i;
 // A name token is a capitalised word/initial, or a surname particle (de, van
 // der, du …) so "E de Waal" survives. Separators are spaces/tabs ONLY — using
 // \s let a name run across a line break and swallow the next email header
@@ -4628,6 +4690,9 @@ function voExtractPersonsFromContext(text, cap) {
   };
   VO_PERSON_MARKER_RE.lastIndex = 0;
   while ((m = VO_PERSON_MARKER_RE.exec(s)) !== null) {
+    var mk = m[1].toLowerCase();
+    if (!m[2] && /^(?:from|to|cc|bcc)$/.test(mk) && !VO_HEADER_COMPANY_RE.test(s.slice(m.index + m[0].length, m.index + m[0].length + 140))) continue;
+    if (!m[2] && mk === 'per' && !/\b(?:faithfully|sincerely|regards|inc|incorporated|attorneys|partners)\b/i.test(s.slice(Math.max(0, m.index - 60), m.index))) continue;
     // A header may list several people ("Cc: A Singh, M Ally"); walk the
     // comma-separated run and stop at the first fragment that is not a name.
     // Stop the run at a line break or the next header's colon, so one header's
@@ -4728,15 +4793,35 @@ function voExtractDates(text) {
 // The needle is keyed on its own words: a quote D01, D09 and D27 wrap in
 // ellipses ("…tive attorneys, provides that…") loses them first, or its key
 // would begin with "…" and never match the page.
+var VO_ABBREV_TOK = { mr: 1, mrs: 1, ms: 1, dr: 1, no: 1, nos: 1, s: 1, ss: 1, cl: 1, para: 1, paras: 1, p: 1, pp: 1, pty: 1, ltd: 1, co: 1, v: 1, vs: 1, st: 1, adv: 1, prof: 1, inc: 1, art: 1, sec: 1, reg: 1, ch: 1, vol: 1, fig: 1, cf: 1, 'e.g': 1, 'i.e': 1, sa: 1, jnr: 1, snr: 1 };
+// The first real sentence boundary in the first 60 characters of a quote, or
+// -1: never after an abbreviation, and never a ";" or ":" before a figure.
+function voFragmentCut(n) {
+  var re = /[.!?;:]\s+(?=[A-Z0-9"\u201C(])/g, m;
+  while ((m = re.exec(n)) !== null && m.index < 60) {
+    var tok = (n.slice(0, m.index).match(/(\S+)$/) || ['', ''])[1].replace(/^[("\u201C']+/, '').toLowerCase();
+    if (m[0].charAt(0) === '.' && (VO_ABBREV_TOK[tok] || /^[a-z]$/.test(tok))) continue;
+    if (/[;:]/.test(m[0].charAt(0)) && /^\d/.test(n.charAt(m.index + m[0].length))) continue;
+    return m.index;
+  }
+  return -1;
+}
 function voSentenceAround(text, needle) {
   var s = String(text == null ? '' : text), n = String(needle == null ? '' : needle).replace(/\s+/g, ' ').replace(/^[\u2026.\s]+|[\u2026.\s]+$/g, '').trim();
   // A quote that starts mid-word ("ication. The contradiction is stark …")
   // begins in the previous sentence: key it on its own sentence, or, with no
   // boundary in sight, on the words after the fragment.
+  // A whole-word lowercase cue ("never countersigned") is keyed as it stands;
+  // only a quote that really begins inside a word on the page loses its
+  // fragment. A boundary after an abbreviation ("Mr.", "no.", "s.") is not a
+  // sentence end.
   if (/^[a-z]/.test(n)) {
-    var cutF = n.search(/[.!?;:]\s+(?=[A-Z0-9"\u201C(])/);
-    if (cutF !== -1 && cutF < 60) n = n.slice(cutF + 1).trim();
-    else n = n.replace(/^\S+\s+/, '');
+    var cutF = voFragmentCut(n);
+    if (cutF !== -1) n = n.slice(cutF + 1).trim();
+    else {
+      var flatL = s.replace(/\s+/g, ' '), atL = flatL.toLowerCase().indexOf(n.slice(0, 60).toLowerCase());
+      if (atL > 0 && /[A-Za-z\u00C0-\u024F]/.test(flatL.charAt(atL - 1))) n = n.replace(/^\S+\s+/, '');
+    }
   }
   if (n.length < 12) return null;
   var key = n.slice(0, 60).toLowerCase();
@@ -4762,6 +4847,40 @@ function voSentenceAround(text, needle) {
 // before a word opens an inner quotation and the next mark closes it; a
 // passage cut before its closing mark ends at the last mark seen. The report's
 // voQuoteSpans reads quotes the same way.
+// Where a quoted passage that opens at `o` closes. Inside it, a straight
+// mark after a space or "(" and before a word opens an inner quotation only
+// when the next straight mark closes it inside the passage, and a curly “
+// only when its ” comes first; otherwise the mark is the record's own
+// unbalanced quotation, cut by the snippet window, and is a literal
+// character. A straight mark followed by the engine's own structure (" (",
+// " vs ", " — ", the end) always closes the passage, so engine text never
+// leaks into the verbatim record (verification of this run).
+function voQuoteClose(s, o) {
+  var n = s.length, depth = 0, last = -1;
+  var isQ = function (ch) { return ch === '"' || ch === '“' || ch === '”'; };
+  var outerClose = function (b) { return /^(?:\s*$|\s*\(|\s+(?:vs\.?|versus|beside|yet|and\s+["“])(?=[\s"“]|$)|\s*[—–]|\s*[.;,]\s*(?:$|["“(]))/.test(s.slice(b + 1, b + 24)); };
+  for (var b = o + 1; b < n; b++) {
+    var c = s.charAt(b);
+    if (!isQ(c)) continue;
+    last = b;
+    if (c === '"' && depth > 0 && outerClose(b)) return { close: b, last: last };
+    if (c === '“') {
+      var cc = s.indexOf('”', b + 1), stop = -1;
+      for (var k = b + 1; k < n; k++) if (s.charAt(k) === '"' && outerClose(k)) { stop = k; break; }
+      if (cc !== -1 && (stop === -1 || cc < stop)) depth++;
+      continue;
+    }
+    var prev = s.charAt(b - 1), nextWord = b + 1 < n && /[A-Za-z0-9À-ɏ]/.test(s.charAt(b + 1));
+    if (c === '"' && depth === 0 && b > o + 1 && nextWord && (/\s/.test(prev) || prev === '(' || prev === '[')) {
+      var m1 = s.indexOf('"', b + 1);
+      if (m1 !== -1 && !outerClose(m1)) depth++;
+      continue;
+    }
+    if (depth > 0) { depth--; continue; }
+    return { close: b, last: last };
+  }
+  return { close: -1, last: last };
+}
 function voExtractQuotes(text) {
   var s = String(text == null ? '' : text), out = [], seen = {}, m, n = s.length, i = 0;
   var push = function (q) { q = q.replace(/\s+/g, ' ').trim(); if (q.length >= 6 && !seen[q]) { seen[q] = true; out.push(q); } };
@@ -4769,17 +4888,7 @@ function voExtractQuotes(text) {
     var o = -1;
     for (var a = i; a < n; a++) { var ca = s.charAt(a); if (ca === '"' || ca === '\u201C' || ca === '\u201D') { o = a; break; } }
     if (o === -1) break;
-    var depth = 0, close = -1, last = -1;
-    for (var b = o + 1; b < n; b++) {
-      var c = s.charAt(b);
-      if (c !== '"' && c !== '\u201C' && c !== '\u201D') continue;
-      last = b;
-      var prevSp = /\s/.test(s.charAt(b - 1)), nextWord = b + 1 < n && /[A-Za-z0-9\u00C0-\u024F]/.test(s.charAt(b + 1));
-      if (c === '\u201C' || (c === '"' && depth === 0 && prevSp && nextWord && b > o + 1)) { depth++; continue; }
-      if (depth > 0) { depth--; continue; }
-      close = b; break;
-    }
-    if (close === -1) close = last;
+    var qc = voQuoteClose(s, o), close = qc.close === -1 ? qc.last : qc.close;
     if (close <= o) break;
     push(s.slice(o + 1, close));
     i = close + 1;
@@ -4818,7 +4927,8 @@ var VO_MON = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oc
 // Public Protector submission was dated 3 October and sealed at 22:11 on
 // 2 October; nothing read the date against the seal.
 var VO_DATE_LABEL_HEAD_RE = /(?:^|[\s|>(])Date\s*:\s*/g;
-function voDatedAfterReference(textBlocks, referenceTime) {
+var VO_DATE_QUALIFIER_RE = /\b(?:due|expiry|expiration|commencement|commencing|effective|hearing|termination|renewal|review|payment|invoice|valid|validity|completion|delivery|start|starting|end|ending|issue|birth|closing|signature|signing|transfer|registration|lodgement|lodgment|occupation|possession|cancellation|maturity|settlement|trial|court|return|filing|deadline|target|launch|release|order|purchase|sale|vesting|lease|expected|estimated|anticipated|next|last|final|new|reference|ref|meeting|inspection|appointment|interview|arrival|departure|travel|exam|examination)\s*$/i;
+function voDatedAfterReference(textBlocks, referenceTime, firstPages) {
   var t = referenceTime ? Date.parse(String(referenceTime)) : NaN;
   if (!isFinite(t)) return [];
   var sast = new Date(t + 2 * 3600 * 1000);
@@ -4826,10 +4936,16 @@ function voDatedAfterReference(textBlocks, referenceTime) {
   var MON = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
   var refTxt = sast.getUTCDate() + ' ' + MON[sast.getUTCMonth()] + ' ' + sast.getUTCFullYear();
   var byDate = {}, order = [];
-  for (var b = 0; b < (textBlocks || []).length; b++) {
+  // A document states its own date on its first page; a "Commencement Date",
+  // "Due Date" or "Hearing Date" is a date the document names, not its date.
+  var pagesToRead = Array.isArray(firstPages) && firstPages.length ? firstPages : [1];
+  for (var pr = 0; pr < pagesToRead.length; pr++) {
+    var b = pagesToRead[pr] - 1;
+    if (b < 0 || b >= (textBlocks || []).length) continue;
     var s = String(textBlocks[b] || '').replace(VO_SEAL_BOILERPLATE_RE, ' '), m;
     VO_DATE_LABEL_HEAD_RE.lastIndex = 0;
     while ((m = VO_DATE_LABEL_HEAD_RE.exec(s)) !== null) {
+      if (VO_DATE_QUALIFIER_RE.test(s.slice(Math.max(0, m.index - 30), m.index + (m[0].search(/Date/i) > 0 ? m[0].search(/Date/i) : 0)))) continue;
       var head = s.slice(m.index + m[0].length, m.index + m[0].length + 40);
       var ds = voExtractDates(head);
       if (!ds.length || head.toLowerCase().indexOf(ds[0].toLowerCase()) !== 0) continue;
@@ -5636,7 +5752,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   allFindings = _voSplitContext(allFindings);
   // A document dated after the day it was analysed for sealing: recorded as a
   // note, never scored (a letter dated for its delivery day is ordinary).
-  var _voDatedAfter = voDatedAfterReference(textBlocks, opts && opts.referenceTime);
+  var _voFirstPages = [1];
+  for (var dsx = 0; dsx < (_docSegs || []).length; dsx++) if (_docSegs[dsx] && _voFirstPages.indexOf(_docSegs[dsx].start) === -1) _voFirstPages.push(_docSegs[dsx].start);
+  var _voDatedAfter = voDatedAfterReference(textBlocks, opts && opts.referenceTime, _voFirstPages);
   for (var dan = 0; dan < _voDatedAfter.length; dan++) _voContextNotes.push(_voDatedAfter[dan]);
 
   // Run catch-all detector (needs other findings)
@@ -5665,7 +5783,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
       _voContextNotes.push({ type: _ld.type || '', location: _ld.location || '',
         text: 'Secondary-source lead, not a finding: ' + String(_ld.evidence || '').replace(/\s*\[secondary source on p\.[^\]]*\]/g, '').replace(/\s*\[OCR page: weight reduced[^\]]*\]/g, '').replace(/\s+/g, ' ').trim() + ' — verify against the primary record' });
     }
-    extractionNote += ' Secondary sources: ' + (_secondaryPages.length) + ' page(s) belong to a document that describes itself as an extract, summary or commentary prepared after the fact' + voSecondaryWhere(_secondarySegs) + '; ' +
+    extractionNote += ' Secondary sources: ' + (_secondaryPages.length) + ' page(s) belong to a document that describes itself as an extract, summary or commentary prepared after the fact' + (_secondarySegs.some(function (g) { return g.submission; }) ? ', or to a party\'s submission about other sealed records' : '') + voSecondaryWhere(_secondarySegs) + '; ' +
       (_sec.leads.length ? _sec.leads.length + ' observation(s) sit entirely on those pages and are recorded under the engine notes as leads to verify against the primary record, NOT as findings' : '') +
       (_sec.leads.length && _sec.capped ? '; ' : '') +
       (_sec.capped ? _sec.capped + ' finding(s) with one half on those pages held at reduced weight' : '') + '.';
@@ -6401,7 +6519,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     generateSummary: generateSummary, voEditDistance: voEditDistance,
     voStripSealFurniture: voStripSealFurniture, voStripSealFurnitureBlocks: voStripSealFurnitureBlocks, voCacheDocSegs: voCacheDocSegs,
-    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSnapWindow: voSnapWindow, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voIsSubmissionOnSealed: voIsSubmissionOnSealed, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voDatedAfterReference: voDatedAfterReference, voIsStampContext: voIsStampContext,
+    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSnapWindow: voSnapWindow, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voIsSubmissionOnSealed: voIsSubmissionOnSealed, voSubmissionSpan: voSubmissionSpan, voFragmentCut: voFragmentCut, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voDatedAfterReference: voDatedAfterReference, voIsStampContext: voIsStampContext,
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,
     CONTRADICTION_TYPES: CONTRADICTION_TYPES,
     DETECTORS: DETECTORS,
