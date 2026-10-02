@@ -732,20 +732,36 @@ var DETECTORS = {
     // A pleading admits paragraphs, not facts: "AD PARAGRAPH 13 … I admit the
     // contents of this paragraph" is the form of an answering affidavit, and
     // the evidence-bundle-4 run sealed eight pages of it as a contradiction.
-    var PLEADING_ADMISSION_RE = /\bad\s+(?:sub-?)?para(?:graph)?s?\b|\badmit(?:s|ted)?\s+(?:the\s+)?(?:contents?|allegations?|averments?|opening\s+sentence|first\s+sentence|remainder|balance)\s+(?:of\s+)?(?:this|the|these|that|said|each)\s+(?:sub-?)?paragraph/i;
+    // The form test reads the cue's own sentence in the pleading grammar
+    // ("admit the contents/allegations contained in/of this/sub-/paragraph
+    // 13.2", "admit the correctness of the contents of this paragraph", "admit
+    // the contents hereof", "admit paragraph 13"). An AD PARAGRAPH heading on
+    // its own never suppresses a sentence — "AD PARAGRAPH 7: I admit that I
+    // signed the deed of suretyship" is an admission of fact — and every
+    // occurrence of a cue on a page is read, so a form sentence never hides a
+    // later sentence of fact.
+    var PLEADING_ADMISSION_RE = /\badmit(?:s|ted)?\s+(?:only\s+)?(?:the\s+)?(?:(?:contents?|allegations?|averments?|correctness|opening\s+sentence|first\s+sentence|remainder|balance|rest)\s+(?:of\s+the\s+(?:contents?|allegations?|averments?)\s+)?(?:contained\s+in\s+|set\s+out\s+in\s+|of\s+|in\s+)?(?:(?:this|the|these|that|said|each)\s+(?:said\s+|aforesaid\s+)?(?:sub-?)?para(?:graph)?s?\b|(?:sub-?)?para(?:graph)?s?\s+\d)|(?:contents?|allegations?|averments?)\s+(?:hereof|thereof|herein|therein)\b|(?:sub-?)?para(?:graph)?s?\s+\d)/i;
     var admPages = [], admQuote = null, admCue = null;
     for (var ap = 0; ap < textBlocks.length; ap++) {
       var lowA = (textBlocks[ap] || '').toLowerCase();
-      for (var ac = 0; ac < admissionCues.length; ac++) {
+      var admCounted = false;
+      for (var ac = 0; ac < admissionCues.length && !admCounted; ac++) {
         var atA = lowA.indexOf(admissionCues[ac]);
-        if (atA === -1) continue;
-        if (PLEADING_ADMISSION_RE.test(lowA.slice(Math.max(0, atA - 80), atA + admissionCues[ac].length + 80))) continue;
-        admPages.push(ap + 1);
-        if (!admQuote) {
-          admCue = admissionCues[ac];
-          admQuote = textBlocks[ap].substring(Math.max(0, atA - 40), atA + admissionCues[ac].length + 120).replace(/\s+/g, ' ').trim();
+        while (atA !== -1) {
+          // The cue's own sentence: from the cue to the next sentence end (a
+          // clause number's "13.2" has no space after its point).
+          var sentA = lowA.slice(atA, atA + 200).split(/[.;!?]\s|\n/)[0];
+          if (!PLEADING_ADMISSION_RE.test(sentA)) {
+            admPages.push(ap + 1);
+            if (!admQuote) {
+              admCue = admissionCues[ac];
+              admQuote = textBlocks[ap].substring(Math.max(0, atA - 40), atA + admissionCues[ac].length + 120).replace(/\s+/g, ' ').trim();
+            }
+            admCounted = true; // one count per page
+            break;
+          }
+          atA = lowA.indexOf(admissionCues[ac], atA + admissionCues[ac].length);
         }
-        break; // one count per page
       }
     }
     // CONDUCT ADMISSION — a party, in their own words, explaining WHY the
@@ -1988,30 +2004,59 @@ var DETECTORS = {
   // page image.
   D13_DETECT_CALCULATION_ERROR: function(textBlocks) {
     var findings = [];
-    var calcRe = /(subtotal|total|vat|tax|amount)\s*[:=]?\s*[R$€£]?\s*([\d,.]+)/gi;
+    // A labelled amount: the label, an optional rate written before the
+    // amount ("VAT 15% R150.00", "VAT (@15%) R150.00"), an optional colon, an
+    // optional currency sign and the figure. Figures are read as this
+    // country's documents print them: thousands grouped by spaces or commas,
+    // decimals after a point or a comma ("R 1 161 950,00", "R1,336,242.50").
+    // A figure followed by "%" is a rate, never an amount; "Tax Invoice No.
+    // 1234" carries no amount at all.
+    var calcRe = /\b(sub-?\s?total|total|vat|tax)\b\s*(?:\(?\s*@?\s*1[45](?:[.,]5)?\s*%\s*\)?\s*)?[:=]?\s*(?:\(?\s*@?\s*1[45](?:[.,]5)?\s*%\s*\)?\s*)?[R$€£]?\s*(\d{1,3}(?:[  ,.]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?!\s*%|\d)/gi;
+    // A discount, delivery or credit line between the subtotal and the VAT
+    // or total changes the sum and the VAT base; the page is then not checked.
+    var betweenRe = /\b(?:discount|delivery|shipping|less|credit|deposit|rounding|freight|handling)\b/i;
+    function parseAmount(tok) {
+      var t = String(tok).replace(/[\s ]/g, '');
+      var m = /^(.*?)([.,])(\d{1,2})$/.exec(t);
+      var whole = (m ? m[1] : t).replace(/[.,]/g, '');
+      return parseFloat(whole + (m ? '.' + m[3] : ''));
+    }
     for (var i = 0; i < textBlocks.length; i++) {
+      var text = String(textBlocks[i] || '');
+      var ocrPage = /^\s*\[OCR\]/.test(text);
       var amounts = [], match;
       calcRe.lastIndex = 0;
-      while ((match = calcRe.exec(textBlocks[i] || '')) !== null) {
-        var val = parseFloat(match[2].replace(/,/g, ''));
-        if (!isNaN(val)) amounts.push({ label: match[1].toLowerCase(), value: val });
+      while ((match = calcRe.exec(text)) !== null) {
+        var val = parseAmount(match[2]);
+        if (!isNaN(val)) amounts.push({ label: match[1].toLowerCase().replace(/[-\s]/g, ''), value: val, index: match.index });
       }
       var subtotal = amounts.find(function(a){return a.label==='subtotal';});
       var vat = amounts.find(function(a){return a.label==='vat'||a.label==='tax';});
       var total = amounts.find(function(a){return a.label==='total';});
       if (!subtotal || !vat || !(subtotal.value > 0)) continue;
-      var vatPlausible = vat.value >= 0 && vat.value <= subtotal.value * 0.25;
+      // Figures that could not be an invoice are a parse of the wrong figure
+      // far more often than an invoice: a VAT line that is neither zero
+      // (zero-rated) nor within a tenth to a quarter of the subtotal, or a
+      // total outside half to twice the subtotal. A note names the page and
+      // the figures; it claims OCR damage only on an OCR-recovered page.
+      var vatPlausible = vat.value === 0 || (vat.value >= subtotal.value * 0.10 && vat.value <= subtotal.value * 0.25);
       var totalPlausible = !total || (total.value >= subtotal.value * 0.5 && total.value <= subtotal.value * 2);
       if (!vatPlausible || !totalPlausible) {
         findings.push({ type: 'CT22', severity: 0, contextOnly: true,
-          evidence: 'Figures on page ' + (i + 1) + ' could not be read as an invoice (subtotal R' + subtotal.value + ', VAT R' + vat.value + (total ? ', total R' + total.value : '') + '): the layout or the OCR broke the numbers; read the page image before relying on any of them',
+          evidence: 'Figures on page ' + (i + 1) + ' do not read as one invoice (subtotal R' + subtotal.value + ', VAT R' + vat.value + (total ? ', total R' + total.value : '') + '): ' + (ocrPage ? 'the OCR may have broken the numbers; read the page image' : 'the text layer may have separated or mislabelled the figures; read the page') + ' before relying on any of them',
           location: 'Page ' + (i + 1) });
         continue;
       }
-      var expectedVat = subtotal.value * 0.15;
-      if (Math.abs(vat.value - expectedVat) > subtotal.value * 0.005) {  // 0.5% tolerance
+      var lo = Math.min(subtotal.index, vat.index, total ? total.index : subtotal.index);
+      var hi = Math.max(subtotal.index, vat.index, total ? total.index : subtotal.index);
+      if (betweenRe.test(text.slice(lo, hi))) continue;
+      // The standard rate is 15 per cent since 1 April 2018 and was 14 per cent
+      // before it; a zero VAT line is zero-rated. The printed words carry no
+      // percentage (PD1), only the two computed amounts.
+      var tol = subtotal.value * 0.005;  // 0.5% tolerance
+      if (vat.value !== 0 && Math.abs(vat.value - subtotal.value * 0.15) > tol && Math.abs(vat.value - subtotal.value * 0.14) > tol) {
         findings.push({ type: 'CT22', severity: 4,
-          evidence: 'VAT mismatch: calculated R' + expectedVat.toFixed(2) + ' but stated R' + vat.value.toFixed(2),
+          evidence: 'VAT mismatch: calculated R' + (subtotal.value * 0.15).toFixed(2) + ' at the standard rate (R' + (subtotal.value * 0.14).toFixed(2) + ' at the rate in force before April 2018) but stated R' + vat.value.toFixed(2),
           location: 'Page ' + (i + 1) });
       }
       if (total) {
@@ -2885,9 +2930,25 @@ var DETECTORS = {
     }
     // The ownership half must be about the premises: "is the owner of certain
     // Intellectual Property" (evidence-bundle-4, p.16) is not the property the
-    // lessee clause is about.
-    var OWNER_OBJECT_RE = /\b(?:premises|property|site|land|erf|erven|building|immovable|farm|stand|plot|portion)\b/i;
-    var OWNER_NOT_RE = /^[^.]{0,30}?\b(?:intellectual\s+property|trade\s*marks?|copyright|shares?|equipment|vehicles?|goods|stock|brand|business)\b/i;
+    // lessee clause is about. The FIRST object the clause names decides, read
+    // to the sentence end: "owns the premises, the equipment and the stock"
+    // and "the owner of property on which the business was operated" (p.78)
+    // are about immovable property; "the owner of all right, title and
+    // interest in and to the Intellectual Property" is not, however far out
+    // the words sit. OCR's "lntellectual | Property" reads as the same words
+    // (column rules are dropped, l/1 for I accepted). A deed of transfer, a
+    // title deed or a deeds-registry number names immovable property by itself.
+    var OWNER_OBJECT_RE = /\b(?:premises|property|site|land|erf|erven|building|immovable|farm|stand|plot|portion|deed\s+of\s+transfer|title\s+deeds?|deeds\s+(?:registry|office)|t\d{3,6}\/(?:19|20)\d{2})\b/i;
+    var OWNER_NOT_RE = /\b(?:[il1]nte[il1]{2}ectua[il1]\s+propert(?:y|ies)|trade\s*marks?|copyright|goodwill|shares?|equipment|vehicles?|goods|stock|brand|business(?!\s+premises))\b/i;
+    function ownerObjectOk(phrase, tail) {
+      var clause = (phrase + tail).replace(/[|*_]+/g, ' ').replace(/\s+/g, ' ');
+      var stop = clause.search(/[.;!?]\s/);
+      if (stop !== -1) clause = clause.slice(0, stop);
+      var obj = OWNER_OBJECT_RE.exec(clause);
+      if (!obj) return false;
+      var not = OWNER_NOT_RE.exec(clause);
+      return !(not && not.index <= obj.index);
+    }
     function allPagesOf(re, objectCheck) {
       var out = [];
       for (var i = 0; i < blocks.length; i++) {
@@ -2897,10 +2958,7 @@ var DETECTORS = {
         while ((m = g.exec(lower)) !== null) {
           // "is NOT the owner" is the lessee clause itself, not an ownership record.
           if (/\bnot\s+(?:the\s+)?$/.test(lower.slice(Math.max(0, m.index - 12), m.index))) continue;
-          if (objectCheck) {
-            var tail = lower.slice(m.index + m[0].length, m.index + m[0].length + 90);
-            if (OWNER_NOT_RE.test(tail) || !OWNER_OBJECT_RE.test(m[0] + tail)) continue;
-          }
+          if (objectCheck && !ownerObjectOk(m[0], lower.slice(m.index + m[0].length, m.index + m[0].length + 120))) continue;
           var q = raw.substring(Math.max(0, m.index - 10), Math.min(raw.length, m.index + m[0].length + 40)).replace(/\s+/g, ' ').trim();
           out.push({ page: i + 1, quote: q, side: sideNear(raw, m.index, m[0].length) });
           if (out.length > 200) return out;
@@ -2910,24 +2968,46 @@ var DETECTORS = {
     }
     var lesseeHits = allPagesOf(/not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/);
     var ownerHits = allPagesOf(/(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/, true);
-    // Both halves must sit in the same stated document: a franchise
-    // agreement's lessee clause for one site and an MOU's recital that the
-    // franchisor owns another site are two instruments, not a trap.
+    // Whose ownership the half records. A half on the clause's own side
+    // ("THE FRANCHISOR/OWNER … is the owner of the immovable property") pairs
+    // with the clause wherever it sits in the record: the proof that the
+    // clause's party owns the premises lives in another instrument (a deed,
+    // a recital, a letter), never in the clause itself. A half with no side
+    // word ("Caltex was also the owner of property on which the business was
+    // operated") does not say which party it is about, so it pairs only
+    // within the same stated document and the same passage of the record
+    // (twenty pages); further away it is a note, not a finding — an MOU's
+    // recital that somebody else owns another site is two instruments, not a
+    // trap. Same-side pairs are preferred; a pair across two documents, or
+    // one made where no document boundaries could be read and the halves sit
+    // far apart, is one step down and tagged for the reader to verify.
+    var VO_D38_NEAR = 20;
     var d38Segs = voDetectDocuments(blocks) || [];
     var d38DocOf = function (page) {
       for (var d = 0; d < d38Segs.length; d++) { if (page >= d38Segs[d].start && page <= d38Segs[d].end) return d; }
       return -1;
     };
-    var lessee = null, owner = null;
-    for (var lh = 0; lh < lesseeHits.length && !owner; lh++) {
-      for (var oh = 0; oh < ownerHits.length; oh++) {
-        var lSide = lesseeHits[lh].side, oSide = ownerHits[oh].side;
-        // "the Owner/Lessor" names the grantor as owner: only a grantor-side
-        // lessee clause can contradict it; a grantee-side clause is about
-        // somebody else.
-        if (lSide && oSide && lSide !== oSide) continue;
-        if (d38Segs.length && (d38DocOf(lesseeHits[lh].page) !== d38DocOf(ownerHits[oh].page) || d38DocOf(lesseeHits[lh].page) === -1)) continue;
-        lessee = lesseeHits[lh]; owner = ownerHits[oh]; break;
+    var d38SameDoc = function (a, b) { return !d38Segs.length || (d38DocOf(a) !== -1 && d38DocOf(a) === d38DocOf(b)); };
+    var lessee = null, owner = null, farHalf = null;
+    for (var pass = 0; pass < 2 && !owner; pass++) {
+      for (var lh = 0; lh < lesseeHits.length && !owner; lh++) {
+        for (var oh = 0; oh < ownerHits.length; oh++) {
+          var lSide = lesseeHits[lh].side, oSide = ownerHits[oh].side;
+          // "the Owner/Lessor" names the grantor as owner: only a grantor-side
+          // lessee clause can contradict it; a grantee-side clause is about
+          // somebody else.
+          if (lSide && oSide && lSide !== oSide) continue;
+          var sameSide = !!(lSide && oSide);
+          if (pass === 0) { if (!sameSide) continue; }
+          else {
+            if (sameSide || !d38SameDoc(lesseeHits[lh].page, ownerHits[oh].page)) continue;
+            if (Math.abs(lesseeHits[lh].page - ownerHits[oh].page) > VO_D38_NEAR) {
+              if (!farHalf) farHalf = { lessee: lesseeHits[lh], owner: ownerHits[oh] };
+              continue;
+            }
+          }
+          lessee = lesseeHits[lh]; owner = ownerHits[oh]; break;
+        }
       }
     }
     var invokesTermination = false;
@@ -2935,9 +3015,17 @@ var DETECTORS = {
       if (/(effluxion|deemed to have terminated|expires?|expiry|terminat)/.test(String(blocks[b]).toLowerCase())) { invokesTermination = true; break; }
     }
     if (lessee && owner && invokesTermination) {
-      findings.push({ type: 'CT44', severity: 5,
-        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner): "' + lessee.quote + '" — yet the record shows the party had become the owner of the premises: "' + owner.quote + '". The clause\'s precondition never occurred. Its legal characterisation is for the court.',
+      var crossDoc = d38Segs.length > 0 && !d38SameDoc(lessee.page, owner.page);
+      var farApart = !d38Segs.length && Math.abs(lessee.page - owner.page) > VO_D38_NEAR;
+      findings.push({ type: 'CT44', severity: (crossDoc || farApart) ? 4 : 5,
+        evidence: 'Termination/expiry rests on a lessee-only clause (party not the owner): "' + lessee.quote + '" — yet the record shows the party had become the owner of the premises: "' + owner.quote + '". The clause\'s precondition never occurred. Its legal characterisation is for the court.' +
+          (crossDoc ? ' [the two halves sit in different documents of the record: verify that they concern the same party, the same premises and the same period]' :
+           farApart ? ' [the record\'s document boundaries could not be read and the two halves sit ' + Math.abs(lessee.page - owner.page) + ' pages apart: verify that they concern the same party, the same premises and the same period]' : ''),
         location: (lessee.page === owner.page) ? 'Page ' + lessee.page : 'Page ' + lessee.page + ' vs Page ' + owner.page });
+    } else if (!owner && farHalf && invokesTermination) {
+      findings.push({ type: 'CT44', severity: 0, contextOnly: true,
+        evidence: 'A lessee-only clause on page ' + farHalf.lessee.page + ' ("' + farHalf.lessee.quote + '") and a statement of ownership on page ' + farHalf.owner.page + ' ("' + farHalf.owner.quote + '") sit ' + Math.abs(farHalf.lessee.page - farHalf.owner.page) + ' pages apart, and the statement names no party role; whose ownership it records is not stated, so the two were not paired. Read both before relying on either.',
+        location: 'Page ' + farHalf.lessee.page + ' vs Page ' + farHalf.owner.page });
     }
     return findings;
   },
@@ -3953,6 +4041,9 @@ function voCapOcrFormatFindings(findings, ocrPages) {
     // Every finding anchored only on OCR-recovered pages is marked, whatever
     // its type or severity: the report counts such findings apart.
     f.ocrAnchored = true;
+    // A signed-package phrase rule matched words, not characters: the cap's
+    // reason does not apply to it, and the report still counts it apart.
+    if (f.packageRule) continue;
     if (!VO_OCR_FORMAT_TYPES[f.type] || !(f.severity > 2)) continue;
     f.severity = 2;
     f.ocrCapped = true;

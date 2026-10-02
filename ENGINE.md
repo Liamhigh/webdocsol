@@ -23,7 +23,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
-5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2160 assertions;
+5. **`node tests/run-all.js` must be green before every push.** 33 suites, 2197 assertions;
    many exist solely to stop the regressions in §4.
 6. **The report leads with the human story, not the table of contents** (§7). That order is a
    founder ruling, not a layout preference.
@@ -524,7 +524,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**33 suites · 2160 assertions.** `tests/run-all.js` is the registry — a new
+**33 suites · 2197 assertions.** `tests/run-all.js` is the registry — a new
 test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -543,7 +543,7 @@ test file that is not registered there does not run.
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `annexure-eb-regression.test.mjs` | 215 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run and the evidence-bundle-4-docs run** (§12.10–§12.13): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans |
+| `annexure-eb-regression.test.mjs` | 252 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run and the evidence-bundle-4-docs run** (§12.10–§12.13): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, opt-in transcription consent/ordering/honesty |
 | `inline-scripts.test.mjs` | 21 | Inline copies byte-identical to source |
@@ -1277,18 +1277,41 @@ sealed four days after §12.12 shipped, so everything there held; what follows i
    Franchise Agreement, "Goodwill" means …" in a pleading) is not the document's own
    (`CITED_DEFINITION_RE`).
 4. **"Owner of certain Intellectual Property" paired with a lessee clause.** D38's ownership
-   half must now concern immovable property (premises, property, site, land, erf, building …;
-   never intellectual property, trade marks, shares, equipment); the side is read from the
-   phrase's whole sentence (a recital names "THE FRANCHISOR/OWNER" 120 characters before "the
-   owner of the immovable property"); and both halves must sit in the same stated document.
+   half must concern immovable property, and the FIRST object the ownership sentence names
+   decides, read to the end of the sentence: premises, property, site, land, erf, building, a
+   deed of transfer or title deed; never intellectual property (OCR's "lntellectual |
+   Property" included), trade marks, goodwill, shares, equipment or "the business" ("business
+   premises" are premises). "Owns the premises, the equipment and the stock" and "the owner of
+   property on which the business was operated" (p.78) are ownership of premises; "the owner
+   of all right, title and interest in and to the Intellectual Property" is not, however far
+   out the words sit. The side is read from the phrase's whole sentence (a recital names "THE
+   FRANCHISOR/OWNER" 120 characters before "the owner of the immovable property"). Pairing:
+   a half on the clause's own side pairs wherever it sits in the record — the proof that the
+   clause's party owns the premises lives in another instrument — one step down and tagged
+   "verify" when the halves sit in different stated documents; a half naming no side pairs
+   only within the same stated document and within twenty pages, otherwise it is an engine
+   note naming both pages. Where no document boundaries could be read, a far same-side pair
+   is tagged and a far side-less half is a note (`VO_D38_NEAR`).
 5. **"I admit the contents of this paragraph" as a contradiction.** A pleading admits
-   paragraphs, not facts: D01's admission branch skips the answering-affidavit form ("AD
-   PARAGRAPH 13 … admit the contents/allegations/opening sentence of this paragraph").
+   paragraphs, not facts: D01's admission branch skips a cue whose own sentence is in the
+   answering-affidavit grammar ("admit the contents/allegations/averments/correctness … of
+   this/the said/sub-paragraph 13.2", "admit the contents hereof", "admit paragraph 13",
+   "admit only the first sentence of this paragraph"). An "AD PARAGRAPH" heading on its own
+   suppresses nothing — "AD PARAGRAPH 7: I admit that I signed the deed of suretyship" is an
+   admission of fact — and every occurrence of a cue on a page is read, so a form sentence
+   never hides a later sentence of fact (the sentence of fact is the one quoted).
 6. **"subtotal R1161950 + VAT R1 = R1161951 but stated R1.08" led the report.** D13 combined
    the first subtotal, VAT and total found ANYWHERE in the bundle; it now works one page at a
-   time and only on figures that could be an invoice (VAT within a quarter of the subtotal, a
-   total within half to twice it) — otherwise a note that the page's figures could not be read.
-   CT15/CT22 join the OCR cap (§12.10).
+   time, reads figures as this country's documents print them (space- or comma-grouped
+   thousands, comma decimals, a rate written before the amount is a rate, "Tax Invoice No.
+   1234" is no amount), and only on figures that could be an invoice (VAT zero or within a
+   tenth to a quarter of the subtotal, a total within half to twice it) — otherwise a note
+   that the page's figures do not read as one invoice, which blames OCR only on an OCR page.
+   Both standard rates since 2018 are accepted, a zero VAT line is zero-rated, and a
+   discount, delivery or credit line between the subtotal and the total leaves the page
+   unchecked. The printed words carry no percentage (PD1). CT15/CT22 join the OCR cap
+   (§12.10); a signed-package phrase rule is never capped — it matched words, not
+   characters — but is still counted apart (`ocrAnchored`).
 7. **An extract prepared on the seal date read as the record.** A stated document whose title
    or first page says it is an extract, summary or commentary prepared after the fact
    (`VO_SECONDARY_TITLE_RE`) is secondary: a finding whose every cited page sits in it moves

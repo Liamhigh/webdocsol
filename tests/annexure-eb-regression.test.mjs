@@ -680,19 +680,65 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   const twoDocs = [];
   for (let p = 1; p <= 3; p++) twoDocs.push((p === 1 ? headLease : 'schedule page ' + p + '.') + foot('VO-AAAAAAAAAAAA', p, 3));
   for (let p = 1; p <= 3; p++) twoDocs.push((p === 1 ? 'By 2014 Bright Idea Projects 66 (Pty) Ltd purchased the property and became the registered owner of the premises.' : 'annexure page ' + p + '.') + foot('VO-BBBBBBBBBBBB', p, 3));
-  ok(ct44(twoDocs).length === 0, 'a lessee clause in one stated document and an ownership line in another are never paired');
+  ok(ct44(twoDocs).length === 0, 'a lessee clause in one stated document and a side-less ownership line in another are never paired');
+  // The first object the clause names decides; OCR shapes; deeds; the p.78 line; a same-side recital pairs across documents.
+  ok(ct44([headLease, 'Astron carries on business in the Area, and is the owner of certain Intellectual | Property used in the Franchised Business.']).length === 0, 'an OCR column rule inside "Intellectual | Property" does not make it premises');
+  ok(ct44([headLease, 'Astron carries on business in the Area, and is the owner of certain lntellectual Property used in the Franchised Business.']).length === 0, 'OCR\'s "lntellectual Property" is still intellectual property');
+  ok(ct44([headLease, 'The Franchisor is the owner of all right, title and interest in and to the Intellectual Property and the Business System.']).length === 0, '"owner of all right, title and interest in and to the Intellectual Property" is not ownership of premises however far out the words sit');
+  ok(ct44([headLease, 'The Franchisor owns the premises, the equipment and the stock in trade, and has let the premises to the Franchisee.']).length === 1, '"owns the premises, the equipment and the stock" is ownership of the premises (the first object decides)');
+  ok(ct44([headLease, 'At the time, the Complainant entered into a Franchise Agreement with Caltex Oil (SA) (Pty) Ltd, along with a Lease Agreement, as Caltex Oil (SA) (pty) Ltd was also the owner of property on which the business was operated.']).length === 1, '"the owner of property on which the business was operated" (p.78) is ownership of the premises');
+  ok(ct44([headLease, 'The Franchisor took transfer on 14 May 2014 under Deed of Transfer T12345/2014 registered in the Pietermaritzburg Deeds Registry.']).length === 1, 'a deed of transfer names immovable property by itself');
+  ok(ct44([headLease, 'The Franchisor took transfer of the business and its goodwill on 14 May 2014.']).length === 0, '"took transfer of the business" is not a transfer of premises');
+  ok(ct44([headLease, 'The Franchisor became the owner of the business premises in 2014.']).length === 1 && ct44([headLease, 'The Franchisor became the owner of the business in 2014.']).length === 0, '"business premises" are premises; "the business" is not');
+  const pref = ct44([headLease, 'Caltex Oil (SA) (Pty) Ltd was also the owner of property on which the business was operated.', 'All Fuels is a supplier of fuel and the Owner/Lessor of the site from which the Operator trades.']);
+  ok(pref.length === 1 && pref[0].location === 'Page 1 vs Page 3', 'an ownership half on the clause\'s own side is preferred over a side-less one (' + (pref[0] && pref[0].location) + ')');
+  const twoDocsSide = [];
+  for (let p = 1; p <= 3; p++) twoDocsSide.push((p === 1 ? headLease : 'schedule page ' + p + '.') + foot('VO-AAAAAAAAAAAA', p, 3));
+  for (let p = 1; p <= 3; p++) twoDocsSide.push((p === 1 ? 'BRIGHT IDEA PROJECTS 66 (PTY) LTD t/a ALL FUELS (hereinafter referred to as THE FRANCHISOR/OWNER) is: a duly appointed Branded Marketer of Astron, AND the owner of the immovable property described as LOT 967 Port Edward and has leased the said property to Palmbili Property Investments (Pty) Ltd under a Head Lease.' : 'annexure page ' + p + '.') + foot('VO-BBBBBBBBBBBB', p, 3));
+  const xd = ct44(twoDocsSide);
+  ok(xd.length === 1 && xd[0].severity === 4 && xd[0].location === 'Page 1 vs Page 4' && /different documents of the record: verify that they concern the same party/.test(xd[0].evidence), 'a recital in another document that the clause\'s own side (THE FRANCHISOR/OWNER) owns the premises pairs across documents, one step down and tagged to verify');
+  ok(ct44([headLease, 'x', 'By 2014 Bright Idea Projects 66 (Pty) Ltd purchased the property and became the registered owner of the premises.'])[0].severity === 5 && !/different documents/.test(ct44([headLease, 'x', 'By 2014 Bright Idea Projects 66 (Pty) Ltd purchased the property and became the registered owner of the premises.'])[0].evidence), 'a pair within one document keeps its severity and carries no tag');
+  ok(ct44([headLease, 'The Franchisee is the owner of the goodwill attaching to the premises.']).length === 0 && ct44([headLease, 'The Franchisee is the owner. The premises are let to it by the landlord.']).length === 0, 'goodwill is not premises, and the object must sit in the ownership sentence itself');
+  // No document boundaries: a side-less ownership line pairs only within twenty pages; further away it is a note.
+  const farSideless = [headLease]; for (let p = 2; p <= 30; p++) farSideless.push('page ' + p + ' text.'); farSideless.push('Caltex Oil (SA) (Pty) Ltd was also the owner of property on which the business was operated.');
+  const fs1 = DET.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED(farSideless);
+  ok(fs1.length === 1 && fs1[0].contextOnly && /names no party role; whose ownership it records is not stated, so the two were not paired/.test(fs1[0].evidence) && fs1[0].location === 'Page 1 vs Page 31', 'without document boundaries, a side-less ownership line thirty pages from the clause is a note, not a finding (' + (fs1[0] && fs1[0].location) + ')');
+  const farSide = [headLease]; for (let p = 2; p <= 30; p++) farSide.push('page ' + p + ' text.'); farSide.push('All Fuels is a supplier of fuel and the Owner/Lessor of the site from which the Operator trades.');
+  const fs2 = ct44(farSide);
+  ok(fs2.length === 1 && fs2[0].severity === 4 && /document boundaries could not be read and the two halves sit 30 pages apart/.test(fs2[0].evidence), 'without document boundaries, a same-side ownership line far from the clause pairs one step down and tagged to verify');
 
   // 17e. CT01: a pleading admits paragraphs, not facts.
   ok(ct01(['AD PARAGRAPH 13 190. I admit the contents of this paragraph. AD PARAGRAPH 14 191. The Respondent admits the opening sentence of this paragraph. On the remainder I have no knowledge.']).length === 0, '"I admit the contents of this paragraph" is the form of an answering affidavit, not an admission of fact');
   ok(ct01(['In my affidavit I admit that I signed the second agreement on 3 March 2019 without reading it, and I was wrong to do so.']).length === 1, 'a first-person admission of fact still fires');
+  ok(ct01(['AD PARAGRAPH 7 7.1 I admit that I signed the Deed of Suretyship on 3 March 2019 and that I received the sum of R1 200 000 from the Plaintiff.']).length === 1, 'an admission of fact under an AD PARAGRAPH heading still fires (the heading alone is not the form)');
+  const mixedAdm = ct01(['AD PARAGRAPH 13 190. I admit the contents of this paragraph. 191. I admit that I signed the acknowledgment of debt on 3 March 2019 and that the amount of R1 200 000 was never repaid.']);
+  ok(mixedAdm.length === 1 && /signed the acknowledgment of debt/.test(mixedAdm[0].evidence), 'a form sentence does not hide a later admission of fact on the same page, and the sentence of fact is the one quoted');
+  for (const form of ['I admit the allegations contained in this paragraph.', 'I admit the contents of paragraph 13.2 only.', 'I admit the contents of sub-paragraph 13.1.', 'I admit the contents hereof.', 'I admit paragraph 13.', 'I admit the correctness of the contents of this paragraph.', 'I admit the contents of paragraphs 13 to 15 insofar as they relate to the lease.', 'I admit the averments in paragraph 7 of the particulars of claim.', 'We admit the contents of the said paragraph.', 'I admit only the first sentence of this paragraph.'])
+    ok(ct01([form]).length === 0, 'pleading form is skipped without a heading: "' + form + '"');
+  ok(ct01(['I admit the contents of the letter dated 3 March 2019 and that I did not reply to it.']).length === 1, '"admit the contents of the letter" is an admission of fact, not of a paragraph');
 
   // 17f. CT15/CT22: one page, plausible figures, OCR cap.
   const d13 = (b) => DET.D13_DETECT_CALCULATION_ERROR(b);
   const badInv = d13(['Subtotal: R1161950 VAT: R1 Total: R1.08']);
-  ok(badInv.filter(f => !f.contextOnly).length === 0 && badInv.some(f => f.contextOnly && /could not be read as an invoice/.test(f.evidence)), '"subtotal R1161950, VAT R1, total R1.08" is an unreadable invoice (a note), not an amount discrepancy');
+  ok(badInv.filter(f => !f.contextOnly).length === 0 && badInv.some(f => f.contextOnly && /do not read as one invoice/.test(f.evidence) && /text layer may have separated/.test(f.evidence)), '"subtotal R1161950, VAT R1, total R1.08" is an unreadable invoice (a note), not an amount discrepancy; on a native page the note blames the text layer, not OCR');
+  ok(d13(['[OCR] Subtotal: R1161950 VAT: R1 Total: R1.08']).some(f => f.contextOnly && /the OCR may have broken the numbers/.test(f.evidence)), 'the same figures on an OCR page say so (p.397)');
   ok(d13(['Subtotal: R1,000.00 VAT: R150.00 Total: R1,250.00']).filter(f => f.type === 'CT15').length === 1, 'a plausible invoice whose total does not add up still fires');
   ok(d13(['Subtotal: R1,000.00 for the goods', 'VAT: R150.00 Total: R1,250.00']).filter(f => !f.contextOnly).length === 0, 'figures on different pages are never combined into one invoice');
   ok(E.voCapOcrFormatFindings([{ type: 'CT15', severity: 5, location: 'Page 397', evidence: 'Total mismatch' }, { type: 'CT22', severity: 4, location: 'Page 397', evidence: 'VAT mismatch' }], [397]).capped === 2, 'an invoice\'s arithmetic on an OCR page is held at reduced weight like every other figure');
+  // The VAT bound: a VAT line is zero or within a tenth to a quarter of the subtotal, whatever the total reads.
+  ok(d13(['Subtotal R1161950.00 VAT R1 Total R1,336,242.50']).every(f => f.contextOnly) && d13(['Subtotal R1161950.00 VAT R1 Amount due R1,336,242.50']).every(f => f.contextOnly), '"VAT R1" against a subtotal of R1 161 950 is a note whether the total was read intact or not at all');
+  // Figures as this country's documents print them.
+  ok(d13(['Subtotal R 12 500.00\nVAT R 1 875.00\nTotal R 14 375.00']).length === 0, 'space-grouped thousands are read whole: a correct invoice is silent');
+  const commaDec = d13(['Subtotal: R1 161 950,00 VAT: R174 292,50 Total: R1 336 242,60']);
+  ok(commaDec.length === 1 && commaDec[0].type === 'CT15' && /R1336242\.5 but stated R1336242\.6/.test(commaDec[0].evidence), 'a comma decimal is read as a decimal and a ten-cent error in the total still fires (' + (commaDec[0] && commaDec[0].evidence) + ')');
+  ok(d13(['Subtotal R1,000.00\nVAT 15% R150.00\nTotal R1,150.00']).length === 0 && d13(['Subtotal R1,000.00\nVAT 15 % R150.00\nTotal R1,150.00']).length === 0 && d13(['Subtotal R1,000.00\nVAT (@15%) : R150.00\nTotal R1,150.00']).length === 0, 'a rate written before the amount is a rate, not the VAT amount');
+  ok(d13(['Tax Invoice No. 1234\nSubtotal R1,000.00\nVAT R150.00\nTotal R1,150.00']).length === 0, '"Tax Invoice No. 1234" is not a tax amount');
+  ok(d13(['Subtotal R1,000.00\nVAT R140.00\nTotal R1,140.00']).length === 0 && d13(['Subtotal R1,000.00\nVAT R0.00\nTotal R1,000.00']).length === 0, 'the rate in force before April 2018 and a zero-rated supply are not VAT mismatches');
+  ok(d13(['Subtotal R100.00\nDiscount R10.00\nVAT R13.50\nTotal R103.50']).length === 0, 'a discount line between the subtotal and the total changes the sum: the page is not checked');
+  const vatOff = d13(['Subtotal: R1,000.00 VAT: R120.00 Total: R1,120.00']);
+  ok(vatOff.length === 1 && vatOff[0].type === 'CT22' && /calculated R150\.00 at the standard rate \(R140\.00 at the rate in force before April 2018\) but stated R120\.00/.test(vatOff[0].evidence) && !/%/.test(vatOff[0].evidence), 'a VAT line at neither rate still fires, and the printed words carry no percentage');
+  const pkgCap = [{ type: 'CT22', severity: 3, packageRule: 'FK13', location: 'Page 2', evidence: 'invoice splitting' }];
+  ok(E.voCapOcrFormatFindings(pkgCap, [2]).capped === 0 && pkgCap[0].severity === 3 && pkgCap[0].ocrAnchored === true, 'a signed-package phrase rule on an OCR page is counted apart but never capped: it matched words, not characters');
 
   // 17g. A secondary source is an account of the record, not the record.
   const segs2 = [{ start: 1, end: 3, title: 'Franchise Agreement between Bright Idea Projects and Wayne Nel Motors' }, { start: 4, end: 6, title: 'Extract prepared 30 Sept 2026 - pages reproduced from the MOU' }];
