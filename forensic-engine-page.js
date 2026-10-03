@@ -747,7 +747,15 @@ var DETECTORS = {
     // 143, 272 of the 3 October 2026 run) was sealed as "The record carries an
     // explicit admission". The admission the engine quotes must be the
     // admitting party's own sentence, never a commentator's label for one.
-    var VO_ADM_CHARACTERISATION_RE = /\b(?:this|that|it|which|the\s+(?:above|foregoing|email|letter|statement|message|passage|response|reply)\b[^.;!?\n]{0,40}?)\s+(?:is|was|would\s+be|constitutes|amounts\s+to|represents|reads\s+as)\s+(?:an?\s+)?(?:\w+[-\s]+){0,3}?admission\b/i;
+    // The test anchors on the words immediately BEFORE the cue — an equative
+    // verb reaching the cue ("is an explicit…", "constitutes a clear…",
+    // "treated as an…") — so the subject can be anything ("Mr Nortje's
+    // email", "that email", "his reply"), and it applies only to the
+    // noun-shaped cue: a first-person "I admit…" is never a label and is
+    // never guard-killed (the Greensky rerun review broke a closed subject
+    // list both ways).
+    var VO_ADM_CHARACTERISATION_RE = /\b(?:is|was|are|were|be|being|been|constitutes?|amount(?:s|ed)?\s+to|represent(?:s|ed)?|reads?\s+as|read\s+as|deem(?:s|ed)?|treat(?:s|ed)?\s+as|considered|regarded\s+as)\s+(?:an?\s+)?(?:\w+[-\s]+){0,3}?$/i;
+    var VO_ADM_NOUN_CUES = { 'admission of guilt': 1 };
     var admPages = [], admQuote = null, admCue = null;
     for (var ap = 0; ap < textBlocks.length; ap++) {
       var lowA = (textBlocks[ap] || '').toLowerCase();
@@ -758,15 +766,17 @@ var DETECTORS = {
           // The cue's own sentence: from the cue to the next sentence end (a
           // clause number's "13.2" has no space after its point).
           var sentA = lowA.slice(atA, atA + 200).split(/[.;!?]\s|\n/)[0];
-          // ...and the sentence's own start, so a label for an admission
+          // ...and the words reaching the cue, so a label for an admission
           // ("this is an explicit admission of guilt") is read as the
-          // characterisation it is.
-          var headA = lowA.slice(Math.max(0, atA - 120), atA);
-          var headBreak = Math.max(headA.lastIndexOf('. '), headA.lastIndexOf('; '), headA.lastIndexOf('! '), headA.lastIndexOf('? '), headA.lastIndexOf('\n'));
-          if (headBreak !== -1) headA = headA.slice(headBreak + 1);
-          if (VO_ADM_CHARACTERISATION_RE.test(headA + admissionCues[ac])) {
-            atA = lowA.indexOf(admissionCues[ac], atA + admissionCues[ac].length);
-            continue;
+          // characterisation it is. Only the cue's own sentence is read.
+          if (VO_ADM_NOUN_CUES[admissionCues[ac]]) {
+            var headA = lowA.slice(Math.max(0, atA - 120), atA);
+            var headBreak = Math.max(headA.lastIndexOf('. '), headA.lastIndexOf('; '), headA.lastIndexOf('! '), headA.lastIndexOf('? '), headA.lastIndexOf('\n'));
+            if (headBreak !== -1) headA = headA.slice(headBreak + 1);
+            if (VO_ADM_CHARACTERISATION_RE.test(headA)) {
+              atA = lowA.indexOf(admissionCues[ac], atA + admissionCues[ac].length);
+              continue;
+            }
           }
           if (!PLEADING_ADMISSION_RE.test(sentA)) {
             admPages.push(ap + 1);
@@ -4232,12 +4242,28 @@ function voSecondaryPages(segs, textBlocks) {
 // single heading-colon-into-bold ("Finding:**" — OCR often loses the opening
 // pair), mark the page; the classification is disclosed and the page's claims
 // become leads to verify against the primary record (voDemoteSecondarySource).
+// The signals are markdown STRUCTURE, never bare asterisks: a bold pair must
+// WRAP words ("**Key Findings**"), because bare "**" counts also live on
+// genuine evidence — masked card numbers ("**** **** **** 1234"), PIN
+// masking ("PIN:****"), fax separator runs, code exponents ("2**8") and
+// footnote markers ("Fees** include VAT") are all primary-record text
+// (Greensky rerun review). The heading-colon-into-bold form ("Finding:**
+// This is…") must be followed by text, not more asterisks; "##" headings
+// (two to four hashes — a shell comment's single "#" never counts) add a
+// signal for an analysis whose bold marks OCR dropped. Two signals mark the
+// page; the "X:** text" form is distinctive enough to mark it alone.
 function voMarkdownAnalysisPages(textBlocks) {
   var out = [];
   for (var i = 0; i < (textBlocks || []).length; i++) {
     var t = String(textBlocks[i] || '');
-    var bold = (t.match(/\*\*/g) || []).length;
-    if (bold >= 4 || /[A-Za-z]\s?:\*\*/.test(t)) out.push(i + 1);
+    if (t.indexOf('*') === -1 && t.indexOf('#') === -1) continue;
+    var boldPairs = (t.match(/\*\*[A-Za-z][^*\n]{0,60}[A-Za-z.!?:]\*\*/g) || []).length;
+    var colonBold = /[A-Za-z]\s?:\*\*\s*[A-Za-z]/.test(t) ? 1 : 0;
+    // Extracted page text is often space-joined, so a heading is recognised
+    // after any whitespace, not only a line start.
+    var hashHeads = (t.match(/(^|\s)#{2,4}\s+[A-Za-z]/g) || []).length;
+    if (hashHeads > 2) hashHeads = 2;
+    if (boldPairs + hashHeads >= 2 || colonBold) out.push(i + 1);
   }
   return out;
 }
@@ -4808,7 +4834,7 @@ var VO_ROSTER_PER_FINDING = 4; // roster names attachable to any one finding
 // Built once at load rather than per call (the roster runs over every page of a
 // 491-page bundle, so the object churn is pointless).
 var VO_ROSTER_NAME_RE = new RegExp("(?<![" + VO_NAME_ANY + "])([" + VO_NAME_UC + "][" + VO_NAME_ANY + "'\u2019-]{1,}(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
-function voBuildNameRoster(blocks, minMentions) {
+function voBuildNameRoster(blocks, minMentions, secondaryPages) {
   var list = blocks || [];
   // A long bundle repeats a real party many times; a short one may name them
   // only twice, so the bar scales rather than silently excluding short documents.
@@ -4817,21 +4843,27 @@ function voBuildNameRoster(blocks, minMentions) {
   // lines recur just like a name does. In a bundle that has text pages, a
   // roster name must be printed on at least one of them; a wholly scanned
   // bundle (annexure EB) keeps its OCR-only names, because there is nothing
-  // else to read them from.
+  // else to read them from. A secondary page (a markdown analysis, an
+  // extract) counts the same way as an OCR page: a name the primary record
+  // never prints — asserted only by a bound AI commentary — must not become
+  // a party to the matter (Greensky rerun review: the same AI summary bound
+  // four times cleared the recurrence bar by itself).
+  var sec = secondaryPages || [];
   var counts = {}, textCounts = {}, display = {}, anyTextPage = false;
   var re = VO_ROSTER_NAME_RE;
   for (var b = 0; b < list.length; b++) {
     var raw = String(list[b] || '');
     var isOcr = /^\s*\[OCR\]/.test(raw);
+    var isSec = sec.indexOf(b + 1) !== -1;
     var s = raw.replace(VO_SEAL_BOILERPLATE_RE, ' ');
-    if (!isOcr && s.replace(/\s+/g, '').length > 60) anyTextPage = true;
+    if (!isOcr && !isSec && s.replace(/\s+/g, '').length > 60) anyTextPage = true;
     var m; re.lastIndex = 0;
     while ((m = re.exec(s)) !== null) {
       var n = voTrimPersonName(voCleanPersonName(m[1].replace(/\s+/g, ' ')));
       if (!n || !voLooksLikePerson(n)) continue;
       var k = n.toLowerCase();
       counts[k] = (counts[k] || 0) + 1;
-      if (!isOcr) textCounts[k] = (textCounts[k] || 0) + 1;
+      if (!isOcr && !isSec) textCounts[k] = (textCounts[k] || 0) + 1;
       if (!display[k]) display[k] = n;
     }
   }
@@ -5083,10 +5115,10 @@ function voStatement(f) {
 // Bind each surviving finding to who/where/quote/when/law. Evidence prose (which
 // the detectors curated) is the primary source; the cited page text is a
 // fallback for context that the evidence string did not carry.
-function voAnchorEnrich(findings, textBlocks) {
+function voAnchorEnrich(findings, textBlocks, secondaryPages) {
   var blocks = textBlocks || [];
   // Built once per document, then reused for every finding (see voBuildNameRoster).
-  var roster = voBuildNameRoster(blocks);
+  var roster = voBuildNameRoster(blocks, 0, secondaryPages);
   for (var i = 0; i < findings.length; i++) {
     var f = findings[i];
     if (!f) continue;
@@ -5749,6 +5781,18 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // The bundle's stated boundaries are read from the seal footers, so they are
   // computed now and cached; then the furniture goes (voStripSealFurniture).
   var _docSegs = voCacheDocSegs(textBlocks);
+  // Whether THIS FILE went through this platform's sealer is judged before
+  // the furniture is stripped, from the BRAND-bearing footer alone and only
+  // when it covers most pages. The generic furniture patterns (a bare UTC
+  // timestamp, a timezone name, "VERIFY SEAL") also live on ordinary
+  // exhibits, and ONE embedded sealed exhibit — a photocopied certificate on
+  // p. 42 of an unsealed bundle — proves nothing about the outer file
+  // (Greensky rerun review). The real wrapper signs nearly every page
+  // (Greensky: 419 of 451).
+  var _voBrandFooterRe = /VERUM\s+OMNIS\s+SEALED\s+(?:ORIGINAL|DOCUMENT)|\bVO-[0-9A-F]{6,}\b/i;
+  var _voBrandPages = 0;
+  for (var bfp = 0; bfp < textBlocks.length; bfp++) if (_voBrandFooterRe.test(String(textBlocks[bfp] || ''))) _voBrandPages++;
+  var _voSelfSealed = textBlocks.length > 1 && _voBrandPages * 2 > textBlocks.length;
   var _furniture = voStripSealFurnitureBlocks(textBlocks);
   if (_furniture) extractionNote += ' Seal furniture: this platform\'s own seal footers (seal id, hash, date and time, page count) were removed from ' + _furniture + ' page(s) before detection; a seal stamp is not a statement of the record.';
   var _secondarySegs = voSecondarySegments(_docSegs, textBlocks);
@@ -5926,10 +5970,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // Digital forensics on the raw PDF structure (revisions, post-signature
   // saves, active content, XMP vs Info disagreement).
   try {
-    // The furniture count doubles as the self-seal signal: a file whose pages
-    // carry this platform's seal footers has been through this sealer, so its
-    // Info dictionary describes the seal pass, not the source document.
-    var _dfFindings = voDigitalForensicsScan(pdfBytes, pdfDoc, { sealedByThisPlatform: !!_furniture });
+    // A file most of whose pages carry this platform's branded seal footer
+    // has been through this sealer, so its Info dictionary describes the
+    // seal pass, not the source document (computed above, before stripping).
+    var _dfFindings = voDigitalForensicsScan(pdfBytes, pdfDoc, { sealedByThisPlatform: _voSelfSealed });
     // Disclose any self-seal metadata suppression (Prime Directive 6).
     if (_dfFindings && _dfFindings.voSelfSealNote) _voContextNotes.push({ type: 'SEAL', location: 'PDF metadata', text: String(_dfFindings.voSelfSealNote) });
     allFindings = allFindings.concat(_dfFindings);
@@ -6020,7 +6064,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // Bind each surviving finding to its anchors (who/where/quote/when/law) so
   // every finding names WHO, WHERE, WHAT and — where the document itself cites
   // one — WHICH provision. Runs on the kept, page-anchored findings only.
-  voAnchorEnrich(allFindings, textBlocks);
+  voAnchorEnrich(allFindings, textBlocks, _secondaryAllPages);
 
   // Oath-context tagging: where a finding's anchor page carries the language
   // of a sworn instrument, record that FACT on the finding. The tag drives a

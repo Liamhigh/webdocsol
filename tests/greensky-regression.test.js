@@ -324,6 +324,64 @@ const E = require('../forensic-engine-page.js');
   ok(R._brainOfCt.CT24 === 'B2' && R._brainOfCt.CT29 === 'B5', 'the metadata and timestamp routes are unchanged');
 }
 
+// ---- 9.8a the adversarial review of the fix set (second round) ----
+// A five-lens verification pass on the first fix set confirmed fourteen
+// defects in or around the new code; each is pinned here.
+{
+  // (i) "and N more" in a grouped location is a COUNT: pageAnchor must never
+  // read it as a page ("p. 2, 101, …" led a CRITICAL finding's anchor with a
+  // fabricated page 2).
+  ok(R._fmtLocation('Page 101, 102, 103, 104, 105, 106, 107, 108 and 2 more') === 'p. 101, 102, 103, 104, 105, 106 and 2 more',
+    'pageAnchor strips "and N more" instead of fabricating page 2: ' + R._fmtLocation('Page 101, 102, 103, 104, 105, 106, 107, 108 and 2 more'));
+
+  // (ii) OCR provenance is judged on the FULL page set (f.pages), not the
+  // truncated location string.
+  ok(R._ocrTouched('Page 101, 102, 103, 104, 105, 106, 107, 108 and 2 more', [109, 110], [101,102,103,104,105,106,107,108,109,110]) === true,
+    'ocrTouched reads the full pages array past the location truncation');
+
+  // (iii) characterisations with subjects outside a closed list still never
+  // seal as admissions; genuine first-person admissions are never guard-killed.
+  const D01 = E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION;
+  const adm = t => D01([t]).filter(f => /explicit admission/.test(f.evidence)).length;
+  ok(adm("Mr Nortje's email of 6 April constitutes an admission of guilt.") === 0, 'possessive-subject characterisation does not fire');
+  ok(adm('That email is an admission of guilt.') === 0, '"That email is an admission" does not fire');
+  ok(adm('His reply amounts to an admission of guilt.') === 0, 'pronoun-possessive characterisation does not fire');
+  ok(adm('Whether or not this was an admission, I admit that I signed the agreement.') === 1,
+    'a first-person admission after a concessive clause still fires');
+  ok(adm('This is my admission: I admit I failed to pay the VAT.') === 1,
+    'the admitting party\'s own framing never kills the admission that follows');
+
+  // (iv) markdown detection keys on structure, never bare asterisks: masked
+  // card numbers, PIN masking, fax separators, code exponents and footnote
+  // markers are primary-record text.
+  const mdNone = E.voMarkdownAnalysisPages([
+    'Card **** **** **** 1234 POS purchase R500.00 Card **** **** **** 1234',
+    'Your PIN:**** must never be shared',
+    'TRANSMISSION OK ************************ PAGE 01',
+    'return 2**8 + 2**10 + x**2 + y**2',
+    'Rate 12%** applies. Fees** include VAT.** See note.',
+  ]);
+  ok(mdNone.length === 0, 'no evidence page is classified as markdown analysis (' + JSON.stringify(mdNone) + ')');
+  // ...while real markdown analysis still is, including the heading form
+  // with a single bold pair.
+  const mdYes = E.voMarkdownAnalysisPages([
+    '## Case Analysis - The email of 6 April is decisive ## Conclusion **Conclusion**: liability follows',
+    'Forensic Finding:** This is an explicit admission of guilt.',
+  ]);
+  ok(mdYes.join(',') === '1,2', 'headed and colon-bold analysis pages still classify (' + mdYes.join(',') + ')');
+
+  // (v) a name asserted only by the bound AI commentary never enters the
+  // roster when the primary record has text pages.
+  const primary = 'This agreement is made between Greensky Ornamentals FZ-LLC and the supplier for the delivery of ornamental plants to the port of entry under the usual terms and conditions of carriage.';
+  const mdPage = '**Analysis:** Johan Vermeulen instructed the transfer. **Finding:** Johan Vermeulen acted alone. Johan Vermeulen benefited.';
+  const blocks = [primary, mdPage, primary, mdPage];
+  const sec = E.voMarkdownAnalysisPages(blocks);
+  const roster = E.voBuildNameRoster(blocks, 0, sec);
+  ok(!roster.some(r => /Vermeulen/.test(r.name)), 'a commentary-only name stays out of the roster');
+  ok(E.voBuildNameRoster([mdPage, mdPage, mdPage], 0, []).some(r => /Vermeulen/.test(r.name)),
+    'without the secondary exclusion the same name would have entered (control)');
+}
+
 // ---- 9.9 the one-page summary collapses identical serious lines ----
 {
   const mk = (page, raw) => ({ type: 'CT03', severity: 5, evidence: 'Impossible date: ' + raw + ' (not a real calendar date read as day/month/year or month/day/year)', location: 'Page ' + page });

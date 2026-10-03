@@ -711,7 +711,11 @@ function centerX(text, font, size) { return (PW - font.widthOfTextAtSize(text, s
 // extract first page anchor from an engine location string
 function pageAnchor(location) {
   if (!location) return '—';
-  var s = String(location);
+  // "… and 3 more" is a COUNT, never a page: a grouped location ("Page 101,
+  // …, 108 and 2 more") read through the page regex below turned the "2"
+  // into a fabricated leading anchor ("p. 2, 101, …") — in a report whose
+  // whole claim is that every finding is anchored to its page.
+  var s = String(location).replace(/\s+and\s+\d+\s+more\b/gi, ' ');
   // Every page number in the location, deduped and ordered. The old pattern
   // matched only the singular "Page N": engine locations of the form
   // "Pages 11, 12" (plural, used by the identity and multi-page detectors)
@@ -770,9 +774,12 @@ function pageNumbers(location) {
 // report says so on the finding and tells the reader to verify the wording
 // against the page image. This is disclosure of how the text was obtained —
 // never a confidence score (PD1 bars those from anything a reader sees).
-function ocrTouched(location, ocrPages) {
+function ocrTouched(location, ocrPages, pagesArr) {
   if (!ocrPages || !ocrPages.length) return false;
-  var pp = pageNumbers(location);
+  // A grouped finding lists at most eight pages in its location string and
+  // carries the full set in f.pages; judge OCR provenance on the full set or
+  // the disclosure is lost for the truncated tail (Greensky rerun review).
+  var pp = (Array.isArray(pagesArr) && pagesArr.length) ? pagesArr : pageNumbers(location);
   for (var i = 0; i < pp.length; i++) {
     if (ocrPages.indexOf(pp[i]) !== -1) return true;
   }
@@ -847,6 +854,34 @@ function voCountPhrase(list, reviewed, ocrPages) {
     (reviewed ? '' : ' (deterministic rules; AI review not run on this report)') + ', and ' + reduced +
     ' anchored only on OCR-recovered pages or on a secondary source, whose quoted wording is to be verified against the page image or the primary document before it is relied on' +
     (capped ? ' (' + capped + ' of them held at reduced weight by the engine)' : '');
+}
+// One count, everywhere (Greensky rerun, 3 October 2026: the cover said 19
+// findings while SEALED FINDINGS said 17 — two file-level findings were
+// silently dropped). The numbered list stays page-anchored; these sentences
+// reconcile what is not in it, each class called what it is: a finding with
+// no page lives at file level, a finding whose passage will not render is
+// NOT a metadata finding and is never described as one.
+function voSealedCountIntro(fr, subst, data) {
+  var all = ((fr && fr.findings) || []).filter(isEngineFinding);
+  var noPage = 0;
+  for (var i = 0; i < all.length; i++) { var loc = fmtLocation(all[i].location); if (!loc || loc === '—') noPage++; }
+  var unrender = all.length - subst.length - noPage;
+  if (unrender < 0) unrender = 0;
+  return 'The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) + '.' +
+    (noPage > 0 ? ' A further ' + noPage + ' finding' + (noPage === 1 ? ' lives' : 's live') + ' at file level (PDF metadata or structure, with no page to cite) and ' + (noPage === 1 ? 'is' : 'are') + ' set out in the Findings & Contradiction Matrix.' : '') +
+    (unrender > 0 ? ' ' + unrender + ' finding' + (unrender === 1 ? '' : 's') + ' with no renderable passage ' + (unrender === 1 ? 'is' : 'are') + ' listed in the matrix only.' : '') +
+    ' The following are established, each anchored to its page:';
+}
+// When NOTHING is page-anchored but engine findings exist (a clean document
+// whose only anomalies are file-level), the section must disclose them —
+// "No contradictions were detected. Every detector ran; none triggered."
+// over two real metadata findings is the 19-vs-17 defect at N-vs-0.
+function voNoAnchoredLine(fr) {
+  var all = ((fr && fr.findings) || []).filter(isEngineFinding);
+  if (!all.length) return null;
+  return 'The record contains ' + all.length + ' engine finding' + (all.length === 1 ? '' : 's') + ', none anchored to a page: ' +
+    (all.length === 1 ? 'it lives' : 'they live') + ' at file level (PDF metadata or structure) or carry no renderable passage, and ' +
+    (all.length === 1 ? 'is' : 'are') + ' set out in the Findings & Contradiction Matrix. No page-anchored contradiction was established.';
 }
 function stripDemotedTag(ev) { return String(ev || '').replace(DEMOTED_TAG_RE, '').replace(/\s{2,}/g, ' ').trim(); }
 
@@ -2448,19 +2483,22 @@ function secSealedFindings(ctx, data) {
     if (!loc || loc === '—') return false;
     return quoteEvidence(f.evidence).replace(/["'\s.,;:—-]/g, '').length > 0;
   }).sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
-  if (subst.length === 0) return;
-  // One count. The 3 October 2026 Greensky report said "19 findings" on its
-  // cover and "The record contains 17 findings" here, because two findings
-  // live at file level (PDF metadata) and carry no page to anchor to. The
-  // list below stays page-anchored; the sentence reconciles the difference.
-  var voFileLevel = (fr.findings || []).filter(isEngineFinding).length - subst.length;
+  if (subst.length === 0) {
+    // File-level-only record: disclose the findings rather than vanish.
+    var noAnch = voNoAnchoredLine(fr);
+    if (!noAnch) return;
+    ctx.newBodyPage();
+    ctx.heading('5. SEALED FINDINGS');
+    ctx.para(noAnch, { size: 10, after: 8 });
+    ctx.para('These findings are sealed under SHA-512 and ' + anchorPhrase(data) + '. Any change to them is detectable.', { size: 9, font: ctx.f.timesBold, color: NAVY2 });
+    return;
+  }
   ctx.newBodyPage();
   ctx.heading('5. SEALED FINDINGS');
-  // §15.3 REQUIRED wording (the shape; the count now reads through voCountPhrase): "The record contains [X] contradictions.
-  // The following are established."
-  ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) +
-    (voFileLevel > 0 ? ' anchored to pages, and ' + voFileLevel + ' further finding' + (voFileLevel === 1 ? '' : 's') + ' recorded at file level (PDF metadata or structure, numbered P# in the matrix)' : '') +
-    '. The following are established, each anchored to its page:', { size: 10, after: 8 });
+  // §15.3 REQUIRED wording (the shape; the count now reads through
+  // voSealedCountIntro/voCountPhrase): "The record contains [X]
+  // contradictions. The following are established."
+  ctx.para(voSealedCountIntro(fr, subst, data), { size: 10, after: 8 });
   var CAP = 20;
   var shown = subst.slice(0, CAP);
   for (var i = 0; i < shown.length; i++) {
@@ -2707,7 +2745,7 @@ function secFindingDetails(ctx, data) {
     if (f.swornContext) {
       factLines.push('Oath context: oath language (affidavit / commissioner-of-oaths formulae) appears on the cited page(s). What a false statement under oath constitutes is reserved to the court.');
     }
-    if (ocrTouched(f.location, data.ocrPages)) {
+    if (ocrTouched(f.location, data.ocrPages, f.pages)) {
       // No percentage and no band word here (PD1, §15.2): the recogniser's
       // per-page confidence travels in the findings JSON only.
       factLines.push('OCR provenance: the text on the cited page(s) was recovered by optical character recognition from a scanned image, not read from a native text layer. Verify the quoted wording against the original page image before relying on exact characters or figures.' + (f.ocrCapped ? ' The engine reduced this finding\'s weight for that reason until the characters are verified.' : ''));
@@ -5038,7 +5076,7 @@ async function buildHumanReport(opts) {
   // narrative said "17" here while the executive summary above it said "19",
   // because two findings lived at file level with no page to anchor to.
   var voEngineAll = (fr.findings || []).filter(isEngineFinding).length;
-  ctx.para('Verified findings in the sealed record: ' + voEngineAll + ' (' + humanFindings.length + ' page-anchored and cited as [F#] in this narrative' + (voEngineAll > humanFindings.length ? '; ' + (voEngineAll - humanFindings.length) + ' at file level or without a quotable passage, numbered P#' : '') + '). AI-raised candidates pending verification: ' + candidates.length + ' (never counted as findings).', { size: 9, font: ctx.f.courier, color: GRAY, after: 4 });
+  ctx.para('Verified findings in the sealed record: ' + voEngineAll + ' (' + humanFindings.length + ' page-anchored and cited as [F#] in this narrative' + (voEngineAll > humanFindings.length ? '; ' + (voEngineAll - humanFindings.length) + ' at file level or without a quotable passage, set out in the sealed technical report' : '') + '). AI-raised candidates pending verification: ' + candidates.length + ' (never counted as findings).', { size: 9, font: ctx.f.courier, color: GRAY, after: 4 });
 
   // ---- 2. EVIDENCE INDEX (engine) -----------------------------------------
   secEvidenceIndex(ctx, data);
@@ -5200,10 +5238,7 @@ async function buildHumanReport(opts) {
   if (subst.length) {
     // One count (see secSealedFindings): page-anchored items are listed; a
     // file-level finding is named in the sentence, never silently dropped.
-    var voFileLevelD = (fr.findings || []).filter(isEngineFinding).length - subst.length;
-    ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) +
-      (voFileLevelD > 0 ? ' anchored to pages, and ' + voFileLevelD + ' further finding' + (voFileLevelD === 1 ? '' : 's') + ' recorded at file level (PDF metadata or structure, numbered P# in the matrix)' : '') +
-      '. The following are established, each anchored to its page:', { size: 10, after: 8 });
+    ctx.para(voSealedCountIntro(fr, subst, data), { size: 10, after: 8 });
     var CAPF = 20;
     for (var d = 0; d < Math.min(subst.length, CAPF); d++) {
       var dq = quoteEvidence(subst[d].evidence);
@@ -5212,7 +5247,9 @@ async function buildHumanReport(opts) {
     }
     if (subst.length > CAPF) ctx.para('+ ' + (subst.length - CAPF) + ' further finding(s), ordered most serious first, in the sealed technical report.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
   } else {
-    ctx.para('No contradictions were detected. Every detector ran; none triggered.', { size: 10, after: 8 });
+    // "None triggered" may only be said when none triggered: a record whose
+    // only findings are file-level still has findings to disclose.
+    ctx.para(voNoAnchoredLine(fr) || 'No contradictions were detected. Every detector ran; none triggered.', { size: 10, after: 8 });
   }
   ctx.gap(4);
   ctx.para('These findings are sealed under SHA-512 and ' + anchorPhrase(data) + ': any change to them is detectable, because the fingerprint would no longer match' + timestampClause(data, 'they') + '. The verdict on any named person is for the court.', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 10 });
