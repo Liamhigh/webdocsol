@@ -2,8 +2,8 @@
 
 **System context (read first):** [`VERUM_OMNIS_SYSTEM_PROMPT.md`](./VERUM_OMNIS_SYSTEM_PROMPT.md)
 — this repository is one surface of the Verum Omnis system; that document is
-identical in every Verum Omnis repository and governs how all surfaces fit
-together. Repo-specific architecture: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
+meant to be identical in every Verum Omnis repository (today it is not — see Open today) and
+governs how all surfaces fit together. Repo-specific architecture: [`ARCHITECTURE.md`](./ARCHITECTURE.md).
 
 **UI design (binding):** [`VERUM_UI_TOKENS.md`](./VERUM_UI_TOKENS.md) is the canonical
 design specification for EVERY Verum Omnis surface — website, Android app, Fraud
@@ -26,88 +26,202 @@ re-introduces a false statement of fact under seal.
 **Repo map:** [`REFERENCE.md`](./REFERENCE.md) — every page, script, worker endpoint and
 directory, and what each one does.
 
-## Start here — the state of the platform (updated 2026-09-06)
+## Start here — the state of the platform (updated 2026-10-03; describes `main` once PR #214 — the Public Protector submission run and the Greensky re-run — is merged)
 
 Read this section first; it is the two-minute orientation. Everything below it is the detail.
 
 **What this is.** One public website and one Cloudflare Worker, both in this repository,
 deployed *together* by Cloudflare Workers Builds on every merge to `main`. The visitor's
-browser does the forensic work (nothing is uploaded to seal a document); the Worker serves
-the site and a small API.
+browser does the forensic work (in "Seal document" nothing leaves the device; in "Seal document
+with forensic report" the engine still runs on the device, and only finding metadata, text
+excerpts, the sealed page text for the Brain 9 sweep and voice-note audio go to the Worker's AI
+endpoints, as the mode card states, and anonymous pattern signals — detector id, type, severity,
+page count — go to `/api/v1/feedback/patterns`); the Worker serves the site and a small API.
 
 | Piece | Source of truth | Where it runs |
 |---|---|---|
-| Website pages | repo root `*.html`, `verum-ui.css`, `images/`, `vendor/` | Served by the Worker as **Workers Static Assets** (`wrangler.toml [assets]`), through a fixed chain when a request reaches the Worker: bundled assets → the `main` branch on `raw.githubusercontent.com` → the legacy Cloudflare Pages origin. Every answer names its tier in `X-VO-Site-Source`; `GET /api/v1/site/health` shows which tier answers for the home page, the seal page and both logos. The two site images also have embedded last-resort copies (`worker/site-assets.js`). |
+| Website pages | repo root `*.html`, `verum-ui.css`, `images/`, `vendor/` | Served by the Worker as **Workers Static Assets** (`wrangler.toml [assets]`), through a fixed chain when a request reaches the Worker: bundled assets → the `main` branch on `raw.githubusercontent.com` → the legacy Cloudflare Pages origin. Files the platform serves straight from the bundled assets (the normal case) carry no extra header; an answer the Worker's own code serves names its tier in `X-VO-Site-Source` (`assets`, `repo`, `pages`, `kv`, `embedded`). `GET /api/v1/site/health` shows which tier answers for the home page, the seal page, the logo and the watermark (all `assets` on 27 September 2026). A path that matches no file falls through to the Pages tier, which answers 200 with the home page (probe, 27 September). The two site images also have embedded last-resort copies (`worker/site-assets.js`). Pages carry self-canonical links to the domain. |
 | Forensic engine, PDF reports, sealing, OpenTimestamps, encryption | `forensic-engine-page.js`, `forensic-report.js`, `seal-guard.js`, `ots-proof.js`, `pdf-encrypt.js` — **inlined** into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers | The visitor's browser. The engine also applies the **signed rule package** the seal page fetches and verifies (`ENGINE.md` §12.7) — the same additive loop the Android app and the fraud-firewall run. Edit the source file, then re-splice the inline copy; `tests/inline-scripts.test.mjs` byte-compares them. |
-| API `/api/v1/*` — AI review (classify, assess, narrate), the Brain 9 sweep of the sealed text (`/api/v1/ai/sweep`: anchored recommendations, never findings), the opt-in court-ready narrative, voice-note transcription (voice notes arrive singly or as a WhatsApp chat-export `.zip` unpacked on the device — `ENGINE.md` §12.6a), signed rule packages, admin publish, site health | `worker/verum-rules.js` (router and handlers), `worker/static-proxy.js` (site chain), `worker/site-assets.js` (embedded images) | Cloudflare Worker `webdocsol`, Custom Domains `verumglobal.foundation` and `www.verumglobal.foundation` declared in `wrangler.toml` (since 2026-09-07; the zone routes declared before never bound — see Known state), bindings `RULES_KV`, `AI`, `ASSETS`; secrets set in the dashboard only: `ADMIN_TOKEN`, `RULE_PRIVATE_KEY`, optional `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL`. `HUMAN_REPORT_MODEL` is a plain var. |
+| API `/api/v1/*` — AI review (classify, assess, narrate), the Brain 9 sweep of the sealed text (`/api/v1/ai/sweep`: anchored recommendations, never findings), the court-ready narrative (`/api/v1/ai/human-report`, automatic in "Seal document with forensic report" since 7 September), voice-note transcription (voice notes arrive singly or as a WhatsApp chat-export `.zip` unpacked on the device — `ENGINE.md` §12.6a), the licensing gatekeeper (`/api/v1/ai/gatekeep`), anonymous pattern feedback (`/api/v1/feedback/patterns`), signed rule packages (`/api/v1/rules/manifest`) and the trainer's log (`/api/v1/rules/changelog`), `/api/v1/status`, admin publish, admin curate and curate-publish, site health; and the weekly trainer run (cron) | `worker/verum-rules.js` (router and handlers), `worker/static-proxy.js` (site chain), `worker/site-assets.js` (embedded images) | Cloudflare Worker `webdocsol` on the zone routes `verumglobal.foundation/*` and `www.verumglobal.foundation/*` (`zone_name = "verumglobal.foundation"`), declared in `wrangler.toml` since 27 September 2026 (#210) and live since the founder re-pointed them that day; also on its own address `webdocsol.liamhigh78.workers.dev` (`workers_dev = true`), a second door that does not depend on the domain, which the probe checks too. Bindings `RULES_KV`, `AI`, `ASSETS`. Cron `[triggers] crons = ["0 3 * * 1"]`: on Cloudflare 1 is Sunday, so the trainer runs Sunday 03:00 UTC. Secrets set in the dashboard only: `ADMIN_TOKEN`, `RULE_PRIVATE_KEY` (absent on 27 September — see Open today), optional `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL`. `HUMAN_REPORT_MODEL` and `AUTO_CURATE` are plain vars. |
+| Pages bridge | `functions/[[path]].js` | Only on the Cloudflare Pages project `verumglobal`, which still builds every push (the `Cloudflare Pages` check on every commit). It hands any request Pages receives to the Worker, loop-guarded by `X-VO-Chain`. Dormant since 27 September: the zone route on `www` runs before Pages. Never shipped as a Worker asset (`.assetsignore`, `SITE_DENY_RE`); `tests/pages-bridge.test.mjs`. |
+| Outside probe | `.github/workflows/live-site-probe.yml` (manual dispatch) | GitHub Actions. It prints DNS answers for the apex and `www`, and for those two and `webdocsol.liamhigh78.workers.dev` the headers, the health and status endpoints, the manifest's shape, the trainer's changelog and an unknown path. Last run: 27 September 2026 04:11 UTC (run 36293574099, on 5dfa007, #210); nothing merged after #210 has been checked from outside. |
 | Dashboard data (`dashboard.html`) | This page only | It fetches `verum-forensic-hub.liamhigh78.workers.dev`, a **separate Worker that is not in this repository**. When it does not answer, the page says so; illustrative figures exist only behind `?demo=1` and are labelled. |
 
 **How a change ships.** Edit → `node tests/run-all.js` (every suite green) and `npm run check`
 → re-splice inline copies if you touched an inlined file → pull request → merge to `main` **is**
-the deploy. Read the PR checks honestly: the **Workers Builds check fails instantly on every
-PR branch** and means nothing; the build that deploys runs on the merge commit. Confirm a
-deploy with the Cloudflare connector (`workers_list` → `webdocsol.modified_on` after the merge)
-and by opening `/api/v1/site/health`. The sandbox used by AI sessions cannot reach
-`verumglobal.foundation`, `*.pages.dev` or `*.workers.dev`; run the **live-site-probe** GitHub
-Actions workflow (`actions_run_trigger` → `get_job_logs`) to see both hosts from outside, ask the
-founder to open a URL, or read the connector.
+the deploy. Read the PR checks honestly: the **Workers Builds** check passed through #184
+(6 September), failed on every merge commit from #185 to #209 (the deploy's triggers step could
+not bind the declared zone routes and then, from #195, the Custom Domains; the code still
+uploaded), and has passed on every PR head and merge commit since #210 (27 September; GitHub
+check runs, read 3 October 2026), so a red check is now a real signal. A PR-branch build uploads
+a version; the build that deploys runs on the merge commit to `main` (branch settings are
+dashboard state, not in this repository). Confirm a deploy with the Workers Builds check on the
+merge commit and by reading `/api/v1/site/health` from outside (the probe). The connector's
+`webdocsol.modified_on` is not proof on its own: it also moves when a branch build uploads a
+version: on 3 October 2026 the connector read 00:18:48 UTC, the branch build of 72e391b (its
+Workers Builds check completed 00:18:52), with nothing merged since #213. The sandbox used
+by AI sessions cannot reach `verumglobal.foundation`, `*.pages.dev` or `*.workers.dev`; run the
+**live-site-probe** GitHub Actions workflow (`actions_run_trigger` → `get_job_logs`) to see both
+hosts from outside, ask the founder to open a URL, or read the connector. Read the log with
+`get_job_logs` (`job_id`, `return_content: true`); the built-in `gh api` cannot fetch Actions
+logs. The last probe ran on 27 September 2026 04:11 UTC, before #211–#214.
 
 **Other repositories that depend on this one.** `Liamhigh/1verum` (Android;
 `core/Constitution.kt` hard-codes `https://verumglobal.foundation/api/v1/rules/manifest` and
 pins `publicKeyId vo-master-1`; QR codes open `verify.html?h=<sha512 prefix>&m=<metadata>`)
-and `Liamhigh/firebase` (fraud-firewall; `src/core/ruleUpdate.ts` hard-codes the same manifest
-URL, `src/seal/sealMetadata.ts` the same QR). Never move those URLs or change the manifest
-shape (`worker/rule-format.md`) without changing both clients. `VERUM_OMNIS_SYSTEM_PROMPT.md`
-is meant to be identical across the three repositories — an edit here must be mirrored there.
+and `Liamhigh/firebase` (fraud-firewall; `fraud-firewall/src/core/ruleUpdate.ts` hard-codes the
+same manifest URL, `fraud-firewall/src/seal/sealMetadata.ts` the same QR; in `1verum` the QR is
+built in `seal/SealMetadata.kt`) — paths checked through the GitHub API on 3 October 2026. Never
+move those URLs or change the manifest shape (`worker/rule-format.md`) without changing both
+clients. `VERUM_OMNIS_SYSTEM_PROMPT.md` is meant to be identical across the three repositories —
+an edit here must be mirrored there. As of 3 October 2026 this copy differs from the 1verum and
+firebase copies (which match each other) in two passages added here by #189 and #199; that file
+is never edited in this repository without mirroring it, so the reconciliation is open with the
+founder.
 
-**Known state right now.**
-- **7 September 2026, 01:16 SAST — the live domain is NOT served by this Worker yet.** The
+**Known state right now.** Two parts: what is open today, then the dated history, oldest first
+(the newest entry is last).
+
+**Open today (as of 3 October 2026; true of `main` once PR #214 is merged).** Each
+item says who holds it. Live Cloudflare state is "last verified" on the date given. No live
+state has been checked from outside since the probe of 27 September 2026 04:11 UTC.
+- **Founder — the signing key.** `RULE_PRIVATE_KEY` is not on the Worker. The trainer's last run
+  (cron, 27 September 03:01 UTC) reads "skipped — no signing key on this service", so the weekly
+  run publishes nothing and the package stays v1.1.0 (published 19 July by an admin publish).
+  Last verified 27 September (probe).
+- **Founder — roll the Cloudflare API token** pasted into chat on 24 September (recorded as
+  still open on 27 September, #210; this repository cannot see whether it has been rolled).
+- **Founder — from the Public Protector run (`ENGINE.md` §12.14 "Open, with the founder"):**
+  (a) the VO-SEAL2 hash is self-referential: anyone can alter a sealed copy and re-seal it with
+  its own hash, keeping the seal ID and ORIG, and verify.html shows a match. The fix is
+  architectural (anchor or sign the sealed-file hash) and touches the verify contract, so for now
+  the copy says only what the check cannot show. (b) The reports call engine findings "verified"
+  when the single-model advisory review retained them; this is a vocabulary decision for the
+  founder. (c) H208/25: this file and the Worker's honesty clause say "in good faith and in the
+  interest of justice" records the respondent's own affidavit, while `constitution.json`,
+  `llms.txt` and `constitution.html` say the Court found the conduct good-faith. The founder holds
+  the judgment; until he rules, state neither version as the Court's finding. (d) D16 (font
+  anomaly) never fires on production blocks, which carry no line breaks; do not revive it by
+  restoring newlines. (e) A single-token trading name ("AllFuels") can never be a party, and no
+  rule ties one person to two different sites. Both are candidate rules, not shipped on one
+  example.
+- **Founder — the system prompt has drifted.** This repository's `VERUM_OMNIS_SYSTEM_PROMPT.md`
+  differs from the 1verum and firebase copies in two passages (#189, #199), and it still calls
+  the narrative "opt-in" (GitHub API, 3 October 2026).
+- **Founder — `vanessa.pdf`.** This confidential real-matter report was removed from the tree on
+  6 September (#189; no test used it). It is still in the git history of this repository, which
+  is public (GitHub API, 3 October 2026). Whether to purge the history or make the repository
+  private is his decision.
+- **Founder — the Pages project `verumglobal`** is still connected and builds every push (the
+  `Cloudflare Pages` check on every commit). It is not the origin of either host. It is the
+  Worker's last serving tier and the home of the dormant bridge, and on both hosts a path that
+  matches no file answers 200 with the home page from that tier (27 September). Disconnecting it
+  removes both.
+- **Unconfirmed since the domain moved.** Voice-note transcription was last reported failing on
+  the host with no API (6–7 September). On the 13 September re-run every court-ready narrator
+  draft failed the server gate, which is a prompt and quality question, never a reason to loosen
+  the gate. Neither has been measured since the domain moved on 27 September: the 2 and 3 October
+  runs on the live site were reviewed for their findings and wording (`ENGINE.md` §12.14,
+  §12.15), and the repository records no transcription result or narrator gate count from them.
+  On the next run, read the narrative's Authentication & Provenance page (sections written vs
+  printed, gate counts) and the voice-note report's transcription note.
+- **Not this repository's** (found 7 September): the Android app and the fraud-firewall send no
+  feedback; the Android `detectDownloadedFraudPairs` has no inside-phrase guard; the firewall
+  publishes its own manifest under the same key id; the Android app executes `pairs` only, so
+  v1.1.0's `groups` (FK13/FK14) change nothing there.
+- Deferred or not adopted, with reasons: `ENGINE.md` §12.13 ("Deferred" in item 12; "Not
+  adopted" in the paragraph that closes the section).
+
+**History, oldest first.** Each entry was the live state on its date (the last two describe PR
+#214, which is live once merged); superseded state is marked.
+- 6 September 2026: the two retired Workers (`verum-rules`, `verumglobal-static`) were deleted
+  from the dashboard; this Worker was meant to own the domain through declared routes (PRs
+  #184–#186); the 7 September probe showed it did not, and it did only from 27 September. The
+  court-ready narrative shipped (#188). The live site showed broken logos afterwards: the Worker
+  answered `/images/logo-full.png` from KV, which holds no such key, and whether the Workers
+  Builds deploy carries its static assets could not be confirmed from the sandbox — hence the
+  serving chain, the embedded images and the health endpoint. Voice-note transcription returned
+  "service error" on 6 September. Since #187 the report note names the actual failure. Cause
+  found on 7 September: the host had no API, so the call got the home page. Both hosts have
+  reached the Worker since 27 September, but no transcription has been confirmed since (now in
+  Open today).
+- 7 September 2026, 01:16 SAST — **SUPERSEDED on 27 September (see that entry): the diagnosis of
+  who held the apex was wrong.** **The live domain is NOT served by this Worker yet.** The
   `live-site-probe` workflow (two runs, five minutes apart, after the deploy that declared both
   routes) showed: the apex `verumglobal.foundation` answers **every** path — `/`, the seal page,
   both images, `/api/v1/status`, `/api/v1/site/health` — with a 1.5 KB React shell whose scripts
-  load from `3exuldgsw7sci.kimi.page` (the March design mock-up; the assets-only Worker
-  `verum-omnis-forensic-web` in the account, whose script is `export default { fetch() {} }`,
-  holds that shell and almost certainly the apex as a Custom Domain); `www` answers from the
-  Cloudflare Pages project `verumglobal` (Pages headers, `308 /seal-document.html →
-  /seal-document`, index.html for every unknown path including `/api/*`). No response on either
-  host carried `X-VO-Site-Source`. So the zone routes this Worker declared never bound.
-  Cloudflare's documented rules say why that is decisive: a route on a hostname that is another
-  Worker's Custom Domain runs *before* that Worker, so a bound route would have answered; and a
-  zone route only runs in front of a proxied DNS record it does not create. `wrangler.toml`
-  therefore now declares both hostnames as **Custom Domains** (`custom_domain = true`) — this
-  Worker is their origin, Cloudflare creates the DNS records and certificates, every deploy
-  re-asserts the binding. Consequences until the binding exists: the API does not exist on
-  either public host (the "transcription service error" is the home page HTML coming back from
-  `www`), QR verify links on the apex open the mock-up, the Android app's manifest URL returns
-  HTML, and every Workers Builds deploy uploads the code and then fails its triggers step
-  (expected). Fix, in the dashboard, once, by the founder: release the apex from
-  `verum-omnis-forensic-web` (remove its Custom Domain or delete that Worker); remove `www` from
-  the Pages project `verumglobal` and delete the leftover `www` CNAME under DNS → Records (a
-  Custom Domain cannot be created over a CNAME); then either add both Custom Domains to
-  `webdocsol` (Settings → Domains & Routes → Add → Custom Domain — immediate) or let the next
-  deploy create them. Re-run `live-site-probe` and expect `X-VO-Site-Source` on both hosts.
-  The Worker's own address `webdocsol.liamhigh78.workers.dev` is kept ON (`workers_dev = true`)
-  as a second door that does not depend on the domain: the probe checks it too, and the seal
-  page works there today. Pages carry self-canonical links to the domain.
-- 7 September 2026: **the trainer run.** The Worker curates and publishes signed rule packages
-  weekly from anonymous signals (founder direction item 13; `ENGINE.md` §12.9). It needs
-  `RULE_PRIVATE_KEY` on the Worker (present: v1.1.0 was signed there in July) and records every
-  outcome at `/api/v1/rules/changelog`. First scheduled run: Monday 03:00 UTC.
+  load from `3exuldgsw7sci.kimi.page` (the March design mock-up; the shell came from the July
+  Worker `verum-omnis-verify-production` through its zone route, found on 27 September); `www`
+  answers from the Cloudflare Pages project `verumglobal` (Pages headers, `308
+  /seal-document.html → /seal-document`, index.html for every unknown path including `/api/*`).
+  No response on either host carried `X-VO-Site-Source`. So the zone routes this Worker declared
+  never bound. Cloudflare's documented rules say why that is decisive: a route on a hostname that
+  is another Worker's Custom Domain runs *before* that Worker, so a bound route would have
+  answered; and a zone route only runs in front of a proxied DNS record it does not create.
+  `wrangler.toml` therefore then declared both hostnames as **Custom Domains** (`custom_domain =
+  true`, #195; replaced by zone routes in #210) — this Worker was to be their origin, with
+  Cloudflare creating the DNS records and certificates and every deploy re-asserting the
+  binding. Consequences recorded then, until a binding existed: the API did not exist on either
+  public host (the "transcription service error" is the home page HTML coming
+  back from `www`), QR verify links on the apex open the mock-up, the Android app's manifest URL
+  returns HTML, and every Workers Builds deploy uploads the code and then fails its triggers step
+  (expected). The Custom Domain declaration (#195) never bound: every deploy's triggers step
+  failed on the existing records until #210 declared the two zone routes the founder had
+  re-pointed.
+- 7 September 2026: the founder's first real run of the court-ready narrative (a 332-page
+  Greensky case file) came back with **no AI text in any section** — every section said
+  "(network)" — because the page was served by the host that has no API (see the 7 September
+  domain entry). The forensic report's **five findings on that file are correct, not a
+  regression**: the engine was unchanged from 22 August to that run and those five are the
+  detections `tests/greensky-regression` protects. PR #193 makes a section the narrator could
+  not write name its reason in plain words, retires the separate plain-language narrative PDF,
+  gives the narrative a contents page and sets its section budgets at the reference document's
+  depth. (The 3 October re-run, last entry below, sealed a different file: the 451-page
+  Greensky bundle the reference document was written over.)
+- 7 September 2026: the engine-update loop now closes on the website. The seal page fetches
+  `/api/v1/rules/manifest`, verifies the RSA-SHA512 signature against the pinned key, caches the
+  last verified package and applies it additively (`ENGINE.md` §12.7); the report and the
+  findings JSON name the package. The Worker serves package v1.1.0 (19 July); its two curated
+  rules (FK13/FK14) are co-occurrence `groups`, which the website now executes and the Android
+  app does not (pairs only). Fixed on the way:
+  the AI review's verdicts never pruned anything (the client looked for a `keep` field the
+  Worker never sends); AI candidates now carry a verbatim quote the page anchors in the sealed
+  text, or are labelled unanchored; CT-typed AI candidates now reach the feedback loop; the
+  report no longer calls a single Llama 3.3 70B call a "multi-model consensus". Known gaps that
+  are NOT this repository's: the Android app and the firewall send no feedback; the Android
+  `detectDownloadedFraudPairs` flags a single claim containing "not paid" as both sides of the
+  pair (no inside-phrase guard); the firewall publishes its own manifest under the same key id.
+- 7 September 2026: **Brain 9 reads the sealed text.** Founder direction: the AI must read
+  the sealed files so nothing is missed, state what it finds, and the loop must let the engine
+  catch it next time; Brain 9 verifies the model's claims are real and in the text. Built as
+  `POST /api/v1/ai/sweep` + `aiBrain9Sweep` (`ENGINE.md` §12.8) under Constitution v8 §2.10:
+  recommendations, never findings; every quote verified verbatim twice (Worker and device);
+  stated on the results panel and in an unsealed JSON; counted (pages read, logged,
+  discarded) in the sealed reports; fed to the loop as `B9_RECOMMENDATION`. Never merged into
+  sealed findings, the findings JSON or the narrative — do not "promote" them without a signed
+  rule. The website has no chat; this runs inside the seal pipeline only.
 - 7 September 2026: **two modes, no switches.** "Seal document" or "Seal document with forensic
   report"; the second runs every AI step and produces the court-ready narrative with the
   technical report automatically (founder direction item 12). The mode card is the disclosure.
+- 7 September 2026: **the trainer run.** The Worker curates and publishes signed rule packages
+  weekly from anonymous signals (founder direction item 13; `ENGINE.md` §12.9). It needs
+  `RULE_PRIVATE_KEY` on the Worker, which was absent on 27 September (the changelog's last run:
+  "skipped — no signing key on this service"; v1.1.0 was published by an admin publish on 19
+  July), and it records every outcome at `/api/v1/rules/changelog`. Schedule: `crons = ["0 3 * *
+  1"]`, which on Cloudflare (1 = Sunday) is Sunday 03:00 UTC. The 27 September run started 03:01
+  UTC, and docs and comments that say Monday are wrong.
 - 11 September 2026: **the annexure EB run and the precision release.** The founder sealed
   the 528-page AllFuels "annexure EB" bundle with a forensic report and had the outputs
   reviewed by an outside model. Two facts first: the run was made on the old Pages host, so
-  every AI leg said "NOT RUN (HTTP 405)" — the domain problem again (see the first bullet) —
-  and the engine had misquoted the record ("R231.3 Million" sealed as "R2313 Million")
+  every AI leg said "NOT RUN (HTTP 405)" — the domain problem again (see the 7 September domain
+  entry) — and the engine had misquoted the record ("R231.3 Million" sealed as "R2313 Million")
   because the extractor dropped punctuation glyphs. Shipped: verbatim glyph extraction;
   context-aware CT01/CT09/CT20/CT23/CT33/CT08/CT18; OCR provenance with consequences
   (severity cap, footer-only pages, per-page confidence); honest labels (`NOT REVIEWED`,
   "engine findings", cover banners); findings JSON v1.3.0 (additive); forensic mode refuses
   to run on a host with no API; the OCR cap asks before leaving pages unread. `ENGINE.md`
-  §12.10; suite `annexure-eb-regression.test.mjs`. The founder should re-run annexure EB on
-  the Worker address and compare the findings count before/after.
+  §12.10; suite `annexure-eb-regression.test.mjs`. The founder re-ran it on the Worker address
+  on 13 September (next entry).
 - 13 September 2026: **the re-run and the honesty release.** Re-run on the Worker: 15 engine
   findings retained, 3 AI candidates, 23 Brain 9 recommendations, the cover quote verbatim.
   The second outside review found the engine had scanned the Verum Omnis supplementary
@@ -122,8 +236,9 @@ is meant to be identical across the three repositories — an edit here must be 
   band sentences; one count everywhere; the narrator provenance line says "asked for N
   sections; no draft passed the gate"; Brain 9 neutral language; the results panel states
   original vs sealed size (the seal adds ~1–4 %; the 88 MB output was the size of the
-  OCR-rendered input). `ENGINE.md` §12.11. Still open: the court-ready narrator's drafts
-  all failed the server gate on this run — a prompt/quality question, not a gate to loosen.
+  OCR-rendered input). `ENGINE.md` §12.11. Open at the time (now in Open today): the court-ready
+  narrator's drafts all failed the server gate on this run — a prompt and quality question, not
+  a gate to loosen.
   **Hotfix the same night (PR #205):** the size line called `fmtBytes`, which lives inside
   the inlined report script's closure, so every seal on the Worker ended "Sealing Failed —
   fmtBytes is not defined" for about an hour after the deploy. The page now has its own
@@ -144,15 +259,19 @@ is meant to be identical across the three repositories — an edit here must be 
   the Worker is unreachable). `www` therefore serves the Worker's site, API and forensic
   service without any DNS change; the apex still needs the founder (release it from
   `verum-omnis-forensic-web` in the dashboard, or give this session a Cloudflare API token
-  as an environment secret). `DEPLOYMENT.md` "The bridge"; `tests/pages-bridge.test.mjs`.
+  as an environment secret). (Superseded 27 September: the apex was held by a zone route on
+  `verum-omnis-verify-production`, which the founder re-pointed; since then the zone route on
+  `www` runs before Pages and the bridge is dormant.) `DEPLOYMENT.md` "The bridge";
+  `tests/pages-bridge.test.mjs`.
 - 27 September 2026: **the domain, resolved.** The apex was held by the zone route
   `verumglobal.foundation/*` on the July Worker `verum-omnis-verify-production` (not by a
   Custom Domain, which is why the dashboard showed none to remove). The founder re-pointed
   it to `webdocsol` and added `www.verumglobal.foundation/*`; no DNS change. Both hostnames
   now serve the Worker directly; `wrangler.toml` declares those two routes. Lesson: read the
   zone's Workers Routes page before theorising about Custom Domains, and print small bodies
-  whole in the probe. Still with the founder: `RULE_PRIVATE_KEY` on the Worker (the trainer
-  skipped again on 27 September), rolling the API token pasted into chat on the 24th.
+  whole in the probe. Still with the founder (now in Open today): `RULE_PRIVATE_KEY` on the
+  Worker (the scheduled run of Sunday 27 September, 03:01 UTC, was skipped: "no signing key on
+  this service"), and rolling the API token pasted into chat on the 24th.
 - 27 September 2026, later: **the evidence-bundle-2-docs run.** An outside review of a
   sealed 68-page bundle of previously sealed exhibits found three false findings (CT02 on
   "R116" vs "R 8000" across two customers' letters; CT18 on a case reference and two mobile
@@ -165,9 +284,9 @@ is meant to be identical across the three repositories — an edit here must be 
   ("amount") across two exhibits is not one figure, and a footer that names this platform
   is not a report. The one finding that survives on that bundle is real: a lookalike
   domain, `standandbank.co.za`, on p.48.
-- 1 October 2026: **the evidence-bundle-4-docs run.** A 651-page bundle of previously sealed
-  exhibits sealed with the report and the narrative; an outside review could support one of
-  44 findings. The engine's own seal footer was the largest cause (25 "impossible date"
+- 1 October 2026: **the evidence-bundle-4-docs run (PR #212, merged 2 October).** A 651-page
+  bundle of previously sealed exhibits sealed with the report and the narrative; an outside
+  review could support one of 44 findings. The engine's own seal footer was the largest cause (25 "impossible date"
   findings from "30/09/2026 15:41:47" read as "0/09/2026"; timeline rows on the seal date):
   `voStripSealFurniture` now removes the platform's footers before detection, after the
   document boundaries have been read from them. Also: OCR variants of clean registration
@@ -178,79 +297,111 @@ is meant to be identical across the three repositories — an edit here must be 
   FRANCHISE_LEASE matrix category, candidate law trimmed by finding type, "cannot be changed"
   replaced by "any change is detectable", reduced-weight findings counted apart.
   `ENGINE.md` §12.13; `tests/annexure-eb-regression.test.mjs` §17 (213 assertions).
-- 7 September 2026: **Brain 9 reads the sealed text.** Founder direction: the AI must read
-  the sealed files so nothing is missed, state what it finds, and the loop must let the engine
-  catch it next time; Brain 9 verifies the model's claims are real and in the text. Built as
-  `POST /api/v1/ai/sweep` + `aiBrain9Sweep` (`ENGINE.md` §12.8) under Constitution v8 §2.10:
-  recommendations, never findings; every quote verified verbatim twice (Worker and device);
-  stated on the results panel and in an unsealed JSON; counted (pages read, logged,
-  discarded) in the sealed reports; fed to the loop as `B9_RECOMMENDATION`. Never merged into
-  sealed findings, the findings JSON or the narrative — do not "promote" them without a signed
-  rule. The website has no chat; this runs inside the seal pipeline only.
-- 7 September 2026: the engine-update loop now closes on the website. The seal page fetches
-  `/api/v1/rules/manifest`, verifies the RSA-SHA512 signature against the pinned key, caches the
-  last verified package and applies it additively (`ENGINE.md` §12.7); the report and the
-  findings JSON name the package. The Worker serves package v1.1.0 (19 July); its two curated
-  rules (FK13/FK14) are co-occurrence `groups`, which the website now executes and the Android
-  app does not (pairs only). Fixed on the way:
-  the AI review's verdicts never pruned anything (the client looked for a `keep` field the
-  Worker never sends); AI candidates now carry a verbatim quote the page anchors in the sealed
-  text, or are labelled unanchored; CT-typed AI candidates now reach the feedback loop; the
-  report no longer calls a single Llama 3.3 70B call a "multi-model consensus". Known gaps that
-  are NOT this repository's: the Android app and the firewall send no feedback; the Android
-  `detectDownloadedFraudPairs` flags a single claim containing "not paid" as both sides of the
-  pair (no inside-phrase guard); the firewall publishes its own manifest under the same key id.
-- 7 September 2026: the founder's first real run of the court-ready narrative (a 332-page
-  Greensky case file) came back with **no AI text in any section** — every section said
-  "(network)" — because the page was served by the host that has no API (previous bullet).
-  The forensic report's **five findings on that file are correct, not a regression**: the
-  engine is unchanged since 22 August and those five are the detections
-  `tests/greensky-regression` protects. PR #193 makes a section the narrator could not write
-  name its reason in plain words, retires the separate plain-language narrative PDF, gives the
-  narrative a contents page and sets its section budgets at the reference document's depth.
-- 6 September 2026: the two retired Workers (`verum-rules`, `verumglobal-static`) were deleted
-  from the dashboard; this Worker owns the domain (PRs #184–#186). The court-ready narrative
-  shipped (#188). The live site showed broken logos afterwards: the Worker answered
-  `/images/logo-full.png` from KV, which holds no such key, and whether the Workers Builds
-  deploy carries its static assets could not be confirmed from the sandbox — hence the serving
-  chain, the embedded images and the health endpoint.
-- The Cloudflare Pages project `verumglobal` is still connected to the repo and builds every
-  push, but its production deployment is stale and it is **not** the origin the site is served
-  from. The founder can disconnect it or point its production branch at `main`.
-- Voice-note transcription returned "service error" on 6 September; since #187 the report note
-  names the actual failure. Root cause still open — the next report PDF will say.
-- `vanessa.pdf`, a confidential real-matter report, was removed from the tree on 6 September
-  (no test used it); it remains in git history of this public repository until the founder
-  decides on a history purge or private visibility.
+- 2 October 2026, morning: **critique round two on the evidence-bundle-4 rules (PR #213).** The
+  eleven critics that had not run, then a verification pass over the fold-in. The primary record
+  is never a secondary source. Engine notes are returned structurally and printed with their
+  page (`contextNotes`), never as findings. A contradiction anchored only on OCR-recovered pages
+  is held below serious (`ocrHeld`, severity 3) until a person reads the page image. Every count
+  tells OCR-anchored and secondary-source findings apart (`voCountPhrase`). There is no
+  immutability claim, and the report says "anchored to the Bitcoin blockchain" only once the
+  proof is confirmed (`anchorPhrase`). The verbatim columns print every passage the record states
+  and mark the engine's computations as its own (`anchorQuotes`). Review-dropped findings leave
+  the timeline and the person index. Findings JSON v1.4.0 adds `secondary_capped` and
+  `ocr_anchored`, and v1.5.0 adds `ocr_held`. `ENGINE.md` §12.13 items 11–12;
+  `tests/annexure-eb-regression.test.mjs` §17.
+- 2 October 2026: **the Public Protector submission run** (PR #214, live from its merge; `ENGINE.md` §12.14). The
+  founder sealed his own 20-page submission to the DMPR's Director-General and the NDPP with the
+  forensic report, the court-ready narrative and the anchor certificate. All three sealed
+  findings were false. CT14 read "compliant" inside "non-compliant". CT37 read two genuine
+  domains of one renamed department, dmre.gov.za and dmpr.gov.za, as a lookalike. CT23 read the
+  plural "unsigned agreements" in the author's allegation as one unsigned instrument. The reports
+  attributed the author's words to a company named on the page, filed the unsigned-agreement
+  sentence under forgery law and lost the record's own quotation marks. A three-lens review, then
+  a five-lens adversarial verification pass, found the rest. Shipped, in the engine: a party's
+  submission that cites other Verum seals is a secondary source (leads, never findings) up to the
+  first page that opens a new record, and a captioned pleading is never a submission
+  (`voSubmissionSpan`). Only domains under restricted government suffixes are exempt from CT37.
+  A category plural skips CT23, but specific plural instruments still fire. A labelled "Date:" on
+  a document's first page later than the analysis day is an engine note: the seal page passes
+  the instant in (`opts.referenceTime`; the engine never reads the clock), and findings JSON
+  1.6.0 records it as `analysis_reference_utc`. Quotes are read nesting-aware. In the reports: a
+  finding concerns a party only when the Case details declare that party and the finding's own
+  words name it (`declaredPartyFor`; a person is named by the whole name or by an initial and
+  the surname, never by a shared surname alone), and a counter-narrative quotes a party only when
+  that party is the speaker (`speakerOf`). There is one F#/P# numbering (`humanNumberable`). The
+  unsigned-agreement shape is a contract question, "Unsigned Agreement Stated". The Nine-Brain
+  blocks keep the §15.4 template's headers ("TAMPER FOUND", "COMMUNICATION GAP FOUND"), each with
+  a Finding line stating the measured fact; kinds no block describes (an unsigned-agreement
+  statement, a legal-reference check CT33, a procedure check CT35, a lookalike domain CT37) are
+  named apart instead of under "TAMPER FOUND". When no AI-written section passed the gates, the
+  narrative's cover and certification call it the deterministic record. There is no scorecard,
+  no "liabilities", no severity column and no confidence band. In the Worker: the four-pillars
+  gate holds every pillar claim to the elements table's types, so knowledge and inducement or
+  reliance appear only as INSUFFICIENT, and the court-recognition ban is broadened (statutory
+  "admissible" is kept). The anchor certificate labels each fingerprint by its bytes, prints the
+  delivered file's real SHA-512, says the Bitcoin block proves existence no later than its time,
+  and never claims a permanent record before Bitcoin confirms. verify.html recognises the
+  certificate (`ANCHOR-CERT|`), never lets a certificate subject override a seal it found, and
+  reads an OTS-format footer as "Seal Present". Open items (a)–(e): see Open today. Tests:
+  `tests/annexure-eb-regression.test.mjs` §18 (83 assertions), §18i (29, the verification pass)
+  and §18j (9, the last verification items of 3 October), `tests/worker.test.mjs` (the pillar
+  gate, the court language, the template) and `tests/human-report.test.mjs` (the pillar map
+  against the elements table).
+- 3 October 2026: **the Greensky re-run** (the same PR #214, live from its merge; `ENGINE.md` §12.15). The founder sealed
+  the 451-page Greensky bundle on the live site (report VO-WEB-20261003-0222): 19 findings, of
+  which at least 17 were wrong. Fourteen "Impossible date" findings were the commodity-code
+  tokens 15.20.9094 and 15.20.9115 on transport invoice pages; D03 now reads a date-shaped token
+  as a date only when its year field lies within 1200–2200 (31/02/2021 still fires), and
+  identical impossible tokens are one finding naming every page. An AI case summary bound into
+  the bundle ("Forensic Finding:** This is an explicit admission of guilt") was sealed as the
+  record's admission; a sentence that calls another statement an admission is now a
+  characterisation (`VO_ADM_CHARACTERISATION_RE`), and pages carrying chat-style markdown are
+  secondary wherever they sit (`voMarkdownAnalysisPages`). "Timestamp Manipulation" and
+  "Metadata Contradiction" were this platform's own seal pass; a file wearing the seal footers
+  is now treated as sealed here (`sealedByThisPlatform`), the XMP-against-Info comparison is
+  suppressed and the suppression disclosed. "Forensic Finding" and role phrases such as "General
+  Manager" are never parties. In the report: the cover and SEALED FINDINGS now agree (file-level
+  findings, numbered P#, are counted beside the page-anchored ones); CT39, CT29 and CT24 carry
+  their own wording, and CT39 is never rendered as a B1 contradiction; identical plain-words lines
+  collapse into one bullet naming every page. Tests: `tests/greensky-regression.test.js` §9. With
+  both runs, PR #214 stands at 33 suites and 2535 assertions.
 
 **What must never be done.** The founder rulings and the seven regressions below; the §15.2
 language gate and the PD2 anchor gate are never loosened; no secret is ever committed; no
 `Date.now()` / `Math.random()` in an analysis path; no regex lookbehind; the inline copies are
 never "de-duplicated"; the rules-manifest URL and the QR verify URL never move; no court is
-ever described as having adopted, endorsed or validated anything. Read the bible for the area
-before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md` (shipping and serving),
-`REFERENCE.md` (every file and endpoint), `FORENSIC-DEBUG.md` (what a failure looks like).
+ever described as having adopted, endorsed or validated anything; a seal or a record is
+tamper-evident, never permanent, immutable or unalterable, and "anchored to the Bitcoin
+blockchain" is written only once the OpenTimestamps proof is confirmed, and then only to say the
+file existed no later than that block (`anchorPhrase`); D16 is never revived by restoring
+newlines; the optional Case details "Parties" field never becomes a required input. Read the
+bible for the area before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md`
+(shipping and serving), `REFERENCE.md` (every file and endpoint), `FORENSIC-DEBUG.md` (what a
+failure looks like).
 
 ## Quick facts
-- Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets.
-- Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js`.
+- Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets. A Pages Function, `functions/[[path]].js`, runs only on the Pages project and has been dormant since 27 September.
+- Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.3.5-web`); findings JSON 1.6.0 (adds `analysis_reference_utc`; 1.5.0 added `ocr_held`).
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **33 suites, 2324 assertions**, **must be green before any push**. Many exist only to stop specific regressions; see `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **33 suites, 2535 assertions** (counted 3 October 2026), **must be green before any push**. Many exist only to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
 
 ## The stakes — read this before anything else
 
-**The platform's output is now evidence in live proceedings.** Sealed documents and forensic
-reports produced by this code sit in the record of the Constitutional Court of South Africa
-(rescission, CCT237/20 & CCT19/20), the KwaZulu-Natal High Court (2026-179949), SAPS and Hawks
-dockets, and served evidence schedules whose SHA-512 values opposing senior counsel have been
-invited to verify. That means:
+**The platform's output is now evidence in live proceedings.** As recorded on 22 August 2026
+(#173), from the founder: sealed documents and forensic reports produced by this code have been filed in the
+Constitutional Court of South Africa (rescission, CCT237/20 & CCT19/20), in a KwaZulu-Natal High
+Court matter (2026-179949), in SAPS and Hawks dockets, and in served evidence schedules whose
+SHA-512 values opposing senior counsel have been invited to verify. The repository holds no
+record of the High Court filing. Filing is not a ruling: none of those forums has ruled on Verum
+Omnis. The rule below that no High Court is among the courts of record concerns where the
+Constitution itself was placed, and it stands. That means:
 
 - **A regression is not a bug — it is a discrepancy an opposing expert can put to a judge.**
-  Determinism (same input → same findings, forever) has been demonstrated in the field and is
-  now part of the platform's credibility in court. Any change that could make two runs differ
+  Determinism (same input → same findings on every run) is what lets anyone, an opposing expert
+  included, reproduce a finding; the founder reports it has been shown in the field. Any change that could make two runs differ
   is a constitutional breach, not a refactor.
 - **The honesty locks are load-bearing.** The §15.2 language gate, the institutional-engagement
   clause, the never-write list below — these exist because overstated claims were found and
@@ -293,9 +444,9 @@ Each was a real failure the founder reported. Read `ENGINE.md` before touching a
 
 Recorded so no session or external review re-litigates them:
 
-1. **§15.4 governs the report format.** The report generator is to be rebuilt
-   to the seven-section narrative template (Critical Legal Subjects,
-   Dishonesty Detection Matrix, Nine-Brain Extraction Findings, Triple
+1. **§15.4 governs the report format.** The report generator (`forensic-report.js`) was
+   rebuilt to the seven-section narrative template, whose sections lead Part 2 of the report
+   (Critical Legal Subjects, Dishonesty Detection Matrix, Nine-Brain Extraction Findings, Triple
    Verification Summary, Sealed Findings, Verdict Reservation, Certification),
    with today's additional sections (timeline, person index, evidence
    appendix, statutory anchoring, …) preserved as ANNEXES after Section 7.
@@ -319,7 +470,9 @@ Recorded so no session or external review re-litigates them:
    which findings cross between them), "THE SHORT VERSION" (one line per
    finding), "THE STORY IN PLAIN LANGUAGE", "PAGES THE ENGINE COULD NOT
    READ" (every unread page named, with its reason and a human-review
-   instruction), then "WHY THIS RECORD CANNOT BE ALTERED" — and only THEN
+   instruction), then "HOW ANY CHANGE TO THIS RECORD IS DETECTED" (renamed from "WHY THIS RECORD
+   CANNOT BE ALTERED" on 2 October 2026, #213: a hash makes tampering detectable, it does not
+   prevent it) — and only THEN
    the table of contents and the §15.4 sections 1-7 with their annexes.
    The first pages of both report documents state that the findings are
    the output of deterministic forensic software — fixed detection rules,
@@ -340,6 +493,13 @@ Recorded so no session or external review re-litigates them:
    party. Jurisdiction likewise (ruling 6). A report that prints "No parties
    were supplied" above a finding naming someone is a bug, not a
    configuration problem — do not add a form field to "fix" it.
+   Since 2 October 2026 (`ENGINE.md` §12.14 item 4): the party index and the names on the cited
+   pages still come from `anchor.who`, but a finding is said to *concern* a party, and a
+   counter-narrative quotes a party, only when that party is declared in the optional Case
+   details "Parties" field (`casePartiesInput`) and named in the finding's own words
+   (`declaredPartyFor`, `partyStronglyNamed`, `speakerOf`). Otherwise the names on the page are
+   stated descriptively ("Named on the cited page (descriptive, not an attribution)"). The field
+   stays optional.
 8. **The engine finds contradictions, not repetitions.** Consolidating more
    documents into one bundle does not, by itself, turn a repeated pattern
    into an anchored finding — it can only surface a finding where two
@@ -373,7 +533,11 @@ decisions below are binding on every later change:
    sealed record does not contain.
 3. **Two gates, never loosened.** The worker's `humanGate` (no anchor, no
    sentence; anchors verified in every spelling; quotations verified; §15.2
-   language; overstated court history; "perjury" outside candidate law;
+   language; overstated court history; court-recognition paraphrases (statutory
+   "admissible" and "court-appointed" excepted); the four-pillars rule — a pillar cites
+   only a finding whose type evidences it, knowledge and inducement or reliance are
+   written only as INSUFFICIENT, a held finding evidences nothing (`gate.pillar`);
+   "perjury" outside candidate law;
    headings gated) and the render-time `scrubNarrative` → `voGatePasses` gate
    (headings gated). A section that loses either prints its deterministic twin
    labelled as not machine-written. "Better-sounding prose" is not a reason to
@@ -396,11 +560,13 @@ decisions below are binding on every later change:
    fallback; an external OpenAI-compatible provider only through the three
    `LLM_*` secrets, never committed.
 
-### Founder direction (2026-09-07) — after the first real run (Greensky, 332 pages)
+### Founder direction (2026-09-07 to 2026-09-13) — after the first real run (Greensky, 332 pages) and the runs that followed
 
 The founder ran a 332-page Greensky case file and read the three PDFs against
-the reference "forensic goal" document. Decisions (PR #193), binding like the
-seven above:
+the reference "forensic goal" document. Decisions (items 8–11 PR #193; 12 PR #200;
+13 PR #201; 14 PR #203; 15 PR #204), binding like the seven above. No founder
+direction has been numbered since item 15; later runs (27 September – 3 October) are
+recorded in the history and in `ENGINE.md` §12.12–§12.15.
 
 8. **One narrative, not two.** The plain-language narrative PDF (the
    standalone `buildNarrative` download) is retired from the seal page: the
@@ -474,7 +640,7 @@ The record, stated exactly:
 
 | Forum | Reference | What actually happened |
 |---|---|---|
-| Constitutional Court of South Africa | CCT237/20 & CCT19/20 | v6.0 **filed**; receipt acknowledged by the Registrar's office. Notice to oppose filed. **No ruling on the merits.** |
+| Constitutional Court of South Africa | CCT237/20 & CCT19/20 | Application **filed** (founding affidavit 23 June 2026, `constitution.json`); receipt acknowledged by the Registrar's office on 9 July 2026. Notice to oppose filed. **No ruling on the merits.** Which Constitution version was filed is open with the founder: `constitution.html` and `constitution.json` name v6.0, whose seal is dated 14 July 2026, after the acknowledgement. |
 | Port Shepstone **Magistrate's** Court | H208/25 | A sealed case file was **placed before the Court and relied upon** — not excluded, struck out, or challenged on admissibility. The application was **dismissed** (harassment not proved) and the Court made **no finding on Verum Omnis**; both parties were unrepresented. |
 
 **Never write, and never let a prompt imply:** that a court has adopted,
@@ -527,8 +693,12 @@ sealed file was **placed before the Court and not challenged** — nobody ruled
 either way. "Placed before the Court and relied upon; not excluded, struck out
 or challenged on admissibility" is the long way round, and it is the only
 version that survives being checked. Use it.
-The phrase *"in good faith and in the interest of justice"* in the H208/25
-judgment records the **respondent's own affidavit**, not a finding by the Court.
+The phrase *"in good faith and in the interest of justice"* in H208/25: this file and the
+Worker's honesty clause (locked by `tests/worker.test.mjs`) say it records the **respondent's own
+affidavit**, not a finding by the Court; `constitution.json`, `llms.txt` and `constitution.html`
+say the Court found the conduct good-faith. Open with the founder since 2 October 2026
+(`ENGINE.md` §12.14 (c)); he holds the judgment. Until he rules, do not attribute the phrase to
+the Court anywhere new, and do not edit either side to match the other.
 The Daubert / ECT Act / ISO 27037 analysis is a **Legal Expert Report**; no
 tribunal has found those standards met.
 
@@ -546,6 +716,8 @@ file was "accepted into court record" and "recognized as admissible" were
 removed. Do not let them back.
 
 - All verification happens at `verify.html` (the Verification Hub). No surface verifies locally.
-- Deploys automatically on push to `main` (Worker via Workers Builds, site via Pages).
+- Deploys automatically on merge to `main`: Workers Builds ships the Worker and the site together
+  (the site is the Worker's static assets since #186). The Pages project still builds every
+  push, but it is the origin of neither host; it answers only as the Worker's last tier.
 - Published documents must never mention any particular attorney's access
   arrangements. Check before publishing anything reader-facing.

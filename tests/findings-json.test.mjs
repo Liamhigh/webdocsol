@@ -44,7 +44,9 @@ const result = {
 };
 const json = buildFindingsJson(result, 'bundle.pdf', 'a'.repeat(128), 100, { caseName: 'Greensky' });
 
-ok(json.findings_json_version === '1.5.0', 'contract version bumped to 1.5.0 (additive ocr_held; 1.4.0 added secondary_capped / ocr_anchored; 1.3.0 added review_status / ocr_provenance / ocr_confidence / severity_capped_for_ocr)');
+ok(buildFindingsJson(Object.assign({}, result, { referenceTime: '2026-10-02T20:11:36.233Z' }), 'bundle.pdf', 'a'.repeat(128), 100, {}).analysis_reference_utc === '2026-10-02T20:11:36.233Z' && json.analysis_reference_utc === null,
+  'analysis_reference_utc records the instant the engine was given (null when none), so the dated-after note is reproducible');
+ok(json.findings_json_version === '1.6.0', 'contract version bumped to 1.6.0 (additive analysis_reference_utc; 1.5.0 added ocr_held; 1.4.0 added secondary_capped / ocr_anchored; 1.3.0 added review_status / ocr_provenance / ocr_confidence / severity_capped_for_ocr)');
 
 // The page block must not redeclare the engine's voCtById(id): two same-named
 // declarations share one global, the later (no-arg) one won, voStatement got a

@@ -1,8 +1,15 @@
 # Verum Omnis — Canonical Design Token Specification
 
 Extracted verbatim from the production site (`index.html`, `seal-document.html`, `verify.html`,
-`constitution.html`, `documents-resources.html` at verumglobal.foundation).
-This is the single source of truth for porting the look to Android Compose and desktop web.
+`constitution.html`, `documents-resources.html`; `dashboard.html` and `verify-data.html` use the
+same palette; `preview-index.html` and `preview-documents.html` are staging previews).
+The same tokens are in **`verum-ui.css`** as `--vo-*` custom properties and `.vo-*` component
+classes; the token names below are those properties without the `--vo-` prefix. The site's pages
+do not link `verum-ui.css`: each carries an inline `<style>` with these values, and the file is
+served at `/verum-ui.css` for other surfaces. A token change must be made in the pages, here and
+in `verum-ui.css`. This is the single source of truth for token values when porting the look to
+Android Compose and desktop web; `DESIGN_LOCK.md` is the no-regression rule for the seal and
+verify pages.
 
 **The theme is permanently dark navy. There is no light mode.** Every surface sits on deep navy;
 gold is the brand/emphasis color; desaturated blue is the "chrome" color (labels, links, secondary
@@ -75,7 +82,7 @@ banner gradient start), `rgba(74,126,199,0.35)` (borders), glow `rgba(74,126,199
 
 | Token | Hex | Usage |
 |---|---|---|
-| `offwhite` | `#F8F9FA` | Headings, strong text, link hover, input text. NEVER pure white for text. |
+| `offwhite` | `#F8F9FA` | Headings, strong text, link hover, input text. NEVER pure white for text (one existing exception: the pipeline error-step glyph, white on `#ef4444`, `.step .status.error` in seal-document.html). |
 | `body` | `#D5D8DD` | Default body text (body color on every page) |
 | `muted` | `#94a3b8` | Muted descriptions (doc-card p, mode-card span, helper notes) |
 | `muted-note` | `#8ea3b5` | OTS receipt note (seal page) |
@@ -105,8 +112,8 @@ Three families, strict roles:
 | Role | Stack | Where |
 |---|---|---|
 | **Display serif** | `'Cormorant Garamond', Georgia, serif` | ALL headings (h1–h4, card titles, stat numbers, quotes). Light weights: 300 for page h1 / big numerals, 400–500 for card & section headings. Italic for quotes. |
-| **Mono** | `'JetBrains Mono', 'Courier New', monospace` (index/docs load JetBrains Mono; seal/verify/constitution use plain `'Courier New', monospace`) | ALL labels, kickers, nav links, buttons, hashes, values, table headers, footers — the "forensic metadata" voice. |
-| **Body sans** | `'Segoe UI', system-ui, -apple-system, sans-serif` (index: `'Source Sans 3'` first) | Body copy, descriptions, inputs. |
+| **Mono** | `'JetBrains Mono', 'Courier New', monospace` (documents-resources: `'JetBrains Mono', 'Courier New', monospace`; index: `'JetBrains Mono', ui-monospace, SFMono-Regular, monospace`; seal/verify/constitution: plain `'Courier New', monospace`) | ALL labels, kickers, nav links, buttons, hashes, values, table headers, footers — the "forensic metadata" voice. |
+| **Body sans** | `'Segoe UI', system-ui, -apple-system, sans-serif` (index: `'Source Sans 3', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif`) | Body copy, descriptions, inputs. |
 
 ### 2.1 The mono-label convention (load-bearing, use everywhere)
 
@@ -154,7 +161,8 @@ Body defaults: `-webkit-font-smoothing: antialiased; line-height: 1.6;`
   (Index starts at `rgba(4,13,27,0.6)` and darkens to `0.85` after scroll.)
 - `border-bottom: 1px solid rgba(26,46,82,0.5)`.
 - Inner row: `max-width 1200px` (index 1400px), auto-centered, `height 100%`, flex,
-  `align-items:center; justify-content:space-between`, `padding: 0 clamp(1.5rem, 5vw, 4rem)`.
+  `align-items:center; justify-content:space-between`, `padding: 0 clamp(1.5rem, 5vw, 4rem)`
+  (index `0 clamp(1rem,3vw,2rem)`).
 - Logo: image `height 40px; width auto` (left).
 - Link cluster (right): flex, `gap: 32px`. Links: mono 12px, uppercase, ls `0.1em`,
   color `#4A7EC7`, no underline, `transition: color 0.3s`; hover `#F8F9FA`; **active page
@@ -162,7 +170,7 @@ Body defaults: `-webkit-font-smoothing: antialiased; line-height: 1.6;`
 - Optional CTA slot: outline button `1px solid #4A7EC7`, text `#4A7EC7`, `padding 10px 20px`,
   radius 6px; hover border+text `#D4A843`. Gold CTA variant: `#D4A843` fill, `#040D1B` text,
   600 weight; hover `#E8C567` + `box-shadow 0 0 20px rgba(212,168,67,0.3)`.
-- Mobile (≤768px): link cluster hidden (index swaps to full-screen navy menu + hamburger).
+- Mobile: on app pages the link cluster is hidden at ≤768px; index shows its links only from 1100px up and below that swaps to a full-screen navy menu + hamburger.
 - Page content clears the bar with ~80–100px top margin on the first block.
 
 ### 3.2 Card (`.card` / `.identity-card`)
@@ -190,7 +198,7 @@ Body defaults: `-webkit-font-smoothing: antialiased; line-height: 1.6;`
 
 ### 3.4 Gold CTA button (`.pdf-cta` / `.seal-btn` / `.btn-primary` / index `.btn-gold`)
 
-- Fill: `linear-gradient(135deg, #D4A843 0%, #b8942a 100%)` (app pages) or flat `#D4A843` (index).
+- Fill: `linear-gradient(135deg, #D4A843 0%, #b8942a 100%)` (seal, constitution) or flat `#D4A843` (index; verify `.btn-primary`, hover `#c49a3a`).
 - Text: **`#040D1B`** (navy-on-gold, never white), mono, 13px (index 0.8rem), weight 600
   (index 500), uppercase, ls `0.08em` (index `0.1em`).
 - Padding `16px 40px` (large CTA), `18px` full-width (seal-btn), `14px 32px` (.btn),
@@ -230,6 +238,10 @@ Body defaults: `-webkit-font-smoothing: antialiased; line-height: 1.6;`
 - Canonical copy pattern, two lines:
   `Verum Omnis Foundation — Patent Pending` /
   `Constitution v6.0 Final — Article X Non-Weaponization Doctrine`.
+  This is the copy the pages carry today (seal-document.html, documents-resources.html). It names
+  v6.0, the version filed with the Constitutional Court; the governance charter is v8.0 and the
+  engine's operating instrument is v6.1 (constitution.html). Whether the footer should change is
+  open with the founder.
 - Muted variant (verify/constitution): `#D5D8DD` at `opacity 0.5`, 0.8rem.
 
 ### 3.8 Table (`.ctable` / index `.charges`)

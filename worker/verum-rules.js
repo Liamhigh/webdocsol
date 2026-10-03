@@ -1262,26 +1262,35 @@ async function handleAiSweep(request, env) {
 // still sends for ordering and are never printed. Counts are stated by tier:
 // engine-verified findings and AI-raised candidates are never one number.
 function narrateTemplate(input, kept) {
-  const top = kept.slice(0, 3);
-  const engineKept = kept.filter(f => !/AI-RAISED/i.test(String(f.status || ''))).length;
-  const aiKept = kept.length - engineKept;
+  // Only engine findings are quoted and stated as fact: an AI-raised candidate
+  // is pending verification, and a P# item (a serial pattern or a page-less
+  // finding the narrative list leaves unnumbered) is not an [F#] finding.
+  const isCand = f => /AI-RAISED/i.test(String(f.status || ''));
+  const isPattern = f => /^P\d/.test(String(f.id || ''));
+  const engine = kept.filter(f => !isCand(f) && !isPattern(f));
+  const top = engine.slice(0, 3);
+  const engineKept = engine.length;
+  const aiKept = kept.filter(isCand).length;
+  const patternKept = kept.filter(f => !isCand(f) && isPattern(f)).length;
   let executiveSummary =
     'The document "' + input.documentName + '" (' + input.pageCount + ' page(s)) was analysed by the ' +
     'Verum Omnis contradiction engine on ' + input.generatedUtc + '. ' +
     (kept.length
       ? (engineKept + ' engine-verified finding' + (engineKept === 1 ? '' : 's') +
          (aiKept ? ' and ' + aiKept + ' AI-raised candidate' + (aiKept === 1 ? '' : 's') + ' (advisory, pending verification)' : '') +
-         (aiKept ? ' were' : (engineKept === 1 ? ' was' : ' were')) + ' supplied for narrative reporting. ')
+         (aiKept ? ' were' : (engineKept === 1 ? ' was' : ' were')) + ' supplied for narrative reporting. ' +
+         (patternKept ? patternKept + ' further item' + (patternKept === 1 ? '' : 's') + ' (a pattern or a finding without a page) ' + (patternKept === 1 ? 'is' : 'are') + ' listed in the report, not quoted here. ' : '') +
+         (aiKept ? 'AI-raised candidates are not quoted here. ' : ''))
       : 'No findings were supplied for narrative reporting. ') +
     (input.findingsPruned > 0 ? input.findingsPruned + ' candidate(s) were pruned as benign before this narrative. ' : '');
   if (top.length) {
-    executiveSummary += 'The most significant retained findings are identified as ' +
-      top.map(f => '[' + f.id + ']').join(', ') + ' and are set out in the critical-evidence narrative. ';
-  } else {
-    executiveSummary += 'No findings were retained for narrative reporting. ';
+    executiveSummary += 'The highest-ranked engine findings supplied are identified as ' +
+      top.map(f => '[' + f.id + ']').join(', ') + ' and are quoted below. ';
+  } else if (kept.length) {
+    executiveSummary += 'No engine finding is quoted in this summary. ';
   }
   executiveSummary += 'This summary states only facts present in the supplied findings and quantifies ' +
-    'nothing beyond them. ' + CLOSING_SENTENCE;
+    'nothing beyond them. ' + (top.length ? CLOSING_SENTENCE : 'The verdict on any named person is for the court.');
 
   let criticalEvidence;
   if (top.length) {
@@ -1289,14 +1298,17 @@ function narrateTemplate(input, kept) {
       // Typographic quotes around the evidence: a finding's own text may
       // begin with a straight-quoted word ("amount" is stated as …), and
       // nesting straight quotes desynchronised the report's sentence gate.
-      'Finding ' + f.id + ' (' + f.type + ', severity ' + f.severity + '), recorded at ' +
+      // No severity number in reader-facing text: the report states that
+      // no band or score is printed, and the order carries the rank.
+      // No raw engine code in reader-facing text ("Translate every code").
+      'Finding ' + f.id + ', recorded at ' +
       (f.location || 'an unspecified location') + ', states: \u201c' + f.evidence + '\u201d [' + f.id + '].'
     ).join(' ') +
-      ' The findings quoted above are the highest-severity findings established in the sealed record. ' +
+      ' The findings quoted above are the highest-ranked engine findings supplied for narrative reporting. ' +
       'No facts beyond the supplied findings are asserted. ' + CLOSING_SENTENCE;
   } else {
-    criticalEvidence = 'No findings were supplied for narrative reporting and no factual claims can ' +
-      'therefore be made. ' + CLOSING_SENTENCE;
+    criticalEvidence = 'No engine finding was supplied for narrative reporting, so no factual claims are made. ' +
+      'The verdict on any named person is for the court.';
   }
   return { executiveSummary, criticalEvidence };
 }
@@ -1511,6 +1523,8 @@ const HUMAN_SECTION_RULES = {
     'Section: FOUR PILLARS OF FRAUD. 200-450 words.\n' +
     'Pillars: misrepresentation; knowledge; inducement or reliance; loss.\n' +
     'Per pillar: what the record evidences, anchored [F#] (p. N).\n' +
+    'Cite under a pillar only a finding whose type evidences it: misrepresentation takes a contradiction of the record; loss takes a financial finding.\n' +
+    'Knowledge, and inducement or reliance: no engine finding evidences them; write INSUFFICIENT.\n' +
     'A pillar the record does not evidence: write INSUFFICIENT.\n' +
     'Intent is for the court. Never a person-level verdict.',
   critical_evidence:
@@ -1657,7 +1671,12 @@ const HUMAN_BANNED_RES = [
   /\bhow\s+to\s+(?:read|use)\s+this\s+report\b/i,
   /\b(?:committed|is\s+guilty\s+of|has\s+committed)\s+(?:fraud|perjury|theft|a\s+crime|an?\s+offence)\b/i,
   // institutional-engagement honesty (AGENTS.md): no court adopted, accepted, found or ruled on anything
-  /court[- ]recogni[sz]ed|judicially\s+validated|\baccepted\b[^.]{0,40}\b(?:as\s+evidence|into\s+(?:the\s+)?record|as\s+proof|as\s+admissible)\b|\baccepted\s+by\s+(?:the\s+|a\s+)?courts?\b|reassessed\s+as\s+criminal|charges?\s+(?:has|have)\s+been\s+laid|verified\s+charge|\bhigh\s+court\b|\bcourts?\s+(?:adopted|endorsed|validated|accredited|accepted|recogni[sz]ed|found|held|ruled|determined)\b/i
+  /court[- ]recogni[sz]ed|judicially\s+validated|\baccepted\b[^.]{0,40}\b(?:as\s+evidence|into\s+(?:the\s+)?record|as\s+proof|as\s+admissible)\b|\baccepted\s+by\s+(?:the\s+|a\s+)?courts?\b|reassessed\s+as\s+criminal|charges?\s+(?:has|have)\s+been\s+laid|verified\s+charge|\bhigh\s+court\b|\bcourts?\s+(?:adopted|endorsed|validated|accredited|accepted|recogni[sz]ed|found|held|ruled|determined)\b/i,
+  // ... and its common paraphrases, which the Public Protector submission
+  // carried ("The Port Shepstone Magistrate's Court has already recognised
+  // this", "a proven, court-accepted technological solution"): tightened,
+  // never loosened.
+  /court-(?:accepted|approved|proven|tested|validated|recogni[sz]ed|endorsed)|judicially\s+recogni[sz]ed|\badmitted\s+(?:into|as|in)\s+evidence\b|\b(?:recogni[sz]ed|accepted|validated|endorsed|approved|upheld|admitted)\s+by\s+(?:the\s+|a\s+)?(?:[\w'\u2019-]+\s+){0,5}courts?\b(?!-|\s+(?:file|roll|registry|record|order|appointed)\b)|\b(?:courts?|magistrates?)\b(?:\s+(?:at|in|of)\s+[A-Z][\w'\u2019/.-]*(?:\s+[A-Z][\w'\u2019/.-]*){0,2}|,\s*in\s+[^,.;]{1,24},)?\s*(?:has|have|had|did|is|was)?\s*(?:(?:\w+ly|already|now|also|previously|never|not|since)\s+){0,3}(?:recogni[sz]|accept|validat|endors|adopt|found\b|held\b|ruled|determin|accredit|admitt|approv|uphe|confirm|acknowledg|noted|questioned|considering|considered)|\b(?:seal(?:ed)?|platform|report|bundle|sealed\s+record|verum)\b[^.]{0,40}\badmissible\b|\badmissible\b[^.]{0,20}\bin\s+court\b/i
 ];
 // "may constitute" is the one sanctioned use of "may" (candidate-law framing);
 // "perjury" is allowed only inside that framing.
@@ -1669,7 +1688,8 @@ const HUMAN_MONTH_MAY_RE = /\b(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?)May\b|\bMay(
 function humanSentenceBanned(s) {
   const candidateLaw = HUMAN_CANDIDATE_LAW_RE.test(s);
   if (/\bperjur/i.test(s) && !candidateLaw) return true;
-  let probe = s.replace(HUMAN_MONTH_MAY_RE, '$1MonthV');
+  // Dashes as Word writes them ("court‑accepted") test as hyphens.
+  let probe = s.replace(/[\u2010-\u2015]/g, '-').replace(HUMAN_MONTH_MAY_RE, '$1MonthV');
   if (candidateLaw) probe = probe.replace(/\bmay\s+constitute\b/gi, 'constitutes');
   for (const re of HUMAN_BANNED_RES) if (re.test(probe)) return true;
   return false;
@@ -1736,26 +1756,109 @@ function humanNorm(s) {
 // "GUILTY OF FRAUD" in capitals is a verdict, not a heading. Failures are
 // DROPPED and counted — never rewritten, because rewriting a model's sentence
 // could change what it asserts.
-function humanGate(text, ctxIds, ctxPages, corpusNorm) {
+// FOUR PILLARS: the finding types that can evidence each pillar, the same
+// lists as the report's deterministic elements table (forensic-report.js
+// OFFENCE_ELEMENTS; a test pins them equal). Knowledge and inducement or
+// reliance have none: a document records statements, not a state of mind or
+// a decision to rely. The Public Protector submission run printed "The record
+// evidences inducement or reliance [F2]" for an unsigned-agreement finding,
+// and the gate passed it because [F2] was a valid id.
+const HUMAN_PILLAR_TYPES = {
+  misrepresentation: ['CT01', 'CT02', 'CT03', 'CT06', 'CT09', 'CT10', 'CT11', 'CT12', 'CT13', 'CT14', 'CT44', 'CT45', 'CT46'],
+  loss: ['CT02', 'CT15', 'CT16', 'CT17', 'CT18', 'CT19', 'CT20', 'CT21', 'CT22'],
+  knowledge: [],
+  inducement: []
+};
+const HUMAN_PILLAR_RE = {
+  misrepresentation: /\bmisrepresent/i,
+  knowledge: /\bknowledge\b|\bkn(?:ew|own|ows|owing|owingly)\b|\baware(?:ness)?\b|\bdeliberate(?:ly)?\b|\bintentional(?:ly)?\b|\bconscious\s+of\b/i,
+  inducement: /\binduc|\breli(?:ance|ed)\b|\brel(?:y|ies|ying)\b|\bacted\s+on\b|\bon\s+the\s+strength\s+of\b|\bpersuad|\bin\s+the\s+belief\b/i,
+  loss: /\blosse?s?\b|\blost\b|\bsuffered\b|\bharm\b|\bdetriment|\bprejudice|\bdamages?\b|\bout\s+of\s+pocket\b/i
+};
+// Pillar words are read with the sentence's quotations masked: the record's
+// own words ("no loss was suffered") are not the narrator's claim.
+function humanPillarsOf(s) {
+  const masked = String(s || '').replace(new RegExp(HUMAN_QUOTE_RE.source, 'g'), ' ');
+  return Object.keys(HUMAN_PILLAR_RE).filter(k => HUMAN_PILLAR_RE[k].test(masked));
+}
+// A pillar heading by content, not case: "MISREPRESENTATION", "1. Inducement
+// or Reliance", "**Loss**", "## Knowledge", "Pillar 3: Inducement or reliance",
+// "Misrepresentation and loss". Returns the pillars, or null.
+const HUMAN_PILLAR_NAME = { misrepresentation: 'misrepresentation', misrepresentations: 'misrepresentation', knowledge: 'knowledge',
+  inducement: 'inducement', reliance: 'inducement', loss: 'loss', losses: 'loss', prejudice: 'loss' };
+function humanPillarHeading(line) {
+  const t = String(line || '').replace(/[*_#`]/g, '').replace(/^\s*(?:\d{1,2}[.)]\s*|[ivx]{1,4}[.)]\s+)/i, '')
+    .replace(/^\s*pillar\s*\d*\s*[:.\-\u2013\u2014]?\s*/i, '').replace(/[:.\s]+$/, '').trim();
+  if (!t || t.length > 60) return null;
+  const parts = t.split(/\s*(?:\band\b|\bor\b|&|\/|,|[-\u2013\u2014])\s*/i).filter(Boolean);
   const out = [];
-  const stats = { kept: 0, dropped: 0, language: 0, anchor: 0, quote: 0, exact: 0 };
+  for (const p of parts) {
+    const k = HUMAN_PILLAR_NAME[p.toLowerCase()];
+    if (!k) return null;
+    if (out.indexOf(k) < 0) out.push(k);
+  }
+  return out.length ? out : null;
+}
+const HUMAN_HELD_RE = /\[secondary source on p\.|\[OCR page: weight reduced/;
+const HUMAN_PILLAR_CLAIM_RE = /\b(?:evidences?|evidenced|establish(?:es|ed)?|shows?|shown|proves?|proven|demonstrates?)\b[^.;]{0,40}\b(?:misrepresent\w*|knowledge|reliance|inducement|loss|losses|prejudice)\b/i;
+// FOUR PILLARS, and any sentence elsewhere that claims a pillar is evidenced:
+// knowledge and inducement or reliance are never evidenced by a finding (only
+// a stated gap, INSUFFICIENT, is written for them); a misrepresentation or a
+// loss needs at least one cited engine finding of a matching type — a page or
+// a quotation alone is not enough, a candidate evidences nothing, and a
+// finding held at reduced weight (OCR-only, secondary source) evidences no
+// pillar, as in the report's elements table. Under a pillar heading the
+// heading decides which pillar a sentence speaks to.
+function humanPillarBad(s, curPillars, idType, pillarMode) {
+  if (/\bINSUFFICIENT\b/.test(s)) return false;
+  const named = humanPillarsOf(s);
+  if (!pillarMode && !HUMAN_PILLAR_CLAIM_RE.test(String(s).replace(new RegExp(HUMAN_QUOTE_RE.source, 'g'), ' '))) return false;
+  if (named.indexOf('knowledge') >= 0 || named.indexOf('inducement') >= 0) return true;
+  const head = pillarMode ? curPillars : [];
+  if (head.length && head.every(p => p === 'knowledge' || p === 'inducement')) return true;
+  const effective = (head.length ? head : named).filter(p => p === 'misrepresentation' || p === 'loss');
+  if (!effective.length) return false;
+  const refs = [];
+  const refRe = new RegExp(HUMAN_REF_RE.source, 'gi');
+  let m;
+  while ((m = refRe.exec(s)) !== null) refs.push((m[1] || m[2] || m[3] || '').toUpperCase());
+  if (!refs.length) return true;
+  return refs.some(id => id[0] !== 'F' || !effective.some(p => HUMAN_PILLAR_TYPES[p].indexOf(idType.get(id)) >= 0));
+}
+function humanGate(text, ctxIds, ctxPages, corpusNorm, idType, pillarMode) {
+  const out = [];
+  const stats = { kept: 0, dropped: 0, language: 0, anchor: 0, quote: 0, exact: 0, pillar: 0 };
+  const types = idType || new Map();
+  let curPillars = [];
   const paras = String(text || '').replace(/\r\n?/g, '\n').split(/\n{2,}/);
   for (const para of paras) {
     const trimmed = para.trim();
     if (!trimmed) continue;
     if (/^[=_\-—–]{3,}$/.test(trimmed)) { out.push(trimmed); continue; }
+    // A pillar heading in any dress opens its pillar and is kept as a heading.
+    if (pillarMode && trimmed.indexOf('\n') < 0 && humanPillarHeading(trimmed) && !humanSentenceBanned(trimmed)) {
+      curPillars = humanPillarHeading(trimmed);
+      out.push(trimmed.replace(/[*_#`]/g, '').trim());
+      continue;
+    }
     if (trimmed.length < 60 && (/^[A-Z0-9 ,'&()\-]+$/.test(trimmed) || /^[A-Z][^.]{0,58}:$/.test(trimmed))) {
       const hc = humanAnchorCheck(trimmed, ctxIds, ctxPages);
       const hbad = hc.bad || (humanSentenceBanned(trimmed) ? 'language' : null);
       if (hbad) { stats.dropped++; stats[hbad]++; continue; }
+      if (pillarMode) curPillars = humanPillarsOf(trimmed);
       out.push(trimmed);
       continue;
     }
     const lines = trimmed.split(/\n/);
     const keptLines = [];
+    let paraPillars = null; // an inline label's pillar, for this paragraph only
     for (const rawLine of lines) {
+      if (pillarMode && humanPillarHeading(rawLine)) { curPillars = humanPillarHeading(rawLine); paraPillars = null; keptLines.push(rawLine.replace(/[*_#`]/g, '').trim()); continue; }
       const bm = rawLine.match(/^\s*(?:[-•*]|\d{1,2}[.)])\s+(.*\S)\s*$/);
       const body = bm ? bm[1] : rawLine;
+      // An inline label ("Loss: the stated total …") opens its pillar for the
+      // rest of the paragraph.
+      if (pillarMode) { const lab = body.match(/^\s*(?:\*\*|__)?([^:*_]{3,60}?)(?:\*\*|__)?\s*:\s+\S/); if (lab && humanPillarHeading(lab[1])) paraPillars = humanPillarHeading(lab[1]); }
       const sentences = humanSplitSentences(body);
       const keptHere = [];
       for (const sentence of sentences) {
@@ -1776,6 +1879,7 @@ function humanGate(text, ctxIds, ctxPages, corpusNorm) {
           }
         }
         if (!bad && humanSentenceBanned(s)) bad = 'language';
+        if (!bad && humanPillarBad(s, paraPillars || curPillars, types, pillarMode)) bad = 'pillar';
         if (!bad && !exact && !ac.anchored && !quoted && !humanAnchorFree(s)) bad = 'anchor';
         if (bad) { stats.dropped++; stats[bad]++; continue; }
         stats.kept++;
@@ -1946,7 +2050,8 @@ async function handleAiHumanReport(request, env) {
   const raw = asStr(parsed.text, 24000).trim();
   if (!raw) return humanFail(section, 'empty', modelName);
 
-  const gated = humanGate(raw, ids, pages, corpusNorm);
+  const idType = new Map(findings.concat(candidates).map(f => [f.id, HUMAN_HELD_RE.test(String(f.evidence || '')) ? 'HELD' : f.type]));
+  const gated = humanGate(raw, ids, pages, corpusNorm, idType, section === 'four_pillars');
   if (!humanGatePasses(gated.stats)) {
     return json({ ok: true, contract: HUMAN_CONTRACT, section, generated: false, machineGenerated: false,
       reason: 'gate_failed', model: modelName, gate: gated.stats });

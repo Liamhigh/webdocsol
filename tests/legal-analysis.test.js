@@ -313,8 +313,8 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'a draft with more prohibited than compliant sentences never leads the story (named policy)');
   ok(/sentence' \+ \(scrub\.dropped === 1 \? '' : 's'\) \+ ' of the draft above/.test(src2),
     'the report discloses how many sentences the gate removed');
-  ok(/var narr = \(narrScrub\.kept >= VO_GATE_MIN_KEPT\) \? narrScrub\.text : ''/.test(src2),
-    'the annex path is gated too — no route prints prohibited language');
+  ok(/var narr = voGatePasses\(narrScrub\) \? narrScrub\.text : ''/.test(src2),
+    'the annex path is gated by the same pass rule as the story — no route prints a mostly prohibited draft');
 
   // Sentence splitting must survive legal prose. A naive [.!?] split cut
   // "Mr. Nortje may have signed it." into "Mr." + the rest, so the gate left

@@ -164,6 +164,20 @@ ok(report.indexOf('.replace(/\\b(?:pp?|pgs?)\\.(?=\\s*\\d)/gi') >= 0, 'the share
     'the flattener accepts nothing and an already-flat list');
 }
 
+// ---- the four-pillars gate and the deterministic elements table agree ------
+// The worker refuses a pillar sentence citing a finding whose type cannot
+// evidence that pillar; the report's elements table (OFFENCE_ELEMENTS) maps the
+// same types to the same elements. Two copies of one rule: pinned equal.
+{
+  const listOf = (src, re) => { const m = src.match(re); return m ? (m[1].match(/CT\d{2}/g) || []).join(',') : null; };
+  const wMis = listOf(worker, /misrepresentation:\s*\[([^\]]*)\]/), wLoss = listOf(worker, /loss:\s*\[([^\]]*)\]/);
+  const rMis = listOf(report, /el: 'A misrepresentation[^']*', types: \[([^\]]*)\]/), rLoss = listOf(report, /el: 'Actual or potential prejudice[^']*', types: \[([^\]]*)\]/);
+  ok(wMis && wMis === rMis, 'the misrepresentation pillar takes exactly the elements table\'s misrepresentation types (' + wMis + ' | ' + rMis + ')');
+  ok(wLoss && wLoss === rLoss, 'the loss pillar takes exactly the elements table\'s prejudice types (' + wLoss + ' | ' + rLoss + ')');
+  ok(/knowledge: \[\]/.test(worker) && /inducement: \[\]/.test(worker), 'no finding type evidences knowledge or inducement: those pillars are INSUFFICIENT');
+  ok(/humanGate\(raw, ids, pages, corpusNorm, idType, section === 'four_pillars'\)/.test(worker) && /HUMAN_PILLAR_CLAIM_RE/.test(worker), 'the full pillar test runs on four pillars; elsewhere a sentence that claims a pillar is evidenced is held to the same types');
+}
+
 console.log(`\n[human-report] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[human-report] FAILURES'); process.exit(1); }
 console.log('[human-report] ALL GREEN');

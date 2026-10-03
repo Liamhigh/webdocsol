@@ -202,6 +202,197 @@ const E = require('../forensic-engine-page.js');
   ok(!/Date\.now|Math\.random/.test(fnSrc), 'document detection is deterministic');
 }
 
+// =====================================================================
+// ---- 9. The 3 October 2026 rerun (report VO-WEB-20261003-0222) ----
+// The founder sealed the 451-page Greensky bundle again on the live site.
+// Fourteen of nineteen findings were "Impossible date: 15.20.9094" — a
+// commodity-code token on the Frontend Transport invoice pages; an AI case
+// summary bound into the bundle ("Forensic Finding:** This is an explicit
+// admission of guilt…") was sealed as the record's own admission and its
+// heading became the party "Forensic Finding"; and the bundle's own Verum
+// seal produced "Timestamp Manipulation" / "Metadata Contradiction" findings
+// (Info dictionary = the seal pass, XMP = the source document).
+// ---------------------------------------------------------------------
+
+// ---- 9.1 a date-shaped token with an impossible year is not a date ----
+{
+  const inv = 'FRONTEND TRANSPORT CC Tax Invoice 4088. Commodity code 15.20.9094 quantity 240. ' +
+    'Commodity code 15.20.9115 quantity 60. Date: 14/03/2025';
+  const out = E.DETECTORS.D03_DETECT_DATE_INCONSISTENCY([inv, 'x', inv]);
+  ok(out.length === 0, 'commodity codes 15.20.9094 / 15.20.9115 raise no impossible-date finding (' + out.length + ')');
+
+  // The gate is a year horizon, not a free pass: a plausible year with an
+  // impossible day/month is exactly the signature of a mistyped or fabricated
+  // date and still fires.
+  const real = E.DETECTORS.D03_DETECT_DATE_INCONSISTENCY(['The deed is dated 31/02/2021.']);
+  ok(real.length === 1 && /Impossible date: 31\/02\/2021/.test(real[0].evidence), 'a plausible-year impossible date still fires');
+  const dotted = E.DETECTORS.D03_DETECT_DATE_INCONSISTENCY(['recorded 15.20.2025 in the ledger']);
+  ok(dotted.length === 1, 'a dotted impossible date with a real year still fires');
+}
+
+// ---- 9.2 identical impossible tokens group into one finding, pages cited ----
+{
+  const p = 'witnessed on 31/02/2021 as recorded.';
+  const out = E.DETECTORS.D03_DETECT_DATE_INCONSISTENCY([p, 'clean', p, p]);
+  ok(out.length === 1, 'one finding for one impossible token across three pages (' + out.length + ')');
+  ok(/appears on 3 pages \(1, 3, 4\)/.test(out[0].evidence), 'the finding names every page the token appears on');
+  ok(out[0].location === 'Page 1, 3, 4', 'the location carries the page list');
+  ok(Array.isArray(out[0].pages) && out[0].pages.join(',') === '1,3,4', 'the pages array is structured');
+}
+
+// ---- 9.3 a sentence that CALLS something an admission is not an admission ----
+{
+  const D01 = E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION;
+  const aiSummary = 'Forensic Finding:** This is an explicit admission of guilt. The shareholder agreement ' +
+    'regarding the 70/30 split was active on the date of the transaction (13 March 2025).';
+  ok(D01([aiSummary]).filter(f => /explicit admission/.test(f.evidence)).length === 0,
+    '"This is an explicit admission of guilt" (a commentator\'s label) raises no admission finding');
+  ok(D01(['The email of 6 April constitutes a clear admission of guilt on his part.'])
+    .filter(f => /explicit admission/.test(f.evidence)).length === 0,
+    '"constitutes a clear admission" is a characterisation, not an admission');
+  // The admitting party's own sentence still fires.
+  ok(D01(['In reply Marius wrote: I admit that I routed the payment to my own account.'])
+    .filter(f => /explicit admission/.test(f.evidence)).length === 1,
+    'a first-person admission still fires');
+}
+
+// ---- 9.4 markdown-formatted analysis pages are a secondary source ----
+{
+  const md = E.voMarkdownAnalysisPages([
+    'plain contract text, no markup at all',
+    '**Key Findings** - **One:** text **Two:** more text',
+    'Forensic Finding:** This is an explicit admission of guilt.',
+    'an ordinary page',
+  ]);
+  ok(md.join(',') === '2,3', 'markdown bold pairs and a heading-colon-into-bold both mark a page (' + md.join(',') + ')');
+  // Findings resting only on such pages demote to leads.
+  const demo = E.voDemoteSecondarySource(
+    [{ type: 'CT01', severity: 4, evidence: 'x', location: 'Page 2, 3', pages: [2, 3] }], md);
+  ok(demo.kept.length === 0 && demo.leads.length === 1, 'a finding anchored only on markdown-analysis pages is a lead, not a finding');
+}
+
+// ---- 9.5 an analysis heading and a role are not parties ----
+{
+  ok(!E.voLooksLikePerson('Forensic Finding'), 'voLooksLikePerson rejects "Forensic Finding"');
+  ok(!E.voLooksLikePerson('General Manager'), 'voLooksLikePerson rejects "General Manager"');
+  ok(!E.voLooksLikePerson('Managing Director'), 'voLooksLikePerson rejects "Managing Director"');
+  ok(E.voLooksLikePerson('Kevin Lappeman'), 'voLooksLikePerson still accepts a real name');
+  const parties = E.voExtractParties('Forensic Finding:** This is an explicit admission of guilt. Marius Nortje wrote it.')
+    .filter(x => x.kind === 'name').map(x => x.name);
+  ok(parties.indexOf('Forensic Finding') === -1, 'the party extractor drops "Forensic Finding"');
+  ok(parties.indexOf('Marius Nortje') !== -1, 'the party extractor keeps the real person');
+}
+
+// ---- 9.6 a file wearing this platform's seal suppresses the metadata compare ----
+{
+  // The Greensky bundle was sealed on 5 August 2026 by a pipeline that left
+  // pdf-lib's default producer, so the producer test alone missed it; the
+  // seal furniture on 419 pages is the proof of sealing.
+  const fakeDoc = {
+    getProducer: () => 'pdf-lib (https://github.com/Hopding/pdf-lib)',
+    getCreationDate: () => new Date('2026-08-05T06:20:30Z'),
+  };
+  const xmp = '<x:xmpmeta xmlns:x="adobe:ns:meta/"><rdf:Description xmp:CreateDate="2025-06-23T08:25:36Z" pdf:Producer="Skia/PDF m137"/></x:xmpmeta>';
+  const pdfLike = '%PDF-1.7 ' + xmp + ' ' + new Array(30).join('padding padding padding ') + '%%EOF';
+  const bytes = new TextEncoder().encode(pdfLike);
+  const sealed = E.voDigitalForensicsScan(bytes, fakeDoc, { sealedByThisPlatform: true });
+  ok(sealed.filter(f => f.type === 'CT29' || f.type === 'CT24').length === 0,
+    'XMP-vs-Info findings are suppressed on a file carrying this platform\'s seal furniture');
+  ok(/artefacts of sealing/.test(String(sealed.voSelfSealNote || '')), 'the suppression is disclosed, never silent');
+  const unsealed = E.voDigitalForensicsScan(bytes, fakeDoc, { sealedByThisPlatform: false });
+  ok(unsealed.filter(f => f.type === 'CT29').length === 1, 'the creation-date comparison still fires on an unsealed file');
+  ok(unsealed.filter(f => f.type === 'CT24').length === 1, 'the producer comparison still fires on an unsealed file');
+}
+
+// ---- 9.7 report wording: an impossible date is not "two dates for one event" ----
+{
+  const impossible = { type: 'CT03', severity: 5, evidence: 'Impossible date: 15.20.2025 (not a real calendar date read as day/month/year or month/day/year)', location: 'Page 408' };
+  ok(/cannot exist on any calendar/.test(R._establishesOf(impossible)),
+    'establishesOf names the impossible-date shape');
+  const twoDates = { type: 'CT03', severity: 4, evidence: '"termination date" is stated as 7 Mar 2025 and as 13 Mar 2025', location: 'Page 95' };
+  ok(/two different dates/.test(R._establishesOf(twoDates)), 'the two-dates shape keeps its own wording');
+  // CT39 / CT29 / CT24 no longer fall through to "The record states both positions".
+  for (const [t, re] of [['CT39', /custody/i], ['CT29', /metadata stores disagree/i], ['CT24', /more than one creating tool|further tool/i]]) {
+    const txt = R._establishesOf({ type: t, severity: 3, evidence: 'x', location: 'Page 1' });
+    ok(re.test(txt) && !/states both positions/.test(txt), t + ' has its own establishes wording');
+  }
+}
+
+// ---- 9.8 CT39 renders by name, never under a brain block ----
+{
+  ok(R._brainOfCt.CT39 === 'NONE', 'a custody gap is listed by name, never as "CONTRADICTION FOUND" under B1');
+  ok(R._brainOfCt.CT24 === 'B2' && R._brainOfCt.CT29 === 'B5', 'the metadata and timestamp routes are unchanged');
+}
+
+// ---- 9.8a the adversarial review of the fix set (second round) ----
+// A five-lens verification pass on the first fix set confirmed fourteen
+// defects in or around the new code; each is pinned here.
+{
+  // (i) "and N more" in a grouped location is a COUNT: pageAnchor must never
+  // read it as a page ("p. 2, 101, …" led a CRITICAL finding's anchor with a
+  // fabricated page 2).
+  ok(R._fmtLocation('Page 101, 102, 103, 104, 105, 106, 107, 108 and 2 more') === 'p. 101, 102, 103, 104, 105, 106 and 2 more',
+    'pageAnchor strips "and N more" instead of fabricating page 2: ' + R._fmtLocation('Page 101, 102, 103, 104, 105, 106, 107, 108 and 2 more'));
+
+  // (ii) OCR provenance is judged on the FULL page set (f.pages), not the
+  // truncated location string.
+  ok(R._ocrTouched('Page 101, 102, 103, 104, 105, 106, 107, 108 and 2 more', [109, 110], [101,102,103,104,105,106,107,108,109,110]) === true,
+    'ocrTouched reads the full pages array past the location truncation');
+
+  // (iii) characterisations with subjects outside a closed list still never
+  // seal as admissions; genuine first-person admissions are never guard-killed.
+  const D01 = E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION;
+  const adm = t => D01([t]).filter(f => /explicit admission/.test(f.evidence)).length;
+  ok(adm("Mr Nortje's email of 6 April constitutes an admission of guilt.") === 0, 'possessive-subject characterisation does not fire');
+  ok(adm('That email is an admission of guilt.') === 0, '"That email is an admission" does not fire');
+  ok(adm('His reply amounts to an admission of guilt.') === 0, 'pronoun-possessive characterisation does not fire');
+  ok(adm('Whether or not this was an admission, I admit that I signed the agreement.') === 1,
+    'a first-person admission after a concessive clause still fires');
+  ok(adm('This is my admission: I admit I failed to pay the VAT.') === 1,
+    'the admitting party\'s own framing never kills the admission that follows');
+
+  // (iv) markdown detection keys on structure, never bare asterisks: masked
+  // card numbers, PIN masking, fax separators, code exponents and footnote
+  // markers are primary-record text.
+  const mdNone = E.voMarkdownAnalysisPages([
+    'Card **** **** **** 1234 POS purchase R500.00 Card **** **** **** 1234',
+    'Your PIN:**** must never be shared',
+    'TRANSMISSION OK ************************ PAGE 01',
+    'return 2**8 + 2**10 + x**2 + y**2',
+    'Rate 12%** applies. Fees** include VAT.** See note.',
+  ]);
+  ok(mdNone.length === 0, 'no evidence page is classified as markdown analysis (' + JSON.stringify(mdNone) + ')');
+  // ...while real markdown analysis still is, including the heading form
+  // with a single bold pair.
+  const mdYes = E.voMarkdownAnalysisPages([
+    '## Case Analysis - The email of 6 April is decisive ## Conclusion **Conclusion**: liability follows',
+    'Forensic Finding:** This is an explicit admission of guilt.',
+  ]);
+  ok(mdYes.join(',') === '1,2', 'headed and colon-bold analysis pages still classify (' + mdYes.join(',') + ')');
+
+  // (v) a name asserted only by the bound AI commentary never enters the
+  // roster when the primary record has text pages.
+  const primary = 'This agreement is made between Greensky Ornamentals FZ-LLC and the supplier for the delivery of ornamental plants to the port of entry under the usual terms and conditions of carriage.';
+  const mdPage = '**Analysis:** Johan Vermeulen instructed the transfer. **Finding:** Johan Vermeulen acted alone. Johan Vermeulen benefited.';
+  const blocks = [primary, mdPage, primary, mdPage];
+  const sec = E.voMarkdownAnalysisPages(blocks);
+  const roster = E.voBuildNameRoster(blocks, 0, sec);
+  ok(!roster.some(r => /Vermeulen/.test(r.name)), 'a commentary-only name stays out of the roster');
+  ok(E.voBuildNameRoster([mdPage, mdPage, mdPage], 0, []).some(r => /Vermeulen/.test(r.name)),
+    'without the secondary exclusion the same name would have entered (control)');
+}
+
+// ---- 9.9 the one-page summary collapses identical serious lines ----
+{
+  const mk = (page, raw) => ({ type: 'CT03', severity: 5, evidence: 'Impossible date: ' + raw + ' (not a real calendar date read as day/month/year or month/day/year)', location: 'Page ' + page });
+  const fr = { findings: [mk(408, '15.20.2025'), mk(408, '16.20.2025'), mk(414, '15.20.2025'), mk(414, '16.20.2025')], overallScore: 0 };
+  const lines = R._plainLeadLines(fr, { docName: 'bundle.pdf', pageCount: 451 }).join('\n');
+  const bullets = lines.split('\n').filter(l => /^•/.test(l) && /date does not add up/.test(l));
+  ok(bullets.length === 1, 'four identical serious lines collapse into one bullet (' + bullets.length + ')');
+  ok(/\(4 findings\)/.test(bullets[0]), 'the bullet carries the count');
+  ok(/p\. ?408/.test(bullets[0]) && /p\. ?414/.test(bullets[0]), 'the bullet names both pages');
+}
+
 console.log('\n[greensky-regression] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[greensky-regression] ALL GREEN');
