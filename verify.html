@@ -2219,7 +2219,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     currentOtsProof = null;
     var badge = '', caption = '';
     if (view.state === 'confirmed') {
-      badge = '<span class="custody-badge match">ANCHORED — Bitcoin blockchain</span>';
+      // The calendar reports the Bitcoin attestation; this page does not
+      // check the block itself (an OpenTimestamps client against a node does).
+      badge = '<span class="custody-badge match">ANCHORED — Bitcoin attestation reported by the OpenTimestamps calendar</span>';
       caption = 'The Bitcoin anchor proves the fingerprint of the original upload existed no later than the time of its Bitcoin block — it does not prove the truth of the document\'s contents. A Verum Omnis seal proves two things only: integrity and time.';
     } else if (view.state === 'pending') {
       badge = '<span class="custody-badge no_seal">PENDING — submitted to calendars, Bitcoin confirmation typically 1–2 hours</span>';

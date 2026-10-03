@@ -4447,7 +4447,7 @@ var VO_NON_PERSON_TOK = (function () {
     // whole phrases below, so "Maria Campos", "Exxaro Resources" and "Texas
     // Instruments" survive (a token also stops its one-edit neighbours).
     // Header words end a colon-free header value ("Rabia Seedat Cc Amrit").
-    'director director-general department assistant regarding does cc bcc subject sent').split(' ');
+    'director director-general department assistant regarding does cc bcc subject sent dear to from date regards sincerely').split(' ');
   for (var i = 0; i < words.length; i++) m[words[i]] = 1;
   return m;
 })();
@@ -5782,7 +5782,13 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
       _voContextNotes.push({ type: _ld.type || '', location: _ld.location || '',
         text: 'Secondary-source lead, not a finding: ' + String(_ld.evidence || '').replace(/\s*\[secondary source on p\.[^\]]*\]/g, '').replace(/\s*\[OCR page: weight reduced[^\]]*\]/g, '').replace(/\s+/g, ' ').trim() + ' — verify against the primary record' });
     }
-    extractionNote += ' Secondary sources: ' + (_secondaryPages.length) + ' page(s) belong to a document that describes itself as an extract, summary or commentary prepared after the fact' + (_secondarySegs.some(function (g) { return g.submission; }) ? ', or to a party\'s submission about other sealed records' : '') + voSecondaryWhere(_secondarySegs) + '; ' +
+    // Say which cue made each document secondary: a party's submission does
+    // not describe itself as an extract.
+    var _subOnly = _secondarySegs.length && _secondarySegs.every(function (g) { return g.submission; });
+    var _subSome = _secondarySegs.some(function (g) { return g.submission; });
+    extractionNote += ' Secondary sources: ' + (_secondaryPages.length) + ' page(s) belong to ' + (_subOnly
+      ? 'a party\'s submission that cites other sealed records (its characterisations of those records are not the records themselves)'
+      : 'a document that describes itself as an extract, summary or commentary prepared after the fact' + (_subSome ? ', or to a party\'s submission that cites other sealed records' : '')) + voSecondaryWhere(_secondarySegs) + '; ' +
       (_sec.leads.length ? _sec.leads.length + ' observation(s) sit entirely on those pages and are recorded under the engine notes as leads to verify against the primary record, NOT as findings' : '') +
       (_sec.leads.length && _sec.capped ? '; ' : '') +
       (_sec.capped ? _sec.capped + ' finding(s) with one half on those pages held at reduced weight' : '') + '.';

@@ -1018,7 +1018,13 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(ct14(['The company is non compliant with the licence conditions of the Department.']).length === 0, 'D09: "non compliant" (no hyphen) is the negation too');
   const ct14g = ct14(['The company is compliant with all licence conditions of the Department.', 'The company is non-compliant with its licence conditions, and the business is under review.']);
   ok(ct14g.length === 1 && /page 1/.test(ct14g[0].evidence) && /page 2/.test(ct14g[0].evidence), 'D09: a company called compliant on one page and non-compliant on another still fires (' + JSON.stringify(ct14g.map(f => f.evidence.slice(0, 120))) + ')');
-  ok(ct14g.length === 1 && !/^\S*[a-z]…|"\w{1,3}\s/.test(ct14g[0].evidence.split('"')[1] || ''), 'D09: each quoted passage is snapped to whole words');
+  // Pages long enough that the ±90-character window must cut: each passage starts and ends on a whole word of the page.
+  const longA = 'The regulator wrote at length about the matter and the history of the site and its operators over many years. The company XYZ Fuels (Pty) Ltd is compliant with all licence conditions of the Department, the letter says, and the inspection in March found nothing amiss at the forecourt or the tanks.';
+  const longB = 'The second letter, written by the same office some months later after a further inspection of the premises, reverses that. The company XYZ Fuels (Pty) Ltd is non-compliant with its licence conditions, and the business is under review by the Controller of Petroleum Products until further notice.';
+  const ct14w = ct14([longA, longB]);
+  const passages = ct14w.length ? E.voExtractQuotes(ct14w[0].evidence) : [];
+  const wholeWord = (p, page) => { const core = p.replace(/^…|…$/g, ''); const at = page.indexOf(core); return at >= 0 && (at === 0 || /\s/.test(page.charAt(at - 1))) && (at + core.length === page.length || /[\s.,;:]/.test(page.charAt(at + core.length))); };
+  ok(ct14w.length === 1 && passages.length === 2 && wholeWord(passages[0], longA) && wholeWord(passages[1], longB), 'D09: each quoted passage is snapped to whole words of its page (' + JSON.stringify(passages) + ')');
 
   // 18b. CT37: two government domains are never a lookalike; a commercial lookalike still is.
   const ct37 = (b) => of(DET.D25_DETECT_CONTACT_MISMATCH, b, 'CT37');
@@ -1096,7 +1102,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   const lawOf = (f) => R._statutesForFinding(f, jur0).map(x => x.provisions.join('; ')).join(' ');
   ok(R._isUnsignedStatement(unsigned2) && !R._isUnsignedStatement(slashS), 'D32\'s two CT23 shapes are told apart');
   ok(/^Common law of contract/.test(lawOf(unsigned2)) && !/Cybercrimes|forgery|Electronic Communications/.test(lawOf(unsigned2)) && /Cybercrimes/.test(lawOf(slashS)), 'an unsigned agreement is a contract question (no Cybercrimes Act, no forgery); a surrogate signature keeps the forgery provisions (' + lawOf(unsigned2) + ')');
-  ok(R._narrativeMeaning(unsigned2) === 'the record states that an agreement it refers to was never signed or countersigned' && !/unusual way/.test(R._narrativeMeaning(unsigned2)), 'the plain meaning says what the record states, not "signed in an unusual way"');
+  ok(R._narrativeMeaning(unsigned2) === 'the record states that an agreement it refers to is unsigned' && !/unusual way/.test(R._narrativeMeaning(unsigned2)), 'the plain meaning says what the record states, not "signed in an unusual way"');
   ok(/signed original/.test(R._hintFor(unsigned2)) && !/native|metadata/i.test(R._hintFor(unsigned2)), 'the next step is the signed original, never a request for native files and metadata');
   ok(/Whether, and when, it was executed/.test(R._establishesOf(unsigned2)) && !/being used to enforce/.test(R._establishesOf(unsigned2)) && /cannot carry the obligation it is being used to enforce/.test(R._establishesOf(unsigned4)) && /conformed or surrogate signature/.test(R._establishesOf(slashS)) && /cannot carry the obligation/.test(R._establishesOf({ type: 'CT23' })),
     'what it establishes: no enforcement claimed without enforcement language; enforcement wording where the record bills under it; the surrogate-signature shape has its own');
@@ -1156,7 +1162,8 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ok(!/It concerns Sanarth/.test(TN) && /Named on the cited page[s]? \(descriptive, not an attribution\):[^.]{0,80}Sanarth Fuels/.test(T), 'a company the engine found on the page is named descriptively, never as the party a finding concerns (' + ((T.match(/Named on the cited page[^.]{0,120}/) || [''])[0]) + ')');
     ok(/It concerns Sanarth Fuels/.test(D) && (D.match(/It concerns Sanarth Fuels/g) || []).length === 1, 'a party the case details declare is the party a finding concerns only when the finding\'s own words name it (once here: the CT14 naming Sanarth Fuels, not the findings that only share its page)');
     ok(!/Sanarth Fuels — the record states/.test(N), 'the counter-narratives never quote the author\'s words as a named company\'s own statement');
-    ok(!/TAMPER FOUND/.test(T) && /INTEGRITY SIGNAL FOUND/.test(T) && /CONTACT CONFLICT FOUND/.test(T) && !/COMMUNICATION GAP FOUND/.test(T), 'the Nine-Brain blocks say what each detector measures: no "TAMPER FOUND" over a sentence about an unsigned agreement, no message-gap header over a contact conflict');
+    ok(!/TAMPER FOUND/.test(T) && !/COMMUNICATION GAP FOUND/.test(T) && /Not rendered under a brain: 2 findings[\s\S]{0,160}Unsigned Agreement Stated[\s\S]{0,60}Contact Detail Mismatch/.test(T.replace(/\s+/g, ' ')) && !/INTEGRITY SIGNAL FOUND|CONTACT CONFLICT FOUND/.test(T),
+      'the Nine-Brain blocks keep the template\'s own headers (PD19), and an unsigned-agreement statement or a lookalike domain, which no brain block describes, is named apart instead of under "TAMPER FOUND" or "COMMUNICATION GAP FOUND"');
     ok(!/Behavioural Scorecard|Top liabilities|top liabilities/.test(TN) && /Parties named on the pages carrying findings/.test(T) && /Most serious findings:/.test(T), 'no "scorecard" over the people a record names, and no "liabilities"');
     ok(!/\(confidence:/.test(TN) && /Document classification \(AI, advisory\): Other/.test(T), 'the classification prints no confidence band');
     ok(!/Highest severity/.test(T) && !/\bSev\.\s/.test(T), 'no severity column in the matrix, for engine findings or AI candidates');
@@ -1258,6 +1265,52 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(/'Seal Present — OTS Format'/.test(vs) && !/'Seal Verified — OTS Format'/.test(vs) && !/Pending confirmation \(1-2 hours typical\)/.test(vs) && /seal\.scheme === 'OTS' && \/\^\[0-9a-fA-F\]\{128\}\$\/\.test/.test(vs), 'an OTS-format footer is a seal present, never verified, and its digest is resolved for the anchor check');
   ok(/pdfSeal\.scheme === 'anchorcert' \|\| pdfSeal\.scheme === 'sealcert'\) && seal && \(seal\.scheme === 'v2' \|\| seal\.scheme === 'legacy'\)/.test(vs), 'a certificate Subject added to a sealed file never replaces the seal the raw scan found');
   ok(/\.custody-badge\.anchor_certificate/.test(vs) && /lastSeal\.scheme === 'anchorcert' \? '' : '; the seal/.test(vs) && /the sealing device's clock; once Bitcoin confirms/.test(vs), 'the certificate verdict is styled and claims no integrity verdict, and the custody caption says what the seal time is');
+}
+
+// ---- §18j The last verification items (2026-10-03) --------------------------
+{
+  const fs = require('fs'), path = require('path');
+  const g = globalThis; const PDFLib = g.PDFLib;
+  const R = require('../forensic-report.js');
+  const pageText = async (bytes) => {
+    const loaded = await PDFLib.PDFDocument.load(bytes, { ignoreEncryption: true });
+    const parts = [];
+    for (let i = 0; i < loaded.getPageCount(); i++) parts.push((await E.extractPageText(bytes, i, loaded)).join(' '));
+    return parts.join(' \n ').replace(/[ \t]+/g, ' ');
+  };
+  ok(R._partyStronglyNamed('Liam Highcock', 'Gary Highcock signed the lease') === false && R._partyStronglyNamed('Liam Highcock', 'L. Highcock signed the lease') === true && R._partyStronglyNamed('Liam Highcock', 'Liam Highcock signed the lease') === true,
+    'a declared person is named by the whole name or an initial and surname; another person sharing the surname is not that party');
+  const one = E.voExtractPersonsFromContext('From: Zeyd Timol To: Wayne Nel Dear Gary Highcock Sent Monday Subject Lease', 8).map(x => x.name);
+  ok(JSON.stringify(one) === '["Zeyd Timol","Wayne Nel","Gary Highcock"]', 'on one-line page text (production text carries no line breaks) a header value ends at the next header word (' + JSON.stringify(one) + ')');
+  const engSrc = fs.readFileSync(path.join(process.cwd(), 'forensic-engine-page.js'), 'utf8');
+  ok(/a party\\'s submission that cites other sealed records \(its characterisations of those records are not the records themselves\)/.test(engSrc), 'the secondary-source disclosure says which cue fired: a submission does not describe itself as an extract');
+  const fx = [
+    { type: 'CT05', severity: 5, location: 'Page 2', evidence: 'Causal impossibility: "the goods were delivered before they were ordered" (p. 2)', anchor: { where: [2], who: [], when: [], quote: [] } },
+    { type: 'CT01', severity: 3, location: 'Page 3 vs Page 4', evidence: 'Direct contradiction: "the lease was renewed in 2019" vs "the lease was never renewed"', anchor: { where: [3, 4], who: [], when: [], quote: [] } },
+    { type: 'CT23', severity: 2, location: 'Page 6', evidence: 'The record states a signature is missing ("unsigned agreement"): "the Respondent relies on an unsigned agreement for the rental" — verify execution against the signature pages of the original', anchor: { where: [6], who: [{ name: 'Gary Highcock', kind: 'name' }], when: [], quote: [] } },
+    { type: 'CT14', severity: 4, location: 'Page 7', evidence: 'Conflicting entity-status claims: "The applicant states that Sanarth Fuels is deregistered and closed" (deregistered, page 7) vs "Sanarth Fuels is registered" (registered, page 8)', anchor: { where: [7, 8], who: [{ name: 'Sanarth Fuels', kind: 'name' }], when: [], quote: [] } }
+  ];
+  const opts = { documents: [{ name: 'x.pdf', pageCount: 9, sha512: 'cd'.repeat(64), sealId: 'VO-ABCDEF123456' }],
+    findings: { clean: false, overallScore: 40, confidence: 'LOW', totalFindings: fx.length, findings: fx, summary: 'x', contradictionTypesUsed: 4 },
+    identity: { parties: 'Respondent: Sanarth Fuels' }, aiReview: { applied: true, retained: 4, assessed: 4, dropped: 0, added: 0, narrative: '' }, ots: { submitted: true }, ocrPages: [], images: {}, generatedAt: '2026-10-03T08:00:00.000Z' };
+  const run18j = async () => {
+    const quiet = console.log; console.log = () => {};
+    let T, N;
+    try {
+      T = await pageText(await R.build(opts));
+      N = await pageText(await R.buildHumanReport(Object.assign({}, opts, { humanSections: { counter_narratives: { provenance: 'ai', text: 'This may be fraud [F1]. It could be.' } }, humanProvenance: { sectionsAttempted: 1 } })));
+    } finally { console.log = quiet; }
+    const tf = T.replace(/\s+/g, ' ');
+    const dish = tf.slice(tf.lastIndexOf('2. DISHONESTY DETECTION MATRIX'), tf.indexOf('3. NINE-BRAIN', tf.lastIndexOf('2. DISHONESTY DETECTION MATRIX')));
+    ok(dish.indexOf('Evasion / Deflection') !== -1 && dish.indexOf('Contradictions') !== -1 && dish.indexOf('Evasion / Deflection') < dish.indexOf('Contradictions') && /Selective Omissions[^]*unsigned agreement/.test(dish), 'the dishonesty rows are ordered by their most serious finding (an Evasion row at severity 5 above Contradictions), and an unsigned-agreement statement is a Selective Omission (' + dish.slice(0, 260) + ')');
+    ok(/- Finding: /.test(tf) && /CONTRADICTION FOUND/.test(tf), 'each Nine-Brain block carries the template\'s Finding line');
+    ok(/A declared party is listed where the finding's own words name it; otherwise the names on its cited pages are listed, marked "\(named on the cited pages\)"/.test(tf) && !/Attribution records that the party is named in the flagged text/.test(tf), 'the Statutory Anchoring footnote says what each row kind is');
+    ok(/would no longer match its seal hash\. To rule out a deliberate re-seal, compare the delivered file's SHA-512/.test(tf + N.replace(/\s+/g, ' ')) && !/verification would fail/.test(tf + N), 'the seal explainer says what the seal check shows and how to rule out a re-seal, as verify.html does');
+    ok(/It concerns Sanarth Fuels/.test(tf) && !/Sanarth Fuels — the record states/.test(N), 'a declared party named in a finding is the party it concerns, but another person\'s statement about it is never quoted as its own words');
+    const nf = N.replace(/\s+/g, ' ');
+    ok(/No AI-written section passed the gates, so this narrative is the deterministic record/.test(nf) && /No AI-written section passed the gates; it is the deterministic record built/.test(nf) && /No section of this document is machine-written prose/.test(nf) && !/the prose is machine-written, gated, and advisory/.test(nf), 'when no AI-written section passed the gates, the cover, the certification and the provenance paragraph say the narrative is the deterministic record');
+  };
+  await run18j();
 }
 
 console.log(`\n[annexure-eb] PASS=${pass} FAIL=${fail}`);
