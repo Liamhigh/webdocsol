@@ -44,7 +44,7 @@ page count — go to `/api/v1/feedback/patterns`); the Worker serves the site an
 | Forensic engine, PDF reports, sealing, OpenTimestamps, encryption | `forensic-engine-page.js`, `forensic-report.js`, `seal-guard.js`, `ots-proof.js`, `pdf-encrypt.js` — **inlined** into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers | The visitor's browser. The engine also applies the **signed rule package** the seal page fetches and verifies (`ENGINE.md` §12.7) — the same additive loop the Android app and the fraud-firewall run. Edit the source file, then re-splice the inline copy; `tests/inline-scripts.test.mjs` byte-compares them. |
 | API `/api/v1/*` — AI review (classify, assess, narrate), the Brain 9 sweep of the sealed text (`/api/v1/ai/sweep`: anchored recommendations, never findings), the court-ready narrative (`/api/v1/ai/human-report`, automatic in "Seal document with forensic report" since 7 September), voice-note transcription (voice notes arrive singly or as a WhatsApp chat-export `.zip` unpacked on the device — `ENGINE.md` §12.6a), the licensing gatekeeper (`/api/v1/ai/gatekeep`), anonymous pattern feedback (`/api/v1/feedback/patterns`), signed rule packages (`/api/v1/rules/manifest`) and the trainer's log (`/api/v1/rules/changelog`), `/api/v1/status`, admin publish, admin curate and curate-publish, site health; and the weekly trainer run (cron) | `worker/verum-rules.js` (router and handlers), `worker/static-proxy.js` (site chain), `worker/site-assets.js` (embedded images) | Cloudflare Worker `webdocsol` on the zone routes `verumglobal.foundation/*` and `www.verumglobal.foundation/*` (`zone_name = "verumglobal.foundation"`), declared in `wrangler.toml` since 27 September 2026 (#210) and live since the founder re-pointed them that day; also on its own address `webdocsol.liamhigh78.workers.dev` (`workers_dev = true`), a second door that does not depend on the domain, which the probe checks too. Bindings `RULES_KV`, `AI`, `ASSETS`. Cron `[triggers] crons = ["0 3 * * 1"]`: on Cloudflare 1 is Sunday, so the trainer runs Sunday 03:00 UTC. Secrets set in the dashboard only: `ADMIN_TOKEN`, `RULE_PRIVATE_KEY` (absent on 27 September — see Open today), optional `LLM_API_BASE` / `LLM_API_KEY` / `LLM_MODEL`. `HUMAN_REPORT_MODEL` and `AUTO_CURATE` are plain vars. |
 | Pages bridge | `functions/[[path]].js` | Only on the Cloudflare Pages project `verumglobal`, which still builds every push (the `Cloudflare Pages` check on every commit). It hands any request Pages receives to the Worker, loop-guarded by `X-VO-Chain`. Dormant since 27 September: the zone route on `www` runs before Pages. Never shipped as a Worker asset (`.assetsignore`, `SITE_DENY_RE`); `tests/pages-bridge.test.mjs`. |
-| Outside probe | `.github/workflows/live-site-probe.yml` (manual dispatch) | GitHub Actions. It prints DNS answers for the apex and `www`, and for those two and `webdocsol.liamhigh78.workers.dev` the headers, the health and status endpoints, the manifest's shape, the trainer's changelog and an unknown path. Last run: 27 September 2026 04:11 UTC (run 36293574099, on 5dfa007, #210); nothing merged after #210 has been checked from outside. |
+| Outside probe | `.github/workflows/live-site-probe.yml` (manual dispatch) | GitHub Actions. It prints DNS answers for the apex and `www`, and for those two and `webdocsol.liamhigh78.workers.dev` the headers, the health and status endpoints, the manifest's shape, the trainer's changelog and an unknown path. Last run: 3 October 2026 11:56 UTC (run 37121243315, on 0561ea5, the #214 merge): all three hosts answered, health `ok: true` with every tier `assets`, manifest v1.1.0 under `vo-master-1`. |
 | Dashboard data (`dashboard.html`) | This page only | It fetches `verum-forensic-hub.liamhigh78.workers.dev`, a **separate Worker that is not in this repository**. When it does not answer, the page says so; illustrative figures exist only behind `?demo=1` and are labelled. |
 
 **How a change ships.** Edit → `node tests/run-all.js` (every suite green) and `npm run check`
@@ -64,7 +64,7 @@ by AI sessions cannot reach `verumglobal.foundation`, `*.pages.dev` or `*.worker
 **live-site-probe** GitHub Actions workflow (`actions_run_trigger` → `get_job_logs`) to see both
 hosts from outside, ask the founder to open a URL, or read the connector. Read the log with
 `get_job_logs` (`job_id`, `return_content: true`); the built-in `gh api` cannot fetch Actions
-logs. The last probe ran on 27 September 2026 04:11 UTC, before #211–#214.
+logs. The last probe ran on 3 October 2026 11:56 UTC on the #214 merge commit 0561ea5 (run 37121243315).
 
 **Other repositories that depend on this one.** `Liamhigh/1verum` (Android;
 `core/Constitution.kt` hard-codes `https://verumglobal.foundation/api/v1/rules/manifest` and
@@ -83,12 +83,12 @@ founder.
 (the newest entry is last).
 
 **Open today (as of 3 October 2026; true of `main` once PR #214 is merged).** Each
-item says who holds it. Live Cloudflare state is "last verified" on the date given. No live
-state has been checked from outside since the probe of 27 September 2026 04:11 UTC.
+item says who holds it. Live Cloudflare state is "last verified" on the date given. Live state was
+last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the #214 merge).
 - **Founder — the signing key.** `RULE_PRIVATE_KEY` is not on the Worker. The trainer's last run
   (cron, 27 September 03:01 UTC) reads "skipped — no signing key on this service", so the weekly
   run publishes nothing and the package stays v1.1.0 (published 19 July by an admin publish).
-  Last verified 27 September (probe).
+  Last verified 3 October 2026 (probe; the changelog still shows the 27 September run as the last).
 - **Founder — roll the Cloudflare API token** pasted into chat on 24 September (recorded as
   still open on 27 September, #210; this repository cannot see whether it has been rolled).
 - **Founder — from the Public Protector run (`ENGINE.md` §12.14 "Open, with the founder"):**
