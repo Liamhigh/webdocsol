@@ -741,6 +741,13 @@ var DETECTORS = {
     // occurrence of a cue on a page is read, so a form sentence never hides a
     // later sentence of fact.
     var PLEADING_ADMISSION_RE = /\badmit(?:s|ted)?\s+(?:only\s+)?(?:the\s+)?(?:(?:contents?|allegations?|averments?|correctness|opening\s+sentence|first\s+sentence|remainder|balance|rest)\s+(?:of\s+the\s+(?:contents?|allegations?|averments?)\s+)?(?:contained\s+in\s+|set\s+out\s+in\s+|of\s+|in\s+)?(?:(?:this|the|these|that|said|each)\s+(?:said\s+|aforesaid\s+)?(?:sub-?)?para(?:graph)?s?\b|(?:sub-?)?para(?:graph)?s?\s+\d)|(?:contents?|allegations?|averments?)\s+(?:hereof|thereof|herein|therein)\b|(?:sub-?)?para(?:graph)?s?\s+\d)/i;
+    // A sentence that CALLS another statement an admission is analysis, not an
+    // admission: "Forensic Finding:** This is an explicit admission of guilt"
+    // (an AI-written case summary bound into the Greensky bundle, pp. 5, 63,
+    // 143, 272 of the 3 October 2026 run) was sealed as "The record carries an
+    // explicit admission". The admission the engine quotes must be the
+    // admitting party's own sentence, never a commentator's label for one.
+    var VO_ADM_CHARACTERISATION_RE = /\b(?:this|that|it|which|the\s+(?:above|foregoing|email|letter|statement|message|passage|response|reply)\b[^.;!?\n]{0,40}?)\s+(?:is|was|would\s+be|constitutes|amounts\s+to|represents|reads\s+as)\s+(?:an?\s+)?(?:\w+[-\s]+){0,3}?admission\b/i;
     var admPages = [], admQuote = null, admCue = null;
     for (var ap = 0; ap < textBlocks.length; ap++) {
       var lowA = (textBlocks[ap] || '').toLowerCase();
@@ -751,6 +758,16 @@ var DETECTORS = {
           // The cue's own sentence: from the cue to the next sentence end (a
           // clause number's "13.2" has no space after its point).
           var sentA = lowA.slice(atA, atA + 200).split(/[.;!?]\s|\n/)[0];
+          // ...and the sentence's own start, so a label for an admission
+          // ("this is an explicit admission of guilt") is read as the
+          // characterisation it is.
+          var headA = lowA.slice(Math.max(0, atA - 120), atA);
+          var headBreak = Math.max(headA.lastIndexOf('. '), headA.lastIndexOf('; '), headA.lastIndexOf('! '), headA.lastIndexOf('? '), headA.lastIndexOf('\n'));
+          if (headBreak !== -1) headA = headA.slice(headBreak + 1);
+          if (VO_ADM_CHARACTERISATION_RE.test(headA + admissionCues[ac])) {
+            atA = lowA.indexOf(admissionCues[ac], atA + admissionCues[ac].length);
+            continue;
+          }
           if (!PLEADING_ADMISSION_RE.test(sentA)) {
             admPages.push(ap + 1);
             if (!admQuote) {
@@ -1055,6 +1072,11 @@ var DETECTORS = {
       return mo >= 1 && mo <= 12 && dy >= 1 && dy <= voDaysInMonth(mo, yr);
     }
     var voSawDMY = null, voSawMDY = null; // a clearly-DD/MM and a clearly-MM/DD example
+    // Identical impossible tokens are grouped: the 3 October 2026 Greensky run
+    // sealed "Impossible date: 15.20.9094" FOURTEEN times (the same two tokens
+    // on eight invoice pages), and fourteen copies of one observation read as
+    // fourteen contradictions. One finding per distinct token, every page cited.
+    var voImpRaw = [], voImpByRaw = {};
     // A case, docket or reference number shaped like a date is not a date:
     // "CAS 96/6/2026" (a SAPS case number) was sealed as "Impossible date:
     // 96/6/2026" on the AllFuels timeline report (13 September 2026).
@@ -1079,16 +1101,35 @@ var DETECTORS = {
       var okDMY = voValidMD(b, a, year); // day=a, month=b  (DD/MM/YYYY)
       var okMDY = voValidMD(a, b, year); // month=a, day=b  (MM/DD/YYYY)
       if (!okDMY && !okMDY) {
+        // Year horizon. A dotted triplet whose "year" no document could carry
+        // is not a date anyone wrote: "15.20.9094" and "15.20.9115" on the
+        // Greensky customs invoices (3 October 2026 run, pp. 408-438) are
+        // commodity-code tokens, and the engine sealed them as fourteen
+        // "Impossible date" findings under fraud law. A date-shaped token is
+        // only a date when its year field could be one (1200-2200 spans every
+        // documentary horizon); an impossible day/month WITH a plausible year
+        // (31/02/2021, 15.20.2025) keeps firing - that is the signature of a
+        // fabricated or mistyped date, not of a part number.
+        if (year < 1200 || year > 2200) continue;
         var why = (a === 2 || b === 2) ? 'February cannot have that many days' : 'not a real calendar date';
-        findings.push({ type: 'CT03', severity: 5,
-          evidence: 'Impossible date: ' + dates[d].raw + ' (' + why + ' read as day/month/year or month/day/year)',
-          location: 'Page ' + (dates[d].page + 1) });
+        var impKey = dates[d].raw + '|' + why;
+        if (!voImpByRaw[impKey]) { voImpByRaw[impKey] = { raw: dates[d].raw, why: why, pages: [] }; voImpRaw.push(impKey); }
+        if (voImpByRaw[impKey].pages.indexOf(dates[d].page + 1) === -1) voImpByRaw[impKey].pages.push(dates[d].page + 1);
       } else {
         // Only one reading is valid -- record which convention it forces, so a
         // bundle that genuinely mixes BOTH can be noted once (below).
         if (okDMY && !okMDY && a > 12) voSawDMY = voSawDMY || dates[d]; // first field >12 -> must be DD/MM
         if (okMDY && !okDMY && b > 12) voSawMDY = voSawMDY || dates[d]; // second field >12 -> must be MM/DD
       }
+    }
+    // One finding per distinct impossible token, every page it appears on cited.
+    for (var ik = 0; ik < voImpRaw.length; ik++) {
+      var imp = voImpByRaw[voImpRaw[ik]];
+      var impList = imp.pages.length > 8 ? imp.pages.slice(0, 8).join(', ') + ' and ' + (imp.pages.length - 8) + ' more' : imp.pages.join(', ');
+      findings.push({ type: 'CT03', severity: 5,
+        evidence: 'Impossible date: ' + imp.raw + ' (' + imp.why + ' read as day/month/year or month/day/year)' +
+          (imp.pages.length > 1 ? ' — the same token appears on ' + imp.pages.length + ' pages (' + impList + ')' : ''),
+        location: 'Page ' + impList, pages: imp.pages.slice() });
     }
     // A single anchored, non-overclaiming note when the bundle mixes conventions.
     if (voSawDMY && voSawMDY) {
@@ -3592,7 +3633,7 @@ function voXmpValue(xmp, tag) {
   return m ? m[1].trim() : null;
 }
 
-function voDigitalForensicsScan(pdfBytes, pdfDoc) {
+function voDigitalForensicsScan(pdfBytes, pdfDoc, opts) {
   var findings = [];
   var u8;
   try { u8 = voToU8(pdfBytes); } catch (e) { return findings; }
@@ -3651,7 +3692,16 @@ function voDigitalForensicsScan(pdfBytes, pdfDoc) {
     // document's history and are suppressed — disclosed, never silent.
     var _selfProducer = '';
     try { _selfProducer = pdfDoc ? (pdfDoc.getProducer() || '') : ''; } catch (eSp) {}
-    var _isVerumSealed = /verum\s*omnis/i.test(_selfProducer);
+    // Producer alone is not enough: a file sealed by an earlier pipeline (or
+    // compressed after sealing) carries pdf-lib's default producer, not ours
+    // — the 3 October 2026 Greensky run sealed a "Timestamp Manipulation" and
+    // a "Metadata Contradiction" finding against a bundle wearing this
+    // platform's own seal footers on 419 pages (XMP "Skia/PDF" vs Info
+    // "pdf-lib", XMP 2025-06-23 vs Info 2026-08-05 — the seal date). When the
+    // page text carries our seal furniture, the file has by definition been
+    // through our sealer and the Info dictionary describes the seal pass.
+    var _isVerumSealed = /verum\s*omnis/i.test(_selfProducer) ||
+      !!(opts && opts.sealedByThisPlatform);
     if (_isVerumSealed && xmp) {
       findings.voSelfSealNote = 'Metadata comparison suppressed: this file was sealed by Verum Omnis, so its Info dictionary carries the SEAL\'s tool and timestamp, not the source document\'s. The XMP-vs-Info creation-date and producer differences that follow from that are artefacts of sealing, not evidence about the document, and were NOT reported as findings. To test the original document\'s metadata, scan the unsealed original.';
     }
@@ -4170,6 +4220,27 @@ function voSecondaryPages(segs, textBlocks) {
   for (var d = 0; d < list.length; d++) for (var p = list[d].start; p <= list[d].end; p++) out.push(p);
   return out;
 }
+
+// A page whose text carries chat-style markdown markup is a rendered analysis
+// — a pasted AI-assistant transcript or compiled commentary — not the record.
+// Evidence documents (contracts, emails, invoices, affidavits) never carry
+// literal "**" bold markers; printed LLM output does. On the 3 October 2026
+// Greensky run, an AI case summary bound into the bundle four times
+// ("Forensic Finding:** This is an explicit admission of guilt…", pp. 5, 63,
+// 143, 272) was sealed as a CT01 finding, its heading became the party
+// "Forensic Finding", and its date entered the timeline. Two bold pairs, or a
+// single heading-colon-into-bold ("Finding:**" — OCR often loses the opening
+// pair), mark the page; the classification is disclosed and the page's claims
+// become leads to verify against the primary record (voDemoteSecondarySource).
+function voMarkdownAnalysisPages(textBlocks) {
+  var out = [];
+  for (var i = 0; i < (textBlocks || []).length; i++) {
+    var t = String(textBlocks[i] || '');
+    var bold = (t.match(/\*\*/g) || []).length;
+    if (bold >= 4 || /[A-Za-z]\s?:\*\*/.test(t)) out.push(i + 1);
+  }
+  return out;
+}
 // The note names each secondary document and its page range, so a reader can
 // see which pages the leads sit on: ' (p. 540-580: "Extract prepared …")'.
 function voSecondaryWhere(secSegs) {
@@ -4447,7 +4518,12 @@ var VO_NON_PERSON_TOK = (function () {
     // whole phrases below, so "Maria Campos", "Exxaro Resources" and "Texas
     // Instruments" survive (a token also stops its one-edit neighbours).
     // Header words end a colon-free header value ("Rabia Seedat Cc Amrit").
-    'director director-general department assistant regarding does cc bcc subject sent dear to from date regards sincerely').split(' ');
+    'director director-general department assistant regarding does cc bcc subject sent dear to from date regards sincerely ' +
+    // Greensky 3 October 2026 run: an AI case summary's own heading ("Forensic
+    // Finding:** This is an explicit admission…") was bound as the party
+    // "Forensic Finding". No person is named Finding, and "forensic" never
+    // opens a person's name.
+    'finding findings forensic').split(' ');
   for (var i = 0; i < words.length; i++) m[words[i]] = 1;
   return m;
 })();
@@ -4495,7 +4571,12 @@ var VO_NON_PERSON_PHRASE = (function () {
     'forensic platform|verum omnis forensic platform|' +
     'petroleum resources|mineral resources|mineral and petroleum resources|trevenna campus|personal assistant|' +
     'critical point|instrument does|concerns regarding|systemic unfair practices|unfair practices|unfair business practices|' +
-    'documented unfair practices|practice description victims|practice description|systemic unfair').split('|');
+    'documented unfair practices|practice description victims|practice description|systemic unfair|' +
+    // Greensky 3 October 2026 run: a letter signed "General Manager" put the
+    // ROLE in the party index. "General" and "Manager" are each part of real
+    // names ("General Electric", "Sipho Manager" is improbable but possible),
+    // so the role is stopped as the exact phrase only.
+    'general manager|managing director|chief executive|chief executive officer|financial manager|operations manager').split('|');
   for (var i = 0; i < phrases.length; i++) m[phrases[i]] = 1;
   return m;
 })();
@@ -5672,6 +5753,18 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   if (_furniture) extractionNote += ' Seal furniture: this platform\'s own seal footers (seal id, hash, date and time, page count) were removed from ' + _furniture + ' page(s) before detection; a seal stamp is not a statement of the record.';
   var _secondarySegs = voSecondarySegments(_docSegs, textBlocks);
   var _secondaryPages = voSecondaryPages(_docSegs, textBlocks);
+  // Markdown-formatted analysis pages (a pasted AI transcript or compiled
+  // commentary) are secondary wherever they sit — they need no heading and
+  // recur scattered through a bundle (Greensky, 3 October 2026: pp. 5, 63,
+  // 143, 272 carried the same AI case summary).
+  var _mdPages = voMarkdownAnalysisPages(textBlocks);
+  var _secondaryAllPages = _secondaryPages.slice();
+  for (var mdp = 0; mdp < _mdPages.length; mdp++) if (_secondaryAllPages.indexOf(_mdPages[mdp]) === -1) _secondaryAllPages.push(_mdPages[mdp]);
+  _secondaryAllPages.sort(function (a, b) { return a - b; });
+  if (_mdPages.length) {
+    var _mdList = _mdPages.length > 12 ? _mdPages.slice(0, 12).join(', ') + ', … (' + _mdPages.length + ' in total)' : _mdPages.join(', ');
+    extractionNote += ' Markdown-formatted analysis: ' + _mdPages.length + ' page(s) (' + _mdList + ') carry chat-style markdown markup ("**" bold marks) and read as a rendered AI or chat analysis, not the record; their claims are treated as a secondary source and any observation resting only on them is a lead, never a finding.';
+  }
 
   // Run every detector
   var detectors = [
@@ -5774,7 +5867,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // neither blocks a package rule nor consumes a type's budget, and before
   // the OCR cap, so a lead carries no cap tag. Each lead goes to the engine
   // notes with its page, where both reports print it.
-  var _sec = voDemoteSecondarySource(allFindings, _secondaryPages);
+  var _sec = voDemoteSecondarySource(allFindings, _secondaryAllPages);
   allFindings = _sec.kept;
   if (_sec.leads.length || _sec.capped) {
     for (var sl = 0; sl < _sec.leads.length; sl++) {
@@ -5783,12 +5876,15 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
         text: 'Secondary-source lead, not a finding: ' + String(_ld.evidence || '').replace(/\s*\[secondary source on p\.[^\]]*\]/g, '').replace(/\s*\[OCR page: weight reduced[^\]]*\]/g, '').replace(/\s+/g, ' ').trim() + ' — verify against the primary record' });
     }
     // Say which cue made each document secondary: a party's submission does
-    // not describe itself as an extract.
+    // not describe itself as an extract, and a markdown analysis page carries
+    // neither heading (its own note above names its pages).
     var _subOnly = _secondarySegs.length && _secondarySegs.every(function (g) { return g.submission; });
     var _subSome = _secondarySegs.some(function (g) { return g.submission; });
-    extractionNote += ' Secondary sources: ' + (_secondaryPages.length) + ' page(s) belong to ' + (_subOnly
+    var _srcDesc = _secondaryPages.length ? (_secondaryPages.length) + ' page(s) belong to ' + (_subOnly
       ? 'a party\'s submission that cites other sealed records (its characterisations of those records are not the records themselves)'
-      : 'a document that describes itself as an extract, summary or commentary prepared after the fact' + (_subSome ? ', or to a party\'s submission that cites other sealed records' : '')) + voSecondaryWhere(_secondarySegs) + '; ' +
+      : 'a document that describes itself as an extract, summary or commentary prepared after the fact' + (_subSome ? ', or to a party\'s submission that cites other sealed records' : '')) + voSecondaryWhere(_secondarySegs) : '';
+    if (_mdPages.length) _srcDesc += (_srcDesc ? ', and ' : '') + _mdPages.length + ' page(s) carry chat-style markdown analysis markup (listed above)';
+    extractionNote += ' Secondary sources: ' + _srcDesc + '; ' +
       (_sec.leads.length ? _sec.leads.length + ' observation(s) sit entirely on those pages and are recorded under the engine notes as leads to verify against the primary record, NOT as findings' : '') +
       (_sec.leads.length && _sec.capped ? '; ' : '') +
       (_sec.capped ? _sec.capped + ' finding(s) with one half on those pages held at reduced weight' : '') + '.';
@@ -5830,7 +5926,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // Digital forensics on the raw PDF structure (revisions, post-signature
   // saves, active content, XMP vs Info disagreement).
   try {
-    var _dfFindings = voDigitalForensicsScan(pdfBytes, pdfDoc);
+    // The furniture count doubles as the self-seal signal: a file whose pages
+    // carry this platform's seal footers has been through this sealer, so its
+    // Info dictionary describes the seal pass, not the source document.
+    var _dfFindings = voDigitalForensicsScan(pdfBytes, pdfDoc, { sealedByThisPlatform: !!_furniture });
     // Disclose any self-seal metadata suppression (Prime Directive 6).
     if (_dfFindings && _dfFindings.voSelfSealNote) _voContextNotes.push({ type: 'SEAL', location: 'PDF metadata', text: String(_dfFindings.voSelfSealNote) });
     allFindings = allFindings.concat(_dfFindings);
@@ -6524,7 +6623,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     generateSummary: generateSummary, voEditDistance: voEditDistance,
     voStripSealFurniture: voStripSealFurniture, voStripSealFurnitureBlocks: voStripSealFurnitureBlocks, voCacheDocSegs: voCacheDocSegs,
-    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSnapWindow: voSnapWindow, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voIsSubmissionOnSealed: voIsSubmissionOnSealed, voSubmissionSpan: voSubmissionSpan, voFragmentCut: voFragmentCut, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voDatedAfterReference: voDatedAfterReference, voIsStampContext: voIsStampContext,
+    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voMarkdownAnalysisPages: voMarkdownAnalysisPages, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSnapWindow: voSnapWindow, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voIsSubmissionOnSealed: voIsSubmissionOnSealed, voSubmissionSpan: voSubmissionSpan, voFragmentCut: voFragmentCut, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voDatedAfterReference: voDatedAfterReference, voIsStampContext: voIsStampContext,
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,
     CONTRADICTION_TYPES: CONTRADICTION_TYPES,
     DETECTORS: DETECTORS,

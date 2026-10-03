@@ -1454,15 +1454,29 @@ function plainLeadLines(fr, data) {
   }).sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
   if (plSeriousList.length > 0) {
     plLines.push(plSeriousList.length === 1 ? 'The serious one, in plain words:' : 'The serious ones, in plain words:');
-    var plSerCap = Math.min(4, plSeriousList.length);
-    for (var ps = 0; ps < plSerCap; ps++) {
+    // Identical plain-words lines collapse into ONE bullet naming every page:
+    // the 3 October 2026 Greensky summary printed the same sentence four
+    // times ("On p. 408, a date does not add up…" twice, p. 414 twice) and
+    // then "…and 12 more serious items" — fourteen copies of one observation
+    // read as fourteen separate matters.
+    var plGroups = [], plByText = {};
+    for (var ps = 0; ps < plSeriousList.length; ps++) {
       var psf = plSeriousList[ps];
+      var psText = withPeriod(narrativeMeaning(psf));
       var psLoc = fmtLocation(psf.location);
-      var psWhere = (psLoc && psLoc !== '—') ? 'On ' + psLoc + ', ' : '';
-      plLines.push('•  ' + psWhere + withPeriod(narrativeMeaning(psf)));
+      if (!plByText[psText]) { plByText[psText] = { text: psText, locs: [], n: 0 }; plGroups.push(plByText[psText]); }
+      plByText[psText].n++;
+      if (psLoc && psLoc !== '—' && plByText[psText].locs.indexOf(psLoc) === -1) plByText[psText].locs.push(psLoc);
     }
-    if (plSeriousList.length > plSerCap) {
-      plLines.push('•  …and ' + (plSeriousList.length - plSerCap) + ' more serious item' + (plSeriousList.length - plSerCap === 1 ? '' : 's') + ', set out in full below.');
+    var plSerCap = Math.min(4, plGroups.length), plShownFindings = 0;
+    for (var pg = 0; pg < plSerCap; pg++) {
+      var plg = plGroups[pg];
+      plShownFindings += plg.n;
+      var plWhere = plg.locs.length ? 'On ' + (plg.locs.length > 6 ? plg.locs.slice(0, 6).join(', ') + ' and ' + (plg.locs.length - 6) + ' more' : plg.locs.join(', ')) + ', ' : '';
+      plLines.push('•  ' + plWhere + plg.text + (plg.n > 1 ? ' (' + plg.n + ' findings)' : ''));
+    }
+    if (plSeriousList.length > plShownFindings) {
+      plLines.push('•  …and ' + (plSeriousList.length - plShownFindings) + ' more serious item' + (plSeriousList.length - plShownFindings === 1 ? '' : 's') + ', set out in full below.');
     }
   }
   if (plSerial > 0) plLines.push(plSerial + ' multi-stage pattern match' + (plSerial === 1 ? '' : 'es') + ' also recorded - see the Serial Pattern Analysis section.');
@@ -2308,7 +2322,10 @@ var VO_BRAIN_OF_CT = (function () {
   // out in Findings in Detail (Public Protector submission run: "TAMPER FOUND"
   // was printed over the author's own sentence about unsigned agreements).
   put('B2', ['CT24', 'CT25', 'CT26', 'CT27', 'CT28', 'CT30', 'CT41', 'CT42']);
-  put('NONE', ['CT23', 'CT33', 'CT35', 'CT37']);
+  // A custody gap (CT39) is an evidence-handling observation: no brain block
+  // in the §15.4 template describes it, and the 3 October 2026 Greensky
+  // report printed it under B1 as "CONTRADICTION FOUND".
+  put('NONE', ['CT23', 'CT33', 'CT35', 'CT37', 'CT39']);
   // Two conflicting addresses, or a party in two places at once, are two
   // statements that cannot both be true. B3 is a message thread's gap, and no
   // detector measures one.
@@ -2432,11 +2449,18 @@ function secSealedFindings(ctx, data) {
     return quoteEvidence(f.evidence).replace(/["'\s.,;:—-]/g, '').length > 0;
   }).sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
   if (subst.length === 0) return;
+  // One count. The 3 October 2026 Greensky report said "19 findings" on its
+  // cover and "The record contains 17 findings" here, because two findings
+  // live at file level (PDF metadata) and carry no page to anchor to. The
+  // list below stays page-anchored; the sentence reconciles the difference.
+  var voFileLevel = (fr.findings || []).filter(isEngineFinding).length - subst.length;
   ctx.newBodyPage();
   ctx.heading('5. SEALED FINDINGS');
   // §15.3 REQUIRED wording (the shape; the count now reads through voCountPhrase): "The record contains [X] contradictions.
   // The following are established."
-  ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
+  ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) +
+    (voFileLevel > 0 ? ' anchored to pages, and ' + voFileLevel + ' further finding' + (voFileLevel === 1 ? '' : 's') + ' recorded at file level (PDF metadata or structure, numbered P# in the matrix)' : '') +
+    '. The following are established, each anchored to its page:', { size: 10, after: 8 });
   var CAP = 20;
   var shown = subst.slice(0, CAP);
   for (var i = 0; i < shown.length; i++) {
@@ -3788,13 +3812,24 @@ var VO_ESTABLISHES = {
   CT26: 'The page make-up is irregular at that point in the bundle.',
   CT46: 'The capacity claimed and the conduct recorded do not match.',
   CT15: 'The stated total differs from the sum of its own parts. At most one of the figures is correct.',
-  CT22: 'The VAT line differs from the rate applied to the subtotal. At most one of the figures is correct.'
+  CT22: 'The VAT line differs from the rate applied to the subtotal. At most one of the figures is correct.',
+  // These three fell through to the two-positions default on the 3 October
+  // 2026 Greensky report ("The record states both positions" under a custody
+  // gap and a metadata tool mismatch — neither states two positions).
+  CT39: 'Custody of the evidence is claimed but not documented step by step. The handling history has to be established before the record\'s weight can be assessed.',
+  CT29: 'The file\'s own metadata stores disagree on when it was created. The true date has to be established from the native original, not from this copy.',
+  CT24: 'The file\'s metadata names more than one creating tool, so it has passed through at least one further tool since creation. What that pass changed has to be established from the native original.'
 };
 function establishesOf(f) {
   // Without enforcement language near it (severity 2), the statement that an
   // agreement is unsigned says nothing about the agreement being enforced.
   if (isUnsignedStatement(f) && typeof f.severity === 'number' && f.severity <= 2) return 'The record states that an agreement it refers to is unsigned. Whether, and when, it was executed has to be established from the original.';
   if (f && f.type === 'CT23' && /^Non-standard signature method/.test(String(f.evidence || ''))) return 'The document was executed by an unusual method (a conformed or surrogate signature). Who signed, and with what authority, has to be established from the original.';
+  // An impossible date is one shape of CT03; two dates for one event is the
+  // other. The 3 October 2026 Greensky report printed "The same event carries
+  // two different dates" under fourteen findings whose evidence was a single
+  // token that exists on no calendar.
+  if (f && f.type === 'CT03' && /^Impossible date/.test(String(f.evidence || ''))) return 'A date in the record cannot exist on any calendar. As written, the entry bearing it cannot be accurate; the true date has to be established from the original.';
   if (f && f.type && VO_ESTABLISHES[f.type]) return VO_ESTABLISHES[f.type];
   return 'The record states both positions. They cannot both hold, and the record does not resolve which one stands.';
 }
@@ -4092,10 +4127,21 @@ function secShortVersion(ctx, data) {
 
   if (singles.length) {
     ctx.subHeading('Also established');
+    // Identical lines collapse into one bullet carrying every page (the
+    // 3 October 2026 Greensky report printed the same date-does-not-add-up
+    // line fourteen times here).
+    var sGroups = [], sByText = {};
     for (var s2 = 0; s2 < singles.length; s2++) {
       var sf = singles[s2].f;
-      var loc = (singles[s2].where && singles[s2].where !== '—') ? ' (' + singles[s2].where + ')' : '';
-      ctx.bullet(withPeriod(narrativeMeaning(sf)).replace(/\.$/, '') + loc + '.', { size: 9.5, after: 3 });
+      var sText = withPeriod(narrativeMeaning(sf)).replace(/\.$/, '');
+      if (!sByText[sText]) { sByText[sText] = { text: sText, locs: [], n: 0 }; sGroups.push(sByText[sText]); }
+      sByText[sText].n++;
+      if (singles[s2].where && singles[s2].where !== '—' && sByText[sText].locs.indexOf(singles[s2].where) === -1) sByText[sText].locs.push(singles[s2].where);
+    }
+    for (var sg = 0; sg < sGroups.length; sg++) {
+      var sgr = sGroups[sg];
+      var sLoc = sgr.locs.length ? ' (' + (sgr.locs.length > 6 ? sgr.locs.slice(0, 6).join(', ') + ' and ' + (sgr.locs.length - 6) + ' more' : sgr.locs.join(', ')) + ')' : '';
+      ctx.bullet(sgr.text + sLoc + (sgr.n > 1 ? ' — ' + sgr.n + ' findings' : '') + '.', { size: 9.5, after: 3 });
     }
     ctx.gap(4);
   }
@@ -4988,7 +5034,11 @@ async function buildHumanReport(opts) {
     if (lead && lead.length) { for (var i = 0; i < lead.length; i++) ctx.para(lead[i], { size: 10.5, after: 6 }); }
     else ctx.para('The sealed record carries no verified finding to summarise.', { size: 10.5, after: 6 });
   });
-  ctx.para('Verified findings in the sealed record: ' + subst.length + ' (' + humanFindings.length + ' page-anchored and cited as [F#] in this narrative). AI-raised candidates pending verification: ' + candidates.length + ' (never counted as findings).', { size: 9, font: ctx.f.courier, color: GRAY, after: 4 });
+  // The headline count is the whole engine set: the 3 October 2026 Greensky
+  // narrative said "17" here while the executive summary above it said "19",
+  // because two findings lived at file level with no page to anchor to.
+  var voEngineAll = (fr.findings || []).filter(isEngineFinding).length;
+  ctx.para('Verified findings in the sealed record: ' + voEngineAll + ' (' + humanFindings.length + ' page-anchored and cited as [F#] in this narrative' + (voEngineAll > humanFindings.length ? '; ' + (voEngineAll - humanFindings.length) + ' at file level or without a quotable passage, numbered P#' : '') + '). AI-raised candidates pending verification: ' + candidates.length + ' (never counted as findings).', { size: 9, font: ctx.f.courier, color: GRAY, after: 4 });
 
   // ---- 2. EVIDENCE INDEX (engine) -----------------------------------------
   secEvidenceIndex(ctx, data);
@@ -5148,7 +5198,12 @@ async function buildHumanReport(opts) {
   ctx.heading('COURT-READY DECLARATION');
   ctx.subHeading('Sealed findings');
   if (subst.length) {
-    ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) + '. The following are established, each anchored to its page:', { size: 10, after: 8 });
+    // One count (see secSealedFindings): page-anchored items are listed; a
+    // file-level finding is named in the sentence, never silently dropped.
+    var voFileLevelD = (fr.findings || []).filter(isEngineFinding).length - subst.length;
+    ctx.para('The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) +
+      (voFileLevelD > 0 ? ' anchored to pages, and ' + voFileLevelD + ' further finding' + (voFileLevelD === 1 ? '' : 's') + ' recorded at file level (PDF metadata or structure, numbered P# in the matrix)' : '') +
+      '. The following are established, each anchored to its page:', { size: 10, after: 8 });
     var CAPF = 20;
     for (var d = 0; d < Math.min(subst.length, CAPF); d++) {
       var dq = quoteEvidence(subst[d].evidence);
@@ -5216,7 +5271,7 @@ var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buil
   _ctNames: CT_NAMES, _narrativeMeaningMap: NARRATIVE_MEANING, _plainLeadLines: plainLeadLines,
   _narrativeBlocks: narrativeBlocks, _pageRanges: pageRanges,
   _fmtLocation: fmtLocation, _pageNumbers: pageNumbers, _scrubNarrative: scrubNarrative, _scrubRebuttals: scrubRebuttals, _isUnsignedStatement: isUnsignedStatement, _declaredPartyFor: declaredPartyFor, _namedOnPages: namedOnPages, _hintFor: hintFor, _anchorQuote: anchorQuote, _anchorQuotes: anchorQuotes, _sameNameVariant: sameNameVariant, _anchorPhrase: anchorPhrase, _docTitle: docTitle, _mergePersonIndex: mergePersonIndex,
-  _contradictionSides: contradictionSides, _establishesOf: establishesOf,
+  _contradictionSides: contradictionSides, _establishesOf: establishesOf, _brainOfCt: VO_BRAIN_OF_CT,
   _docsForLocation: docsForLocation, _crossDocNote: crossDocNote, _ocrTouched: ocrTouched,
   _documentParties: documentParties, _effectiveParties: effectiveParties,
   _effectivePartiesWithRoles: effectivePartiesWithRoles,
