@@ -50,7 +50,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**33 suites, 2524 assertions**, all green (counted 3 October 2026, with the Public Protector
+**33 suites, 2535 assertions**, all green (counted 3 October 2026, with the Public Protector
 submission run and the Greensky re-run, `ENGINE.md` §12.14–§12.15). `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file
 there. What each suite guards, and the real evidence bundle behind it, is in
