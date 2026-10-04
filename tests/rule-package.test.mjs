@@ -250,10 +250,12 @@ const key = makeKey();
   ok(/ctx\.para\(rulePackageLine\(data\), \{ size: 9, font: ctx\.f\.courier, color: GRAY, after: 2 \}\);/.test(rsrc) && /ctx\.bullet\(rulePackageLine\(data\), \{ size: 9\.5 \}\);/.test(rsrc) && /rulePackageLine\(data\),\s*brain9SweepLine\(data\),\s*'Verification: verumglobal\.foundation\/verify\.html/.test(rsrc), 'the line prints on the cover, in Methodology and in the court-ready narrative\'s provenance record');
 }
 
-// ---- 8. the hybrid: the AI review prunes, anchors and feeds back ----
+// ---- 8. the hybrid: the AI review notes, anchors and feeds back (it never prunes) ----
 {
   const html = readFileSync(path.join(root, 'seal-document.html'), 'utf8');
-  ok(/var dropped = \(v\.verdict === 'drop'\) \|\| \(v\.keep === false\);/.test(html), 'assess verdicts are read as the Worker sends them ({verdict:"drop"}), so the review can prune');
+  // Founder ruling (5 October 2026): the AI can never delete an engine
+  // finding; an "unsupported" verdict (or an older worker's "drop") is a note.
+  ok(/var unsupported = \(v\.verdict === 'unsupported'\) \|\| \(v\.verdict === 'drop'\) \|\| \(v\.keep === false\);/.test(html) && /notes\[String\(v\.id\)\]/.test(html) && !/dropIds/.test(html), 'assess verdicts are read as the Worker sends them ({verdict:"unsupported"}) and become notes, never removals');
   ok(/var dupKey = aType \+ '\|' \+ aRationale\.toLowerCase\(\)/.test(html), 'AI additions are deduplicated across batches');
   ok(/var anchor = voAnchorAiQuote\(af\.quote, af\.page\);/.test(html) && /anchored: anchor\.found,/.test(html), 'every AI addition is anchored (or labelled unanchored) on this device');
   // Run the page's anchoring function in Node with a stubbed text store.

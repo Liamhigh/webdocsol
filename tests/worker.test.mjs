@@ -197,15 +197,17 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(r.status === 200, 'narrate accepts the documented payload shape (' + r.status + ')');
   const nb = await r.json().catch(() => null);
   ok(nb && nb.ok === true, 'narrate returns ok:true');
-  ok(nb && nb.model === 'template-fallback' && !/score|confidence/i.test(nb.executiveSummary || '') && /1 engine-verified finding was supplied/.test(nb.executiveSummary || ''),
+  ok(nb && nb.model === 'template-fallback' && !/score|confidence/i.test(nb.executiveSummary || '') && /1 engine finding was supplied/.test(nb.executiveSummary || '') && !/verified/.test(nb.executiveSummary || ''),
     'the template narrative names its provenance and prints no score and no band (' + JSON.stringify(nb && nb.executiveSummary).slice(0, 160) + ')');
   ok(nb && /states: \u201csignature mismatch\u201d \[F1\]/.test(nb.criticalEvidence || ''),
     'the template wraps a finding\'s evidence in typographic quotes, so evidence that itself opens with a straight-quoted word cannot desynchronise the report\'s sentence gate');
   const mixed = { ...good, findingsKept: good.findingsKept.concat([{ id: 'F2', type: 'CT09', severity: 3, severityOrdinal: 'MEDIUM', status: 'AI-RAISED CANDIDATE - PENDING VERIFICATION', location: 'Page 3', evidence: 'name differs' }]), findingsPruned: 2 };
   r = await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify(mixed)), env, {});
   const mb = await r.json().catch(() => null);
-  ok(mb && /1 engine-verified finding and 1 AI-raised candidate \(advisory, pending verification\) were supplied/.test(mb.executiveSummary || '') && /2 candidate\(s\) were pruned/.test(mb.executiveSummary || ''),
-    'the template counts engine-verified findings apart from AI-raised candidates (' + JSON.stringify(mb && mb.executiveSummary).slice(0, 200) + ')');
+  // Founder ruling (5 October 2026): the AI removes no engine finding, so an
+  // older client's findingsPruned is accepted and never printed.
+  ok(mb && /1 engine finding and 1 AI-raised candidate \(advisory, pending verification\) were supplied/.test(mb.executiveSummary || '') && !/pruned/.test(mb.executiveSummary || ''),
+    'the template counts engine findings apart from AI-raised candidates and never says a finding was pruned (' + JSON.stringify(mb && mb.executiveSummary).slice(0, 200) + ')');
 
   // The OLD client payload {findings, score, verdict} is the wrong shape and
   // must be rejected -- documents the contract the client now satisfies.
@@ -724,7 +726,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     const nb = await (await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify({ documentName: 'd.pdf', pageCount: 9, score: 0, confidence: 'n/a', generatedUtc: '2026-10-02T00:00:00Z', findingsPruned: 0,
       findingsKept: [{ id: 'F1', type: 'CT14', severity: 5, status: 'ENGINE-VERIFIED', location: 'Page 13', evidence: 'status twice' }, { id: 'C1', type: 'CT09', severity: 3, status: 'AI-RAISED CANDIDATE - PENDING VERIFICATION', location: 'Page 3', evidence: 'name differs' }, { id: 'P1', type: 'SERIAL', severity: 3, status: 'ENGINE-VERIFIED', location: '', evidence: 'serial pattern' }] })), env, {})).json();
     const all = (nb.executiveSummary || '') + ' ' + (nb.criticalEvidence || '');
-    ok(/\[F1\]/.test(all) && !/\[C1\]|Finding C1|name differs|Finding P1|serial pattern/.test(all) && /1 engine-verified finding and 1 AI-raised candidate/.test(all) && /AI-raised candidates are not quoted here/.test(all) && !/\(CT14\)/.test(all),
+    ok(/\[F1\]/.test(all) && !/\[C1\]|Finding C1|name differs|Finding P1|serial pattern/.test(all) && /1 engine finding and 1 AI-raised candidate/.test(all) && /AI-raised candidates are not quoted here/.test(all) && !/\(CT14\)/.test(all),
       'the template states as fact only engine findings, quotes no candidate or pattern, and prints no raw engine code (' + all.slice(0, 260) + ')');
     const nz = await (await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify({ documentName: 'd.pdf', pageCount: 9, score: 0, confidence: 'n/a', generatedUtc: '2026-10-02T00:00:00Z', findingsPruned: 0, findingsKept: [] })), env, {})).json();
     const allz = (nz.executiveSummary || '') + ' ' + (nz.criticalEvidence || '');

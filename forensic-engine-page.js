@@ -2536,7 +2536,7 @@ var DETECTORS = {
     }
     if (foundJurisdictions.length > 1) {
       findings.push({ type: 'CT38', severity: 0, contextOnly: true,
-        evidence: 'Context: multiple jurisdictions are referenced (' + foundJurisdictions.join(', ') + ') — expected in a cross-border matter and NOT scored as a finding.',
+        evidence: 'Context: multiple jurisdictions are referenced (' + foundJurisdictions.join(', ') + ') — expected in a cross-border matter and not recorded as a finding.',
         location: 'Full document' });
     }
     return findings;
@@ -6143,7 +6143,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     findingsByCategory[cat].push(finding);
   }
   if (allFindings.length) {
-    extractionNote += ' Score calibration: confidence-weighted per finding type (calibration v1): lower-precision detectors contribute less than high-precision ones.';
+    // The calibration weights only the internal ordering; a report never
+    // prints it (PD1: "Score calibration" in the methodology read as a score,
+    // evidence-bundle-7-docs review, 5 October 2026).
   }
 
   var overallScore = maxScore > 0 ? Math.round((totalScore / maxScore) * 100) : 0;
@@ -6210,37 +6212,17 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
 }
 
 function generateSummary(findings, score) {
-  // A density score over a tiny finding set reads as a sweeping verdict —
-  // 2 findings on a 451-page bundle scored "70/100 HIGH ... suggests fraud
-  // or tampering", HIGHER than the old 12-finding report, purely because the
-  // per-finding average rose. With few findings the honest story is "a
-  // couple of specific, checkable issues", so say exactly that.
-  // PD16 + Ordinal Confidence: no band-label prefixes (CRITICAL/HIGH/MODERATE
-  // read as graded confidence), no score talk, no "appears". Counts and flat
-  // statements of what the record contains; the internal score only selects
-  // which statement fits.
-  if (findings.length > 0 && findings.length <= 3) {
-    // No band word here either: "per-finding severity is moderate" is a
-    // confidence band in a sentence (§15.2), and it led the annex summary of
-    // the evidence-bundle-2-docs report.
-    return findings.length + ' page-anchored finding' + (findings.length === 1 ? '' : 's') +
-      ' established. The finding count is low for the document — read each finding on its cited page.';
-  }
-  if (score >= 80) {
-    return findings.length + ' contradictions established across multiple categories. ' +
-      'The documents evidence systematic fraud. Manual forensic review strongly recommended.';
-  } else if (score >= 60) {
-    return findings.length + ' contradictions established. ' +
-      'The documents cannot all be true as written.';
-  } else if (score >= 40) {
-    return findings.length + ' contradictions established. ' +
-      'The record contradicts itself at the cited pages; read each finding against the original.';
-  } else if (score >= 20) {
-    return findings.length + ' minor contradictions established. ' +
-      'The document is largely consistent, with the anomalies cited.';
-  } else {
-    return 'No contradictions were detected. Every detector ran; none triggered.';
-  }
+  // PD1 and §15.2: the summary states the count and nothing graded. It once
+  // let the internal score choose the sentence — "4 minor contradictions
+  // established. The document is largely consistent" (evidence-bundle-7-docs,
+  // 5 October 2026) and, above 80, "The documents evidence systematic fraud",
+  // a characterisation the court reserves — and a document with more than
+  // three low-ranked findings read "No contradictions were detected".
+  // `score` is accepted for callers and not used.
+  var n = Array.isArray(findings) ? findings.length : 0;
+  if (!n) return 'No contradictions were detected. Every detector ran; none triggered.';
+  return n + ' finding' + (n === 1 ? '' : 's') + ' established, each set out with its page or file-level location. ' +
+    'Read each finding against the original at the cited page.';
 }
 
 // ===================== EXPORT =====================

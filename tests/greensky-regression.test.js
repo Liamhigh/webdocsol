@@ -318,9 +318,12 @@ const E = require('../forensic-engine-page.js');
   }
 }
 
-// ---- 9.8 CT39 renders by name, never under a brain block ----
+// ---- 9.8 CT39 renders under its brain, never as "CONTRADICTION FOUND" ----
+// (5 October 2026: every finding renders under the brain that produced it, §2;
+// a custody record belongs to B2 and prints as FINDING RECORDED, since no
+// template block describes it.)
 {
-  ok(R._brainOfCt.CT39 === 'NONE', 'a custody gap is listed by name, never as "CONTRADICTION FOUND" under B1');
+  ok(R._brainOfCt.CT39 === 'B2' && R._brainBlockLabel({ type: 'CT39', evidence: 'x' }) === 'FINDING RECORDED', 'a custody gap renders under B2 as FINDING RECORDED, never as "CONTRADICTION FOUND" under B1');
   ok(R._brainOfCt.CT24 === 'B2' && R._brainOfCt.CT29 === 'B5', 'the metadata and timestamp routes are unchanged');
 }
 

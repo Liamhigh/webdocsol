@@ -9,6 +9,11 @@
  *   - no batch can exceed the worker's body-size or count caps,
  *   - a large finding set that would 413 in one shot now goes through,
  *   - verdicts merge by id and a failing batch keeps (never drops) its findings.
+ * Founder ruling (5 October 2026): the AI can never delete or change an engine
+ * finding. An "unsupported" view is a note on a copy of the ORIGINAL finding;
+ * every finding comes back, in order, with the engine's own words (the review
+ * once returned its 300-character request copies, and a long quote reached the
+ * sealed report cut mid-word: "verify execution agai").
  */
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
@@ -92,17 +97,26 @@ sentBatches = []; failBatchIndex = -1;
 const r1 = await sandbox.aiAssessFindings(big);
 ok(r1 && r1.ran === true, 'aiAssessFindings runs across batches without a 413');
 ok(sentBatches.length === batches.length, 'one POST per batch (' + sentBatches.length + ')');
-// The mock drops finding index 0 of each batch -> exactly one drop per batch.
-ok(r1.findings.length === big.length - batches.length,
-  'kept = total minus one dropped-by-AI per batch (' + r1.findings.length + ')');
+// The mock marks finding index 0 of each batch unsupported -> one NOTE per
+// batch, and no finding removed.
+ok(r1.findings.length === big.length,
+  'every engine finding comes back: the AI removes none (' + r1.findings.length + ' of ' + big.length + ')');
+ok(r1.noted === batches.length && r1.findings.filter(f => f.aiReviewNote).length === batches.length,
+  'an unsupported view is an advisory note, one per batch here (' + r1.noted + ')');
+ok(r1.findings.every((f, i) => f.evidence === big[i].evidence && f.id === big[i].id && f.type === big[i].type),
+  'every finding keeps the engine\'s own words: the 300-character request copy never reaches the report');
+ok(r1.findings.every(f => f.aiAssessed === true) && big.every(f => f.aiAssessed === undefined && f.aiReviewNote === undefined),
+  'the review\'s marks travel on copies; the engine\'s own finding objects are untouched');
 
 // --- a failing batch keeps its findings, the rest still assess ---
 sentBatches = []; failBatchIndex = 1;   // second batch throws
 const r2 = await sandbox.aiAssessFindings(big);
 ok(r2 && r2.ran === true, 'partial failure still yields a review (some batches ran)');
-// Only the successful batches drop their index-0 finding; the failed batch keeps all.
-ok(r2.findings.length === big.length - (batches.length - 1),
-  'a failed batch drops nothing; only successful batches prune (' + r2.findings.length + ')');
+// Every finding comes back; only the successful batches carry notes.
+ok(r2.findings.length === big.length && r2.noted === batches.length - 1,
+  'a failed batch adds no note and nothing is ever removed (' + r2.findings.length + ', notes ' + r2.noted + ')');
+ok(r2.findings.filter(f => f.aiAssessed === true).length === big.length - sentBatches[1].length,
+  'the failed batch\'s findings are marked not reviewed');
 
 // --- if EVERY batch fails, the review honestly reports it did not run ---
 const alwaysFail = { };
@@ -113,6 +127,13 @@ vm.runInContext(consts + '\n' + batchesFn + '\n' + findingsFn +
   '\n; this.aiAssessFindings = aiAssessFindings;', sb2);
 const r3 = await sb2.aiAssessFindings(big);
 ok(r3 === null, 'when every batch fails, aiAssessFindings returns null (review did not run)');
+
+// --- the worker's no-model fallback (reviewed:false) is not a review ---
+async function aiApiPostFallback(path, payload) { return { reviewed: false, verdicts: payload.findings.map(f => ({ id: f.id, verdict: 'supported', reason: 'ai unavailable — no note' })), additionalFindings: [] }; }
+const sb3 = { JSON, Object, String, parseInt, isFinite, aiApiPost: aiApiPostFallback, console };
+sb3.globalThis = sb3; vm.createContext(sb3);
+vm.runInContext(consts + '\n' + batchesFn + '\n' + findingsFn + '\n; this.aiAssessFindings = aiAssessFindings;', sb3);
+ok(await sb3.aiAssessFindings(big) === null, 'the worker\'s reviewed:false fallback is not counted as a review that ran');
 
 console.log(`\n[ai-assess-batch] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[ai-assess-batch] FAILURES'); process.exit(1); }

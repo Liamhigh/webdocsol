@@ -380,8 +380,8 @@ for (const page of PAGES) {
   const rep = readFileSync('forensic-report.js', 'utf8');
   ok(!/det \+ ' · ' \+ g\.type/.test(rep),
     'matrix rows no longer lead with bare detector codes');
-  ok(/\(CT_NAMES\[g\.type\] \|\| g\.type\) \+ '  \('/.test(rep),
-    'matrix rows lead with the plain-language finding name');
+  ok(/det: findingName\(g\) \+ '  \('/.test(rep),
+    'matrix rows lead with the plain-language finding name (the measured label, findingName)');
   ok(html.includes('KEY CONTRADICTIONS'),
     'on-device narrative lists top findings as plain sentences with page anchors');
 }

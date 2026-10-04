@@ -262,8 +262,10 @@ global.extractPdfText = async () => ([
   const res3 = await runForensicEngine(new Uint8Array([1, 2, 3]), mockDoc);
   t.ok(res3.findings.length >= 1 && res3.findings.length <= 3,
     'low-count fixture yields 1-3 findings (' + res3.findings.length + ')');
-  t.ok(/page-anchored finding/.test(res3.summary || '') && /finding count is low/.test(res3.summary || '') && !/systematic fraud/.test(res3.summary || ''),
-    'summary for a tiny finding set stays focused, not a sweeping fraud verdict (got "' + String(res3.summary).slice(0, 60) + '...")');
+  // Since the evidence-bundle-7-docs review (5 October 2026) the summary is
+  // the count and nothing graded, whatever the internal score.
+  t.ok(new RegExp('^' + res3.findings.length + ' findings? established').test(res3.summary || '') && !/systematic fraud|minor|largely consistent|serious/i.test(res3.summary || ''),
+    'summary for a tiny finding set states the count and nothing graded, not a sweeping fraud verdict (got "' + String(res3.summary).slice(0, 60) + '...")');
 
   t.done('forensic-engine');
 })();
