@@ -294,13 +294,26 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'the case file is clearly labelled for the narrator');
 
   // PD16 language lock (the "constitutional certainty" order). The AI layer
-  // works on SEALED evidence — quoted text bound to a page in a record that
-  // cannot be altered — so it reports measurements, it does not hedge them.
+  // works on SEALED evidence — quoted text bound to a page in a tamper-evident
+  // record — so it reports measurements, it does not hedge them.
   // These assertions exist so a future edit cannot quietly reintroduce
   // probabilistic language into the narrator's instructions.
   ok(/WHY YOU STATE FACTS/.test(capturedSystem) && /sealed under SHA-512/.test(capturedSystem)
     && /measurement to be reported/.test(capturedSystem),
     'the narrator is told WHY it states facts: the evidence is sealed and page-anchored');
+  {
+    // The seal is tamper-evident, never unalterable, and at sealing the
+    // OpenTimestamps proof is only submitted (CLAUDE.md non-negotiable 8;
+    // ENGINE.md §6, fixed 5 October 2026): no AI prompt may say otherwise.
+    const wsrc0 = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
+    const promptOf = (name) => { const m = wsrc0.match(new RegExp('const ' + name + ' = ([\\s\\S]*?);\\n')); return m ? m[1] : ''; };
+    const prompts = ['NARRATE_SYSTEM', 'ASSESS_SYSTEM', 'SWEEP_SYSTEM'].map(promptOf);
+    ok(prompts.every(t => t.length > 200), 'the three prompts are found in the Worker source');
+    ok(prompts.every(t => !/anchored to the Bitcoin|cannot be altered|unalterable|immutable|permanent record/i.test(t)),
+      'no AI prompt calls the record unalterable or anchored to Bitcoin');
+    ok(prompts.every(t => /any change to it is detectable/.test(t)), 'every AI prompt says any change to the record is detectable');
+    ok(/tamper-evident/.test(capturedSystem) && !/cannot be altered/.test(capturedSystem), 'the narrator receives the tamper-evident wording');
+  }
   ok(/BANNED for anchored facts/.test(capturedSystem)
     && /appears, might, possibly, seems, could, potentially/.test(capturedSystem),
     'the narrator prompt bans hedging verbs for anchored facts');

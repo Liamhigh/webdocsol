@@ -131,10 +131,14 @@ The website is the centre of gravity: **all document verification happens at the
   which defines CT01–CT46 and D01–D40, and is never merged over the engine's taxonomy.
   (2) **The findings JSON.** `FINDINGS_JSON_SCHEMA.json` is kept in `1verum` and `firebase` at
   v1.0.0 (`findings_json_version` fixed at "1.0.0"); this repository has no copy. The website
-  builds its file in `seal-document.html` (`buildFindingsJson`) and is at v1.6.0, extended
+  builds its file in `seal-document.html` (`buildFindingsJson`) and is at v1.7.0, extended
   additively: `review_status` (1.3.0), `secondary_capped` and `ocr_anchored` (1.4.0), `ocr_held`
-  (1.5.0), `analysis_reference_utc` (1.6.0). A validator that enforces the schema's version
-  constant would refuse the website's file. That drift is open with the founder.
+  (1.5.0), `analysis_reference_utc` (1.6.0), `display_name`, `brain`, `triple_verification` and
+  `ai_review_note` (1.7.0). A validator that enforces the schema's version constant would refuse
+  the website's file. That drift is open with the founder, and so is the schema's vocabulary: it
+  requires `verification_status: "ENGINE-VERIFIED"`, band-word severity and confidence enums, and
+  AI candidates inside `contradictions`, which the founder's 5 October 2026 rulings (no
+  "verified"; no bands) would change in all three repositories together (`ENGINE.md` §12.16).
 - **This engine is authoritative.** Where another surface's engine disagrees with this one, this
   one is correct and the other is the one to fix. The guards in [`ENGINE.md`](./ENGINE.md) §4 were
   each earned on a real evidence bundle; a surface without them will report false findings.
@@ -233,9 +237,10 @@ The website is the centre of gravity: **all document verification happens at the
   record and from the optional Jurisdiction field. Case details are optional and must stay
   optional: do not make them required, and do not add a field to "fix" a report that names no
   party. `ENGINE.md` §7, AGENTS.md rulings 6–7.
-- **The report has a fixed two-part order** — the human story first, the table of contents and the
-  Constitution v8.0 §15.4 sections after it. This is a founder ruling, not a layout preference.
-  `ENGINE.md` §7, AGENTS.md ruling 5. In "Seal document with forensic report" the page seals two
+- **The report leads with the Constitution's template** — the cover, the table of contents and
+  the Constitution v8.0 §15.4 sections 1–7, then the annexes, the plain-language pages first. This
+  is a founder ruling of 5 October 2026 (it replaced the story-first order of AGENTS.md ruling 5),
+  not a layout preference. `ENGINE.md` §7 and §12.16. In "Seal document with forensic report" the page seals two
   reports beside the document: the technical forensic report and the court-ready narrative
   (`ENGINE.md` §13). It also gives the findings JSON and an unsealed Brain 9 recommendations
   file, which is never part of a sealed report. "Seal document" gives the sealed PDF and a
@@ -269,9 +274,10 @@ passes the §15.2 language gate and the anchor gate, and none adds a sealed find
 section passes, the narrative's cover and certification say it is the deterministic record. The
 on-device hybrid models belong to `1verum`, not to this repository.
 
-An AI-raised item is **candidate tier and never a verified finding**: it is excluded from the
-verified count, the fact box, the severity table and the plain-language lead, and disclosed on its
-own advisory line. Mixing the two inflates the count and misdescribes the record. (Whether the
-reports should call an engine finding "verified" when only the single-model advisory review has
-retained it is open with the founder: `ENGINE.md` §12.14, "Open, with the founder" (b). Do not
-widen the word's use.)
+An AI-raised item is **candidate tier and never a finding**: it is excluded from the engine
+count, the fact box and the plain-language lead, and disclosed on its own advisory line. Mixing the
+two inflates the count and misdescribes the record. In the other direction, the advisory review
+never removes or changes an engine finding; it adds a note (founder ruling, 5 October 2026). The
+reports no longer call any finding "verified": Prime Directive 13 asks for three independent
+verifiers, which this platform does not have (`ENGINE.md` §12.16, resolving §12.14 "Open, with
+the founder" (b)).
