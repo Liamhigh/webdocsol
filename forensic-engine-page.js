@@ -1177,7 +1177,9 @@ var DETECTORS = {
     // on p. 110 and "12/30/2020" on p. 147, in different documents).
     var d03Segs = voDetectDocuments(textBlocks) || [];
     var d03Key = voDocKeyOf(d03Segs, textBlocks.length);
-    var d03SameDoc = function (pa, pb) { return pa === pb || !d03Segs.length || (d03Key(pa) === d03Key(pb) && d03Key(pa).charAt(0) === 'd'); };
+    // One stated document, or one unnumbered run within twenty pages (a
+    // schedule printed without page numbers is still one document).
+    var d03SameDoc = function (pa, pb) { return pa === pb || !d03Segs.length || (d03Key(pa) === d03Key(pb) && (d03Key(pa).charAt(0) === 'd' || Math.abs(pa - pb) <= 20)); };
     if (voSawDMY && voSawMDY && d03SameDoc(voSawDMY.page, voSawMDY.page)) {
       findings.push({ type: 'CT03', severity: 2,
         evidence: 'Document mixes date formats: "' + voSawDMY.raw + '" reads as day/month/year while "' + voSawMDY.raw + '" reads as month/day/year -- numeric dates in this bundle are ambiguous; confirm the intended reading before relying on any date',
@@ -1414,7 +1416,8 @@ var DETECTORS = {
       // in a page of notes and an invoice 48 pages away were sealed as
       // "billing after the stated expiry" (Combine 06 April 2026, p. 97 vs
       // p. 49).
-      if (tlSegs.length && tlDocOf(a.page).charAt(0) === 'u' && (!ca || !cb)) return false;
+      // Adjacent pages of one unnumbered run (within five) are one schedule.
+      if (tlSegs.length && tlDocOf(a.page).charAt(0) === 'u' && Math.abs(a.page - b.page) > 5 && (!ca || !cb)) return false;
       if (!ca || !cb) return true;
       for (var k in ca) { if (cb[k]) return true; }
       return false;
@@ -1968,13 +1971,16 @@ var DETECTORS = {
             continue;
           }
         }
-        if (!bad[val]) {
+        // A person's field and a company's field are kept apart: one person's
+        // number in a complainant's field never silences the same number
+        // printed under a company's registration label elsewhere.
+        var bkey = isIdField ? val + '|id' : val;
+        if (!bad[bkey]) {
           var quote = block.substring(cm.index, cm.index + cm[0].length + tok.index + tok[0].length).replace(/\s+/g, ' ').trim();
-          bad[val] = { pages: [], quote: quote, foreign: false, near: NEAR_SA_REG.test(val), idShaped: idShaped(val) || isIdField };
+          bad[bkey] = { pages: [], quote: quote, foreign: false, near: NEAR_SA_REG.test(val), idShaped: idShaped(val) || isIdField, idField: isIdField };
         }
-        if (isIdField) bad[val].idField = true;
-        if (FOREIGN_REG_RE.test(context)) bad[val].foreign = true;
-        if (bad[val].pages.indexOf(i + 1) === -1) bad[val].pages.push(i + 1);
+        if (FOREIGN_REG_RE.test(context)) bad[bkey].foreign = true;
+        if (bad[bkey].pages.indexOf(i + 1) === -1) bad[bkey].pages.push(i + 1);
       }
     }
     if (repaired.length) {
@@ -2821,18 +2827,21 @@ var DETECTORS = {
       }
       return prev[b.length];
     }
-    // One definition read twice by OCR differs only in misread letters:
-    // "auy information thai car be wed directly" and "avy Information fiat
-    // cor 03 used directiy" (Combine 06 April 2026, pp. 649 and 652). When
-    // either side came through OCR, the opening forty letters are compared
-    // with room for the recogniser's errors (four in ten): a native-text
-    // page keeps the strict test above.
+    // One definition read twice by OCR differs only in misread letters,
+    // scattered from its first word: "auy information thai car be wed
+    // directly" and "avy Information fiat cor 03 used directiy" (Combine 06
+    // April 2026, pp. 649 and 652). Two definitions whose opening forty
+    // letters agree exactly and that part later ("… supplied by the
+    // Franchisor to the Franchisee for resale" / "… supplied by the Franchisor
+    // including lubricants") are two different definitions, read cleanly: the
+    // strict test above decides them. So the OCR allowance applies only when
+    // the opening itself carries the recogniser's errors (at most four in ten).
     function voDefSameReadTwice(prev, snippet, ocr) {
       if (!ocr) return false;
       var ca = String(prev.snippet).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
       var cb = String(snippet).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
       var n = Math.min(ca.length, cb.length);
-      if (n < 20) return false;
+      if (n < 20 || ca.slice(0, n) === cb.slice(0, n)) return false;
       return voEditDistance(ca.slice(0, n), cb.slice(0, n)) / n <= 0.4;
     }
     // Two definitions of "the Premises" that name different properties (Lot
@@ -2898,9 +2907,16 @@ var DETECTORS = {
         var prev = definitions[dkey];
         if (prev && prev.page !== i && prev.norm && norm && prev.norm !== norm &&
             voMateriallyDiffer(prev.snippet, snippet) && !reported[dkey] &&
-            !voDefSameReadTwice(prev, snippet, /^\s*\[OCR\]/.test(String(textBlocks[i] || '')) || prev.ocr) &&
-            !voDefDifferentProperties(prev.snippet, snippet)) {
+            !voDefSameReadTwice(prev, snippet, /^\s*\[OCR\]/.test(String(textBlocks[i] || '')) || prev.ocr)) {
           reported[dkey] = true;
+          if (voDefDifferentProperties(prev.snippet, snippet)) {
+            // Two properties under one defined term: usually two agreements
+            // bound into one run; stated as a note to read, never dropped.
+            findings.push({ type: 'CT08', severity: 0, contextOnly: true,
+              evidence: 'Term "' + term + '" names a different property in two places: "' + prev.snippet.slice(0, 70) + '" (Page ' + (prev.page + 1) + ') and "' + snippet.slice(0, 70) + '" (Page ' + (i + 1) + ') — usually two agreements over two sites; read both before treating them as one instrument. Not a finding.',
+              location: 'Page ' + (prev.page + 1) + ' and Page ' + (i + 1) });
+            continue;
+          }
           // Severity 2: definitional drift across a long agreement is common
           // boilerplate; on the AllFuels rerun eight CT08 rows at Medium buried
           // the critical findings. The conflict is still reported and quoted.
@@ -3365,10 +3381,10 @@ var DETECTORS = {
     var d39Segs = voDetectDocuments(blocks) || [];
     var d39Key = voDocKeyOf(d39Segs, blocks.length);
     var d39OneAgreement = function (a, c) {
-      if (a.page === c.page) return true;
+      if (a.page === c.page || !d39Segs.length) return true; // a file that states no boundaries is one document (as D03, D30)
       var ka = d39Key(a.page - 1), kc = d39Key(c.page - 1);
-      if (d39Segs.length && ka.charAt(0) === 'd') return ka === kc;
-      return Math.abs(a.page - c.page) <= 20;
+      if (ka !== kc) return false;
+      return ka.charAt(0) === 'd' || Math.abs(a.page - c.page) <= 20;
     };
     if (noComp && acquires && d39OneAgreement(noComp, acquires)) {
       findings.push({ type: 'CT45', severity: 5,
@@ -4497,9 +4513,10 @@ function voSecondaryWhere(secSegs) {
   }
   return parts.length ? ' (' + parts.join('; ') + ')' : '';
 }
-// A near-empty-page finding (CT26) every page of which is a scanned image
-// with no text layer of its own is a reading limit, not a format anomaly:
-// it becomes an engine note naming the page (Combine 06 April 2026).
+// A near-empty-page finding (CT26) every page of which has no text layer of
+// its own and was rendered for OCR is a reading limit, not a format anomaly:
+// it becomes an engine note naming the page (Combine 06 April 2026). A thin
+// page the OCR pass did not render keeps the D17 check.
 function voImageOnlyCt26ToNotes(findings, imageOnlyPages) {
   var kept = [], notes = [];
   for (var i = 0; i < (findings || []).length; i++) {
@@ -4507,7 +4524,7 @@ function voImageOnlyCt26ToNotes(findings, imageOnlyPages) {
     if (!f || f.type !== 'CT26') { kept.push(f); continue; }
     var fp = voFindingPages(f);
     if (!fp.length || !fp.every(function (pg) { return (imageOnlyPages || []).indexOf(pg) !== -1; })) { kept.push(f); continue; }
-    notes.push({ type: 'CT26', location: f.location || '', text: (fp.length === 1 ? 'Page ' + fp[0] + ' is' : 'Pages ' + fp.join(', ') + ' are') + ' a scanned image with no text layer of its own, and OCR recovered little or no text from it: a reading limit, not a finding. Read the page image.' });
+    notes.push({ type: 'CT26', location: f.location || '', text: (fp.length === 1 ? 'Page ' + fp[0] + ' has' : 'Pages ' + fp.join(', ') + ' have') + ' no text layer of its own and was rendered for OCR, which recovered little or no legible text (blank, photographic, or print too poor to read): a reading limit, not a finding. Read the page itself.' });
   }
   return { kept: kept, notes: notes };
 }
@@ -5981,9 +5998,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     // Runs BEFORE the too-little-text check so a fully scanned document can
     // be rescued rather than falling through to the raw-stream fallback.
     // Inert when absent; a failure is disclosed, never fatal (PD6).
-    // Pages with (almost) no text layer of their own are scanned images,
-    // whatever OCR later recovers from them (see the D17 hand-over below).
-    for (var nti = 0; nti < textBlocks.length; nti++) if (String(textBlocks[nti] || '').replace(/\s+/g, '').length < 50) _imageOnlyPages.push(nti + 1);
+    // Pages with (almost) no text layer of their own; only those the OCR
+    // pass then rendered count for the D17 hand-over below.
+    var _nativeThin = [];
+    for (var nti = 0; nti < textBlocks.length; nti++) if (String(textBlocks[nti] || '').replace(/\s+/g, '').length < 50) _nativeThin.push(nti + 1);
     try {
       var _g = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
       if (_g && typeof _g.voOcrRescuePages === 'function' && textBlocks.length > 1) {
@@ -5991,6 +6009,13 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
         if (_ocr && Array.isArray(_ocr.textBlocks) && _ocr.textBlocks.length === textBlocks.length) {
           _ocrRan = true;
           textBlocks = _ocr.textBlocks;
+          // A thin page the OCR pass rendered: it returned text ("[OCR] …"),
+          // or the host names it as rendered with no legible text.
+          var _noTextHost = Array.isArray(_ocr.noTextPages) ? _ocr.noTextPages : [];
+          for (var nt2 = 0; nt2 < _nativeThin.length; nt2++) {
+            var ntp = _nativeThin[nt2];
+            if (/^\s*\[OCR\]/.test(String(textBlocks[ntp - 1] || '')) || _noTextHost.indexOf(ntp) !== -1) _imageOnlyPages.push(ntp);
+          }
           if (_ocr.note) extractionNote += ' ' + _ocr.note;
           // OCR provenance travels with the result: which pages (1-based)
           // were machine-recovered and, per page, how sure the recogniser was.
@@ -6181,6 +6206,32 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // were sealed as findings that way).
   var _secPending = [];
   for (var spn = 0; spn < allFindings.length; spn++) if (allFindings[spn] && !voFindingPages(allFindings[spn]).length) _secPending.push(allFindings[spn]);
+  // Their pages are found now (the backfill below leaves an anchored finding
+  // alone), before the per-type cap, so a late lead takes no slot of its
+  // type's budget. A finding whose pages are ALL secondary is a lead; one
+  // with a page of the record is re-anchored to its record pages at full
+  // weight — a bound-in analysis quoting the record does not weaken the
+  // record's own finding (the review of this rule, 5 October 2026).
+  if (_secPending.length && _secondaryAllPages.length) {
+    voBackfillPageAnchors(_secPending, textBlocks);
+    var _lateLeads = [];
+    for (var lpi = 0; lpi < _secPending.length; lpi++) {
+      var lf0 = _secPending[lpi], lpg = voFindingPages(lf0);
+      if (!lpg.length) continue;
+      var lprim = lpg.filter(function (pg) { return _secondaryAllPages.indexOf(pg) === -1; });
+      if (!lprim.length) { lf0.secondaryLead = true; _lateLeads.push(lf0); continue; }
+      if (lprim.length < lpg.length) lf0.location = (lprim.length === 1 ? 'Page ' : 'Pages ') + lprim.join(', ');
+    }
+    if (_lateLeads.length) {
+      allFindings = allFindings.filter(function (f) { return _lateLeads.indexOf(f) === -1; });
+      for (var sl2 = 0; sl2 < _lateLeads.length; sl2++) {
+        var _ld2 = _lateLeads[sl2];
+        _voContextNotes.push({ type: _ld2.type || '', location: _ld2.location || '',
+          text: 'Secondary-source lead, not a finding: ' + String(_ld2.evidence || '').replace(/\s+/g, ' ').trim() + ' — verify against the primary record' });
+      }
+      extractionNote += ' Located later: ' + _lateLeads.length + ' further observation(s) whose page was found after the first pass sit entirely on secondary or analysis pages and are recorded under the engine notes as leads, NOT as findings.';
+    }
+  }
   if (_sec.leads.length || _sec.capped) {
     for (var sl = 0; sl < _sec.leads.length; sl++) {
       var _ld = _sec.leads[sl];
@@ -6286,23 +6337,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
 
   // Pin findings to a real page where their evidence resolves to exactly one.
   allFindings = voBackfillPageAnchors(allFindings, textBlocks);
-  // The secondary-source rule for the findings that only now have a page.
-  var _secLate = allFindings.filter(function (f) { return _secPending.indexOf(f) !== -1 && voFindingPages(f).length; });
-  if (_secLate.length && _secondaryAllPages.length) {
-    var _sec2 = voDemoteSecondarySource(_secLate, _secondaryAllPages);
-    if (_sec2.leads.length) {
-      allFindings = allFindings.filter(function (f) { return _sec2.leads.indexOf(f) === -1; });
-      for (var sl2 = 0; sl2 < _sec2.leads.length; sl2++) {
-        var _ld2 = _sec2.leads[sl2];
-        _voContextNotes.push({ type: _ld2.type || '', location: _ld2.location || '',
-          text: 'Secondary-source lead, not a finding: ' + String(_ld2.evidence || '').replace(/\s*\[secondary source on p\.[^\]]*\]/g, '').replace(/\s+/g, ' ').trim() + ' — verify against the primary record' });
-      }
-    }
-    if (_sec2.leads.length || _sec2.capped) {
-      extractionNote += ' Located later: ' + (_sec2.leads.length ? _sec2.leads.length + ' further observation(s) whose page was found after the first pass sit entirely on secondary or analysis pages and are recorded under the engine notes as leads, NOT as findings' : '') +
-        (_sec2.leads.length && _sec2.capped ? '; ' : '') + (_sec2.capped ? _sec2.capped + ' further finding(s) with one part on those pages held at reduced weight' : '') + '.';
-    }
-  }
+
 
   // OCR provenance has a consequence, not just a footnote (annexure EB): a
   // FORMAT check whose every cited page came through OCR is held at Low until

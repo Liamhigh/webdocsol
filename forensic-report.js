@@ -3874,7 +3874,7 @@ function voAssertsEstablished(t) {
 // 2026). It stands only as candidate law, a section or element name, the name
 // of a body or a case, or what a party alleged — the Worker's rule, held again.
 var VO_OFFENCE_ANY_RE = new RegExp('\\b' + VO_OFFENCE_NOUN + '\\b|\\bunlawful(?:ly)?\\s+enrich', 'i');
-var VO_OFFENCE_OK_RE = /\b(?:pillars?|elements?)\s+of\s+(?:common-law\s+)?fraud\b|\b(?:fraud|theft|corruption|forgery|bribery|extortion|money\s+laundering)\s+(?:department|unit|division|desk|hotline|team|investigators?|case|cases|charge|charges|complaint|complaints|report|docket|matter|squad|prevention)\b|\b(?:alleg\w*|accus\w*|complain\w*|claim\w*|charg\w*|reported|reports)\b/i;
+var VO_OFFENCE_OK_RE = /\b(?:pillars?|elements?)\s+of\s+(?:common-law\s+)?fraud\b|\b(?:fraud|theft|corruption|forgery|bribery|extortion|money\s+laundering)\s+(?:department|unit|division|desk|hotline|team|investigators?|case|cases|charge|charges|complaint|complaints|report|docket|matter|squad|prevention)\b|\b(?:alleg\w*|accus\w*|complain\w*|claim\w*|charg\w*|reported|reports|states|stated|wrote|written|records|recorded|reads|says|said|opened\s+(?:for|a|an))\b|\b(?:fraud|theft|corruption|forgery|bribery|extortion|coercion|intimidation|duress|blackmail|racketeering|money\s+laundering)\s+patterns?\b|\bpatterns?\s*(?:named|:)/i;
 function voCharacterises(s) {
   var t = voOverclaimMask(s);
   if (VO_CANDIDATE_LAW_RE.test(t)) return false;

@@ -817,8 +817,13 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     ok(RR0()._scrubNarrative(t.replace(' (p. 2)', '')).dropped === 1, 'and at render time: ' + t.slice(0, 60));
   }
   for (const t of ['The complaint alleges fraud by the supplier [F1] (p. 2).', 'The SAPS fraud case was opened on 3 March 2026 [F1] (p. 2).',
-    'The dates may constitute fraud as candidate law, for counsel to confirm [F1] (p. 2).']) {
-    ok(await kept(t), 'an allegation, a case name or candidate law keeps its offence word: ' + t.slice(0, 50));
+    'The dates may constitute fraud as candidate law, for counsel to confirm [F1] (p. 2).',
+    // the review: what the coercive-conduct section asks for, and what a record states
+    'The statement on p. 2 matches the duress pattern [F1].', 'The SAPS case was opened for theft on 3 March 2026 [F1] (p. 2).',
+    'The affidavit states the deponent signed under duress [F1] (p. 2).']) {
+    ok(await kept(t), 'an allegation, a case name, a named pattern, a stated record or candidate law keeps its offence word: ' + t.slice(0, 50));
+    // (the render-time §15.2 gate drops any "may", so candidate law in that dress is the Worker's alone)
+    if (!/\bmay\b/.test(t)) ok(RR0()._scrubNarrative(t).dropped === 0, 'and at render time: ' + t.slice(0, 50));
   }
   let hg = await gate('CONDUCT CONSTITUTES COERCION\n\n' + PAD);
   ok(!/COERCION/.test(hg.text) && hg.gate.overclaim === 1, 'a heading that calls conduct an offence is dropped and counted as an overclaim');

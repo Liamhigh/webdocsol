@@ -170,7 +170,10 @@ ok(await sb3.aiAssessFindings(big) === null, 'the worker\'s reviewed:false fallb
     return { verdicts: payload.findings.map(f => ({ id: f.id, verdict: 'supported', reason: 'ok' })), additionalFindings: [
       { type: 'CT01', severity: 3, rationale: 'Lessee vs owner contradiction' },
       { type: 'INCONSISTENT_STATEMENT', severity: 3, rationale: 'Contradictory value recognition' },
-      { type: 'CT02', severity: 3, rationale: 'The rental escalation figure differs between schedules' }
+      { type: 'CT02', severity: 3, rationale: 'The rental escalation figure differs between schedules' },
+      // The review's false duplicates: ordinary shared words never make one.
+      { type: 'UNSIGNED_AGREEMENT', severity: 3, rationale: 'The lease clause naming the owner of the site is not signed' },
+      { type: 'BANK_DETAILS_CHANGE', severity: 3, rationale: 'The amount was paid to a different bank account, a discrepancy' }
     ] };
   }
   const names = { CT44: 'Conditional Clause Misinvoked (Lessee/Owner Trap)', CT45: 'Asset Value Recognised Then Denied (Goodwill)' };
@@ -180,8 +183,8 @@ ok(await sb3.aiAssessFindings(big) === null, 'the worker\'s reviewed:false fallb
   sb5.globalThis = sb5; vm.createContext(sb5);
   vm.runInContext(consts + '\n' + batchesFn + '\n' + findingsFn + '\n; this.aiAssessFindings = aiAssessFindings;', sb5);
   const r5 = await sb5.aiAssessFindings(eng);
-  ok(r5.duplicates === 2 && r5.added.length === 1 && r5.added[0].type === 'CT02',
-    'unanchored candidates restating the Lessee/Owner Trap and the goodwill finding are duplicates; a different unanchored candidate is kept (' + JSON.stringify(r5.added.map(a => a.type)) + ', ' + r5.duplicates + ')');
+  ok(r5.duplicates === 2 && r5.added.map(a => a.type).join(',') === 'CT02,UNSIGNED_AGREEMENT,BANK_DETAILS_CHANGE',
+    'unanchored candidates restating the Lessee/Owner Trap and the goodwill finding are duplicates; different unanchored candidates, even sharing ordinary words, are kept (' + JSON.stringify(r5.added.map(a => a.type)) + ', ' + r5.duplicates + ')');
 }
 
 console.log(`\n[ai-assess-batch] PASS=${pass} FAIL=${fail}`);

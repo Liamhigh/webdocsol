@@ -68,6 +68,15 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor 
   ok(r2.findings.some(f => f.type === 'CT01' && /Page 2/.test(f.location)), 'positive control: the same CT01 on a page of the record is still a finding (' + JSON.stringify(r2.findings.map(f => f.type)) + ')');
 }
 
+// The review of this rule: an analysis page QUOTING the record does not weaken
+// the record's own finding — it is re-anchored to its record page, full weight.
+{
+  const rec = 'The supplier signed the delivery note at the depot. The dealer states the supplier never signed the delivery note at the depot that day.';
+  const r = await runEngine(await buildPdf(['Letter of demand to the franchisor regarding the supply agreement and the outstanding account.' + filler, rec + filler, 'Statement of account for the station.' + filler, rec + ' **Finding:** a contradiction. **Note:** see the record.']));
+  const c = r.findings.find(f => f.type === 'CT01');
+  ok(c && c.severity === 4 && c.location === 'Page 2' && !/secondary source/.test(c.evidence), 'a CT01 on a record page that an analysis page also quotes stays at full weight on the record page (' + JSON.stringify(c && [c.severity, c.location]) + ')');
+}
+
 // ===== 2. OCR pages are known from the text itself ===========================
 {
   // The host hands back OCR text but no page list: the "[OCR]" prefix decides.
@@ -99,14 +108,21 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor 
   const mixed = ['Agreement Page 1 of 3 signed 31/07/2016.' + filler, 'Agreement Page 2 of 3' + filler, 'Agreement Page 3 of 3' + filler, 'Report Page 1 of 3 dated 12/30/2020.' + filler, 'Report Page 2 of 3' + filler, 'Report Page 3 of 3' + filler];
   ok(of(DET.D03_DETECT_DATE_INCONSISTENCY, mixed, 'CT03').length === 0, 'two documents in two date conventions are not one document mixing them (p. 110 vs p. 147)');
   ok(of(DET.D03_DETECT_DATE_INCONSISTENCY, ['Signed 31/07/2016 and countersigned 12/30/2020 in this letter.' + filler], 'CT03').length === 1, 'positive control: one document mixing the conventions is still noted');
+  const urun = ['Agreement Page 1 of 3' + filler, 'Agreement Page 2 of 3' + filler, 'Agreement Page 3 of 3' + filler, 'Schedule. The termination date is 2026-01-20.' + filler, 'Schedule continued.' + filler, 'Schedule end. The termination date is 2026-03-31.' + filler, 'Report Page 1 of 3' + filler, 'Report Page 2 of 3' + filler, 'Report Page 3 of 3' + filler];
+  ok(of(DET.D03_DETECT_DATE_INCONSISTENCY, urun, 'CT03').length === 1, 'positive control (the review): an event date restated within one unnumbered run still fires when other documents are numbered');
 }
 
 // ===== 5. An unnumbered run links pages only by a shared company =============
 {
   const docA = n => 'Supply agreement Page ' + n + ' of 3.' + filler, docB = n => 'Lease agreement Page ' + n + ' of 3.' + filler;
-  const run = (exp, inv) => [docA(1), docA(2), docA(3), exp, 'Notes continue.' + filler, 'More notes.' + filler, inv, docB(1), docB(2), docB(3)];
+  const notes = []; for (let i = 0; i < 6; i++) notes.push('Notes continue, part ' + (i + 1) + '.' + filler);
+  // Ten numbered pages and eight unnumbered: the bundle states its documents.
+  const docA5 = n => 'Supply agreement Page ' + n + ' of 5.' + filler, docB5 = n => 'Lease agreement Page ' + n + ' of 5.' + filler;
+  const run = (exp, inv) => [docA5(1), docA5(2), docA5(3), docA5(4), docA5(5), exp].concat(notes, [inv, docB5(1), docB5(2), docB5(3), docB5(4), docB5(5)]);
   ok((DET.D04_DETECT_TEMPORAL_IMPOSSIBILITY(run('Timeline of the matter: lease expires – never renewed 11 Dec 2018.' + filler, 'Statement of account. Invoice date: 31 March 2026. Diesel 5000 litres.' + filler)) || []).filter(f => f.type === 'CT04').length === 0,
-    'an expiry in a page of notes and an invoice three pages on, in an unnumbered run, are not linked by default (p. 97 vs p. 49)');
+    'an expiry in a page of notes and an invoice seven pages on, in an unnumbered run, are not linked by default (p. 97 vs p. 49)');
+  const adj = [docA(1), docA(2), docA(3), 'Schedule: the lease expired on 11 December 2018 and was not renewed.' + filler, 'Schedule continued. Rental invoice date: 31 March 2026.' + filler, docB(1), docB(2), docB(3)];
+  ok((DET.D04_DETECT_TEMPORAL_IMPOSSIBILITY(adj) || []).filter(f => f.type === 'CT04').length === 1, 'positive control (the review): two adjacent pages of one unnumbered schedule are one document');
   ok((DET.D04_DETECT_TEMPORAL_IMPOSSIBILITY(run('Alpha Fuels (Pty) Ltd: the lease expired on 11 December 2018 and was not renewed.' + filler, 'Alpha Fuels (Pty) Ltd statement of account. Invoice date: 31 March 2026.' + filler)) || []).filter(f => f.type === 'CT04').length === 1,
     'positive control: the same pages naming the same company are linked');
 }
@@ -118,19 +134,32 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor 
   ok(blanks.length === 1, 'positive control: D17 still measures an isolated near-empty page');
   // The engine hands a near-empty finding on scanned image pages to the notes.
   const io = E.voImageOnlyCt26ToNotes([{ type: 'CT26', severity: 2, location: 'Page 676', evidence: 'Page 676 is nearly empty (9 chars)' }, { type: 'CT26', severity: 2, location: 'Page 12', evidence: 'Page 12 is nearly empty' }, { type: 'CT01', severity: 4, location: 'Page 676', evidence: 'x' }], [664, 676]);
-  ok(io.kept.length === 2 && !io.kept.some(f => f.type === 'CT26' && /676/.test(f.location)) && io.kept.some(f => /Page 12/.test(f.location)) && io.notes.length === 1 && /Page 676 is a scanned image with no text layer of its own/.test(io.notes[0].text),
+  ok(io.kept.length === 2 && !io.kept.some(f => f.type === 'CT26' && /676/.test(f.location)) && io.kept.some(f => /Page 12/.test(f.location)) && io.notes.length === 1 && /Page 676 has no text layer of its own and was rendered for OCR/.test(io.notes[0].text),
     'a near-empty finding on a scanned page with no text layer is an engine note (p. 676); one on a text page stays a finding; other kinds are untouched');
   const src = fs.readFileSync(path.join(process.cwd(), 'forensic-engine-page.js'), 'utf8');
   ok(/if \(_ocrRan && _imageOnlyPages\.length\) \{\s*var _io = voImageOnlyCt26ToNotes\(allFindings, _imageOnlyPages\);/.test(src), 'the engine applies it only when an OCR pass ran over the file');
+  // The review: only a page the OCR pass rendered counts — a page returned
+  // with "[OCR]" text, or one the host names as rendered with no legible
+  // text; a blank page the pass never rendered keeps the D17 check.
+  ok(/if \(\/\^\\s\*\\\[OCR\\\]\/\.test\(String\(textBlocks\[ntp - 1\] \|\| ''\)\) \|\| _noTextHost\.indexOf\(ntp\) !== -1\) _imageOnlyPages\.push\(ntp\);/.test(src)
+    && /noTextPages: noText\.slice\(\)/.test(fs.readFileSync(path.join(process.cwd(), 'seal-document.html'), 'utf8')), 'a page counts as rendered only on the OCR pass\'s own evidence, and the host names its no-text pages');
+}
+
+// ===== 6b. A person's field and a company's field are kept apart (D11) =====
+{
+  const r = DET.D11_DETECT_REGISTRATION_FAKE(['Company registration number: 7801015009087 of the supplier.', 'Registration number of complainant: 7801015009087']);
+  ok(r.some(f => !f.contextOnly && f.severity === 2 && f.location === 'Page 1') && r.some(f => f.contextOnly && f.location === 'Page 2'), 'one person\'s number in a complainant\'s field never silences the same number under a company\'s registration label (' + JSON.stringify(r.map(f => [f.severity, !!f.contextOnly, f.location])) + ')');
 }
 
 // ===== 7. Definitions: two sites, one definition read twice, a longer term ==
 {
   const ct08 = b => of(DET.D30_DETECT_TERM_DEFINITION_CONFLICT, b, 'CT08');
-  ok(ct08(['[OCR] "the Premises" means Remainder of Lot 967, Port Edward commonly known 4s Port Edward Garage', '[OCR] "the Premises" means the iminovable property known as Sub 10 (of 9) of Lot 26 Bluft No. 268']).length === 0, '"the Premises" of two different properties belongs to two agreements (pp. 641, 644)');
+  const prem = DET.D30_DETECT_TERM_DEFINITION_CONFLICT(['[OCR] "the Premises" means Remainder of Lot 967, Port Edward commonly known 4s Port Edward Garage', '[OCR] "the Premises" means the iminovable property known as Sub 10 (of 9) of Lot 26 Bluft No. 268']).filter(f => f.type === 'CT08');
+  ok(prem.length === 1 && prem[0].contextOnly && /names a different property in two places/.test(prem[0].evidence), '"the Premises" of two different properties is a note to read (usually two agreements), never a finding and never dropped (pp. 641, 644)');
   ok(ct08(['[OCR] "Personal Data" means auy information thai car be wed directly : or indireatly, alone or In combination', '[OCR] "Personal Data" means avy Information fiat cor 03 used directiy Bg Hato Destin A VEE, Lt xt']).length === 0, 'one definition read twice by OCR is one definition (pp. 649, 652)');
   ok(ct08(['"Franchised Business" means the conduct of a Astron Motor Fuel Franchise for the sale and/or provision of goods', 'the Value of the "Franchised Business" means the price a willing independent arm\'s-length purchaser is prepared to pay']).length === 0, 'the tail of "Value of the Franchised Business" is not a second definition of "Franchised Business" (p. 317)');
   ok(ct08(['[OCR] "Goods" means petrol and diesel delivered by road tanker to the site and stored', '[OCR] "Goods" means the movable furniture, fittings and equipment listed in the inventory schedule']).length === 1, 'positive control: two different definitions of one term on OCR pages still fire');
+  ok(ct08(['[OCR] "Goods" means petroleum products supplied by the Franchisor to the Franchisee for resale at the site', '[OCR] "Goods" means petroleum products supplied by the Franchisor including lubricants, gas and convenience store stock']).length === 1, 'positive control (the review): two definitions that agree for forty letters and then part still fire on OCR pages');
   ok(ct08(['"the Premises" means Erf 12 Margate and the buildings on it', '"the Premises" means Erf 12 Margate together with the fuel tanks and pumps only']).length === 1, 'positive control: one property defined two ways still fires');
 }
 
@@ -143,8 +172,13 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor 
   const acq = 'The Franchisor shall be entitled to purchase the property at its fair market value on termination.';
   const pad = []; for (let i = 0; i < 40; i++) pad.push('Schedule page ' + (i + 1) + '.' + filler);
   const far = pad.slice(); far[0] = noComp; far[30] = acq;
+  // Two stated agreements: the halves sit in different ones.
+  for (let i = 0; i < 20; i++) far[i] = (i === 0 ? noComp : 'Lease schedule') + ' Page ' + (i + 1) + ' of 20.' + filler;
+  for (let i = 20; i < 40; i++) far[i] = (i === 30 ? acq : 'Supply schedule') + ' Page ' + (i - 19) + ' of 20.' + filler;
   const near = pad.slice(); near[0] = noComp; near[4] = acq;
-  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, far, 'CT45').length === 0, 'a no-compensation clause and a purchase right thirty pages apart, with no stated document, are not one agreement\'s trap (p. 246 vs p. 422)');
+  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, far, 'CT45').length === 0, 'a no-compensation clause and a purchase right in two different stated agreements are not one agreement\'s trap (p. 246 vs p. 422)');
+  const longOne = pad.slice(); longOne[0] = noComp; longOne[25] = acq;
+  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, longOne, 'CT45').length === 1, 'positive control (the review): a file that states no boundaries is one agreement, however long');
   ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, near, 'CT45').length === 1, 'positive control: the two halves within one passage still fire');
 }
 
