@@ -26,7 +26,7 @@ re-introduces a false statement of fact under seal.
 **Repo map:** [`REFERENCE.md`](./REFERENCE.md) — every page, script, worker endpoint and
 directory, and what each one does.
 
-## Start here — the state of the platform (updated 2026-10-05; describes `main` once PR #PRNUM — the Combine 06 April 2026 run — is merged; PR #216 and #217 are live)
+## Start here — the state of the platform (updated 2026-10-05; describes `main` once PR #218 — the Combine 06 April 2026 run — is merged; PR #216 and #217 are live)
 
 Read this section first; it is the two-minute orientation. Everything below it is the detail.
 
@@ -82,7 +82,7 @@ founder.
 **Known state right now.** Two parts: what is open today, then the dated history, oldest first
 (the newest entry is last).
 
-**Open today (as of 5 October 2026; true of `main` once PR #PRNUM is merged).** Each
+**Open today (as of 5 October 2026; true of `main` once PR #218 is merged).** Each
 item says who holds it. Live Cloudflare state is "last verified" on the date given. Live state was
 last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the #214 merge).
 - **Founder — the signing key (decided 5 October 2026: leave it).** `RULE_PRIVATE_KEY` is not on
@@ -161,7 +161,7 @@ last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the
   adopted" in the paragraph that closes the section).
 
 **History, oldest first.** Each entry was the live state on its date (PR #214 is live since its
-merge on 3 October, PR #216 since 5 October; the last entry describes PR #PRNUM, live once merged); superseded state is
+merge on 3 October, PR #216 since 5 October; the last entry describes PR #218, live once merged); superseded state is
 marked.
 - 6 September 2026: the two retired Workers (`verum-rules`, `verumglobal-static`) were deleted
   from the dashboard; this Worker was meant to own the domain through declared routes (PRs
@@ -418,7 +418,7 @@ marked.
   fixed with the reviewer's reproduction as a test (`ENGINE.md` §12.16 item 10). 34 suites and
   2658 assertions. Open: the cross-repository findings-JSON schema and the narrator's "the
   documents evidence fraud" instruction (Open today).
-- 5 October 2026, evening: **the Combine 06 April 2026 run** (PR #PRNUM, live once merged;
+- 5 October 2026, evening: **the Combine 06 April 2026 run** (PR #218, live once merged;
   `ENGINE.md` §12.17). The founder sealed a 684-page bundle on the live site after #216 and had
   two AI reviews written from the findings JSON. Read against the engine, most of the 19
   findings were the engine's error: a CT01 on a markdown analysis page and a CT45 inside a Verum
