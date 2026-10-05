@@ -747,6 +747,43 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     ok(await kept(t), 'legitimate prose about a statute or the record is kept: ' + t);
   }
 }
+// --- the overclaim gate (evidence-bundle-7-docs, 5 October 2026) -----------
+// A page anchor proves the page exists, not that what the sentence asserts is
+// established. Only an [F#] finding is "established", "shown", "proved",
+// "revealed" or "confirmed"; a contradiction is stated only with its [F#];
+// conduct is never called an offence outside candidate-law framing. The three
+// sentences the narrator wrote over the founder's own email are the fixtures.
+{
+  const hPost = (body, e) => worker.fetch(mk('/api/v1/ai/human-report', 'POST', JSON.stringify(body)), e || env, {});
+  const gFindings = [
+    { id: 'F1', type: 'CT02', name: 'Date inconsistency', severity: 4, page: 2, pages: [2, 5], evidence: 'dated 3 March 2026 — yet dated 9 March 2026', quote: 'dated 3 March 2026' },
+    { id: 'F2', type: 'CT03', name: 'Signature missing', severity: 5, page: 7, pages: [7], evidence: 'signature block left blank on the counterpart', quote: 'signature block left blank' }
+  ];
+  const gBase = { section: 'executive_summary', pageCount: 9, findings: gFindings,
+    excerpt: '[Page 2] All Fuels has cut fuel supply to the only two petrol stations.\n[Page 5] Goodwill terminates and can never be argued to remain on the locality.' };
+  const PAD = 'Finding one is a date stated twice [F1] (p. 2). Finding two is a blank signature block [F2] (p. 7). ';
+  const mockAI = (text) => ({ ...env, AI: { run: async () => ({ response: JSON.stringify({ text }) }) } });
+  const gate = async (text) => (await hPost(gBase, mockAI(text))).json();
+  const kept = async (sentence) => { const j = await gate(PAD + sentence); return !!(j.text && j.text.indexOf(sentence.slice(0, 24)) >= 0); };
+  ok(!(await kept('The core pattern the record establishes is that All Fuels has cut fuel supply to the only two petrol stations (p. 2).')), 'a page-only sentence may not say the record "establishes" anything: the author\'s own email is not an established fact');
+  ok(!(await kept('Read together, the record shows that All Fuels has a history of terminating agreements (p. 5).')), '"the record shows" on a page anchor alone is dropped');
+  ok(!(await kept('According to the email, All Fuels\' actions constitute coercion (p. 2).')), 'conduct called an offence ("constitute coercion") is dropped outside candidate-law framing');
+  ok(!(await kept('Mr Timol swore that goodwill terminates, contradicting the company\'s own documents (p. 5).')), 'a contradiction the engine never found (no [F#]) is dropped');
+  ok(await kept('Page 2 states that All Fuels has cut fuel supply to the only two petrol stations (p. 2).'), 'a page-only sentence that says what the page STATES is kept');
+  ok(await kept('Both dates are established by the record [F1] (p. 2).'), '"established" with its [F#] is kept');
+  ok(await kept('These two dates contradict each other [F1] (p. 2).'), 'a contradiction stated with its [F#] is kept');
+  ok(await kept('As candidate law, the stated dates may constitute fraud, for counsel to confirm [F1] (p. 2).'), 'an offence named as candidate law ("may constitute", for counsel to confirm) is kept');
+  ok(await kept('Nothing on page 5 establishes when the supply was cut (p. 5).'), 'a negated "establishes" (a stated gap) is kept');
+  const j = await gate(PAD + 'The core pattern the record establishes is that All Fuels has cut fuel supply (p. 2).');
+  ok(j.gate && j.gate.dropped === 1 && j.gate.overclaim === 1, 'the overclaim is counted in the gate statistics (' + JSON.stringify(j.gate) + ')');
+  const wsrc = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
+  ok(/Only an \[F#\] finding is established\. A sentence citing only a page says what that page STATES/.test(wsrc) && /never call conduct fraud, coercion or any offence outside "may constitute" candidate law/.test(wsrc), 'the narrator is told the rule the gate enforces');
+  // The render-time gate holds the same three rules for every machine-written telling.
+  globalThis.PDFLib = globalThis.PDFLib || { rgb: (r, g, b) => ({ r, g, b }), StandardFonts: {}, PDFDocument: {} };
+  const RR = (await import('../forensic-report.js')).default || globalThis.VerumReport;
+  const sc = RR._scrubNarrative('The core pattern the record establishes is that All Fuels has cut fuel supply [Page 1]. The record states that All Fuels\' actions constitute coercion [Page 2]. The record reveals that Mr Timol swore otherwise, contradicting the company\'s own documents [Page 12]. Page 1 states that the supply was cut [Page 1]. The two dates contradict each other [F1].');
+  ok(sc.dropped === 3 && /Page 1 states that the supply was cut/.test(sc.text) && /contradict each other \[F1\]/.test(sc.text), 'the render-time gate drops the same three overclaims and keeps the page statement and the [F#] contradiction (' + JSON.stringify(sc) + ')');
+}
 
 // --- the signed rule-package loop: publish -> manifest -> the website verifies.
 // The Worker signs canonical JSON with RULE_PRIVATE_KEY (PKCS#8 DER, base64);

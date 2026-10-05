@@ -4551,6 +4551,7 @@ function aiReviewTrailer(ar) {
     '; it removed and changed none — every engine finding stands as the engine produced it';
   if ((ar.noted | 0) > 0) parts += '; it noted ' + (ar.noted | 0) + ' as unsupported (advisory notes, printed with the AI-Identified Candidates)';
   if ((ar.added | 0) > 0) parts += '; it raised ' + (ar.added | 0) + ' candidate' + ((ar.added | 0) === 1 ? '' : 's') + ' the engine did not report';
+  if ((ar.duplicates | 0) > 0) parts += '; ' + (ar.duplicates | 0) + ' further item' + ((ar.duplicates | 0) === 1 ? '' : 's') + ' it raised quoted what an engine finding on the same page already quotes and ' + ((ar.duplicates | 0) === 1 ? 'is' : 'are') + ' not listed as candidates';
   return parts + '.';
 }
 
