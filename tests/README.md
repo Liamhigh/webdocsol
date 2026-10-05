@@ -50,8 +50,8 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**33 suites, 2535 assertions**, all green (counted 3 October 2026, with the Public Protector
-submission run and the Greensky re-run, `ENGINE.md` §12.14–§12.15). `run-all.js` is the
+**34 suites, 2658 assertions**, all green (counted 5 October 2026, with the evidence-bundle-7-docs
+run and its review round, `ENGINE.md` §12.16). `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file
 there. What each suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
@@ -62,7 +62,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 |---|-------|------|--------|-----------|
 | 1 | `forensic-engine` | `forensic-engine.test.js` | 328 | `forensic-engine-page.js`: every detector on edge inputs without throwing; known contradictions detected; clean text silent; the serial-pattern engine; `runForensicEngine` via the raw-text fallback |
 | 2 | `ots-proof` | `ots-proof.test.js` | 16 | `ots-proof.js`: OpenTimestamps receipt format and round trips |
-| 3 | `worker` | `worker.test.mjs` | 311 | `worker/verum-rules.js` against a mocked `env` (no live KV or AI) |
+| 3 | `worker` | `worker.test.mjs` | 373 | `worker/verum-rules.js` against a mocked `env` (no live KV or AI) |
 | 4 | `page-boot` | `page-boot.test.mjs` | 101 | `seal-document.html` boots with pdf-lib missing; vendored libraries present; locks on the page's wiring |
 | 5 | `engine-perf` | `engine-perf.test.mjs` | 5 | Per-page extraction parses the PDF once (counts parses, not time) |
 | 6 | `voice-crypto` | `voice-crypto.test.mjs` | 7 | `.voice` encryption round trip between `seal-document.html` and `verify.html` |
@@ -75,13 +75,13 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 13 | `digital-forensics` | `digital-forensics.test.mjs` | 16 | `voDigitalForensicsScan` (raw PDF structure) |
 | 14 | `ocr-rescue` | `ocr-rescue.test.mjs` | 44 | The page's OCR fallback, loader and deadline helper |
 | 15 | `rule-classify` | `rule-classify.test.mjs` | 9 | The deterministic classification fallback in `seal-document.html` |
-| 16 | `findings-json` | `findings-json.test.mjs` | 17 | `buildFindingsJson`, findings JSON contract 1.6.0 |
+| 16 | `findings-json` | `findings-json.test.mjs` | 23 | `buildFindingsJson`, findings JSON contract 1.7.0 |
 | 17 | `finding-anchors` | `finding-anchors.test.mjs` | 87 | WHO / WHERE / WHAT / WHEN anchoring per finding |
 | 18 | `wrangler-config` | `wrangler-config.test.mjs` | 34 | `wrangler.toml` drift lock |
 | 19 | `crop-normalize` | `crop-normalize.test.mjs` | 115 | CropBox normalisation, seal band, share ordering, certificate privacy, the voice-note path |
 | 20 | `encrypt-detect` | `encrypt-detect.test.mjs` | 9 | `voPdfIsEncrypted` |
 | 21 | `constitution-lock` | `constitution-lock.test.mjs` | 41 | `constitution.json`, `constitution.html` and the pages that cite a version agree |
-| 22 | `ai-assess-batch` | `ai-assess-batch.test.mjs` | 11 | Client batching under the `/api/v1/ai/assess` caps |
+| 22 | `ai-assess-batch` | `ai-assess-batch.test.mjs` | 18 | Client batching under the `/api/v1/ai/assess` caps; the review never removes or changes a finding, and a candidate is a duplicate only when it restates one |
 | 23 | `narrate-excerpt` | `narrate-excerpt.test.mjs` | 16 | `voBuildNarrateExcerpt` |
 | 24 | `human-report` | `human-report.test.mjs` | 81 | The court-ready narrative wiring: Worker, `forensic-report.js` and page agree |
 | 25 | `site-serving` | `site-serving.test.mjs` | 56 | `worker/static-proxy.js` serving tiers and `/api/v1/site/health` |
@@ -90,9 +90,10 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 28 | `rule-package` | `rule-package.test.mjs` | 129 | Signed rule packages on the website |
 | 29 | `inline-scripts` | `inline-scripts.test.mjs` | 25 | The five inline copies in `seal-document.html` are byte-identical to their sources |
 | 30 | `legal-analysis` | `legal-analysis.test.js` | 216 | `forensic-report.js`: parties and jurisdiction, legal subjects, **PD16 language** (no scores, no bands, no hedging), the §15.2 narrative gate, sentence splitting, page anchors, SEALED FINDINGS integrity |
-| 31 | `greensky-regression` | `greensky-regression.test.js` | 87 | The Greensky run of 7 August 2026, and its re-run of 3 October 2026 (§9; `ENGINE.md` §12.15) |
+| 31 | `greensky-regression` | `greensky-regression.test.js` | 98 | The Greensky run of 7 August 2026, and its re-run of 3 October 2026 (§9; `ENGINE.md` §12.15) |
 | 32 | `allfuels-regression` | `allfuels-regression.test.js` | 59 | The AllFuels run of 14 August 2026 |
-| 33 | `annexure-eb` | `annexure-eb-regression.test.mjs` | 496 | The annexure EB run and every run after it up to the Public Protector submission (`ENGINE.md` §12.10–§12.14) |
+| 33 | `annexure-eb` | `annexure-eb-regression.test.mjs` | 497 | The annexure EB run and every run after it up to the Public Protector submission (`ENGINE.md` §12.10–§12.14) |
+| 34 | `evidence-bundle-7` | `evidence-bundle-7-regression.test.mjs` | 47 | The evidence-bundle-7-docs run of 5 October 2026, the founder's rulings and the review round (`ENGINE.md` §12.16) |
 
 **Writing a regression test:** use the **exact text from the real document** that caused the
 failure, not a paraphrase. Every guard in `ENGINE.md` §4 has one, and that is why they have

@@ -111,6 +111,10 @@ last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the
   in print) are met in every printed report; the JSON keeps the schema's words until a schema v2
   (a neutral status such as `ENGINE-FINDING`, a separate `ai_candidates` array) is agreed for all
   three repositories. Do not change the contract in this repository alone.
+- **Founder — the narrator's event-level instruction (`ENGINE.md` §12.16, "Open, with the
+  founder").** `NARRATE_SYSTEM` still allows "the documents evidence fraud" for corroborated
+  events (v6.1 EVENT-LEVEL DETERMINATION); the gates pass it. Whether it survives the 5 October
+  rulings is a constitutional decision, not a gate change.
 - **Founder — the system prompt has drifted.** This repository's `VERUM_OMNIS_SYSTEM_PROMPT.md`
   differs from the 1verum and firebase copies in two passages (#189, #199), and it still calls
   the narrative "opt-in" (GitHub API, 3 October 2026).
@@ -389,8 +393,13 @@ marked.
   reference, set-aside pages, a document's stated last page and a Verum Omnis analysis's running
   title correctly; findings JSON 1.7.0. On the real bundle the engine now seals one finding, the
   lookalike domain. Tests: `tests/evidence-bundle-7-regression.test.mjs` and updated assertions
-  across the suites, SUITECOUNT suites and ASSERTCOUNT assertions. Open: the cross-repository
-  findings-JSON schema (Open today).
+  across the suites. Two independent reviews of the change then found five blocking and
+  seventeen minor defects (AI candidates discarded as duplicates, unnumbered pages after two
+  documents read as one, evidence sealed after a report page read as analysis, a month test that
+  matched any word, CT33/CT35 printed as two positions, among others); each confirmed one is
+  fixed with the reviewer's reproduction as a test (`ENGINE.md` §12.16 item 10). 34 suites and
+  2658 assertions. Open: the cross-repository findings-JSON schema and the narrator's "the
+  documents evidence fraud" instruction (Open today).
 
 **What must never be done.** The founder rulings and the seven regressions below; the §15.2
 language gate and the PD2 anchor gate are never loosened; no secret is ever committed; no
@@ -409,7 +418,7 @@ failure looks like).
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets. A Pages Function, `functions/[[path]].js`, runs only on the Pages project and has been dormant since 27 September.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.3.5-web`); findings JSON 1.7.0 (adds `display_name`, `brain`, `triple_verification`, `ai_review_note`; 1.6.0 added `analysis_reference_utc`).
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **33 suites, 2535 assertions** (counted 3 October 2026), **must be green before any push**. Many exist only to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **34 suites, 2658 assertions** (counted 5 October 2026), **must be green before any push**. Many exist only to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
