@@ -213,7 +213,7 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(src.indexOf("head += ' The record shows this ' + g.length + ' times.'") !== -1,
     'a repeated pattern is told once with its instance count');
   ok(src.indexOf("'Where it happens: '") !== -1, 'a repeated pattern lists every page it touches, once');
-  ok(src.indexOf("'The strongest instance: '") !== -1, 'a repeated pattern quotes its strongest instance');
+  ok(src.indexOf("'The first instance in the engine\\'s order: '") !== -1 && src.indexOf('The strongest instance') === -1, 'a repeated pattern quotes its first instance in the engine\'s order (no "strongest": PD1)');
   ok(src.indexOf("'At its core: '") !== -1, 'the narrative opens with a factual thesis of the top patterns');
   ok(!/A moderate issue|A lesser issue/.test(src),
     'per-finding severity adjectives are gone - pattern order carries the weight');
@@ -514,8 +514,8 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   const src5 = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
   ok(/function secExecutiveSummary/.test(src5), 'the executive summary section exists');
   const es = src5.slice(src5.indexOf('function secExecutiveSummary'), src5.indexOf('function secShortVersion'));
-  ok(/The findings that matter most/.test(es) && /What this establishes/.test(es),
-    'it names the top findings and what each establishes');
+  ok(/The leading findings/.test(es) && !/matter most/.test(es) && /What this establishes/.test(es),
+    'it names the leading findings and what each establishes (no "matter most": PD1)');
   ok(/Key dates in the record/.test(es), 'it carries the dated sequence');
   // Both halves of a two-sided finding must survive. A single truncation
   // window cut the "owner" quote off the Lessee/Owner trap, leaving only the

@@ -1688,6 +1688,10 @@ const HUMAN_BANNED_RES = [
   /\b\d{1,3}(?:\.\d+)?\s*(?:%|percent)(?![A-Za-z])|\b\d{1,3}\s*\/\s*(?:10|100)\b(?!\/)|\bout\s+of\s+(?:ten|10|100)\b|\bscores?\b|\bscored\b|\b(?:confidence|probability)\s+(?:level|score|band|rating)\b|\bconfidence\s+is\s+(?:very\s+)?(?:high|low|moderate)\b/i,
   /\b(?:severity|confidence)\s*[:=]?\s*(?:critical|very[ _-]?high|high|moderate|low|insufficient)\b|\b(?:critical|high|moderate|low)\s+severity\b|\bVERY_HIGH\b/i,
   /\bhow\s+to\s+(?:read|use)\s+this\s+report\b/i,
+  // ranking a finding by seriousness is a severity label in other words
+  // (PD1; the review of 5 October 2026: "the most serious finding",
+  // "high-severity", "critical findings" and "minor findings" all passed)
+  /\bmost\s+serious\b|\b(?:critical|high|moderate|medium|low)-severity\b|\bseverity\s+(?:level|rating|band|ranking)\b|\b(?:critical|minor|serious|major)\s+(?:findings?|contradictions?)\b/i,
   /\b(?:committed|is\s+guilty\s+of|has\s+committed)\s+(?:fraud|perjury|theft|a\s+crime|an?\s+offence)\b/i,
   // institutional-engagement honesty (AGENTS.md): no court adopted, accepted, found or ruled on anything
   /court[- ]recogni[sz]ed|judicially\s+validated|\baccepted\b[^.]{0,40}\b(?:as\s+evidence|into\s+(?:the\s+)?record|as\s+proof|as\s+admissible)\b|\baccepted\s+by\s+(?:the\s+|a\s+)?courts?\b|reassessed\s+as\s+criminal|charges?\s+(?:has|have)\s+been\s+laid|verified\s+charge|\bhigh\s+court\b|\bcourts?\s+(?:adopted|endorsed|validated|accredited|accepted|recogni[sz]ed|found|held|ruled|determined)\b/i,

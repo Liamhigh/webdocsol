@@ -235,7 +235,7 @@ const run = async () => {
   const at = s => t.lastIndexOf(s);
   ok(at('1. CRITICAL LEGAL SUBJECTS') > 0 && at('1. CRITICAL LEGAL SUBJECTS') < at('7. CERTIFICATION') && at('7. CERTIFICATION') < at('ANNEXES') && at('ANNEXES') < at('EXECUTIVE SUMMARY') && at('EXECUTIVE SUMMARY') < at('THE STORY IN PLAIN LANGUAGE'),
     'the §15.4 sections 1-7 come first; the one-page summary and the story follow as annexes (PD19)');
-  ok(/Timestamp: 2026-10-04T23:00:43\.844Z/.test(t) && /Jurisdiction\(s\): detected: South Africa/.test(t) && /Case Reference: none entered/.test(t) && /Report Type: Combined/.test(t), 'the cover carries the §15.4 header: timestamp, jurisdictions, case reference and report type');
+  ok(/Timestamp: 2026-10-04T23:00:43\.844Z/.test(t) && /Jurisdiction\(s\): South Africa \(default home jurisdiction\)/.test(t) && !/detected: South Africa/.test(t) && /Case Reference: none entered/.test(t) && /Report Type: Combined/.test(t), 'the cover carries the §15.4 header: timestamp, jurisdictions, case reference and report type');
   ok(!/HOW ANY CHANGE TO THIS RECORD IS DETECTED/.test(t) && /The seal check alone cannot show that a copy was not altered and re-sealed with its own hash/.test(t), 'no user-manual explainer (PD20); Section 7 keeps the re-seal limit');
   ok(!/\bserious\b|\bminor\b|largely consistent|by severity|Score calibration|scoring weight|\/ 46\b|Contradiction types triggered|\bverified findings?\b|AI REVIEW NOT RUN/i.test(t), 'no severity word, score, ratio, calibration, "verified" count or AI-review cover warning anywhere in the report (PD1, §15.2)');
   ok(/contains 4 findings\. The following are established\./.test(t), 'the count is the Constitution\'s own §15.3 sentence, without "verified"');
@@ -253,6 +253,48 @@ const run = async () => {
   ok(/Law of Evidence Amendment Act/.test(law) && !/perj[u]ry/i.test(law.slice(law.indexOf('Chain-of-Custody'), law.indexOf('Chain-of-Custody') + 260)), 'a custody-steps finding carries evidential law, never perjury, in its own row and in the offence matrix');
 };
 await run();
+
+// ===== 8. The review of this change (5 October 2026), pinned ==================
+{
+  const quiet = console.log;
+  // A record with no finding still prints §15.4 sections 1-7 in order.
+  const empty = { documents: [{ name: 'clean.pdf', pageCount: 2, sha512: 'ab'.repeat(64), sealId: 'VO-ABABABABABAB' }],
+    findings: { findings: [], contradictionTypesUsed: 0, clean: true }, ots: { submitted: true }, ocrPages: [], images: {}, generatedAt: '2026-10-04T23:00:43.844Z' };
+  let T0; console.log = () => {};
+  try { T0 = (await pageText(await R.build(empty))).replace(/\s+/g, ' '); } finally { console.log = quiet; }
+  const pos = ['1. CRITICAL LEGAL SUBJECTS', '2. DISHONESTY DETECTION MATRIX', '3. NINE-BRAIN EXTRACTION FINDINGS', '4. TRIPLE VERIFICATION SUMMARY', '5. SEALED FINDINGS', '6. VERDICT RESERVATION', '7. CERTIFICATION'].map(h => T0.lastIndexOf(h));
+  ok(pos.every((p, i) => p > 0 && (i === 0 || p > pos[i - 1])) && /No contradictions were detected\. Every detector ran; none triggered\./.test(T0),
+    'a record with no finding prints sections 1-7 in order, section 5 in the Constitution\'s clean sentence (' + JSON.stringify(pos) + ')');
+  ok(/Jurisdiction\(s\): South Africa \(default home jurisdiction\)/.test(T0), 'the cover says the home jurisdiction is the default when nothing names one');
+  // Single-source kinds carry their own sentence, never "both positions".
+  ok(['CT33', 'CT35', 'CT31', 'CT32', 'CT05', 'CT07', 'CT40', 'CT25'].every(ty => !/both positions/.test(R._establishesOf({ type: ty, evidence: 'Suspiciously high section number: Section 600 of Companies Act' }))),
+    'a section-number check, a procedure check and the other single-source kinds never print "The record states both positions"');
+  ok(/both positions/.test(R._establishesOf({ type: 'CT43', evidence: 'x' })) === false && /both positions/.test(R._establishesOf({ type: 'CT06', evidence: 'x' })), 'the two-positions sentence stays for two-statement kinds only');
+  ok(R._brainOf({ type: 'CT31' }) === 'B2' && R._brainOf({ type: 'CT32' }) === 'B2' && R._brainBlockLabel({ type: 'CT31' }) === 'FINDING RECORDED' && R._brainBlockLabel({ type: 'CT07' }) === 'FINDING RECORDED',
+    'a missing referenced document and an unsourced citation are document measurements (B2), never "CONTRADICTION FOUND"');
+  // The AI note table lists every noted engine row, and a note in banned words is withheld.
+  const fn = [
+    { type: 'CT02', severity: 4, location: 'Page 2 vs Page 3', evidence: 'R10,000 (p. 2) vs R12,000 (p. 3)', aiReviewNote: 'the two figures appear to be different invoices' },
+    { type: 'SERIAL', severity: 3, location: 'Pages 1-3', evidence: 'Multi-stage pattern', serialPattern: 'Advance-fee sequence', aiReviewNote: 'generic wording only' },
+    { type: 'CT37', severity: 3, location: 'Page 1, 3', evidence: 'Lookalike email domain: "pprotect.org" (p. 3) beside "protect.org" (p. 1)' }
+  ];
+  let T1; console.log = () => {};
+  try { T1 = (await pageText(await R.build({ documents: [{ name: 'n.pdf', pageCount: 3, sha512: 'cd'.repeat(64), sealId: 'VO-CDCDCDCDCDCD' }], findings: { findings: fn, contradictionTypesUsed: 2 },
+    aiReview: { applied: true, assessed: 3, attempted: 3, original: 3, noted: 2, added: 0 }, ots: { submitted: true }, ocrPages: [], images: {}, generatedAt: '2026-10-04T23:00:43.844Z' }))).replace(/\s+/g, ' '); } finally { console.log = quiet; }
+  const notes = T1.slice(T1.lastIndexOf('AI Review Notes on Engine Findings'));
+  ok(/AI Review Notes on Engine Findings \(2\)/.test(T1) && /generic wording only/.test(notes) && !/appear to be different invoices/.test(T1) && /did not pass the report's language rule/.test(notes),
+    'the note table lists every noted engine row (a serial pattern too), and a note in hedged words is withheld, not printed');
+  ok(/it noted 2 as unsupported \(advisory notes, printed under AI Review Notes on Engine Findings/.test(T1) && /it raised no candidate/.test(T1), 'the trailer points to where the notes are, and section 7 says no candidate was raised');
+  // The on-device summary: engine findings only, and nothing the render gate drops.
+  const html = fs.readFileSync(path.join(process.cwd(), 'seal-document.html'), 'utf8');
+  const fnSrc = html.match(/function buildLocalNarrative\(findings, score, verdict\) \{[\s\S]*?\n\}/)[0];
+  const buildLocal = new Function('window', 'voCaseDetails', fnSrc + '; return buildLocalNarrative;')(g, undefined);
+  const local = buildLocal(fn.concat([{ type: 'CT09', severity: 5, source: 'ai', category: 'AI_IDENTIFIED', evidence: 'an AI reading', rationale: 'AI says so', location: 'Page 3' }, { type: 'CT20', severity: 3, location: 'Page 3', evidence: 'Registration 1999/1234/0 is not a valid format' }]), 40, 'MODERATE');
+  const keySec = local.slice(local.indexOf('KEY FINDINGS'), local.indexOf('WHAT THE EVIDENCE SHOWS'));
+  ok(!/an AI reading/.test(keySec) && !/The first finding in the engine's order is an identity contradiction/.test(local), 'an AI candidate never leads the on-device summary or its key findings');
+  const scl = R._scrubNarrative(local);
+  ok(scl.dropped === 0, 'the on-device summary passes the render-time gate whole (' + scl.dropped + ' dropped)');
+}
 
 console.log(`\n[evidence-bundle-7] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[evidence-bundle-7] FAILURES'); process.exit(1); }
