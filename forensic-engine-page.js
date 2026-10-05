@@ -1171,8 +1171,14 @@ var DETECTORS = {
           (imp.pages.length > 1 ? ' — the same token appears on ' + imp.pages.length + ' pages (' + impList + ')' : ''),
         location: 'Page ' + impList, pages: imp.pages.slice() });
     }
-    // A single anchored, non-overclaiming note when the bundle mixes conventions.
-    if (voSawDMY && voSawMDY) {
+    // A single anchored, non-overclaiming note when ONE document mixes
+    // conventions. Two documents of a bundle written in two conventions are
+    // two documents, not one mixed one (Combine 06 April 2026: "31/07/2016"
+    // on p. 110 and "12/30/2020" on p. 147, in different documents).
+    var d03Segs = voDetectDocuments(textBlocks) || [];
+    var d03Key = voDocKeyOf(d03Segs, textBlocks.length);
+    var d03SameDoc = function (pa, pb) { return pa === pb || !d03Segs.length || (d03Key(pa) === d03Key(pb) && d03Key(pa).charAt(0) === 'd'); };
+    if (voSawDMY && voSawMDY && d03SameDoc(voSawDMY.page, voSawMDY.page)) {
       findings.push({ type: 'CT03', severity: 2,
         evidence: 'Document mixes date formats: "' + voSawDMY.raw + '" reads as day/month/year while "' + voSawMDY.raw + '" reads as month/day/year -- numeric dates in this bundle are ambiguous; confirm the intended reading before relying on any date',
         location: 'Page ' + (voSawDMY.page + 1) + ' vs Page ' + (voSawMDY.page + 1) });
@@ -1241,13 +1247,21 @@ var DETECTORS = {
       // date") names ONE event, so it still pairs across pages; and a generic
       // label restated on one page (the p.95 termination conflict pattern)
       // still fires.
-      var GENERIC_DATE_LABEL = { 'dated': 1, 'date signed': 1, 'signed on': 1 };
+      // A label that every instrument of its kind carries ("invoice date",
+      // "due date", a person's "date of birth") names one date PER instrument:
+      // two invoices dated 20 January and 31 March are two invoices
+      // (Combine 06 April 2026, p. 49 vs p. 680). They pair on one page only.
+      var GENERIC_DATE_LABEL = { 'dated': 1, 'date signed': 1, 'signed on': 1, 'invoice date': 1, 'due date': 1, 'date of birth': 1, 'notice date': 1, 'meeting date': 1 };
       var base2 = st[0];
       var seenKeys2 = {};
       for (var q = 1; q < st.length; q++) {
         if (st[q].key === base2.key) continue;
         if (seenKeys2[st[q].key]) continue; // a repeated value is one discrepancy, not many
         if (GENERIC_DATE_LABEL[lab2] && st[q].page !== base2.page) continue;
+        // An event label ("termination date") names one event of ONE
+        // instrument: across the documents of a bundle it is compared only
+        // inside one stated document.
+        if (!d03SameDoc(base2.page, st[q].page)) continue;
         seenKeys2[st[q].key] = true;
         findings.push({ type: 'CT03', severity: 4,
           evidence: '"' + lab2 + '" is stated as ' + base2.raw + ' and as ' + st[q].raw,
@@ -1394,6 +1408,13 @@ var DETECTORS = {
       if (a.page === b.page) return true;
       if (tlSegs.length && tlDocOf(a.page) !== tlDocOf(b.page)) return false;
       var ca = tlCompanies(a.page), cb = tlCompanies(b.page);
+      // Pages no stated document covers (a run of unnumbered pages in a
+      // bundle) are linked only by a positive mark — a company both pages
+      // name — never by default: "lease expires – never renewed 11 Dec 2018"
+      // in a page of notes and an invoice 48 pages away were sealed as
+      // "billing after the stated expiry" (Combine 06 April 2026, p. 97 vs
+      // p. 49).
+      if (tlSegs.length && tlDocOf(a.page).charAt(0) === 'u' && (!ca || !cb)) return false;
       if (!ca || !cb) return true;
       for (var k in ca) { if (cb[k]) return true; }
       return false;
@@ -1876,6 +1897,11 @@ var DETECTORS = {
         var before = block.slice(Math.max(0, cm.index - 12), cm.index);
         if (/\bvat\s*$/i.test(before)) continue; // "VAT REGISTRATION NUMBER": a VAT number, D10's business
         var idField = /\b(?:id|identity(?:\s+number)?)\s*(?:\/|or|\|)\s*$/i.test(before);
+        var afterCue = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 40);
+        // "Registration number of complainant" is a person's field: a natural
+        // person's number there is an identity number (Combine 06 April 2026,
+        // p. 400, where OCR had dropped the form's "ID/").
+        if (!idField && /^\s*[:.]?\s*of\s+(?:the\s+)?(?:complainant|applicant|respondent|deponent|member|director|person|individual|claimant)\b/i.test(afterCue)) idField = true;
         // The number must START within 40 characters of the cue but may run
         // past that window: "CIPC company-history search on 2002/059909/23"
         // was cut to "2002/059909/2" by a fixed 40-character slice and then
@@ -1946,6 +1972,7 @@ var DETECTORS = {
           var quote = block.substring(cm.index, cm.index + cm[0].length + tok.index + tok[0].length).replace(/\s+/g, ' ').trim();
           bad[val] = { pages: [], quote: quote, foreign: false, near: NEAR_SA_REG.test(val), idShaped: idShaped(val) || isIdField };
         }
+        if (isIdField) bad[val].idField = true;
         if (FOREIGN_REG_RE.test(context)) bad[val].foreign = true;
         if (bad[val].pages.indexOf(i + 1) === -1) bad[val].pages.push(i + 1);
       }
@@ -1965,6 +1992,14 @@ var DETECTORS = {
       if (bad[v].foreign) {
         findings.push({ type: 'CT20', severity: 2,
           evidence: 'A registration number does not match the SA (CIPC) format, and the surrounding text names a foreign registry (e.g. RAKEZ/UAE) — verify it against that registry, not the SA format: "' + bad[v].quote + '"',
+          location: 'Page ' + bad[v].pages.join(', ') });
+      } else if (bad[v].idField) {
+        // An identity number in a person's ID/registration field is what the
+        // field asks for: an engine note, never a finding (it once counted as
+        // a Low finding; Combine 06 April 2026 printed two, pp. 400 and 425,
+        // for one person's number).
+        findings.push({ type: 'CT20', severity: 0, contextOnly: true,
+          evidence: 'An identity number in a person\'s ID/registration field is that person\'s identity number, not a company registration; not a finding: "' + bad[v].quote + '"',
           location: 'Page ' + bad[v].pages.join(', ') });
       } else if (bad[v].idShaped) {
         findings.push({ type: 'CT20', severity: 2,
@@ -2786,6 +2821,34 @@ var DETECTORS = {
       }
       return prev[b.length];
     }
+    // One definition read twice by OCR differs only in misread letters:
+    // "auy information thai car be wed directly" and "avy Information fiat
+    // cor 03 used directiy" (Combine 06 April 2026, pp. 649 and 652). When
+    // either side came through OCR, the opening forty letters are compared
+    // with room for the recogniser's errors (four in ten): a native-text
+    // page keeps the strict test above.
+    function voDefSameReadTwice(prev, snippet, ocr) {
+      if (!ocr) return false;
+      var ca = String(prev.snippet).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+      var cb = String(snippet).toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 40);
+      var n = Math.min(ca.length, cb.length);
+      if (n < 20) return false;
+      return voEditDistance(ca.slice(0, n), cb.slice(0, n)) / n <= 0.4;
+    }
+    // Two definitions of "the Premises" that name different properties (Lot
+    // 967 Port Edward, Lot 26 Bluff) belong to two agreements over two sites,
+    // bound into one bundle (Combine 06 April 2026, pp. 641 and 644).
+    function voDefDifferentProperties(a, b) {
+      var ids = function (t) {
+        var out = [], m, re = /\b(?:lot|erf|portion|stand|farm|sub(?:division)?|remainder\s+of\s+(?:lot|erf))\s*(?:no\.?\s*)?(\d{1,6})/gi;
+        while ((m = re.exec(String(t))) !== null) out.push(m[0].toLowerCase().replace(/\s+/g, ' '));
+        return out;
+      };
+      var ia = ids(a), ib = ids(b);
+      if (!ia.length || !ib.length) return false;
+      for (var x = 0; x < ia.length; x++) if (ib.indexOf(ia[x]) !== -1) return false;
+      return true;
+    }
     function voMateriallyDiffer(a, b) {
       var ca = String(a).toLowerCase().replace(/[^a-z0-9]/g, '');
       var cb = String(b).toLowerCase().replace(/[^a-z0-9]/g, '');
@@ -2824,13 +2887,19 @@ var DETECTORS = {
           for (var wI = 0; wI < words.length; wI++) { if (!/^[A-Z]/.test(words[wI])) { capOk = false; break; } }
           if (!capOk || TERM_STOP[term] || TERM_STOP[words[0].toLowerCase()] || term.length < 4) continue;
         }
+        // A term that is the tail of a longer defined phrase ('the Value of
+        // the "Franchised Business" means the price …') is that phrase's
+        // definition, not the term's (Combine 06 April 2026, p. 317).
+        if (/\b(?:of|for)\s+(?:the\s+|a\s+|an\s+)?["\u201C'\u2018]?$/i.test(String(textBlocks[i]).slice(Math.max(0, match.index - 24), match.index + 1).replace(/\s+/g, ' '))) continue;
         var snippet = String(textBlocks[i]).substr(match.index + match[0].length, 90).replace(/\s+/g, ' ').trim();
         if (voLooksGarbled(snippet)) continue; // OCR debris is not a definition
         var norm = snippet.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').slice(0, 60);
         var dkey = (docSegs.length ? docOf(i) : 0) + ':' + term; // each document keeps its own first definition
         var prev = definitions[dkey];
         if (prev && prev.page !== i && prev.norm && norm && prev.norm !== norm &&
-            voMateriallyDiffer(prev.snippet, snippet) && !reported[dkey]) {
+            voMateriallyDiffer(prev.snippet, snippet) && !reported[dkey] &&
+            !voDefSameReadTwice(prev, snippet, /^\s*\[OCR\]/.test(String(textBlocks[i] || '')) || prev.ocr) &&
+            !voDefDifferentProperties(prev.snippet, snippet)) {
           reported[dkey] = true;
           // Severity 2: definitional drift across a long agreement is common
           // boilerplate; on the AllFuels rerun eight CT08 rows at Medium buried
@@ -2839,7 +2908,7 @@ var DETECTORS = {
             evidence: 'Term "' + term + '" is defined differently in two places: "' + prev.snippet.slice(0, 70) + '" (Page ' + (prev.page + 1) + ') vs "' + snippet.slice(0, 70) + '" (Page ' + (i + 1) + ')',
             location: 'Page ' + (prev.page + 1) + ' and Page ' + (i + 1) });
         }
-        if (!prev) definitions[dkey] = { page: i, snippet: snippet, norm: norm };
+        if (!prev) definitions[dkey] = { page: i, snippet: snippet, norm: norm, ocr: /^\s*\[OCR\]/.test(String(textBlocks[i] || '')) };
       }
     }
     return findings;
@@ -3143,6 +3212,11 @@ var DETECTORS = {
         while ((m = g.exec(lower)) !== null) {
           // "is NOT the owner" is the lessee clause itself, not an ownership record.
           if (/\bnot\s+(?:the\s+)?$/.test(lower.slice(Math.max(0, m.index - 12), m.index))) continue;
+          // A condition is not a record: "In the event that the Franchisee is
+          // the owner of the Premises and at any time during the Term …" is a
+          // clause of the agreement providing for a case, not a statement
+          // that the case occurred (Combine 06 April 2026, p. 327).
+          if (objectCheck && /\b(?:if|in the event (?:that|of)|in the case (?:that|where|of)|should|whether|unless|provided that|on condition that|to the extent that)\b[^.;:]{0,60}$/.test(lower.slice(Math.max(0, m.index - 80), m.index))) continue;
           if (objectCheck && !ownerObjectOk(m[0], lower.slice(m.index + m[0].length, m.index + m[0].length + 120))) continue;
           var q = voSnapWindow(raw, m.index - 10, m.index + m[0].length + 40);
           out.push({ page: i + 1, quote: q, side: sideNear(raw, m.index, m[0].length) });
@@ -3283,7 +3357,20 @@ var DETECTORS = {
     // silent (that clause alone is not a contradiction).
     var noComp = pageOf(/not\s+(?:be\s+)?entitled\s+to\s+(?:any\s+)?(?:compensation|repayment)[^.]{0,140}(?:structural|addition|alteration|improvement)/);
     var acquires = pageOf(/entitled[^.]{0,60}(?:purchase|acquire|buy)[^.]{0,70}(?:property|premises|site)[^.]{0,70}(?:fair market value|market value|value)/);
-    if (noComp && acquires) {
+    // Both halves must belong to one agreement: one stated document, or —
+    // where no boundaries can be read — one passage of the record (twenty
+    // pages, as D38). A no-compensation clause on p. 246 and a purchase
+    // right on p. 422 of a 684-page bundle were sealed as one trap
+    // (Combine 06 April 2026).
+    var d39Segs = voDetectDocuments(blocks) || [];
+    var d39Key = voDocKeyOf(d39Segs, blocks.length);
+    var d39OneAgreement = function (a, c) {
+      if (a.page === c.page) return true;
+      var ka = d39Key(a.page - 1), kc = d39Key(c.page - 1);
+      if (d39Segs.length && ka.charAt(0) === 'd') return ka === kc;
+      return Math.abs(a.page - c.page) <= 20;
+    };
+    if (noComp && acquires && d39OneAgreement(noComp, acquires)) {
       findings.push({ type: 'CT45', severity: 5,
         evidence: 'The franchisee is denied any compensation for its own improvements to the premises: "' + noComp.quote + '" — while the franchisor is entitled to acquire the property itself at value: "' + acquires.quote + '". Value denied to the party who built it, yet realised by the other. Its legal characterisation is for the court.',
         location: loc(noComp, acquires) });
@@ -4302,15 +4389,22 @@ function voSecondarySegments(segs, textBlocks) {
       // letter, a statement — and is read as the record (a lookalike domain
       // on such pages was turned into a lead by the first version of this
       // rule; the review of 5 October 2026).
-      var vEnd = seg.start;
-      for (var vp = seg.start + 1; vp <= seg.end; vp++) {
-        if (VO_NEW_RECORD_HEAD_RE.test(headOf(vp))) break;
-        if (!VO_ANALYSIS_SIGNAL_RE.test(String(blocks[vp - 1] || '').replace(/\s+/g, ' '))) break;
-        vEnd = vp;
+      // Each page is judged on its own mark, up to the first page that opens
+      // a new record: a continuation page without one does not end the
+      // analysis (Combine 06 April 2026: pp. 10-31 of a 24-page Verum Omnis
+      // analysis were scanned as the record because one early page carried
+      // no exhibit citation, and its p. 12 was sealed as a CT45 finding).
+      var vStop = seg.end;
+      for (var vp = seg.start + 1; vp <= seg.end; vp++) { if (VO_NEW_RECORD_HEAD_RE.test(headOf(vp))) { vStop = vp - 1; break; } }
+      var vRun = null;
+      for (var vq = seg.start + 1; vq <= vStop; vq++) {
+        if (VO_ANALYSIS_SIGNAL_RE.test(String(blocks[vq - 1] || '').replace(/\s+/g, ' '))) {
+          if (vRun && vRun.end === vq - 1) vRun.end = vq;
+          else { vRun = { start: vq, end: vq, title: 'Verum Omnis analysis (its first page set aside)', analysis: true }; out.push(vRun); }
+        }
       }
-      if (vEnd > seg.start) out.push({ start: seg.start, end: vEnd, title: 'Verum Omnis analysis (its first page set aside)', analysis: true });
       // The pages after it in the same exhibit are tested page by page below.
-      for (var vr = vEnd + 1; vr <= seg.end; vr++) delete covered[vr];
+      for (var vr = seg.start + 1; vr <= seg.end; vr++) delete covered[vr];
       continue;
     }
     if (!(voIsSecondaryHead(seg.title) || voIsSecondaryHead(head))) {
@@ -4402,6 +4496,20 @@ function voSecondaryWhere(secSegs) {
     parts.push('p. ' + (g.start === g.end ? g.start : g.start + '-' + g.end) + ': "' + g.title + '"');
   }
   return parts.length ? ' (' + parts.join('; ') + ')' : '';
+}
+// A near-empty-page finding (CT26) every page of which is a scanned image
+// with no text layer of its own is a reading limit, not a format anomaly:
+// it becomes an engine note naming the page (Combine 06 April 2026).
+function voImageOnlyCt26ToNotes(findings, imageOnlyPages) {
+  var kept = [], notes = [];
+  for (var i = 0; i < (findings || []).length; i++) {
+    var f = findings[i];
+    if (!f || f.type !== 'CT26') { kept.push(f); continue; }
+    var fp = voFindingPages(f);
+    if (!fp.length || !fp.every(function (pg) { return (imageOnlyPages || []).indexOf(pg) !== -1; })) { kept.push(f); continue; }
+    notes.push({ type: 'CT26', location: f.location || '', text: (fp.length === 1 ? 'Page ' + fp[0] + ' is' : 'Pages ' + fp.join(', ') + ' are') + ' a scanned image with no text layer of its own, and OCR recovered little or no text from it: a reading limit, not a finding. Read the page image.' });
+  }
+  return { kept: kept, notes: notes };
 }
 function voDemoteSecondarySource(findings, secondaryPages) {
   var leads = [], kept = [], capped = 0;
@@ -5852,7 +5960,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // Extract text blocks (one per page)
   var textBlocks = [];
   var extractionNote = 'Per-page PDF content-stream decoding with ToUnicode CMaps.';
-  var _ocrPages = [], _ocrConfidence = null;
+  var _ocrPages = [], _ocrConfidence = null, _imageOnlyPages = [], _ocrRan = false;
   try {
     var pages = pdfDoc.getPages();
     for (var i = 0; i < pages.length; i++) {
@@ -5873,16 +5981,25 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     // Runs BEFORE the too-little-text check so a fully scanned document can
     // be rescued rather than falling through to the raw-stream fallback.
     // Inert when absent; a failure is disclosed, never fatal (PD6).
+    // Pages with (almost) no text layer of their own are scanned images,
+    // whatever OCR later recovers from them (see the D17 hand-over below).
+    for (var nti = 0; nti < textBlocks.length; nti++) if (String(textBlocks[nti] || '').replace(/\s+/g, '').length < 50) _imageOnlyPages.push(nti + 1);
     try {
       var _g = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
       if (_g && typeof _g.voOcrRescuePages === 'function' && textBlocks.length > 1) {
         var _ocr = await _g.voOcrRescuePages(pdfBytes, textBlocks, onProgress);
         if (_ocr && Array.isArray(_ocr.textBlocks) && _ocr.textBlocks.length === textBlocks.length) {
+          _ocrRan = true;
           textBlocks = _ocr.textBlocks;
           if (_ocr.note) extractionNote += ' ' + _ocr.note;
           // OCR provenance travels with the result: which pages (1-based)
           // were machine-recovered and, per page, how sure the recogniser was.
           if (Array.isArray(_ocr.ocrPages)) _ocrPages = _ocr.ocrPages.slice();
+          // The text itself carries its provenance ("[OCR] "), so the page set
+          // never depends on the host's list alone (Combine 06 April 2026: 203
+          // pages were OCR-recovered and no finding on them was held).
+          for (var opx = 0; opx < textBlocks.length; opx++) if (/^\s*\[OCR\]/.test(String(textBlocks[opx] || '')) && _ocrPages.indexOf(opx + 1) === -1) _ocrPages.push(opx + 1);
+          _ocrPages.sort(function (a, b) { return a - b; });
           if (_ocr.ocrConfidence && typeof _ocr.ocrConfidence === 'object') _ocrConfidence = _ocr.ocrConfidence;
         }
       }
@@ -6043,8 +6160,27 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // neither blocks a package rule nor consumes a type's budget, and before
   // the OCR cap, so a lead carries no cap tag. Each lead goes to the engine
   // notes with its page, where both reports print it.
+  // A near-empty page that has no text layer of its own is a scanned page
+  // OCR could barely read: a reading limit, disclosed with the unread and
+  // OCR pages, not a format anomaly of the record (Combine 06 April 2026:
+  // p. 664, 30 characters at OCR confidence 39, and p. 676, no legible text,
+  // were sealed as CT26 findings, one "for the investigator" to say whether
+  // a page was inserted or removed).
+  if (_ocrRan && _imageOnlyPages.length) {
+    var _io = voImageOnlyCt26ToNotes(allFindings, _imageOnlyPages);
+    allFindings = _io.kept;
+    for (var ion = 0; ion < _io.notes.length; ion++) _voContextNotes.push(_io.notes[ion]);
+  }
   var _sec = voDemoteSecondarySource(allFindings, _secondaryAllPages);
   allFindings = _sec.kept;
+  // A finding whose detector names no page ("Same passage", "Full document")
+  // is pinned to its page only later (voBackfillPageAnchors), so this pass
+  // cannot see it. They are held here and passed through the same rule once
+  // they have a page (Combine 06 April 2026, 5 October: a CT01 on a markdown
+  // analysis page, p. 192, and a CT45 inside a Verum Omnis analysis, p. 12,
+  // were sealed as findings that way).
+  var _secPending = [];
+  for (var spn = 0; spn < allFindings.length; spn++) if (allFindings[spn] && !voFindingPages(allFindings[spn]).length) _secPending.push(allFindings[spn]);
   if (_sec.leads.length || _sec.capped) {
     for (var sl = 0; sl < _sec.leads.length; sl++) {
       var _ld = _sec.leads[sl];
@@ -6150,6 +6286,23 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
 
   // Pin findings to a real page where their evidence resolves to exactly one.
   allFindings = voBackfillPageAnchors(allFindings, textBlocks);
+  // The secondary-source rule for the findings that only now have a page.
+  var _secLate = allFindings.filter(function (f) { return _secPending.indexOf(f) !== -1 && voFindingPages(f).length; });
+  if (_secLate.length && _secondaryAllPages.length) {
+    var _sec2 = voDemoteSecondarySource(_secLate, _secondaryAllPages);
+    if (_sec2.leads.length) {
+      allFindings = allFindings.filter(function (f) { return _sec2.leads.indexOf(f) === -1; });
+      for (var sl2 = 0; sl2 < _sec2.leads.length; sl2++) {
+        var _ld2 = _sec2.leads[sl2];
+        _voContextNotes.push({ type: _ld2.type || '', location: _ld2.location || '',
+          text: 'Secondary-source lead, not a finding: ' + String(_ld2.evidence || '').replace(/\s*\[secondary source on p\.[^\]]*\]/g, '').replace(/\s+/g, ' ').trim() + ' — verify against the primary record' });
+      }
+    }
+    if (_sec2.leads.length || _sec2.capped) {
+      extractionNote += ' Located later: ' + (_sec2.leads.length ? _sec2.leads.length + ' further observation(s) whose page was found after the first pass sit entirely on secondary or analysis pages and are recorded under the engine notes as leads, NOT as findings' : '') +
+        (_sec2.leads.length && _sec2.capped ? '; ' : '') + (_sec2.capped ? _sec2.capped + ' further finding(s) with one part on those pages held at reduced weight' : '') + '.';
+    }
+  }
 
   // OCR provenance has a consequence, not just a footnote (annexure EB): a
   // FORMAT check whose every cited page came through OCR is held at Low until
@@ -6785,7 +6938,7 @@ if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
     generateSummary: generateSummary, voEditDistance: voEditDistance,
     voStripSealFurniture: voStripSealFurniture, voStripSealFurnitureBlocks: voStripSealFurnitureBlocks, voCacheDocSegs: voCacheDocSegs,
-    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voIsVerumAnalysisPage: voIsVerumAnalysisPage, voMarkdownAnalysisPages: voMarkdownAnalysisPages, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSnapWindow: voSnapWindow, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voIsSubmissionOnSealed: voIsSubmissionOnSealed, voSubmissionSpan: voSubmissionSpan, voFragmentCut: voFragmentCut, voDemoteSecondarySource: voDemoteSecondarySource, voSentenceAround: voSentenceAround, voDatedAfterReference: voDatedAfterReference, voIsStampContext: voIsStampContext,
+    voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voIsVerumAnalysisPage: voIsVerumAnalysisPage, voMarkdownAnalysisPages: voMarkdownAnalysisPages, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSnapWindow: voSnapWindow, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voIsSubmissionOnSealed: voIsSubmissionOnSealed, voSubmissionSpan: voSubmissionSpan, voFragmentCut: voFragmentCut, voDemoteSecondarySource: voDemoteSecondarySource, voImageOnlyCt26ToNotes: voImageOnlyCt26ToNotes, voSentenceAround: voSentenceAround, voDatedAfterReference: voDatedAfterReference, voIsStampContext: voIsStampContext,
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,
     CONTRADICTION_TYPES: CONTRADICTION_TYPES,
     DETECTORS: DETECTORS,

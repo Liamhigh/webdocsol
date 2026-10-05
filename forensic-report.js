@@ -3868,9 +3868,18 @@ function voAssertsEstablished(t) {
   }
   return false;
 }
+// An offence word in the narrator's own voice characterises conduct however it
+// is phrased ("a coordinated scheme of fraud … by the directors [F1]", "the
+// findings establish a pattern of systemic commercial fraud"; Combine 06 April
+// 2026). It stands only as candidate law, a section or element name, the name
+// of a body or a case, or what a party alleged — the Worker's rule, held again.
+var VO_OFFENCE_ANY_RE = new RegExp('\\b' + VO_OFFENCE_NOUN + '\\b|\\bunlawful(?:ly)?\\s+enrich', 'i');
+var VO_OFFENCE_OK_RE = /\b(?:pillars?|elements?)\s+of\s+(?:common-law\s+)?fraud\b|\b(?:fraud|theft|corruption|forgery|bribery|extortion|money\s+laundering)\s+(?:department|unit|division|desk|hotline|team|investigators?|case|cases|charge|charges|complaint|complaints|report|docket|matter|squad|prevention)\b|\b(?:alleg\w*|accus\w*|complain\w*|claim\w*|charg\w*|reported|reports)\b/i;
 function voCharacterises(s) {
   var t = voOverclaimMask(s);
-  return VO_CHARACTERISE_RE.test(t) && !VO_CANDIDATE_LAW_RE.test(t);
+  if (VO_CANDIDATE_LAW_RE.test(t)) return false;
+  if (VO_CHARACTERISE_RE.test(t)) return true;
+  return VO_OFFENCE_ANY_RE.test(t) && !VO_OFFENCE_OK_RE.test(t);
 }
 function voSentenceOverclaims(s) {
   var t0 = String(s || '');
@@ -4671,7 +4680,7 @@ function aiReviewTrailer(ar) {
     '; it removed and changed none — every engine finding stands as the engine produced it';
   if ((ar.noted | 0) > 0) parts += '; it noted ' + (ar.noted | 0) + ' as unsupported (advisory notes, printed under AI Review Notes on Engine Findings in the Findings & Contradiction Matrix)';
   if ((ar.added | 0) > 0) parts += '; it raised ' + (ar.added | 0) + ' candidate' + ((ar.added | 0) === 1 ? '' : 's') + ' the engine did not report';
-  if ((ar.duplicates | 0) > 0) parts += '; ' + (ar.duplicates | 0) + ' further item' + ((ar.duplicates | 0) === 1 ? '' : 's') + ' it raised quoted what an engine finding on the same page already quotes and ' + ((ar.duplicates | 0) === 1 ? 'is' : 'are') + ' not listed as candidates';
+  if ((ar.duplicates | 0) > 0) parts += '; ' + (ar.duplicates | 0) + ' further item' + ((ar.duplicates | 0) === 1 ? '' : 's') + ' it raised restated an engine finding (the same words on the same page, or the same kind of finding) and ' + ((ar.duplicates | 0) === 1 ? 'is' : 'are') + ' not listed as candidates';
   return parts + '.';
 }
 

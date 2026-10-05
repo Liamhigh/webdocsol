@@ -95,9 +95,13 @@ ok(ct20(['LESSOR: PALMBILI PROPERTY INVESTMENTS (PTY) LTD REGISTRATION NUMBER: 2
 ok(ct20(['RONNIE MOIR TRAVEL CC (Registration NO. CK2000/071982/23) t/a Port Edward Garage']).length === 0,
   'CT20 silent: CK2000/071982/23 is a valid close-corporation registration (F009)');
 {
-  const f = ct20(['Registration number of complainant 510209 5091 08 (a natural person) under the Consumer Protection Act.']);
-  ok(f.length === 1 && f[0].severity === 2 && /identity number/.test(f[0].evidence),
-    'CT20 demotes an identity-number-shaped value under a registration label to a Low check (F005)');
+  // A person's field ("of complainant") holding an identity number is what the field asks
+  // for: an engine note since 5 October 2026 (Combine 06 April 2026); a company's
+  // registration label holding an identity-shaped number stays the Low check (F005).
+  const f = ct20(['Registration number of complainant 510209 5091 08 (a natural person) under the Consumer Protection Act.']).filter(x => !x.contextOnly);
+  const fc = ct20(['Company registration number 8001015009087 of the supplier, as printed on the invoice.']);
+  ok(f.length === 0 && fc.length === 1 && fc[0].severity === 2 && /identity number/.test(fc[0].evidence),
+    'CT20: an identity number in a person\'s field is a note; an identity-shaped number under a company registration label is the Low check (F005)');
 }
 {
   const f = ct20(['Registration Number 1911/0001154/07 (Transferor), a company duly incorporated']);
@@ -249,7 +253,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(/async function voPreflightForensicService/.test(page) && /var _pre = await voPreflightForensicService\(\);/.test(page) && /no forensic report was produced and nothing was sealed/.test(page),
     'forensic mode pre-flights the service and refuses to produce an unreviewed forensic report on a host with no API');
   ok(/function voOcrAskToContinue/.test(page) && /candidates = candidates\.concat\(cappedIdx\);/.test(page), 'the OCR cap asks once whether to read the remaining scanned pages');
-  ok(/findings_json_version: '1\.7\.0'/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page) && /secondary_capped: /.test(page) && /ocr_anchored: /.test(page) && /ocr_held: /.test(page) && /triple_verification: /.test(page) && /ai_review_note: /.test(page) && /brain: /.test(page) && /display_name: /.test(page), 'findings JSON v1.7.0 carries review_status, ocr_provenance, secondary_capped, ocr_anchored, ocr_held, and (new) brain, display_name, triple_verification and ai_review_note');
+  ok(/findings_json_version: '1\.8\.0'/.test(page) && /candidate_law: candidateLawOf\(f\)/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page) && /secondary_capped: /.test(page) && /ocr_anchored: /.test(page) && /ocr_held: /.test(page) && /triple_verification: /.test(page) && /ai_review_note: /.test(page) && /brain: /.test(page) && /display_name: /.test(page), 'findings JSON v1.8.0 carries review_status, ocr_provenance, secondary_capped, ocr_anchored, ocr_held, and (new) brain, display_name, triple_verification and ai_review_note');
   // Behavioural: the pre-flight against stubbed answers.
   const preSrc = page.slice(page.indexOf('var VO_PREFLIGHT_TIMEOUT_MS'), page.indexOf('function voShowPreflightBlock'));
   const mk = new Function('AbortController', 'setTimeout', 'clearTimeout', preSrc + '\nreturn { voPreflightForensicService, voPreflightMessage };');
@@ -647,8 +651,11 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   const ct20 = (b) => of(DET.D11_DETECT_REGISTRATION_FAKE, b, 'CT20').filter(f => !f.contextOnly);
   const idF = ct20(['ID/Registration number of complainant 510209 5091087']);
   const idT = ct20(['ID/Registration number of complainant 510209 5091 0']);
-  ok(idF.length === 1 && idF[0].severity === 2 && /identity number/.test(idF[0].evidence) && idT.length === 1 && idT[0].severity === 2 && /identity number/.test(idT[0].evidence),
-    '"ID/Registration number of complainant 510209 5091087" is an identity number (sev 2 note), even when OCR cut it short — never "not a valid format"');
+  // Since 5 October 2026 (Combine 06 April 2026) an identity number in a person's
+  // ID/registration field is an engine note, not a Low finding: it is what the field asks for.
+  const idNote = (b) => DET.D11_DETECT_REGISTRATION_FAKE(b).filter(f => f.contextOnly && /identity number/.test(f.evidence));
+  ok(idF.length === 0 && idT.length === 0 && idNote(['ID/Registration number of complainant 510209 5091087']).length === 1 && idNote(['ID/Registration number of complainant 510209 5091 0']).length === 1,
+    '"ID/Registration number of complainant 510209 5091087" is an identity number (an engine note, not a finding), even when OCR cut it short — never "not a valid format"');
   const twins = ['MEMORANDUM OF UNDERSTANDING BRIGHT IDEA PROJECTS 66 PTY (LTD) t/a ALL FUELS Registration Number 2012/226353/07 (Represented herein by Zeyd Timol duly authorised)', '[OCR] Registration number 20121226353/07 as per the letterhead; CIPC 200205930923; Reg. No. 1811100115407', 'Registration Number 2002/059909/23 and Registration Number 1911/001154/07'];
   ok(ct20(twins).length === 0, 'OCR variants of numbers printed cleanly elsewhere in the bundle are not findings');
   const repairs = DET.D11_DETECT_REGISTRATION_FAKE(twins).filter(f => f.contextOnly);
@@ -659,7 +666,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(garbled.filter(f => !f.contextOnly).length === 0 && garbled.some(f => f.contextOnly && /could not be read reliably/.test(f.evidence) && /1991 1 G25755/.test(f.evidence)), 'a garbled number on an OCR page with no clean twin is an unreadable note, never a finding');
   ok(ct20(['Registration No: 2002/05990/2 as stated on the letterhead.']).length === 1, 'a malformed number on a native-text page with no clean twin still fires');
   const idOcr = DET.D11_DETECT_REGISTRATION_FAKE(['[OCR] ID/Registration number of complainant 2012226353071', 'Registration Number 2012/226353/07']);
-  ok(idOcr.some(f => !f.contextOnly && f.severity === 2 && /identity number/.test(f.evidence)) && !idOcr.some(f => f.contextOnly && /reads as/.test(f.evidence)), 'an identity number under an ID/Registration field is never "repaired" into a nearby company number');
+  ok(idOcr.some(f => f.contextOnly && /identity number/.test(f.evidence)) && !idOcr.some(f => !f.contextOnly) && !idOcr.some(f => f.contextOnly && /reads as/.test(f.evidence)), 'an identity number under an ID/Registration field is never "repaired" into a nearby company number');
   const nearest = DET.D11_DETECT_REGISTRATION_FAKE(['[OCR] Registration Number 2012/226353/01', '[OCR] Reg No. 20121226353/07 and again Reg No. 20121226353/07', 'Registration Number 2012/226353/07']).filter(f => f.contextOnly);
   ok(nearest.length === 1 && /20121226353\/07 \(p\.2\) reads as 2012\/226353\/07/.test(nearest[0].evidence) && (nearest[0].evidence.match(/reads as/g) || []).length === 1, 'the twin is the nearest clean number from a text page, listed once (' + (nearest[0] && nearest[0].evidence) + ')');
 

@@ -790,6 +790,9 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(await kept('The bank confirmed receipt of the payment in its letter (p. 2).'), 'reported speech ("the bank confirmed …") is what the page states, and is kept');
   ok(await kept('The station company was established in 2001 according to the letter (p. 5).'), 'a founding date ("established in 2001") is not an overclaim');
   ok(!(await kept('It is confirmed that All Fuels cut the supply (p. 2).')), 'a passive "it is confirmed" on a page anchor alone is dropped');
+  globalThis.PDFLib = globalThis.PDFLib || { rgb: (r, g, b) => ({ r, g, b }), StandardFonts: {}, PDFDocument: {} };
+  const RRmod = (await import('../forensic-report.js')).default || globalThis.VerumReport;
+  const RR0 = () => RRmod;
   // The review of 5 October 2026: each rule judged where its verb stands.
   for (const t of ['The record establishes on page 2 that All Fuels cut the supply (p. 2).', 'The record proves in paragraph 4 that the supply was cut (p. 2).',
     'The documents reveal in clause 7 that the supply was cut (p. 2).',
@@ -806,6 +809,16 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'Page 2 states that the letter reads "these figures contradict the audited accounts" (p. 2).', 'Page 2 states that the letter reads "this is fraud by the dealer" (p. 2).',
     'The record does not establish who signed the counterpart (p. 5).']) {
     ok(await kept(t), 'what a page states is kept: ' + t);
+  }
+  // Combine 06 April 2026: an offence word in the narrator's own voice, however phrased.
+  for (const t of ['The record shows a coordinated scheme of fraud and unlawful enrichment conducted by the directors of All Fuels (Pty) Ltd [F1] (p. 2).',
+    'The findings establish a pattern of systemic commercial fraud and theft of goodwill across multiple petrol stations [F1] (p. 2).']) {
+    ok(!(await kept(t)), 'an offence word in the narrator\'s voice is dropped even with an [F#]: ' + t.slice(0, 60));
+    ok(RR0()._scrubNarrative(t.replace(' (p. 2)', '')).dropped === 1, 'and at render time: ' + t.slice(0, 60));
+  }
+  for (const t of ['The complaint alleges fraud by the supplier [F1] (p. 2).', 'The SAPS fraud case was opened on 3 March 2026 [F1] (p. 2).',
+    'The dates may constitute fraud as candidate law, for counsel to confirm [F1] (p. 2).']) {
+    ok(await kept(t), 'an allegation, a case name or candidate law keeps its offence word: ' + t.slice(0, 50));
   }
   let hg = await gate('CONDUCT CONSTITUTES COERCION\n\n' + PAD);
   ok(!/COERCION/.test(hg.text) && hg.gate.overclaim === 1, 'a heading that calls conduct an offence is dropped and counted as an overclaim');
