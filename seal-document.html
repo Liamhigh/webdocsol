@@ -6622,6 +6622,27 @@ function voCacheDocSegs(textBlocks) {
   _voDocSegsCache = { blocks: textBlocks, segs: segs };
   return segs;
 }
+// Which document a page belongs to, as a key two pages can be compared by.
+// A page no stated document covers (an unnumbered run after a document that
+// reached its last page, or a run too short to count) is NOT "the same
+// document" as every other such page: each contiguous run of them is its own
+// document. One shared "-1" bucket once paired an annexure after one
+// agreement with a schedule after another (definitions in D30, an expiry and
+// an invoice in D04) — the evidence-bundle-7 review, 5 October 2026.
+function voDocKeyOf(segs, pageCount) {
+  var ids = [];
+  for (var d = 0; d < (segs || []).length; d++) {
+    for (var q = segs[d].start; q <= segs[d].end; q++) ids[q - 1] = 'd' + d;
+  }
+  var run = 0;
+  for (var i = 0; i < pageCount; i++) {
+    if (ids[i] !== undefined) continue;
+    if (i === 0 || String(ids[i - 1]).charAt(0) !== 'u') run = i;
+    ids[i] = 'u' + run;
+  }
+  return function (pageIdx) { return ids[pageIdx] !== undefined ? ids[pageIdx] : 'u' + pageIdx; };
+}
+
 function voDetectDocuments(textBlocks) {
   if (_voDocSegsCache && _voDocSegsCache.blocks === textBlocks) return _voDocSegsCache.segs;
   if (!textBlocks || textBlocks.length < 6) return [];
@@ -7554,10 +7575,7 @@ var DETECTORS = {
     // company cannot be excluded on that ground; the finding still tells the
     // reader to verify the instrument.
     var tlSegs = voDetectDocuments(textBlocks) || [];
-    var tlDocOf = function (pageIdx) {
-      for (var d = 0; d < tlSegs.length; d++) { if (pageIdx + 1 >= tlSegs[d].start && pageIdx + 1 <= tlSegs[d].end) return d; }
-      return -1;
-    };
+    var tlDocOf = voDocKeyOf(tlSegs, textBlocks.length);
     var TL_COMPANY_RE = /\b([A-Z][A-Za-z&'.-]*(?:\s+[A-Z0-9][A-Za-z0-9&'.-]*){0,4})\s+(?:\(Pty\)\s*Ltd|Pty\s*Ltd|\(Proprietary\)\s*Limited|Limited|Ltd|CC|Inc\.?|Incorporated|LLC|PLC)\b/g;
     var tlCompanies = function (pageIdx) {
       var out = {}, any = false, m2, txt = String(textBlocks[pageIdx] || '');
@@ -7959,7 +7977,7 @@ var DETECTORS = {
     // is NOT a valid SA registration format. A number with no "registration"
     // label (the bank reference) never fires; a valid one that recurs never
     // fires. Each malformed value is reported once, anchored to its pages.
-    var cueRe = /(?:company\s+)?registration\s+(?:number|no\.?|nr\.?)|reg(?:istration)?\.?\s*(?:number|no\.?|nr\.?)|CIPC/gi;
+    var cueRe = /(?:company\s+)?registration\s+(?:number|no\.?|nr\.?)|reg(?:istration)?\.?\s*(?:number|no\.?|nr\.?)|enterprise\s+(?:number|no\.?|nr\.?)|CIPC/gi;
     // Every SA form: YYYY/NNNNNN/NN (companies), CKYYYY/NNNNNN/NN (close
     // corporations, e.g. CK2000/071982/23 — the old pattern wanted two digits
     // after CK and called a valid CC number fake on the annexure EB run), plus
@@ -8070,16 +8088,21 @@ var DETECTORS = {
         // seal id ("Cipc compilation (VO35E910616402, 31 pp") or a search date
         // ("CIPC Search 20260907"), both sealed as false registration numbers
         // in the evidence-bundle-7-docs index (5 October 2026).
-        if (/^cipc$/i.test(cm[0]) && tok.index > 12) continue;
+        // A "number" word between them still names the number ("listed with
+        // CIPC under the number 2016/39254/07").
+        if (/^cipc$/i.test(cm[0]) && tok.index > 12 && !/\b(?:number|no\.?|nr\.?)\s*[:#]?\s*$/i.test(afterFull.slice(0, tok.index))) continue;
         var val = tok[0].replace(/\s+/g, '');
         if (SA_REG.test(val)) continue; // a valid registration format is not "fake" (and the street number after it is not part of it)
         // A token inside a Verum Omnis seal id (VO-XXXXXXXXXXXX, with or
         // without the dash) is a seal, not a registration number.
         var tokAt = cm.index + cm[0].length + tok.index;
         if (/VO-?[0-9A-F]{0,12}$/i.test(block.slice(Math.max(0, tokAt - 14), tokAt)) && /^[0-9A-F]/i.test(block.charAt(tokAt))) continue;
-        // An eight-digit date (YYYYMMDD) is a date stamp, not a registration.
+        // An eight-digit date (YYYYMMDD) after a bare "CIPC", or beside a
+        // "search" or "date" word, is a date stamp, not a registration. Under a
+        // registration label ("Registration No: 19991231") it is still checked.
         var ymd = /^(19|20)\d{2}(\d{2})(\d{2})$/.exec(val);
-        if (ymd && +ymd[2] >= 1 && +ymd[2] <= 12 && +ymd[3] >= 1 && +ymd[3] <= 31) continue;
+        if (ymd && +ymd[2] >= 1 && +ymd[2] <= 12 && +ymd[3] >= 1 && +ymd[3] <= 31 &&
+            (/^cipc$/i.test(cm[0]) || /\b(?:search(?:ed)?|dated?)\b[^.;]{0,12}$/i.test(block.slice(Math.max(0, tokAt - 24), tokAt)))) continue;
         // An identity number typed with spaces ("510209 5091 08") reads as a
         // shorter digit run: take the spaced digits only when the first run is
         // digits alone and the spaced form is identity-length.
@@ -8797,6 +8820,12 @@ var DETECTORS = {
     // it, or a seal id, annexure or exhibit reference right after it.
     var REF_BEFORE = /\b(?:affidavit|certificate|annexure|annex|exhibit|report|statement|register|log|record)s?\b[^.;]{0,80}\b(?:record(?:s|ed|ing)?|set(?:s|ting)?\s+out|describ(?:es|ed|ing)|document(?:s|ed|ing)|deal(?:s|ing)?\s+with|explain(?:s|ed|ing)?|cover(?:s|ing)?)\b[^.;]{0,60}$/i;
     var REF_AFTER = /^[^.;]{0,30}\((?:VO-[0-9A-F]{6,}|Annexure|Annex|Exhibit|CB\d|[A-Z]{1,3}\d{1,3}\b)/i;
+    // A document that speaks of ITSELF is not a reference to another one:
+    // "This affidavit records the chain of custody", "In this statement I set
+    // out the chain of custody" are this document's own custody claims, and
+    // are checked (the review of 5 October 2026).
+    var SELF_NOUN = /\b(?:this|these|the\s+present)\s+(?:affidavit|certificate|annexure|annex|exhibit|report|statement|register|log|record)s?\b[^.;]{0,80}$/i;
+    var SELF_FIRST = /\b(?:I|[Ww]e)\s+(?:have\s+|hereby\s+)?(?:record(?:ed)?|set(?:\s+out)?|describe[ds]?|document(?:ed)?|deal\s+with|explain(?:ed)?|cover(?:ed)?)\b[^.;]{0,60}$/;
     var ctxPage = 0, ctxSnippet = '';
     for (var b = 0; b < textBlocks.length && !ctxPage; b++) {
       var t = textBlocks[b] || '', m;
@@ -8804,7 +8833,7 @@ var DETECTORS = {
       while ((m = CUSTODY_CONTEXT.exec(t)) !== null) {
         var pre = t.substring(Math.max(0, m.index - 160), m.index);
         var post = t.substring(m.index + m[0].length, m.index + m[0].length + 40);
-        if (REF_BEFORE.test(pre) || REF_AFTER.test(post)) continue;
+        if ((REF_BEFORE.test(pre) && !SELF_NOUN.test(pre) && !SELF_FIRST.test(pre)) || REF_AFTER.test(post)) continue;
         ctxPage = b + 1;
         ctxSnippet = t.substring(Math.max(0, m.index - 60), Math.min(t.length, m.index + m[0].length + 60)).replace(/\s+/g, ' ').trim();
         break;
@@ -8968,12 +8997,7 @@ var DETECTORS = {
     // document only, using the bundle's own page numbering (voDetectDocuments);
     // a bundle that states no boundaries is one document.
     var docSegs = voDetectDocuments(textBlocks) || [];
-    var docOf = function (pageIdx) {
-      for (var d = 0; d < docSegs.length; d++) {
-        if (pageIdx + 1 >= docSegs[d].start && pageIdx + 1 <= docSegs[d].end) return d;
-      }
-      return -1;
-    };
+    var docOf = voDocKeyOf(docSegs, textBlocks.length);
     var definitions = {};
     var reported = {};
     for (var i = 0; i < textBlocks.length; i++) {
@@ -10452,6 +10476,11 @@ var VO_SECONDARY_NOTE = function (pages) { return ' [secondary source on p. ' + 
 // ("Verum Omnis — <title> Index/Narrative/Report… • Page N of M") is
 // secondary. Their findings become leads to verify against the primary record.
 var VO_REPORT_PLACEHOLDER_HEAD_RE = /^\s*prior verum omnis report page excluded\./;
+// Marks of a page written about the record rather than being it: this
+// platform's name, a Verum Omnis seal id cited in the text (the seal footers
+// are stripped before this runs), a bundle-page citation ("bundle pp 290") or
+// a compiled-bundle exhibit label ("CB9").
+var VO_ANALYSIS_SIGNAL_RE = /\bVerum\s+Omnis\b|\bVO-\s?[0-9A-F]{12}\b|\bCB\s?\d{1,3}\b|\bbundle\s+pp?\.?\s*\d/i;
 var VO_ANALYSIS_RUNNING_TITLE_RE = /\bVerum\s+Omnis\s*[\u2014\u2013-]\s*[^\u2022|]{3,90}?\b(?:index|narrative|report|summary|analysis|chronology|brief|submission|timeline)\b[^\u2022|]{0,40}\u2022\s*page\s+\d{1,4}\s+of\s+\d{1,4}\b/i;
 function voIsVerumAnalysisPage(text) { return VO_ANALYSIS_RUNNING_TITLE_RE.test(String(text || '').replace(/\s+/g, ' ')); }
 function voSecondarySegments(segs, textBlocks) {
@@ -10462,9 +10491,17 @@ function voSecondarySegments(segs, textBlocks) {
     for (var c = seg.start; c <= seg.end; c++) covered[c] = true;
     var head = headOf(seg.start);
     if (VO_REPORT_PLACEHOLDER_HEAD_RE.test(head)) {
+      // A continuation page must carry its own mark of being written about
+      // the record (VO_ANALYSIS_SIGNAL_RE): the narrative's pages 10-18 each
+      // cite the bundle's exhibits ("CB9, bundle pp 290-293") or other seals.
+      // A page without one is evidence sealed with the report — a chat, a
+      // letter, a statement — and is read as the record (a lookalike domain
+      // on such pages was turned into a lead by the first version of this
+      // rule; the review of 5 October 2026).
       var vEnd = seg.start;
       for (var vp = seg.start + 1; vp <= seg.end; vp++) {
         if (VO_NEW_RECORD_HEAD_RE.test(headOf(vp))) break;
+        if (!VO_ANALYSIS_SIGNAL_RE.test(String(blocks[vp - 1] || '').replace(/\s+/g, ' '))) break;
         vEnd = vp;
       }
       if (vEnd > seg.start) out.push({ start: seg.start, end: vEnd, title: 'Verum Omnis analysis (its first page set aside)', analysis: true });
@@ -12952,6 +12989,7 @@ if (typeof module !== 'undefined' && module.exports) {
     runForensicEngine: runForensicEngine,
     detectSerialPatterns: detectSerialPatterns,
     voDetectDocuments: voDetectDocuments,
+    voDocKeyOf: voDocKeyOf,
     voDetectSwornPages: voDetectSwornPages,
     voBackfillPageAnchors: voBackfillPageAnchors,
     voPageForEvidence: voPageForEvidence,
@@ -16680,20 +16718,32 @@ async function aiAssessFindings(findings) {
     }
   }
   if (!anyRan) return null;   // every batch failed -> AI review genuinely did not run
-  // A candidate that quotes what an engine finding on the same page already
-  // quotes is that finding again, not a contradiction the engine missed: the
-  // evidence-bundle-7-docs report listed "never countersigned" (p. 13) as an
-  // AI candidate beside the engine's own finding on those words. It is not
-  // listed, and the count is said.
+  // A candidate that restates an engine finding is that finding again, not a
+  // contradiction the engine missed: the evidence-bundle-7-docs report listed
+  // "never countersigned" (p. 13) as an AI candidate beside the engine's own
+  // finding on those words. It is not listed, and the count is said. Quoting
+  // an engine finding's words is NOT enough on its own: the assess prompt
+  // tells the model to quote from the findings it was shown, so every
+  // anchored candidate does. A candidate is a duplicate only when, on a page
+  // the finding cites, its quote sits in that finding's evidence AND it is
+  // the same kind of finding (its type names the finding's CT code) or its
+  // quote is most of that evidence. A different contradiction read from the
+  // same words is the review's one permitted output, and is kept.
   var normQ = function (t) { return String(t || '').toLowerCase().replace(/[\u2018\u2019\u201c\u201d"']/g, '').replace(/\s+/g, ' ').trim(); };
   var pagesQ = function (loc) { return (typeof voRulePagesOf === 'function') ? voRulePagesOf(String(loc || '')) : (String(loc || '').match(/\d+/g) || []).map(Number); };
-  var engineQ = findings.filter(function (f) { return f && f.source !== 'ai'; }).map(function (f) { return { ev: normQ(f.evidence), pages: pagesQ(f.location) }; });
+  var engineQ = findings.filter(function (f) { return f && f.source !== 'ai'; }).map(function (f) { return { ev: normQ(f.evidence), pages: pagesQ(f.location), type: String(f.type || '').toUpperCase() }; });
   var duplicates = 0;
   added = added.filter(function (a) {
     if (!a.anchored || !a.evidence) return true;
     var q = normQ(a.evidence), ap = pagesQ(a.location);
     if (q.length < 8) return true;
-    var dup = engineQ.some(function (e) { return e.ev.indexOf(q) !== -1 && (!ap.length || ap.some(function (pg) { return e.pages.indexOf(pg) !== -1; })); });
+    var at = String(a.type || '').toUpperCase();
+    var dup = engineQ.some(function (e) {
+      if (e.ev.indexOf(q) === -1) return false;
+      if (ap.length && !ap.some(function (pg) { return e.pages.indexOf(pg) !== -1; })) return false;
+      var sameKind = !!e.type && (at === e.type || at.indexOf(e.type + '_') === 0 || at.indexOf(e.type + ' ') === 0);
+      return sameKind || q.length >= 0.6 * e.ev.length;
+    });
     if (dup) duplicates++;
     return !dup;
   });

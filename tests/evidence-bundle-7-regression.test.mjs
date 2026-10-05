@@ -51,6 +51,11 @@ console.log('======================================================\n');
   ok(of(DET.D11_DETECT_REGISTRATION_FAKE, ['The enterprise number is K2016/392549/07 on the certificate. Registration number: K2016392549 per the CIPC portal.'], 'CT20').length === 0, 'the K-form with or without slashes is a valid CIPC form');
   ok(of(DET.D11_DETECT_REGISTRATION_FAKE, ['Company registration number: 1999/12345/0 issued to the respondent.'], 'CT20').length === 1, 'positive control: a malformed number under a registration label still fires');
   ok(of(DET.D11_DETECT_REGISTRATION_FAKE, ['CIPC: 2016/39254/07 per the search result.'], 'CT20').length === 1, 'positive control: a number right after a bare "CIPC" is still checked');
+  // The review of these guards (5 October 2026): each skip stays as narrow as its case.
+  ok(of(DET.D11_DETECT_REGISTRATION_FAKE, ['CIPC enterprise number: 2016/39254/07 per the search.'], 'CT20').length === 1 && of(DET.D11_DETECT_REGISTRATION_FAKE, ['The company is listed with CIPC under the number 2016/39254/07 per the search.'], 'CT20').length === 1,
+    'positive control: "enterprise number" is a registration label, and "CIPC under the number …" still names the number');
+  ok(of(DET.D11_DETECT_REGISTRATION_FAKE, ['Company registration number: 20120526 issued.'], 'CT20').length === 1 && of(DET.D11_DETECT_REGISTRATION_FAKE, ['Registration No: 19991231 on the form.'], 'CT20').length === 1,
+    'positive control: an eight-digit value under a registration label is checked; only a search date after "CIPC" is skipped');
 }
 
 // ===== 2. Chain of custody (D27 / CT39) ======================================
@@ -58,6 +63,8 @@ console.log('======================================================\n');
   const ref = 'The rescission application was filed with the Registrar on the night of 2 October 2026, with the founding affidavit of Mr Bester (VO-E543924CB79B), my supporting affidavit recording the forensic collection and the chain of custody (VO-0D93BB2C1B46), and the Notice of Motion.';
   ok(of(DET.D27_DETECT_CUSTODY_GAP, [ref], 'CT39').length === 0, 'a reference to another document that records the chain of custody is not a custody gap in this document');
   ok(of(DET.D27_DETECT_CUSTODY_GAP, ['Annexure CB12 sets out the chain of custody for each exhibit.'], 'CT39').length === 0, 'an annexure said to set out the custody is a reference too');
+  ok(of(DET.D27_DETECT_CUSTODY_GAP, ['This affidavit records the chain of custody of the exhibits. Item 1 received by Sgt Mokoena.'], 'CT39').length === 1 && of(DET.D27_DETECT_CUSTODY_GAP, ['In this statement I set out the chain of custody of the phone.'], 'CT39').length === 1,
+    'positive control: a document that sets out its own custody ("This affidavit records …", "In this statement I set out …") is still checked');
   ok(of(DET.D27_DETECT_CUSTODY_GAP, ['The chain of custody of the exhibits is recorded below. Item 1 received by Sgt Mokoena.'], 'CT39').length === 1, 'positive control: a document claiming its own custody record with missing steps still fires');
 }
 
@@ -82,6 +89,20 @@ console.log('======================================================\n');
   const ph = 'prior verum omnis report page excluded. '.repeat(10);
   const blocks2 = blocks.slice(); blocks2[3] = ph;
   ok(E.voDetectDocuments(blocks2).find(x => x.statedTotal === 5).title === 'Verum Omnis analysis (set aside from scanning)', 'a document whose first page was set aside is named for what it is, never by the placeholder');
+  // The pages no stated document covers are not one shared document: each
+  // contiguous run is its own (the review of this fix found an annexure after
+  // one agreement compared with a schedule after another).
+  const key = E.voDocKeyOf([{ start: 1, end: 3 }, { start: 5, end: 7 }], 9);
+  ok(key(0) === key(2) && key(3) !== key(7) && key(3) !== key(0) && key(7) === key(8) && key(4) !== key(0),
+    'an unnumbered run after one document and another after the next are different documents; a run stays one document');
+  const filler = ' The parties record the terms below and each party signs every page of this instrument in the presence of witnesses.';
+  const defs = ['Supply agreement between Alpha Fuels and the dealer.' + filler + ' Page 1 of 3', 'Clause two sets out pricing and delivery obligations.' + filler + ' Page 2 of 3', 'Clause three sets out termination and notices.' + filler + ' Page 3 of 3',
+    'Annexure to the supply agreement. "Goods" means petrol and diesel delivered by road tanker to the site.' + filler,
+    'Lease agreement between Beta Properties and the tenant.' + filler + ' Page 1 of 3', 'Clause two sets out rental and escalation.' + filler + ' Page 2 of 3', 'Clause three sets out breach and cancellation.' + filler + ' Page 3 of 3',
+    'Schedule to the lease. "Goods" means the movable furniture, fittings and equipment listed in the inventory.' + filler];
+  ok(of(DET.D30_DETECT_TERM_DEFINITION_CONFLICT, defs, 'CT08').length === 0, 'two instruments\' definitions of "Goods", each on an unnumbered page after its own document, are not one document\'s conflict (D30)');
+  const tl = defs.slice(); tl[3] = 'Addendum to the depot lease. The lease expired on 28 February 2018 and was not renewed.' + filler; tl[7] = 'Statement of account for the new station. Invoice date: 3 March 2025. Diesel 5000 litres.' + filler;
+  ok((DET.D04_DETECT_TEMPORAL_IMPOSSIBILITY(tl) || []).length === 0, 'an expiry after one document and an invoice after another are not linked as one instrument (D04)');
 }
 
 // ===== 4. Names ==============================================================
@@ -99,6 +120,45 @@ ok(E.generateSummary([{}, {}, {}, {}], 15) === E.generateSummary([{}, {}, {}, {}
 ok(E.voIsVerumAnalysisPage('Part B — Large sealed bundles … Verum Omnis — CCT 19/20 Google Drive Index • Page 4 of 9') && !E.voIsVerumAnalysisPage('VERUM OMNIS SEALED ORIGINAL | Seal: VO-3C28D1DEA47F | 4/65 The lease agreement'),
   'a page whose running title names a Verum Omnis analysis is recognised; the seal footer on evidence is not');
 
+// ===== 6b. Evidence sealed after a report page is still the record ===========
+// The first version of rule (a) read every page after a set-aside Verum Omnis
+// report page as analysis, up to the next record heading: a chat, a letter and
+// a bank statement sealed with the report became "analysis", and a real
+// lookalike domain on them became a lead (the review of 5 October 2026). A
+// continuation page must carry its own mark (a cited seal, "Verum Omnis", an
+// exhibit label such as CB9, or a bundle-page citation).
+{
+  const foot2 = (id, n, N) => ' VERUM OMNIS SEALED ORIGINAL | Seal: ' + id + ' | SHA-512: 3c28d1dea47fec22... | 05/10/2026 00:59:25 Africa/Johannesburg | ' + n + '/' + N;
+  const P2 = [
+    'VERUM OMNIS FORENSIC REPORT. Report Reference: VO-AF-2026-0523-SUPP. Prepared for the complainant. This report reads the annexed correspondence.' + foot2('VO-AAAAAAAAAAAA', 1, 4),
+    'WhatsApp chat export, 3 October 2026. Dean: please send the referral to the investigator at thomas@protect.org today so the matter is handled before Friday, the stations are running dry.' + foot2('VO-AAAAAAAAAAAA', 2, 4),
+    'Public Protector South Africa. Please quote this reference in your reply: CMS-88494/2026 Enquiries: Thomas Mogoba Email: thomasm@pprotect.org Tel: (012) 366 7210 Dear Mr Highcock, the complaint has been received and referred.' + foot2('VO-AAAAAAAAAAAA', 3, 4),
+    'Bank statement extract for the station account showing fuel purchases for September 2026, opening balance and closing balance, with the supplier rebate credited at month end.' + foot2('VO-AAAAAAAAAAAA', 4, 4),
+    'Letter of demand from the attorneys to the supplier regarding the interruption of fuel supply and the terms of the franchise agreement.' + foot2('VO-BBBBBBBBBBBB', 1, 3),
+    'The supplier is requested to restore supply within seven days of this letter failing which the client will approach the court for urgent relief.' + foot2('VO-BBBBBBBBBBBB', 2, 3),
+    'Yours faithfully, the attorneys for the franchisee, with copies to the regional manager and the franchisee directly by registered post.' + foot2('VO-BBBBBBBBBBBB', 3, 3)
+  ];
+  const d = await PDFLib.PDFDocument.create();
+  const font = await d.embedFont(PDFLib.StandardFonts.Helvetica);
+  for (let i = 0; i < P2.length; i++) {
+    const pg = d.addPage([612, 882]);
+    let line = '', y = 840;
+    for (const w of (P2[i] + ' Clean Bundle Page ' + (i + 1) + ' of ' + P2.length).split(' ')) {
+      const next = line ? line + ' ' + w : w;
+      if (font.widthOfTextAtSize(next, 9) > 560) { pg.drawText(line, { x: 24, y, size: 9, font }); y -= 12; line = w; } else line = next;
+    }
+    if (line) pg.drawText(line, { x: 24, y, size: 9, font });
+  }
+  const bytes2 = await d.save({ useObjectStreams: false });
+  const doc2 = await PDFLib.PDFDocument.load(bytes2, { ignoreEncryption: true });
+  const quiet2 = console.log; console.log = () => {};
+  let res2;
+  try { res2 = await E.runForensicEngine(bytes2, doc2, null, { referenceTime: '2026-10-04T23:00:13.390Z' }); }
+  finally { console.log = quiet2; }
+  ok(res2.findings.some(f => f.type === 'CT37' && /Page 2, 3/.test(f.location)) && !/Secondary-source lead[^.]*pprotect/.test(res2.extractionNotes || ''),
+    'a lookalike domain on a chat and a letter sealed after a report page is a finding, not a lead (' + JSON.stringify(res2.findings.map(f => f.type + ' ' + f.location)) + ')');
+}
+
 // ===== 7. End to end on a bundle of the same shape ===========================
 const outer = (n, N) => ' VERUM OMNIS SEALED ORIGINAL | Seal: VO-3C28D1DEA47F | SHA-512: 3c28d1dea47fec22... | 05/10/2026 00:59:25 Africa/Johannesburg | ' + n + '/' + N;
 const inner = (n, N) => ' VERUM OMNIS SEALED ORIGINAL | Seal: VO-553451FF1282 | SHA-512: 553451ff128275a1... | 04/10/2026 23:33:00 Africa/Johannesburg | ' + n + '/' + N;
@@ -108,7 +168,7 @@ const PAGES = [
   'The Public Protector has considered the complaint and the documents submitted with it, and refers the matter as set out below for further handling by the appropriate office. Page 2 of 3',
   'For any further enquiries you are at liberty to approach the Lead Investigator, Mr Thomas Mogoba, at 012 366 7210 alternatively at thomasm@pprotect.org. Yours sincerely. Page 3 of 3',
   'VERUM OMNIS FORENSIC NARRATIVE — FROM DES SMITH TO THE PRESENT. Prepared by Liam Anthony Highcock, read with the Verum Omnis Forensic Report (Ninth Edition). In the Constitutional Court, Case No CCT 19/20.' + inner(1, 5),
-  'Goodwill does not terminate: the respondent was selling it, buying it back, and forfeiting it under any circumstances. The MOU was never countersigned by All Fuels. He signed it, and paid under it, before the Constitutional Court heard the matter.' + inner(2, 5),
+  'Goodwill does not terminate: the respondent was selling it, buying it back, and forfeiting it under any circumstances (CB6). The MOU was never countersigned by All Fuels. He signed it, and paid under it, before the Constitutional Court heard the matter.' + inner(2, 5),
   'The rescission application was filed with the Registrar on the night of 2 October 2026, with the founding affidavit of Mr Bester (VO-E543924CB79B), my supporting affidavit recording the forensic collection and the chain of custody (VO-0D93BB2C1B46), and the Notice of Motion.' + inner(3, 5),
   'GOOGLE DRIVE EVIDENCE INDEX CCT 19/20. Contents: CIPC portal screenshots for Sanarth Fuels (K2016392549) and its annual return; an email "LA Highcock CIPC Search 20260907" from Port Edward Garage. Verum Omnis — CCT 19/20 Google Drive Index • Page 1 of 2' + inner(4, 5),
   'CB13 CIPC searches conducted 7 September 2026. Cipc compilation (VO35E910616402, 31 pp; shared with allfuelsfinal). The MOU was never countersigned. Verum Omnis — CCT 19/20 Google Drive Index • Page 2 of 2' + inner(5, 5),

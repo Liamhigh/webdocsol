@@ -135,6 +135,31 @@ sb3.globalThis = sb3; vm.createContext(sb3);
 vm.runInContext(consts + '\n' + batchesFn + '\n' + findingsFn + '\n; this.aiAssessFindings = aiAssessFindings;', sb3);
 ok(await sb3.aiAssessFindings(big) === null, 'the worker\'s reviewed:false fallback is not counted as a review that ran');
 
+// --- candidates: quoting an engine finding's words is not a duplicate ---
+// The assess prompt tells the model to quote from the findings it was shown,
+// so every anchored candidate quotes one. Only a candidate of the same kind,
+// or one whose quote is most of the finding's evidence, restates it.
+{
+  const eng = [{ id: 0, type: 'CT02', severity: 4, location: 'Page 2 vs Page 3', evidence: 'Clause 4 states the term is five years (p. 2); the schedule is signed by Mr B Smith and states three years (p. 3)' }];
+  const cand = (type, quote, page) => ({ type, severity: 3, rationale: type + ' read from ' + quote, quote, page });
+  async function postCands(path, payload) {
+    return { verdicts: payload.findings.map(f => ({ id: f.id, verdict: 'supported', reason: 'ok' })), additionalFindings: [
+      cand('CT01', 'the term is five years', 2),
+      cand('CT09', 'signed by Mr B Smith', 3),
+      cand('CT02', 'the term is five years', 2),
+      cand('UNSIGNED_AGREEMENT', 'Clause 4 states the term is five years (p. 2); the schedule is signed by Mr B Smith and states three years', 3)
+    ] };
+  }
+  const sb4 = { JSON, Object, String, parseInt, isFinite, aiApiPost: postCands, console,
+    voAnchorAiQuote: (q, pg) => ({ found: true, quote: q, location: 'Page ' + pg }) };
+  sb4.globalThis = sb4; vm.createContext(sb4);
+  vm.runInContext(consts + '\n' + batchesFn + '\n' + findingsFn + '\n; this.aiAssessFindings = aiAssessFindings;', sb4);
+  const r4 = await sb4.aiAssessFindings(eng);
+  const kept = r4.added.map(a => a.type).join(',');
+  ok(kept === 'CT01,CT09', 'a different contradiction read from an engine finding\'s words is kept; the same kind on the same words is a duplicate (' + kept + ')');
+  ok(r4.duplicates === 2, 'the same-kind restatement and the near-whole-quote restatement are counted as duplicates (' + r4.duplicates + ')');
+}
+
 console.log(`\n[ai-assess-batch] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[ai-assess-batch] FAILURES'); process.exit(1); }
 console.log('[ai-assess-batch] ALL GREEN');
