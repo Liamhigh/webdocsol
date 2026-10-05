@@ -774,6 +774,9 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(await kept('These two dates contradict each other [F1] (p. 2).'), 'a contradiction stated with its [F#] is kept');
   ok(await kept('As candidate law, the stated dates may constitute fraud, for counsel to confirm [F1] (p. 2).'), 'an offence named as candidate law ("may constitute", for counsel to confirm) is kept');
   ok(await kept('Nothing on page 5 establishes when the supply was cut (p. 5).'), 'a negated "establishes" (a stated gap) is kept');
+  ok(await kept('The bank confirmed receipt of the payment in its letter (p. 2).'), 'reported speech ("the bank confirmed …") is what the page states, and is kept');
+  ok(await kept('The station company was established in 2001 according to the letter (p. 5).'), 'a founding date ("established in 2001") is not an overclaim');
+  ok(!(await kept('It is confirmed that All Fuels cut the supply (p. 2).')), 'a passive "it is confirmed" on a page anchor alone is dropped');
   const j = await gate(PAD + 'The core pattern the record establishes is that All Fuels has cut fuel supply (p. 2).');
   ok(j.gate && j.gate.dropped === 1 && j.gate.overclaim === 1, 'the overclaim is counted in the gate statistics (' + JSON.stringify(j.gate) + ')');
   const wsrc = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
@@ -783,6 +786,8 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   const RR = (await import('../forensic-report.js')).default || globalThis.VerumReport;
   const sc = RR._scrubNarrative('The core pattern the record establishes is that All Fuels has cut fuel supply [Page 1]. The record states that All Fuels\' actions constitute coercion [Page 2]. The record reveals that Mr Timol swore otherwise, contradicting the company\'s own documents [Page 12]. Page 1 states that the supply was cut [Page 1]. The two dates contradict each other [F1].');
   ok(sc.dropped === 3 && /Page 1 states that the supply was cut/.test(sc.text) && /contradict each other \[F1\]/.test(sc.text), 'the render-time gate drops the same three overclaims and keeps the page statement and the [F#] contradiction (' + JSON.stringify(sc) + ')');
+  const sc2 = RR._scrubNarrative('The bank confirmed receipt of the payment in its letter [Page 2]. The station company was established in 2001 according to the letter [Page 5]. It is confirmed that All Fuels cut the supply [Page 2]. The documents clearly show that the supply was cut [Page 3].');
+  ok(sc2.dropped === 2 && /bank confirmed receipt/.test(sc2.text) && /established in 2001/.test(sc2.text), 'the render-time gate keeps reported speech and a founding date, and drops "it is confirmed" and "the documents clearly show" (' + JSON.stringify(sc2) + ')');
 }
 
 // --- the signed rule-package loop: publish -> manifest -> the website verifies.

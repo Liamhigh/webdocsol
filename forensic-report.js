@@ -3782,7 +3782,7 @@ function voSentenceBanned(s) {
 // contradiction is stated only with its [F#]; conduct is never called an
 // offence outside candidate-law framing.
 var VO_FINDING_REF_RE = /\[F\d{1,3}\]|\(F\d{1,3}\)|\bfindings?\s+F\d{1,3}\b/i;
-var VO_ESTABLISH_RE = /\b(?:establish(?:es|ed)?|proves?|proved|proven|reveals?|revealed|demonstrates?|demonstrated|confirms?|confirmed)\b|\b(?:record|records|documents?|evidence|bundle)\s+(?:clearly\s+)?(?:shows?|showed)\b/i;
+var VO_ESTABLISH_RE = /\b(?:establish(?:es|ed)?|proves?|proved|proven|reveals?|revealed|demonstrates?|demonstrated)\b(?!\s+(?:in|on|by\s+deed)\s+(?:\d|[A-Z][a-z]+\s+\d))|\b(?:record|records|documents?|evidence|bundle|file|pages?|this|which|these\s+facts|the\s+facts)\s+(?:\w+\s+){0,2}?(?:clearly\s+)?(?:shows?|showed|shown|confirms?|confirmed)\b|\b(?:is|are|was|were|been)\s+(?:clearly\s+)?(?:shown|confirmed)\b/i;
 var VO_NOT_ESTABLISHED_RE = /\b(?:no|not|never|nothing|nor|neither|cannot|does\s+not|do\s+not|did\s+not)\b[^.;]{0,40}\b(?:establish|prove|reveal|demonstrate|confirm|show)/i;
 var VO_CONTRADICT_RE = /\bcontradict(?:s|ed|ing|ion|ions|ory)?\b|\bcannot\s+(?:both|all)\s+be\s+true\b/i;
 var VO_CHARACTERISE_RE = /\b(?:constitut(?:e|es|ed|ing)|amount(?:s|ed|ing)?\s+to|tantamount\s+to)\s+(?:an?\s+|the\s+)?(?:acts?\s+of\s+)?(?:fraud|coercion|extortion|racketeering|theft|corruption|money\s+laundering|forgery|bribery|blackmail|intimidation|duress|perj(?:ury)|crim(?:e|inal)|(?:an?\s+)?offen[cs]es?)\b/i;

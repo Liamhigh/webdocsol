@@ -1772,7 +1772,7 @@ function humanAnchorCheck(s, ctxIds, ctxPages) {
 // "revealed", "shown" or "confirmed" by the record; a contradiction is stated
 // only with its [F#]; and conduct is never called an offence outside
 // candidate-law framing. A page-only sentence may say what the page STATES.
-const HUMAN_ESTABLISH_RE = /\b(?:establish(?:es|ed)?|proves?|proved|proven|reveals?|revealed|demonstrates?|demonstrated|confirms?|confirmed)\b|\b(?:record|records|documents?|evidence|bundle)\s+(?:clearly\s+)?(?:shows?|showed)\b/i;
+const HUMAN_ESTABLISH_RE = /\b(?:establish(?:es|ed)?|proves?|proved|proven|reveals?|revealed|demonstrates?|demonstrated)\b(?!\s+(?:in|on|by\s+deed)\s+(?:\d|[A-Z][a-z]+\s+\d))|\b(?:record|records|documents?|evidence|bundle|file|pages?|this|which|these\s+facts|the\s+facts)\s+(?:\w+\s+){0,2}?(?:clearly\s+)?(?:shows?|showed|shown|confirms?|confirmed)\b|\b(?:is|are|was|were|been)\s+(?:clearly\s+)?(?:shown|confirmed)\b/i;
 const HUMAN_NOT_ESTABLISHED_RE = /\b(?:no|not|never|nothing|nor|neither|cannot|does\s+not|do\s+not|did\s+not)\b[^.;]{0,40}\b(?:establish|prove|reveal|demonstrate|confirm|show)/i;
 const HUMAN_CONTRADICT_RE = /\bcontradict(?:s|ed|ing|ion|ions|ory)?\b|\bcannot\s+(?:both|all)\s+be\s+true\b/i;
 const HUMAN_REBUTTAL_FRAME_RE = /^\s*(?:[-\u2022*]|\d{1,2}[.)])?\s*\**\s*(?:this (?:account|statement|version) conflicts|the record (?:at p\.|states|it conflicts)|assessment\s*[:\u2014\u2013-])/i;
