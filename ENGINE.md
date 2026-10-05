@@ -7,9 +7,9 @@
 
 **Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.3.5-web'`
 **Report:** `forensic-report.js` — `ENGINE_VERSION = '5.3.5-web'`, report builder v1.3.1.
-**Findings JSON:** v1.7.0, built by `buildFindingsJson` in `seal-document.html`, not by either
-script (1.7.0 adds `display_name`, `brain`, `triple_verification` and `ai_review_note`; 1.6.0
-added `analysis_reference_utc`)
+**Findings JSON:** v1.8.0, built by `buildFindingsJson` in `seal-document.html`, not by either
+script (1.8.0 adds `candidate_law`; 1.7.0 added `display_name`, `brain`, `triple_verification` and
+`ai_review_note`)
 **Host page:** `seal-document.html` (the engine, the report and three helper scripts are
 inlined — see [§9 Inlining](#9-inlining))
 **Governing law:** Constitution v6.1 (engine operating instrument, seal `VO-9E51D3F507E6`);
@@ -22,9 +22,10 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 1. **Do not "simplify" a guard.** Most odd-looking conditions in this engine exist because a
    real bundle produced a false finding. §4 lists the founding guards, each with the case that
    caused it; the guards each later real-bundle run added are recorded in that run's section
-   (§12.10–§12.16) and pinned in `tests/annexure-eb-regression.test.mjs` (the Greensky
+   (§12.10–§12.17) and pinned in `tests/annexure-eb-regression.test.mjs` (the Greensky
    re-run's in `tests/greensky-regression.test.js`, the evidence-bundle-7 run's in
-   `tests/evidence-bundle-7-regression.test.mjs`).
+   `tests/evidence-bundle-7-regression.test.mjs`, the Combine 06 April 2026 run's in
+   `tests/combine-06-april-regression.test.mjs`).
    Removing one re-introduces a false statement of fact under seal.
 2. **Precision beats recall here.** A missed contradiction is a gap; a false contradiction is
    a lie in a court document. Recall is the AI layer's job: on the website the advisory review
@@ -83,7 +84,7 @@ PDF bytes + pdf-lib PDFDocument (+ opts.referenceTime from the seal page)
   ├─ false-clean guard               zero findings at < 200 characters a page over >= 3 pages is UNREADABLE, never clean
   └─ generateSummary()               the count and a read-against-the-page instruction, or the clean sentence (never the score, §12.16)
         ↓
-   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 → buildFindingsJson (v1.7.0)
+   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 → buildFindingsJson (v1.8.0)
           → forensic-report.js build() → seal()
 ```
 
@@ -488,7 +489,10 @@ confirmed (a sentence citing only a page reports what that page states); a contr
 stated only with its [F#] (a rebuttal frame excepted; at render time a finding kind's own name,
 "Identity Contradiction", is a reference, not a claim); and conduct is never said to be,
 constitute, amount to or be committed as fraud, coercion or any offence outside "may constitute"
-candidate law — on every line, a stated gap and an [F#] sentence included. Each verb is judged
+candidate law — on every line, a stated gap and an [F#] sentence included; since §12.17 an offence
+noun in the narrator's own voice is dropped however it is phrased ("a scheme of fraud", "a pattern
+of … theft"), unless the sentence is candidate law, names a section or element, a body or a case,
+or reports an allegation. Each verb is judged
 where it stands: a negation counts only when it governs the verb in its own clause ("no doubt",
 "not only" and "cannot be disputed" are not negations); a founding ("established in 2001", "by
 deed", "in terms of the Act", "by Mr Smith", never "by the record"), reported speech ("The bank
@@ -809,7 +813,7 @@ When in doubt on this engine: **prefer precision.** Let the hybrid layer chase r
 
 The engine is only as good as the page that runs it. Most of the following were field failures
 reported by the founder; §12.7–§12.9 record his directions of 2026-09-07 (§12.9 runs in the
-Worker); §12.10–§12.16 record sealed runs and what their reviews found (§12.16 also the founder's rulings of 5 October 2026). None of them is
+Worker); §12.10–§12.17 record sealed runs and what their reviews found (§12.16 also the founder's rulings of 5 October 2026). None of them is
 decoration.
 
 ### 12.1 OCR must never hang
@@ -2159,6 +2163,95 @@ severity and confidence enums, and AI candidates inside `contradictions`. A sche
 neutral status such as `ENGINE-FINDING`, a separate `ai_candidates` array) must change in this
 repository, `Liamhigh/1verum` and `Liamhigh/firebase` together; this repository does not change
 the contract alone.
+
+### 12.17 The Combine 06 April 2026 run — what a page is found to be after it is found; dates per instrument; offence words in the narrator's voice (2026-10-05)
+
+The founder sealed a 684-page bundle ("Combine 06 April 2026.PDF(1)(2).PDF") on the live site
+the evening PR #216 went live (findings JSON 1.7.0; analysis instant 22:01 UTC) and had two AI
+reviews written from the findings JSON ("Forensic Engine Performance Report" and "Engine
+Compliance Report"). The source bundle was not supplied; the sealed reports and the JSON were.
+Read against the engine, 19 engine findings and 2 candidates showed these defects, each pinned
+by `tests/combine-06-april-regression.test.mjs` (synthetic pages in the bundle's own words, a
+positive control beside every guard) or by the suites named:
+
+1. **The secondary-source rule ran before some findings had a page.** CT01, CT44 and CT45 name
+   "Same passage" or "Full document" and are pinned to a page only by `voBackfillPageAnchors`,
+   after `voDemoteSecondarySource`. A CT01 on a markdown analysis page (p. 192, listed as such
+   in the same report) and a CT45 inside the Verum Omnis analysis (pp. 9–32) were sealed as
+   findings. Findings with no page at the first pass are now held and passed through the rule
+   again once they have one; the late pass is disclosed ("Located later: …").
+2. **No finding on the 203 OCR-recovered pages was held** (`ocr_anchored` false on every record;
+   no "OCR provenance:" engine note), while the report, reading the page's own list, counted
+   seven OCR-anchored findings. The cause could not be reproduced without the bundle: in Node the
+   same flow holds them. The engine now also derives the OCR pages from the text's own `[OCR] `
+   prefix, so the hold never depends on the host's list alone. Open: confirm on the next live run.
+3. **Rule (a) stopped at the first unmarked page** of a set-aside Verum Omnis analysis, so pages
+   after it were scanned as the record. Each continuation page is now judged on its own mark, up
+   to the first page that opens a new record.
+4. **Dates per instrument (D03).** "Invoice date" on two invoices (p. 49 vs p. 680) was "stated
+   as 2026-01-20 and as 2026-03-31"; invoice, due, notice and meeting dates and a date of birth
+   are now per-instrument labels (same page only), and an event label ("termination date") and
+   the mixed-convention note are compared only within one stated document.
+5. **An unnumbered run is not one document by default (D04).** An expiry in a page of notes
+   ("lease expires – never renewed 11 Dec 2018", p. 97) was linked to an invoice on p. 49;
+   pages in an unnumbered run now link only when both name a shared company.
+6. **A scanned page OCR could barely read is a reading limit, not a format anomaly (D17).**
+   pp. 664 (30 characters, recogniser confidence 39) and 676 (no legible text) were CT26
+   findings, one asking "whether a page was inserted or removed". When an OCR pass ran, a
+   near-empty finding on pages with no text layer of their own becomes an engine note
+   (`voImageOnlyCt26ToNotes`); a native file keeps the check.
+7. **An identity number in a person's field (D11).** "Registration number of complainant
+   510209 …" (pp. 400, 425; OCR had dropped the form's "ID/") was a Low finding; an identity
+   number in a person's ID/registration field is now an engine note. An identity-shaped number
+   under a company's registration label stays the Low check. (This supersedes the 13 September
+   behaviour pinned in `tests/annexure-eb-regression.test.mjs` §17b and F005, updated there.)
+8. **Definitions (D30).** "The Premises" of two sites (Lot 967 Port Edward, Lot 26 Bluff;
+   pp. 641, 644), one definition of "personal data" read twice by OCR (pp. 649, 652) and the
+   tail of 'Value of the "Franchised Business"' (p. 317) were "defined differently". Different
+   property identifiers mean two agreements; on OCR pages the opening forty letters are compared
+   with room for the recogniser's errors; a term preceded by "of the" is part of a longer term.
+9. **A condition is not a record (D38).** "In the event that the Franchisee is the owner of the
+   Premises and at any time during the Term …" (p. 327) was read as ownership against the lessee
+   clause (p. 285). A conditional before the ownership phrase now excludes it.
+10. **One agreement per trap (D39 path B).** A no-compensation clause (p. 246) and a purchase
+    right (p. 422) are paired only inside one stated document, or within twenty pages where none
+    is stated. In this bundle both pages sit in one 302-page stated run (pp. 124–425), so this
+    pair may still fire; whether that run is one agreement is for the founder to read.
+11. **AI candidates without a quote.** "Lessee vs owner contradiction" and "Contradictory value
+    recognition" (F020, F021: no quote, page 0) restated the engine's CT44 and CT45. An
+    unanchored candidate sharing two distinctive word stems with an engine finding's kind name,
+    or carrying its CT type, is now a counted duplicate (`tests/ai-assess-batch.test.mjs`).
+12. **Offence words in the narrator's voice.** The court-ready narrative printed "… a coordinated
+    scheme of fraud and unlawful enrichment conducted by the directors of All Fuels (Pty) Ltd
+    [F1]" and "The findings establish a pattern of systemic commercial fraud and theft of
+    goodwill …": the offence rule matched only "constitute/is/committed … fraud". Both gates now
+    drop an offence noun in the narrator's voice unless the sentence is candidate law, names a
+    section or element ("Four Pillars of Fraud"), a body or case ("fraud case"), or reports an
+    allegation (`tests/worker.test.mjs`).
+13. **Findings JSON 1.8.0.** `candidate_law` per engine record: the report's own candidate law
+    by jurisdiction ("for counsel to confirm"). `legal_hypothesis` stays null: the engine states
+    no legal conclusion.
+
+**The two AI reviews, for the record.** The performance review called F016–F018, F004, F003 and
+F005 the "strongest findings": four of those six were false (F016 a condition, item 9; F017 an
+analysis page, items 1 and 3; F004 an unlinked invoice, item 5; F003 two invoices, item 4), F005
+should have been held below serious (item 2), and F018 is item 10. The reviews missed most of this
+section; the performance review did note that F001 sits on a markdown analysis page.
+The compliance review's points: (1) bands and percentages in the JSON — the severity and
+confidence enums are the shared schema's (open, cross-repository, §12.16) and `ocr_confidence` is
+the recogniser's own measurement of a page, not a confidence in a finding; not changed. (2)
+Three independent verifiers — not met, and the report says so (§12.16). (3) Pending candidates —
+candidates are advisory by design and never verified; these two were duplicates (item 11). (4)
+"Instructions" in findings — telling the reader to read the original is failure-mode disclosure
+(PD6) and stays; the insertion speculation went with item 6. (5) B7 output — `legal_hypothesis`
+is null by design; `candidate_law` added (item 13); B3 and B4 produced nothing because no
+detector of theirs fired. (6) §15.4 template — the sealed report follows it since PR #216; the
+review read only the JSON. (7) OpenTimestamps — the sealed PDFs carry the OTS receipt and the
+anchor certificate; the JSON is not a sealed output. Its point that the Constitution's own
+verification section reads "SHA-512: [To be generated upon sealing]" is correct
+(`constitution.html`, `CONSTITUTION-v8.md`): a locked instrument, for the founder. (8) Two
+timestamps — `analysis_reference_utc` is the instant passed in, `generated_utc` is when the JSON
+was written; determinism is tested.
 
 ## 13. The court-ready narrative (the "human report")
 
