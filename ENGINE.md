@@ -745,7 +745,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**34 suites · 2658 assertions** (counted 2026-10-05 on the PR #PRNUM branch, with the evidence-bundle-7-docs run and its review round; recount after any test change).
+**34 suites · 2658 assertions** (counted 2026-10-05 on the PR #216 branch, with the evidence-bundle-7-docs run and its review round; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |

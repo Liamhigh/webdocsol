@@ -26,7 +26,7 @@ re-introduces a false statement of fact under seal.
 **Repo map:** [`REFERENCE.md`](./REFERENCE.md) — every page, script, worker endpoint and
 directory, and what each one does.
 
-## Start here — the state of the platform (updated 2026-10-05; describes `main` once PR #PRNUM — the evidence-bundle-7-docs run and the founder's rulings of 5 October — is merged)
+## Start here — the state of the platform (updated 2026-10-05; describes `main` once PR #216 — the evidence-bundle-7-docs run and the founder's rulings of 5 October — is merged)
 
 Read this section first; it is the two-minute orientation. Everything below it is the detail.
 
@@ -82,7 +82,7 @@ founder.
 **Known state right now.** Two parts: what is open today, then the dated history, oldest first
 (the newest entry is last).
 
-**Open today (as of 5 October 2026; true of `main` once PR #PRNUM is merged).** Each
+**Open today (as of 5 October 2026; true of `main` once PR #216 is merged).** Each
 item says who holds it. Live Cloudflare state is "last verified" on the date given. Live state was
 last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the #214 merge).
 - **Founder — the signing key.** `RULE_PRIVATE_KEY` is not on the Worker. The trainer's last run
@@ -143,7 +143,7 @@ last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the
   adopted" in the paragraph that closes the section).
 
 **History, oldest first.** Each entry was the live state on its date (PR #214 is live since its
-merge on 3 October; the last entry describes PR #PRNUM, live once merged); superseded state is
+merge on 3 October; the last entry describes PR #216, live once merged); superseded state is
 marked.
 - 6 September 2026: the two retired Workers (`verum-rules`, `verumglobal-static`) were deleted
   from the dashboard; this Worker was meant to own the domain through declared routes (PRs
@@ -376,7 +376,7 @@ marked.
   their own wording, and CT39 is never rendered as a B1 contradiction; identical plain-words lines
   collapse into one bullet naming every page. Tests: `tests/greensky-regression.test.js` §9. With
   both runs, PR #214 stands at 33 suites and 2535 assertions.
-- 5 October 2026: **the evidence-bundle-7-docs run and the founder's rulings** (PR #PRNUM, live
+- 5 October 2026: **the evidence-bundle-7-docs run and the founder's rulings** (PR #216, live
   once merged; `ENGINE.md` §12.16). The founder sealed a 65-page bundle (his email to the Public
   Protector, the Protector's letters, a 49-page sealed exhibit of his own Verum Omnis analysis,
   printed emails, a sealed timeline) and had DeepSeek review the three PDFs against Constitution
@@ -608,7 +608,7 @@ decisions below are binding on every later change:
 
 The founder ran a 332-page Greensky case file and read the three PDFs against
 the reference "forensic goal" document. Decisions (items 8–11 PR #193; 12 PR #200;
-13 PR #201; 14 PR #203; 15 PR #204; 16–18 PR #PRNUM), binding like the seven above. The
+13 PR #201; 14 PR #203; 15 PR #204; 16–18 PR #216), binding like the seven above. The
 runs of 27 September – 3 October added no numbered direction; they are recorded in the history
 and in `ENGINE.md` §12.12–§12.15.
 
