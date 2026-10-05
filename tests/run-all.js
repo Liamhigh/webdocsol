@@ -40,6 +40,7 @@ const suites = [
   'greensky-regression.test.js',
   'allfuels-regression.test.js',
   'annexure-eb-regression.test.mjs',
+  'evidence-bundle-7-regression.test.mjs',
 ];
 
 let failed = 0;

@@ -72,10 +72,13 @@ for (const fn of ['secEvidenceIndex', 'secMatrix', 'secOffenceMatrix']) {
 }
 // Engine sections that live UNDER a contract heading render through
 // engineUnder, so the PDF carries exactly fifteen numbered sections.
-for (const fn of ['secStatutoryAnchoring', 'secActions', 'secEvidenceAppendix', 'secUnreadPages', 'secOcrProvenance', 'secSealExplainer']) {
+// (The seal explainer, "How any change to this record is detected", is gone
+// from both reports since 5 October 2026: a user manual, PD20 and §15.2.)
+for (const fn of ['secStatutoryAnchoring', 'secActions', 'secEvidenceAppendix', 'secUnreadPages', 'secOcrProvenance']) {
   ok(new RegExp('engineUnder\\(' + fn + '\\)').test(bodyBH) && !new RegExp(fn + '\\(ctx, data\\)').test(bodyBH),
     'engine section ' + fn + ' renders under its contract heading (engineUnder)');
 }
+ok(!/secSealExplainer|HOW ANY CHANGE TO THIS RECORD IS DETECTED/.test(bodyBH), 'the court-ready narrative carries no "how any change is detected" explainer (a user manual, PD20)');
 ok(/function engineUnder\(fn, o\)/.test(bodyBH) && /ctx\.subHeading\(t, \{ keepWith: [^}]*toc: true \}\)/.test(bodyBH),
   'engineUnder demotes the engine heading to a sub-heading and restores ctx.heading');
 ok(/headerTitle: 'Verum Omnis Court-Ready Narrative'/.test(bodyBH), 'every body page is headed as the narrative, never "Forensic Report"');
@@ -131,8 +134,8 @@ ok(/VO_HUMAN_CALL_TIMEOUT_MS = 52000/.test(html) && /HUMAN_TIMEOUT_MS = 30000/.t
   'primary + fallback model timeouts fit inside the client wait');
 
 // ---- the render-time gate: headings are gated, dates are not hedges --------
-ok(/function voSentenceBanned\(s\)/.test(report) && /if \(voSentenceBanned\(trimmed\)\) \{ dropped\+\+; continue; \}/.test(report),
-  'scrubNarrative gates headings with the same language rule');
+ok(/function voHeadingBanned\(s\) \{\s*return VO_BANNED_SENTENCE_RE\.test\(/.test(report) && /if \(voHeadingBanned\(trimmed\)\) \{ dropped\+\+; continue; \}/.test(report),
+  'scrubNarrative gates headings with the same language rule (and the offence-word rule; a heading asserts nothing else)');
 ok(/VO_MONTH_MAY_RE/.test(report) && /could\|would/.test(report) && /consistent\\\\s\+with/.test(report),
   'the render-time gate masks the month of May and bans could/would/consistent with');
 ok(report.indexOf('.replace(/\\b(?:pp?|pgs?)\\.(?=\\s*\\d)/gi') >= 0, 'the shared splitter keeps "(p.99)" in one sentence');

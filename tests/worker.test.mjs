@@ -197,15 +197,17 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(r.status === 200, 'narrate accepts the documented payload shape (' + r.status + ')');
   const nb = await r.json().catch(() => null);
   ok(nb && nb.ok === true, 'narrate returns ok:true');
-  ok(nb && nb.model === 'template-fallback' && !/score|confidence/i.test(nb.executiveSummary || '') && /1 engine-verified finding was supplied/.test(nb.executiveSummary || ''),
+  ok(nb && nb.model === 'template-fallback' && !/score|confidence/i.test(nb.executiveSummary || '') && /1 engine finding was supplied/.test(nb.executiveSummary || '') && !/verified/.test(nb.executiveSummary || ''),
     'the template narrative names its provenance and prints no score and no band (' + JSON.stringify(nb && nb.executiveSummary).slice(0, 160) + ')');
   ok(nb && /states: \u201csignature mismatch\u201d \[F1\]/.test(nb.criticalEvidence || ''),
     'the template wraps a finding\'s evidence in typographic quotes, so evidence that itself opens with a straight-quoted word cannot desynchronise the report\'s sentence gate');
   const mixed = { ...good, findingsKept: good.findingsKept.concat([{ id: 'F2', type: 'CT09', severity: 3, severityOrdinal: 'MEDIUM', status: 'AI-RAISED CANDIDATE - PENDING VERIFICATION', location: 'Page 3', evidence: 'name differs' }]), findingsPruned: 2 };
   r = await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify(mixed)), env, {});
   const mb = await r.json().catch(() => null);
-  ok(mb && /1 engine-verified finding and 1 AI-raised candidate \(advisory, pending verification\) were supplied/.test(mb.executiveSummary || '') && /2 candidate\(s\) were pruned/.test(mb.executiveSummary || ''),
-    'the template counts engine-verified findings apart from AI-raised candidates (' + JSON.stringify(mb && mb.executiveSummary).slice(0, 200) + ')');
+  // Founder ruling (5 October 2026): the AI removes no engine finding, so an
+  // older client's findingsPruned is accepted and never printed.
+  ok(mb && /1 engine finding and 1 AI-raised candidate \(advisory, pending verification\) were supplied/.test(mb.executiveSummary || '') && !/pruned/.test(mb.executiveSummary || ''),
+    'the template counts engine findings apart from AI-raised candidates and never says a finding was pruned (' + JSON.stringify(mb && mb.executiveSummary).slice(0, 200) + ')');
 
   // The OLD client payload {findings, score, verdict} is the wrong shape and
   // must be rejected -- documents the contract the client now satisfies.
@@ -292,13 +294,26 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'the case file is clearly labelled for the narrator');
 
   // PD16 language lock (the "constitutional certainty" order). The AI layer
-  // works on SEALED evidence — quoted text bound to a page in a record that
-  // cannot be altered — so it reports measurements, it does not hedge them.
+  // works on SEALED evidence — quoted text bound to a page in a tamper-evident
+  // record — so it reports measurements, it does not hedge them.
   // These assertions exist so a future edit cannot quietly reintroduce
   // probabilistic language into the narrator's instructions.
   ok(/WHY YOU STATE FACTS/.test(capturedSystem) && /sealed under SHA-512/.test(capturedSystem)
     && /measurement to be reported/.test(capturedSystem),
     'the narrator is told WHY it states facts: the evidence is sealed and page-anchored');
+  {
+    // The seal is tamper-evident, never unalterable, and at sealing the
+    // OpenTimestamps proof is only submitted (CLAUDE.md non-negotiable 8;
+    // ENGINE.md §6, fixed 5 October 2026): no AI prompt may say otherwise.
+    const wsrc0 = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
+    const promptOf = (name) => { const m = wsrc0.match(new RegExp('const ' + name + ' = ([\\s\\S]*?);\\n')); return m ? m[1] : ''; };
+    const prompts = ['NARRATE_SYSTEM', 'ASSESS_SYSTEM', 'SWEEP_SYSTEM'].map(promptOf);
+    ok(prompts.every(t => t.length > 200), 'the three prompts are found in the Worker source');
+    ok(prompts.every(t => !/anchored to the Bitcoin|cannot be altered|unalterable|immutable|permanent record/i.test(t)),
+      'no AI prompt calls the record unalterable or anchored to Bitcoin');
+    ok(prompts.every(t => /any change to it is detectable/.test(t)), 'every AI prompt says any change to the record is detectable');
+    ok(/tamper-evident/.test(capturedSystem) && !/cannot be altered/.test(capturedSystem), 'the narrator receives the tamper-evident wording');
+  }
   ok(/BANNED for anchored facts/.test(capturedSystem)
     && /appears, might, possibly, seems, could, potentially/.test(capturedSystem),
     'the narrator prompt bans hedging verbs for anchored facts');
@@ -724,7 +739,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     const nb = await (await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify({ documentName: 'd.pdf', pageCount: 9, score: 0, confidence: 'n/a', generatedUtc: '2026-10-02T00:00:00Z', findingsPruned: 0,
       findingsKept: [{ id: 'F1', type: 'CT14', severity: 5, status: 'ENGINE-VERIFIED', location: 'Page 13', evidence: 'status twice' }, { id: 'C1', type: 'CT09', severity: 3, status: 'AI-RAISED CANDIDATE - PENDING VERIFICATION', location: 'Page 3', evidence: 'name differs' }, { id: 'P1', type: 'SERIAL', severity: 3, status: 'ENGINE-VERIFIED', location: '', evidence: 'serial pattern' }] })), env, {})).json();
     const all = (nb.executiveSummary || '') + ' ' + (nb.criticalEvidence || '');
-    ok(/\[F1\]/.test(all) && !/\[C1\]|Finding C1|name differs|Finding P1|serial pattern/.test(all) && /1 engine-verified finding and 1 AI-raised candidate/.test(all) && /AI-raised candidates are not quoted here/.test(all) && !/\(CT14\)/.test(all),
+    ok(/\[F1\]/.test(all) && !/\[C1\]|Finding C1|name differs|Finding P1|serial pattern/.test(all) && /1 engine finding and 1 AI-raised candidate/.test(all) && /AI-raised candidates are not quoted here/.test(all) && !/\(CT14\)/.test(all),
       'the template states as fact only engine findings, quotes no candidate or pattern, and prints no raw engine code (' + all.slice(0, 260) + ')');
     const nz = await (await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify({ documentName: 'd.pdf', pageCount: 9, score: 0, confidence: 'n/a', generatedUtc: '2026-10-02T00:00:00Z', findingsPruned: 0, findingsKept: [] })), env, {})).json();
     const allz = (nz.executiveSummary || '') + ' ' + (nz.criticalEvidence || '');
@@ -744,6 +759,85 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'The bundle was recognised by the parties as the court file [F1] (p. 2).', 'The Magistrate\'s Court summons states the defendant admitted the debt [F1] (p. 2).']) {
     ok(await kept(t), 'legitimate prose about a statute or the record is kept: ' + t);
   }
+}
+// --- the overclaim gate (evidence-bundle-7-docs, 5 October 2026) -----------
+// A page anchor proves the page exists, not that what the sentence asserts is
+// established. Only an [F#] finding is "established", "shown", "proved",
+// "revealed" or "confirmed"; a contradiction is stated only with its [F#];
+// conduct is never called an offence outside candidate-law framing. The three
+// sentences the narrator wrote over the founder's own email are the fixtures.
+{
+  const hPost = (body, e) => worker.fetch(mk('/api/v1/ai/human-report', 'POST', JSON.stringify(body)), e || env, {});
+  const gFindings = [
+    { id: 'F1', type: 'CT02', name: 'Date inconsistency', severity: 4, page: 2, pages: [2, 5], evidence: 'dated 3 March 2026 — yet dated 9 March 2026', quote: 'dated 3 March 2026' },
+    { id: 'F2', type: 'CT03', name: 'Signature missing', severity: 5, page: 7, pages: [7], evidence: 'signature block left blank on the counterpart', quote: 'signature block left blank' }
+  ];
+  const gBase = { section: 'executive_summary', pageCount: 9, findings: gFindings,
+    excerpt: '[Page 2] All Fuels has cut fuel supply to the only two petrol stations. The letter reads: these figures contradict the audited accounts, and this is fraud by the dealer.\n[Page 5] Goodwill terminates and can never be argued to remain on the locality.' };
+  const PAD = 'Finding one is a date stated twice [F1] (p. 2). Finding two is a blank signature block [F2] (p. 7). ';
+  const mockAI = (text) => ({ ...env, AI: { run: async () => ({ response: JSON.stringify({ text }) }) } });
+  const gate = async (text) => (await hPost(gBase, mockAI(text))).json();
+  const kept = async (sentence) => { const j = await gate(PAD + sentence); return !!(j.text && j.text.indexOf(sentence.slice(0, 24)) >= 0); };
+  ok(!(await kept('The core pattern the record establishes is that All Fuels has cut fuel supply to the only two petrol stations (p. 2).')), 'a page-only sentence may not say the record "establishes" anything: the author\'s own email is not an established fact');
+  ok(!(await kept('Read together, the record shows that All Fuels has a history of terminating agreements (p. 5).')), '"the record shows" on a page anchor alone is dropped');
+  ok(!(await kept('According to the email, All Fuels\' actions constitute coercion (p. 2).')), 'conduct called an offence ("constitute coercion") is dropped outside candidate-law framing');
+  ok(!(await kept('Mr Timol swore that goodwill terminates, contradicting the company\'s own documents (p. 5).')), 'a contradiction the engine never found (no [F#]) is dropped');
+  ok(await kept('Page 2 states that All Fuels has cut fuel supply to the only two petrol stations (p. 2).'), 'a page-only sentence that says what the page STATES is kept');
+  ok(await kept('Both dates are established by the record [F1] (p. 2).'), '"established" with its [F#] is kept');
+  ok(await kept('These two dates contradict each other [F1] (p. 2).'), 'a contradiction stated with its [F#] is kept');
+  ok(await kept('As candidate law, the stated dates may constitute fraud, for counsel to confirm [F1] (p. 2).'), 'an offence named as candidate law ("may constitute", for counsel to confirm) is kept');
+  ok(await kept('Nothing on page 5 establishes when the supply was cut (p. 5).'), 'a negated "establishes" (a stated gap) is kept');
+  ok(await kept('The bank confirmed receipt of the payment in its letter (p. 2).'), 'reported speech ("the bank confirmed …") is what the page states, and is kept');
+  ok(await kept('The station company was established in 2001 according to the letter (p. 5).'), 'a founding date ("established in 2001") is not an overclaim');
+  ok(!(await kept('It is confirmed that All Fuels cut the supply (p. 2).')), 'a passive "it is confirmed" on a page anchor alone is dropped');
+  // The review of 5 October 2026: each rule judged where its verb stands.
+  for (const t of ['The record establishes on page 2 that All Fuels cut the supply (p. 2).', 'The record proves in paragraph 4 that the supply was cut (p. 2).',
+    'The documents reveal in clause 7 that the supply was cut (p. 2).',
+    'There is no doubt that the record establishes the supply was cut (p. 2).', 'It cannot be disputed that page 2 proves the supply was cut (p. 2).',
+    'The record, not the witness, establishes that the supply was cut (p. 2).', 'The record does not show who signed, but it proves the payment was made (p. 2).',
+    'Knowledge is INSUFFICIENT, but the payments constitute fraud (p. 2).', 'These facts establish fraud [F1] (p. 2).', 'Mr Smith committed fraud [F1] (p. 2).',
+    'This is fraud [F1] (p. 2).', 'It is established by the record that the supply was cut (p. 2).']) {
+    ok(!(await kept(t)), 'overclaim dropped: ' + t);
+  }
+  for (const t of ['Page 2 shows a payment of R5,000 on 3 March 2026 (p. 2).', 'The invoice on page 5 shows a total of R12,000 (p. 5).',
+    'This was confirmed by the bank in writing (p. 2).', 'Receipt was confirmed by the bank on 3 March 2025 (p. 2).',
+    'The trust was established by deed of trust on 3 March 2010 (p. 5).', 'The trust was established in terms of the Trust Property Control Act (p. 5).',
+    'The company was established by Mr Smith in 2001 (p. 5).', 'Clause 5 of the agreement establishes a 30-day notice period (p. 5).',
+    'Page 2 states that the letter reads "these figures contradict the audited accounts" (p. 2).', 'Page 2 states that the letter reads "this is fraud by the dealer" (p. 2).',
+    'The record does not establish who signed the counterpart (p. 5).']) {
+    ok(await kept(t), 'what a page states is kept: ' + t);
+  }
+  let hg = await gate('CONDUCT CONSTITUTES COERCION\n\n' + PAD);
+  ok(!/COERCION/.test(hg.text) && hg.gate.overclaim === 1, 'a heading that calls conduct an offence is dropped and counted as an overclaim');
+  hg = await gate('WHAT THE FINDINGS ESTABLISH\n\n' + PAD);
+  ok(/WHAT THE FINDINGS ESTABLISH/.test(hg.text) && hg.gate.dropped === 0, 'the section heading the narrator is asked for passes (a heading asserts nothing)');
+  ok(/WHAT THE FINDINGS ESTABLISH/.test(fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8')) && !/WHAT THE RECORD ESTABLISHES|core pattern the record establishes|most serious first|single most serious/.test(fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8').replace(/^\s*\/\/.*$/gm, '')),
+    'the prompts ask for nothing the gates drop, and rank nothing "most serious"');
+  const j = await gate(PAD + 'The core pattern the record establishes is that All Fuels has cut fuel supply (p. 2).');
+  ok(j.gate && j.gate.dropped === 1 && j.gate.overclaim === 1, 'the overclaim is counted in the gate statistics (' + JSON.stringify(j.gate) + ')');
+  const wsrc = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
+  ok(/Only an \[F#\] finding is established\. A sentence citing only a page says what that page STATES/.test(wsrc) && /never call conduct fraud, coercion or any offence outside "may constitute" candidate law/.test(wsrc), 'the narrator is told the rule the gate enforces');
+  // The render-time gate holds the same three rules for every machine-written telling.
+  globalThis.PDFLib = globalThis.PDFLib || { rgb: (r, g, b) => ({ r, g, b }), StandardFonts: {}, PDFDocument: {} };
+  const RR = (await import('../forensic-report.js')).default || globalThis.VerumReport;
+  const sc = RR._scrubNarrative('The core pattern the record establishes is that All Fuels has cut fuel supply [Page 1]. The record states that All Fuels\' actions constitute coercion [Page 2]. The record reveals that Mr Timol swore otherwise, contradicting the company\'s own documents [Page 12]. Page 1 states that the supply was cut [Page 1]. The two dates contradict each other [F1].');
+  ok(sc.dropped === 3 && /Page 1 states that the supply was cut/.test(sc.text) && /contradict each other \[F1\]/.test(sc.text), 'the render-time gate drops the same three overclaims and keeps the page statement and the [F#] contradiction (' + JSON.stringify(sc) + ')');
+  const sc2 = RR._scrubNarrative('The bank confirmed receipt of the payment in its letter [Page 2]. The station company was established in 2001 according to the letter [Page 5]. It is confirmed that All Fuels cut the supply [Page 2]. The documents clearly show that the supply was cut [Page 3].');
+  ok(sc2.dropped === 2 && /bank confirmed receipt/.test(sc2.text) && /established in 2001/.test(sc2.text), 'the render-time gate keeps reported speech and a founding date, and drops "it is confirmed" and "the documents clearly show" (' + JSON.stringify(sc2) + ')');
+  for (const t of ['The record establishes on page 2 that All Fuels cut the supply [Page 2].', 'There is no doubt that the record establishes the supply was cut [Page 2].',
+    'The record, not the witness, establishes that the supply was cut [Page 2].', 'The record does not show who signed, but it proves the payment was made [Page 4].',
+    'Knowledge is INSUFFICIENT, but the payments constitute fraud [Page 3].', 'These facts establish fraud [F1].', 'Mr Smith committed fraud [F1].', 'This is fraud [F1].']) {
+    ok(RR._scrubNarrative(t).dropped === 1, 'render-time gate drops: ' + t);
+  }
+  for (const t of ['Page 2 shows a payment of R5,000 on 3 March 2026 [Page 2].', 'Receipt was confirmed by the bank on 3 March 2025 [Page 4].',
+    'The trust was established in terms of the Trust Property Control Act [Page 3].', 'The company was established by Mr Smith in 2001 [Page 3].',
+    'Clause 5 of the agreement establishes a 30-day notice period [Page 5].', 'Page 6 states "these figures contradict the audited accounts" [Page 6].',
+    'Page 4 states: "This confirms our agreement of 3 March" [Page 4].']) {
+    ok(RR._scrubNarrative(t).dropped === 0, 'render-time gate keeps: ' + t);
+  }
+  const hs = RR._scrubNarrative('WHAT THE FINDINGS ESTABLISH\n\nRole / Capacity Contradiction (p 11):\n\nCONDUCT CONSTITUTES COERCION\n\nPage 2 states the supply was cut [Page 2]. Page 5 states the lease ended [Page 5].');
+  ok(/WHAT THE FINDINGS ESTABLISH/.test(hs.text) && /Role \/ Capacity Contradiction/.test(hs.text) && !/COERCION/.test(hs.text) && hs.dropped === 1,
+    'at render time a heading asserts nothing (kept), unless it calls conduct an offence (' + JSON.stringify(hs) + ')');
 }
 
 // --- the signed rule-package loop: publish -> manifest -> the website verifies.

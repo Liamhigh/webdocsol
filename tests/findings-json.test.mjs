@@ -46,7 +46,32 @@ const json = buildFindingsJson(result, 'bundle.pdf', 'a'.repeat(128), 100, { cas
 
 ok(buildFindingsJson(Object.assign({}, result, { referenceTime: '2026-10-02T20:11:36.233Z' }), 'bundle.pdf', 'a'.repeat(128), 100, {}).analysis_reference_utc === '2026-10-02T20:11:36.233Z' && json.analysis_reference_utc === null,
   'analysis_reference_utc records the instant the engine was given (null when none), so the dated-after note is reproducible');
-ok(json.findings_json_version === '1.6.0', 'contract version bumped to 1.6.0 (additive analysis_reference_utc; 1.5.0 added ocr_held; 1.4.0 added secondary_capped / ocr_anchored; 1.3.0 added review_status / ocr_provenance / ocr_confidence / severity_capped_for_ocr)');
+ok(json.findings_json_version === '1.7.0', 'contract version bumped to 1.7.0 (brain, display_name, triple_verification, ai_review_note; candidates carry INSUFFICIENT, not a band; 1.6.0 added analysis_reference_utc; 1.5.0 ocr_held; 1.4.0 secondary_capped / ocr_anchored; 1.3.0 review_status / ocr_provenance / ocr_confidence / severity_capped_for_ocr)');
+
+// v1.7.0 (evidence-bundle-7-docs review, 5 October 2026), with the report
+// builder loaded as the page has it: the brain (§2), the measured label, the
+// Thesis / Antithesis / Synthesis legs (§3), the AI's advisory note (founder
+// ruling: a note, never a removal), and no confidence band on a candidate (PD1).
+{
+  if (!globalThis.PDFLib) globalThis.PDFLib = { rgb: (r, g, b) => ({ r, g, b }), StandardFonts: {}, PDFDocument: {} };
+  const R = require('../forensic-report.js');
+  const withWin = new Function(
+    'CONTRADICTION_TYPES', 'VO_ENGINE_VERSION', 'window',
+    '"use strict";' + src + '\nreturn { buildFindingsJson };'
+  )(ENGINE.CONTRADICTION_TYPES, ENGINE.VO_ENGINE_VERSION, { VerumReport: R }).buildFindingsJson;
+  const j7 = withWin({ findings: [
+    { type: 'CT20', severity: 3, evidence: 'A number labelled as a registration is not a valid SA registration format: "Reg 12AB"', location: 'Page 54', aiReviewNote: 'reference to a portal number' },
+    { type: 'CT39', severity: 3, evidence: 'Chain-of-custody documentation is claimed but only 2 of 5 steps appear', location: 'Page 17' },
+    { type: 'CT28', severity: 3, evidence: 'cropped', location: 'Page 12', source: 'ai' }
+  ] }, 'b.pdf', 'a'.repeat(128), 65, {});
+  const [a, c, d] = j7.contradictions;
+  ok(a.brain === 'B6' && c.brain === 'B2' && d.brain === null, 'every engine record names its brain (B6 for a registration number, B2 for a custody record); a candidate names none');
+  ok(a.display_name === 'Registration Number Format Invalid' && a.ct_name === 'Registration Number Fake' && c.display_name === 'Chain-of-Custody Steps Not Documented', 'the measured label travels beside the sealed taxonomy name');
+  ok(a.triple_verification && a.triple_verification.thesis.result === 'PASS' && a.triple_verification.status === 'ACCEPTED' && a.triple_verification.independent_verifiers === 1 && d.triple_verification === null, 'each engine record carries its Thesis / Antithesis / Synthesis legs and says one independent verifier made them');
+  ok(a.ai_review_note === 'reference to a portal number' && c.ai_review_note === null && a.verification_status === 'ENGINE-VERIFIED', 'the AI\'s note rides beside the unchanged finding (the schema\'s enum value is unchanged)');
+  ok(d.severity === 'INSUFFICIENT' && d.confidence === 'INSUFFICIENT' && d.detected_fact.confidence === 'INSUFFICIENT' && !/MODERATE|HIGH/.test(JSON.stringify(d)), 'an AI candidate carries no severity and no confidence band (PD1): the schema\'s INSUFFICIENT');
+  ok(j7.engine_verified_count === 2 && j7.g3_candidate_count === 1, 'the candidate is never counted with the engine findings');
+}
 
 // The page block must not redeclare the engine's voCtById(id): two same-named
 // declarations share one global, the later (no-arg) one won, voStatement got a

@@ -238,14 +238,18 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
 {
   const src = require('fs').readFileSync(require('path').join(process.cwd(), 'forensic-report.js'), 'utf8');
   const tv = src.slice(src.indexOf('function secTripleVerification'), src.indexOf('function secSealedFindings'));
-  ok(/'NOT REVIEWED'/.test(tv) && !/: 'ENGINE-VERIFIED'/.test(tv), 'the Triple Verification review leg reads NOT REVIEWED when the AI review did not run');
+  // 5 October 2026: the advisory AI review is not a verification leg (founder
+  // ruling: it cannot remove or change a finding); the legs are the
+  // Constitution's Thesis / Antithesis / Synthesis, and the table says PD13's
+  // three independent verifiers are not met.
+  ok(/Thesis/.test(tv) && /Antithesis/.test(tv) && /Synthesis/.test(tv) && !/'RETAINED'|'NOT REVIEWED'|: 'ENGINE-VERIFIED'/.test(tv) && /three independent verifiers/.test(tv), 'the Triple Verification table carries the Constitution\'s three legs, no AI review leg, and says PD13\'s independence is not met');
   const cover = src.slice(src.indexOf('function drawCover'), src.indexOf('function drawCover') + 9000);
-  ok(/INCOMPLETE READ: /.test(cover) && /AI REVIEW NOT RUN/.test(cover), 'the cover carries the incomplete-read and not-reviewed banners');
+  ok(/INCOMPLETE READ: /.test(cover) && !/AI REVIEW NOT RUN/.test(cover) && /Jurisdiction\(s\): /.test(cover) && /Report Type: /.test(cover) && /Case Reference: /.test(cover) && /Timestamp: /.test(cover), 'the cover carries the §15.4 header and the incomplete-read banner; the AI review, which touches no finding, is not a cover warning');
   const page = require('fs').readFileSync(require('path').join(process.cwd(), 'seal-document.html'), 'utf8');
   ok(/async function voPreflightForensicService/.test(page) && /var _pre = await voPreflightForensicService\(\);/.test(page) && /no forensic report was produced and nothing was sealed/.test(page),
     'forensic mode pre-flights the service and refuses to produce an unreviewed forensic report on a host with no API');
   ok(/function voOcrAskToContinue/.test(page) && /candidates = candidates\.concat\(cappedIdx\);/.test(page), 'the OCR cap asks once whether to read the remaining scanned pages');
-  ok(/findings_json_version: '1\.6\.0'/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page) && /secondary_capped: /.test(page) && /ocr_anchored: /.test(page) && /ocr_held: /.test(page), 'findings JSON v1.6.0 carries review_status, ocr_provenance, secondary_capped, ocr_anchored and ocr_held');
+  ok(/findings_json_version: '1\.7\.0'/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page) && /secondary_capped: /.test(page) && /ocr_anchored: /.test(page) && /ocr_held: /.test(page) && /triple_verification: /.test(page) && /ai_review_note: /.test(page) && /brain: /.test(page) && /display_name: /.test(page), 'findings JSON v1.7.0 carries review_status, ocr_provenance, secondary_capped, ocr_anchored, ocr_held, and (new) brain, display_name, triple_verification and ai_review_note');
   // Behavioural: the pre-flight against stubbed answers.
   const preSrc = page.slice(page.indexOf('var VO_PREFLIGHT_TIMEOUT_MS'), page.indexOf('function voShowPreflightBlock'));
   const mk = new Function('AbortController', 'setTimeout', 'clearTimeout', preSrc + '\nreturn { voPreflightForensicService, voPreflightMessage };');
@@ -342,8 +346,8 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   const fs = require('fs'), path = require('path');
   const wsrc = fs.readFileSync(path.join(process.cwd(), 'worker/verum-rules.js'), 'utf8');
   const tmpl = wsrc.slice(wsrc.indexOf('function narrateTemplate'), wsrc.indexOf('async function handleAiNarrate'));
-  ok(!/integrity score|confidence rating|input\.score|input\.confidence/.test(tmpl) && /engine-verified finding/.test(tmpl) && /AI-raised candidate/.test(tmpl),
-    'the Worker\'s template narrative prints no score and no band, and counts engine-verified findings apart from AI-raised candidates');
+  ok(!/integrity score|confidence rating|input\.score|input\.confidence/.test(tmpl) && /' engine finding'/.test(tmpl) && !/engine-verified/.test(tmpl) && /AI-raised candidate/.test(tmpl),
+    'the Worker\'s template narrative prints no score and no band, and counts engine findings apart from AI-raised candidates');
   ok(/SWEEP_VERDICT_RE/.test(wsrc) && /Neutral language only/.test(wsrc), 'Brain 9 is told to use neutral language and conclusory items are discarded server-side');
   const rsrc = fs.readFileSync(path.join(process.cwd(), 'forensic-report.js'), 'utf8');
   const gate = rsrc.slice(rsrc.indexOf('var VO_BANNED_SENTENCE_RE'), rsrc.indexOf('var VO_MONTH_MAY_RE'));
@@ -353,7 +357,9 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(/no draft passed the server\\'s anchor and language gate/.test(rsrc), 'the narrator provenance line says when every section was asked for and discarded');
   const page = fs.readFileSync(path.join(process.cwd(), 'seal-document.html'), 'utf8');
   ok(/window\._voNarrateTemplate \? 'local' : 'ai'/.test(page) && /res\.model === 'template-fallback'/.test(page), 'template text from the Worker is labelled local, never as the AI narrator\'s writing');
-  ok(/reportFraudResult\.summary = generateSummary\(assessRes\.findings/.test(page), 'the summary sentence is recomputed on the retained engine findings');
+  // Since the founder ruling of 5 October 2026 the review removes nothing, so
+  // the engine's own summary and counts stand unchanged.
+  ok(!/reportFraudResult\.summary = generateSummary\(assessRes\.findings/.test(page) && /var mergedFindings = assessRes\.findings\.concat\(assessRes\.added\);/.test(page), 'nothing is recomputed after the review: it removed no finding');
   ok(/sectionsAttempted: hr\.calls/.test(page), 'the human-report provenance carries how many sections were asked for');
   ok(/id="sizeRow"/.test(page) && /for the watermark, QR and footer on every page/.test(page), 'the results panel states the original and sealed sizes');
   // The inlined scripts each run inside their own closure: a helper defined
@@ -520,7 +526,11 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
 
   // 16g. The summary prints no band word.
   const summ = E.generateSummary([{ type: 'CT02' }, { type: 'CT18' }], 66);
-  ok(/2 page-anchored findings established/.test(summ) && !/severity is|\b(?:moderate|high|critical)\b/i.test(summ), 'the short summary states the count and no severity band (' + summ + ')');
+  ok(/^2 findings established/.test(summ) && !/severity is|\b(?:moderate|high|critical|minor|serious)\b|largely consistent|systematic fraud/i.test(summ), 'the short summary states the count and no severity band (' + summ + ')');
+  // ... whatever the internal score: it once chose "4 minor contradictions
+  // established. The document is largely consistent" (evidence-bundle-7-docs).
+  const fourKinds = [{ type: 'CT20' }, { type: 'CT37' }, { type: 'CT39' }, { type: 'CT23' }];
+  ok([5, 25, 45, 65, 85].every(sc => E.generateSummary(fourKinds, sc) === '4 findings established, each set out with its page or file-level location. Read each finding against the original at the cited page.'), 'the summary is the same sentence at every internal score (no band chosen by a score)');
 
   // 16h. Footer-only: the newer footer (slash date and time, a chain line, the verify line).
   ok(E.voIsFooterOnlyPage('PRIVATE SEAL -- FREE TIER VERUM OMNIS SEALED ORIGINAL | Seal: VO-12A18F7CF129 | SHA-512: 12a18f7cf1296317... | 27/07/2026 12:57:50 Africa/Johannesburg | 1/2 verumglobal.foundation | OpenTimestamps | Patent Pending PRIVATE SEAL -- FREE TIER | Chain: 1 prev VERUM OMNIS SEALED ORIGINAL | Seal: VO-DD6E103B29EA | SHA-512: dd6e103b29eabfa6... | 04/08/2026 12:40:55 Africa/Johannesburg | 1/7 | Chain: 1 prev verumglobal.foundation | OpenTimestamps | Patent Pending VERUM OMNIS SEALED ORIGINAL scan the code or verify at verumglobal.foundation/verify.html PRIVATE SEAL — FREE TIER verumglobal.foundation | OpenTimestamps | Patent Pending VERUM OMNIS SEALED ORIGINAL | Seal: VO-52DEE57A7AC6 | SHA-512: 52dee57a7ac66fdd... | 27/09/2026 08:23:04 Africa/Johannesburg | 62/68') === true,
@@ -901,13 +911,13 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   const ct44Law = R._statutesForFinding({ type: 'CT44' }, jur0).map(x => x.provisions.join('; ')).join(' ');
   ok(/theft/.test(ct22Law) && !/Organised Crime|Financial Intelligence|Corrupt/.test(ct22Law) && /Organised Crime/.test(ct18Law), 'an arithmetic finding is not money laundering; a bank-detail finding keeps the diversion statutes');
   ok(/Common law of contract/.test(ct44Law) && /Petroleum Products Act/.test(ct44Law) && !/Rental Housing|racketeering/.test(ct44Law), 'a contract finding names no residential-tenancy statute and no racketeering provision');
-  ok(/held at reduced weight/.test(R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x' }, { type: 'CT03', severity: 2, evidence: 'y [OCR page: weight reduced until the quoted characters are verified against the page image]' }], true)) && R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x' }], true) === '1 verified finding',
+  ok(/held at reduced weight/.test(R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x' }, { type: 'CT03', severity: 2, evidence: 'y [OCR page: weight reduced until the quoted characters are verified against the page image]' }], true)) && R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x' }], true) === '1 finding' && R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x' }], false) === '1 finding',
     'the count phrase tells reduced-weight findings apart and is unchanged when there are none');
   const uncapped = R._voCountPhrase([{ type: 'CT44', severity: 5, evidence: 'lessee clause vs owner', location: 'Page 7' }], true, [7]);
-  ok(/^1 finding: 0 verified at full weight, and 1 anchored only on OCR-recovered pages or on a secondary source, whose quoted wording is to be verified/.test(uncapped) && !/held at reduced weight/.test(uncapped), 'an uncapped finding on a scanned page is counted apart without any claim that its weight was reduced (' + uncapped + ')');
+  ok(/^1 finding: 0 at full weight, and 1 anchored only on OCR-recovered pages or on a secondary source, whose quoted wording is to be verified/.test(uncapped) && !/held at reduced weight/.test(uncapped), 'an uncapped finding on a scanned page is counted apart without any claim that its weight was reduced (' + uncapped + ')');
   const mixedCap = R._voCountPhrase([{ type: 'CT44', severity: 5, evidence: 'x', location: 'Page 7' }, { type: 'CT20', severity: 2, ocrCapped: true, evidence: 'y', location: 'Page 7' }, { type: 'CT02', severity: 4, evidence: 'z', location: 'Page 2' }], true, [7]);
-  ok(/3 findings: 1 verified at full weight, and 2 anchored only on OCR-recovered pages[^(]*\(1 of them held at reduced weight by the engine\)/.test(mixedCap), '"held at reduced weight" is said only of the finding the engine capped (' + mixedCap + ')');
-  ok(/2 findings: 1 verified at full weight, and 1 anchored only on OCR-recovered pages/.test(R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x', location: 'Page 2' }, { type: 'CT20', severity: 2, evidence: 'identity number', location: 'Page 7' }], true, [7])),
+  ok(/3 findings: 1 at full weight, and 2 anchored only on OCR-recovered pages[^(]*\(1 of them held at reduced weight by the engine\)/.test(mixedCap), '"held at reduced weight" is said only of the finding the engine capped (' + mixedCap + ')');
+  ok(/2 findings: 1 at full weight, and 1 anchored only on OCR-recovered pages/.test(R._voCountPhrase([{ type: 'CT02', severity: 4, evidence: 'x', location: 'Page 2' }, { type: 'CT20', severity: 2, evidence: 'identity number', location: 'Page 7' }], true, [7])),
     'a severity-2 finding anchored only on an OCR page is counted apart even without the cap tag');
   ok(E.voCapOcrFormatFindings([{ type: 'CT20', severity: 2, location: 'Page 7', evidence: 'identity number' }], [7]).capped === 0, 'the cap leaves a severity-2 finding alone');
   const run = async () => {
@@ -939,7 +949,9 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     } finally { console.log = quiet; }
     const slice = (from, to) => { const a = T.lastIndexOf(from); const b = to ? T.indexOf(to, a + 1) : -1; return a < 0 ? '' : T.slice(a, b > a ? b : undefined); };
     ok(/Franchise \/ Lease & Goodwill/.test(slice('FINDINGS & CONTRADICTION MATRIX', 'Finding type summary')), 'the findings matrix carries the Franchise / Lease & Goodwill category (CT44/CT45 were missing from it)');
-    ok(/The review dropped 3 engine findings as unsupported/.test(T), 'the Triple Verification table says how many findings the review dropped');
+    // Founder ruling (5 October 2026): the review removes nothing, and the
+    // report never says it dropped or retained a finding.
+    ok(!/review dropped|dropped as unsupported|engine findings retained/.test(T + N) && /it removed and changed none/.test(T), 'no report says the AI review dropped or retained a finding; the trailer says it removed and changed none');
     // Engine page notes: their own heading in both reports, never "could not pin to a page", never dropped from the narrative.
     const pinPara = slice('could not pin to a specific page', 'Engine notes');
     ok(/suspiciously round/.test(pinPara) && !/Figures recognised/.test(pinPara) && !/Engine notes/.test(pinPara), 'the "could not pin to a specific page" paragraph carries the anchor-rule items only, not a note about page 397 (' + pinPara.slice(0, 160).replace(/\s+/g, ' ') + ')');
@@ -950,13 +962,13 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     const enC = R._engineNotes({ findings: { contextNotes: [{ type: 'CT38', location: '', text: 'Context: multiple jurisdictions are referenced' }, { type: 'CT20', location: 'Page 74', text: 'ID/Registration number' }] } });
     ok(enC.length === 1 && enC[0].type === 'CT20', 'structured notes win, and a cross-border Context note is not a page note');
     ok(!/cannot be changed, altered, or deleted/.test(T) && /any change to them is detectable/.test(T), 'the seal is described as tamper-evident, never as preventing change');
-    ok(/3 findings: 2 verified at full weight, and 1 anchored only on OCR-recovered pages or on a secondary source, whose quoted wording is to be verified/.test(T) && /\(1 of them held at reduced weight by the engine\)/.test(T), 'the cover count tells the OCR-held finding apart and says the engine lowered its weight (' + (T.match(/contains [^.]{0,200}/) || [''])[0] + ')');
+    ok(/3 findings: 2 at full weight, and 1 anchored only on OCR-recovered pages or on a secondary source, whose quoted wording is to be verified/.test(T) && /\(1 of them held at reduced weight by the engine\)/.test(T), 'the cover count tells the OCR-held finding apart and says the engine lowered its weight (' + (T.match(/contains [^.]{0,200}/) || [''])[0] + ')');
     ok(/Corrupt Activities/.test(R._statutesForFinding({ type: 'CT14' }, jur0).map(x => x.provisions.join('; ')).join(' ')) && !/Corrupt Activities|Money Laundering/.test(R._statutesForFinding({ type: 'CT15' }, jur0).map(x => x.provisions.join('; ')).join(' ')), 'an entity-status contradiction (CT14) keeps the Corrupt Activities Act; an invoice total (CT15) does not');
     ok(!/Organised Crime/.test(slice('Person → Contradiction → Page → Candidate law', 'CANDIDATE OFFENCE MATRIX')) || /CT18/.test(slice('Person → Contradiction → Page → Candidate law', 'CANDIDATE OFFENCE MATRIX')), 'the arithmetic finding\'s row cites no money-laundering provision');
     ok(/lease commenced on 1 August 2001/.test(N) && /p\. 9, which states/.test(N) && !/p\. 7, which states/.test(N) && !/p\. 11 states/.test(N), 'a rebuttal whose claim the gate removed is dropped whole, in the narrator\'s own wording too ("The record at p. 11 states …"); a heading between a kept claim and its rebuttal keeps the rebuttal');
     ok(/server's anchor and language gate: 3/.test(N) && /render-time §15\.2 gate: 2/.test(N) && /rebuttal sentences dropped with a removed claim: 4/.test(N), 'the provenance box prints both gate counters and the orphaned sentences apart (server 1 + 2; render-time 2 hedged claims; 4 orphaned rebuttal sentences the gate itself passed)');
-    ok(!/can alter it afterwards|preserves, forever|CANNOT BE ALTERED|immutable instrument/.test(T + N) && /HOW ANY CHANGE TO THIS RECORD IS DETECTED/.test(T + N), 'no page says the record cannot be altered or is immutable; the seal section says how a change is detected');
-    ok(!/\b\d+ verified findings? (?:are|is|stands?)\b/.test(T + N) && /Recorded below:\s+3 findings:\s+2 verified at full weight/.test(T) && /On the record above:\s+3 findings:\s+2 verified at full weight/.test(T), 'every count of findings tells the OCR-anchored one apart: the executive summary and the summary trailer too, and no undivided "N verified findings" sentence remains (' + JSON.stringify([(T.match(/Recorded below[^.]{0,80}/) || [''])[0], ((T + N).match(/\b\d+ verified findings? (?:are|is|stands?)\b[^.]{0,60}/) || [''])[0]]) + ')');
+    ok(!/can alter it afterwards|preserves, forever|CANNOT BE ALTERED|immutable instrument/.test(T + N) && !/HOW ANY CHANGE TO THIS RECORD IS DETECTED/.test(T + N) && /Any change to it is detectable/.test(T), 'no page says the record cannot be altered or is immutable; the user-manual explainer is gone and Section 7 says a change is detectable');
+    ok(!/\bverified findings?\b/.test(T + N) && /Recorded below:\s+3 findings:\s+2 at full weight/.test(T) && /On the record above:\s+3 findings:\s+2 at full weight/.test(T), 'every count of findings tells the OCR-anchored one apart: the executive summary and the summary trailer too, and no undivided "N verified findings" sentence remains (' + JSON.stringify([(T.match(/Recorded below[^.]{0,80}/) || [''])[0], ((T + N).match(/\b\d+ verified findings? (?:are|is|stands?)\b[^.]{0,60}/) || [''])[0]]) + ')');
     ok(/Contract, Lease & Franchise/.test(T) && !/Legal subject: CONTRACT\b/.test(T), 'the CONTRACT subject prints its label, never the raw key');
     ok(!/\(p\. 20\)/.test(N), 'a removed claim leaves no stray page cite behind, and the cite does not keep its rebuttal alive');
     const srFx = 'Mr X states: "I signed the lease on 3 May 2020." (p. 12)\n\nThis account conflicts with the record at p. 7. Assessment: contradicted by the record at p. 7.\n\nRecord:\n\nMs Z states that the rent was paid in full. (p. 14)\n\nThis account conflicts with the record at p. 9. Assessment: contradicted by the record at p. 9.';
@@ -980,7 +992,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     const merged = R._mergePersonIndex([{ name: 'Crompton Street Motors', kind: 'name', mentionCount: 7, pages: [29], mentions: [1] }, { name: 'CROMPTON STREET MOTORS CC', kind: 'name', mentionCount: 6, pages: [59], mentions: [2] }, { name: 'Bright Idea', kind: 'name', mentionCount: 7, pages: [3], mentions: [3] }, { name: 'Bright Idea Projects', kind: 'name', mentionCount: 5, pages: [4], mentions: [4] }]);
     ok(merged.length === 2 && merged[0].mentionCount === 13 && merged[0].name === 'CROMPTON STREET MOTORS CC' && merged[1].mentionCount === 12 && merged[1].name === 'Bright Idea Projects', 'the person index merges name variants the way the scorecard does (' + JSON.stringify(merged.map(m => m.name + ':' + m.mentionCount)) + ')');
     const pageSrc = require('fs').readFileSync(require('path').join(process.cwd(), 'seal-document.html'), 'utf8');
-    ok(/voBuildTimeline\(retainedEngine\)/.test(pageSrc) && /voBuildPersonIndex\(retainedEngine\)/.test(pageSrc) && /contradictionTypesUsed = Object\.keys\(rbt\)\.length/.test(pageSrc), 'the page recomputes the timeline, the person index and the type count on the retained findings after the review');
+    ok(!/retainedEngine/.test(pageSrc) && /all\.push\(Object\.assign\(\{\}, findings\[j\], extra\)\)/.test(pageSrc), 'the review returns every engine finding, so the timeline, the person index and the type count are the engine\'s own');
     const ct20Law = R._statutesForFinding({ type: 'CT20', severity: 2 }, jur0).map(x => x.provisions.join('; ')).join(' ');
     ok(/Common-law fraud/.test(ct20Law) && !/Corrupt Activities|Consumer Protection/.test(ct20Law) && !/Corrupt Activities/.test(R._statutesForFinding({ type: 'CT02', severity: 2 }, jur0).map(x => x.provisions.join('; ')).join(' ')), 'a registration-number note and any Low finding carry no corruption or consumer statute');
   };
@@ -1162,9 +1174,13 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ok(!/It concerns Sanarth/.test(TN) && /Named on the cited page[s]? \(descriptive, not an attribution\):[^.]{0,80}Sanarth Fuels/.test(T), 'a company the engine found on the page is named descriptively, never as the party a finding concerns (' + ((T.match(/Named on the cited page[^.]{0,120}/) || [''])[0]) + ')');
     ok(/It concerns Sanarth Fuels/.test(D) && (D.match(/It concerns Sanarth Fuels/g) || []).length === 1, 'a party the case details declare is the party a finding concerns only when the finding\'s own words name it (once here: the CT14 naming Sanarth Fuels, not the findings that only share its page)');
     ok(!/Sanarth Fuels — the record states/.test(N), 'the counter-narratives never quote the author\'s words as a named company\'s own statement');
-    ok(!/TAMPER FOUND/.test(T) && !/COMMUNICATION GAP FOUND/.test(T) && /Not rendered under a brain: 2 findings[\s\S]{0,160}Unsigned Agreement Stated[\s\S]{0,60}Contact Detail Mismatch/.test(T.replace(/\s+/g, ' ')) && !/INTEGRITY SIGNAL FOUND|CONTACT CONFLICT FOUND/.test(T),
-      'the Nine-Brain blocks keep the template\'s own headers (PD19), and an unsigned-agreement statement or a lookalike domain, which no brain block describes, is named apart instead of under "TAMPER FOUND" or "COMMUNICATION GAP FOUND"');
-    ok(!/Behavioural Scorecard|Top liabilities|top liabilities/.test(TN) && /Parties named on the pages carrying findings/.test(T) && /Most serious findings:/.test(T), 'no "scorecard" over the people a record names, and no "liabilities"');
+    // 5 October 2026: every finding renders under the brain that produced it
+    // (§2); a kind no template block describes prints as FINDING RECORDED
+    // under its brain — never under "TAMPER FOUND" or "COMMUNICATION GAP FOUND".
+    const nb = T.slice(T.lastIndexOf('3. NINE-BRAIN EXTRACTION FINDINGS'), T.lastIndexOf('4. TRIPLE VERIFICATION SUMMARY')).replace(/\s+/g, ' ');
+    ok(!/TAMPER FOUND/.test(nb) && !/COMMUNICATION GAP FOUND/.test(nb) && !/Not rendered under a brain/.test(T) && /B2 — Document Brain FINDING RECORDED: - Type: Unsigned Agreement Stated/.test(nb) && /B3 — Communications Brain FINDING RECORDED: - Type: (?:Contact Detail Mismatch|Lookalike Email Domain)/.test(nb) && !/INTEGRITY SIGNAL FOUND|CONTACT CONFLICT FOUND/.test(T),
+      'every finding renders under its brain (§2): an unsigned-agreement statement under B2 and a contact detail under B3, each as FINDING RECORDED, never under "TAMPER FOUND" or "COMMUNICATION GAP FOUND" (' + nb.slice(380, 1400) + ')');
+    ok(!/Behavioural Scorecard|Top liabilities|top liabilities/.test(TN) && /Parties named on the pages carrying findings/.test(T) && /Leading findings:/.test(T) && !/Most serious findings/.test(T), 'no "scorecard" over the people a record names, no "liabilities", and no severity word in the actionable output');
     ok(!/\(confidence:/.test(TN) && /Document classification \(AI, advisory\): Other/.test(T), 'the classification prints no confidence band');
     ok(!/Highest severity/.test(T) && !/\bSev\.\s/.test(T), 'no severity column in the matrix, for engine findings or AI candidates');
     ok(/A candidate marked "unanchored" has no quote in the sealed text/.test(T), 'an unanchored AI candidate is called a question, not a lead to a page');
@@ -1183,7 +1199,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ok(!/fix when (?:they|it) existed|fixes the moment/.test(TN) && /the latest time by which/.test(TN), 'OpenTimestamps fixes the latest time by which the files existed, never "when"');
     ok(!/the only place a Verum seal is verified/.test(N) && /an OpenTimestamps client can check the Bitcoin block independently/.test(N), 'the provenance record says what verify.html checks and how to check Bitcoin independently');
     ok(/drafts the server's gate discarded whole: 2/.test(N) && /server's anchor and language gate: 5/.test(N) && !/removed and counted\./.test(N), 'the provenance record counts drafts the server\'s gate discarded whole and their dropped sentences (' + ((N.match(/Sections written by the AI narrator[^\n]{0,260}/) || [''])[0]) + ')');
-    ok(/No language-model verification of the findings is claimed beyond the advisory AI review recorded in the technical report/.test(N), 'with the AI review applied, "no language-model verification" says what the review is, so it never contradicts "verified" on the same page');
+    ok(/No language-model verification of the findings is claimed; the advisory AI review recorded in the technical report read the findings, removed and changed none/.test(N), 'with the AI review applied, the narrative says what the review is and that it removed and changed no finding');
     const one = await pageText(await (async () => { const q = console.log; console.log = () => {}; try { return await R.build(Object.assign({}, opts, { findings: Object.assign({}, opts.findings, { findings: [findings[1], findings[2]], totalFindings: 2 }) })); } finally { console.log = q; } })());
     ok(!/cannot all be true at the same time/.test(one) && /cannot all be true at the same time/.test(T), '"the documents cannot all be true at once" is printed only when a finding has two sides');
   };
@@ -1305,7 +1321,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ok(dish.indexOf('Evasion / Deflection') !== -1 && dish.indexOf('Contradictions') !== -1 && dish.indexOf('Evasion / Deflection') < dish.indexOf('Contradictions') && /Selective Omissions[^]*unsigned agreement/.test(dish), 'the dishonesty rows are ordered by their most serious finding (an Evasion row at severity 5 above Contradictions), and an unsigned-agreement statement is a Selective Omission (' + dish.slice(0, 260) + ')');
     ok(/- Finding: /.test(tf) && /CONTRADICTION FOUND/.test(tf), 'each Nine-Brain block carries the template\'s Finding line');
     ok(/A declared party is listed where the finding's own words name it; otherwise the names on its cited pages are listed, marked "\(named on the cited pages\)"/.test(tf) && !/Attribution records that the party is named in the flagged text/.test(tf), 'the Statutory Anchoring footnote says what each row kind is');
-    ok(/would no longer match its seal hash\. To rule out a deliberate re-seal, compare the delivered file's SHA-512/.test(tf + N.replace(/\s+/g, ' ')) && !/verification would fail/.test(tf + N), 'the seal explainer says what the seal check shows and how to rule out a re-seal, as verify.html does');
+    ok(/The seal check alone cannot show that a copy was not altered and re-sealed with its own hash; to rule that out, compare the delivered file's SHA-512/.test(tf) && !/verification would fail/.test(tf + N), 'Section 7 says what the seal check shows and how to rule out a re-seal, as verify.html does (the explainer page is gone, its one substantive line kept)');
     ok(/It concerns Sanarth Fuels/.test(tf) && !/Sanarth Fuels — the record states/.test(N), 'a declared party named in a finding is the party it concerns, but another person\'s statement about it is never quoted as its own words');
     const nf = N.replace(/\s+/g, ' ');
     ok(/No AI-written section passed the gates, so this narrative is the deterministic record/.test(nf) && /No AI-written section passed the gates; it is the deterministic record built/.test(nf) && /No section of this document is machine-written prose/.test(nf) && !/the prose is machine-written, gated, and advisory/.test(nf), 'when no AI-written section passed the gates, the cover, the certification and the provenance paragraph say the narrative is the deterministic record');

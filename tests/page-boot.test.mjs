@@ -376,14 +376,15 @@ for (const page of PAGES) {
     'findings JSON is included in the share bundle');
 
   // Human-readable findings: plain names lead, codes trail; the deterministic
-  // narrative lists top findings as sentences under KEY CONTRADICTIONS.
+  // narrative lists top findings as sentences under KEY FINDINGS (engine
+  // findings only, never an AI candidate; 5 October 2026).
   const rep = readFileSync('forensic-report.js', 'utf8');
   ok(!/det \+ ' · ' \+ g\.type/.test(rep),
     'matrix rows no longer lead with bare detector codes');
-  ok(/\(CT_NAMES\[g\.type\] \|\| g\.type\) \+ '  \('/.test(rep),
-    'matrix rows lead with the plain-language finding name');
-  ok(html.includes('KEY CONTRADICTIONS'),
-    'on-device narrative lists top findings as plain sentences with page anchors');
+  ok(/det: findingName\(g\) \+ '  \('/.test(rep),
+    'matrix rows lead with the plain-language finding name (the measured label, findingName)');
+  ok(html.includes("'KEY FINDINGS\\n\\n'") && /var keyList = list\.filter\(function \(f\) \{ return f\.type !== 'SERIAL' && !isDem\(f\) && f\.source !== 'ai'; \}\)/.test(html),
+    'on-device narrative lists top engine findings (never an AI candidate) as plain sentences with page anchors');
 }
 
 // False-clean guard: a 187-page scanned bundle that had been sealed before

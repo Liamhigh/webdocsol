@@ -7,8 +7,9 @@
 
 **Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.3.5-web'`
 **Report:** `forensic-report.js` — `ENGINE_VERSION = '5.3.5-web'`, report builder v1.3.1.
-**Findings JSON:** v1.6.0, built by `buildFindingsJson` in `seal-document.html`, not by either
-script (1.6.0 adds `analysis_reference_utc`; 1.5.0 added `ocr_held`)
+**Findings JSON:** v1.7.0, built by `buildFindingsJson` in `seal-document.html`, not by either
+script (1.7.0 adds `display_name`, `brain`, `triple_verification` and `ai_review_note`; 1.6.0
+added `analysis_reference_utc`)
 **Host page:** `seal-document.html` (the engine, the report and three helper scripts are
 inlined — see [§9 Inlining](#9-inlining))
 **Governing law:** Constitution v6.1 (engine operating instrument, seal `VO-9E51D3F507E6`);
@@ -21,20 +22,23 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
 1. **Do not "simplify" a guard.** Most odd-looking conditions in this engine exist because a
    real bundle produced a false finding. §4 lists the founding guards, each with the case that
    caused it; the guards each later real-bundle run added are recorded in that run's section
-   (§12.10–§12.15) and pinned in `tests/annexure-eb-regression.test.mjs` (the Greensky
-   re-run's in `tests/greensky-regression.test.js`).
+   (§12.10–§12.16) and pinned in `tests/annexure-eb-regression.test.mjs` (the Greensky
+   re-run's in `tests/greensky-regression.test.js`, the evidence-bundle-7 run's in
+   `tests/evidence-bundle-7-regression.test.mjs`).
    Removing one re-introduces a false statement of fact under seal.
 2. **Precision beats recall here.** A missed contradiction is a gap; a false contradiction is
    a lie in a court document. Recall is the AI layer's job: on the website the advisory review
    (`/api/v1/ai/assess`) raises AI candidates and Brain 9 (`/api/v1/ai/sweep`) feeds misses to
-   the signed-rule loop (§12.7–§12.9); neither ever becomes a sealed finding.
+   the signed-rule loop (§12.7–§12.9); neither ever becomes a sealed finding, and neither ever
+   removes or changes one (founder ruling, 5 October 2026, §12.16).
 3. **Every finding must be anchored** to quoted text and a page. Unanchorable content findings
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   33 suites, 2535 assertions (§10); many exist solely to stop the regressions in §4 and §12.
-6. **The report leads with the human story, not the table of contents** (§7). That order is a
-   founder ruling, not a layout preference.
+   34 suites, 2658 assertions (§10); many exist solely to stop the regressions in §4 and §12.
+6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
+   1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
+   5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
 7. **No regex lookbehind in new code** (§4.16). Safari < 16.4 throws at parse time and the
    whole scan dies silently.
 8. **Tamper-evident, never immutable.** A SHA-512 fingerprint makes a change detectable; it
@@ -77,9 +81,9 @@ PDF bytes + pdf-lib PDFDocument (+ opts.referenceTime from the seal page)
   ├─ voDetectSwornPages()            oath language per page; findings on those pages get swornContext (§4.18)
   ├─ internal weighting              per-type confidence, overallScore and band: internal only, never printed (§6)
   ├─ false-clean guard               zero findings at < 200 characters a page over >= 3 pages is UNREADABLE, never clean
-  └─ generateSummary()               one of six fixed summary sentences, chosen by finding count and the internal score
+  └─ generateSummary()               the count and a read-against-the-page instruction, or the clean sentence (never the score, §12.16)
         ↓
-   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 → buildFindingsJson (v1.6.0)
+   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 → buildFindingsJson (v1.7.0)
           → forensic-report.js build() → seal()
 ```
 
@@ -260,11 +264,20 @@ they are **not, by themselves, signs of tampering**.
 `clause 1.1.10` was being read as a date ("On 1.1.10 …"). **Guard:** dotted dates require a
 4-digit year, plus day ≤ 31 / month ≤ 12 bounds.
 
-### 4.10 AI candidates are never "verified findings"
-An AI-raised item is **candidate tier**. It is excluded from the verified count, the fact box,
+### 4.10 AI candidates are never findings, and the AI review never removes one
+An AI-raised item is **candidate tier**. It is excluded from the engine count, the fact box,
 SEALED FINDINGS, the court-ready narrative's [F#] numbering and the plain-language lead, and is
 disclosed on its own advisory line (AI-Identified Candidates).
 Mixing the two inflates the count and misdescribes the record.
+
+The other direction holds too (founder ruling, 5 October 2026, §12.16): the advisory review
+**never removes, changes, truncates or reorders an engine finding**. `aiAssessFindings` returns
+copies of the original findings with the model's note attached (`aiAssessed`, `aiReviewNote`);
+an UNSUPPORTED verdict is printed as an advisory note in the Findings & Contradiction Matrix
+("AI Review Notes on Engine Findings", after the AI-Identified Candidates) and goes to the feedback
+loop as `AI_REVIEW_UNSUPPORTED`, so the engine can be improved by a signed rule
+or a code change, never by the model's say-so. A candidate that quotes an engine finding on the
+same page is a duplicate and is counted, not listed.
 
 ### 4.11 D01 / conduct admission — a cause is not an admission
 An "admission of conduct" detector that fired on causal wording alone flagged ordinary contract
@@ -390,12 +403,12 @@ breathalyzer prints a reading without pronouncing a conviction.
 
 **Required:**
 - Opening: `The sealed record of "<doc>" (N pages) contains <count>. The following are established.` — the count
-  is `voCountPhrase`'s. When the advisory AI review ran: `N verified findings`; when it did not: `N engine
-  findings (deterministic rules; AI review not run on this report)`. Where some findings are anchored only on
-  OCR-recovered pages or on a secondary source: `N findings: K verified at full weight` (or `K established by
-  the record at full weight (deterministic rules; AI review not run on this report)`), `and M anchored only on
-  OCR-recovered pages or on a secondary source, whose quoted wording is to be verified against the page image or
-  the primary document before it is relied on (C of them held at reduced weight by the engine)`.
+  is `voCountPhrase`'s: `N findings`, whether or not the advisory AI review ran. A finding is never called
+  "verified": Prime Directive 13 asks for three independent verifiers, and the platform has one deterministic
+  engine and at most one advisory model (founder ruling, 5 October 2026, §12.16). Where some findings are
+  anchored only on OCR-recovered pages or on a secondary source: `N findings: K at full weight, and M anchored
+  only on OCR-recovered pages or on a secondary source, whose quoted wording is to be verified against the page
+  image or the primary document before it is relied on (C of them held at reduced weight by the engine)`.
 - Closing: `These findings are sealed under SHA-512 and <anchorPhrase>: any change to them is detectable, because
   the fingerprint would no longer match<timestampClause>. The verdict on any named person is for the court.` At
   sealing the proof is only submitted, so the seal page prints: `…sealed under SHA-512 and submitted for
@@ -415,15 +428,16 @@ The narrator (`/api/v1/ai/narrate`) is given the reason in full; the advisory re
 evidence"). The reason is given, not just the rule, because a model that understands *why* complies far more
 reliably:
 
-> Every finding you receive was produced by a deterministic engine from a document sealed under
-> SHA-512 and anchored to the Bitcoin blockchain. It is quoted evidence bound to a page in a
-> record that cannot be altered. It is therefore not a suspicion to be hedged — it is a
-> measurement to be reported.
+> WHY YOU STATE FACTS: every finding you receive was produced by a deterministic engine from a
+> document sealed under SHA-512 (tamper-evident: any change to it is detectable). It is quoted
+> evidence bound to a page of that sealed record. It is therefore not a suspicion to be hedged —
+> it is a measurement to be reported.
 
-(Open: the prompt's "anchored to the Bitcoin blockchain" and "a record that cannot be altered"
-overstate the seal. The record is tamper-evident, and at sealing the anchor is only submitted.
-The reports already say so; the prompt wording in `worker/verum-rules.js` (`NARRATE_SYSTEM`,
-`ASSESS_SYSTEM`, `SWEEP_SYSTEM`) is reported for correction.)
+(Until 5 October 2026 the prompts said "anchored to the Bitcoin blockchain" and "a record that
+cannot be altered", which overstated the seal: the record is tamper-evident, and at sealing the
+anchor is only submitted. `NARRATE_SYSTEM`, `ASSESS_SYSTEM` and `SWEEP_SYSTEM` now say any change
+is detectable, and `tests/worker.test.mjs` fails if any of them calls the record unalterable,
+immutable or anchored to Bitcoin.)
 
 Concretely, the narrator prompt **bans** `appears`, `might`, `possibly`, `seems`, `could`,
 `potentially`, `apparently`, `allegedly`, `suggests`, `indicates`, `may indicate`,
@@ -436,13 +450,15 @@ probabilistic language into the AI layer.
 
 **Two-tier naming.** An engine finding is a **finding**; an AI-raised item is a **candidate**.
 The report's AI section is headed *AI-Identified Candidates* and counts candidates, never
-findings. Do not blur the two words — the distinction is what keeps the verified count honest.
+findings. Do not blur the two words — the distinction is what keeps the engine count honest.
 
 **Two deliberate exceptions, both mandated by the Constitution:**
 1. **Ordinal severity, internal only** — each finding carries a severity of 1–5 (Prime
    Directive 1's ordinal ranking). It ranks what a finding *is*, not the probability that it is
-   real. It orders the findings most serious first and travels in the findings JSON; no severity
-   word (Critical / High / …) and no severity column prints (AGENTS.md ruling 2).
+   real. It fixes the engine's order of findings and travels in the findings JSON; no severity
+   word (Critical / High / …), no severity column and, since 5 October 2026, no "most serious",
+   "by severity", "serious" or "minor" prints either: the report says only that the findings are
+   in the engine's fixed order (`VO_ORDER_NOTE`; AGENTS.md ruling 2, §12.16).
 2. **Candidate law** — PD16 reserves the legal characterisation to the court, so the reports
    name provisions only as "Candidate law (for counsel to confirm)" (the court-ready narrative
    adds "not a legal conclusion"); the worker's court-ready-narrative gate also admits "may
@@ -450,8 +466,9 @@ findings. Do not blur the two words — the distinction is what keeps the verifi
    constitute". The contradiction is stated as fact; what it *is* in law is not.
 
 `overallScore` (and its internal band, `confidence`) still exist **internally** in the engine's
-result: they set the `clean` flag, choose the engine's summary sentence (`generateSummary`), and
-are sent to the narrator as context. Neither is in the findings JSON, and neither may ever be
+result: they set the `clean` flag and are sent to the narrator as context. Since 5 October 2026
+the engine's summary sentence (`generateSummary`) no longer varies with them: it states the
+count and the instruction to read each finding against the original page. Neither is in the findings JSON, and neither may ever be
 displayed. `tests/legal-analysis.test.js` asserts the absence of `/100` and confidence
 bands and will fail the build if either returns.
 
@@ -462,6 +479,24 @@ A prompt is a request; a gate is a guarantee. Everything the worker returns is p
 deterministic narrative if too much was dropped. When you change the narrator prompt in
 `worker/verum-rules.js`, change the gate's expectations in `tests/legal-analysis.test.js` too —
 never loosen the gate to let a better-sounding prompt through.
+
+**Overclaim (5 October 2026, §12.16 items 6 and 10).** Beside the §15.2 words, `scrubNarrative`
+(through `voSentenceBanned` → `voSentenceOverclaims`) and the Worker's court-ready gate
+(`humanOverclaim`, counted as `gate.overclaim`) hold three rules, on the sentence with its
+quotations masked: only an [F#] finding is established, proved, revealed, demonstrated, shown or
+confirmed (a sentence citing only a page reports what that page states); a contradiction is
+stated only with its [F#] (a rebuttal frame excepted; at render time a finding kind's own name,
+"Identity Contradiction", is a reference, not a claim); and conduct is never said to be,
+constitute, amount to or be committed as fraud, coercion or any offence outside "may constitute"
+candidate law — on every line, a stated gap and an [F#] sentence included. Each verb is judged
+where it stands: a negation counts only when it governs the verb in its own clause ("no doubt",
+"not only" and "cannot be disputed" are not negations); a founding ("established in 2001", "by
+deed", "in terms of the Act", "by Mr Smith", never "by the record"), reported speech ("The bank
+confirmed receipt", "receipt was confirmed by the bank", "Page 2 shows a payment") and a
+provision's own words ("Clause 5 establishes a 30-day notice period") are kept. A heading is held
+to the §15.2 words and the offence rule only (`voHeadingBanned`; "WHAT THE FINDINGS ESTABLISH" is
+kept, "CONDUCT CONSTITUTES COERCION" is not). Both gates also drop ranking words: "most serious",
+"high-severity", "critical findings", "minor findings".
 
 The narrator prompt also carries **FORMAT**, **SYNTHESIS** and **WHY IT MATTERS** rules
 (founder request: "it mustn't be a text dump"). `narrativeBlocks` then renders the result as
@@ -483,51 +518,49 @@ for the court-ready narrative). The QR opens `verify.html?h=<first 32 hex charac
 SHA-512>&m=<metadata>`. The court-ready narrative's section order is in §13 (cover, contents
 page, fifteen contract sections).
 
-**The report is in two halves, and the order is a founder ruling (AGENTS.md ruling 5): the
-human story leads, the institutional evidence follows.** Do not reorder Part 1 behind the
-table of contents "because that is how reports are laid out" — that is precisely the layout
-the ruling replaced.
+**The report leads with the Constitution's template (founder ruling of 5 October 2026, §12.16,
+which replaces the story-first order of AGENTS.md ruling 5).** Cover → table of contents → the
+§15.4 sections 1–7 → `secAnnexDivider` → the annexes, the plain-language pages first. Prime
+Directive 19 asks for the template exactly; do not move the plain-language pages back in front of
+section 1 without a founder decision. The plain-language pages are unchanged in content; they are
+annexes now, numbered like the rest.
 
-### Part 1 — the story (for everyone)
+### The cover and the §15.4 template
 
 | # | Section | What it is |
 |---|---|---|
-| — | **Cover** (`drawCover`) | `CONFIDENTIAL` banner, title FORENSIC EVIDENCE REPORT, case or document name, reference, date, source and source SHA-512, the case rows the sealer entered, `INCOMPLETE READ` and `AI REVIEW NOT RUN` warnings when they apply (§12.10 item 4), the three provenance lines (forensic software, not a generative AI), and `GOVERNED BY CONSTITUTION V8.0 \| ENGINE INSTRUMENT V6.1` (governance first, instrument second). The verification QR is stamped by `seal()` |
-| 1 | **`secExecutiveSummary`** — *front page* | Source line, an **IN ONE PAGE** box, **The findings that matter most** (top 3, with *both* halves of a two-sided contradiction printed in full), **Key dates in the record**, **What to do next**, closing verdict reservation. "Key dates" prints with two or more dated events; "What to do next" adds an unread-pages step when pages went unread; the closing says "the documents cannot all be true at the same time" only when a finding has two sides |
-| 2 | **`secDocumentsInBundle`** | When `voDetectDocuments` recovered document boundaries: which documents are in the bundle, their page ranges, and which findings cross between them (`crossDocNote`) |
-| 3 | **`secShortVersion`** | Each substantive finding as one line, contradictions split into their two sides by `contradictionSides` |
-| 4 | **`secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' })`** | When the worker narrator ran (not the local template) and its draft clears the §15.2 gate, it leads as "The analyst's telling", labelled advisory, with the count of sentences removed; the deterministic backbone ("The verifiable backbone: each pattern, anchored") follows, word-for-word repeatable, then "The story the dates tell" when two or more dated findings exist — always structured into headings/bullets/paragraphs by `narrativeBlocks`, never a text dump, and always passed through the §15.2 gate (§6) |
-| 5 | **`secUnreadPages`** | Every page the engine could not read, named with its reason (`capped` / `noText` / `renderFailed` / `timedOut`), collapsed into ranges by `pageRanges`, with a human-review instruction — plus **PAGES READ THROUGH OCR** (`secOcrProvenance`): pages whose text was machine-recovered are named, and findings anchored on them carry an OCR-provenance line in FINDINGS IN DETAIL. No per-word confidence is printed — that would be PD1's barred probability language; the disclosure is HOW the text was obtained and WHERE to verify it — and pages carrying only a seal footer, and the pages set aside before scanning (a prior Verum Omnis report or the analysis template), followed by the engine notes (`secEngineNotes`). With nothing unread and only notes, the heading is PAGES THE ENGINE COULD NOT USE |
-| 6 | **`secSealExplainer(… { label: 'HOW ANY CHANGE TO THIS RECORD IS DETECTED' })`** | The SHA-512 fingerprint and OpenTimestamps in plain words: any change is detectable, and once Bitcoin confirms, the proof fixes the latest time by which the file existed |
+| — | **Cover** (`drawCover`) | `CONFIDENTIAL` banner, title FORENSIC EVIDENCE REPORT, subtitle `Findings by Forensic Software — Constitution v8.0 §15.4 Template`, the template's header fields (Timestamp, ISO (UTC); Jurisdiction(s) detected; Case Reference, or "none entered"; Report Type, `opts.coverReportType`; the jurisdiction line names its basis: the sealing location, the engine's findings, or the default home jurisdiction), case or document name, reference, date, source and source SHA-512, the case rows the sealer entered, the `INCOMPLETE READ` warning when pages went unread (§12.10 item 4; the `AI REVIEW NOT RUN` banner was removed on 5 October 2026: no finding depends on the AI), the three provenance lines (forensic software, not a generative AI), and `GOVERNED BY CONSTITUTION V8.0 \| ENGINE INSTRUMENT V6.1`. The verification QR is stamped by `seal()` |
+| — | **Table of contents** | Placeholder page, drawn last once real page numbers are known |
+| 1 | `secCriticalSubjects` | CRITICAL LEGAL SUBJECTS |
+| 2 | `secDishonestyMatrix` | DISHONESTY DETECTION MATRIX |
+| 3 | `secNineBrain` | NINE-BRAIN EXTRACTION FINDINGS: every engine finding under exactly one of B1–B7 (`brainOf`, `VO_BRAIN_OF_CT`; v8.0 §2 puts each detector in one brain). The block keeps the template's header ("TAMPER FOUND", "COMMUNICATION GAP FOUND", …) with a Finding line stating the measured fact; a kind no header describes prints as FINDING RECORDED under its brain (`VO_NEUTRAL_BLOCK_CT`: CT23, CT31, CT32 and CT39 in B2, CT37 in B3, CT33 and CT35 in B7, CT07 in B1). Each block's Finding line is `establishesOf`: a measured sentence per kind, the two-positions sentence only for a two-statement kind or two-sided evidence. No finding is set apart "not rendered under a brain"; structural notes of a compiled bundle are named as listed in the matrix. A section with nothing to show (a clean record) still prints its heading and says so; consecutive empty sections share a page (`voEmptyTemplateSection`) |
+| 4 | `secTripleVerification` | TRIPLE VERIFICATION SUMMARY: one row per finding (the first 16), Thesis / Antithesis / Synthesis / Status (`tripleVerificationOf`: the Thesis passes on the anchored quote; the Antithesis is INSUFFICIENT when the finding rests on a secondary source or an OCR-recovered page, PASS otherwise; the Synthesis says what survives; the Status is ACCEPTED under the v8.0 §3 consensus rule and REJECTED on any FAIL, each leg with its reason), and the statement that Prime Directive 13's three independent verifiers are not met, so the report does not call its findings verified |
+| 5 | `secSealedFindings` | SEALED FINDINGS: "The record contains N findings… The following are established" (§6), file-level findings counted beside the page-anchored list |
+| 6 | `secVerdictReservation` | VERDICT RESERVATION |
+| 7 | `secDeclaration` | CERTIFICATION, with what the AI review did (it read N engine findings, removed and changed none, noted K as unsupported, raised C candidates) and what the seal check alone cannot show (a copy altered and re-sealed with its own hash; compare the delivered file's SHA-512 with the one the sender recorded) |
 
-The cover and the opening of THE STORY IN PLAIN LANGUAGE both carry the **provenance statement** required by ruling 5: the findings are the
-output of deterministic forensic software — fixed detection rules, page-anchored quotes — and
-**not** the opinion of a generative AI. Any optional AI layer stays labelled and advisory.
+These headings are constitutional and are **not** renamed for accessibility.
 
-### Part 2 — the evidence (for investigators and lawyers)
+### The annexes, plain language first
 
-**Table of contents** (placeholder page, drawn last once real page numbers are known), then
-the **Constitution v8.0 §15.4 seven-section template** in order — these headings are
-constitutional and are **not** renamed for accessibility:
+`secAnnexDivider`, then in build order:
 
-1. `secCriticalSubjects` — CRITICAL LEGAL SUBJECTS
-2. `secDishonestyMatrix` — DISHONESTY DETECTION MATRIX
-3. `secNineBrain` — NINE-BRAIN EXTRACTION FINDINGS
-4. `secTripleVerification` — TRIPLE VERIFICATION SUMMARY
-5. `secSealedFindings` — SEALED FINDINGS
-6. `secVerdictReservation` — VERDICT RESERVATION
-7. `secDeclaration` — CERTIFICATION
+| Annex | Section | What it is |
+|---|---|---|
+| plain | **`secExecutiveSummary`** | Source line, an **IN ONE PAGE** box, **The leading findings** (the first three in the engine's order, with *both* halves of a two-sided contradiction printed in full), **Key dates in the record**, **What to do next**, closing verdict reservation. "Key dates" prints with two or more dated events; "What to do next" adds an unread-pages step when pages went unread; the closing says "the documents cannot all be true at the same time" only when a finding has two sides |
+| plain | **`secDocumentsInBundle`** | When `voDetectDocuments` recovered document boundaries: which documents are in the bundle, their page ranges, and which findings cross between them (`crossDocNote`) |
+| plain | **`secShortVersion`** | Each finding as one line, contradictions split into their two sides by `contradictionSides`, identical lines collapsed into one naming every page |
+| plain | **`secNarrative(ctx, data, { title: 'THE STORY IN PLAIN LANGUAGE' })`** | When the worker narrator ran (not the local template) and its draft clears the §15.2 and overclaim gates, it leads as "The analyst's telling", labelled advisory, with the count of sentences removed; the deterministic backbone ("The verifiable backbone: each pattern, anchored") follows, word-for-word repeatable, then "The story the dates tell" when two or more dated findings exist — always structured into headings/bullets/paragraphs by `narrativeBlocks`, never a text dump. It opens with the provenance statement: the findings are the output of deterministic forensic software, not the opinion of a generative AI |
+| plain | **`secUnreadPages`** | Every page the engine could not read, named with its reason (`capped` / `noText` / `renderFailed` / `timedOut`), collapsed into ranges by `pageRanges`, with a human-review instruction — plus **PAGES READ THROUGH OCR** (`secOcrProvenance`), pages carrying only a seal footer, the pages set aside before scanning (a prior Verum Omnis report or the analysis template), and the engine notes (`secEngineNotes`). With nothing unread and only notes, the heading is PAGES THE ENGINE COULD NOT USE. No per-word OCR confidence is printed (PD1) |
+| detail | `secExecSummary(ctx, data, { noLead: true })` | FINDINGS AT A GLANCE: the IN PLAIN LANGUAGE box ("In plain words, in the engine's order:"), the fact box ("Kinds of finding recorded: N (the engine checks for 46 kinds)" — never "N / 46"), the leading findings and evidence statistics; no severity table and no summary sentence |
+| detail | `secAiReview` … `secMethodology` | `secAiReview` (headed FORENSIC NARRATIVE, ENGINE SUMMARY or AI REVIEW; nothing when neither ran) · `secPartyAnalysis` ("Parties named on the pages carrying findings", not a scorecard) · `secStatutoryAnchoring` (person → contradiction → page → candidate law) · `secOffenceMatrix` (with **Elements Evidenced**; the provisions are the union of each finding's own candidate law) · `secActions` (0–14 / 14–90 / 90+ days) · `secMonetaryFigures` · `secEvidenceIndex` · `secMatrix` (with AI-Identified Candidates and "AI Review Notes on Engine Findings" when the review ran) · `secFindingDetails` (F# for anchored engine findings, then P#, the same numbering as the narrator and the court-ready narrative; "Party implicated" only for a declared party named in the finding's own words, otherwise the names on the cited page are stated descriptively; location, legal subject, oath context (§4.18), OCR provenance, the provision the document cites, what it means, the verbatim quote and candidate law) · `secPersonIndex` · `secSerial` (no severity column) · `secTimeline` · `secEvidenceAppendix` · `secEvidenceMap` (Annexure A) · `secConstitution` · `secMethodology` ("Order of findings") |
 
-Then `secAnnexDivider` and the annexes, in build order: `secExecSummary` (the annex
-summary: IN PLAIN LANGUAGE box, verified-count fact box with "Contradiction types triggered:
-N / 46", the engine's summary sentence, top findings, evidence statistics; no severity table) ·
-`secAiReview` (headed FORENSIC NARRATIVE, ENGINE SUMMARY or AI REVIEW; nothing when neither ran) ·
-`secPartyAnalysis` ("Parties named on the pages carrying findings", not a scorecard) ·
-`secStatutoryAnchoring` (person → contradiction → page → candidate law) · `secOffenceMatrix`
-(with **Elements Evidenced**) · `secActions` (0–14 / 14–90 / 90+ days) · `secMonetaryFigures` ·
-`secEvidenceIndex` · `secMatrix` · `secFindingDetails` (F# for anchored engine findings, then P#, the same numbering as the narrator and the court-ready narrative; "Party implicated" only for a declared party named in the finding's own words, otherwise the names on the cited page are stated descriptively; location, legal subject, oath context (a finding with `swornContext` adds one factual line and a sworn-statement candidate-law bullet, §4.18), OCR provenance, the provision the document cites, what it means, the verbatim quote and candidate law) · `secPersonIndex` · `secSerial` ·
-`secTimeline` · `secEvidenceAppendix` · `secEvidenceMap` (Annexure A) · `secConstitution` ·
-`secMethodology`.
+The "HOW ANY CHANGE TO THIS RECORD IS DETECTED" page (`secSealExplainer`) was removed on 5
+October 2026: PD20 bars manuals, and section 7 and the closing sentence of SEALED FINDINGS
+already say what the seal shows and what it cannot. Display names come from `findingName` /
+`ctLabel`: the taxonomy keeps its names in the findings JSON, and two print in measured words
+(`VO_DISPLAY_NAME`: CT20 "Registration Number Format Invalid", CT39 "Chain-of-Custody Steps Not
+Documented").
 
 ### Report facts the engine derives — never the user
 
@@ -712,7 +745,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**33 suites · 2535 assertions** (counted 2026-10-03 on commit 179e45c; recount after any test change).
+**34 suites · 2658 assertions** (counted 2026-10-05 on the PR #216 branch, with the evidence-bundle-7-docs run and its review round; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -722,7 +755,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `page-boot.test.mjs` | 101 | The seal page still boots when a library is missing |
 | `detector-recall.test.mjs` | 107 | Recall + the §4 false-positive guards, pinned to real bundle strings |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
-| `worker.test.mjs` | 311 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, consent follows the sealing mode — no tick box, and the copy says the audio leaves the device), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget), **the four-pillars gate** (a pillar claim is held to the elements-table types in every section; knowledge and inducement only as INSUFFICIENT; pillar headings recognised in any dress; findings held at reduced weight evidence no pillar), **the court-recognition ban** (paraphrases of court acceptance dropped, a statute's "admissible" kept) and **the template quoting engine findings only** |
+| `worker.test.mjs` | 373 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, consent follows the sealing mode — no tick box, and the copy says the audio leaves the device), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget), **the four-pillars gate** (a pillar claim is held to the elements-table types in every section; knowledge and inducement only as INSUFFICIENT; pillar headings recognised in any dress; findings held at reduced weight evidence no pillar), **the court-recognition ban** (paraphrases of court acceptance dropped, a statute's "admissible" kept), **the template quoting engine findings only**, **the overclaim rule** in the Worker gate and at render time (only an [F#] establishes; a contradiction only with its [F#]; no offence outside candidate law; reported speech and founding dates kept) and **the tamper-evident wording of every AI prompt** (§12.16) |
 | `human-report.test.mjs` | 81 | **The court-ready narrative** (§13): one section contract in three artefacts, part of "Seal document with forensic report" with no separate switch (since 2026-09-07) and a disclosure that says what leaves the device, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery, and **the four-pillars map** pinned equal to the elements table (`HUMAN_PILLAR_TYPES` in the Worker = `OFFENCE_ELEMENTS` in the report; knowledge and inducement have no types) |
 | `site-serving.test.mjs` | 56 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
 | `pages-bridge.test.mjs` | 16 | **The www bridge** (DEPLOYMENT.md "The bridge"), a dormant fallback since 2026-09-27 when the www zone route took over: the Pages Function hands every request to the Worker at the same path and query with method, headers and body; redirects pass through; a request marked `X-VO-Chain` is served from static files (no loop); an unreachable Worker falls back to static with an honest header; `functions/` never ships as a Worker asset |
@@ -731,17 +764,18 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `annexure-eb-regression.test.mjs` | 496 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run, the evidence-bundle-4-docs run and the Public Protector submission run** (§12.10–§12.14): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans; and the Public Protector submission (§18, §18i, §18j): a status word inside its own negation (CT14), two government-suffix domains never a lookalike (CT37), a category plural is not one instrument and quotes are whole words (CT23), titles/addresses/headings are not parties, nesting-aware quotes with WHEN and LAW from the quote's own sentence, a party's submission citing other Verum seals read as secondary up to the first page that opens a new record, the dated-after-analysis note, attribution only to declared parties named whole or by initial and surname, the unsigned-agreement contract shape, the template's own Nine-Brain headers with a Finding line, and the technical report, court-ready narrative, Worker template, anchor certificate and verify.html read back, each confirmed defect of the verification pass pinned with the reviewer's reproduction |
+| `annexure-eb-regression.test.mjs` | 497 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run, the evidence-bundle-4-docs run and the Public Protector submission run** (§12.10–§12.14): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans; and the Public Protector submission (§18, §18i, §18j): a status word inside its own negation (CT14), two government-suffix domains never a lookalike (CT37), a category plural is not one instrument and quotes are whole words (CT23), titles/addresses/headings are not parties, nesting-aware quotes with WHEN and LAW from the quote's own sentence, a party's submission citing other Verum seals read as secondary up to the first page that opens a new record, the dated-after-analysis note, attribution only to declared parties named whole or by initial and surname, the unsigned-agreement contract shape, the template's own Nine-Brain headers with a Finding line, and the technical report, court-ready narrative, Worker template, anchor certificate and verify.html read back, each confirmed defect of the verification pass pinned with the reviewer's reproduction |
+| `evidence-bundle-7-regression.test.mjs` | 47 | **The evidence-bundle-7-docs run** (§12.16), on a synthetic bundle of the same shape built from the bundle's own strings: the CIPC K-form and a bare "CIPC" cue (CT20), a reference to a document that records the custody (CT39), set-aside pages are not near-empty (CT26), a document ends at its stated last page, header words and possessives are not names, the count-only summary sentence, a Verum Omnis analysis's running title is secondary, the lookalike domain still fires end to end, and the technical report read back: template first, no explainer page, no "verified", severity or score words, the Thesis / Antithesis / Synthesis table, every finding under a brain; and §8, the review round: unnumbered runs keyed per run (D30, D04), a report page does not turn the evidence sealed with it into analysis, narrowed D11/D27 skips with positive controls, a clean report keeps sections 1-7, measured Finding lines, the AI-note table, the on-device summary |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, transcription consent (follows the sealing mode since 2026-09-07), ordering and honesty |
 | `inline-scripts.test.mjs` | 25 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.js` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
 | `digital-forensics.test.mjs` / `narrate-excerpt.test.mjs` | 16 each | PDF structure · AI excerpt building |
-| `findings-json.test.mjs` | 17 | JSON contract v1.6.0 |
+| `findings-json.test.mjs` | 23 | JSON contract v1.7.0: `display_name`, `brain`, `triple_verification`, `ai_review_note`; an AI candidate carries `INSUFFICIENT`, never a band |
 | `franchise-lease.test.mjs` | 15 | D38/D39 (CT44/CT45) |
 | `wrangler-config.test.mjs` | 34 | **Deploy config drift**: the top level and `[env.production]` carry the same KV, AI, vars, observability, assets block (`./`, `ASSETS`, `/api/*` Worker-first) and trainer cron (weekly, Monday 03:00 UTC, `AUTO_CURATE = "on"`); exactly two zone routes, `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, in both environments, zone named, no `custom_domain` |
 | `role-capacity.test.mjs` | 13 | D40/CT46, no hardcoded parties |
-| `ai-assess-batch.test.mjs` | 11 | Client batching under the worker's body limit |
+| `ai-assess-batch.test.mjs` | 18 | Client batching under the worker's body limit; **the AI review never removes or changes a finding** (notes only, original evidence returned, an unreviewed batch adds nothing; §12.16) |
 | `encrypt-detect.test.mjs` / `rule-classify.test.mjs` | 9 each | Encryption detection · deterministic classify fallback |
 | `find-seal.test.mjs` / `pdf-encrypt.test.mjs` | 8 each | Seal discovery · real password protection |
 | `voice-crypto.test.mjs` | 7 | `.voice` cross-page encryption |
@@ -755,7 +789,7 @@ The deterministic engine has a real ceiling on scanned/OCR'd documents (fuzzy pa
 paraphrased clauses). That ceiling is **by design** the boundary where the hybrid LLM layer
 takes over — on the apps, and on the website through the advisory AI review's candidates (§4.10)
 and Brain 9's recommendations (§12.8): the model reads difficult documents and raises **candidates**, always
-labelled as candidates pending verification, never counted as verified findings (§4.10).
+labelled as candidates pending verification, never counted as findings (§4.10).
 
 **Rejected detector requests, recorded so they are not re-litigated:**
 - **"Executed before effective date" (CT03/CT04).** Signing before the effective date is the
@@ -775,7 +809,7 @@ When in doubt on this engine: **prefer precision.** Let the hybrid layer chase r
 
 The engine is only as good as the page that runs it. Most of the following were field failures
 reported by the founder; §12.7–§12.9 record his directions of 2026-09-07 (§12.9 runs in the
-Worker); §12.10–§12.15 record sealed runs and what their reviews found. None of them is
+Worker); §12.10–§12.16 record sealed runs and what their reviews found (§12.16 also the founder's rulings of 5 October 2026). None of them is
 decoration.
 
 ### 12.1 OCR must never hang
@@ -1916,12 +1950,12 @@ OpenTimestamps calendar", because the page does not check the block itself.
 **Open, with the founder (not fixed here):** (a) the VO-SEAL2 hash is self-referential — anyone
 can alter a sealed copy and re-seal it with its own hash, keeping the seal ID and ORIG, and
 verify.html shows a match; the fix is architectural (anchor the sealed-file hash too, or sign it)
-and touches the verify contract, so verify.html and the reports' seal explainer now say what
-the check cannot show and tell the reader to compare the delivered file's SHA-512 with the one
+and touches the verify contract, so verify.html and the report (its seal explainer until 5
+October 2026, section 7 CERTIFICATION since, §12.16) now say what the check cannot show and tell the reader to compare the delivered file's SHA-512 with the one
 the sender recorded (the reports add that it is printed on the anchor certificate) — a check
 that is only as good as the sender's own record; (b) the reports
-call engine findings "verified" when the single-model advisory review retained them — a
-vocabulary decision for the founder (the review leg is constitutional, §15.4); (c) the repository
+called engine findings "verified" when the single-model advisory review retained them — a
+vocabulary decision for the founder, **resolved on 5 October 2026: the word is dropped (§12.16)**; (c) the repository
 disagrees with itself on "in good faith and in the interest of justice" in H208/25: AGENTS.md says
 it records the respondent's own affidavit, `constitution.json` and `llms.txt` say the Court found
 the conduct good-faith — the founder holds the judgment; (d) D16 (font anomaly) measures
@@ -1975,6 +2009,156 @@ the same pull request as §12.14 (commits cd23c26 and 179e45c).
    read as page 2 (`pageAnchor` now strips the count), and OCR provenance is judged on a
    finding's full `pages` list, not its truncated location string (`ocrTouched`). Items 2–5
    above describe the state after this round.
+
+### 12.16 The evidence-bundle-7-docs run — the AI review never removes a finding; the template leads; no "verified" (2026-10-05)
+
+The founder sealed a 65-page bundle with the forensic report and the court-ready narrative: his
+email to the Public Protector, the Protector's referral letters, a 49-page sealed exhibit of his
+own Verum Omnis analysis (VO-553451FF1282, pp. 9–57: a "Verum Omnis Forensic Narrative", a
+30-page report and a Google Drive index), printed emails and a sealed timeline. He had DeepSeek
+review the three PDFs against Constitution v8.0 ("Constitutional Compliance Review — Verum Omnis
+Forensic Engine v5.3.5-web"). Pinned by `tests/evidence-bundle-7-regression.test.mjs` (31
+assertions: the real engine on a synthetic bundle of the same shape built from the bundle's own
+strings, and the technical report rendered and read back; no real matter document is committed)
+and by updated assertions in the existing suites.
+
+**What was sealed.** Four engine findings, one of them real: the lookalike domain (CT37) —
+the founder's email went to `protect.org` (p. 1) while the Protector's investigator writes from
+`pprotect.org` (pp. 5, 7), one character apart. The other three rested on the founder's own
+analysis pages: a CIPC enterprise number in the portal's own form (K2016392549) sealed as "not a
+valid SA registration format" (CT20); a reference to his affidavit "recording … the chain of
+custody (VO-0D93BB2C1B46)" sealed as a custody gap (CT39); and his sentence "The MOU was never
+countersigned" sealed as a signature finding (CT23). The advisory AI review had removed two more
+engine findings from the report, and the report's wording still called findings "verified" and
+described their order in severity words.
+
+**The founder's rulings (5 October 2026), binding:**
+1. The AI review never deletes or changes an engine finding. In his words: "The ai cannot delete
+   findings from the engine it can read the json the sealed evidence and the sealed forensic
+   report it cannot alter this. The ai must do a forensic report based on the findings of the
+   engine and it must report missed contradictions and improve the engine".
+2. The word "verified" is dropped from the reports (PD13's three independent verifiers do not
+   exist on this platform).
+3. Template first: the §15.4 sections 1–7 lead; the plain-language pages become annexes; the
+   "How any change is detected" page goes.
+
+**What changed.**
+1. **The AI review notes, it never removes (§4.10).** `aiAssessFindings` returns copies of the
+   original findings, never the model's 300-character excerpt (the excerpt had truncated an
+   evidence string to "verify execution agai"); an UNSUPPORTED verdict becomes `aiReviewNote`;
+   a batch the Worker did not review (`reviewed: false`) adds nothing; a candidate that quotes an
+   engine finding on the same page is a counted duplicate. UNSUPPORTED notes go to the feedback
+   loop as `AI_REVIEW_UNSUPPORTED`. The Worker's `ASSESS_SYSTEM` asks for SUPPORTED or UNSUPPORTED
+   and says the reviewer cannot remove, change or overrule a finding; legacy keep/drop verdicts are
+   mapped onto it. The report prints the notes in the matrix ("AI Review Notes on Engine Findings"),
+   section 7 says the review removed and changed nothing, and the AI section's trailer counts what
+   it did ("AI review read N engine findings; it removed and changed none …"); the narrate template no
+   longer prints a pruned count.
+2. **No "verified".** `voCountPhrase` says "N findings" (§6); the Triple Verification Summary is
+   a Thesis / Antithesis / Synthesis / Status table that states PD13 is not met (§7). The findings
+   JSON keeps `verification_status: "ENGINE-VERIFIED"` because the shared 1verum schema's enum
+   requires it (open, cross-repository, below).
+3. **Template first (§7).** Cover, contents, sections 1–7, the annex divider, then the
+   plain-language pages as numbered annexes. `secSealExplainer` is deleted (from `build`,
+   `buildNarrative` and `buildHumanReport`); what the seal shows and cannot show is in section 7
+   and in the closing sentence of SEALED FINDINGS. The cover carries the template's header fields
+   (Timestamp ISO, Jurisdiction(s), Case Reference, Report Type) and no "AI REVIEW NOT RUN" banner.
+4. **No severity, score or band words in print (PD1).** Gone: "most serious first", "by
+   severity", "serious"/"minor", "scoring weight", "N / 46", "ordinal confidence", the severity
+   column of the serial table, and the engine's score-dependent summary sentence: it had printed
+   "4 minor contradictions established. The document is largely consistent" on this bundle, could
+   print "The documents evidence systematic fraud" above a score of 80, and printed "No
+   contradictions were detected" over more than three low-ranked findings (`generateSummary` now
+   states the count and says to read each finding against the page). The
+   order note (`VO_ORDER_NOTE`) says only that findings are in the engine's fixed order.
+5. **Every finding under one brain.** `VO_BRAIN_OF_CT` places CT23 and CT39 in B2, CT37 in B3,
+   CT33 and CT35 in B7; kinds no template header describes print as FINDING RECORDED. CT39's
+   candidate law excludes perjury and obstruction (a missing custody step is not false
+   testimony), its dishonesty category is OMISSIONS, and the offence matrix lists the union of
+   each finding's own provisions. Two display names are measured (`VO_DISPLAY_NAME`, §7).
+6. **The overclaim gate (§6).** The narrative had sealed "The core pattern the record
+   establishes is …" over the author's own email, "… constitute coercion" and "… contradicting the
+   company's own documents" without an [F#]. `voSentenceOverclaims` (render time) and
+   `humanOverclaim` (Worker) now drop them; `HUMAN_SYSTEM` states the rule.
+7. **Engine precision.** D11: the CIPC K-form (`K2016392549`, `K2016/392549/07`) is valid; a bare
+   "CIPC" cue checks only a number that follows within 12 characters; tokens inside a VO seal id
+   and YYYYMMDD dates are skipped. D27: a mention of another document that records or sets out the
+   custody (an affidavit, certificate, annexure … before it; a seal id, annexure or exhibit
+   reference after it) is not a custody gap. D17: pages the engine set aside (prior report,
+   template) are neither near-empty nor in the average (the run would have sealed "35 near-empty
+   pages" over the report pages it excluded). `voDetectDocuments`: an unmarked page inherits a
+   document only while that document has not reached its stated last page (three emails after
+   "49/49" were counted into the exhibit); a set-aside first page is titled "Verum Omnis analysis
+   (set aside from scanning)", never by its placeholder. `voSecondarySegments`: (a) the pages of
+   a stated document whose first page was set aside as a Verum Omnis report are secondary up to
+   the first page that opens a new record; (b) a page whose running title names a Verum Omnis
+   analysis document ("Verum Omnis — … Index • Page N of M", `voIsVerumAnalysisPage`) is
+   secondary wherever it sits; the extraction note names the kind. Names: header labels, defined
+   terms and headings ("E-mail", "MOU", "National", "Part") no longer join a name, and a possessive
+   is stripped. On the real bundle the engine now seals one finding, the CT37 lookalike, and
+   records CT23 as a secondary-source lead.
+8. **The prompts say tamper-evident, and ask for nothing the gates drop (§6).** `NARRATE_SYSTEM`, `ASSESS_SYSTEM` and `SWEEP_SYSTEM`
+   no longer call the record unalterable or anchored to Bitcoin; the executive-summary rules ask
+   for "the core pattern the findings set out" and a heading WHAT THE FINDINGS ESTABLISH, never
+   "the record establishes", and nothing is ordered "most serious first".
+9. **Findings JSON 1.7.0 (additive).** `display_name`, `brain`, `triple_verification` and
+   `ai_review_note` per finding; an AI candidate's severity and confidence are the schema's
+   `INSUFFICIENT`, never a band word.
+10. **The review round.** Two independent reviews of this change (engine and AI layer; report
+   builder) found five blocking and seventeen minor defects; each confirmed one is fixed with the
+   reviewer's reproduction as a test (`tests/evidence-bundle-7-regression.test.mjs` §6b, §8 and
+   additions to §1–§3b; `tests/worker.test.mjs`; `tests/ai-assess-batch.test.mjs`). Blocking: the
+   duplicate filter discarded nearly every anchored AI candidate (the prompt makes every candidate
+   quote an engine finding), so a candidate is a duplicate only when it is the same kind or quotes
+   most of the evidence; pages no stated document covers shared one "-1" document, pairing an
+   annexure after one agreement with a schedule after another (D30, D04), so each unnumbered run
+   is its own document (`voDocKeyOf`); rule (a) turned a chat, a letter and a bank statement
+   sealed after a report page into analysis, so a continuation page needs its own analysis mark
+   (`VO_ANALYSIS_SIGNAL_RE`: "Verum Omnis", a cited seal id, a CB exhibit label, a bundle-page
+   citation; the real bundle's pages 10–18 each carry one); the founding-date exception read any
+   word as a month under `/i`, letting "the record establishes on page 2 that …" through; and
+   CT33 and CT35 printed the two-positions sentence under their brain. Minor: the D27 and D11
+   skips are narrowed with positive controls ("This affidavit records the chain of custody …",
+   "CIPC enterprise number: …", an eight-digit value under a registration label); the overclaim
+   rules as in §6; AI notes pass the language rule before they print and the table agrees with
+   the count; a clean report keeps sections 1–7; the story groups by printed name; the cover's
+   jurisdiction basis; ranking words; the on-device summary (an AI candidate once led it, and the
+   gate dropped five of its sentences, among them "a determination of guilt" and "the engine
+   could read"). Not adopted: a reference to an investigating officer's report that "deals with
+   the evidence bag" stays a reference to another document (D27); the technical narrator's
+   constitutional instruction that "the documents evidence fraud" (event-level determination,
+   v6.1 PD16) is the founder's to change (Open, below).
+
+**The DeepSeek review, point by point** (for the record; the founder's rulings decide where it
+asked for a choice). Confirmed and fixed: band, score and severity language (2.1), the AI
+review's removals (2.2), "verified" without three verifiers (2.3), findings outside the brains
+(2.4), the narrative's overreach (2.7), and the template order and explainer page (2.10).
+Partly adopted: measured display names, with the taxonomy names kept in the JSON (2.6); candidate
+band words removed, while candidates stay in the JSON's `contradictions` array because the shared
+schema puts them there (2.8). Not adopted: that single-source signals are not contradictions (2.5
+— v8.0 §0 defines a contradiction to include integrity and custody signals; the false CT20, CT39
+and CT23 findings it cites were fixed in the engine instead, item 7), and the OpenTimestamps
+wording (2.9 — the reports already say "submitted for anchoring" while the proof is pending and
+"anchored" only once it is confirmed, `anchorPhrase`). On 2.11 (several reports that disagree):
+the "Verum Omnis Forensic Report — CCT 19/20 Rescission Application (Ninth Edition)" with
+findings F1–F11 is an analysis bound into the bundle as part of the founder's exhibit, not engine
+output; advice recorded for the founder: an analysis written by a person or an
+AI about a sealed record should not be titled "Verum Omnis Forensic Report", which names the
+engine's sealed output. The review missed that the one real finding, the lookalike domain, is
+actionable: the email may not have reached the Protector's investigator.
+
+**Open, with the founder:** the technical narrator's prompt (`NARRATE_SYSTEM`, from the v6.1
+instrument's EVENT-LEVEL DETERMINATION rule) still tells the model it may write that "the documents
+evidence fraud" when events are corroborated; the gates pass it because it names no person and no
+"constitute". Whether that event-level sentence survives the 5 October rulings is a constitutional
+question for the founder, not a gate change.
+
+**Open, cross-repository (founder):** the shared findings-JSON schema (1verum
+`FINDINGS_JSON_SCHEMA` v1.0.0) requires `verification_status: "ENGINE-VERIFIED"`, band-word
+severity and confidence enums, and AI candidates inside `contradictions`. A schema v2 (a
+neutral status such as `ENGINE-FINDING`, a separate `ai_candidates` array) must change in this
+repository, `Liamhigh/1verum` and `Liamhigh/firebase` together; this repository does not change
+the contract alone.
 
 ## 13. The court-ready narrative (the "human report")
 
@@ -2040,15 +2224,19 @@ prejudice rows of the report's `OFFENCE_ELEMENTS`, pinned equal by
 `tests/human-report.test.mjs` — a page or a quotation alone is not enough, and a finding held at
 reduced weight (OCR-only or secondary source) evidences nothing; outside four pillars a sentence
 that claims a pillar is evidenced is held to the same types. Dropped pillar sentences are counted
-in `gate.pillar`. Headings are gated too: "GUILTY OF
-FRAUD" in capitals is a verdict, not a section name. A section keeps at least two sentences
+in `gate.pillar`. The overclaim rule is part of the gate too (since 5 October 2026, §6 and §12.16
+item 6; `humanOverclaim`, counted in `gate.overclaim`): a sentence that does not cite an [F#] may
+not say the record establishes, proves, reveals, shows or confirms anything, may not call two
+things contradictory (a rebuttal frame excepted), and no sentence may say conduct constitutes
+fraud, coercion or an offence outside "may constitute" candidate law. Headings are gated too:
+"GUILTY OF FRAUD" in capitals is a verdict, not a section name. A section keeps at least two sentences
 and at least as many as it lost — or is exactly one sanctioned answer — or it answers
 `generated:false, reason:'gate_failed'` with **no text** — never a template dressed as AI.
 Client side, `buildHumanReport` re-runs the render-time §15.2 language gate (`scrubNarrative`,
 or `scrubRebuttals` for Counter-Narratives, which also drops a rebuttal orphaned by a removed
 claim; then `voGatePasses`) on every AI section, headings included — hedges, characterisation
-nouns, scores and bands, person-level judgment; the anchor, quotation, pillar and court-language
-checks run on the server only — prints the removed-sentence count under it, prints no AI section
+nouns, scores and bands, person-level judgment, and the overclaim rule; the anchor, quotation,
+pillar and court-language checks run on the server only — prints the removed-sentence count under it, prints no AI section
 at all when fewer than half of two or more drafted sections pass, and renders the deterministic
 twin — labelled "nothing here is machine-written" — for any section that did
 not survive. Never loosen either gate.

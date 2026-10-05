@@ -153,7 +153,7 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     'narrativeMeaning() returns the finding-specific plain clause (CT20), not the generic fallback');
 }
 
-// ---- plain-language "bottom line" opens the report and NAMES the serious ones ----
+// ---- plain-language "bottom line" NAMES the leading findings, with no severity word ----
 {
   const data = { docName: 'Wallers Agreement', pageCount: 20 };
   const fr = {
@@ -168,14 +168,15 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   const lines = R._plainLeadLines(fr, data);
   const joined = lines.join('\n');
   ok(lines.length > 0, 'plain lead is produced when there are findings');
-  // Since the annexure EB run (11 Sep 2026) an unreviewed report says "engine
-  // findings" and names the fact that the AI review did not run; "verified"
-  // is reserved for a report the advisory AI review actually retained.
-  ok(/sealed record of "Wallers Agreement" \(20 pages\) contains 4 engine findings \(deterministic rules; AI review not run on this report\)\. The following are established\./.test(joined),
-    'plain lead opens with the sealed record, document name, page count and the finding count stated as fact, and says the review did not run');
+  // Founder ruling (5 October 2026): no count says "verified" (PD13's three
+  // independent verifiers are not met), and the advisory AI review no longer
+  // touches a finding, so the count is the same whether or not it ran — in
+  // the Constitution's own §15.3 sentence.
+  ok(/sealed record of "Wallers Agreement" \(20 pages\) contains 4 findings\. The following are established\./.test(joined),
+    'plain lead opens with the sealed record, document name, page count and the finding count stated as fact (§15.3 wording)');
   const joinedReviewed = R._plainLeadLines(fr, Object.assign({}, data, { aiReview: { applied: true } })).join('\n');
-  ok(/contains 4 verified findings\. The following are established\./.test(joinedReviewed),
-    'plain lead says "verified findings" only once the AI review has run');
+  ok(/contains 4 findings\. The following are established\./.test(joinedReviewed) && !/verified/.test(joinedReviewed + joined),
+    'the count never says "verified", whether or not the AI review ran');
   // An AI-raised item is candidate tier — it must never inflate the verified
   // count, never appear among the established serious findings, and must be
   // disclosed as advisory (PD16).
@@ -183,12 +184,12 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
     { source: 'ai', type: 'INCONSISTENT_ENTITLEMENT', severity: 4, rationale: 'franchisor vs franchisee' }
   ]) };
   const joinedAi = R._plainLeadLines(frAi, data).join('\n');
-  ok(/contains 4 engine findings/.test(joinedAi), 'AI candidate does NOT inflate the findings count');
+  ok(/contains 4 findings/.test(joinedAi), 'AI candidate does NOT inflate the findings count');
   ok(/raised 1 further candidate item/.test(joinedAi) && /advisory only/.test(joinedAi),
     'AI candidate is disclosed as advisory, outside the established findings');
-  ok(/The serious ones, in plain words:/.test(joined), 'plain lead announces the serious findings');
-  ok(/On p\. 11, .*goodwill/i.test(joined), 'plain lead NAMES the CT45 serious finding in plain words, anchored to its page');
-  ok(/date does not add up/.test(joined), 'plain lead NAMES the CT03 serious finding in plain words');
+  ok(/In plain words, in the engine's order:/.test(joined) && !/serious|minor|severity/i.test(joined), 'plain lead names the leading findings with no severity word (PD1, §15.2)');
+  ok(/On p\. 11, .*goodwill/i.test(joined), 'plain lead NAMES the CT45 finding in plain words, anchored to its page');
+  ok(/date does not add up/.test(joined), 'plain lead NAMES the CT03 finding in plain words');
   ok(!/CT45|CT03/.test(joined), 'plain lead contains no CT codes (everyday language only)');
   ok(/sealed under SHA-512/.test(joined) && /any change to them is detectable/.test(joined) && !/cannot be changed, altered, or deleted/.test(joined) && /verdict on any named person is for the court/.test(joined),
     'plain lead states what the seal establishes (any change is detectable; a hash proves tampering, it does not prevent it) and reserves the verdict for the court (PD16) - no score language');
@@ -212,31 +213,30 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   ok(src.indexOf("head += ' The record shows this ' + g.length + ' times.'") !== -1,
     'a repeated pattern is told once with its instance count');
   ok(src.indexOf("'Where it happens: '") !== -1, 'a repeated pattern lists every page it touches, once');
-  ok(src.indexOf("'The strongest instance: '") !== -1, 'a repeated pattern quotes its strongest instance');
+  ok(src.indexOf("'The first instance in the engine\\'s order: '") !== -1 && src.indexOf('The strongest instance') === -1, 'a repeated pattern quotes its first instance in the engine\'s order (no "strongest": PD1)');
   ok(src.indexOf("'At its core: '") !== -1, 'the narrative opens with a factual thesis of the top patterns');
   ok(!/A moderate issue|A lesser issue/.test(src),
     'per-finding severity adjectives are gone - pattern order carries the weight');
 
-  // Founder ruling 5 (AGENTS.md): the story leads, and provenance is on the
-  // first pages. The narrative must be wired BEFORE §15.4 section 1 in
-  // build(), and the software-not-AI statement must appear on the cover, in
-  // the narrative intro, and on the sealed plain-language twin's first page.
+  // Founder ruling (5 October 2026), Constitution v8.0 PD19/§15.4: the seven
+  // template sections come first, after the cover and the contents; the
+  // plain-language pages (the one-page summary, the story) follow as annexes,
+  // and the "how any change is detected" explainer is gone (PD20: no user
+  // manuals). The software-not-AI statement stays on the cover, in the
+  // narrative intro, and on the sealed plain-language twin's first page.
   const buildBody = src.slice(src.indexOf('async function build('), src.indexOf('async function buildNarrative('));
-  const narrAt = buildBody.indexOf("secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' })");
+  const narrAt = buildBody.indexOf("secNarrative(ctx, data, { title: 'THE STORY IN PLAIN LANGUAGE' })");
   const sec1At = buildBody.indexOf('secCriticalSubjects(ctx, data)');
-  ok(narrAt !== -1 && sec1At !== -1 && narrAt < sec1At,
-    'plain-language narrative renders on the first pages, before §15.4 section 1');
-  // Story first, evidence second: page 2 is IN ONE PAGE, then the story, then
-  // unread pages, then the seal explainer — and the TOC placeholder comes
-  // AFTER the whole human part, so a lay reader meets the story before a
-  // 25-entry wall of section names.
+  const sec7At = buildBody.indexOf('secDeclaration(ctx, data)');
+  const annexAt = buildBody.indexOf('secAnnexDivider(ctx, data)');
   const onePageAt = buildBody.indexOf('secExecutiveSummary(ctx, data)');
-  const sealExplAt = buildBody.indexOf('secSealExplainer(ctx, data');
   const tocAt = buildBody.indexOf('var tocPage = doc.addPage');
-  ok(onePageAt !== -1 && onePageAt < narrAt, 'the executive summary is the front page, before the story');
-  ok(sealExplAt !== -1 && narrAt < sealExplAt && sealExplAt < tocAt,
-    'the seal explainer joins Part 1, and the TOC only comes after the human part');
-  ok(tocAt < sec1At, 'the §15.4 sections follow the TOC as Part 2');
+  ok(tocAt !== -1 && tocAt < sec1At && sec1At < sec7At && sec7At < annexAt,
+    'the cover and contents are followed by §15.4 sections 1-7, then the annexes (PD19)');
+  ok(annexAt < onePageAt && onePageAt < narrAt,
+    'the one-page summary and the story follow section 7 as annexes');
+  ok(!/secSealExplainer/.test(src) && !/HOW ANY CHANGE TO THIS RECORD IS DETECTED/.test(src),
+    'no "how any change is detected" explainer remains in either report (PD20, §15.2: no user manuals)');
   ok((src.match(/not the opinion of a generative AI|not by a generative AI/g) || []).length >= 3,
     'cover, narrative intro and narrative twin all state findings are software output, not generative AI');
   ok(/produced by forensic software/.test(src) && /deterministic detection rules/.test(src),
@@ -395,11 +395,15 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   const narrBuild = src.slice(src.indexOf('async function buildNarrative('));
   ok(/secUnreadPages\(ctx, data\)/.test(mainBuild) && /secUnreadPages\(ctx, data\)/.test(narrBuild),
     'the disclosure is wired into BOTH the main report and the narrative twin');
-  const storyAt = mainBuild.indexOf("secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' })");
+  // Since 5 October 2026 the §15.4 sections lead (PD19); the unread pages
+  // follow the story as the first annexes, and the cover still names an
+  // incomplete read where a reader looks first (PD6).
+  const storyAt = mainBuild.indexOf("secNarrative(ctx, data, { title: 'THE STORY IN PLAIN LANGUAGE' })");
   const unreadAt = mainBuild.indexOf('secUnreadPages(ctx, data)');
-  const sec1At2 = mainBuild.indexOf('secCriticalSubjects(ctx, data)');
-  ok(storyAt !== -1 && storyAt < unreadAt && unreadAt < sec1At2,
-    'unread pages are disclosed on the first pages, right after the story');
+  const sec7At2 = mainBuild.indexOf('secDeclaration(ctx, data)');
+  ok(storyAt !== -1 && sec7At2 < storyAt && storyAt < unreadAt,
+    'unread pages are disclosed in the annexes, right after the story');
+  ok(/INCOMPLETE READ: /.test(src), 'the cover still names an incomplete read (PD6)');
   ok(/These pages MUST be reviewed by a human\./.test(src),
     'the disclosure carries the explicit human-review instruction');
   ok(/absence of a finding on an unread page means nothing/.test(src),
@@ -473,16 +477,17 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   const b4 = src4.slice(src4.indexOf('async function build('), src4.indexOf('async function buildNarrative('));
   const shortAt = b4.indexOf('secShortVersion(ctx, data)');
   const onePageAt2 = b4.indexOf("ctx.box('IN ONE PAGE'");
-  const storyAt2 = b4.indexOf("secNarrative(ctx, data, { label: 'THE STORY IN PLAIN LANGUAGE' })");
-  ok(shortAt !== -1 && onePageAt2 < shortAt && shortAt < storyAt2,
-    'it sits in Part 1: after IN ONE PAGE, before the story');
+  const storyAt2 = b4.indexOf("secNarrative(ctx, data, { title: 'THE STORY IN PLAIN LANGUAGE' })");
+  const onePage2 = b4.indexOf('secExecutiveSummary(ctx, data)');
+  ok(shortAt !== -1 && onePage2 !== -1 && onePage2 < shortAt && shortAt < storyAt2 && /ctx\.box\('IN ONE PAGE'/.test(src4),
+    'it sits among the annexes: after the one-page summary, before the story');
   ok(/secShortVersion\(ctx, data\)/.test(src4.slice(src4.indexOf('async function buildNarrative('))),
     'the plain-language twin carries it too');
   ok(/What cannot all be true at once/.test(src4) && /The record states/.test(src4) && /and also states/.test(src4),
     'the summary presents both sides of each contradiction side by side');
   ok(/Also established/.test(src4), 'single-sided findings still appear, in one line each');
   ok(/f\.source !== 'ai'/.test(src4.slice(src4.indexOf('function secShortVersion'), src4.indexOf('function secUnreadPages'))),
-    'AI candidates are excluded from the summary — verified findings only');
+    'AI candidates are excluded from the summary — engine findings only');
   ok(/not legal conclusions/.test(src4) && /verdict on any named person is for the court/.test(src4),
     'the summary reserves the verdict and marks candidate law as starting points');
 }
@@ -509,8 +514,8 @@ ok(R._subjectOf({ type: 'CT18' }) === 'FINANCIAL', 'subjectOf: CT18 -> FINANCIAL
   const src5 = require('fs').readFileSync(require('path').join(__dirname, '..', 'forensic-report.js'), 'utf8');
   ok(/function secExecutiveSummary/.test(src5), 'the executive summary section exists');
   const es = src5.slice(src5.indexOf('function secExecutiveSummary'), src5.indexOf('function secShortVersion'));
-  ok(/The findings that matter most/.test(es) && /What this establishes/.test(es),
-    'it names the top findings and what each establishes');
+  ok(/The leading findings/.test(es) && !/matter most/.test(es) && /What this establishes/.test(es),
+    'it names the leading findings and what each establishes (no "matter most": PD1)');
   ok(/Key dates in the record/.test(es), 'it carries the dated sequence');
   // Both halves of a two-sided finding must survive. A single truncation
   // window cut the "owner" quote off the Lessee/Owner trap, leaving only the

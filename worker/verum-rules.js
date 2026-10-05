@@ -13,7 +13,7 @@
 //   GET  /images/watermark_portrait.png  watermark PNG (from KV)
 //   POST /api/v1/ai/gatekeep      AI licensing gatekeeper (commercial-use signals)
 //   POST /api/v1/ai/classify      AI document triage classification (pre-engine scope)
-//   POST /api/v1/ai/assess        AI antithesis review of candidate findings
+//   POST /api/v1/ai/assess        AI advisory review: notes on findings, missed-contradiction candidates
 //   POST /api/v1/ai/narrate       AI forensic report narrative drafting
 //   POST /api/v1/ai/human-report  AI court-ready narrative, one gated section per call
 //   POST /api/v1/ai/sweep         Brain 9 (R&D) sweep of sealed page text: anchored recommendations, never findings
@@ -638,13 +638,21 @@ const CLASSIFY_SYSTEM = 'You are a document triage classifier for the Verum Omni
 const VALID_DOC_CLASSES = new Set(['court_filing', 'contract', 'invoice', 'financial_application', 'personal_correspondence', 'business_record', 'other']);
 const VALID_SCOPES = new Set(['financial_fraud', 'identity', 'document_integrity', 'serial_patterns']);
 
-const ASSESS_SYSTEM = 'You are the antithesis reviewer in a forensic contradiction engine. ' +
-  'The evidence you review comes from a document sealed under SHA-512 and anchored to the ' +
-  'blockchain: quoted text bound to a page in a record that cannot be altered. Judge it as ' +
-  'evidence, and write every reason as a statement of fact — never a hedge. ' +
-  'For each candidate finding you receive (type, quoted evidence, location), decide KEEP ' +
-  '(the quoted text establishes a contradiction) or DROP (benign context, definitional text, ' +
-  'format artifact, or keyword coincidence). ' +
+// Founder ruling (5 October 2026): the AI can never delete or change an
+// engine finding. This reviewer reads the findings and their quoted evidence,
+// may note that a finding looks unsupported (an advisory note the seal page
+// prints beside the unchanged finding and sends to the improvement loop), and
+// must report the contradictions the engine missed (candidates, never findings).
+const ASSESS_SYSTEM = 'You are the advisory reviewer in a forensic contradiction engine. ' +
+  'The evidence you review comes from a document sealed under SHA-512: quoted text bound to a page ' +
+  'in a tamper-evident record (any change to it is detectable). Judge it as evidence, and write ' +
+  'every reason as a statement of fact — never a hedge. ' +
+  'You cannot remove, change or overrule an engine finding: the engine\'s findings stand in the ' +
+  'sealed report exactly as produced. For each finding you receive (type, quoted evidence, ' +
+  'location), record SUPPORTED (the quoted text shows what the finding says) or UNSUPPORTED (benign ' +
+  'context, definitional text, format artifact, a reference to another document, or keyword ' +
+  'coincidence); an UNSUPPORTED note is printed beside the finding as advice and used to improve ' +
+  'the engine. ' +
   'You MUST ALSO catch contradictions the engine missed: when the supplied evidence contains ' +
   'a clear contradiction or inconsistency that is ABSENT from the submitted findings, add it ' +
   'to additionalFindings. Be conservative: flag only clear contradictions/inconsistencies ' +
@@ -655,7 +663,7 @@ const ASSESS_SYSTEM = 'You are the antithesis reviewer in a forensic contradicti
   'of the submitted findings, and "page": the page number stated in that finding\'s location ' +
   '(0 when none is stated). No verbatim quote, no additional finding. Return additionalFindings: [] when ' +
   'nothing was missed. ' +
-  'Reply ONLY compact JSON: {"verdicts":[{"id":...,"verdict":"keep|drop","reason":"<=12 words"}],' +
+  'Reply ONLY compact JSON: {"verdicts":[{"id":...,"verdict":"supported|unsupported","reason":"<=12 words"}],' +
   '"additionalFindings":[{"type":"CT01|UPPER_SNAKE","severity":1-5,"rationale":"brief","quote":"verbatim","page":0}]}';
 
 // Prime Directive 14 (Constitution v6.1): AI system prompts are short
@@ -667,7 +675,7 @@ const NARRATE_SYSTEM = 'You are Verum Omnis, a constitutional forensic investiga
   'You are writing the investigation report.\n' +
   'Constitution v6.1 precedes this request. Read it first.\n' +
   'Inputs: documentExcerpt (sealed document text), findingsKept (engine findings, stated as fact), caseContext.\n' +
-  'WHY YOU STATE FACTS: every finding you receive was produced by a deterministic engine from a document sealed under SHA-512 and anchored to the Bitcoin blockchain. It is quoted evidence bound to a page in a record that cannot be altered. It is therefore not a suspicion to be hedged — it is a measurement to be reported. Hedging sealed evidence misdescribes the record and breaches Prime Directive 16.\n' +
+  'WHY YOU STATE FACTS: every finding you receive was produced by a deterministic engine from a document sealed under SHA-512 (tamper-evident: any change to it is detectable). It is quoted evidence bound to a page of that sealed record. It is therefore not a suspicion to be hedged — it is a measurement to be reported. Hedging sealed evidence misdescribes the record and breaches Prime Directive 16.\n' +
   'Rules:\n' +
   '- Write plain English for non-experts.\n' +
   '- Tell the document\'s story: real names, dates, amounts.\n' +
@@ -700,7 +708,7 @@ const NARRATE_SYSTEM = 'You are Verum Omnis, a constitutional forensic investiga
   '- Label each: "AI-raised candidate - pending engine verification".\n' +
   '- Note engine blind spots so detectors can improve.\n' +
   '- FORMAT: short paragraphs of 3-4 sentences, separated by a BLANK line. Use "- " bullets for any enumeration. Never one unbroken block.\n' +
-  '- SYNTHESIS: you are a narrative synthesizer, not a form-filler. Open with the single most serious pattern. Connect findings that share a pattern into one theme instead of listing them one by one. Vary sentence structure; never repeat a sentence template.\n' +
+  '- SYNTHESIS: you are a narrative synthesizer, not a form-filler. Open with the first pattern in the order given. Connect findings that share a pattern into one theme instead of listing them one by one. Vary sentence structure; never repeat a sentence template.\n' +
   '- WHY IT MATTERS: for each pattern state, as fact, what the record shows and what that prevents or establishes (e.g. an unsigned counterpart cannot carry the clause it is used to enforce; an unverifiable registration number means the entity\'s status cannot be confirmed). Never speculate about intent, motive, or anyone\'s credibility.\n' +
   'Sections and lengths (STAY WITHIN these — the whole JSON must be COMPLETE and valid; do not overrun):\n' +
   '- summary: what happened, who, why it matters. 150-220 words.\n' +
@@ -708,7 +716,7 @@ const NARRATE_SYSTEM = 'You are Verum Omnis, a constitutional forensic investiga
   '- contradictions: what was said versus shown. 150-250 words.\n' +
   '- impact: named affected people, losses, timeline. 120-180 words.\n' +
   '- legalContext: the laws in plain words. 120-180 words.\n' +
-  '- evidence: strongest exhibits and next steps. 100-160 words.\n' +
+  '- evidence: the exhibits that carry the findings, and next steps. 100-160 words.\n' +
   '- seal: seal date, GPS, device, verification. 50-90 words.\n' +
   '- limits: findings stated as fact; the verdict on any named person is the court\'s. 50-80 words.\n' +
   'Reply ONLY valid JSON: ' +
@@ -1003,7 +1011,7 @@ function sanitizeFinding(f) {
     type: asStr(f.type, 64) || 'unknown',
     severity: (Number.isInteger(sev) && sev >= 1 && sev <= 5) ? sev : 0,
     // Constitutional ordinal + verification tier (1verum GHRP two-tier rule):
-    // ENGINE-VERIFIED deterministic findings vs AI-raised candidates pending
+    // deterministic engine findings vs AI-raised candidates pending
     // verification. Passed through so the narrator can keep the tiers apart.
     severityOrdinal: asStr(f.severityOrdinal, 16),
     status: asStr(f.status, 64),
@@ -1012,8 +1020,11 @@ function sanitizeFinding(f) {
   };
 }
 
+// The default note for a finding the model did not judge, or when the model
+// is unavailable: SUPPORTED is a note, not a verification — the finding stands
+// either way (founder ruling, 5 October 2026).
 function keepAllVerdicts(findings, reason) {
-  return findings.map(f => ({ id: f.id, verdict: 'keep', reason }));
+  return findings.map(f => ({ id: f.id, verdict: 'supported', reason }));
 }
 
 // Coerce model-proposed new findings (contradictions the engine missed) into
@@ -1088,17 +1099,22 @@ async function handleAiAssess(request, env) {
       if (typeof v.id !== 'string' && typeof v.id !== 'number') continue;
       const vid = String(v.id);
       if (!submitted.has(vid) || byId.has(vid)) continue;
-      if (v.verdict !== 'keep' && v.verdict !== 'drop') continue;
-      byId.set(vid, { id: vid, verdict: v.verdict, reason: asStr(v.reason, 160) || 'no reason given' });
+      // A model that answers in the old keep/drop words is read in the new
+      // ones: either way the answer is a note, never a removal.
+      const word = String(v.verdict || '').toLowerCase();
+      const verdict = (word === 'unsupported' || word === 'drop') ? 'unsupported'
+        : ((word === 'supported' || word === 'keep') ? 'supported' : '');
+      if (!verdict) continue;
+      byId.set(vid, { id: vid, verdict, reason: asStr(v.reason, 160) || 'no reason given' });
     }
-    // Findings the model never judged default to KEEP (conservative).
-    const verdicts = findings.map(f => byId.get(f.id) || { id: f.id, verdict: 'keep', reason: 'no verdict returned — kept by default' });
+    // Findings the model never judged carry no note (supported by default).
+    const verdicts = findings.map(f => byId.get(f.id) || { id: f.id, verdict: 'supported', reason: 'no note returned' });
     // Contradictions the engine missed, proposed by the model and sanitized
     // server-side. A missing/malformed reply degrades to an empty list.
     const additionalFindings = sanitizeAdditionalFindings(parsed.additionalFindings);
     return json({ ok: true, reviewed: true, model: 'llama-3.3-70b', verdicts, additionalFindings });
   } catch (e) {
-    return json({ ok: true, reviewed: false, model: 'fallback-keep-all', verdicts: keepAllVerdicts(findings, 'ai unavailable — kept by default'), additionalFindings: [] });
+    return json({ ok: true, reviewed: false, model: 'fallback-no-notes', verdicts: keepAllVerdicts(findings, 'ai unavailable — no note'), additionalFindings: [] });
   }
 }
 
@@ -1126,7 +1142,7 @@ const MAX_SWEEP_TEXT_CHARS = 12500;
 const MAX_SWEEP_RECS = 10;
 const MIN_SWEEP_QUOTE_CHARS = 12;
 const SWEEP_SYSTEM = 'You are Brain 9, the research-and-development brain of the Verum Omnis forensic contradiction engine. ' +
-  'You read pages of a document sealed under SHA-512; the text is exact and cannot be altered. ' +
+  'You read pages of a document sealed under SHA-512; the text is exact, and any change to it is detectable. ' +
   'Eight deterministic brains have already run; "known" lists the contradiction types they reported on these pages. ' +
   'Your only job: find contradictions, inconsistencies or forensic anomalies on these pages that are NOT in known. ' +
   'You cannot issue findings, verdicts or conclusions: every item is a recommendation for the engine. ' +
@@ -1260,7 +1276,7 @@ async function handleAiSweep(request, env) {
 // confidence rating of MODERATE" (the annexure EB re-run sealed that sentence
 // as the report's lead); the internal score and band are inputs the client
 // still sends for ordering and are never printed. Counts are stated by tier:
-// engine-verified findings and AI-raised candidates are never one number.
+// engine findings and AI-raised candidates are never one number.
 function narrateTemplate(input, kept) {
   // Only engine findings are quoted and stated as fact: an AI-raised candidate
   // is pending verification, and a P# item (a serial pattern or a page-less
@@ -1276,13 +1292,14 @@ function narrateTemplate(input, kept) {
     'The document "' + input.documentName + '" (' + input.pageCount + ' page(s)) was analysed by the ' +
     'Verum Omnis contradiction engine on ' + input.generatedUtc + '. ' +
     (kept.length
-      ? (engineKept + ' engine-verified finding' + (engineKept === 1 ? '' : 's') +
+      ? (engineKept + ' engine finding' + (engineKept === 1 ? '' : 's') +
          (aiKept ? ' and ' + aiKept + ' AI-raised candidate' + (aiKept === 1 ? '' : 's') + ' (advisory, pending verification)' : '') +
          (aiKept ? ' were' : (engineKept === 1 ? ' was' : ' were')) + ' supplied for narrative reporting. ' +
          (patternKept ? patternKept + ' further item' + (patternKept === 1 ? '' : 's') + ' (a pattern or a finding without a page) ' + (patternKept === 1 ? 'is' : 'are') + ' listed in the report, not quoted here. ' : '') +
          (aiKept ? 'AI-raised candidates are not quoted here. ' : ''))
-      : 'No findings were supplied for narrative reporting. ') +
-    (input.findingsPruned > 0 ? input.findingsPruned + ' candidate(s) were pruned as benign before this narrative. ' : '');
+      : 'No findings were supplied for narrative reporting. ');
+  // input.findingsPruned is accepted for older clients and never printed: the
+  // AI review removes no engine finding (founder ruling, 5 October 2026).
   if (top.length) {
     executiveSummary += 'The highest-ranked engine findings supplied are identified as ' +
       top.map(f => '[' + f.id + ']').join(', ') + ' and are quoted below. ';
@@ -1508,9 +1525,9 @@ const HUMAN_SECTIONS = [
 const HUMAN_SECTION_RULES = {
   executive_summary:
     'Section: EXECUTIVE SUMMARY. 350-650 words.\n' +
-    'Paragraph 1: the core pattern the record establishes, in one or two sentences, anchored.\n' +
-    'Then a heading line KEY FINDINGS and one short paragraph per finding, most serious first: what the record states, who, when, the page(s), why it matters.\n' +
-    'Then a heading line WHAT THE RECORD ESTABLISHES: the pattern the findings form together, anchored.\n' +
+    'Paragraph 1: the core pattern the findings set out, in one or two sentences, each citing its [F#].\n' +
+    'Then a heading line KEY FINDINGS and one short paragraph per finding, in the order given: what the record states, who, when, the page(s), why it matters.\n' +
+    'Then a heading line WHAT THE FINDINGS ESTABLISH: the pattern the findings form together, each sentence citing its [F#].\n' +
     'Cite findings as [F#] and pages as (p. N). Quote the record where a quotation exists in the inputs.\n' +
     'Close with: The verdict on any named person is for the court.',
   chronology:
@@ -1568,9 +1585,11 @@ const HUMAN_SECTION_RULES = {
 const HUMAN_SYSTEM = 'You are Verum Omnis, a constitutional forensic narrator.\n' +
   'Constitution v6.1 precedes this request. Read it first.\n' +
   'You write ONE section of a court-ready narrative report.\n' +
-  'Inputs: findings (engine-verified, stated as fact), candidates (pending verification), caseContext, excerpt, timeline.\n' +
+  'Inputs: findings (engine findings, stated as fact), candidates (pending verification), caseContext, excerpt, timeline.\n' +
   'The engine found everything. You originate nothing.\n' +
   'Every sentence cites a finding [F#] or a page (p. N) from the inputs; a sentence without one is deleted before publication.\n' +
+  'Only an [F#] finding is established. A sentence citing only a page says what that page STATES ("p. 2 states that ..."); never "the record establishes, shows, proves or reveals" without an [F#].\n' +
+  'A contradiction is stated only with its [F#]; never call conduct fraud, coercion or any offence outside "may constitute" candidate law.\n' +
   'Quote only text present in the inputs, verbatim.\n' +
   'Anchored facts stated flatly. Never hedge sealed evidence.\n' +
   'Headings name a section; a heading never states a conclusion.\n' +
@@ -1621,7 +1640,7 @@ function sanitizeHumanFinding(f) {
     type: asStr(f.type, 24) || 'unknown',
     name: asStr(f.name, 120) || 'finding',
     severity: (Number.isInteger(sev) && sev >= 1 && sev <= 5) ? sev : 0,
-    status: id[0] === 'C' ? 'AI-RAISED CANDIDATE - PENDING VERIFICATION' : 'ENGINE-VERIFIED',
+    status: id[0] === 'C' ? 'AI-RAISED CANDIDATE - PENDING VERIFICATION' : 'ENGINE FINDING',
     location: asStr(f.location, 120),
     page,
     pages,
@@ -1669,6 +1688,10 @@ const HUMAN_BANNED_RES = [
   /\b\d{1,3}(?:\.\d+)?\s*(?:%|percent)(?![A-Za-z])|\b\d{1,3}\s*\/\s*(?:10|100)\b(?!\/)|\bout\s+of\s+(?:ten|10|100)\b|\bscores?\b|\bscored\b|\b(?:confidence|probability)\s+(?:level|score|band|rating)\b|\bconfidence\s+is\s+(?:very\s+)?(?:high|low|moderate)\b/i,
   /\b(?:severity|confidence)\s*[:=]?\s*(?:critical|very[ _-]?high|high|moderate|low|insufficient)\b|\b(?:critical|high|moderate|low)\s+severity\b|\bVERY_HIGH\b/i,
   /\bhow\s+to\s+(?:read|use)\s+this\s+report\b/i,
+  // ranking a finding by seriousness is a severity label in other words
+  // (PD1; the review of 5 October 2026: "the most serious finding",
+  // "high-severity", "critical findings" and "minor findings" all passed)
+  /\bmost\s+serious\b|\b(?:critical|high|moderate|medium|low)-severity\b|\bseverity\s+(?:level|rating|band|ranking)\b|\b(?:critical|minor|serious|major)\s+(?:findings?|contradictions?)\b/i,
   /\b(?:committed|is\s+guilty\s+of|has\s+committed)\s+(?:fraud|perjury|theft|a\s+crime|an?\s+offence)\b/i,
   // institutional-engagement honesty (AGENTS.md): no court adopted, accepted, found or ruled on anything
   /court[- ]recogni[sz]ed|judicially\s+validated|\baccepted\b[^.]{0,40}\b(?:as\s+evidence|into\s+(?:the\s+)?record|as\s+proof|as\s+admissible)\b|\baccepted\s+by\s+(?:the\s+|a\s+)?courts?\b|reassessed\s+as\s+criminal|charges?\s+(?:has|have)\s+been\s+laid|verified\s+charge|\bhigh\s+court\b|\bcourts?\s+(?:adopted|endorsed|validated|accredited|accepted|recogni[sz]ed|found|held|ruled|determined)\b/i,
@@ -1717,13 +1740,15 @@ const HUMAN_REF_RE = /\[([FC]\d{1,3})\]|\(([FC]\d{1,3})\)|\b(?:findings?|candida
 const HUMAN_PAGE_CITE_RE = /\b(?:pp?|pgs?|pages?)\.?\s*\d{1,4}(?:\s*(?:,|and|&|\u2013|-|to)\s*(?:pp?\.?\s*)?\d{1,4}(?!\d|\s+[A-Za-z]{3,9}\s+\d{4}))*/gi;
 const HUMAN_PAGE_WORD_RE = /\b(?:pp?|pages?)\.?\s+(?:one|two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|thirteen|fourteen|fifteen|sixteen|seventeen|eighteen|nineteen|twenty|thirty|forty|fifty)\b/i;
 function humanAnchorCheck(s, ctxIds, ctxPages) {
-  let anchored = false, m;
+  let anchored = false, finding = false, m;
   const refRe = new RegExp(HUMAN_REF_RE.source, 'gi');
   while ((m = refRe.exec(s)) !== null) {
-    if (!ctxIds.has((m[1] || m[2] || m[3] || '').toUpperCase())) return { bad: 'anchor', anchored };
+    const rid = (m[1] || m[2] || m[3] || '').toUpperCase();
+    if (!ctxIds.has(rid)) return { bad: 'anchor', anchored, finding };
     anchored = true;
+    if (rid[0] === 'F') finding = true;
   }
-  if (HUMAN_PAGE_WORD_RE.test(s)) return { bad: 'anchor', anchored };
+  if (HUMAN_PAGE_WORD_RE.test(s)) return { bad: 'anchor', anchored, finding };
   const pageRe = new RegExp(HUMAN_PAGE_CITE_RE.source, 'gi');
   while ((m = pageRe.exec(s)) !== null) {
     const nums = (m[0].match(/\d{1,4}/g) || []).map(Number);
@@ -1733,10 +1758,87 @@ function humanAnchorCheck(s, ctxIds, ctxPages) {
       const a = Number(r[1]), b = Number(r[2]);
       if (b > a && b - a <= 50) for (let n = a + 1; n < b; n++) nums.push(n);
     }
-    for (const n of nums) if (!ctxPages.has(n)) return { bad: 'anchor', anchored };
+    for (const n of nums) if (!ctxPages.has(n)) return { bad: 'anchor', anchored, finding };
     anchored = true;
   }
-  return { bad: null, anchored };
+  return { bad: null, anchored, finding };
+}
+
+// Evidence before narrative (PD2) and verdicts to the court (PD16), as the
+// evidence-bundle-7-docs narrative showed they were needed (5 October 2026):
+// "The core pattern the record establishes is that All Fuels has cut fuel
+// supply … [Page 1]" stated the author's own email as an established fact,
+// "The record states that All Fuels' actions constitute coercion [Page 2]"
+// characterised conduct as an offence, and "… contradicting the company's own
+// documents [Page 12]" asserted a contradiction the engine never found. A page
+// anchor proves the page exists, not that what the sentence asserts is
+// established. So: only an [F#] finding is "established", "proved",
+// "revealed", "shown" or "confirmed" by the record; a contradiction is stated
+// only with its [F#]; and conduct is never called an offence outside
+// candidate-law framing. A page-only sentence may say what the page STATES.
+// The rules read the sentence with its quotations masked (a quotation is
+// what the page says, "this contradicts your email" included), and judge
+// each verb where it stands (the review of 5 October 2026):
+// - a founding or a date is not a finding: "was established in 2001",
+//   "established by deed of trust", "established in terms of the Act",
+//   "established by Mr Smith" — but never "established by the record";
+// - reported speech is not the record's verdict: "the bank confirmed
+//   receipt", "receipt was confirmed by the bank", "page 2 shows a payment";
+// - a negation counts only where it governs the verb, in its own clause, and
+//   "no doubt", "not only" and "cannot be disputed" are not negations.
+const HUMAN_MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?';
+const HUMAN_RECORD_AGENT = '(?:(?:the|this|that|these|those|its|their)\\s+)?(?:record|records|evidence|documents?|bundle|file|pages?|findings?|facts)\\b';
+const HUMAN_FOUNDING_RE = new RegExp('\\bestablished\\s+(?:in\\s+terms\\s+of|under\\s+|by\\s+deed|(?:in|on)\\s+(?:\\d|' + HUMAN_MONTH + '\\s+\\d)|by\\s+(?!' + HUMAN_RECORD_AGENT + '))', 'gi');
+const HUMAN_ESTABLISH_VERB_RE = /\b(?:establish(?:es|ed)?|proves?|proved|proven|reveals?|revealed|demonstrates?|demonstrated)\b/gi;
+const HUMAN_SHOW_RE = new RegExp('(?:\\b(?:record|records|documents?|evidence|bundle|file|this|which|these\\s+facts|the\\s+facts)\\s+(?:[\\w\'-]+\\s+){0,2}?(?:clearly\\s+)?(?:shows?|showed|shown|confirms?|confirmed)|\\b(?:is|are|was|were|been)\\s+(?:clearly\\s+)?(?:shown|confirmed))\\b(?!\\s+by\\s+(?!' + HUMAN_RECORD_AGENT + '))', 'gi');
+const HUMAN_NEG_BEFORE_RE = /\b(?:no|not|never|nothing|nor|neither|cannot|can't|doesn't|don't|didn't|isn't|aren't|wasn't|weren't)\s+(?:[\w'-]+\s+){0,3}$/i;
+const HUMAN_NOT_A_NEGATION_RE = /\bno\s+doubt\b|\bnot\s+only\b|\bcannot\s+be\s+(?:disputed|denied|doubted|contested)\b|\bundisputed\b/i;
+const HUMAN_CONTRADICT_RE = /\bcontradict(?:s|ed|ing|ion|ions|ory)?\b|\bcannot\s+(?:both|all)\s+be\s+true\b/i;
+const HUMAN_REBUTTAL_FRAME_RE = /^\s*(?:[-•*]|\d{1,2}[.)])?\s*\**\s*(?:this (?:account|statement|version) conflicts|the record (?:at p\.|states|it conflicts)|assessment\s*[:—–-])/i;
+const HUMAN_OFFENCE_NOUN = '(?:fraud|coercion|extortion|racketeering|theft|corruption|money\\s+laundering|forgery|bribery|blackmail|intimidation|duress|perjury)';
+const HUMAN_CHARACTERISE_RE = new RegExp(
+  '\\b(?:constitut(?:e|es|ed|ing)|amount(?:s|ed|ing)?\\s+to|tantamount\\s+to)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:' + HUMAN_OFFENCE_NOUN + '|crim(?:e|inal)|(?:an?\\s+)?offen[cs]es?)\\b' +
+  '|\\b(?:is|are|was|were|be|been|being)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:' + HUMAN_OFFENCE_NOUN + '|crimes?)\\b' +
+  '|\\b(?:committed|perpetrated|engaged\\s+in)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:' + HUMAN_OFFENCE_NOUN + '|crimes?|offen[cs]es?)\\b' +
+  '|\\b(?:establish(?:es|ed)?|proves?|proved|proven|shows?|demonstrates?|reveals?)\\s+(?:an?\\s+)?' + HUMAN_OFFENCE_NOUN + '\\b', 'i');
+function humanOverclaimMask(s) {
+  return String(s || '').replace(new RegExp(HUMAN_QUOTE_RE.source, 'g'), ' "Q" ');
+}
+// A provision's own words are what the instrument states: "Clause 5 of the
+// agreement establishes a 30-day notice period".
+const HUMAN_PROVISION_SUBJECT_RE = /\b(?:clause|section|paragraph|para|article|regulation|schedule|annexure)\s+[\w.()\/-]+(?:\s+of\s+(?:the\s+)?(?:[\w'-]+\s+){0,4}?)?\s*$/i;
+function humanNegatedAt(t, at, matched) {
+  if (matched && /\b(?:not|never|cannot)\b|n't\b/i.test(matched)) return true;
+  const pre = t.slice(Math.max(0, at - 60), at).split(/[,;:]|\bbut\b/i).pop();
+  if (HUMAN_PROVISION_SUBJECT_RE.test(pre)) return true;
+  if (HUMAN_NOT_A_NEGATION_RE.test(pre)) return false;
+  return HUMAN_NEG_BEFORE_RE.test(pre);
+}
+function humanAssertsEstablished(t) {
+  const u = t.replace(HUMAN_FOUNDING_RE, ' founded ');
+  const res = [new RegExp(HUMAN_ESTABLISH_VERB_RE.source, 'gi'), new RegExp(HUMAN_SHOW_RE.source, 'gi')];
+  for (const re of res) {
+    let m;
+    while ((m = re.exec(u)) !== null) { if (!humanNegatedAt(u, m.index, re === res[1] ? m[0] : '')) return true; }
+  }
+  return false;
+}
+function humanCharacterises(s) {
+  const t = humanOverclaimMask(s);
+  return HUMAN_CHARACTERISE_RE.test(t) && !HUMAN_CANDIDATE_LAW_RE.test(t);
+}
+function humanOverclaim(s, ac) {
+  if (humanIsExact(s)) return false;
+  // Conduct is never called an offence outside candidate law, on any line —
+  // a stated gap ("Knowledge is INSUFFICIENT, but the payments constitute
+  // fraud") and an [F#] sentence included.
+  if (humanCharacterises(s)) return true;
+  if (humanAnchorFree(s)) return false;
+  if (ac && ac.finding) return false;
+  const t = humanOverclaimMask(s);
+  if (humanAssertsEstablished(t)) return true;
+  if (HUMAN_CONTRADICT_RE.test(t) && !HUMAN_REBUTTAL_FRAME_RE.test(s)) return true;
+  return false;
 }
 // Quotation forms the gate checks against the corpus: "...", “...”, ‘...’ and
 // '...' when the straight quotes delimit a phrase (an apostrophe never opens
@@ -1827,7 +1929,7 @@ function humanPillarBad(s, curPillars, idType, pillarMode) {
 }
 function humanGate(text, ctxIds, ctxPages, corpusNorm, idType, pillarMode) {
   const out = [];
-  const stats = { kept: 0, dropped: 0, language: 0, anchor: 0, quote: 0, exact: 0, pillar: 0 };
+  const stats = { kept: 0, dropped: 0, language: 0, anchor: 0, quote: 0, exact: 0, pillar: 0, overclaim: 0 };
   const types = idType || new Map();
   let curPillars = [];
   const paras = String(text || '').replace(/\r\n?/g, '\n').split(/\n{2,}/);
@@ -1843,7 +1945,10 @@ function humanGate(text, ctxIds, ctxPages, corpusNorm, idType, pillarMode) {
     }
     if (trimmed.length < 60 && (/^[A-Z0-9 ,'&()\-]+$/.test(trimmed) || /^[A-Z][^.]{0,58}:$/.test(trimmed))) {
       const hc = humanAnchorCheck(trimmed, ctxIds, ctxPages);
-      const hbad = hc.bad || (humanSentenceBanned(trimmed) ? 'language' : null);
+      // A heading asserts nothing, so the "establishes" and contradiction
+      // rules leave it alone ("WHAT THE FINDINGS ESTABLISH"); an offence word
+      // is a verdict in any dress ("CONDUCT CONSTITUTES COERCION").
+      const hbad = hc.bad || (humanSentenceBanned(trimmed) ? 'language' : null) || (humanCharacterises(trimmed) ? 'overclaim' : null);
       if (hbad) { stats.dropped++; stats[hbad]++; continue; }
       if (pillarMode) curPillars = humanPillarsOf(trimmed);
       out.push(trimmed);
@@ -1879,6 +1984,7 @@ function humanGate(text, ctxIds, ctxPages, corpusNorm, idType, pillarMode) {
           }
         }
         if (!bad && humanSentenceBanned(s)) bad = 'language';
+        if (!bad && humanOverclaim(s, ac)) bad = 'overclaim';
         if (!bad && humanPillarBad(s, paraPillars || curPillars, types, pillarMode)) bad = 'pillar';
         if (!bad && !exact && !ac.anchored && !quoted && !humanAnchorFree(s)) bad = 'anchor';
         if (bad) { stats.dropped++; stats[bad]++; continue; }

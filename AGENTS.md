@@ -26,7 +26,7 @@ re-introduces a false statement of fact under seal.
 **Repo map:** [`REFERENCE.md`](./REFERENCE.md) — every page, script, worker endpoint and
 directory, and what each one does.
 
-## Start here — the state of the platform (updated 2026-10-03; describes `main` once PR #214 — the Public Protector submission run and the Greensky re-run — is merged)
+## Start here — the state of the platform (updated 2026-10-05; describes `main` once PR #216 — the evidence-bundle-7-docs run and the founder's rulings of 5 October — is merged)
 
 Read this section first; it is the two-minute orientation. Everything below it is the detail.
 
@@ -82,7 +82,7 @@ founder.
 **Known state right now.** Two parts: what is open today, then the dated history, oldest first
 (the newest entry is last).
 
-**Open today (as of 3 October 2026; true of `main` once PR #214 is merged).** Each
+**Open today (as of 5 October 2026; true of `main` once PR #216 is merged).** Each
 item says who holds it. Live Cloudflare state is "last verified" on the date given. Live state was
 last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the #214 merge).
 - **Founder — the signing key.** `RULE_PRIVATE_KEY` is not on the Worker. The trainer's last run
@@ -95,9 +95,8 @@ last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the
   (a) the VO-SEAL2 hash is self-referential: anyone can alter a sealed copy and re-seal it with
   its own hash, keeping the seal ID and ORIG, and verify.html shows a match. The fix is
   architectural (anchor or sign the sealed-file hash) and touches the verify contract, so for now
-  the copy says only what the check cannot show. (b) The reports call engine findings "verified"
-  when the single-model advisory review retained them; this is a vocabulary decision for the
-  founder. (c) H208/25: this file and the Worker's honesty clause say "in good faith and in the
+  the copy says only what the check cannot show. (b) Resolved 5 October 2026: the founder
+  dropped the word "verified" from the reports (`ENGINE.md` §12.16). (c) H208/25: this file and the Worker's honesty clause say "in good faith and in the
   interest of justice" records the respondent's own affidavit, while `constitution.json`,
   `llms.txt` and `constitution.html` say the Court found the conduct good-faith. The founder holds
   the judgment; until he rules, state neither version as the Court's finding. (d) D16 (font
@@ -105,6 +104,17 @@ last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the
   restoring newlines. (e) A single-token trading name ("AllFuels") can never be a party, and no
   rule ties one person to two different sites. Both are candidate rules, not shipped on one
   example.
+- **Founder, with the 1verum and firebase repositories — the findings-JSON schema (from the
+  evidence-bundle-7-docs run, `ENGINE.md` §12.16).** The shared `FINDINGS_JSON_SCHEMA` v1.0.0
+  requires `verification_status: "ENGINE-VERIFIED"`, band-word severity and confidence enums, and
+  AI candidates inside `contradictions`. The founder's 5 October rulings (no "verified", no bands
+  in print) are met in every printed report; the JSON keeps the schema's words until a schema v2
+  (a neutral status such as `ENGINE-FINDING`, a separate `ai_candidates` array) is agreed for all
+  three repositories. Do not change the contract in this repository alone.
+- **Founder — the narrator's event-level instruction (`ENGINE.md` §12.16, "Open, with the
+  founder").** `NARRATE_SYSTEM` still allows "the documents evidence fraud" for corroborated
+  events (v6.1 EVENT-LEVEL DETERMINATION); the gates pass it. Whether it survives the 5 October
+  rulings is a constitutional decision, not a gate change.
 - **Founder — the system prompt has drifted.** This repository's `VERUM_OMNIS_SYSTEM_PROMPT.md`
   differs from the 1verum and firebase copies in two passages (#189, #199), and it still calls
   the narrative "opt-in" (GitHub API, 3 October 2026).
@@ -132,8 +142,9 @@ last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the
 - Deferred or not adopted, with reasons: `ENGINE.md` §12.13 ("Deferred" in item 12; "Not
   adopted" in the paragraph that closes the section).
 
-**History, oldest first.** Each entry was the live state on its date (the last two describe PR
-#214, which is live once merged); superseded state is marked.
+**History, oldest first.** Each entry was the live state on its date (PR #214 is live since its
+merge on 3 October; the last entry describes PR #216, live once merged); superseded state is
+marked.
 - 6 September 2026: the two retired Workers (`verum-rules`, `verumglobal-static`) were deleted
   from the dashboard; this Worker was meant to own the domain through declared routes (PRs
   #184–#186); the 7 September probe showed it did not, and it did only from 27 September. The
@@ -365,6 +376,30 @@ last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the
   their own wording, and CT39 is never rendered as a B1 contradiction; identical plain-words lines
   collapse into one bullet naming every page. Tests: `tests/greensky-regression.test.js` §9. With
   both runs, PR #214 stands at 33 suites and 2535 assertions.
+- 5 October 2026: **the evidence-bundle-7-docs run and the founder's rulings** (PR #216, live
+  once merged; `ENGINE.md` §12.16). The founder sealed a 65-page bundle (his email to the Public
+  Protector, the Protector's letters, a 49-page sealed exhibit of his own Verum Omnis analysis,
+  printed emails, a sealed timeline) and had DeepSeek review the three PDFs against Constitution
+  v8.0. Of four sealed findings one is real: the lookalike domain (`protect.org` on p. 1 beside
+  the Protector's `pprotect.org` on pp. 5 and 7). Three rested on the founder's own analysis
+  pages (a CIPC K-form enterprise number, a reference to an affidavit that records the custody,
+  "The MOU was never countersigned"), and the advisory AI review had removed two more findings.
+  Founder rulings 16–18 below: the AI review never removes or changes an engine finding; the
+  word "verified" is dropped; the §15.4 template leads. Shipped: the review adds notes and
+  candidates only; no severity, score or "most serious" words, and no score-chosen summary
+  sentence; a Thesis / Antithesis / Synthesis table stating that PD13's three verifiers are not
+  met; every finding under one brain; the explainer page removed; the overclaim rule in both
+  narrative gates; the AI prompts say tamper-evident; the engine reads the CIPC K-form, a custody
+  reference, set-aside pages, a document's stated last page and a Verum Omnis analysis's running
+  title correctly; findings JSON 1.7.0. On the real bundle the engine now seals one finding, the
+  lookalike domain. Tests: `tests/evidence-bundle-7-regression.test.mjs` and updated assertions
+  across the suites. Two independent reviews of the change then found five blocking and
+  seventeen minor defects (AI candidates discarded as duplicates, unnumbered pages after two
+  documents read as one, evidence sealed after a report page read as analysis, a month test that
+  matched any word, CT33/CT35 printed as two positions, among others); each confirmed one is
+  fixed with the reviewer's reproduction as a test (`ENGINE.md` §12.16 item 10). 34 suites and
+  2658 assertions. Open: the cross-repository findings-JSON schema and the narrator's "the
+  documents evidence fraud" instruction (Open today).
 
 **What must never be done.** The founder rulings and the seven regressions below; the §15.2
 language gate and the PD2 anchor gate are never loosened; no secret is ever committed; no
@@ -381,9 +416,9 @@ failure looks like).
 
 ## Quick facts
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets. A Pages Function, `functions/[[path]].js`, runs only on the Pages project and has been dormant since 27 September.
-- Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.3.5-web`); findings JSON 1.6.0 (adds `analysis_reference_utc`; 1.5.0 added `ocr_held`).
+- Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.3.5-web`); findings JSON 1.7.0 (adds `display_name`, `brain`, `triple_verification`, `ai_review_note`; 1.6.0 added `analysis_reference_utc`).
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **33 suites, 2535 assertions** (counted 3 October 2026), **must be green before any push**. Many exist only to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **34 suites, 2658 assertions** (counted 5 October 2026), **must be green before any push**. Many exist only to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
@@ -414,8 +449,10 @@ Constitution itself was placed, and it stands. That means:
 
 Each was a real failure the founder reported. Read `ENGINE.md` before touching any of them.
 
-1. **Report order** — the human story leads, the table of contents follows (`ENGINE.md` §7,
-   ruling 5 below). Moving Part 1 behind the TOC undoes the whole restructure.
+1. **Report order** — the §15.4 template leads: cover, contents, sections 1–7, then the
+   annexes with the plain-language pages first (`ENGINE.md` §7; founder ruling 18 below, which
+   replaced ruling 5's story-first order on 5 October 2026). Moving the plain-language pages back
+   in front of section 1 undoes the ruling.
 2. **The §15.2 narrative gate** — `scrubNarrative` DROPS prohibited sentences and never
    rewrites them; `voGatePasses` requires `kept >= 2 && kept >= dropped` or the deterministic
    narrative is used instead (`ENGINE.md` §4.13). The worker prompt is a request; the gate is
@@ -453,7 +490,10 @@ Recorded so no session or external review re-litigates them:
 2. **Severity word-labels are removed from display.** "CRITICAL / HIGH /
    MODERATE / LOW" must not print in reports (§15.2 names those tokens as
    prohibited bands). Severity remains an INTERNAL weight: findings stay
-   ranked most-serious-first, and the ordering carries the weight.
+   in the engine's ranked order, and the ordering carries the weight. Since
+   5 October 2026 (rulings 16–18) no "most serious", "by severity",
+   "serious" or "minor" wording prints either: the report says only that the
+   findings are in the engine's fixed order (`VO_ORDER_NOTE`).
 3. **Nine-Brain equivalence stands (v8.0 §2).** The 46 contradiction types
    across 40 detectors ARE the Nine-Brain architecture — "the spec and the
    code describe the same machine." Reviews claiming the engine "ignores the
@@ -462,7 +502,11 @@ Recorded so no session or external review re-litigates them:
    "this is a pattern of fraud"; §15.2 prohibits exactly that ("X is guilty
    of Y" — verdict belongs to the court). The engine states anchored facts
    and cites candidate law (POCA s1 included); the last step is the court's.
-5. **The human story leads, and the first pages state the provenance.** The
+5. **The human story leads, and the first pages state the provenance.**
+   *(Order superseded on 5 October 2026 by ruling 18: the §15.4 template now
+   leads and the plain-language pages are annexes; the provenance statement
+   stays on the cover and opens THE STORY IN PLAIN LANGUAGE, and the "HOW ANY
+   CHANGE" page was removed. The text below records the order as it was.)* The
    main report reads Story First, Evidence Second. Part 1, in order:
    the EXECUTIVE SUMMARY front page ("IN ONE PAGE", the findings that
    matter most, key dates, what to do next), "DOCUMENTS IN THIS BUNDLE"
@@ -564,9 +608,9 @@ decisions below are binding on every later change:
 
 The founder ran a 332-page Greensky case file and read the three PDFs against
 the reference "forensic goal" document. Decisions (items 8–11 PR #193; 12 PR #200;
-13 PR #201; 14 PR #203; 15 PR #204), binding like the seven above. No founder
-direction has been numbered since item 15; later runs (27 September – 3 October) are
-recorded in the history and in `ENGINE.md` §12.12–§12.15.
+13 PR #201; 14 PR #203; 15 PR #204; 16–18 PR #216), binding like the seven above. The
+runs of 27 September – 3 October added no numbered direction; they are recorded in the history
+and in `ENGINE.md` §12.12–§12.15.
 
 8. **One narrative, not two.** The plain-language narrative PDF (the
    standalone `buildNarrative` download) is retired from the seal page: the
@@ -617,14 +661,31 @@ recorded in the history and in `ENGINE.md` §12.12–§12.15.
    EB review the founder said "the word" to the fix list: a quote is the record's own
    characters; a shared word is not a shared proposition; a format check on an OCR page is a
    Low note until a person has read the page image; a report that was not reviewed says
-   `NOT REVIEWED` and never "verified"; forensic mode does not run where the service is
+   `NOT REVIEWED` and never "verified" (since item 17, no report says "verified" at all); forensic mode does not run where the service is
    absent. `ENGINE.md` §12.10. Do not re-widen a detector to recover a finding the
    annexure EB suite pins as false; add a positive control instead.
 15. **The engine never reads a Verum Omnis report as evidence; one count; no template in
    AI's clothes (2026-09-13).** A prior Verum Omnis report bound into a bundle is excluded
    from scanning and the exclusion disclosed; every count a reader sees is the
-   engine-verified count, AI candidates told apart; deterministic template text is never
+   engine count, AI candidates told apart; deterministic template text is never
    labelled as the AI narrator's and never carries a score or band. `ENGINE.md` §12.11.
+16. **The AI review never removes or changes an engine finding (2026-10-05).** The founder's
+   words: "The ai cannot delete findings from the engine it can read the json the sealed evidence
+   and the sealed forensic report it cannot alter this. The ai must do a forensic report based on
+   the findings of the engine and it must report missed contradictions and improve the engine".
+   The review reads the findings and the sealed text; it may add a note to a finding (printed as
+   advice, fed to the loop) and raise candidates the engine missed. An engine finding the model
+   thinks wrong is fixed by a detector guard with a regression test, never by the model's
+   verdict. `ENGINE.md` §4.10, §12.16.
+17. **No "verified" (2026-10-05).** Prime Directive 13 asks for three independent verifiers;
+   the platform has one deterministic engine and at most one advisory model, so no report calls
+   a finding verified. The Triple Verification Summary is a Thesis / Antithesis / Synthesis table
+   that says so. (The findings JSON keeps the shared schema's `ENGINE-VERIFIED` until the
+   cross-repository schema changes; Open today.)
+18. **Template first (2026-10-05, replaces ruling 5's order).** The report opens with the
+   §15.4 sections 1–7 after the cover and contents; the plain-language pages follow as annexes;
+   the "How any change is detected" page is gone (PD20: no manuals; section 7 states what the seal
+   shows and cannot show). `ENGINE.md` §7.
 
 ### How the Constitution's standing may be described (v8.0 §12)
 
