@@ -708,7 +708,7 @@ const NARRATE_SYSTEM = 'You are Verum Omnis, a constitutional forensic investiga
   '- Label each: "AI-raised candidate - pending engine verification".\n' +
   '- Note engine blind spots so detectors can improve.\n' +
   '- FORMAT: short paragraphs of 3-4 sentences, separated by a BLANK line. Use "- " bullets for any enumeration. Never one unbroken block.\n' +
-  '- SYNTHESIS: you are a narrative synthesizer, not a form-filler. Open with the single most serious pattern. Connect findings that share a pattern into one theme instead of listing them one by one. Vary sentence structure; never repeat a sentence template.\n' +
+  '- SYNTHESIS: you are a narrative synthesizer, not a form-filler. Open with the first pattern in the order given. Connect findings that share a pattern into one theme instead of listing them one by one. Vary sentence structure; never repeat a sentence template.\n' +
   '- WHY IT MATTERS: for each pattern state, as fact, what the record shows and what that prevents or establishes (e.g. an unsigned counterpart cannot carry the clause it is used to enforce; an unverifiable registration number means the entity\'s status cannot be confirmed). Never speculate about intent, motive, or anyone\'s credibility.\n' +
   'Sections and lengths (STAY WITHIN these — the whole JSON must be COMPLETE and valid; do not overrun):\n' +
   '- summary: what happened, who, why it matters. 150-220 words.\n' +
@@ -716,7 +716,7 @@ const NARRATE_SYSTEM = 'You are Verum Omnis, a constitutional forensic investiga
   '- contradictions: what was said versus shown. 150-250 words.\n' +
   '- impact: named affected people, losses, timeline. 120-180 words.\n' +
   '- legalContext: the laws in plain words. 120-180 words.\n' +
-  '- evidence: strongest exhibits and next steps. 100-160 words.\n' +
+  '- evidence: the exhibits that carry the findings, and next steps. 100-160 words.\n' +
   '- seal: seal date, GPS, device, verification. 50-90 words.\n' +
   '- limits: findings stated as fact; the verdict on any named person is the court\'s. 50-80 words.\n' +
   'Reply ONLY valid JSON: ' +
@@ -1525,9 +1525,9 @@ const HUMAN_SECTIONS = [
 const HUMAN_SECTION_RULES = {
   executive_summary:
     'Section: EXECUTIVE SUMMARY. 350-650 words.\n' +
-    'Paragraph 1: the core pattern the record establishes, in one or two sentences, anchored.\n' +
-    'Then a heading line KEY FINDINGS and one short paragraph per finding, most serious first: what the record states, who, when, the page(s), why it matters.\n' +
-    'Then a heading line WHAT THE RECORD ESTABLISHES: the pattern the findings form together, anchored.\n' +
+    'Paragraph 1: the core pattern the findings set out, in one or two sentences, each citing its [F#].\n' +
+    'Then a heading line KEY FINDINGS and one short paragraph per finding, in the order given: what the record states, who, when, the page(s), why it matters.\n' +
+    'Then a heading line WHAT THE FINDINGS ESTABLISH: the pattern the findings form together, each sentence citing its [F#].\n' +
     'Cite findings as [F#] and pages as (p. N). Quote the record where a quotation exists in the inputs.\n' +
     'Close with: The verdict on any named person is for the court.',
   chronology:
@@ -1772,17 +1772,68 @@ function humanAnchorCheck(s, ctxIds, ctxPages) {
 // "revealed", "shown" or "confirmed" by the record; a contradiction is stated
 // only with its [F#]; and conduct is never called an offence outside
 // candidate-law framing. A page-only sentence may say what the page STATES.
-const HUMAN_ESTABLISH_RE = /\b(?:establish(?:es|ed)?|proves?|proved|proven|reveals?|revealed|demonstrates?|demonstrated)\b(?!\s+(?:in|on|by\s+deed)\s+(?:\d|[A-Z][a-z]+\s+\d))|\b(?:record|records|documents?|evidence|bundle|file|pages?|this|which|these\s+facts|the\s+facts)\s+(?:\w+\s+){0,2}?(?:clearly\s+)?(?:shows?|showed|shown|confirms?|confirmed)\b|\b(?:is|are|was|were|been)\s+(?:clearly\s+)?(?:shown|confirmed)\b/i;
-const HUMAN_NOT_ESTABLISHED_RE = /\b(?:no|not|never|nothing|nor|neither|cannot|does\s+not|do\s+not|did\s+not)\b[^.;]{0,40}\b(?:establish|prove|reveal|demonstrate|confirm|show)/i;
+// The rules read the sentence with its quotations masked (a quotation is
+// what the page says, "this contradicts your email" included), and judge
+// each verb where it stands (the review of 5 October 2026):
+// - a founding or a date is not a finding: "was established in 2001",
+//   "established by deed of trust", "established in terms of the Act",
+//   "established by Mr Smith" — but never "established by the record";
+// - reported speech is not the record's verdict: "the bank confirmed
+//   receipt", "receipt was confirmed by the bank", "page 2 shows a payment";
+// - a negation counts only where it governs the verb, in its own clause, and
+//   "no doubt", "not only" and "cannot be disputed" are not negations.
+const HUMAN_MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?';
+const HUMAN_RECORD_AGENT = '(?:(?:the|this|that|these|those|its|their)\\s+)?(?:record|records|evidence|documents?|bundle|file|pages?|findings?|facts)\\b';
+const HUMAN_FOUNDING_RE = new RegExp('\\bestablished\\s+(?:in\\s+terms\\s+of|under\\s+|by\\s+deed|(?:in|on)\\s+(?:\\d|' + HUMAN_MONTH + '\\s+\\d)|by\\s+(?!' + HUMAN_RECORD_AGENT + '))', 'gi');
+const HUMAN_ESTABLISH_VERB_RE = /\b(?:establish(?:es|ed)?|proves?|proved|proven|reveals?|revealed|demonstrates?|demonstrated)\b/gi;
+const HUMAN_SHOW_RE = new RegExp('(?:\\b(?:record|records|documents?|evidence|bundle|file|this|which|these\\s+facts|the\\s+facts)\\s+(?:[\\w\'-]+\\s+){0,2}?(?:clearly\\s+)?(?:shows?|showed|shown|confirms?|confirmed)|\\b(?:is|are|was|were|been)\\s+(?:clearly\\s+)?(?:shown|confirmed))\\b(?!\\s+by\\s+(?!' + HUMAN_RECORD_AGENT + '))', 'gi');
+const HUMAN_NEG_BEFORE_RE = /\b(?:no|not|never|nothing|nor|neither|cannot|can't|doesn't|don't|didn't|isn't|aren't|wasn't|weren't)\s+(?:[\w'-]+\s+){0,3}$/i;
+const HUMAN_NOT_A_NEGATION_RE = /\bno\s+doubt\b|\bnot\s+only\b|\bcannot\s+be\s+(?:disputed|denied|doubted|contested)\b|\bundisputed\b/i;
 const HUMAN_CONTRADICT_RE = /\bcontradict(?:s|ed|ing|ion|ions|ory)?\b|\bcannot\s+(?:both|all)\s+be\s+true\b/i;
-const HUMAN_REBUTTAL_FRAME_RE = /^\s*(?:[-\u2022*]|\d{1,2}[.)])?\s*\**\s*(?:this (?:account|statement|version) conflicts|the record (?:at p\.|states|it conflicts)|assessment\s*[:\u2014\u2013-])/i;
-const HUMAN_CHARACTERISE_RE = /\b(?:constitut(?:e|es|ed|ing)|amount(?:s|ed|ing)?\s+to|tantamount\s+to)\s+(?:an?\s+|the\s+)?(?:acts?\s+of\s+)?(?:fraud|coercion|extortion|racketeering|theft|corruption|money\s+laundering|forgery|bribery|blackmail|intimidation|duress|perjury|crim(?:e|inal)|(?:an?\s+)?offen[cs]es?)\b/i;
+const HUMAN_REBUTTAL_FRAME_RE = /^\s*(?:[-•*]|\d{1,2}[.)])?\s*\**\s*(?:this (?:account|statement|version) conflicts|the record (?:at p\.|states|it conflicts)|assessment\s*[:—–-])/i;
+const HUMAN_OFFENCE_NOUN = '(?:fraud|coercion|extortion|racketeering|theft|corruption|money\\s+laundering|forgery|bribery|blackmail|intimidation|duress|perjury)';
+const HUMAN_CHARACTERISE_RE = new RegExp(
+  '\\b(?:constitut(?:e|es|ed|ing)|amount(?:s|ed|ing)?\\s+to|tantamount\\s+to)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:' + HUMAN_OFFENCE_NOUN + '|crim(?:e|inal)|(?:an?\\s+)?offen[cs]es?)\\b' +
+  '|\\b(?:is|are|was|were|be|been|being)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:' + HUMAN_OFFENCE_NOUN + '|crimes?)\\b' +
+  '|\\b(?:committed|perpetrated|engaged\\s+in)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:' + HUMAN_OFFENCE_NOUN + '|crimes?|offen[cs]es?)\\b' +
+  '|\\b(?:establish(?:es|ed)?|proves?|proved|proven|shows?|demonstrates?|reveals?)\\s+(?:an?\\s+)?' + HUMAN_OFFENCE_NOUN + '\\b', 'i');
+function humanOverclaimMask(s) {
+  return String(s || '').replace(new RegExp(HUMAN_QUOTE_RE.source, 'g'), ' "Q" ');
+}
+// A provision's own words are what the instrument states: "Clause 5 of the
+// agreement establishes a 30-day notice period".
+const HUMAN_PROVISION_SUBJECT_RE = /\b(?:clause|section|paragraph|para|article|regulation|schedule|annexure)\s+[\w.()\/-]+(?:\s+of\s+(?:the\s+)?(?:[\w'-]+\s+){0,4}?)?\s*$/i;
+function humanNegatedAt(t, at, matched) {
+  if (matched && /\b(?:not|never|cannot)\b|n't\b/i.test(matched)) return true;
+  const pre = t.slice(Math.max(0, at - 60), at).split(/[,;:]|\bbut\b/i).pop();
+  if (HUMAN_PROVISION_SUBJECT_RE.test(pre)) return true;
+  if (HUMAN_NOT_A_NEGATION_RE.test(pre)) return false;
+  return HUMAN_NEG_BEFORE_RE.test(pre);
+}
+function humanAssertsEstablished(t) {
+  const u = t.replace(HUMAN_FOUNDING_RE, ' founded ');
+  const res = [new RegExp(HUMAN_ESTABLISH_VERB_RE.source, 'gi'), new RegExp(HUMAN_SHOW_RE.source, 'gi')];
+  for (const re of res) {
+    let m;
+    while ((m = re.exec(u)) !== null) { if (!humanNegatedAt(u, m.index, re === res[1] ? m[0] : '')) return true; }
+  }
+  return false;
+}
+function humanCharacterises(s) {
+  const t = humanOverclaimMask(s);
+  return HUMAN_CHARACTERISE_RE.test(t) && !HUMAN_CANDIDATE_LAW_RE.test(t);
+}
 function humanOverclaim(s, ac) {
-  if (humanIsExact(s) || humanAnchorFree(s)) return false;
-  const finding = !!(ac && ac.finding);
-  if (!finding && HUMAN_ESTABLISH_RE.test(s) && !HUMAN_NOT_ESTABLISHED_RE.test(s)) return true;
-  if (!finding && HUMAN_CONTRADICT_RE.test(s) && !HUMAN_REBUTTAL_FRAME_RE.test(s)) return true;
-  if (HUMAN_CHARACTERISE_RE.test(s) && !HUMAN_CANDIDATE_LAW_RE.test(s)) return true;
+  if (humanIsExact(s)) return false;
+  // Conduct is never called an offence outside candidate law, on any line —
+  // a stated gap ("Knowledge is INSUFFICIENT, but the payments constitute
+  // fraud") and an [F#] sentence included.
+  if (humanCharacterises(s)) return true;
+  if (humanAnchorFree(s)) return false;
+  if (ac && ac.finding) return false;
+  const t = humanOverclaimMask(s);
+  if (humanAssertsEstablished(t)) return true;
+  if (HUMAN_CONTRADICT_RE.test(t) && !HUMAN_REBUTTAL_FRAME_RE.test(s)) return true;
   return false;
 }
 // Quotation forms the gate checks against the corpus: "...", “...”, ‘...’ and
@@ -1890,7 +1941,10 @@ function humanGate(text, ctxIds, ctxPages, corpusNorm, idType, pillarMode) {
     }
     if (trimmed.length < 60 && (/^[A-Z0-9 ,'&()\-]+$/.test(trimmed) || /^[A-Z][^.]{0,58}:$/.test(trimmed))) {
       const hc = humanAnchorCheck(trimmed, ctxIds, ctxPages);
-      const hbad = hc.bad || (humanSentenceBanned(trimmed) ? 'language' : null);
+      // A heading asserts nothing, so the "establishes" and contradiction
+      // rules leave it alone ("WHAT THE FINDINGS ESTABLISH"); an offence word
+      // is a verdict in any dress ("CONDUCT CONSTITUTES COERCION").
+      const hbad = hc.bad || (humanSentenceBanned(trimmed) ? 'language' : null) || (humanCharacterises(trimmed) ? 'overclaim' : null);
       if (hbad) { stats.dropped++; stats[hbad]++; continue; }
       if (pillarMode) curPillars = humanPillarsOf(trimmed);
       out.push(trimmed);

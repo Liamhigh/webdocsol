@@ -4506,19 +4506,74 @@ function voSentenceBanned(s) {
 // contradiction is stated only with its [F#]; conduct is never called an
 // offence outside candidate-law framing.
 var VO_FINDING_REF_RE = /\[F\d{1,3}\]|\(F\d{1,3}\)|\bfindings?\s+F\d{1,3}\b/i;
-var VO_ESTABLISH_RE = /\b(?:establish(?:es|ed)?|proves?|proved|proven|reveals?|revealed|demonstrates?|demonstrated)\b(?!\s+(?:in|on|by\s+deed)\s+(?:\d|[A-Z][a-z]+\s+\d))|\b(?:record|records|documents?|evidence|bundle|file|pages?|this|which|these\s+facts|the\s+facts)\s+(?:\w+\s+){0,2}?(?:clearly\s+)?(?:shows?|showed|shown|confirms?|confirmed)\b|\b(?:is|are|was|were|been)\s+(?:clearly\s+)?(?:shown|confirmed)\b/i;
-var VO_NOT_ESTABLISHED_RE = /\b(?:no|not|never|nothing|nor|neither|cannot|does\s+not|do\s+not|did\s+not)\b[^.;]{0,40}\b(?:establish|prove|reveal|demonstrate|confirm|show)/i;
+// The rules read the sentence with its quotations masked (a quotation is
+// what the page says, "this contradicts your email" included) and judge each
+// verb where it stands, the same way as the Worker's humanOverclaim (the
+// review of 5 October 2026): a founding or a date is not a finding ("was
+// established in 2001", "established by deed", "established in terms of the
+// Act", "established by Mr Smith" — never "by the record"); reported speech
+// is not the record's verdict ("the bank confirmed receipt", "receipt was
+// confirmed by the bank", "page 2 shows a payment"); a provision's own words
+// are what the instrument states ("Clause 5 establishes a notice period");
+// and a negation counts only where it governs the verb, in its own clause —
+// "no doubt", "not only" and "cannot be disputed" are not negations.
+var VO_MONTH = '(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\\.?';
+var VO_RECORD_AGENT = '(?:(?:the|this|that|these|those|its|their)\\s+)?(?:record|records|evidence|documents?|bundle|file|pages?|findings?|facts)\\b';
+var VO_FOUNDING_RE = new RegExp('\\bestablished\\s+(?:in\\s+terms\\s+of|under\\s+|by\\s+deed|(?:in|on)\\s+(?:\\d|' + VO_MONTH + '\\s+\\d)|by\\s+(?!' + VO_RECORD_AGENT + '))', 'gi');
+var VO_ESTABLISH_VERB_SRC = '\\b(?:establish(?:es|ed)?|proves?|proved|proven|reveals?|revealed|demonstrates?|demonstrated)\\b';
+var VO_SHOW_SRC = '(?:\\b(?:record|records|documents?|evidence|bundle|file|this|which|these\\s+facts|the\\s+facts)\\s+(?:[\\w\'-]+\\s+){0,2}?(?:clearly\\s+)?(?:shows?|showed|shown|confirms?|confirmed)|\\b(?:is|are|was|were|been)\\s+(?:clearly\\s+)?(?:shown|confirmed))\\b(?!\\s+by\\s+(?!' + VO_RECORD_AGENT + '))';
+var VO_NEG_BEFORE_RE = /\b(?:no|not|never|nothing|nor|neither|cannot|can't|doesn't|don't|didn't|isn't|aren't|wasn't|weren't)\s+(?:[\w'-]+\s+){0,3}$/i;
+var VO_NOT_A_NEGATION_RE = /\bno\s+doubt\b|\bnot\s+only\b|\bcannot\s+be\s+(?:disputed|denied|doubted|contested)\b|\bundisputed\b/i;
+var VO_PROVISION_SUBJECT_RE = /\b(?:clause|section|paragraph|para|article|regulation|schedule|annexure)\s+[\w.()\/-]+(?:\s+of\s+(?:the\s+)?(?:[\w'-]+\s+){0,4}?)?\s*$/i;
 var VO_CONTRADICT_RE = /\bcontradict(?:s|ed|ing|ion|ions|ory)?\b|\bcannot\s+(?:both|all)\s+be\s+true\b/i;
-var VO_CHARACTERISE_RE = /\b(?:constitut(?:e|es|ed|ing)|amount(?:s|ed|ing)?\s+to|tantamount\s+to)\s+(?:an?\s+|the\s+)?(?:acts?\s+of\s+)?(?:fraud|coercion|extortion|racketeering|theft|corruption|money\s+laundering|forgery|bribery|blackmail|intimidation|duress|perj(?:ury)|crim(?:e|inal)|(?:an?\s+)?offen[cs]es?)\b/i;
+// (the noun for false testimony is spelled in two parts: tests/allfuels-regression
+// locks that word to candidate-law lines, and this line bans it, not prints it)
+var VO_OFFENCE_NOUN = '(?:fraud|coercion|extortion|racketeering|theft|corruption|money\\s+laundering|forgery|bribery|blackmail|intimidation|duress|perj' + 'ury)';
+var VO_CHARACTERISE_RE = new RegExp(
+  '\\b(?:constitut(?:e|es|ed|ing)|amount(?:s|ed|ing)?\\s+to|tantamount\\s+to)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:' + VO_OFFENCE_NOUN + '|crim(?:e|inal)|(?:an?\\s+)?offen[cs]es?)\\b' +
+  '|\\b(?:is|are|was|were|be|been|being)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:' + VO_OFFENCE_NOUN + '|crimes?)\\b' +
+  '|\\b(?:committed|perpetrated|engaged\\s+in)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:' + VO_OFFENCE_NOUN + '|crimes?|offen[cs]es?)\\b' +
+  '|\\b(?:establish(?:es|ed)?|proves?|proved|proven|shows?|demonstrates?|reveals?)\\s+(?:an?\\s+)?' + VO_OFFENCE_NOUN + '\\b', 'i');
 var VO_CANDIDATE_LAW_RE = /\bmay\s+constitute\b|\bcandidate\s+law\b|\bfor\s+counsel\s+to\s+confirm\b/i;
-function voSentenceOverclaims(s) {
-  var t = String(s || '');
-  if (/\bINSUFFICIENT\b/.test(t) || /^the verdict on any named person is (?:reserved )?for the court\.?$/i.test(t.trim())) return false;
-  var finding = VO_FINDING_REF_RE.test(t);
-  if (!finding && VO_ESTABLISH_RE.test(t) && !VO_NOT_ESTABLISHED_RE.test(t)) return true;
-  if (!finding && VO_CONTRADICT_RE.test(t) && !REBUTTAL_OPEN_RE.test(t) && !REBUTTAL_ASSESS_RE.test(t)) return true;
-  if (VO_CHARACTERISE_RE.test(t) && !VO_CANDIDATE_LAW_RE.test(t)) return true;
+var VO_QUOTE_MASK_RE = /["“”]([^"“”]{12,})["“”]|‘([^‘’]{12,})’|(?:^|[\s(\[])'([^']{12,}?)'(?=[\s.,;:)\]!?]|$)/g;
+function voOverclaimMask(s) { return String(s || '').replace(VO_QUOTE_MASK_RE, ' "Q" '); }
+function voVerbNeutralAt(t, at, matched) {
+  if (matched && /\b(?:not|never|cannot)\b|n't\b/i.test(matched)) return true;
+  var pre = t.slice(Math.max(0, at - 60), at).split(/[,;:]|\bbut\b/i).pop();
+  if (VO_PROVISION_SUBJECT_RE.test(pre)) return true;
+  if (VO_NOT_A_NEGATION_RE.test(pre)) return false;
+  return VO_NEG_BEFORE_RE.test(pre);
+}
+function voAssertsEstablished(t) {
+  var u = t.replace(VO_FOUNDING_RE, ' founded ');
+  var res = [new RegExp(VO_ESTABLISH_VERB_SRC, 'gi'), new RegExp(VO_SHOW_SRC, 'gi')];
+  for (var r = 0; r < res.length; r++) {
+    var m;
+    while ((m = res[r].exec(u)) !== null) { if (!voVerbNeutralAt(u, m.index, r === 1 ? m[0] : '')) return true; }
+  }
   return false;
+}
+function voCharacterises(s) {
+  var t = voOverclaimMask(s);
+  return VO_CHARACTERISE_RE.test(t) && !VO_CANDIDATE_LAW_RE.test(t);
+}
+function voSentenceOverclaims(s) {
+  var t0 = String(s || '');
+  // Conduct is never called an offence outside candidate law, on any line —
+  // a stated gap and an [F#] sentence included.
+  if (voCharacterises(t0)) return true;
+  if (/\bINSUFFICIENT\b/.test(t0) || /^the verdict on any named person is (?:reserved )?for the court\.?$/i.test(t0.trim())) return false;
+  if (VO_FINDING_REF_RE.test(t0)) return false;
+  var t = voOverclaimMask(t0);
+  if (voAssertsEstablished(t)) return true;
+  if (VO_CONTRADICT_RE.test(t) && !REBUTTAL_OPEN_RE.test(t0) && !REBUTTAL_ASSESS_RE.test(t0)) return true;
+  return false;
+}
+// A heading asserts nothing, so the "establishes" and contradiction rules
+// leave it alone ("WHAT THE FINDINGS ESTABLISH", "Role / Capacity
+// Contradiction (p 11):"); the §15.2 words and an offence word still drop it.
+function voHeadingBanned(s) {
+  return VO_BANNED_SENTENCE_RE.test(String(s || '').replace(VO_MONTH_MAY_RE, '$1MonthV')) || voCharacterises(s);
 }
 
 // Gate policy, named so it can be reasoned about rather than read out of an
@@ -4549,7 +4604,7 @@ function scrubNarrative(text) {
     // OF FRAUD"). Headings are held to the same language rule and dropped
     // (and counted) when they fail it; they are never printed unread.
     if (trimmed.length < 60 && (/^[A-Z0-9 ,'&()\-]+$/.test(trimmed) || /^[A-Z][^.]{0,58}:$/.test(trimmed))) {
-      if (voSentenceBanned(trimmed)) { dropped++; continue; }
+      if (voHeadingBanned(trimmed)) { dropped++; continue; }
       out.push(para);
       continue;
     }

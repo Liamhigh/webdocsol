@@ -134,8 +134,8 @@ ok(/VO_HUMAN_CALL_TIMEOUT_MS = 52000/.test(html) && /HUMAN_TIMEOUT_MS = 30000/.t
   'primary + fallback model timeouts fit inside the client wait');
 
 // ---- the render-time gate: headings are gated, dates are not hedges --------
-ok(/function voSentenceBanned\(s\)/.test(report) && /if \(voSentenceBanned\(trimmed\)\) \{ dropped\+\+; continue; \}/.test(report),
-  'scrubNarrative gates headings with the same language rule');
+ok(/function voHeadingBanned\(s\) \{\s*return VO_BANNED_SENTENCE_RE\.test\(/.test(report) && /if \(voHeadingBanned\(trimmed\)\) \{ dropped\+\+; continue; \}/.test(report),
+  'scrubNarrative gates headings with the same language rule (and the offence-word rule; a heading asserts nothing else)');
 ok(/VO_MONTH_MAY_RE/.test(report) && /could\|would/.test(report) && /consistent\\\\s\+with/.test(report),
   'the render-time gate masks the month of May and bans could/would/consistent with');
 ok(report.indexOf('.replace(/\\b(?:pp?|pgs?)\\.(?=\\s*\\d)/gi') >= 0, 'the shared splitter keeps "(p.99)" in one sentence');
