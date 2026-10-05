@@ -387,6 +387,9 @@ openssl dgst -sha512 -verify pub.pem -signature signature.bin canonical.json
   (PKCS#8 DER, base64), set in the Cloudflare dashboard. No private key is
   committed to git. Whether any other copy exists cannot be checked from the
   repository.
+- The original `vo-master-1` private key is no longer held (the founder, 5 October 2026), so no
+  new package can be signed until a rotation; the founder chose to defer it (AGENTS.md, Open
+  today). Never set a different private key under `vo-master-1`.
 - Rotation is not implemented. `vo-master-1` is hard-coded in
   `worker/verum-rules.js` (`PUBLIC_KEY_ID`), in the engine
   (`VO_RULES_PUBLIC_KEY_ID` and the pinned `VO_RULES_PUBLIC_KEY_DER_B64`,
