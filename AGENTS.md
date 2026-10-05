@@ -85,10 +85,18 @@ founder.
 **Open today (as of 5 October 2026; true of `main` once PR #216 is merged).** Each
 item says who holds it. Live Cloudflare state is "last verified" on the date given. Live state was
 last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the #214 merge).
-- **Founder — the signing key.** `RULE_PRIVATE_KEY` is not on the Worker. The trainer's last run
-  (cron, 27 September 03:01 UTC) reads "skipped — no signing key on this service", so the weekly
-  run publishes nothing and the package stays v1.1.0 (published 19 July by an admin publish).
-  Last verified 3 October 2026 (probe; the changelog still shows the 27 September run as the last).
+- **Founder — the signing key (decided 5 October 2026: leave it).** `RULE_PRIVATE_KEY` is not on
+  the Worker, and the founder does not hold the original `vo-master-1` private key. Every client
+  pins that key, so a new key must never be set on its own: it would make the website, the
+  Android app and the fraud-firewall refuse every package. The founder chose to leave it as it is
+  for now: the package stays v1.1.0 (published 19 July by an admin publish, still valid on every
+  client), the weekly trainer run keeps reading "skipped — no signing key on this service"
+  (last seen on the probe of 5 October for the 4 October run), and engine improvements ship as
+  code through pull requests. Do not ask the founder for the key again. Restoring signed updates
+  means a key rotation (`worker/rule-format.md`, "Key management"): the founder generates a new
+  pair on his own machine and hands over only the public half; all three clients ship accepting
+  `vo-master-1` and the new key (the Android change reaches users only with an app release); then
+  the new secret and key id go on the Worker. Not started; it waits on the founder.
 - **Founder — roll the Cloudflare API token** pasted into chat on 24 September (recorded as
   still open on 27 September, #210; this repository cannot see whether it has been rolled).
 - **Founder — from the Public Protector run (`ENGINE.md` §12.14 "Open, with the founder"):**
