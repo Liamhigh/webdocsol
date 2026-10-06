@@ -5534,21 +5534,65 @@ function voAnchorEnrich(findings, textBlocks, secondaryPages) {
 // The timeline narrative: every dated finding becomes one chronological line a
 // human can read top to bottom. This is the story layer — the sealed proof
 // stays underneath; this is what a person actually reads.
-function voBuildTimeline(findings) {
+// The timeline is built from two sources, both descriptive and page-anchored:
+// the dates a finding already carries (anchor.when), AND — when the per-page
+// text is passed in — every other real date the record states. The Louw v
+// Naidoo run emitted "no dated events" because its findings were ID/email/
+// registration (dateless), even though the pages named 22 May 2024, 21 June
+// 2024, 15 July 2024 and more; those dates now enter the chronology. An
+// impossible date (voDateSortKey returns null, e.g. 25/13/2024) is never
+// ordered and never guessed — it stays the CT03 finding it already is. No date
+// is inferred; the event quotes the line the date sits on.
+function voBuildTimeline(findings, textBlocks, secondaryPages) {
   var events = [];
+  var seen = {}; // one event per (calendar date, page), findings first
+  var secSet = {};
+  if (Array.isArray(secondaryPages)) for (var sp = 0; sp < secondaryPages.length; sp++) secSet[secondaryPages[sp]] = true;
   for (var i = 0; i < findings.length; i++) {
     var f = findings[i];
     if (!f || !f.anchor) continue;
     var dates = f.anchor.when || [];
+    var fpage = (f.anchor.where && f.anchor.where[0]) || null;
     for (var d = 0; d < dates.length; d++) {
       var key = voDateSortKey(dates[d]);
       if (key === null) continue;
+      seen[key + '@' + (fpage || 0)] = true;
       events.push({
-        key: key, date: dates[d], type: f.type,
-        page: (f.anchor.where && f.anchor.where[0]) || null,
+        key: key, date: dates[d], type: f.type, source: 'finding',
+        page: fpage,
         who: (f.anchor.who || []).map(function (x) { return x.name; }),
         evidence: String(f.evidence || '').replace(/\s+/g, ' ').trim()
       });
+    }
+  }
+  if (textBlocks && textBlocks.length) {
+    var VO_TL_MAX_DOC = 150;
+    var added = 0;
+    for (var p = 0; p < textBlocks.length && added < VO_TL_MAX_DOC; p++) {
+      // A secondary-source, submission or analysis page is an account OF the
+      // record, not the record; its dates are not presented as record events
+      // (the engine demotes findings on these pages the same way).
+      if (secSet[p + 1] || voIsVerumAnalysisPage(textBlocks[p])) continue;
+      var raw = String(textBlocks[p] || '').replace(VO_SEAL_BOILERPLATE_RE, ' ');
+      var ds = voExtractDates(raw);
+      for (var k = 0; k < ds.length && added < VO_TL_MAX_DOC; k++) {
+        // A numeric date with a two-digit year does not establish its century;
+        // placing it would guess one, so it is not ordered (no date beats a
+        // wrong one). Month-name and ISO forms always carry a four-digit year.
+        if (/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2}$/.test(ds[k])) continue;
+        var dk = voDateSortKey(ds[k]);
+        if (dk === null) continue; // impossible / unparseable — not ordered, not guessed
+        var sk = dk + '@' + (p + 1);
+        if (seen[sk]) continue;    // a finding already carries this date on this page
+        seen[sk] = true;
+        // Quote the line the date sits on, trimmed, so the event is anchored to
+        // the record's own words — never a paraphrase or an inferred fact.
+        var at = raw.indexOf(ds[k]);
+        var snip = raw.slice(Math.max(0, at - 70), at + ds[k].length + 70).replace(/\s+/g, ' ').trim();
+        if (snip.length > 160) snip = snip.slice(0, 157) + '…';
+        events.push({ key: dk, date: ds[k], type: 'DATE', source: 'document', page: p + 1, who: [], evidence: snip });
+        added++;
+      }
     }
   }
   events.sort(function (a, b) { return (a.key - b.key) || ((a.page || 0) - (b.page || 0)); });
@@ -6591,7 +6635,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     pageTexts: textBlocks,
     documentMap: voDetectDocuments(textBlocks),
     swornPages: swornPages,
-    timeline: voBuildTimeline(allFindings),
+    timeline: voBuildTimeline(allFindings, textBlocks, _secondaryAllPages),
     personIndex: voBuildPersonIndex(allFindings),
     findingsByType: findingsByType,
     findingsByCategory: findingsByCategory,

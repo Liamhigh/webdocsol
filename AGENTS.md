@@ -432,7 +432,7 @@ marked.
   of systemic commercial fraud and theft". Each is fixed and pinned
   (`tests/combine-06-april-regression.test.mjs` and the suites named in §12.17); an independent
   review of the fixes found two blocking and eight minor defects, all fixed and pinned (§12.17
-  item 14). 37 suites, 2761 assertions. Findings JSON 1.8.0 adds `candidate_law`. Not fixed here: why no OCR-only finding was held on that run
+  item 14). 38 suites, 2778 assertions. Findings JSON 1.8.0 adds `candidate_law`. Not fixed here: why no OCR-only finding was held on that run
   (mitigated; Open today), and the Constitution's own SHA-512 placeholder (founder).
 - 6 October 2026: **photos sealed as documents** (`ENGINE.md` §12.18). The founder chose a photo
   on the live seal page from a phone and was refused ("Chat exports (.txt) and screenshots
@@ -442,7 +442,7 @@ marked.
   name and the original file's SHA-512 printed under the picture and set as the PDF subject) and
   joins the PDF bundle, where on-device OCR reads it. A voice-note batch keeps its screenshots
   as before; a chat `.txt` alone is still refused, with a way forward.
-  `tests/photo-intake.test.mjs` (41 assertions, after the Sourcery review on #219); 37 suites, 2761 assertions.
+  `tests/photo-intake.test.mjs` (41 assertions, after the Sourcery review on #219); 38 suites, 2778 assertions.
 - 6 October 2026: **the Louw v Naidoo run** (`evidence-bundle-6-docs`, Case 341/2025;
   `ENGINE.md` §12.19). A third-party AI review graded the deterministic engine a C-, but it
   mistook the anomaly engine for the **human forensic narrative** (a separate instrument that
@@ -454,8 +454,14 @@ marked.
   resolved person; and D25/CT37 emitted six findings over one lookalike-email cluster — D25 now
   emits one finding per cluster. The review's calls for severity tiers or "detect fraud" are
   rejected (Prime Directive 1 and Verdict Reservation). `tests/louw-naidoo-regression.test.mjs`
-  (14 assertions). The empty timeline is a separate PR; cross-document contradiction recall is a
+  (14 assertions). Cross-document contradiction recall is a
   design note awaiting the founder.
+- 6 October 2026: **the empty timeline fixed** (`ENGINE.md` §12.20). The Louw v Naidoo report's
+  §25 said "no dated events" though the pages named many real dates; the timeline was built only
+  from dates a finding carried, and that bundle's findings were dateless. `voBuildTimeline` now
+  also reads the dates the page text states (text layer and OCR), orders them with page anchors,
+  excludes impossible dates (never guessing a true date) and infers nothing; a finding date and
+  the same date in the text on one page are one event. `tests/timeline-dates.test.mjs`.
 
 **What must never be done.** The founder rulings and the seven regressions below; the §15.2
 language gate and the PD2 anchor gate are never loosened; no secret is ever committed; no
@@ -474,7 +480,7 @@ failure looks like).
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets. A Pages Function, `functions/[[path]].js`, runs only on the Pages project and has been dormant since 27 September.
 - Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.3.5-web`); findings JSON 1.8.0 (adds `candidate_law`; 1.7.0 added `display_name`, `brain`, `triple_verification`, `ai_review_note`).
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **37 suites, 2761 assertions** (counted 6 October 2026), **must be green before any push**. Many exist only to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **38 suites, 2778 assertions** (counted 6 October 2026), **must be green before any push**. Many exist only to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.

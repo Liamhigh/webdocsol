@@ -36,7 +36,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   37 suites, 2761 assertions (§10); many exist solely to stop the regressions in §4 and §12.
+   38 suites, 2778 assertions (§10); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -749,7 +749,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**37 suites · 2761 assertions** (counted 2026-10-06, with the photo-intake and Louw v Naidoo changes, §12.18-§12.19; recount after any test change).
+**38 suites · 2778 assertions** (counted 2026-10-06, with the photo-intake and Louw v Naidoo changes, §12.18-§12.19; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -771,6 +771,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
 | `annexure-eb-regression.test.mjs` | 497 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run, the evidence-bundle-4-docs run and the Public Protector submission run** (§12.10–§12.14): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans; and the Public Protector submission (§18, §18i, §18j): a status word inside its own negation (CT14), two government-suffix domains never a lookalike (CT37), a category plural is not one instrument and quotes are whole words (CT23), titles/addresses/headings are not parties, nesting-aware quotes with WHEN and LAW from the quote's own sentence, a party's submission citing other Verum seals read as secondary up to the first page that opens a new record, the dated-after-analysis note, attribution only to declared parties named whole or by initial and surname, the unsigned-agreement contract shape, the template's own Nine-Brain headers with a Finding line, and the technical report, court-ready narrative, Worker template, anchor certificate and verify.html read back, each confirmed defect of the verification pass pinned with the reviewer's reproduction |
 | `evidence-bundle-7-regression.test.mjs` | 47 | **The evidence-bundle-7-docs run** (§12.16), on a synthetic bundle of the same shape built from the bundle's own strings: the CIPC K-form and a bare "CIPC" cue (CT20), a reference to a document that records the custody (CT39), set-aside pages are not near-empty (CT26), a document ends at its stated last page, header words and possessives are not names, the count-only summary sentence, a Verum Omnis analysis's running title is secondary, the lookalike domain still fires end to end, and the technical report read back: template first, no explainer page, no "verified", severity or score words, the Thesis / Antithesis / Synthesis table, every finding under a brain; and §8, the review round: unnumbered runs keyed per run (D30, D04), a report page does not turn the evidence sealed with it into analysis, narrowed D11/D27 skips with positive controls, a clean report keeps sections 1-7, measured Finding lines, the AI-note table, the on-device summary |
+| `timeline-dates.test.mjs` | 17 | **Timeline date extraction** (§12.20): dates in the page text (text layer and OCR) become ordered, page-anchored events, not only dates a finding carries; impossible dates are excluded and never guessed; a finding date and the same calendar date in the text on one page are one event; finding-only when no page text is passed |
 | `louw-naidoo-regression.test.mjs` | 14 | **The Louw v Naidoo run** (§12.19): D06/CT09 identifier-type classification (an SA ID typed solid and spaced is one id; a fishing right `LF…`, a vessel `DTD…` and a company registration are not identities; a `said` pair fires only for the same resolved person) and D25/CT37 cluster de-duplication (one finding per lookalike cluster; a two-domain cluster keeps the original wording), each beside a positive control |
 | `combine-06-april-regression.test.mjs` | 30 | **The Combine 06 April 2026 run** (§12.17): the late secondary-source pass (lead only when every page is secondary; a record page keeps full weight), OCR pages from the `[OCR]` prefix, rule (a) page by page, per-instrument dates and one-document comparisons (D03, D04), scanned pages OCR could barely read (CT26 hand-over), person and company registration fields (D11), two properties, OCR re-reads and longer terms (D30), conditional ownership (D38), one agreement per trap (D39), each beside a positive control |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
@@ -2344,6 +2345,27 @@ positive control). Not changed here: the empty timeline (no dated events
 extracted — its own PR) and cross-document contradiction recall (duplicate
 21/06/2024 ownership notices, swap-vs-sale), which is a design note awaiting the
 founder's steer because it sits near the verdict line.
+
+### 12.20 The empty timeline — dates the record states, not only dates a finding carries (2026-10-06)
+
+The Louw v Naidoo report's §25 read "The engine emitted no dated events for
+this document" although the pages named 22 May 2024, 21 June 2024, 15 July
+2024, 13 September 2024 and 16 January 2026. Root cause: `voBuildTimeline` built
+events ONLY from `finding.anchor.when`, and that bundle's findings were
+ID/email/registration — dateless. The engine could read dates (`voExtractDates`)
+but never scanned the document text for the chronology.
+
+`voBuildTimeline(findings, textBlocks)` now takes the per-page text (passed at
+the call site) and, after the finding-derived events, scans each page for the
+dates it states — text layer and OCR-recovered pages alike — and adds them as
+page-anchored events (`source: 'document'`), each quoting the line the date sits
+on. Guards, all within the Constitution: an impossible date (`voDateSortKey`
+returns null, e.g. 25/13/2024) is never ordered and never guessed — it stays its
+CT03 finding; a finding date and the same calendar date in the text on one page
+are one event (the finding wins); no date is inferred; the per-document scan is
+capped. Called without page text the function is finding-only, so every prior
+timeline contract is unchanged. §25 of the report now says the dates are read
+from the record (findings and page text). Pinned in `tests/timeline-dates.test.mjs`.
 
 ## 13. The court-ready narrative (the "human report")
 

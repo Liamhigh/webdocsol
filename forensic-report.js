@@ -2109,7 +2109,7 @@ function secTimeline(ctx, data) {
   var tl = (data.findings && data.findings.timeline) || null;
   var tlEvents = (tl && tl.events) || [];
   if (tlEvents.length) {
-    ctx.para('The engine (v' + ENGINE_VERSION + ') reconstructs a chronological timeline from the dated findings. Each line names WHEN, the names on the cited page (descriptive, not an attribution), and the page — read in order, this is the sequence the documents describe:', { size: 9.5, after: 6 });
+    ctx.para('The engine (v' + ENGINE_VERSION + ') reconstructs a chronological timeline from the dates the record states — both the dates a finding carries and the other dates read from the page text (including OCR-recovered pages). Each line names WHEN, the names on the cited page (descriptive, not an attribution), and the page — read in order, this is the sequence the documents describe. A date that cannot exist on a calendar is not ordered here; it stays a finding. No date is inferred:', { size: 9.5, after: 6 });
     // One-glance strip: the unique dates in order, arrow-joined (max 6), so the
     // shape of the story is visible before the detail. ASCII arrows only — the
     // report's standard PDF fonts carry WinAnsi, not arrow glyphs.
