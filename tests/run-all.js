@@ -44,6 +44,7 @@ const suites = [
   'evidence-bundle-7-regression.test.mjs',
   'combine-06-april-regression.test.mjs',
   'louw-naidoo-regression.test.mjs',
+  'timeline-dates.test.mjs',
 ];
 
 let failed = 0;
