@@ -10,6 +10,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
 import { webcrypto } from 'node:crypto';
+import zlib from 'node:zlib';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -22,7 +23,7 @@ console.log('RUN  photo-intake.test.mjs');
 console.log('======================================================\n');
 
 // ---- lift the converter out of the page -----------------------------------
-const start = html.indexOf('// EXIF orientation (tag 0x0112) of a JPEG');
+const start = html.indexOf('// EXIF orientation (tag 0x0112) read from a TIFF header');
 const end = html.indexOf('// Add PDFs to the bundle (deduped by name+size)');
 ok(start > 0 && end > start, 'the photo converter block exists in seal-document.html');
 const src = html.slice(start, end);
@@ -37,7 +38,7 @@ async function voReadFileBytes(f) { return await f.arrayBuffer(); }
 async function computeSHA512(bytes) { const h = await __subtle.digest('SHA-512', bytes); return Array.from(new Uint8Array(h)).map(b => b.toString(16).padStart(2,'0')).join(''); }
 async function __load(f) { return PDFLib.PDFDocument.load(new Uint8Array(await f.arrayBuffer())); }
 async function __imgSize(f) { const d = await PDFLib.PDFDocument.create(); const i = await d.embedJpg(new Uint8Array(await f.arrayBuffer())); return [i.width, i.height]; }
-` + src + '\nthis.__load = __load; this.__imgSize = __imgSize; this.voJpegOrientation = voJpegOrientation; this.voPhotoToPdf = voPhotoToPdf; this.voPhotosToPdfs = voPhotosToPdfs;', sandbox);
+` + src + '\nthis.__load = __load; this.__imgSize = __imgSize; this.voJpegOrientation = voJpegOrientation; this.voOrientMatrix = voOrientMatrix; this.voPhotoToPdf = voPhotoToPdf; this.voPhotosToPdfs = voPhotosToPdfs;', sandbox);
 
 const jpg = new Uint8Array(fs.readFileSync(path.join(root, 'images', 'court-exterior.jpg')));
 const png = new Uint8Array(fs.readFileSync(path.join(root, 'images', 'favicon.png')));
@@ -60,8 +61,29 @@ function withOrientation(u8, v, le) {
     ok(sandbox.voJpegOrientation(withOrientation(jpg, v, false)) === v, 'big-endian EXIF orientation ' + v + ' is read');
     ok(sandbox.voJpegOrientation(withOrientation(jpg, v, true)) === v, 'little-endian EXIF orientation ' + v + ' is read');
   }
-  ok(sandbox.voJpegOrientation(png) === 1, 'a PNG reads as 1 (no JPEG markers)');
+  ok(sandbox.voJpegOrientation(png) === 1, 'a PNG without an eXIf chunk reads as 1');
+  // a PNG carrying an eXIf chunk (orientation 6) right after IHDR
+  const ihdrEnd = 8 + 12 + ((png[8] << 24) | (png[9] << 16) | (png[10] << 8) | png[11]);
+  const tiff6 = [0x4D,0x4D,0x00,0x2A, 0,0,0,8, 0,1, 0x01,0x12, 0,3, 0,0,0,1, 0,6,0,0, 0,0,0,0];
+  const pngExif = new Uint8Array([...png.slice(0, ihdrEnd), 0,0,0,tiff6.length, 0x65,0x58,0x49,0x66, ...tiff6, 0,0,0,0, ...png.slice(ihdrEnd)]);
+  ok(sandbox.voJpegOrientation(pngExif) === 6, 'a PNG eXIf chunk orientation is read too');
   ok(sandbox.voJpegOrientation(new Uint8Array([0xFF,0xD8,0xFF,0xE1,0,40])) === 1, 'a truncated EXIF segment does not throw');
+
+  // ---- the orientation matrix: every EXIF case lands exactly in the box ----
+  // Stored-picture corners in image space (u right, v up; v=1 is the stored top
+  // row) and where EXIF says each stored corner must appear on screen.
+  const X = 100, Y = 50, W = 300, H = 200;
+  const at = (m, u, v) => [m[0] * u + m[2] * v + m[4], m[1] * u + m[3] * v + m[5]];
+  const scr = { TL: [X, Y + H], TR: [X + W, Y + H], BL: [X, Y], BR: [X + W, Y] };
+  // stored top-left / top-right / bottom-left -> screen corner, per EXIF 1-8
+  const want = { 1: ['TL','TR','BL'], 2: ['TR','TL','BR'], 3: ['BR','BL','TR'], 4: ['BL','BR','TL'],
+                 5: ['TL','BL','TR'], 6: ['TR','BR','TL'], 7: ['BR','TR','BL'], 8: ['BL','TL','BR'] };
+  for (let o = 1; o <= 8; o++) {
+    const m = sandbox.voOrientMatrix(o, X, Y, W, H);
+    const got = [at(m, 0, 1), at(m, 1, 1), at(m, 0, 0)];
+    const exp = want[o].map(k => scr[k]);
+    ok(got.every((g, i) => Math.abs(g[0] - exp[i][0]) < 1e-9 && Math.abs(g[1] - exp[i][1]) < 1e-9), 'EXIF orientation ' + o + ' maps the stored picture onto the box exactly (mirror included)');
+  }
 
   // ---- one photo, one page -------------------------------------------------
   const f1 = new File([jpg], 'IMG_20260406.jpg', { type: 'image/jpeg', lastModified: 1700000000000 });
@@ -76,6 +98,19 @@ function withOrientation(u8, v, le) {
   // the JPEG is embedded unchanged: its bytes appear verbatim inside the PDF
   const idx = Buffer.from(b1).indexOf(Buffer.from(jpg.slice(0, 64)));
   ok(idx > 0 && Buffer.from(b1).subarray(idx, idx + jpg.length).equals(Buffer.from(jpg)), 'the JPEG bytes are embedded in the sealed page unchanged');
+  // the page itself draws the picture (not merely carries it): its content
+  // stream paints /VoPhoto, and /VoPhoto is the embedded image
+  const pageContent = async (doc) => {
+    const node = doc.getPage(0).node, ctx = doc.context;
+    const cs = ctx.lookup(node.get(sandbox.PDFLib.PDFName.of('Contents')));
+    const streams = cs.asArray ? cs.asArray().map(r => ctx.lookup(r)) : [cs];
+    return streams.map(st => { const raw = Buffer.from(st.getContents()); try { return zlib.inflateSync(raw).toString('latin1'); } catch (e) { return raw.toString('latin1'); } }).join('\n');
+  };
+  const c1 = await pageContent(d1);
+  ok(/\/VoPhoto Do/.test(c1) && /\bcm\b/.test(c1), 'the page content paints the photo (cm + /VoPhoto Do)');
+  const xo = d1.getPage(0).node.Resources().lookup(sandbox.PDFLib.PDFName.of('XObject'));
+  const imgObj = d1.context.lookup(xo.get(sandbox.PDFLib.PDFName.of('VoPhoto')));
+  ok(imgObj && Buffer.from(imgObj.getContents()).equals(Buffer.from(jpg)), '/VoPhoto on the page is the original JPEG, byte for byte');
   const [pw, ph] = [d1.getPage(0).getWidth(), d1.getPage(0).getHeight()];
   ok(Math.abs(pw - 595.28) < 0.01 && ph <= 841.9, 'the page is A4 wide and no taller than A4');
 
@@ -100,12 +135,14 @@ function withOrientation(u8, v, le) {
   ok(r.notes.some(n => /Could not use: broken\.jpg \(not a PNG or JPEG picture\)/.test(n)), 'an unreadable picture is named, not silently dropped');
 
   // ---- intake wiring -------------------------------------------------------
-  ok(/function voAddFiles\(fileList\) \{\n  voExpandZips\(fileList\)\.then\(/.test(html), 'every selection is still expanded first');
+  ok(/function voAddFilesQueued\(fileList\) \{\n  return voExpandZips\(fileList\)\.then\(/.test(html), 'every selection is still expanded first');
+  ok(/var files = Array\.prototype\.slice\.call\(fileList\);[^\n]*\n  voIntakeQueue = voIntakeQueue\.then\(/.test(html), 'selections are copied at once and queued, so they land in the order chosen');
   ok(/if \(audioBatch\) return \{ files: files, notes: notes \};\n    return voPhotosToPdfs\(files\)/.test(html), 'photos are converted only when no voice note is in the batch (a voice-note batch keeps its screenshots as-is)');
   ok(!/Chat exports \(\.txt\) and screenshots accompany a voice-note batch/.test(html), 'the old photo refusal is gone');
   ok(/A chat export \(\.txt\) goes with a voice-note batch/.test(html), 'a chat .txt alone is still refused, with a way forward');
   ok(/up to 10 PDFs or photos \(JPG\/PNG\)/.test(html), 'the upload panel says photos are accepted');
-  ok(/accept="[^"]*\.jpg[^"]*image\/jpeg/.test(html), 'the picker still offers JPG/PNG');
+  const accept = (html.match(/id="fileInput" accept="([^"]*)"/) || [])[1] || '';
+  ok(['.png', '.jpg', '.jpeg', 'image/png', 'image/jpeg'].every(t => accept.split(',').includes(t)), 'the picker still offers JPG and PNG (extensions and MIME types)');
 
   console.log(`\nphoto-intake: ${pass} passed, ${fail} failed`);
   process.exit(fail ? 1 : 0);

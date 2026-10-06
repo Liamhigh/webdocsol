@@ -105,7 +105,7 @@ const trunc = zipBuf.slice(0);
 
 // ---- wiring in the page ----------------------------------------------------
 ok(/accept="[^"]*\.zip,application\/zip,application\/x-zip-compressed"/.test(html), 'the picker accepts .zip');
-ok(/function voAddFiles\(fileList\) \{\n  voExpandZips\(fileList\)\.then\(/.test(html) && /function voAddFilesNow\(fileList\) \{/.test(html), 'every selection is expanded before the unchanged intake runs');
+ok(/function voAddFilesQueued\(fileList\) \{\n  return voExpandZips\(fileList\)\.then\(/.test(html) && /voIntakeQueue = voIntakeQueue\.then\(function \(\) \{ return voAddFilesQueued\(files\); \}\)/.test(html) && /function voAddFilesNow\(fileList\) \{/.test(html), 'every selection is expanded before the unchanged intake runs');
 ok(/Documents in the export are not part of a voice-note batch — seal them separately/.test(html), 'documents inside a voice-note export are named for a separate seal, never mixed');
 ok(/id="zipNote"/.test(html) && /function voShowZipNote\(notes\)/.test(html), 'the panel note element and its writer exist');
 ok(/unpacked <strong>on this device, never uploaded<\/strong>/.test(html), 'the upload copy says the archive never leaves the device');

@@ -14645,9 +14645,15 @@ function voShowZipNote(notes) {
 // Entry point for every selection (picker or drop): archives are expanded
 // first; a chat export that holds voice notes AND documents becomes a
 // voice-note batch, and its documents are named in the note for a separate
-// seal — the intake below refuses to guess at a mixed seal.
+// seal — the intake below refuses to guess at a mixed seal. Selections are
+// queued, so a later one never lands before an earlier one still unpacking.
+var voIntakeQueue = Promise.resolve();
 function voAddFiles(fileList) {
-  voExpandZips(fileList).then(function (x) {
+  var files = Array.prototype.slice.call(fileList); // copied now: the picker is cleared right after
+  voIntakeQueue = voIntakeQueue.then(function () { return voAddFilesQueued(files); });
+}
+function voAddFilesQueued(fileList) {
+  return voExpandZips(fileList).then(function (x) {
     var files = x.files, notes = x.notes;
     if (x.sawZip) {
       var hasAudio = files.some(function (f) { return voIsAudioFile(f) || voIsVideoFile(f); }) || selectedAudioFiles.length > 0;
@@ -14673,36 +14679,65 @@ function voAddFiles(fileList) {
   });
 }
 
-// EXIF orientation (tag 0x0112) of a JPEG, 1 when absent or unreadable.
+// EXIF orientation (tag 0x0112) read from a TIFF header at offset t; 1 when
+// absent or unreadable.
+function voTiffOrientation(u8, t) {
+  if (t + 8 > u8.length) return 1;
+  var le = u8[t] === 0x49;
+  var r16 = function (o) { return le ? (u8[o] | (u8[o + 1] << 8)) : ((u8[o] << 8) | u8[o + 1]); };
+  var r32 = function (o) { return le ? ((u8[o] | (u8[o + 1] << 8) | (u8[o + 2] << 16)) + u8[o + 3] * 16777216) : (u8[o] * 16777216 + ((u8[o + 1] << 16) | (u8[o + 2] << 8) | u8[o + 3])); };
+  var ifd = t + r32(t + 4);
+  if (ifd + 2 > u8.length) return 1;
+  var n = r16(ifd);
+  for (var k = 0; k < n; k++) {
+    var e = ifd + 2 + k * 12;
+    if (e + 10 > u8.length) return 1;
+    if (r16(e) === 0x0112) { var v = r16(e + 8); return (v >= 1 && v <= 8) ? v : 1; }
+  }
+  return 1;
+}
+// EXIF orientation of a JPEG (APP1 "Exif") or a PNG (eXIf chunk); 1 otherwise.
 function voJpegOrientation(u8) {
+  if (u8.length > 8 && u8[0] === 0x89 && u8[1] === 0x50 && u8[2] === 0x4E && u8[3] === 0x47) {
+    var q = 8;
+    while (q + 8 <= u8.length) {
+      var clen = u8[q] * 16777216 + ((u8[q + 1] << 16) | (u8[q + 2] << 8) | u8[q + 3]);
+      var ty = String.fromCharCode(u8[q + 4], u8[q + 5], u8[q + 6], u8[q + 7]);
+      if (ty === 'eXIf') return voTiffOrientation(u8, q + 8);
+      if (ty === 'IDAT' || ty === 'IEND') return 1;
+      q += 12 + clen;
+    }
+    return 1;
+  }
   if (u8.length < 4 || u8[0] !== 0xFF || u8[1] !== 0xD8) return 1;
   var i = 2;
   while (i + 4 < u8.length) {
     if (u8[i] !== 0xFF) return 1;
     var mk = u8[i + 1], len = (u8[i + 2] << 8) | u8[i + 3];
     if (mk === 0xDA || mk === 0xD9) return 1;
-    if (mk === 0xE1 && i + 10 < u8.length && u8[i + 4] === 0x45 && u8[i + 5] === 0x78 && u8[i + 6] === 0x69 && u8[i + 7] === 0x66) {
-      var t = i + 10, le = u8[t] === 0x49;
-      var r16 = function (o) { return le ? (u8[o] | (u8[o + 1] << 8)) : ((u8[o] << 8) | u8[o + 1]); };
-      var r32 = function (o) { return le ? ((u8[o] | (u8[o + 1] << 8) | (u8[o + 2] << 16)) + u8[o + 3] * 16777216) : (u8[o] * 16777216 + ((u8[o + 1] << 16) | (u8[o + 2] << 8) | u8[o + 3])); };
-      if (t + 8 > u8.length) return 1;
-      var ifd = t + r32(t + 4);
-      if (ifd + 2 > u8.length) return 1;
-      var n = r16(ifd);
-      for (var k = 0; k < n; k++) {
-        var e = ifd + 2 + k * 12;
-        if (e + 10 > u8.length) return 1;
-        if (r16(e) === 0x0112) { var v = r16(e + 8); return (v >= 1 && v <= 8) ? v : 1; }
-      }
-      return 1;
-    }
+    if (mk === 0xE1 && i + 10 < u8.length && u8[i + 4] === 0x45 && u8[i + 5] === 0x78 && u8[i + 6] === 0x69 && u8[i + 7] === 0x66) return voTiffOrientation(u8, i + 10);
     i += 2 + len;
   }
   return 1;
 }
+// The PDF matrix [a b c d e f] that draws the stored picture (unit square)
+// upright into the box x..x+dw, y..y+dh for EXIF orientation o (1-8), mirror
+// images included.
+function voOrientMatrix(o, x, y, dw, dh) {
+  switch (o) {
+    case 2: return [-dw, 0, 0, dh, x + dw, y];
+    case 3: return [-dw, 0, 0, -dh, x + dw, y + dh];
+    case 4: return [dw, 0, 0, -dh, x, y + dh];
+    case 5: return [0, -dh, -dw, 0, x + dw, y + dh];
+    case 6: return [0, -dh, dw, 0, x, y + dh];
+    case 7: return [0, dh, dw, 0, x, y];
+    case 8: return [0, dh, -dw, 0, x + dw, y];
+    default: return [dw, 0, 0, dh, x, y];
+  }
+}
 // One photo (PNG/JPEG) on one PDF page. The JPEG bytes are embedded unchanged
 // (a PNG is re-compressed losslessly by pdf-lib); the page shows the picture
-// upright (EXIF orientation honoured) and, beneath it, the file name and the
+// as the camera meant it (EXIF orientation applied) and, beneath it, the file name and the
 // SHA-512 of the original file, so the sealed page names the photo it carries.
 async function voPhotoToPdf(file) {
   var PDFLibRef = window.PDFLib;
@@ -14714,7 +14749,7 @@ async function voPhotoToPdf(file) {
   var sha = await computeSHA512(bytes);
   var doc = await PDFLibRef.PDFDocument.create();
   var img = isPng ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
-  var orient = isJpg ? voJpegOrientation(bytes) : 1;
+  var orient = voJpegOrientation(bytes);
   var quarter = orient >= 5; // 5-8: the stored picture is on its side
   var w0 = img.width, h0 = img.height;
   var vw = quarter ? h0 : w0, vh = quarter ? w0 : h0; // upright size
@@ -14722,20 +14757,16 @@ async function voPhotoToPdf(file) {
   var sc = Math.min(maxW / vw, maxH / vh);
   var dw = vw * sc, dh = vh * sc, PH = dh + 2 * M + CAP;
   var page = doc.addPage([PW, PH]);
-  var x = (PW - dw) / 2, y = M + CAP;
-  var iw = w0 * sc, ih = h0 * sc, deg = PDFLibRef.degrees;
-  // Orientations 2, 4, 5 and 7 are mirror images; the picture is drawn
-  // without the mirror and the caption says so.
-  if (orient === 3 || orient === 4) page.drawImage(img, { x: x + dw, y: y + dh, width: iw, height: ih, rotate: deg(180) });
-  else if (orient === 6 || orient === 5) page.drawImage(img, { x: x, y: y + dh, width: iw, height: ih, rotate: deg(-90) });
-  else if (orient === 8 || orient === 7) page.drawImage(img, { x: x + dw, y: y, width: iw, height: ih, rotate: deg(90) });
-  else page.drawImage(img, { x: x, y: y, width: iw, height: ih });
+  var m = voOrientMatrix(orient, (PW - dw) / 2, M + CAP, dw, dh);
+  page.node.setXObject(PDFLibRef.PDFName.of('VoPhoto'), img.ref);
+  page.pushOperators(PDFLibRef.pushGraphicsState(),
+    PDFLibRef.concatTransformationMatrix(m[0], m[1], m[2], m[3], m[4], m[5]),
+    PDFLibRef.drawObject('VoPhoto'), PDFLibRef.popGraphicsState());
   var f1 = await doc.embedFont(PDFLibRef.StandardFonts.Helvetica);
   var f2 = await doc.embedFont(PDFLibRef.StandardFonts.Courier);
   var nm = String(file.name).replace(/[^\x20-\x7E]/g, '?');
   if (nm.length > 90) nm = nm.slice(0, 87) + '...';
-  var mirrored = orient === 2 || orient === 4 || orient === 5 || orient === 7;
-  page.drawText('Photo: ' + nm + ' (' + bytes.length + ' bytes' + (mirrored ? '; the camera marked it mirrored, shown unmirrored' : '') + ')', { x: M, y: M + 13, size: 7, font: f1 });
+  page.drawText('Photo: ' + nm + ' (' + bytes.length + ' bytes' + ')', { x: M, y: M + 13, size: 7, font: f1 });
   page.drawText('Original file SHA-512: ' + sha, { x: M, y: M + 3, size: 5.6, font: f2 });
   try { doc.setTitle('Photo ' + nm); doc.setSubject('Original file SHA-512 ' + sha); } catch (e) {}
   var out = await doc.save({ useObjectStreams: true });
