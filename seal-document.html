@@ -356,7 +356,7 @@
   <div class="upload-zone" id="uploadZone">
     <div class="icon">&#128196;</div>
     <h3>Upload PDF Document(s) — sealed as one</h3>
-    <p>Drag and drop <strong>up to 10 PDFs</strong> here, or click to browse (hold Ctrl/Cmd to pick several). Multiple documents are <strong>merged and sealed as ONE</strong> — you get back a single sealed document and a single seal certificate.</p>
+    <p>Drag and drop <strong>up to 10 PDFs or photos (JPG/PNG)</strong> here, or click to browse (hold Ctrl/Cmd to pick several). Each photo is placed on its own PDF page on this device. Multiple documents are <strong>merged and sealed as ONE</strong> — you get back a single sealed document and a single seal certificate.</p>
     <p style="margin-top:8px;"><strong>Voice notes:</strong> pick the recordings (.opus) with any screen grabs of them — or upload a <strong>WhatsApp chat export (.zip)</strong>: on your phone open the chat → ⋮ → More → Export chat → <em>Include media</em>. The archive is unpacked <strong>on this device, never uploaded</strong>; every voice note, image and the chat text seal together and the report ties each note to its sender and time.</p>
     <input type="file" id="fileInput" accept=".pdf,application/pdf,.opus,.ogg,.oga,.m4a,.aac,.mp3,.wav,.amr,.3gp,audio/*,.txt,text/plain,.png,.jpg,.jpeg,image/png,image/jpeg,.mp4,.mov,.m4v,.webm,.mkv,.avi,video/*,.zip,application/zip,application/x-zip-compressed" multiple>
   </div>
@@ -14659,11 +14659,102 @@ function voAddFiles(fileList) {
         }
       }
     }
-    voShowZipNote(notes);
-    if (files.length) voAddFilesNow(files);
+    // Photos with no voice note in the batch are documents: each is placed on
+    // its own PDF page (the original bytes and their SHA-512 recorded on it)
+    // and joins the PDF bundle, where on-device OCR reads it.
+    var audioBatch = selectedAudioFiles.length > 0 || files.some(function (f) { return voIsAudioFile(f) || voIsVideoFile(f); });
+    if (audioBatch) return { files: files, notes: notes };
+    return voPhotosToPdfs(files).then(function (y) { return { files: y.files, notes: notes.concat(y.notes) }; });
+  }).then(function (r) {
+    voShowZipNote(r.notes);
+    if (r.files.length) voAddFilesNow(r.files);
   }).catch(function (err) {
     alert('Could not read the selection: ' + (err && err.message ? err.message : 'unknown error'));
   });
+}
+
+// EXIF orientation (tag 0x0112) of a JPEG, 1 when absent or unreadable.
+function voJpegOrientation(u8) {
+  if (u8.length < 4 || u8[0] !== 0xFF || u8[1] !== 0xD8) return 1;
+  var i = 2;
+  while (i + 4 < u8.length) {
+    if (u8[i] !== 0xFF) return 1;
+    var mk = u8[i + 1], len = (u8[i + 2] << 8) | u8[i + 3];
+    if (mk === 0xDA || mk === 0xD9) return 1;
+    if (mk === 0xE1 && i + 10 < u8.length && u8[i + 4] === 0x45 && u8[i + 5] === 0x78 && u8[i + 6] === 0x69 && u8[i + 7] === 0x66) {
+      var t = i + 10, le = u8[t] === 0x49;
+      var r16 = function (o) { return le ? (u8[o] | (u8[o + 1] << 8)) : ((u8[o] << 8) | u8[o + 1]); };
+      var r32 = function (o) { return le ? ((u8[o] | (u8[o + 1] << 8) | (u8[o + 2] << 16)) + u8[o + 3] * 16777216) : (u8[o] * 16777216 + ((u8[o + 1] << 16) | (u8[o + 2] << 8) | u8[o + 3])); };
+      if (t + 8 > u8.length) return 1;
+      var ifd = t + r32(t + 4);
+      if (ifd + 2 > u8.length) return 1;
+      var n = r16(ifd);
+      for (var k = 0; k < n; k++) {
+        var e = ifd + 2 + k * 12;
+        if (e + 10 > u8.length) return 1;
+        if (r16(e) === 0x0112) { var v = r16(e + 8); return (v >= 1 && v <= 8) ? v : 1; }
+      }
+      return 1;
+    }
+    i += 2 + len;
+  }
+  return 1;
+}
+// One photo (PNG/JPEG) on one PDF page. The JPEG bytes are embedded unchanged
+// (a PNG is re-compressed losslessly by pdf-lib); the page shows the picture
+// upright (EXIF orientation honoured) and, beneath it, the file name and the
+// SHA-512 of the original file, so the sealed page names the photo it carries.
+async function voPhotoToPdf(file) {
+  var PDFLibRef = window.PDFLib;
+  if (!PDFLibRef || !PDFLibRef.PDFDocument) throw new Error('PDF engine not loaded');
+  var bytes = new Uint8Array(await voReadFileBytes(file));
+  var isPng = bytes.length > 8 && bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4E && bytes[3] === 0x47;
+  var isJpg = bytes.length > 3 && bytes[0] === 0xFF && bytes[1] === 0xD8;
+  if (!isPng && !isJpg) throw new Error('not a PNG or JPEG picture');
+  var sha = await computeSHA512(bytes);
+  var doc = await PDFLibRef.PDFDocument.create();
+  var img = isPng ? await doc.embedPng(bytes) : await doc.embedJpg(bytes);
+  var orient = isJpg ? voJpegOrientation(bytes) : 1;
+  var quarter = orient >= 5; // 5-8: the stored picture is on its side
+  var w0 = img.width, h0 = img.height;
+  var vw = quarter ? h0 : w0, vh = quarter ? w0 : h0; // upright size
+  var PW = 595.28, M = 18, CAP = 30, maxW = PW - 2 * M, maxH = 841.89 - 2 * M - CAP;
+  var sc = Math.min(maxW / vw, maxH / vh);
+  var dw = vw * sc, dh = vh * sc, PH = dh + 2 * M + CAP;
+  var page = doc.addPage([PW, PH]);
+  var x = (PW - dw) / 2, y = M + CAP;
+  var iw = w0 * sc, ih = h0 * sc, deg = PDFLibRef.degrees;
+  // Orientations 2, 4, 5 and 7 are mirror images; the picture is drawn
+  // without the mirror and the caption says so.
+  if (orient === 3 || orient === 4) page.drawImage(img, { x: x + dw, y: y + dh, width: iw, height: ih, rotate: deg(180) });
+  else if (orient === 6 || orient === 5) page.drawImage(img, { x: x, y: y + dh, width: iw, height: ih, rotate: deg(-90) });
+  else if (orient === 8 || orient === 7) page.drawImage(img, { x: x + dw, y: y, width: iw, height: ih, rotate: deg(90) });
+  else page.drawImage(img, { x: x, y: y, width: iw, height: ih });
+  var f1 = await doc.embedFont(PDFLibRef.StandardFonts.Helvetica);
+  var f2 = await doc.embedFont(PDFLibRef.StandardFonts.Courier);
+  var nm = String(file.name).replace(/[^\x20-\x7E]/g, '?');
+  if (nm.length > 90) nm = nm.slice(0, 87) + '...';
+  var mirrored = orient === 2 || orient === 4 || orient === 5 || orient === 7;
+  page.drawText('Photo: ' + nm + ' (' + bytes.length + ' bytes' + (mirrored ? '; the camera marked it mirrored, shown unmirrored' : '') + ')', { x: M, y: M + 13, size: 7, font: f1 });
+  page.drawText('Original file SHA-512: ' + sha, { x: M, y: M + 3, size: 5.6, font: f2 });
+  try { doc.setTitle('Photo ' + nm); doc.setSubject('Original file SHA-512 ' + sha); } catch (e) {}
+  var out = await doc.save({ useObjectStreams: true });
+  var base = String(file.name).replace(/\.[^.]*$/, '') || 'photo';
+  return new File([out], base + '.photo.pdf', { type: 'application/pdf', lastModified: file.lastModified || 0 });
+}
+// Convert every photo in a selection to a one-page PDF (other files pass
+// through). A photo that cannot be read is named in the panel note.
+async function voPhotosToPdfs(files) {
+  var out = [], notes = [], done = 0, failed = [];
+  for (var i = 0; i < files.length; i++) {
+    var f = files[i];
+    if (!(VO_SCREENSHOT_RE.test(f.name) || /^image\/(png|jpe?g)$/.test(f.type))) { out.push(f); continue; }
+    try { out.push(await voPhotoToPdf(f)); done++; }
+    catch (e) { failed.push(f.name + ' (' + (e && e.message ? e.message : 'unreadable') + ')'); }
+  }
+  if (done) notes.push(done + ' photo' + (done === 1 ? ' was' : 's were') + ' placed on ' + (done === 1 ? 'a PDF page' : 'PDF pages (one page each)') + ' on this device, to be sealed as documents; each page records the original file’s SHA-512.');
+  if (failed.length) notes.push('Could not use: ' + failed.join(', ') + '. Only PNG and JPEG pictures can be sealed.');
+  return { files: out, notes: notes };
 }
 
 // Add PDFs to the bundle (deduped by name+size), enforcing a total-size cap.
@@ -14704,9 +14795,10 @@ function voAddFilesNow(fileList) {
     voRenderAudioFiles();
     return;
   }
-  if (txtIn.length || shotIn.length) {
-    alert('Chat exports (.txt) and screenshots accompany a voice-note batch — add the voice notes first.');
-    return;
+  if (txtIn.length) {
+    alert('A chat export (.txt) goes with a voice-note batch — add the voice notes first. To seal the chat text on its own, save or print it as a PDF.');
+    if (!pdfIn.length) return;
+    fileList = pdfIn;
   }
   for (var i = 0; i < fileList.length; i++) {
     var f = fileList[i];

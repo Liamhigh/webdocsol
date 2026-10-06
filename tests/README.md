@@ -50,8 +50,8 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**35 suites, 2706 assertions**, all green (counted 5 October 2026, with the Combine 06 April 2026
-run and its review, `ENGINE.md` §12.17). `run-all.js` is the
+**36 suites, 2735 assertions**, all green (counted 6 October 2026, with photos sealed as
+documents, `ENGINE.md` §12.18). `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file
 there. What each suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
