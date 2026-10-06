@@ -46,6 +46,7 @@ const suites = [
   'louw-naidoo-regression.test.mjs',
   'timeline-dates.test.mjs',
   'doc-fact-index.test.mjs',
+  'cross-doc-conflicts.test.mjs',
 ];
 
 let failed = 0;

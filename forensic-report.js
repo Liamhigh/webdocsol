@@ -4333,6 +4333,24 @@ function secFactIndex(ctx, data) {
   ctx.gap(6);
 }
 
+// Cross-document observations: where two RECORD pages state facts about the
+// same subject that cannot both hold. Each is quoted on both sides and stated
+// in a fixed neutral form — it names no offence, declares no owner, and reaches
+// no conclusion. Which statement governs is for the court.
+function secCrossDocObservations(ctx, data) {
+  var cons = (data.findings && data.findings.crossDocConflicts) || [];
+  if (!cons.length) return;
+  ctx.newBodyPage();
+  ctx.heading('CROSS-DOCUMENT OBSERVATIONS');
+  ctx.para('Where two record pages state facts about the same subject that cannot both be true, both are set out below, each quoted from its page. This is an observation, not a conclusion: it does not say which statement is correct, who the owner is, or that any wrong was done — that is for the court. Secondary-source and analysis pages are not compared here.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  for (var i = 0; i < cons.length; i++) {
+    var c = cons[i];
+    ctx.para((i + 1) + '. ' + c.statement, { size: 9.8, after: 4 });
+    if (c.a && c.a.quote) ctx.bullet('Page ' + c.a.page + ': "' + capText(String(c.a.quote).replace(/\s+/g, ' '), 180, '…') + '"', { size: 8.5, color: GRAY, after: 2 });
+    if (c.b && c.b.quote) ctx.bullet('Page ' + c.b.page + ': "' + capText(String(c.b.quote).replace(/\s+/g, ' '), 180, '…') + '"', { size: 8.5, color: GRAY, after: 8 });
+  }
+}
+
 function secDocumentsInBundle(ctx, data) {
   var map = (data.findings && data.findings.documentMap) || [];
   if (map.length < 2) return;
@@ -4834,6 +4852,7 @@ async function build(opts) {
   secExecutiveSummary(ctx, data);
   secDocumentsInBundle(ctx, data);
   secFactIndex(ctx, data);            // DOCUMENT FACT INDEX (descriptive; no comparison)
+  secCrossDocObservations(ctx, data); // CROSS-DOCUMENT OBSERVATIONS (neutral; no verdict)
   secShortVersion(ctx, data);
   secNarrative(ctx, data, { title: 'THE STORY IN PLAIN LANGUAGE' });
   secUnreadPages(ctx, data);

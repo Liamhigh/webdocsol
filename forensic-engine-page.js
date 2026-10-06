@@ -5685,6 +5685,9 @@ var VO_FACT_OWNER_DIR = [
   new RegExp('previous owner\\s*:?\\s*' + VO_FACT_NAME + '[\\s\\S]{0,60}?new owner\\s*:?\\s*' + VO_FACT_NAME, 'i'),
   new RegExp('(?:transferred|transfer|changed|passed|sold)\\s+from\\s+' + VO_FACT_NAME + '\\s+to\\s+' + VO_FACT_NAME, 'i')
 ];
+// Acquirer only ("sells/transfers/conveys … to Y", "the vessel passes to Y"):
+// a sale or swap page often names who the vessel goes TO without a "from X".
+var VO_FACT_ACQUIRER = new RegExp('(?:sell[s]?|sold|transfer[s]?|transferred|convey[s]?|conveyed|awarded|passes|passed)\\b[\\s\\S]{0,40}?\\bto\\s+' + VO_FACT_NAME, 'i');
 function voFactSnippet(raw, idx, len) {
   var s = raw.slice(Math.max(0, idx - 90), idx + (len || 0) + 90).replace(/\s+/g, ' ').trim();
   return s.length > 200 ? s.slice(0, 197) + '…' : s;
@@ -5734,6 +5737,10 @@ function voExtractPageFacts(text) {
     var om = raw.match(VO_FACT_OWNER_DIR[oi]);
     if (om) { facts.ownerFrom = cleanName(om[1]); facts.ownerTo = cleanName(om[2]); facts.ownerQuote = voFactSnippet(raw, om.index, om[0].length); break; }
   }
+  if (!facts.ownerTo) {
+    var am = raw.match(VO_FACT_ACQUIRER);
+    if (am) { facts.ownerTo = cleanName(am[1]); facts.ownerQuote = voFactSnippet(raw, am.index, am[0].length); }
+  }
   return facts;
 }
 // Flatten a page's facts into {label, value, quote} rows so every stated value
@@ -5769,10 +5776,74 @@ function voBuildFactIndex(textBlocks, secondaryPages) {
       rights: f.rights.map(function (x) { return x.value; }),
       amounts: f.amounts.map(function (x) { return x.value; }),
       companyRegs: f.companyRegs.map(function (x) { return x.value; }),
-      date: f.date, ownerFrom: f.ownerFrom, ownerTo: f.ownerTo
+      date: f.date, ownerFrom: f.ownerFrom, ownerTo: f.ownerTo, ownerQuote: f.ownerQuote
     });
   }
   return { records: records, excluded: excluded };
+}
+
+// ===== Cross-document conflict detection (stage B) ===========================
+// It reads the fact index (RECORD pages only) and reports where two record
+// pages state facts about the SAME subject that cannot both hold. It is a
+// contradiction detector, NOT a judge: it names no offence, declares no owner,
+// and reaches no conclusion. Each conflict quotes both pages and says, in a
+// fixed neutral form, only that the two statements cannot both be true — "which
+// governs is for the court". The wording is deliberately narrow and is pinned
+// by a forbidden-words test (no "fraud", "forgery", "illegal", "the true owner
+// is", "therefore", or any legal conclusion). Analysis/secondary pages are not
+// in the fact index, so an account OF the record can never raise a conflict.
+var VO_NAME_SUFFIX_TOK = { pty: 1, ltd: 1, limited: 1, cc: 1, inc: 1, llp: 1, trust: 1, npc: 1, edms: 1, bpk: 1 };
+function voNameCore(n) { return String(n || '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+function voNameSurname(n) {
+  var toks = voNameCore(n).split(' ').filter(function (t) { return t && !VO_NAME_SUFFIX_TOK[t]; });
+  return toks.length ? toks[toks.length - 1] : '';
+}
+// Two party names are treated as the SAME party when one core contains the
+// other (an initialled form of the same name) or they share a surname token.
+// Erring toward "same" keeps "R. Louw" and "Ritzema Louw" from being read as a
+// conflict — only clearly different parties raise one.
+function voSameParty(a, b) {
+  var ca = voNameCore(a), cb = voNameCore(b);
+  if (!ca || !cb) return true;
+  if (ca === cb || ca.indexOf(cb) !== -1 || cb.indexOf(ca) !== -1) return true;
+  var sa = voNameSurname(a), sb = voNameSurname(b);
+  return !!sa && sa === sb;
+}
+function voCrossDocConflicts(factIndex) {
+  var out = [], seen = {};
+  var recs = (factIndex && factIndex.records) || [];
+  var byVessel = {};
+  for (var i = 0; i < recs.length; i++) {
+    var r = recs[i];
+    if (!r.ownerTo || !r.vessels || !r.vessels.length) continue;
+    for (var v = 0; v < r.vessels.length; v++) (byVessel[r.vessels[v]] = byVessel[r.vessels[v]] || []).push(r);
+  }
+  Object.keys(byVessel).sort().forEach(function (vessel) {
+    var list = byVessel[vessel];
+    for (var a = 0; a < list.length; a++) {
+      for (var b = a + 1; b < list.length; b++) {
+        var ra = list[a], rb = list[b];
+        if (ra.page === rb.page) continue;
+        if (voSameParty(ra.ownerTo, rb.ownerTo)) continue; // same acquirer, no conflict
+        var key = vessel + '|' + Math.min(ra.page, rb.page) + '|' + Math.max(ra.page, rb.page);
+        if (seen[key]) continue;
+        seen[key] = true;
+        var lo = ra.page <= rb.page ? ra : rb, hi = ra.page <= rb.page ? rb : ra;
+        var datePhrase = (lo.date && hi.date) ? (lo.date === hi.date ? ' on the same date' : ' on ' + hi.date) : (hi.date ? ' on ' + hi.date : '');
+        var loDate = lo.date ? ' on ' + lo.date : '';
+        var statement = 'Page ' + lo.page + ' states ' + lo.ownerTo + ' acquired ' + vessel + loDate + '. ' +
+          'Page ' + hi.page + ' states ' + hi.ownerTo + ' acquired the same vessel' + datePhrase + '. ' +
+          'These two statements cannot both describe the sole new owner of ' + vessel + '.';
+        out.push({
+          kind: 'ownership', subject: vessel,
+          a: { page: lo.page, owner: lo.ownerTo, date: lo.date || null, quote: lo.ownerQuote || null },
+          b: { page: hi.page, owner: hi.ownerTo, date: hi.date || null, quote: hi.ownerQuote || null },
+          statement: statement
+        });
+      }
+    }
+  });
+  return out;
 }
 
 function detectSerialPatterns(textBlocks) {
@@ -6744,6 +6815,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
       ' pages) -- effectively no text layer. Zero findings here means the content was NOT examined, not that it is consistent.';
   }
 
+  var _factIndex = voBuildFactIndex(textBlocks, _secondaryAllPages);
+
   return {
     engineVersion: VO_ENGINE_VERSION,
     // The signed rule package this scan applied (version, key, canonical
@@ -6763,7 +6836,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     // whitelists fields) and is dropped after the narrate call.
     pageTexts: textBlocks,
     documentMap: voDetectDocuments(textBlocks),
-    factIndex: voBuildFactIndex(textBlocks, _secondaryAllPages),
+    factIndex: _factIndex,
+    crossDocConflicts: voCrossDocConflicts(_factIndex),
     swornPages: swornPages,
     timeline: voBuildTimeline(allFindings, textBlocks, _secondaryAllPages),
     personIndex: voBuildPersonIndex(allFindings),
@@ -7270,6 +7344,8 @@ if (typeof module !== 'undefined' && module.exports) {
     voExtractPageFacts: voExtractPageFacts,
     voBuildFactIndex: voBuildFactIndex,
     voFactRows: voFactRows,
+    voCrossDocConflicts: voCrossDocConflicts,
+    voSameParty: voSameParty,
     voBuildPersonIndex: voBuildPersonIndex,
     VO_RULES_PUBLIC_KEY_ID: VO_RULES_PUBLIC_KEY_ID,
     VO_RULES_ALGORITHM: VO_RULES_ALGORITHM,
