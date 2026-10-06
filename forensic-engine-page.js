@@ -1481,6 +1481,40 @@ var DETECTORS = {
     // passport) within the same passage.
     var ID_CUE = /\b(?:id|i\.d\.|identity|identification|passport|id no\.?|id number|identity number)\b/i;
     var CURRENCY_PREFIX = /^(?:R|ZAR|N|P|K|USD|GBP|EUR|AED|Rs)$/;
+    // Classify the identifier TYPE before comparing. The Louw v Naidoo run
+    // (evidence-bundle-6-docs) fused one man's SA ID, a DFFE fishing-right
+    // number and a second man's SA ID into "4 different identity numbers
+    // attributed to one labelled subject": the right number LF210223 is not an
+    // identity number at all, and "4805175068087" / "480517 5068 08 7" are the
+    // SAME ID typed solid and spaced. A finding only fires within ONE identifier
+    // type ('said' = 13-digit SA ID led by a plausible YYMMDD; 'alpha' = a
+    // labelled passport/lettered code). Fishing/sardine rights (LF…, KSBS…),
+    // vessel registrations (DTD…) and company registrations (NNNN/NNNNNN/NN,
+    // CK…) are other kinds of number and never an identity. The canonical form
+    // (digits only for 'said') is what dedupes the spaced/solid pair.
+    var idCanon = function (value) { return value.replace(/\s+/g, '').toUpperCase(); };
+    // A letter-prefixed code is only EXCLUDED as a right/vessel/company number
+    // when the surrounding text labels it one; otherwise a labelled passport or
+    // identity code that happens to share a reserved prefix (an "LF…"/"CK…"
+    // passport) is still classified. The 13-digit SA-ID and the
+    // NNNN/NNNNNN/NN company shapes are unambiguous and need no cue.
+    var RIGHT_CUE = /\b(?:right|permit|licen[cs]e|quota|fishing|linefish|sardine|seine|zone)\b/i;
+    var VESSEL_CUE = /\b(?:vessel|boat|ski-?boat|craft|hull|samsa|dinghy|registration of)\b/i;
+    var COMPANY_CUE = /\b(?:cc|close corp|\(pty\)|company reg|cipc|enterprise|holdings)\b/i;
+    var idClass = function (value, around) {
+      var cx = String(around || '');
+      var v = value.replace(/\s+/g, '');
+      if (/^\d{13}$/.test(v)) {
+        var mm = +v.slice(2, 4), dd = +v.slice(4, 6);
+        return (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) ? 'said' : null;
+      }
+      if (/^\d{4}\/\d{6}\/\d{2}$/.test(v)) return null;            // company registration (unambiguous shape)
+      if (/^(?:LF|KSBS)\d/i.test(v) && RIGHT_CUE.test(cx)) return null;   // fishing / sardine-beach-seine right
+      if (/^DTD\d+[A-Z]?$/i.test(v) && VESSEL_CUE.test(cx)) return null;  // vessel registration
+      if (/^CK\d/i.test(v) && COMPANY_CUE.test(cx)) return null;          // close-corporation registration
+      if (/^[A-Z]{1,2}\d{6,10}[A-Z]?$/.test(v)) return 'alpha';    // labelled passport / lettered identity code
+      return null;
+    };
     // Whose identity? A lease names the lessor's and the lessee's identity
     // numbers; an affidavit carries the deponent's and the commissioner's.
     // Two people, two numbers, is the ordinary shape of a South African
@@ -1516,7 +1550,9 @@ var DETECTORS = {
             var letters = (val.match(/^[A-Z]+/) || [''])[0];
             if (CURRENCY_PREFIX.test(letters)) continue; // R103509 is money, not a person
           }
-          ids.push({ value: val, page: i, pos: match.index, who: personBefore(textBlocks[i], match.index) });
+          var cls = idClass(val, around);
+          if (!cls) continue; // a right/permit, vessel or company number is not an identity
+          ids.push({ value: val, canon: idCanon(val), cls: cls, page: i, pos: match.index, who: personBefore(textBlocks[i], match.index) });
         }
       }
     }
@@ -1535,30 +1571,43 @@ var DETECTORS = {
     // finding that cannot say WHICH numbers is not actionable -- cite-or-stay-
     // silent -- so name the values and stay honest that they are ID-*shaped*
     // strings (a Capitec client reference matches the same pattern as an ID).
-    var idUniq = [], idPages = [], who = null;
+    // Group distinct canonical values to ONE subject, and keep each subject's
+    // conflict SEPARATE: two people, each carrying two IDs, are two findings,
+    // never one list of four attributed to the last name seen. A subject is the
+    // SAME resolved name (keyed per identifier type), or — for ambiguous
+    // lettered codes with no visible name — one passage (same page). Two
+    // different 13-digit SA IDs with no name between them are the ordinary
+    // lessor/lessee shape, not one subject, so a 'said' pair never groups on the
+    // no-name branch. Values of different identifier types are never grouped;
+    // canonical de-duplication collapses the solid/spaced form of one ID.
+    var groups = {};
+    var addToGroup = function (key, whoName, e) {
+      var g = groups[key] || (groups[key] = { who: whoName || null, values: [], canon: {}, pages: {} });
+      if (!g.canon[e.canon]) { g.canon[e.canon] = 1; g.values.push(e.value); }
+      g.pages[e.page + 1] = 1;
+    };
     for (var a = 0; a < ids.length; a++) {
       for (var b = a + 1; b < ids.length; b++) {
         var ea = ids[a], eb = ids[b];
-        if (ea.value.replace(/\s+/g, '') === eb.value.replace(/\s+/g, '')) continue;
-        var same = false;
-        if (ea.who && eb.who) same = (ea.who === eb.who);
-        else if (!ea.who && !eb.who) same = (ea.page === eb.page && Math.abs(ea.pos - eb.pos) <= 200);
-        if (!same) continue;
-        if (idUniq.indexOf(ea.value) === -1) idUniq.push(ea.value);
-        if (idUniq.indexOf(eb.value) === -1) idUniq.push(eb.value);
-        if (idPages.indexOf(ea.page + 1) === -1) idPages.push(ea.page + 1);
-        if (idPages.indexOf(eb.page + 1) === -1) idPages.push(eb.page + 1);
-        if (ea.who && ea.who === eb.who) who = ea.who;
+        if (ea.canon === eb.canon) continue;   // the same identity, solid vs spaced
+        if (ea.cls !== eb.cls) continue;        // an SA ID and a passport are two kinds of number, not a contradiction
+        var key = null, whoName = null;
+        if (ea.who && eb.who && ea.who === eb.who) { key = 'who:' + ea.cls + ':' + ea.who; whoName = ea.who; }
+        else if (!ea.who && !eb.who && ea.cls === 'alpha' && ea.page === eb.page && Math.abs(ea.pos - eb.pos) <= 200) { key = 'pg:' + ea.page; }
+        if (!key) continue;
+        addToGroup(key, whoName, ea); addToGroup(key, whoName, eb);
       }
     }
-    if (idUniq.length >= 2) {
-      idPages.sort(function (x, y) { return x - y; });
+    Object.keys(groups).forEach(function (key) {
+      var g = groups[key];
+      if (g.values.length < 2) return;
+      var pgs = Object.keys(g.pages).map(Number).sort(function (x, y) { return x - y; });
       findings.push({ type: 'CT09', severity: 4,
-        evidence: idUniq.length + ' different identity numbers are attributed to ' + (who ? 'the same person (' + who.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }) + ')' : 'one labelled subject in the same passage') + ': ' +
-          idUniq.slice(0, 6).join(', ') + (idUniq.length > 6 ? ' …' : '') +
+        evidence: g.values.length + ' different identity numbers are attributed to ' + (g.who ? 'the same person (' + g.who.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }) + ')' : 'one labelled subject in the same passage') + ': ' +
+          g.values.slice(0, 6).join(', ') + (g.values.length > 6 ? ' …' : '') +
           ' — confirm which is that person\'s identity number',
-        location: 'Pages ' + idPages.join(', ') });
-    }
+        location: 'Pages ' + pgs.join(', ') });
+    });
     return findings;
   },
 
@@ -2595,6 +2644,16 @@ var DETECTORS = {
     }
     var domains = Object.keys(byDomain).sort();
     var fmtPages = function (pgs) { return pgs.length > 4 ? pgs.slice(0, 4).join(', ') + ' and ' + (pgs.length - 4) + ' more' : pgs.join(', '); };
+    // Collect qualifying lookalike EDGES, then group the domains those edges
+    // connect into clusters. A correspondence bundle with gmail.com, gmall.com,
+    // ymail.com and ymail.coi within one or two characters of each other is ONE
+    // cluster of lookalikes, not six separate findings (the Louw v Naidoo run
+    // emitted six, each then fanned out across every name on its pages). One
+    // finding per cluster; a two-domain cluster keeps the original "A beside B"
+    // wording so the record and the regressions are unchanged.
+    var parent = {}, edge = {};
+    var find = function (x) { while (parent[x] !== x) { parent[x] = parent[parent[x]]; x = parent[x]; } return x; };
+    var unite = function (x, y) { parent[find(x)] = find(y); };
     for (var a = 0; a < domains.length; a++) {
       for (var b = a + 1; b < domains.length; b++) {
         var da = domains[a], db = domains[b];
@@ -2607,14 +2666,33 @@ var DETECTORS = {
         if (voGovSuffix(da) && voGovSuffix(db)) continue;
         var dist = voEditDistance(da, db);
         if (dist < 1 || dist > 2) continue;
-        var union = byDomain[da].pages.concat(byDomain[db].pages.filter(function (p) { return byDomain[da].pages.indexOf(p) === -1; }))
-          .sort(function (x, y) { return x - y; });
-        findings.push({ type: 'CT37', severity: 3,
-          evidence: 'Lookalike email domain: "' + da + '" (p. ' + fmtPages(byDomain[da].pages) + ') beside "' + db + '" (p. ' + fmtPages(byDomain[db].pages) + ') — ' +
-            dist + ' character' + (dist === 1 ? '' : 's') + ' apart; confirm which is genuine before relying on messages from either',
-          location: 'Page ' + (union.length > 8 ? union.slice(0, 8).join(', ') + ' and ' + (union.length - 8) + ' more' : union.join(', ')), pages: union.slice() });
+        if (!(da in parent)) parent[da] = da;
+        if (!(db in parent)) parent[db] = db;
+        unite(da, db);
+        edge[da + '|' + db] = dist;
       }
     }
+    var clusters = {};
+    Object.keys(parent).forEach(function (d) { var r = find(d); (clusters[r] || (clusters[r] = [])).push(d); });
+    Object.keys(clusters).sort().forEach(function (r) {
+      var members = clusters[r].sort();
+      var pageOf = function (dom) { return byDomain[dom].pages; };
+      var union = [];
+      members.forEach(function (dom) { pageOf(dom).forEach(function (p) { if (union.indexOf(p) === -1) union.push(p); }); });
+      union.sort(function (x, y) { return x - y; });
+      var loc = 'Page ' + (union.length > 8 ? union.slice(0, 8).join(', ') + ' and ' + (union.length - 8) + ' more' : union.join(', '));
+      var ev;
+      if (members.length === 2) {
+        var d0 = members[0], d1 = members[1], dd = edge[d0 + '|' + d1];
+        ev = 'Lookalike email domain: "' + d0 + '" (p. ' + fmtPages(pageOf(d0)) + ') beside "' + d1 + '" (p. ' + fmtPages(pageOf(d1)) + ') — ' +
+          dd + ' character' + (dd === 1 ? '' : 's') + ' apart; confirm which is genuine before relying on messages from either';
+      } else {
+        ev = 'Lookalike email domains in one record: ' +
+          members.map(function (dom) { return '"' + dom + '" (p. ' + fmtPages(pageOf(dom)) + ')'; }).join(', ') +
+          ' — each within one or two characters of another; confirm which is genuine before relying on messages from any of them';
+      }
+      findings.push({ type: 'CT37', severity: 3, evidence: ev, location: loc, pages: union.slice() });
+    });
     return findings;
   },
 
