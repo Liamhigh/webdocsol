@@ -4342,7 +4342,7 @@ function secCrossDocObservations(ctx, data) {
   if (!cons.length) return;
   ctx.newBodyPage();
   ctx.heading('CROSS-DOCUMENT OBSERVATIONS');
-  ctx.para('Where two record pages state facts about the same subject that cannot both be true, both are set out below, each quoted from its page. This is an observation, not a conclusion: it does not say which statement is correct, who the owner is, or that any wrong was done — that is for the court. Secondary-source and analysis pages are not compared here.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.para('Where two record pages make claims about the same subject that the record cannot reconcile, both are set out below, each quoted from its page. This is an observation, not a conclusion: it does not say which statement is correct, who the owner is, or that any wrong was done — that is for the court. Where a conflict is stated, both pages are quoted verbatim; the engine does not select between them. Secondary-source and analysis pages are not compared here.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
   for (var i = 0; i < cons.length; i++) {
     var c = cons[i];
     ctx.para((i + 1) + '. ' + c.statement, { size: 9.8, after: 4 });
