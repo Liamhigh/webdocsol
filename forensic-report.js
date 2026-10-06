@@ -4292,6 +4292,40 @@ function docTitle(t, ocr) {
   if (!debris) return t;
   return ocr ? '(title unreadable in the OCR text)' : '(title unreadable)';
 }
+// A descriptive, page-anchored index of the facts each record page states
+// (vessel, parties, date, amount, right). It makes NO comparison and asserts
+// NO contradiction — it is the record read back, quoted and paged, so a human
+// can see what each page says. The verdict on any named person is for the court.
+function secFactIndex(ctx, data) {
+  var fi = (data.findings && data.findings.factIndex) || null;
+  var recs = (fi && fi.records) || [];
+  if (recs.length < 2) return;
+  ctx.newBodyPage();
+  ctx.heading('DOCUMENT FACT INDEX');
+  ctx.para('A page-by-page index of the facts each record page states, read back from the record and anchored to its page. It is descriptive only: it lists what a page says, it draws no comparison and reaches no conclusion. Secondary-source, submission and analysis pages are not record facts and are not listed here. The verdict on any named person is for the court.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  var kindLabel = { 'ownership-notice': 'Ownership notice', 'sale': 'Sale', 'swap': 'Swap / exchange', 'lease': 'Lease / rental', 'permit': 'Permit / right', 'certificate': 'Certificate', 'correspondence': 'Correspondence', 'other': 'Record page' };
+  var rows = recs.slice(0, 60).map(function (r) {
+    var facts = [];
+    if (r.vessel) facts.push('Vessel ' + r.vessel);
+    if (r.ownerFrom || r.ownerTo) facts.push('owner ' + (r.ownerFrom || '?') + ' → ' + (r.ownerTo || '?'));
+    if (r.right) facts.push('right ' + r.right);
+    if (r.amount) facts.push('amount ' + r.amount);
+    if (r.companyReg) facts.push('reg ' + r.companyReg);
+    if (r.date) facts.push(r.date);
+    return { page: 'p. ' + r.page, kind: kindLabel[r.kind] || r.kind, facts: facts.join('; ') };
+  });
+  ctx.table(
+    [
+      { key: 'page', title: 'Page', w: 44, font: ctx.f.timesBold },
+      { key: 'kind', title: 'Page type', w: 100 },
+      { key: 'facts', title: 'What the page states (descriptive)', w: 320 }
+    ],
+    rows,
+    { size: 8.5 }
+  );
+  ctx.gap(6);
+}
+
 function secDocumentsInBundle(ctx, data) {
   var map = (data.findings && data.findings.documentMap) || [];
   if (map.length < 2) return;
@@ -4792,6 +4826,7 @@ async function build(opts) {
   secAnnexDivider(ctx, data);
   secExecutiveSummary(ctx, data);
   secDocumentsInBundle(ctx, data);
+  secFactIndex(ctx, data);            // DOCUMENT FACT INDEX (descriptive; no comparison)
   secShortVersion(ctx, data);
   secNarrative(ctx, data, { title: 'THE STORY IN PLAIN LANGUAGE' });
   secUnreadPages(ctx, data);

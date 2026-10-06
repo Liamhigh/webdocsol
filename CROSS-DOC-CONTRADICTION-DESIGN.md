@@ -1,6 +1,8 @@
 # Design note — cross-document contradiction detection (DRAFT, awaiting founder steer)
 
-Status: **design only, no code.** Prepared 6 October 2026 after the Louw v Naidoo
+Status: **approved; building in three sequenced PRs.** Stage A (document classification + descriptive fact index) is built — `voClassifyPage`/`voExtractPageFacts`/`voBuildFactIndex`, the `factIndex` result and the report's "DOCUMENT FACT INDEX" section, `tests/doc-fact-index.test.mjs` (ENGINE.md §12.21). Stage B (conflict detection) is held behind the stage-C wording sign-off; no contradiction code is written yet. The original design follows.
+
+Original note: **design only, no code.** Prepared 6 October 2026 after the Louw v Naidoo
 run (`evidence-bundle-6-docs`, Case 341/2025). This note sits near the
 verdict-reservation line, so nothing here ships until the founder approves the
 approach. It is not served (`*.md` is in `.assetsignore`).
