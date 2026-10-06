@@ -26,7 +26,7 @@
 
 **Repository:** `Liamhigh/webdocsol`  
 **Sealing standard:** VO-DSS-1.2 ([`seal-module/SPEC.md`](./seal-module/SPEC.md)); QR payload `v: "1.2"`; sealed PDFs carry a `VO-SEAL2|…` Subject (Producer `Verum Omnis Document Sealing Service v1.3.0`); site package version 1.2.5 (`package.json`)  
-**Engine:** `VO_ENGINE_VERSION 5.3.5-web` (report `ENGINE_VERSION` the same) — CT01–CT46, detectors D01–D40; findings JSON 1.7.0  
+**Engine:** `VO_ENGINE_VERSION 5.3.5-web` (report `ENGINE_VERSION` the same) — CT01–CT46, detectors D01–D40; findings JSON 1.8.0  
 **Constitution:** v8.0 (governance charter, seal `VO-9A4F3C5E825C`); v6.1 (engine operating instrument, seal `VO-9E51D3F507E6`)  
 **Updated:** 2026-10-03 — describes `main` once the Public Protector submission run and the Greensky re-run (`ENGINE.md` §12.14–§12.15) are merged as one pull request (expected #214; until then `main` is at #213). Constitution v8.0 was sealed on 2026-08-05.  
 **Integrity model:** tamper-evident (SHA-512 + OpenTimestamps) — never "immutable". **Licence:** none in the repository (open with the founder).  
@@ -105,7 +105,7 @@ User chooses a PDF (or voice notes / a WhatsApp chat export .zip)
        |
        +--> forensic mode only: AI review through the Worker (assess, Brain 9 sweep,
        |    court-ready narrative), then the sealed technical report, the sealed
-       |    court-ready narrative and findings JSON 1.7.0
+       |    court-ready narrative and findings JSON 1.8.0
        v
 [Out]  both modes: sealed PDF, .ots receipt, anchor certificate (if a calendar accepted)
        Seal document only: Seal Certificate (+ PRIVATE certificate)
@@ -283,7 +283,7 @@ webdocsol/
 |   |-- static-proxy.js                # the site-serving chain (assets -> main branch on GitHub -> legacy Pages -> embedded images)
 |   |-- site-assets.js                 # embedded last-resort copies of the logo and watermark
 |   |-- rule-format.md, public-key.der.b64, seed-rules.json
-|-- tests/                             # 34 suites, 2658 assertions (counted 2026-10-05 on the PR #216 branch; per suite: ENGINE.md §10) — node tests/run-all.js
+|-- tests/                             # 35 suites, 2706 assertions (counted 2026-10-05 on the PR #218 branch; per suite: ENGINE.md §10) — node tests/run-all.js
 |   |-- run-all.js                     # the registry — an unregistered file does not run
 |   |-- README.md                      # the short guide to the suites
 |-- vendor/                            # pinned pdf.js, pdf-lib, qrcode, Tesseract (offline-first)
@@ -352,7 +352,7 @@ operating instrument remains v6.1 (seal `VO-9E51D3F507E6`). All implementations 
 ## Working on this repository
 
 ```
-node tests/run-all.js   # or npm test — 34 suites, 2658 assertions (2026-10-05); every suite green
+node tests/run-all.js   # or npm test — 35 suites, 2706 assertions (2026-10-05); every suite green
 npm run check          # node --check on the five inlined scripts and the three worker files
 ```
 

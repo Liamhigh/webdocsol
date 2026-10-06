@@ -46,7 +46,7 @@ const json = buildFindingsJson(result, 'bundle.pdf', 'a'.repeat(128), 100, { cas
 
 ok(buildFindingsJson(Object.assign({}, result, { referenceTime: '2026-10-02T20:11:36.233Z' }), 'bundle.pdf', 'a'.repeat(128), 100, {}).analysis_reference_utc === '2026-10-02T20:11:36.233Z' && json.analysis_reference_utc === null,
   'analysis_reference_utc records the instant the engine was given (null when none), so the dated-after note is reproducible');
-ok(json.findings_json_version === '1.7.0', 'contract version bumped to 1.7.0 (brain, display_name, triple_verification, ai_review_note; candidates carry INSUFFICIENT, not a band; 1.6.0 added analysis_reference_utc; 1.5.0 ocr_held; 1.4.0 secondary_capped / ocr_anchored; 1.3.0 review_status / ocr_provenance / ocr_confidence / severity_capped_for_ocr)');
+ok(json.findings_json_version === '1.8.0', 'contract version bumped to 1.8.0 (candidate_law; 1.7.0 added brain, display_name, triple_verification, ai_review_note; candidates carry INSUFFICIENT, not a band; 1.6.0 added analysis_reference_utc; 1.5.0 ocr_held; 1.4.0 secondary_capped / ocr_anchored; 1.3.0 review_status / ocr_provenance / ocr_confidence / severity_capped_for_ocr)');
 
 // v1.7.0 (evidence-bundle-7-docs review, 5 October 2026), with the report
 // builder loaded as the page has it: the brain (§2), the measured label, the
@@ -71,6 +71,10 @@ ok(json.findings_json_version === '1.7.0', 'contract version bumped to 1.7.0 (br
   ok(a.ai_review_note === 'reference to a portal number' && c.ai_review_note === null && a.verification_status === 'ENGINE-VERIFIED', 'the AI\'s note rides beside the unchanged finding (the schema\'s enum value is unchanged)');
   ok(d.severity === 'INSUFFICIENT' && d.confidence === 'INSUFFICIENT' && d.detected_fact.confidence === 'INSUFFICIENT' && !/MODERATE|HIGH/.test(JSON.stringify(d)), 'an AI candidate carries no severity and no confidence band (PD1): the schema\'s INSUFFICIENT');
   ok(j7.engine_verified_count === 2 && j7.g3_candidate_count === 1, 'the candidate is never counted with the engine findings');
+  // v1.8.0 (Combine 06 April 2026): the candidate law the report prints travels with each engine record.
+  ok(Array.isArray(a.candidate_law) && a.candidate_law.length >= 1 && a.candidate_law[0].jurisdiction === 'ZA' && a.candidate_law[0].provisions.length >= 1 && a.legal_hypothesis === null && Array.isArray(d.candidate_law) && d.candidate_law.length === 0,
+    'each engine record carries the report\'s candidate law by jurisdiction (legal_hypothesis stays null: no legal conclusion); a candidate carries none (' + JSON.stringify(a.candidate_law) + ')');
+  ok(!/perj/i.test(JSON.stringify(c.candidate_law)), 'the custody-steps record carries no perjury candidate law, as in the report');
 }
 
 // The page block must not redeclare the engine's voCtById(id): two same-named

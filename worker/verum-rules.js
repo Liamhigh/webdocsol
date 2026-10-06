@@ -1823,9 +1823,21 @@ function humanAssertsEstablished(t) {
   }
   return false;
 }
+// An offence word in the narrator's own voice characterises conduct however
+// it is phrased: "a coordinated scheme of fraud and unlawful enrichment
+// conducted by the directors [F1]" and "the findings establish a pattern of
+// systemic commercial fraud and theft of goodwill" passed the verb rule above
+// (Combine 06 April 2026). It stands only as candidate law, as a section or
+// element name ("Four Pillars of Fraud", "elements of common-law fraud"), as
+// the name of a body or a case ("fraud department", "fraud case"), or as
+// what a party alleged ("the complaint alleges fraud").
+const HUMAN_OFFENCE_ANY_RE = new RegExp('\\b' + HUMAN_OFFENCE_NOUN + '\\b|\\bunlawful(?:ly)?\\s+enrich', 'i');
+const HUMAN_OFFENCE_OK_RE = /\b(?:pillars?|elements?)\s+of\s+(?:common-law\s+)?fraud\b|\b(?:fraud|theft|corruption|forgery|bribery|extortion|money\s+laundering)\s+(?:department|unit|division|desk|hotline|team|investigators?|case|cases|charge|charges|complaint|complaints|report|docket|matter|squad|prevention)\b|\b(?:alleg\w*|accus\w*|complain\w*|claim\w*|charg\w*|reported|reports|states|stated|wrote|written|records|recorded|reads|says|said|opened\s+(?:for|a|an))\b|\b(?:fraud|theft|corruption|forgery|bribery|extortion|coercion|intimidation|duress|blackmail|racketeering|money\s+laundering)\s+patterns?\b|\bpatterns?\s*(?:named|:)/i;
 function humanCharacterises(s) {
   const t = humanOverclaimMask(s);
-  return HUMAN_CHARACTERISE_RE.test(t) && !HUMAN_CANDIDATE_LAW_RE.test(t);
+  if (HUMAN_CANDIDATE_LAW_RE.test(t)) return false;
+  if (HUMAN_CHARACTERISE_RE.test(t)) return true;
+  return HUMAN_OFFENCE_ANY_RE.test(t) && !HUMAN_OFFENCE_OK_RE.test(t);
 }
 function humanOverclaim(s, ac) {
   if (humanIsExact(s)) return false;

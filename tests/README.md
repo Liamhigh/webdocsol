@@ -50,8 +50,8 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**34 suites, 2658 assertions**, all green (counted 5 October 2026, with the evidence-bundle-7-docs
-run and its review round, `ENGINE.md` §12.16). `run-all.js` is the
+**35 suites, 2706 assertions**, all green (counted 5 October 2026, with the Combine 06 April 2026
+run and its review, `ENGINE.md` §12.17). `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file
 there. What each suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
@@ -62,7 +62,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 |---|-------|------|--------|-----------|
 | 1 | `forensic-engine` | `forensic-engine.test.js` | 328 | `forensic-engine-page.js`: every detector on edge inputs without throwing; known contradictions detected; clean text silent; the serial-pattern engine; `runForensicEngine` via the raw-text fallback |
 | 2 | `ots-proof` | `ots-proof.test.js` | 16 | `ots-proof.js`: OpenTimestamps receipt format and round trips |
-| 3 | `worker` | `worker.test.mjs` | 373 | `worker/verum-rules.js` against a mocked `env` (no live KV or AI) |
+| 3 | `worker` | `worker.test.mjs` | 388 | `worker/verum-rules.js` against a mocked `env` (no live KV or AI) |
 | 4 | `page-boot` | `page-boot.test.mjs` | 101 | `seal-document.html` boots with pdf-lib missing; vendored libraries present; locks on the page's wiring |
 | 5 | `engine-perf` | `engine-perf.test.mjs` | 5 | Per-page extraction parses the PDF once (counts parses, not time) |
 | 6 | `voice-crypto` | `voice-crypto.test.mjs` | 7 | `.voice` encryption round trip between `seal-document.html` and `verify.html` |
@@ -75,13 +75,13 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 13 | `digital-forensics` | `digital-forensics.test.mjs` | 16 | `voDigitalForensicsScan` (raw PDF structure) |
 | 14 | `ocr-rescue` | `ocr-rescue.test.mjs` | 44 | The page's OCR fallback, loader and deadline helper |
 | 15 | `rule-classify` | `rule-classify.test.mjs` | 9 | The deterministic classification fallback in `seal-document.html` |
-| 16 | `findings-json` | `findings-json.test.mjs` | 23 | `buildFindingsJson`, findings JSON contract 1.7.0 |
+| 16 | `findings-json` | `findings-json.test.mjs` | 25 | `buildFindingsJson`, findings JSON contract 1.8.0 |
 | 17 | `finding-anchors` | `finding-anchors.test.mjs` | 87 | WHO / WHERE / WHAT / WHEN anchoring per finding |
 | 18 | `wrangler-config` | `wrangler-config.test.mjs` | 34 | `wrangler.toml` drift lock |
 | 19 | `crop-normalize` | `crop-normalize.test.mjs` | 115 | CropBox normalisation, seal band, share ordering, certificate privacy, the voice-note path |
 | 20 | `encrypt-detect` | `encrypt-detect.test.mjs` | 9 | `voPdfIsEncrypted` |
 | 21 | `constitution-lock` | `constitution-lock.test.mjs` | 41 | `constitution.json`, `constitution.html` and the pages that cite a version agree |
-| 22 | `ai-assess-batch` | `ai-assess-batch.test.mjs` | 18 | Client batching under the `/api/v1/ai/assess` caps; the review never removes or changes a finding, and a candidate is a duplicate only when it restates one |
+| 22 | `ai-assess-batch` | `ai-assess-batch.test.mjs` | 19 | Client batching under the `/api/v1/ai/assess` caps; the review never removes or changes a finding, and a candidate is a duplicate only when it restates one |
 | 23 | `narrate-excerpt` | `narrate-excerpt.test.mjs` | 16 | `voBuildNarrateExcerpt` |
 | 24 | `human-report` | `human-report.test.mjs` | 81 | The court-ready narrative wiring: Worker, `forensic-report.js` and page agree |
 | 25 | `site-serving` | `site-serving.test.mjs` | 56 | `worker/static-proxy.js` serving tiers and `/api/v1/site/health` |
@@ -94,6 +94,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 32 | `allfuels-regression` | `allfuels-regression.test.js` | 59 | The AllFuels run of 14 August 2026 |
 | 33 | `annexure-eb` | `annexure-eb-regression.test.mjs` | 497 | The annexure EB run and every run after it up to the Public Protector submission (`ENGINE.md` §12.10–§12.14) |
 | 34 | `evidence-bundle-7` | `evidence-bundle-7-regression.test.mjs` | 47 | The evidence-bundle-7-docs run of 5 October 2026, the founder's rulings and the review round (`ENGINE.md` §12.16) |
+| 35 | `combine-06-april` | `combine-06-april-regression.test.mjs` | 30 | The Combine 06 April 2026 run and its review (`ENGINE.md` §12.17) |
 
 **Writing a regression test:** use the **exact text from the real document** that caused the
 failure, not a paraphrase. Every guard in `ENGINE.md` §4 has one, and that is why they have

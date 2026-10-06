@@ -41,6 +41,7 @@ const suites = [
   'allfuels-regression.test.js',
   'annexure-eb-regression.test.mjs',
   'evidence-bundle-7-regression.test.mjs',
+  'combine-06-april-regression.test.mjs',
 ];
 
 let failed = 0;

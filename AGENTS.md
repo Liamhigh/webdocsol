@@ -26,7 +26,7 @@ re-introduces a false statement of fact under seal.
 **Repo map:** [`REFERENCE.md`](./REFERENCE.md) — every page, script, worker endpoint and
 directory, and what each one does.
 
-## Start here — the state of the platform (updated 2026-10-05; describes `main` once PR #216 — the evidence-bundle-7-docs run and the founder's rulings of 5 October — is merged)
+## Start here — the state of the platform (updated 2026-10-05; describes `main` once PR #218 — the Combine 06 April 2026 run — is merged; PR #216 and #217 are live)
 
 Read this section first; it is the two-minute orientation. Everything below it is the detail.
 
@@ -82,7 +82,7 @@ founder.
 **Known state right now.** Two parts: what is open today, then the dated history, oldest first
 (the newest entry is last).
 
-**Open today (as of 5 October 2026; true of `main` once PR #216 is merged).** Each
+**Open today (as of 5 October 2026; true of `main` once PR #218 is merged).** Each
 item says who holds it. Live Cloudflare state is "last verified" on the date given. Live state was
 last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the #214 merge).
 - **Founder — the signing key (decided 5 October 2026: leave it).** `RULE_PRIVATE_KEY` is not on
@@ -119,6 +119,16 @@ last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the
   in print) are met in every printed report; the JSON keeps the schema's words until a schema v2
   (a neutral status such as `ENGINE-FINDING`, a separate `ai_candidates` array) is agreed for all
   three repositories. Do not change the contract in this repository alone.
+- **Founder — the Constitution's own fingerprint line.** `constitution.html` and
+  `CONSTITUTION-v8.md` read "SHA-512: [To be generated upon sealing]" in the verification section
+  (found by the compliance review of the Combine 06 April 2026 run, `ENGINE.md` §12.17). The
+  instrument is locked (`tests/constitution-lock.test.mjs`); completing that line is the
+  founder's act, never an edit here.
+- **Next live run — confirm the OCR hold.** On the Combine 06 April 2026 run no finding on the
+  203 OCR-recovered pages was held, and the cause could not be reproduced without the bundle
+  (`ENGINE.md` §12.17 item 2). The engine now also reads the OCR pages from the text itself. On
+  the next run with scanned pages, check that the findings JSON shows `ocr_anchored: true` on
+  OCR-only findings and that the extraction notes carry "OCR provenance: …".
 - **Founder — the narrator's event-level instruction (`ENGINE.md` §12.16, "Open, with the
   founder").** `NARRATE_SYSTEM` still allows "the documents evidence fraud" for corroborated
   events (v6.1 EVENT-LEVEL DETERMINATION); the gates pass it. Whether it survives the 5 October
@@ -151,7 +161,7 @@ last read from outside by the probe of 3 October 2026 11:56 UTC (on 0561ea5, the
   adopted" in the paragraph that closes the section).
 
 **History, oldest first.** Each entry was the live state on its date (PR #214 is live since its
-merge on 3 October; the last entry describes PR #216, live once merged); superseded state is
+merge on 3 October, PR #216 since 5 October; the last entry describes PR #218, live once merged); superseded state is
 marked.
 - 6 September 2026: the two retired Workers (`verum-rules`, `verumglobal-static`) were deleted
   from the dashboard; this Worker was meant to own the domain through declared routes (PRs
@@ -385,7 +395,7 @@ marked.
   collapse into one bullet naming every page. Tests: `tests/greensky-regression.test.js` §9. With
   both runs, PR #214 stands at 33 suites and 2535 assertions.
 - 5 October 2026: **the evidence-bundle-7-docs run and the founder's rulings** (PR #216, live
-  once merged; `ENGINE.md` §12.16). The founder sealed a 65-page bundle (his email to the Public
+  since its merge at 02:28 UTC on 5 October; `ENGINE.md` §12.16). The founder sealed a 65-page bundle (his email to the Public
   Protector, the Protector's letters, a 49-page sealed exhibit of his own Verum Omnis analysis,
   printed emails, a sealed timeline) and had DeepSeek review the three PDFs against Constitution
   v8.0. Of four sealed findings one is real: the lookalike domain (`protect.org` on p. 1 beside
@@ -408,6 +418,22 @@ marked.
   fixed with the reviewer's reproduction as a test (`ENGINE.md` §12.16 item 10). 34 suites and
   2658 assertions. Open: the cross-repository findings-JSON schema and the narrator's "the
   documents evidence fraud" instruction (Open today).
+- 5 October 2026, evening: **the Combine 06 April 2026 run** (PR #218, live once merged;
+  `ENGINE.md` §12.17). The founder sealed a 684-page bundle on the live site after #216 and had
+  two AI reviews written from the findings JSON. Read against the engine, most of the 19
+  findings were the engine's error: a CT01 on a markdown analysis page and a CT45 inside a Verum
+  Omnis analysis escaped the secondary-source rule because their page was found later; two
+  invoices' dates, two documents' date conventions and an expiry in a page of notes beside an
+  invoice were "contradictions"; scanned pages OCR could barely read were "format anomalies"; an
+  identity number in the complainant's field was a finding; two sites' "Premises", one definition
+  read twice by OCR and a longer defined term were "defined differently"; a conditional clause
+  was read as ownership; two AI candidates without a quote restated engine findings; and the
+  court-ready narrative printed "a coordinated scheme of fraud … by the directors" and "a pattern
+  of systemic commercial fraud and theft". Each is fixed and pinned
+  (`tests/combine-06-april-regression.test.mjs` and the suites named in §12.17); an independent
+  review of the fixes found two blocking and eight minor defects, all fixed and pinned (§12.17
+  item 14). 35 suites, 2706 assertions. Findings JSON 1.8.0 adds `candidate_law`. Not fixed here: why no OCR-only finding was held on that run
+  (mitigated; Open today), and the Constitution's own SHA-512 placeholder (founder).
 
 **What must never be done.** The founder rulings and the seven regressions below; the §15.2
 language gate and the PD2 anchor gate are never loosened; no secret is ever committed; no
@@ -424,9 +450,9 @@ failure looks like).
 
 ## Quick facts
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets. A Pages Function, `functions/[[path]].js`, runs only on the Pages project and has been dormant since 27 September.
-- Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.3.5-web`); findings JSON 1.7.0 (adds `display_name`, `brain`, `triple_verification`, `ai_review_note`; 1.6.0 added `analysis_reference_utc`).
+- Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.3.5-web`); findings JSON 1.8.0 (adds `candidate_law`; 1.7.0 added `display_name`, `brain`, `triple_verification`, `ai_review_note`).
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **34 suites, 2658 assertions** (counted 5 October 2026), **must be green before any push**. Many exist only to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **35 suites, 2706 assertions** (counted 5 October 2026), **must be green before any push**. Many exist only to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
