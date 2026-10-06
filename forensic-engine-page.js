@@ -1493,15 +1493,25 @@ var DETECTORS = {
     // CK…) are other kinds of number and never an identity. The canonical form
     // (digits only for 'said') is what dedupes the spaced/solid pair.
     var idCanon = function (value) { return value.replace(/\s+/g, '').toUpperCase(); };
-    var idClass = function (value) {
+    // A letter-prefixed code is only EXCLUDED as a right/vessel/company number
+    // when the surrounding text labels it one; otherwise a labelled passport or
+    // identity code that happens to share a reserved prefix (an "LF…"/"CK…"
+    // passport) is still classified. The 13-digit SA-ID and the
+    // NNNN/NNNNNN/NN company shapes are unambiguous and need no cue.
+    var RIGHT_CUE = /\b(?:right|permit|licen[cs]e|quota|fishing|linefish|sardine|seine|zone)\b/i;
+    var VESSEL_CUE = /\b(?:vessel|boat|ski-?boat|craft|hull|samsa|dinghy|registration of)\b/i;
+    var COMPANY_CUE = /\b(?:cc|close corp|\(pty\)|company reg|cipc|enterprise|holdings)\b/i;
+    var idClass = function (value, around) {
+      var cx = String(around || '');
       var v = value.replace(/\s+/g, '');
-      if (/^(?:LF|KSBS)\d/i.test(v)) return null;                 // fishing / sardine-beach-seine right, not an identity
-      if (/^DTD\d+[A-Z]?$/i.test(v)) return null;                 // vessel registration
-      if (/^\d{4}\/\d{6}\/\d{2}$/.test(v) || /^CK\d/i.test(v)) return null; // company registration
       if (/^\d{13}$/.test(v)) {
         var mm = +v.slice(2, 4), dd = +v.slice(4, 6);
         return (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) ? 'said' : null;
       }
+      if (/^\d{4}\/\d{6}\/\d{2}$/.test(v)) return null;            // company registration (unambiguous shape)
+      if (/^(?:LF|KSBS)\d/i.test(v) && RIGHT_CUE.test(cx)) return null;   // fishing / sardine-beach-seine right
+      if (/^DTD\d+[A-Z]?$/i.test(v) && VESSEL_CUE.test(cx)) return null;  // vessel registration
+      if (/^CK\d/i.test(v) && COMPANY_CUE.test(cx)) return null;          // close-corporation registration
       if (/^[A-Z]{1,2}\d{6,10}[A-Z]?$/.test(v)) return 'alpha';    // labelled passport / lettered identity code
       return null;
     };
@@ -1540,7 +1550,7 @@ var DETECTORS = {
             var letters = (val.match(/^[A-Z]+/) || [''])[0];
             if (CURRENCY_PREFIX.test(letters)) continue; // R103509 is money, not a person
           }
-          var cls = idClass(val);
+          var cls = idClass(val, around);
           if (!cls) continue; // a right/permit, vessel or company number is not an identity
           ids.push({ value: val, canon: idCanon(val), cls: cls, page: i, pos: match.index, who: personBefore(textBlocks[i], match.index) });
         }
@@ -1561,42 +1571,43 @@ var DETECTORS = {
     // finding that cannot say WHICH numbers is not actionable -- cite-or-stay-
     // silent -- so name the values and stay honest that they are ID-*shaped*
     // strings (a Capitec client reference matches the same pattern as an ID).
-    // Count DISTINCT canonical values grouped to ONE subject. Two values are
-    // the same subject's only when the SAME resolved name carries both, OR —
-    // for ambiguous lettered codes with no visible name — when they sit in one
-    // passage. Two different 13-digit SA IDs with no name between them are the
-    // ordinary lessor/lessee shape of a South African instrument, not one
-    // subject, so a 'said' pair never groups on the no-name branch. Values of
-    // different identifier TYPES are never grouped. Canonical de-duplication
-    // collapses the solid/spaced form of one ID.
-    var idUniq = [], idCanonSeen = [], idPages = [], who = null;
-    var noteId = function (e) {
-      if (idCanonSeen.indexOf(e.canon) !== -1) return;
-      idCanonSeen.push(e.canon); idUniq.push(e.value);
+    // Group distinct canonical values to ONE subject, and keep each subject's
+    // conflict SEPARATE: two people, each carrying two IDs, are two findings,
+    // never one list of four attributed to the last name seen. A subject is the
+    // SAME resolved name (keyed per identifier type), or — for ambiguous
+    // lettered codes with no visible name — one passage (same page). Two
+    // different 13-digit SA IDs with no name between them are the ordinary
+    // lessor/lessee shape, not one subject, so a 'said' pair never groups on the
+    // no-name branch. Values of different identifier types are never grouped;
+    // canonical de-duplication collapses the solid/spaced form of one ID.
+    var groups = {};
+    var addToGroup = function (key, whoName, e) {
+      var g = groups[key] || (groups[key] = { who: whoName || null, values: [], canon: {}, pages: {} });
+      if (!g.canon[e.canon]) { g.canon[e.canon] = 1; g.values.push(e.value); }
+      g.pages[e.page + 1] = 1;
     };
     for (var a = 0; a < ids.length; a++) {
       for (var b = a + 1; b < ids.length; b++) {
         var ea = ids[a], eb = ids[b];
         if (ea.canon === eb.canon) continue;   // the same identity, solid vs spaced
         if (ea.cls !== eb.cls) continue;        // an SA ID and a passport are two kinds of number, not a contradiction
-        var same = false;
-        if (ea.who && eb.who) same = (ea.who === eb.who);
-        else if (!ea.who && !eb.who) same = (ea.cls === 'alpha' && ea.page === eb.page && Math.abs(ea.pos - eb.pos) <= 200);
-        if (!same) continue;
-        noteId(ea); noteId(eb);
-        if (idPages.indexOf(ea.page + 1) === -1) idPages.push(ea.page + 1);
-        if (idPages.indexOf(eb.page + 1) === -1) idPages.push(eb.page + 1);
-        if (ea.who && ea.who === eb.who) who = ea.who;
+        var key = null, whoName = null;
+        if (ea.who && eb.who && ea.who === eb.who) { key = 'who:' + ea.cls + ':' + ea.who; whoName = ea.who; }
+        else if (!ea.who && !eb.who && ea.cls === 'alpha' && ea.page === eb.page && Math.abs(ea.pos - eb.pos) <= 200) { key = 'pg:' + ea.page; }
+        if (!key) continue;
+        addToGroup(key, whoName, ea); addToGroup(key, whoName, eb);
       }
     }
-    if (idUniq.length >= 2) {
-      idPages.sort(function (x, y) { return x - y; });
+    Object.keys(groups).forEach(function (key) {
+      var g = groups[key];
+      if (g.values.length < 2) return;
+      var pgs = Object.keys(g.pages).map(Number).sort(function (x, y) { return x - y; });
       findings.push({ type: 'CT09', severity: 4,
-        evidence: idUniq.length + ' different identity numbers are attributed to ' + (who ? 'the same person (' + who.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }) + ')' : 'one labelled subject in the same passage') + ': ' +
-          idUniq.slice(0, 6).join(', ') + (idUniq.length > 6 ? ' …' : '') +
+        evidence: g.values.length + ' different identity numbers are attributed to ' + (g.who ? 'the same person (' + g.who.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }) + ')' : 'one labelled subject in the same passage') + ': ' +
+          g.values.slice(0, 6).join(', ') + (g.values.length > 6 ? ' …' : '') +
           ' — confirm which is that person\'s identity number',
-        location: 'Pages ' + idPages.join(', ') });
-    }
+        location: 'Pages ' + pgs.join(', ') });
+    });
     return findings;
   },
 

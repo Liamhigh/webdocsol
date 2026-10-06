@@ -78,6 +78,26 @@ ok(ct09([
 ]).length === 0,
   'CT09 silent: a right number and a vessel registration are not identity numbers');
 
+// Two people, each carrying two different IDs, are TWO findings — never one
+// list of four attributed to the last name seen (Sourcery #220, comment 1).
+const twoPeople = ct09([
+  'Applicant Sipho Dlamini, ID 8001015009087, and later identity number 7502204567089 for Sipho Dlamini.',
+  'Thabo Khumalo, identity number 9001015009086, and identity number 8502204567088 for Thabo Khumalo.'
+]);
+ok(twoPeople.length === 2,
+  'CT09: two people each with two IDs are two separate findings, not one merged list (' + twoPeople.length + ')');
+ok(twoPeople.length === 2 &&
+   twoPeople.some(f => /Sipho Dlamini/.test(f.evidence) && /8001015009087/.test(f.evidence) && !/9001015009086/.test(f.evidence)) &&
+   twoPeople.some(f => /Thabo Khumalo/.test(f.evidence) && /9001015009086/.test(f.evidence) && !/8001015009087/.test(f.evidence)),
+  'CT09: each finding lists only its own person\'s IDs, attributed to that person');
+
+// A letter-prefixed code LABELLED a passport (no right/vessel/company cue) is
+// an identity, not dropped by prefix alone (Sourcery #220, comment 2).
+ok(ct09([
+  'Holder Pat Naidoo, passport LF1234567, noted.', 'Pat Naidoo passport GH7654321 on file.'
+]).length === 1,
+  'CT09: an LF-prefixed code labelled a passport is still an identity (prefix alone does not exclude it)');
+
 // ---- 2. Lookalike-email over-reporting (CT37) ------------------------------
 
 // The real cluster: four near-identical webmail domains across the bundle.
