@@ -34,6 +34,7 @@ const suites = [
   'site-serving.test.mjs',
   'pages-bridge.test.mjs',
   'zip-intake.test.mjs',
+  'photo-intake.test.mjs',
   'rule-package.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',
