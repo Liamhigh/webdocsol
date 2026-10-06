@@ -283,7 +283,7 @@ webdocsol/
 |   |-- static-proxy.js                # the site-serving chain (assets -> main branch on GitHub -> legacy Pages -> embedded images)
 |   |-- site-assets.js                 # embedded last-resort copies of the logo and watermark
 |   |-- rule-format.md, public-key.der.b64, seed-rules.json
-|-- tests/                             # 39 suites, 2801 assertions (counted 2026-10-06; per suite: ENGINE.md §10) — node tests/run-all.js
+|-- tests/                             # 39 suites, 2805 assertions (counted 2026-10-06; per suite: ENGINE.md §10) — node tests/run-all.js
 |   |-- run-all.js                     # the registry — an unregistered file does not run
 |   |-- README.md                      # the short guide to the suites
 |-- vendor/                            # pinned pdf.js, pdf-lib, qrcode, Tesseract (offline-first)
@@ -352,7 +352,7 @@ operating instrument remains v6.1 (seal `VO-9E51D3F507E6`). All implementations 
 ## Working on this repository
 
 ```
-node tests/run-all.js   # or npm test — 39 suites, 2801 assertions (2026-10-06); every suite green
+node tests/run-all.js   # or npm test — 39 suites, 2805 assertions (2026-10-06); every suite green
 npm run check          # node --check on the five inlined scripts and the three worker files
 ```
 

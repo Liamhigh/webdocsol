@@ -4304,24 +4304,31 @@ function secFactIndex(ctx, data) {
   ctx.heading('DOCUMENT FACT INDEX');
   ctx.para('A page-by-page index of the facts each record page states, read back from the record and anchored to its page. It is descriptive only: it lists what a page says, it draws no comparison and reaches no conclusion. Secondary-source, submission and analysis pages are not record facts and are not listed here. The verdict on any named person is for the court.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
   var kindLabel = { 'ownership-notice': 'Ownership notice', 'sale': 'Sale', 'swap': 'Swap / exchange', 'lease': 'Lease / rental', 'permit': 'Permit / right', 'certificate': 'Certificate', 'correspondence': 'Correspondence', 'other': 'Record page' };
-  var rows = recs.slice(0, 60).map(function (r) {
-    var facts = [];
-    if (r.vessel) facts.push('Vessel ' + r.vessel);
-    if (r.ownerFrom || r.ownerTo) facts.push('owner ' + (r.ownerFrom || '?') + ' → ' + (r.ownerTo || '?'));
-    if (r.right) facts.push('right ' + r.right);
-    if (r.amount) facts.push('amount ' + r.amount);
-    if (r.companyReg) facts.push('reg ' + r.companyReg);
-    if (r.date) facts.push(r.date);
-    return { page: 'p. ' + r.page, kind: kindLabel[r.kind] || r.kind, facts: facts.join('; ') };
-  });
+  // One row per STATED FACT, each with the verbatim line it came from, so every
+  // value shown carries its own quote. Capped so the section stays readable.
+  var rows = [], shown = 0;
+  for (var ri = 0; ri < recs.length && shown < 80; ri++) {
+    var r = recs[ri];
+    var frs = r.facts || [];
+    for (var fj = 0; fj < frs.length && shown < 80; fj++) {
+      rows.push({
+        page: fj === 0 ? 'p. ' + r.page : '',
+        kind: fj === 0 ? (kindLabel[r.kind] || r.kind) : '',
+        fact: frs[fj].label + ': ' + frs[fj].value,
+        quote: capText(String(frs[fj].quote || '').replace(/\s+/g, ' '), 140, '…')
+      });
+      shown++;
+    }
+  }
   ctx.table(
     [
-      { key: 'page', title: 'Page', w: 44, font: ctx.f.timesBold },
-      { key: 'kind', title: 'Page type', w: 100 },
-      { key: 'facts', title: 'What the page states (descriptive)', w: 320 }
+      { key: 'page', title: 'Page', w: 40, font: ctx.f.timesBold },
+      { key: 'kind', title: 'Page type', w: 86 },
+      { key: 'fact', title: 'Stated fact', w: 150 },
+      { key: 'quote', title: 'Quoted from the page', w: 188 }
     ],
     rows,
-    { size: 8.5 }
+    { size: 8 }
   );
   ctx.gap(6);
 }
