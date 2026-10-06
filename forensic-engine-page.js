@@ -5646,6 +5646,135 @@ function voBuildPersonIndex(findings) {
   return out;
 }
 
+// ===== Document fact index (descriptive; no contradictions, no verdicts) =====
+// The foundation of cross-document reading (CROSS-DOC-CONTRADICTION-DESIGN.md,
+// stage A). It classifies each page and extracts a small, page-anchored fact
+// record from the RECORD pages, each field quoted from the page. It is purely
+// descriptive: it states what a page says, quoted and paged. It asserts NO
+// contradiction, names NO offence, reaches NO conclusion about ownership or
+// anyone's conduct — those are not the engine's to make (Verdict Reservation).
+// A secondary-source, submission or analysis page is classified as such and is
+// NOT a record fact, so an account OF the record is never read as the record.
+var VO_FACT_CLASS_CUES = [
+  ['ownership-notice', /\b(?:notice of change of ownership|change of ownership of a vessel|change of ownership)\b/i],
+  ['sale', /\b(?:deed of sale|agreement of sale|sale agreement|bill of sale|hereby sells?|sells? (?:to|the)|purchase price|sold (?:to|the)\b)/i],
+  ['swap', /\b(?:swap(?:ped)?|exchange of vessels?|in exchange for|no money changing hands|exchanged the vessel)\b/i],
+  ['lease', /\b(?:lease agreement|rental agreement|rental contract|monthly rental|the lessee|the lessor)\b/i],
+  ['permit', /\b(?:permit conditions|fishing right|linefish right|licen[cs]e conditions|quota|permit number|zone [a-z]\b)/i],
+  ['certificate', /\b(?:local general safety certificate|buoyancy certificate|survey certificate|safety certificate|certificate of)\b/i],
+  ['correspondence', /\b(?:dear (?:sir|madam|mr|mrs|ms)|yours (?:faithfully|sincerely)|kind regards|subject:\s|^from:\s|^to:\s)/im]
+];
+function voClassifyPage(text, isSecondary) {
+  if (isSecondary || voIsVerumAnalysisPage(text)) return 'analysis-secondary';
+  var s = String(text || '').replace(/\s+/g, ' ');
+  for (var i = 0; i < VO_FACT_CLASS_CUES.length; i++) if (VO_FACT_CLASS_CUES[i][1].test(s)) return VO_FACT_CLASS_CUES[i][0];
+  return 'other';
+}
+var VO_FACT_VESSEL_RE = /\bDTD\s?\d{1,4}\s?[A-Z]\b/ig;
+var VO_FACT_RIGHT_RE = /\b(?:LF|KSBS)\d{3,}\b/ig;
+var VO_FACT_AMOUNT_RE = /\b(?:R|ZAR|USD|US\$|\$|EUR|€|GBP|£)\s?\d[\d  ,.]{2,}\d\b/ig;
+var VO_FACT_COMPANYREG_RE = /\b\d{4}\/\d{6}\/\d{2}\b/g;
+// A party name: a capitalised word, then capitalised words OR lowercase name
+// particles ("van der", "de la", "von"), with an optional company suffix
+// ("(Pty) Ltd", "CC", "Trust"), so "Pieter van der Merwe" and "Harbor (Pty)
+// Ltd" are captured whole, not truncated to the first word.
+var VO_FACT_PARTICLE = '(?:van(?:\\s+der|\\s+den)?|von|de(?:\\s+la|\\s+le)?|du|le|la|den|der|ter|ten|bin|al)';
+var VO_FACT_SUFFIX = '(?:\\s+\\(Pty\\)\\s+Ltd|\\s+\\(Pty\\)\\s+Limited|\\s+\\(Edms\\)\\s+Bpk|\\s+CC|\\s+Ltd|\\s+Limited|\\s+Inc|\\s+LLP|\\s+Trust|\\s+NPC)?';
+var VO_FACT_NAME = '([A-Z][A-Za-z.\'’-]+(?:\\s+(?:' + VO_FACT_PARTICLE + '|[A-Z][A-Za-z.\'’-]+)){0,4}' + VO_FACT_SUFFIX + ')';
+var VO_FACT_OWNER_DIR = [
+  new RegExp('previous owner\\s*:?\\s*' + VO_FACT_NAME + '[\\s\\S]{0,60}?new owner\\s*:?\\s*' + VO_FACT_NAME, 'i'),
+  new RegExp('(?:transferred|transfer|changed|passed|sold)\\s+from\\s+' + VO_FACT_NAME + '\\s+to\\s+' + VO_FACT_NAME, 'i')
+];
+function voFactSnippet(raw, idx, len) {
+  var s = raw.slice(Math.max(0, idx - 90), idx + (len || 0) + 90).replace(/\s+/g, ' ').trim();
+  return s.length > 200 ? s.slice(0, 197) + '…' : s;
+}
+// Every match of a repeatable field, each with the verbatim line it sits on,
+// so a page that names two vessels (a swap) shows both — never only the first.
+function voFactAll(re, raw, norm) {
+  var out = [], seen = {}, m;
+  re.lastIndex = 0;
+  while ((m = re.exec(raw)) !== null) {
+    var v = norm ? norm(m[0]) : m[0].replace(/\s+/g, ' ').trim();
+    if (seen[v]) continue;
+    seen[v] = true;
+    out.push({ value: v, quote: voFactSnippet(raw, m.index, m[0].length) });
+    if (m.index === re.lastIndex) re.lastIndex++;
+  }
+  return out;
+}
+// The facts a single page states. Every value is kept WITH the verbatim line it
+// came from (per-value quote), and repeatable fields keep all their matches. A
+// field is empty/null when the page does not state it; nothing is inferred.
+function voExtractPageFacts(text) {
+  var raw = String(text || '').replace(VO_SEAL_BOILERPLATE_RE, ' ');
+  var facts = {
+    vessels: voFactAll(VO_FACT_VESSEL_RE, raw, function (x) { return x.replace(/\s+/g, '').toUpperCase(); }),
+    rights: voFactAll(VO_FACT_RIGHT_RE, raw, function (x) { return x.toUpperCase(); }),
+    amounts: voFactAll(VO_FACT_AMOUNT_RE, raw),
+    companyRegs: voFactAll(VO_FACT_COMPANYREG_RE, raw),
+    date: null, dateQuote: null, ownerFrom: null, ownerTo: null, ownerQuote: null
+  };
+  var ds = voExtractDates(raw);
+  for (var di = 0; di < ds.length; di++) {
+    // the instrument's date: the first date with an established (four-digit) year
+    if (!/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2}$/.test(ds[di]) && voDateSortKey(ds[di]) !== null) {
+      facts.date = ds[di];
+      var dAt = raw.indexOf(ds[di]);
+      facts.dateQuote = dAt >= 0 ? voFactSnippet(raw, dAt, ds[di].length) : null;
+      break;
+    }
+  }
+  // A trailing capitalised non-name word ("Dated", "Signed", "The") can be
+  // pulled into the name match; strip it so the party is just the party. A
+  // company suffix (Ltd/CC/Trust) is NOT a trailing stopword and is kept.
+  var VO_FACT_NAME_TAIL = /\s+(?:dated|date|signed|on|of|at|in|by|and|for|to|the|this|that|vessel|registration|previous|new|owner|hereby|was|is)\b[\s\S]*$/i;
+  var cleanName = function (n) { return n.replace(/\s+/g, ' ').trim().replace(VO_FACT_NAME_TAIL, '').replace(/[\s.,;:]+$/, '').trim(); };
+  for (var oi = 0; oi < VO_FACT_OWNER_DIR.length; oi++) {
+    var om = raw.match(VO_FACT_OWNER_DIR[oi]);
+    if (om) { facts.ownerFrom = cleanName(om[1]); facts.ownerTo = cleanName(om[2]); facts.ownerQuote = voFactSnippet(raw, om.index, om[0].length); break; }
+  }
+  return facts;
+}
+// Flatten a page's facts into {label, value, quote} rows so every stated value
+// carries its own verbatim support.
+function voFactRows(f) {
+  var rows = [];
+  f.vessels.forEach(function (v) { rows.push({ label: 'vessel', value: v.value, quote: v.quote }); });
+  if (f.ownerFrom || f.ownerTo) rows.push({ label: 'owner', value: (f.ownerFrom || '?') + ' → ' + (f.ownerTo || '?'), quote: f.ownerQuote });
+  f.rights.forEach(function (v) { rows.push({ label: 'right', value: v.value, quote: v.quote }); });
+  f.amounts.forEach(function (v) { rows.push({ label: 'amount', value: v.value, quote: v.quote }); });
+  f.companyRegs.forEach(function (v) { rows.push({ label: 'company reg', value: v.value, quote: v.quote }); });
+  if (f.date) rows.push({ label: 'date', value: f.date, quote: f.dateQuote });
+  return rows;
+}
+// One record per RECORD page that states at least one fact; secondary/analysis
+// pages are listed separately and never enter the record set. Each record
+// carries the flattened fact rows, every one with its own verbatim quote.
+function voBuildFactIndex(textBlocks, secondaryPages) {
+  var records = [], excluded = [];
+  if (!textBlocks || !textBlocks.length) return { records: records, excluded: excluded };
+  var secSet = {};
+  if (Array.isArray(secondaryPages)) for (var s = 0; s < secondaryPages.length; s++) secSet[secondaryPages[s]] = true;
+  for (var p = 0; p < textBlocks.length; p++) {
+    var page = p + 1;
+    var kind = voClassifyPage(textBlocks[p], !!secSet[page]);
+    if (kind === 'analysis-secondary') { excluded.push({ page: page, kind: kind }); continue; }
+    var f = voExtractPageFacts(textBlocks[p]);
+    var rows = voFactRows(f);
+    if (!rows.length) continue;
+    records.push({
+      page: page, kind: kind, facts: rows,
+      vessels: f.vessels.map(function (x) { return x.value; }),
+      rights: f.rights.map(function (x) { return x.value; }),
+      amounts: f.amounts.map(function (x) { return x.value; }),
+      companyRegs: f.companyRegs.map(function (x) { return x.value; }),
+      date: f.date, ownerFrom: f.ownerFrom, ownerTo: f.ownerTo
+    });
+  }
+  return { records: records, excluded: excluded };
+}
+
 function detectSerialPatterns(textBlocks) {
   var findings = [];
   var blocks = (textBlocks && textBlocks.length) ? textBlocks.map(function (b) { return String(b || '').toLowerCase(); }) : [''];
@@ -6634,6 +6763,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     // whitelists fields) and is dropped after the narrate call.
     pageTexts: textBlocks,
     documentMap: voDetectDocuments(textBlocks),
+    factIndex: voBuildFactIndex(textBlocks, _secondaryAllPages),
     swornPages: swornPages,
     timeline: voBuildTimeline(allFindings, textBlocks, _secondaryAllPages),
     personIndex: voBuildPersonIndex(allFindings),
@@ -7136,6 +7266,10 @@ if (typeof module !== 'undefined' && module.exports) {
     voStatement: voStatement,
     voAnchorEnrich: voAnchorEnrich,
     voBuildTimeline: voBuildTimeline,
+    voClassifyPage: voClassifyPage,
+    voExtractPageFacts: voExtractPageFacts,
+    voBuildFactIndex: voBuildFactIndex,
+    voFactRows: voFactRows,
     voBuildPersonIndex: voBuildPersonIndex,
     VO_RULES_PUBLIC_KEY_ID: VO_RULES_PUBLIC_KEY_ID,
     VO_RULES_ALGORITHM: VO_RULES_ALGORITHM,
