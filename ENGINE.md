@@ -36,7 +36,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   35 suites, 2706 assertions (§10); many exist solely to stop the regressions in §4 and §12.
+   36 suites, 2747 assertions (§10); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -749,7 +749,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**35 suites · 2706 assertions** (counted 2026-10-05 on the PR #218 branch, with the Combine 06 April 2026 run and its review; recount after any test change).
+**36 suites · 2747 assertions** (counted 2026-10-06 on the photo-intake branch, §12.18; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -764,6 +764,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `site-serving.test.mjs` | 56 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
 | `pages-bridge.test.mjs` | 16 | **The www bridge** (DEPLOYMENT.md "The bridge"), a dormant fallback since 2026-09-27 when the www zone route took over: the Pages Function hands every request to the Worker at the same path and query with method, headers and body; redirects pass through; a request marked `X-VO-Chain` is served from static files (no loop); an unreachable Worker falls back to static with an honest header; `functions/` never ships as a Worker asset |
 | `zip-intake.test.mjs` | 25 | **WhatsApp chat exports unpacked on-device** (§12.6a): the page's ZIP reader against real archives (stored, deflated, data-descriptor, folder, macOS cruft, encrypted, garbage), expansion into typed Files, only evidence types admitted, documents inside a voice-note export named for a separate seal, the panel note, the .zip picker entry, the 25-note batch, the home-page copy and locally served photos |
+| `photo-intake.test.mjs` | 41 | **Photos sealed as documents** (§12.18): the page's converter with the vendored pdf-lib against real images — one page per photo whose content paints the original JPEG byte for byte, the original file's SHA-512 recorded, EXIF orientation (JPEG and PNG, both byte orders) read and all eight cases mapped exactly onto the box, unreadable pictures named, and the intake wiring (selections queued in order; a voice-note batch keeps its screenshots) |
 | `greensky-regression.test.js` | 98 | The Greensky bundle: D01 conduct admission (§4.11) and `voDetectDocuments` (§4.15); §9 the 3 October 2026 re-run (§12.15): commodity codes are not dates, a commentator's label is not an admission, markdown analysis pages are secondary, this platform's own seal is not tampering |
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
@@ -2268,6 +2269,36 @@ verification section reads "SHA-512: [To be generated upon sealing]" is correct
 (`constitution.html`, `CONSTITUTION-v8.md`): a locked instrument, for the founder. (8) Two
 timestamps — `analysis_reference_utc` is the instant passed in, `generated_utc` is when the JSON
 was written; determinism is tested.
+
+### 12.18 Photos sealed as documents (2026-10-06)
+
+**What happened.** The founder picked a photo on the live seal page from a phone and got
+"Chat exports (.txt) and screenshots accompany a voice-note batch — add the voice notes first."
+`voAddFilesNow` admitted a PNG or JPEG only as a screen grab in a voice-note batch (§12.6a); a
+photo on its own had no path to a seal.
+
+**The change (`seal-document.html`).** `voAddFiles` now, when the selection (after any `.zip` is
+unpacked) holds no voice note or video and none is already chosen, passes it through
+`voPhotosToPdfs`: each PNG/JPEG becomes a one-page PDF (`voPhotoToPdf`) named
+`<name>.photo.pdf`, and the intake treats it as any other PDF (merge, seal, forensic scan; the
+picture has no text layer, so on-device OCR reads it). On the page:
+- the JPEG is embedded by pdf-lib unchanged (its bytes sit verbatim in the PDF); a PNG is
+  re-compressed losslessly;
+- EXIF orientation (`voJpegOrientation`: a JPEG's APP1 or a PNG's eXIf chunk, both byte
+  orders) is applied exactly, mirror images included, through one placement matrix
+  (`voOrientMatrix`), so a phone photo stands as the camera meant it;
+- the file name, byte count and the **SHA-512 of the original photo file** are printed under the
+  picture and set as the PDF subject, so the sealed page names the file it carries.
+
+The seal covers the PDF, not the photo file: the printed SHA-512 is what ties the page to the
+original, and anyone holding the original can recompute it. The photo's own EXIF (camera, date,
+GPS) is not read into findings by this change. A voice-note batch keeps its screenshots as-is;
+a chat `.txt` without voice notes is still refused, now with a way forward (save it as a PDF).
+Selections are copied at once and queued (`voIntakeQueue`), so a later pick never lands
+before an earlier one still unpacking or converting.
+Pinned in `tests/photo-intake.test.mjs`; checked in Chromium at phone width (two photos → two
+pages, Seal enabled, merged bundle of two pages), and every orientation case rendered with
+pdf.js in Chromium and its corners read back (orientations 1, 3, 4, 6, 8).
 
 ## 13. The court-ready narrative (the "human report")
 
