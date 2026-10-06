@@ -46,6 +46,18 @@ ok(/^On 22 May 2024:/m.test(tl.narrative) && /On 16 January 2026:/.test(tl.narra
 const i1 = tl.narrative.indexOf('22 May 2024'), i2 = tl.narrative.indexOf('16 January 2026');
 ok(i1 !== -1 && i2 !== -1 && i1 < i2, 'the events are ordered chronologically');
 
+// Ordering must come from the SORT, not the input order: feed the pages in a
+// deliberately scrambled order and require the output is still chronological.
+const scrambled = E.voBuildTimeline([], [
+  'filed on 16 January 2026 at the office.',
+  'signed on 22 May 2024 at Durban.',
+  'agreed on 15 July 2024 at the club.'
+]);
+const order = scrambled.events.map(e => e.key);
+ok(order.length === 3 && order[0] < order[1] && order[1] < order[2] &&
+   scrambled.events[0].date === '22 May 2024' && scrambled.events[2].date === '16 January 2026',
+  'events are sorted chronologically even when the pages arrive out of order');
+
 // the event carries the page and the record's own words, no inference
 const may = tl.events.find(e => e.date === '22 May 2024');
 ok(may && may.page === 1 && /Durban/.test(may.evidence) && may.source === 'document',
@@ -69,6 +81,21 @@ ok(julys.length === 1 && julys[0].source === 'finding',
 const ocr = E.voBuildTimeline([], ['[OCR] meeting held on 3 January 2025 at the club.']);
 ok(ocr.events.some(e => e.date === '3 January 2025'),
   'dates on an OCR-recovered page ([OCR] prefix) enter the timeline');
+
+// ---- 4b. a two-digit-year numeric date is not placed (century unknown) -----
+ok(!E.voBuildTimeline([], ['paid on 15/11/98 per the slip.']).events.some(e => /15\/11\/98/.test(e.date)),
+  'a numeric date with a two-digit year is not ordered (its century is not established)');
+
+// ---- 4c. dates on a secondary/analysis page are not record events ----------
+const withSecondary = E.voBuildTimeline([], [
+  'The deed was signed on 22 May 2024 at Durban.',
+  'Counsel submits that on 30 September 2099 the matter should be set down.'
+], [2]); // page 2 flagged secondary
+ok(withSecondary.events.some(e => e.date === '22 May 2024') && !withSecondary.events.some(e => /2099/.test(e.date)),
+  'a date on a page flagged secondary/analysis is not presented as a record event');
+const analysisPage = 'Verum Omnis — Forensic Narrative • page 3 of 20 the review dated 1 April 2030 notes';
+ok(!E.voBuildTimeline([], [analysisPage]).events.some(e => /2030/.test(e.date)),
+  'a date on a Verum Omnis analysis page is not a record event');
 
 // ---- 5. backward compatible: no textBlocks -> finding-only -----------------
 const fo = E.voBuildTimeline([{ type: 'CT03', evidence: 'x', anchor: { where: [2], who: [], when: ['21 June 2024'], quote: [] } }]);
