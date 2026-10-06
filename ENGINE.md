@@ -36,7 +36,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   35 suites, 2706 assertions (§10); many exist solely to stop the regressions in §4 and §12.
+   36 suites, 2717 assertions (§10); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -749,7 +749,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**35 suites · 2706 assertions** (counted 2026-10-05 on the PR #218 branch, with the Combine 06 April 2026 run and its review; recount after any test change).
+**36 suites · 2717 assertions** (counted 2026-10-05 on the PR #218 branch, with the Combine 06 April 2026 run and its review; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -770,6 +770,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
 | `annexure-eb-regression.test.mjs` | 497 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run, the evidence-bundle-4-docs run and the Public Protector submission run** (§12.10–§12.14): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans; and the Public Protector submission (§18, §18i, §18j): a status word inside its own negation (CT14), two government-suffix domains never a lookalike (CT37), a category plural is not one instrument and quotes are whole words (CT23), titles/addresses/headings are not parties, nesting-aware quotes with WHEN and LAW from the quote's own sentence, a party's submission citing other Verum seals read as secondary up to the first page that opens a new record, the dated-after-analysis note, attribution only to declared parties named whole or by initial and surname, the unsigned-agreement contract shape, the template's own Nine-Brain headers with a Finding line, and the technical report, court-ready narrative, Worker template, anchor certificate and verify.html read back, each confirmed defect of the verification pass pinned with the reviewer's reproduction |
 | `evidence-bundle-7-regression.test.mjs` | 47 | **The evidence-bundle-7-docs run** (§12.16), on a synthetic bundle of the same shape built from the bundle's own strings: the CIPC K-form and a bare "CIPC" cue (CT20), a reference to a document that records the custody (CT39), set-aside pages are not near-empty (CT26), a document ends at its stated last page, header words and possessives are not names, the count-only summary sentence, a Verum Omnis analysis's running title is secondary, the lookalike domain still fires end to end, and the technical report read back: template first, no explainer page, no "verified", severity or score words, the Thesis / Antithesis / Synthesis table, every finding under a brain; and §8, the review round: unnumbered runs keyed per run (D30, D04), a report page does not turn the evidence sealed with it into analysis, narrowed D11/D27 skips with positive controls, a clean report keeps sections 1-7, measured Finding lines, the AI-note table, the on-device summary |
+| `louw-naidoo-regression.test.mjs` | 11 | **The Louw v Naidoo run** (§12.19): D06/CT09 identifier-type classification (an SA ID typed solid and spaced is one id; a fishing right `LF…`, a vessel `DTD…` and a company registration are not identities; a `said` pair fires only for the same resolved person) and D25/CT37 cluster de-duplication (one finding per lookalike cluster; a two-domain cluster keeps the original wording), each beside a positive control |
 | `combine-06-april-regression.test.mjs` | 30 | **The Combine 06 April 2026 run** (§12.17): the late secondary-source pass (lead only when every page is secondary; a record page keeps full weight), OCR pages from the `[OCR]` prefix, rule (a) page by page, per-instrument dates and one-document comparisons (D03, D04), scanned pages OCR could barely read (CT26 hand-over), person and company registration fields (D11), two properties, OCR re-reads and longer terms (D30), conditional ownership (D38), one agreement per trap (D39), each beside a positive control |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, transcription consent (follows the sealing mode since 2026-09-07), ordering and honesty |
@@ -2268,6 +2269,50 @@ verification section reads "SHA-512: [To be generated upon sealing]" is correct
 (`constitution.html`, `CONSTITUTION-v8.md`): a locked instrument, for the founder. (8) Two
 timestamps — `analysis_reference_utc` is the instant passed in, `generated_utc` is when the JSON
 was written; determinism is tested.
+
+### 12.19 The Louw v Naidoo run — one identity typed two ways, a right number is not an identity, one email cluster is one finding (2026-10-06)
+
+The founder sealed `evidence-bundle-6-docs` (158 pages, the Louw v Naidoo matter,
+Case 341/2025) and a third-party AI review graded the deterministic engine a C-.
+Most of that review mistook the anomaly engine for the **human forensic
+narrative** (the sealed "Louw v Naidoo — Narrative and SA Law Advice", a separate
+instrument that already carries the ownership chain, the swap-then-sale, the
+charter breach, the SAMSA prohibition and the attorney conflict). Two of its
+points, though, were real engine-precision defects, fixed here. The review's
+calls to add severity tiers or make the engine "detect fraud" are **rejected**:
+they would breach Prime Directive 1 (§15.2, no score/severity) and Verdict
+Reservation.
+
+1. **D06 / CT09 over-grouped identifiers.** The finding read "4 different
+   identity numbers are attributed to one labelled subject: 4805175068087,
+   LF210223, 980123 5120 08 8, 480517 5068 08 7". In fact `4805175068087` and
+   `480517 5068 08 7` are Louw's one SA ID typed solid and spaced; `LF210223`
+   is a DFFE Commercial Traditional Linefish Right, not an identity; and
+   `9801235120088` is Naidoo's ID — a *different* person. D06 now classifies the
+   identifier type before comparing (`idClass`): `said` = a 13-digit SA ID led by
+   a plausible YYMMDD; `alpha` = a labelled passport/lettered code; fishing and
+   sardine rights (`LF…`, `KSBS…`), vessel registrations (`DTD…`) and company
+   registrations (`NNNN/NNNNNN/NN`, `CK…`) are excluded. Values are compared only
+   within one type; the canonical (whitespace-stripped) form dedupes the
+   solid/spaced pair; and two full SA IDs with no name between them (the ordinary
+   lessor/lessee shape) no longer group on the no-name branch — a `said` pair
+   fires only when the SAME resolved person carries two different IDs. The
+   annexure-EB contracts (same person → fires; two people → silent) are kept.
+
+2. **D25 / CT37 fanned out one email cluster into six findings.** The bundle's
+   `gmail.com`, `gmall.com`, `ymail.com` and `ymail.coi` are within one or two
+   characters of each other; the engine emitted every pairwise edge (six
+   findings), which then repeated across every name on their pages. D25 now
+   groups the qualifying lookalike edges into connected clusters and emits ONE
+   finding per cluster. A two-domain cluster keeps the original
+   "A beside B — N characters apart" wording (the record and every prior CT37
+   regression are unchanged); a cluster of three or more names its members once.
+
+Pinned in `tests/louw-naidoo-regression.test.mjs` (11 assertions, each beside a
+positive control). Not changed here: the empty timeline (no dated events
+extracted — its own PR) and cross-document contradiction recall (duplicate
+21/06/2024 ownership notices, swap-vs-sale), which is a design note awaiting the
+founder's steer because it sits near the verdict line.
 
 ## 13. The court-ready narrative (the "human report")
 
