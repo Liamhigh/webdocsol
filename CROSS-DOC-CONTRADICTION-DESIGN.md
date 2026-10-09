@@ -1,6 +1,11 @@
 # Design note — cross-document contradiction detection (DRAFT, awaiting founder steer)
 
-Status: **approved; building in three sequenced PRs.** Stage A (document classification + descriptive fact index) is built — `voClassifyPage`/`voExtractPageFacts`/`voBuildFactIndex`, the `factIndex` result and the report's "DOCUMENT FACT INDEX" section, `tests/doc-fact-index.test.mjs` (ENGINE.md §12.21). Stage B (conflict detection) is held behind the stage-C wording sign-off; no contradiction code is written yet. The original design follows.
+Status: **approved and signed off; merging.** Stage A (document classification + descriptive fact index) is built — `voClassifyPage`/`voExtractPageFacts`/`voBuildFactIndex`, the `factIndex` result and the report's "DOCUMENT FACT INDEX" section, `tests/doc-fact-index.test.mjs` (ENGINE.md §12.21). Stage B (conflict detection) is BUILT (`voCrossDocConflicts`/`voSameParty`, `crossDocConflicts`, the "CROSS-DOCUMENT OBSERVATIONS" section, `tests/cross-doc-conflicts.test.mjs`, ENGINE.md §12.22). Its wording was set at the stage-C sign-off (9 Oct 2026): the engine classifies the conflict SHAPE before writing a sentence — it must never infer shape from "same vessel" alone — and emits one of two fixed forms:
+
+- **type A (same transferor, same date):** both new owners are named inline, symmetric with type B, closing "…two transfers of the same vessel by the same previous owner on the same day to two different people; both cannot be the sole transfer."
+- **type B (same transferor, different dates):** a chain-of-title gap — "…does not explain how the previous owner retained the vessel to make the second transfer after the first." No exclusivity over-claim.
+
+The founder's one merge condition is met and locked by tests (§6 below): the forbidden-words guard is a **labelled channel** — it filters the engine's generated statement only, never the verbatim quotes. The original design follows.
 
 Original note: **design only, no code.** Prepared 6 October 2026 after the Louw v Naidoo
 run (`evidence-bundle-6-docs`, Case 341/2025). This note sits near the
@@ -115,5 +120,27 @@ claims) — it is low-risk, useful on its own, and lets us see extraction qualit
 real bundles before Stage C asserts any contradiction. Hold Stage C until the
 founder signs off on the wording and the boundary (question 4 above).
 
-_Prepared by Claude Code for founder review. No code has been written for this
-feature._
+## 6. Lessons logged (stage-C sign-off, 9 Oct 2026)
+
+Two durable lessons from the wording review, recorded while fresh:
+
+1. **Classify the conflict shape before writing a sentence.** The first draft
+   wrote one sentence for "two documents name the same vessel", which over-claimed
+   (it read as sole-ownership exclusivity even for a lawful chain of successive
+   owners). The shape is derived from the *relationship* between the two claims —
+   same transferor + same date (type A) vs same transferor + different dates
+   (type B) — never from "same vessel" alone. A pairing that is not one of the
+   two shapes raises nothing.
+
+2. **An evidence system must separate (a) the engine describing the record from
+   (b) the record itself.** The record is not editable. Any pattern filter the
+   engine ever runs — the forbidden-words guard here, and any future PII
+   redaction, summarisation or de-duplication — must be scoped to channel (a)
+   only. A quote is channel (b): it is reproduced verbatim and may legitimately
+   contain a word ("title", "valid", "void") that the guard blocks in engine
+   prose. `tests/cross-doc-conflicts.test.mjs` locks both directions: a quote
+   carrying a forbidden word is emitted intact, and a *generated statement* that
+   would carry one is suppressed.
+
+_Originally prepared by Claude Code for founder review (design only). Stages A and
+B are now built and signed off; this note is kept as the design record._

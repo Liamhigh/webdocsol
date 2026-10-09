@@ -5683,8 +5683,17 @@ var VO_FACT_SUFFIX = '(?:\\s+\\(Pty\\)\\s+Ltd|\\s+\\(Pty\\)\\s+Limited|\\s+\\(Ed
 var VO_FACT_NAME = '([A-Z][A-Za-z.\'’-]+(?:\\s+(?:' + VO_FACT_PARTICLE + '|[A-Z][A-Za-z.\'’-]+)){0,4}' + VO_FACT_SUFFIX + ')';
 var VO_FACT_OWNER_DIR = [
   new RegExp('previous owner\\s*:?\\s*' + VO_FACT_NAME + '[\\s\\S]{0,60}?new owner\\s*:?\\s*' + VO_FACT_NAME, 'i'),
-  new RegExp('(?:transferred|transfer|changed|passed|sold)\\s+from\\s+' + VO_FACT_NAME + '\\s+to\\s+' + VO_FACT_NAME, 'i')
+  new RegExp('(?:transferred|transfer|changed|passed|sold)\\s+from\\s+' + VO_FACT_NAME + '\\s+to\\s+' + VO_FACT_NAME, 'i'),
+  // "X (hereby) sells/sold/transferred/conveyed … to Y" — names both the
+  // transferor and the new owner, as a sale or swap deed does. The transferor
+  // is anchored to a sentence start (begin, or after a ". "/"; ") so it cannot
+  // run back across a sentence boundary into a document title ("Deed of sale.
+  // T.F. Hardouin…"). No lookbehind (Safari < 16.4) — the boundary is consumed.
+  new RegExp('(?:^|[.;:]\\s+)' + VO_FACT_NAME + '\\s+(?:hereby\\s+)?(?:sell[s]?|sold|transfer(?:s|red)?|convey(?:s|ed)?)\\b[\\s\\S]{0,40}?\\bto\\s+' + VO_FACT_NAME, 'i')
 ];
+// Acquirer only ("sells/transfers/conveys … to Y", "the vessel passes to Y"):
+// a sale or swap page often names who the vessel goes TO without a "from X".
+var VO_FACT_ACQUIRER = new RegExp('(?:sell[s]?|sold|transfer[s]?|transferred|convey[s]?|conveyed|awarded|passes|passed)\\b[\\s\\S]{0,40}?\\bto\\s+' + VO_FACT_NAME, 'i');
 function voFactSnippet(raw, idx, len) {
   var s = raw.slice(Math.max(0, idx - 90), idx + (len || 0) + 90).replace(/\s+/g, ' ').trim();
   return s.length > 200 ? s.slice(0, 197) + '…' : s;
@@ -5730,9 +5739,20 @@ function voExtractPageFacts(text) {
   // company suffix (Ltd/CC/Trust) is NOT a trailing stopword and is kept.
   var VO_FACT_NAME_TAIL = /\s+(?:dated|date|signed|on|of|at|in|by|and|for|to|the|this|that|vessel|registration|previous|new|owner|hereby|was|is)\b[\s\S]*$/i;
   var cleanName = function (n) { return n.replace(/\s+/g, ' ').trim().replace(VO_FACT_NAME_TAIL, '').replace(/[\s.,;:]+$/, '').trim(); };
+  // Drop a leading document title ("DEED OF SALE.", "Notice of Change of
+  // Ownership of a Vessel.") before reading the owner direction, so a transferor
+  // name is never captured from the title instead of the body. The offset is
+  // kept so the quote still points into the real page text.
+  var titleM = raw.match(/^\s*[\s\S]{0,80}?\b(?:deed|notice|agreement|memorandum|certificate|licen[cs]e|lease|contract|minute|affidavit|letter|register|application)\b[^.]{0,80}?\.\s+/i);
+  var bodyAt = titleM ? titleM[0].length : 0;
+  var body = raw.slice(bodyAt);
   for (var oi = 0; oi < VO_FACT_OWNER_DIR.length; oi++) {
-    var om = raw.match(VO_FACT_OWNER_DIR[oi]);
-    if (om) { facts.ownerFrom = cleanName(om[1]); facts.ownerTo = cleanName(om[2]); facts.ownerQuote = voFactSnippet(raw, om.index, om[0].length); break; }
+    var om = body.match(VO_FACT_OWNER_DIR[oi]);
+    if (om) { facts.ownerFrom = cleanName(om[1]); facts.ownerTo = cleanName(om[2]); facts.ownerQuote = voFactSnippet(raw, bodyAt + om.index, om[0].length); break; }
+  }
+  if (!facts.ownerTo) {
+    var am = body.match(VO_FACT_ACQUIRER);
+    if (am) { facts.ownerTo = cleanName(am[1]); facts.ownerQuote = voFactSnippet(raw, bodyAt + am.index, am[0].length); }
   }
   return facts;
 }
@@ -5769,10 +5789,100 @@ function voBuildFactIndex(textBlocks, secondaryPages) {
       rights: f.rights.map(function (x) { return x.value; }),
       amounts: f.amounts.map(function (x) { return x.value; }),
       companyRegs: f.companyRegs.map(function (x) { return x.value; }),
-      date: f.date, ownerFrom: f.ownerFrom, ownerTo: f.ownerTo
+      date: f.date, ownerFrom: f.ownerFrom, ownerTo: f.ownerTo, ownerQuote: f.ownerQuote
     });
   }
   return { records: records, excluded: excluded };
+}
+
+// ===== Cross-document conflict detection (stage B) ===========================
+// It reads the fact index (RECORD pages only) and reports where two record
+// pages make claims about the SAME subject that the record cannot reconcile. It
+// is a contradiction detector, NOT a judge: it names no offence, declares no
+// owner, and reaches no conclusion. Each conflict quotes both pages.
+//
+// The SHAPE of a conflict is classified before a sentence is written about it
+// (the durable fix for the founder's wording review of 6 October): two pages
+// merely naming the same vessel is not a conflict. A conflict needs the SAME
+// previous owner (transferor) transferring the vessel to two DIFFERENT people —
+//  - type A, same date: two transfers on one day; both cannot be the sole one;
+//  - type B, different dates: successive transfers the record does not reconcile
+//    (it does not state how the previous owner still held the vessel to make the
+//    second transfer). Successive owners on different dates are NOT, by
+//    themselves, a contradiction — only the unexplained same-transferor chain is.
+// The wording is fixed per type and pinned by a forbidden-words test and a
+// runtime guard (no offence word, no verdict, no "therefore"/"valid"/"title"…).
+var VO_NAME_STOP_TOK = { pty: 1, ltd: 1, limited: 1, cc: 1, inc: 1, llp: 1, trust: 1, npc: 1, edms: 1, bpk: 1, request: 1, in: 1, ref: 1, no: 1, number: 1, the: 1, of: 1, and: 1, to: 1, mr: 1, mrs: 1, ms: 1, dr: 1, adv: 1, prof: 1 };
+function voNameCore(n) { return String(n || '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
+function voNameTokens(n) { return voNameCore(n).split(' ').filter(function (t) { return t && !VO_NAME_STOP_TOK[t]; }); }
+function voNameSurname(n) { var t = voNameTokens(n); return t.length ? t[t.length - 1] : ''; }
+// Two party names are treated as the SAME party when, after dropping titles and
+// non-name noise ("Mr", a mis-parsed trailing "REQUEST"), one core contains the
+// other (an initialled form of the same name) or they share a surname token.
+// Erring toward "same" keeps "R. Louw", "Ritzema Louw" and "Ritzema Louw
+// REQUEST" as one party — only clearly different parties raise a conflict.
+function voSameParty(a, b) {
+  var ta = voNameTokens(a).join(' '), tb = voNameTokens(b).join(' ');
+  if (!ta || !tb) return true;
+  if (ta === tb || ta.indexOf(tb) !== -1 || tb.indexOf(ta) !== -1) return true;
+  var sa = voNameSurname(a), sb = voNameSurname(b);
+  return !!sa && sa === sb;
+}
+// No conflict statement may read as a verdict or a legal conclusion.
+var VO_CONFLICT_FORBIDDEN = /\b(fraud|fraudulent|forgery|forged|illegal|unlawful|the (?:true|rightful) owner|therefore|consequently|which (?:proves|shows)|guilty|crime|criminal|liable|wrongdoing|valid|invalid|void|title)\b/i;
+function voCrossDocConflicts(factIndex) {
+  var out = [], seen = {};
+  var recs = (factIndex && factIndex.records) || [];
+  var byVessel = {};
+  for (var i = 0; i < recs.length; i++) {
+    var r = recs[i];
+    if (!r.ownerTo || !r.ownerFrom || !r.vessels || !r.vessels.length) continue; // need a transferor AND a new owner
+    for (var v = 0; v < r.vessels.length; v++) (byVessel[r.vessels[v]] = byVessel[r.vessels[v]] || []).push(r);
+  }
+  Object.keys(byVessel).sort().forEach(function (vessel) {
+    var list = byVessel[vessel];
+    for (var a = 0; a < list.length; a++) {
+      for (var b = a + 1; b < list.length; b++) {
+        var ra = list[a], rb = list[b];
+        if (ra.page === rb.page) continue;
+        if (!voSameParty(ra.ownerFrom, rb.ownerFrom)) continue;  // not the same previous owner — not this conflict
+        if (voSameParty(ra.ownerTo, rb.ownerTo)) continue;        // same new owner — no conflict
+        var key = vessel + '|' + Math.min(ra.page, rb.page) + '|' + Math.max(ra.page, rb.page);
+        if (seen[key]) continue;
+        seen[key] = true;
+        // order by date when known, else by page
+        var ka = voDateSortKey(ra.date || ''), kb = voDateSortKey(rb.date || '');
+        var lo, hi;
+        if (ka !== null && kb !== null && ka !== kb) { lo = ka < kb ? ra : rb; hi = ka < kb ? rb : ra; }
+        else { lo = ra.page <= rb.page ? ra : rb; hi = ra.page <= rb.page ? rb : ra; }
+        var transferor = lo.ownerFrom;
+        var sameDate = (lo.date && hi.date && lo.date === hi.date);
+        var type, statement;
+        if (sameDate) {
+          type = 'A';
+          // Both owners named inline, symmetric with type B: a reader sees at a
+          // glance which two parties are in conflict (founder sign-off, 9 Oct 2026).
+          statement = 'Page ' + lo.page + ' states ' + transferor + ' transferred ' + vessel + ' to ' + lo.ownerTo + ' on ' + lo.date + '. ' +
+            'Page ' + hi.page + ' states ' + transferor + ' transferred the same vessel to ' + hi.ownerTo + ' on the same date, ' + hi.date + '. ' +
+            'The record states two transfers of the same vessel by the same previous owner on the same day to two different people; both cannot be the sole transfer.';
+        } else {
+          type = 'B';
+          var loDate = lo.date ? ' on ' + lo.date : '', hiDate = hi.date ? ' on ' + hi.date : '';
+          statement = 'Page ' + lo.page + ' states ' + transferor + ' transferred ' + vessel + ' to ' + lo.ownerTo + loDate + '. ' +
+            'Page ' + hi.page + ' states ' + transferor + ' transferred the same vessel to ' + hi.ownerTo + hiDate + '. ' +
+            'The record states two transfers of the same vessel by the same previous owner to two different people, and does not explain how the previous owner retained the vessel to make the second transfer' + (lo.date && hi.date ? ' after the first' : '') + '.';
+        }
+        if (VO_CONFLICT_FORBIDDEN.test(statement)) continue; // never emit a statement that reads as a conclusion
+        out.push({
+          kind: 'ownership', type: type, subject: vessel, transferor: transferor,
+          a: { page: lo.page, owner: lo.ownerTo, date: lo.date || null, quote: lo.ownerQuote || null },
+          b: { page: hi.page, owner: hi.ownerTo, date: hi.date || null, quote: hi.ownerQuote || null },
+          statement: statement
+        });
+      }
+    }
+  });
+  return out;
 }
 
 function detectSerialPatterns(textBlocks) {
@@ -6744,6 +6854,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
       ' pages) -- effectively no text layer. Zero findings here means the content was NOT examined, not that it is consistent.';
   }
 
+  var _factIndex = voBuildFactIndex(textBlocks, _secondaryAllPages);
+
   return {
     engineVersion: VO_ENGINE_VERSION,
     // The signed rule package this scan applied (version, key, canonical
@@ -6763,7 +6875,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     // whitelists fields) and is dropped after the narrate call.
     pageTexts: textBlocks,
     documentMap: voDetectDocuments(textBlocks),
-    factIndex: voBuildFactIndex(textBlocks, _secondaryAllPages),
+    factIndex: _factIndex,
+    crossDocConflicts: voCrossDocConflicts(_factIndex),
     swornPages: swornPages,
     timeline: voBuildTimeline(allFindings, textBlocks, _secondaryAllPages),
     personIndex: voBuildPersonIndex(allFindings),
@@ -7270,6 +7383,8 @@ if (typeof module !== 'undefined' && module.exports) {
     voExtractPageFacts: voExtractPageFacts,
     voBuildFactIndex: voBuildFactIndex,
     voFactRows: voFactRows,
+    voCrossDocConflicts: voCrossDocConflicts,
+    voSameParty: voSameParty,
     voBuildPersonIndex: voBuildPersonIndex,
     VO_RULES_PUBLIC_KEY_ID: VO_RULES_PUBLIC_KEY_ID,
     VO_RULES_ALGORITHM: VO_RULES_ALGORITHM,
