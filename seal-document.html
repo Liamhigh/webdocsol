@@ -12246,8 +12246,11 @@ function voCrossDocConflicts(factIndex) {
         var type, statement;
         if (sameDate) {
           type = 'A';
-          statement = 'Page ' + lo.page + ' and Page ' + hi.page + ' each state that ' + transferor + ' transferred ' + vessel +
-            ' to a different new owner on the same date, ' + lo.date + '. The record states two transfers of the same vessel on the same day to two different people; both cannot be the sole transfer.';
+          // Both owners named inline, symmetric with type B: a reader sees at a
+          // glance which two parties are in conflict (founder sign-off, 9 Oct 2026).
+          statement = 'Page ' + lo.page + ' states ' + transferor + ' transferred ' + vessel + ' to ' + lo.ownerTo + ' on ' + lo.date + '. ' +
+            'Page ' + hi.page + ' states ' + transferor + ' transferred the same vessel to ' + hi.ownerTo + ' on the same date, ' + hi.date + '. ' +
+            'The record states two transfers of the same vessel by the same previous owner on the same day to two different people; both cannot be the sole transfer.';
         } else {
           type = 'B';
           var loDate = lo.date ? ' on ' + lo.date : '', hiDate = hi.date ? ' on ' + hi.date : '';

@@ -36,7 +36,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   40 suites, 2818 assertions (§10); many exist solely to stop the regressions in §4 and §12.
+   40 suites, 2823 assertions (§10); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -749,7 +749,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**40 suites · 2818 assertions** (counted 2026-10-06, with the photo-intake and Louw v Naidoo changes, §12.18-§12.19; recount after any test change).
+**40 suites · 2823 assertions** (counted 2026-10-09, with the photo-intake, Louw v Naidoo and cross-document changes, §12.18-§12.22; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -771,7 +771,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
 | `annexure-eb-regression.test.mjs` | 497 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run, the evidence-bundle-4-docs run and the Public Protector submission run** (§12.10–§12.14): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans; and the Public Protector submission (§18, §18i, §18j): a status word inside its own negation (CT14), two government-suffix domains never a lookalike (CT37), a category plural is not one instrument and quotes are whole words (CT23), titles/addresses/headings are not parties, nesting-aware quotes with WHEN and LAW from the quote's own sentence, a party's submission citing other Verum seals read as secondary up to the first page that opens a new record, the dated-after-analysis note, attribution only to declared parties named whole or by initial and surname, the unsigned-agreement contract shape, the template's own Nine-Brain headers with a Finding line, and the technical report, court-ready narrative, Worker template, anchor certificate and verify.html read back, each confirmed defect of the verification pass pinned with the reviewer's reproduction |
 | `evidence-bundle-7-regression.test.mjs` | 47 | **The evidence-bundle-7-docs run** (§12.16), on a synthetic bundle of the same shape built from the bundle's own strings: the CIPC K-form and a bare "CIPC" cue (CT20), a reference to a document that records the custody (CT39), set-aside pages are not near-empty (CT26), a document ends at its stated last page, header words and possessives are not names, the count-only summary sentence, a Verum Omnis analysis's running title is secondary, the lookalike domain still fires end to end, and the technical report read back: template first, no explainer page, no "verified", severity or score words, the Thesis / Antithesis / Synthesis table, every finding under a brain; and §8, the review round: unnumbered runs keyed per run (D30, D04), a report page does not turn the evidence sealed with it into analysis, narrowed D11/D27 skips with positive controls, a clean report keeps sections 1-7, measured Finding lines, the AI-note table, the on-device summary |
-| `cross-doc-conflicts.test.mjs` | 13 | **Cross-document conflict detection** (§12.22, stage B; HELD for wording sign-off): same-vessel conflicting new-owner across record pages (duplicate ownership notices; swap-vs-sale), both sides quoted and paged, the fixed neutral "cannot both describe the sole new owner" form, a same-party check (R. Louw ≈ Ritzema Louw) that avoids false conflicts, an analysis/secondary page can never raise one, and a forbidden-words guard (no offence/verdict/conclusion) |
+| `cross-doc-conflicts.test.mjs` | 18 | **Cross-document conflict detection** (§12.22, stage B; wording signed off): same previous owner transferring one vessel to two different people — type A (same date, both new owners named inline) and type B (different dates, chain-of-title gap), both sides quoted and paged; a same-party check (R. Louw ≈ Ritzema Louw) that avoids false conflicts; a legitimate A→B→C chain raises nothing; an analysis/secondary page can never raise one; and a labelled-channel forbidden-words guard that filters engine prose only, leaving a verbatim quote (even one containing "valid title") intact |
 | `doc-fact-index.test.mjs` | 27 | **Document fact index** (§12.21, cross-doc stage A): page classification (ownership-notice/sale/swap/lease/permit/certificate/correspondence/analysis-secondary) and page-anchored fact extraction (vessel, parties + owner direction, date, amount, right, company reg) with a verbatim quote; descriptive only; secondary/analysis pages excluded from the record set |
 | `timeline-dates.test.mjs` | 17 | **Timeline date extraction** (§12.20): dates in the page text (text layer and OCR) become ordered, page-anchored events, not only dates a finding carries; impossible dates are excluded and never guessed; a finding date and the same calendar date in the text on one page are one event; finding-only when no page text is passed |
 | `louw-naidoo-regression.test.mjs` | 14 | **The Louw v Naidoo run** (§12.19): D06/CT09 identifier-type classification (an SA ID typed solid and spaced is one id; a fishing right `LF…`, a vessel `DTD…` and a company registration are not identities; a `said` pair fires only for the same resolved person) and D25/CT37 cluster de-duplication (one finding per lookalike cluster; a two-domain cluster keeps the original wording), each beside a positive control |
@@ -2391,7 +2391,7 @@ section that draws no comparison. Pinned in `tests/doc-fact-index.test.mjs`.
 Stage B (conflict detection) and stage C (the wording gate) are not in this
 change.
 
-### 12.22 Cross-document reading, stage B — conflict detection, classified by shape (2026-10-06; founder-approved wording)
+### 12.22 Cross-document reading, stage B — conflict detection, classified by shape (2026-10-06; wording signed off 2026-10-09)
 
 Stage B of the cross-document build (§12.21). `voCrossDocConflicts` reads the
 stage-A fact index (RECORD pages only) and reports where the record cannot
@@ -2401,10 +2401,15 @@ writes a sentence** — two pages merely naming the same vessel is not a conflic
 A conflict needs the SAME previous owner (transferor) transferring the vessel to
 two DIFFERENT people:
 
-- **Type A — same date.** "Page X and Page Y each state that [transferor]
-  transferred [vessel] to a different new owner on the same date, [date]. The
-  record states two transfers of the same vessel on the same day to two
-  different people; both cannot be the sole transfer."
+- **Type A — same date.** Both new owners are named inline, symmetric with
+  type B: "Page X states [transferor] transferred [vessel] to [A] on [date].
+  Page Y states [transferor] transferred the same vessel to [B] on the same
+  date, [date]. The record states two transfers of the same vessel by the same
+  previous owner on the same day to two different people; both cannot be the
+  sole transfer." (At the sign-off the founder chose to name both parties so a
+  reader sees at a glance which two are in conflict; both names are facts of the
+  record, naming is symmetric, and it neither favours a side nor draws a
+  conclusion.)
 - **Type B — different dates (chain-of-title gap).** "Page X states [transferor]
   transferred [vessel] to [A] on [date A]. Page Y states [transferor]
   transferred the same vessel to [B] on [date B]. The record states two
@@ -2417,12 +2422,23 @@ A→B→C chain) raise nothing. Safeguards: `voSameParty` (titles and a mis-pars
 trailing "REQUEST" dropped; core-substring or shared surname) keeps "R. Louw",
 "Ritzema Louw" and "Ritzema Louw REQUEST" as one party; the vessel key is
 whitespace/case-normalised; an analysis/secondary page is not in the fact index
-so it can never raise or join a conflict; and every statement passes a
-forbidden-words guard AND a runtime filter (no offence word, no owner
-determination, no verdict, no "therefore"/"consequently"/"valid"/"void"/
-"title"…). The result carries `crossDocConflicts` and a "CROSS-DOCUMENT
-OBSERVATIONS" section ("both pages are quoted verbatim; the engine does not
-select between them"). Pinned in `tests/cross-doc-conflicts.test.mjs`.
+so it can never raise or join a conflict; and every generated statement passes a
+forbidden-words guard (no offence word, no owner determination, no verdict, no
+"therefore"/"consequently"/"valid"/"void"/"title"…). The result carries
+`crossDocConflicts` and a "CROSS-DOCUMENT OBSERVATIONS" section ("both pages are
+quoted verbatim; the engine does not select between them"). Pinned in
+`tests/cross-doc-conflicts.test.mjs`.
+
+**The forbidden-words guard is a labelled channel (founder merge condition,
+2026-10-09).** It filters the engine's GENERATED STATEMENT only — never the
+verbatim QUOTES. A quote is evidence; the engine never edits the record, so a
+quote may legitimately contain a word the guard blocks in engine prose. Two
+regression assertions lock both directions: a conflict whose quote contains
+"valid title" still emits with that quote intact, and a conflict whose generated
+statement *would* contain "void" (via a new-owner name) is suppressed, while the
+same shape with a clean name fires. The principle generalises: any future
+engine-side filter (PII redaction, summarisation, de-duplication) is scoped to
+the engine's description of the record, never to the record itself.
 
 **Lesson logged:** the engine must not infer the shape of a conflict from the
 fact that two pages mention the same subject. Conflict shape is derived from the

@@ -7,8 +7,12 @@
  *   type A (same date):  two transfers on one day; both cannot be the sole one.
  *   type B (diff dates):  successive transfers the record does not reconcile.
  * It is a detector, not a judge: no offence, no owner determination, no verdict,
- * fixed wording per type, pinned by a forbidden-words guard. Only record pages
- * are compared — an analysis/secondary page can never raise or join a conflict.
+ * fixed wording per type, pinned by a forbidden-words guard. The guard is a
+ * LABELLED CHANNEL: it filters the engine's GENERATED STATEMENT only, never the
+ * verbatim QUOTES — a quote is evidence and the engine never edits the record,
+ * so a quote may legitimately contain a word ("title", "valid", "void") that the
+ * guard would block in engine prose. Only record pages are compared — an
+ * analysis/secondary page can never raise or join a conflict.
  *
  * Synthetic pages in the Louw v Naidoo shape; no real-matter document committed.
  */
@@ -30,8 +34,8 @@ const A = conflicts([
   'Notice of Change of Ownership of a Vessel. Vessel DTD782C. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 21 June 2024.'
 ]);
 ok(A.length === 1 && A[0].type === 'A', 'two notices, same transferor, same date, different new owners → one type-A conflict');
-ok(A.length === 1 && A[0].statement === 'Page 1 and Page 2 each state that T.F. Hardouin transferred DTD782C to a different new owner on the same date, 21 June 2024. The record states two transfers of the same vessel on the same day to two different people; both cannot be the sole transfer.',
-  'type-A wording is exactly the approved form');
+ok(A.length === 1 && A[0].statement === 'Page 1 states T.F. Hardouin transferred DTD782C to R. Louw on 21 June 2024. Page 2 states T.F. Hardouin transferred the same vessel to Niven Naidoo on the same date, 21 June 2024. The record states two transfers of the same vessel by the same previous owner on the same day to two different people; both cannot be the sole transfer.',
+  'type-A wording is exactly the approved form (both new owners named inline, symmetric with type B)');
 ok(A.length === 1 && /previous owner T\.F\. Hardouin new owner R\. Louw/.test(A[0].a.quote || '') && /new owner Niven Naidoo/.test(A[0].b.quote || ''),
   'type A quotes both pages verbatim');
 
@@ -88,6 +92,35 @@ const mixed = conflicts([
 ]);
 ok(mixed.length >= 1 && mixed.every(c => !FORBIDDEN.test(c.statement)),
   'no conflict statement contains an offence word, a verdict, or a legal conclusion (incl. therefore/valid/void/title)');
+
+// ---- labelled channel (1/2): a verbatim QUOTE containing a forbidden word is
+//      emitted INTACT. The guard never runs over quotes — they are evidence, and
+//      editing a quote would corrupt the record (founder condition, 9 Oct 2026).
+const qt = conflicts([
+  'Notice of Change of Ownership of a Vessel. Vessel DTD640D. previous owner T.F. Hardouin new owner R. Louw, holder of valid title. Dated 21 June 2024.',
+  'Notice of Change of Ownership of a Vessel. Vessel DTD640D. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 21 June 2024.'
+]);
+ok(qt.length === 1 && qt[0].type === 'A', 'a conflict still fires when a quote contains the forbidden word "valid"/"title"');
+ok(qt.length === 1 && /valid title/i.test(qt[0].a.quote || ''),
+  'the verbatim quote keeps "valid title" intact — a quote is never run through the forbidden-words filter');
+ok(qt.length === 1 && !FORBIDDEN.test(qt[0].statement),
+  'the engine-generated statement for that same conflict carries no forbidden word');
+
+// ---- labelled channel (2/2): the guard DOES block the engine's own prose. If a
+//      generated statement would carry a forbidden word (here via a new-owner
+//      name), the whole conflict is suppressed rather than emitted.
+ok(conflicts([
+  'Vessel DTD660F. previous owner T.F. Hardouin new owner Void Holdings. Dated 21 June 2024.',
+  'Vessel DTD660F. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 21 June 2024.'
+]).length === 0,
+  'a conflict whose generated statement would contain a forbidden word ("Void") is suppressed');
+// control: the identical shape with a clean new-owner name DOES fire, so the
+// suppression above is the forbidden word and nothing else about the fixture.
+ok(conflicts([
+  'Vessel DTD660F. previous owner T.F. Hardouin new owner Grace Holdings. Dated 21 June 2024.',
+  'Vessel DTD660F. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 21 June 2024.'
+]).length === 1,
+  'the identical shape with a clean new-owner name fires — the only difference is the forbidden word');
 
 console.log('\ncross-doc-conflicts: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

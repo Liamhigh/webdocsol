@@ -533,8 +533,8 @@ or after that build. On its own this proves nothing, because branch builds move 
 no commit: `version` is the fixed `SERVICE_VERSION`. `wrangler deploy` by hand is the fallback
 for when Workers Builds is unavailable, not the normal path.
 
-**Because merge = publish:** run `node tests/run-all.js` (40 suites; 2818 assertions on
-5 October 2026, per-suite counts in `ENGINE.md` §10) and `npm run check`, and re-splice the
+**Because merge = publish:** run `node tests/run-all.js` (40 suites; 2823 assertions on
+9 October 2026, per-suite counts in `ENGINE.md` §10) and `npm run check`, and re-splice the
 inline copies into `seal-document.html` (`tests/inline-scripts.test.mjs` byte-compares them),
 all **before** the PR, not after. A merged
 regression is live within a minute.
