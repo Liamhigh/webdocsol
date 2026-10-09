@@ -157,5 +157,31 @@ ok(td.length === 1 && td[0].type === 'A',
 ok(td.length === 1 && / on 21 June 2024\. /.test(td[0].statement) && !/2 January 2020/.test(td[0].statement),
   'the Type A statement uses the transfer date (21 June 2024), never the unrelated page date');
 
+// ---- #1 precision: a shared surname ALONE does not merge two different people -
+ok(!E.voSameParty('John Smith', 'Jane Smith'), 'different given names, same surname → NOT the same party (Sourcery #1)');
+ok(E.voSameParty('John Smith', 'J. Smith') && E.voSameParty('John Smith', 'John Smith') && E.voSameParty('Smith', 'John Smith'),
+  'an initial, an exact first name, or a bare surname still matches (no over-correction)');
+const sn = conflicts([
+  'Vessel DTD120A. previous owner T.F. Hardouin new owner John Smith. Dated 1 April 2024.',
+  'Vessel DTD120A. previous owner T.F. Hardouin new owner Jane Smith. Dated 1 April 2024.'
+]);
+ok(sn.length === 1 && sn[0].type === 'A',
+  'two different new owners who share a surname (John vs Jane Smith) DO raise a conflict — the old shared-surname merge hid it');
+
+// ---- #2 precision: a transfer is bound to ITS vessel, not every vessel on page
+ok(conflicts([
+  'A fleet notice. T.F. Hardouin sells DTD200A to R. Louw on 1 May 2024. DTD300B remains unsold.',
+  'Vessel DTD300B. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 1 June 2024.'
+]).length === 0,
+  'a transfer of DTD200A on a page that also lists DTD300B is NOT paired against a DTD300B transfer (Sourcery #2)');
+
+// ---- #4 precision: a transfer stated in the title sentence is not stripped away
+const t4 = conflicts([
+  'Deed: Terry Hardouin sells DTD910Z to Ritzema Louw on 1 March 2024. Registered.',
+  'Deed: Terry Hardouin sells DTD910Z to Niven Naidoo on 1 March 2024. Registered.'
+]);
+ok(t4.length === 1 && t4[0].type === 'A',
+  'a transfer in the same sentence as the document title ("Deed: X sells … to Y") is not lost to title-stripping (Sourcery #4)');
+
 console.log('\ncross-doc-conflicts: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

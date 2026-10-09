@@ -50,7 +50,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**40 suites, 2834 assertions**, all green (counted 9 October 2026, with photos sealed as
+**40 suites, 2839 assertions**, all green (counted 9 October 2026, with photos sealed as
 documents (`ENGINE.md` §12.18), the Louw v Naidoo precision fixes (§12.19) and the
 cross-document conflict detection (§12.21-§12.22)). `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file

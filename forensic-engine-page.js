@@ -5740,6 +5740,28 @@ function voTransferDate(raw, start, len) {
   }
   return null;
 }
+// The vessel a transfer is ABOUT — read from the transfer's own passage (a tight
+// window around the owner-direction match), so on a page that names more than one
+// vessel the transfer is bound to the vessel in its own clause, not to every
+// vessel on the page (Sourcery #2). Null when the passage names no vessel.
+function voOwnerVessel(raw, start, len) {
+  // Within the transfer passage itself (the matched span) plus a short tail for a
+  // trailing "… of DTD200A". No backward look — a vessel listed BEFORE the passage
+  // is the page's subject list, not necessarily this transfer's vessel.
+  var win = String(raw || '').slice(start, start + (len || 0) + 40);
+  VO_FACT_VESSEL_RE.lastIndex = 0;
+  var m = VO_FACT_VESSEL_RE.exec(win);
+  return m ? m[0].replace(/\s+/g, '').toUpperCase() : null;
+}
+// Does a text span itself state a transfer (an owner direction or an acquirer)?
+// Used so a leading document title is NOT stripped when the opening sentence is
+// also the transfer ("Deed: Terry Hardouin sells DTD910Z to Ritzema Louw.") —
+// stripping it would lose the transfer (Sourcery #4).
+function voHasOwnerDir(s) {
+  s = String(s || '');
+  for (var i = 0; i < VO_FACT_OWNER_DIR.length; i++) if (VO_FACT_OWNER_DIR[i].test(s)) return true;
+  return VO_FACT_ACQUIRER.test(s);
+}
 // Every match of a repeatable field, each with the verbatim line it sits on,
 // so a page that names two vessels (a swap) shows both — never only the first.
 function voFactAll(re, raw, norm) {
@@ -5764,7 +5786,7 @@ function voExtractPageFacts(text) {
     rights: voFactAll(VO_FACT_RIGHT_RE, raw, function (x) { return x.toUpperCase(); }),
     amounts: voFactAll(VO_FACT_AMOUNT_RE, raw),
     companyRegs: voFactAll(VO_FACT_COMPANYREG_RE, raw),
-    date: null, dateQuote: null, ownerFrom: null, ownerTo: null, ownerQuote: null, ownerDate: null
+    date: null, dateQuote: null, ownerFrom: null, ownerTo: null, ownerQuote: null, ownerDate: null, ownerVessel: null
   };
   var ds = voExtractDates(raw);
   for (var di = 0; di < ds.length; di++) {
@@ -5785,8 +5807,11 @@ function voExtractPageFacts(text) {
   // Ownership of a Vessel.") before reading the owner direction, so a transferor
   // name is never captured from the title instead of the body. The offset is
   // kept so the quote still points into the real page text.
+  // …UNLESS the opening sentence is itself the transfer ("Deed: Terry Hardouin
+  // sells DTD910Z to Ritzema Louw."), in which case stripping it would lose the
+  // transfer — so only strip a title that does not itself state one (Sourcery #4).
   var titleM = raw.match(/^\s*[\s\S]{0,80}?\b(?:deed|notice|agreement|memorandum|certificate|licen[cs]e|lease|contract|minute|affidavit|letter|register|application)\b[^.]{0,80}?\.\s+/i);
-  var bodyAt = titleM ? titleM[0].length : 0;
+  var bodyAt = (titleM && !voHasOwnerDir(titleM[0])) ? titleM[0].length : 0;
   var body = raw.slice(bodyAt);
   // A NEGATED transfer ("… was never transferred from X to Y") is not a transfer:
   // skip it so a non-event never becomes a positive ownership claim. The date is
@@ -5798,6 +5823,7 @@ function voExtractPageFacts(text) {
       facts.ownerFrom = cleanName(om[1]); facts.ownerTo = cleanName(om[2]);
       facts.ownerQuote = voFactSnippet(raw, bodyAt + om.index, om[0].length);
       facts.ownerDate = voTransferDate(raw, bodyAt + om.index, om[0].length);
+      facts.ownerVessel = voOwnerVessel(raw, bodyAt + om.index, om[0].length);
       break;
     }
   }
@@ -5807,6 +5833,7 @@ function voExtractPageFacts(text) {
       facts.ownerTo = cleanName(am[1]);
       facts.ownerQuote = voFactSnippet(raw, bodyAt + am.index, am[0].length);
       facts.ownerDate = voTransferDate(raw, bodyAt + am.index, am[0].length);
+      facts.ownerVessel = voOwnerVessel(raw, bodyAt + am.index, am[0].length);
     }
   }
   return facts;
@@ -5844,7 +5871,7 @@ function voBuildFactIndex(textBlocks, secondaryPages) {
       rights: f.rights.map(function (x) { return x.value; }),
       amounts: f.amounts.map(function (x) { return x.value; }),
       companyRegs: f.companyRegs.map(function (x) { return x.value; }),
-      date: f.date, ownerFrom: f.ownerFrom, ownerTo: f.ownerTo, ownerQuote: f.ownerQuote, ownerDate: f.ownerDate
+      date: f.date, ownerFrom: f.ownerFrom, ownerTo: f.ownerTo, ownerQuote: f.ownerQuote, ownerDate: f.ownerDate, ownerVessel: f.ownerVessel
     });
   }
   return { records: records, excluded: excluded };
@@ -5871,17 +5898,36 @@ var VO_NAME_STOP_TOK = { pty: 1, ltd: 1, limited: 1, cc: 1, inc: 1, llp: 1, trus
 function voNameCore(n) { return String(n || '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
 function voNameTokens(n) { return voNameCore(n).split(' ').filter(function (t) { return t && !VO_NAME_STOP_TOK[t]; }); }
 function voNameSurname(n) { var t = voNameTokens(n); return t.length ? t[t.length - 1] : ''; }
-// Two party names are treated as the SAME party when, after dropping titles and
-// non-name noise ("Mr", a mis-parsed trailing "REQUEST"), one core contains the
-// other (an initialled form of the same name) or they share a surname token.
-// Erring toward "same" keeps "R. Louw", "Ritzema Louw" and "Ritzema Louw
-// REQUEST" as one party — only clearly different parties raise a conflict.
+// Do two first-name sets belong to the same person? A bare surname (no first
+// name on one side) cannot disprove identity. Otherwise the leading given names
+// must be compatible: an initial against a name beginning with that letter
+// ("R." ↔ "Ritzema", "T." ↔ "Terry"), two equal names, or one a prefix of the
+// other ("Ritz" ⊂ "Ritzema"). Two different full first names ("John" vs "Jane")
+// are NOT compatible — a shared surname does not make them one party.
+function voNameFirstCompatible(a, b) {
+  var fa = voNameTokens(a), fb = voNameTokens(b);
+  fa = fa.slice(0, Math.max(0, fa.length - 1)); // drop the surname token
+  fb = fb.slice(0, Math.max(0, fb.length - 1));
+  if (!fa.length || !fb.length) return true;
+  var x = fa[0], y = fb[0];
+  if (x === y) return true;
+  if (x.length === 1 || y.length === 1) return x.charAt(0) === y.charAt(0);
+  return x.indexOf(y) === 0 || y.indexOf(x) === 0;
+}
+// Two party names are the SAME party when, after dropping titles and non-name
+// noise ("Mr", a mis-parsed trailing "REQUEST"), one core contains the other (an
+// initialled or sub-name form of the same name), OR they share a surname AND
+// their given names are compatible. A shared surname ALONE is not enough — two
+// different people can share one (Sourcery #1). An unreadable name is not assumed
+// to match. This keeps "R. Louw", "Ritzema Louw" and "Ritzema Louw REQUEST" as
+// one party while keeping, e.g., "John Smith" and "Jane Smith" apart.
 function voSameParty(a, b) {
   var ta = voNameTokens(a).join(' '), tb = voNameTokens(b).join(' ');
-  if (!ta || !tb) return true;
+  if (!ta || !tb) return false;
   if (ta === tb || ta.indexOf(tb) !== -1 || tb.indexOf(ta) !== -1) return true;
   var sa = voNameSurname(a), sb = voNameSurname(b);
-  return !!sa && sa === sb;
+  if (!sa || sa !== sb) return false;
+  return voNameFirstCompatible(a, b);
 }
 // No conflict statement may read as a verdict or a legal conclusion.
 var VO_CONFLICT_FORBIDDEN = /\b(fraud|fraudulent|forgery|forged|illegal|unlawful|the (?:true|rightful) owner|therefore|consequently|which (?:proves|shows)|guilty|crime|criminal|liable|wrongdoing|valid|invalid|void|title)\b/i;
@@ -5892,7 +5938,13 @@ function voCrossDocConflicts(factIndex) {
   for (var i = 0; i < recs.length; i++) {
     var r = recs[i];
     if (!r.ownerTo || !r.ownerFrom || !r.vessels || !r.vessels.length) continue; // need a transferor AND a new owner
-    for (var v = 0; v < r.vessels.length; v++) (byVessel[r.vessels[v]] = byVessel[r.vessels[v]] || []).push(r);
+    // Bind the transfer to ITS vessel, not every vessel on the page (Sourcery #2):
+    // the vessel named in the transfer passage, else the sole vessel on the page,
+    // else none — a multi-vessel page whose transfer names no vessel is not grouped.
+    var tv = (r.ownerVessel && r.vessels.indexOf(r.ownerVessel) !== -1) ? r.ownerVessel
+           : (r.vessels.length === 1 ? r.vessels[0] : null);
+    if (!tv) continue;
+    (byVessel[tv] = byVessel[tv] || []).push(r);
   }
   Object.keys(byVessel).sort().forEach(function (vessel) {
     var list = byVessel[vessel];
