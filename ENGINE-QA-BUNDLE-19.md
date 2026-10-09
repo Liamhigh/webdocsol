@@ -31,10 +31,17 @@ run; it cannot establish the engine's precision/recall across a corpus.
 The engine ran **correctly and honestly**. Provenance, anchoring, verdict
 reservation, the anchor discipline (demoting unanchorable signals to
 "observations, not findings"), and the explicit Prime-Directive-13 disclosure all
-worked. Of the review's five item-level criticisms, **one is a genuine defect,
-two are wrong or overstated, and two are low-harm precision points.** The
-review's headline ("more false positives than true positives", "not suitable as
-a standalone engine") does not survive the sealed record.
+worked. The review found **one genuine defect** (F1, CT11 negation — now fixed).
+Its **"severity HIGH" point is correct** (read from the findings JSON; the report
+only suppresses *printing* it). Its **F2 "mislabel" claim is unfounded** (the
+engine labels F2 correctly). F3 and F4 are **low-harm page-type observations**;
+F4's specific "seal page" reading **does not hold on the engine's SHA-verified
+input**, but the two differently-named copies should be reconciled (see below).
+The review's broad headline ("more false positives than true positives", "not
+suitable as a standalone engine") is too harsh for what the sealed record shows,
+but it is **not** the inversion the earlier draft of this note implied — two of
+this note's own first-draft "corrections" were themselves wrong and are fixed
+here (severity, and the confidence/framing on F4).
 
 ## The one real defect — CT11 negation false positive (CONFIRMED, now fixed)
 
@@ -55,18 +62,41 @@ cannot drift. Pinned in `detector-recall.test.mjs` with the real p. 8 text.
 > negation hole in the cross-document path. Two independent reviews, one defect —
 > which is why both detectors were wired to one matcher.
 
-## Claims that are wrong or overstated (HIGH confidence)
+## The review's "overstated" claims, re-checked against the sealed files
 
-- **"F4 flagged its own seal page" — FALSE.** The review called this the "clear
-  bug." Bundle **p. 45 is not the seal page**; it is an email-tail page: *"Yours
-  faithfully"* + a *REFUND FOR FUEL.pdf (206 KB)* attachment thumbnail. The
-  reviewer mistook the seal **header that appears on every page** for page
-  content. Report §29 confirms the stripping worked: *"Seal furniture … removed
-  from 42 page(s) before detection."* There is no seal self-flag bug.
-- **"Severity set to HIGH" — FALSE.** The sealed report prints no severity. §29:
-  *"No score, band or severity label is printed (Constitution v8.0 Prime
-  Directive 1, §15.2)."* F1's status is ACCEPTED with antithesis **INSUFFICIENT**
-  (OCR page — verify the image). The severity was imported by the reviewer.
+Each was re-checked against the **exact bytes the engine analysed** — the bundle
+whose SHA-512 is `a38d494f6fb3233556960c41900d0d6692905d68b262f5806bf77e4f3b4c2128f154274e000c560d4ace9805bf422148c44d59f209dde665a832151875ab7cf4`,
+confirmed by hashing the input file and matching it to the source hash the engine
+printed on the report cover and the OpenTimestamps page. **Page numbers below are
+to that file, not to any re-sealed copy.**
+
+- **"Severity set to HIGH" — the review was right; the engine DOES emit it.**
+  (Correction to this note's first draft, which wrongly said the engine "does not
+  emit" severity.) The engine's findings carry a numeric severity internally
+  (CT11 = 4 = HIGH) and the findings JSON carries it (F001/F004 = HIGH, F002/F003
+  = LOW) — `tests/findings-json.test.mjs` confirms findings carry severity. What is
+  true is narrow: the **sealed PDF report does not print** it (§29: "No score,
+  band or severity label is printed", Prime Directive 1 §15.2). So the reviewer
+  read "HIGH" from the JSON — not a fabrication.
+- **"F4 flagged its own seal page" — not supported on the engine's input, with a
+  file-identity caveat.** On the SHA-verified input, bundle **p. 45** is an email
+  sign-off page — *"Yours faithfully"* above a *REFUND FOR FUEL.pdf (206 KB)*
+  attachment, footer "45/48" — carrying the per-page seal **header** ("VERUM
+  OMNIS SEALED ORIGINAL — scan the code …") that appears on all 48 pages. It is
+  not a standalone seal page. Two checks agree: the engine's "37 chars" residual
+  is inconsistent with a seal page (a stripped seal line leaves ~0 chars, an
+  un-stripped one ~90; 37 matches the email-tail text after the header was
+  stripped), and §29 records seal furniture stripped from 42 pages. So on this
+  file F4 is a **page-type-awareness miss** (a structurally-normal sparse page,
+  the same class as F3), not a seal-exclusion failure.
+  **Caveat (court-facing):** the review quotes a p. 45 that *is* the seal line,
+  from a differently-named copy (`…-sealed-sealed.pdf`) whose hash differs. If
+  that re-sealed copy carries the seal line at p. 45, the two files genuinely
+  differ at that page. That does not change the engine's finding (computed on the
+  `a38d494f…` file), but **before this point is relied on, reconcile the two files
+  and verify the seal-exclusion path on the pristine input.** Confidence on the
+  engine's input: HIGH (SHA match + visible content + char-count + §29). On the
+  other copy's p. 45: INSUFFICIENT — not verified here.
 - **"F2 mislabelled as Signature Mismatch" — UNFOUNDED.** The engine labels F2
   *"Unsigned Agreement Stated (CT23)"* (report §3, §5, §11), which is correct, and
   it is the strongest, most central finding in the bundle (the unsigned MOU,
@@ -124,6 +154,18 @@ affidavits, which carry it well. Two notes:
 | O(n²) pairwise per vessel | Sourcery #6 | Deferred (note only) |
 | Exec-summary "substantive findings" wording | AI review 5.18 | Open (low) |
 | Page-type awareness (attachment lists, email tails) | AI review F3/F4, 5.2 | Open (low) |
+| Reconcile the two bundle copies at p. 45 (`…-sealed` vs `…-sealed-sealed`) and verify the seal-exclusion path on the pristine input | Founder QA re-check (9 Oct 2026) | Open — engine input SHA-verified; the re-sealed copy not verified here |
+
+**Correction log (this note):** the first draft of this note made two mistaken
+"corrections" of the review, both fixed above. (1) It said the engine "does not
+emit" severity; in fact the engine emits severity in its findings/JSON and only
+the printed report suppresses it. (2) It called the F4 "seal page" claim a bald
+"FALSE" at HIGH confidence without citing which file or acknowledging the two
+differently-named copies; the claim does not hold on the SHA-verified engine
+input, but the point now carries that verification, the file-identity caveat, and
+a reconciliation action. The lesson: a QA note that goes in front of an opponent
+must itself be QA'd — cite the file and its hash, and never state a "FALSE" that a
+re-check of the primary source can invert.
 
 _Reviewer: Claude Code. This note records one run's assessment; it is evidence of
 the review that was done, not a certification of overall engine accuracy._
