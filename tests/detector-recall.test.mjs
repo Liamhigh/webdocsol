@@ -275,6 +275,16 @@ ok(DET.D08_DETECT_AUTHORITY_EXCEEDED(['this was signed by john on behalf of acme
   'CT11 fires on a local "signed by ... on behalf of"');
 ok(DET.D08_DETECT_AUTHORITY_EXCEEDED(['signed by john. ' + 'filler '.repeat(60) + 'on behalf of acme']).length === 0,
   'CT11 does not stretch across a large gap (no sprawling seal-debris blob)');
+// Negation gate (bundle-19 F1, 9 Oct 2026): the real p.8 text says a signature
+// was ABSENT — "was never signed by or on behalf of the respondent" — which is
+// not an excess of authority. CT11 must NOT fire. Shared with the cross-document
+// owner-direction gate (voNegatedBefore).
+ok(DET.D08_DETECT_AUTHORITY_EXCEEDED(['to show that the respondent’s document, on its face, was never signed by or on behalf of the respondent']).length === 0,
+  'CT11 does NOT fire on a NEGATED "never signed by or on behalf of" (bundle-19 F1 false positive)');
+ok(DET.D08_DETECT_AUTHORITY_EXCEEDED(['the deed was not signed by the clerk on behalf of the firm']).length === 0,
+  'CT11 does NOT fire on a "not signed by ... on behalf of" (negation)');
+ok(DET.D08_DETECT_AUTHORITY_EXCEEDED(['this was signed by john on behalf of acme. a later page was never signed by or on behalf of anyone']).length > 0,
+  'CT11 still fires on the POSITIVE match even when a negated one is also present');
 
 // CT43 (D37): breadth note is neutral, contextOnly (never a counted finding),
 // and only at >=8 types. An external reviewer flagged that a meta-observation

@@ -122,5 +122,40 @@ ok(conflicts([
 ]).length === 1,
   'the identical shape with a clean new-owner name fires — the only difference is the forbidden word');
 
+// ---- shared negation gate (voNegatedBefore): ONE matcher used by BOTH the CT11
+//      authority detector (bundle-19 F1) and the cross-document owner-direction
+//      extractor. Tested against both detectors' real text; the two paths are
+//      not fixed separately (founder directive, 9 Oct 2026).
+{
+  const ct11 = 'to show that the respondent’s document, on its face, was never signed by or on behalf of the respondent';
+  ok(E.voNegatedBefore(ct11, ct11.indexOf('signed')), 'voNegatedBefore: "was never signed …" is negated (CT11 path)');
+  const xdoc = 'the vessel DTD700X was never transferred from T.F. Hardouin to R. Louw';
+  ok(E.voNegatedBefore(xdoc, xdoc.indexOf('transferred')), 'voNegatedBefore: "was never transferred from …" is negated (cross-doc path)');
+  const notSigned = 'the memorandum was not signed by or on behalf of the firm';
+  ok(E.voNegatedBefore(notSigned, notSigned.indexOf('signed')), 'voNegatedBefore: "was not signed …" is negated');
+  const pos = 'T.F. Hardouin transferred DTD700X to R. Louw on 1 May 2024';
+  ok(!E.voNegatedBefore(pos, pos.indexOf('transferred')), 'voNegatedBefore: a plain positive transfer is NOT negated');
+  const noun = 'there is no dispute that T.F. Hardouin transferred DTD700X to R. Louw';
+  ok(!E.voNegatedBefore(noun, noun.indexOf('transferred')), 'voNegatedBefore: a distant noun-negation ("no dispute that …") does NOT suppress a real transfer');
+}
+
+// ---- a NEGATED transfer is not a transfer: it cannot raise a conflict --------
+ok(conflicts([
+  'The vessel DTD700X was never transferred from T.F. Hardouin to R. Louw.',
+  'Vessel DTD700X. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 21 June 2024.'
+]).length === 0,
+  'a page stating the vessel was NEVER transferred raises no conflict (negation gate, cross-doc path)');
+
+// ---- #5 transfer-local date: the shape is set by the TRANSFER date, not the
+//      first date on the page. An unrelated earlier date must not flip A→B.
+const td = conflicts([
+  'Registered 2 January 2020. Vessel DTD800Y. previous owner T.F. Hardouin new owner R. Louw. Dated 21 June 2024.',
+  'Vessel DTD800Y. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 21 June 2024.'
+]);
+ok(td.length === 1 && td[0].type === 'A',
+  'an unrelated earlier page date ("Registered 2 January 2020") does not flip a same-day conflict to Type B');
+ok(td.length === 1 && / on 21 June 2024\. /.test(td[0].statement) && !/2 January 2020/.test(td[0].statement),
+  'the Type A statement uses the transfer date (21 June 2024), never the unrelated page date');
+
 console.log('\ncross-doc-conflicts: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
