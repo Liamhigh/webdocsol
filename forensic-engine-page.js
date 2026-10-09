@@ -5724,6 +5724,13 @@ function voFactSnippet(raw, idx, len) {
   var s = raw.slice(Math.max(0, idx - 90), idx + (len || 0) + 90).replace(/\s+/g, ' ').trim();
   return s.length > 200 ? s.slice(0, 197) + '…' : s;
 }
+// The SAME passage window, stored BYTE-FAITHFULLY — exact whitespace, no
+// normalisation, no length cap (Sourcery #7). This is the record's quote; the
+// report may collapse whitespace and excerpt it FOR DISPLAY, but the unedited
+// text is kept here (and in the findings JSON) so "quoted from the page" is true.
+function voFactSnippetRaw(raw, idx, len) {
+  return String(raw || '').slice(Math.max(0, idx - 90), idx + (len || 0) + 90);
+}
 // The date that belongs to a transfer, not just the first date on the page. It
 // is read from the transfer's own clause (the part of the sentence before the
 // owner-direction match, back to the last terminator) plus a bounded window
@@ -5786,7 +5793,7 @@ function voExtractPageFacts(text) {
     rights: voFactAll(VO_FACT_RIGHT_RE, raw, function (x) { return x.toUpperCase(); }),
     amounts: voFactAll(VO_FACT_AMOUNT_RE, raw),
     companyRegs: voFactAll(VO_FACT_COMPANYREG_RE, raw),
-    date: null, dateQuote: null, ownerFrom: null, ownerTo: null, ownerQuote: null, ownerDate: null, ownerVessel: null
+    date: null, dateQuote: null, ownerFrom: null, ownerTo: null, ownerQuote: null, ownerQuoteFull: null, ownerDate: null, ownerVessel: null
   };
   var ds = voExtractDates(raw);
   for (var di = 0; di < ds.length; di++) {
@@ -5822,6 +5829,7 @@ function voExtractPageFacts(text) {
     if (om && !voNegatedBefore(raw, bodyAt + om.index)) {
       facts.ownerFrom = cleanName(om[1]); facts.ownerTo = cleanName(om[2]);
       facts.ownerQuote = voFactSnippet(raw, bodyAt + om.index, om[0].length);
+      facts.ownerQuoteFull = voFactSnippetRaw(raw, bodyAt + om.index, om[0].length);
       facts.ownerDate = voTransferDate(raw, bodyAt + om.index, om[0].length);
       facts.ownerVessel = voOwnerVessel(raw, bodyAt + om.index, om[0].length);
       break;
@@ -5832,6 +5840,7 @@ function voExtractPageFacts(text) {
     if (am && !voNegatedBefore(raw, bodyAt + am.index)) {
       facts.ownerTo = cleanName(am[1]);
       facts.ownerQuote = voFactSnippet(raw, bodyAt + am.index, am[0].length);
+      facts.ownerQuoteFull = voFactSnippetRaw(raw, bodyAt + am.index, am[0].length);
       facts.ownerDate = voTransferDate(raw, bodyAt + am.index, am[0].length);
       facts.ownerVessel = voOwnerVessel(raw, bodyAt + am.index, am[0].length);
     }
@@ -5871,7 +5880,7 @@ function voBuildFactIndex(textBlocks, secondaryPages) {
       rights: f.rights.map(function (x) { return x.value; }),
       amounts: f.amounts.map(function (x) { return x.value; }),
       companyRegs: f.companyRegs.map(function (x) { return x.value; }),
-      date: f.date, ownerFrom: f.ownerFrom, ownerTo: f.ownerTo, ownerQuote: f.ownerQuote, ownerDate: f.ownerDate, ownerVessel: f.ownerVessel
+      date: f.date, ownerFrom: f.ownerFrom, ownerTo: f.ownerTo, ownerQuote: f.ownerQuote, ownerQuoteFull: f.ownerQuoteFull, ownerDate: f.ownerDate, ownerVessel: f.ownerVessel
     });
   }
   return { records: records, excluded: excluded };
@@ -5984,8 +5993,8 @@ function voCrossDocConflicts(factIndex) {
         if (VO_CONFLICT_FORBIDDEN.test(statement)) continue; // never emit a statement that reads as a conclusion
         out.push({
           kind: 'ownership', type: type, subject: vessel, transferor: transferor,
-          a: { page: lo.page, owner: lo.ownerTo, date: lo.ownerDate || null, quote: lo.ownerQuote || null },
-          b: { page: hi.page, owner: hi.ownerTo, date: hi.ownerDate || null, quote: hi.ownerQuote || null },
+          a: { page: lo.page, owner: lo.ownerTo, date: lo.ownerDate || null, quote: lo.ownerQuote || null, quoteFull: lo.ownerQuoteFull || null },
+          b: { page: hi.page, owner: hi.ownerTo, date: hi.ownerDate || null, quote: hi.ownerQuote || null, quoteFull: hi.ownerQuoteFull || null },
           statement: statement
         });
       }

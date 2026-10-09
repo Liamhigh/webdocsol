@@ -4342,12 +4342,21 @@ function secCrossDocObservations(ctx, data) {
   if (!cons.length) return;
   ctx.newBodyPage();
   ctx.heading('CROSS-DOCUMENT OBSERVATIONS');
-  ctx.para('Where two record pages make claims about the same subject that the record cannot reconcile, both are set out below, each quoted from its page. This is an observation, not a conclusion: it does not say which statement is correct, who the owner is, or that any wrong was done — that is for the court. Where a conflict is stated, both pages are quoted verbatim; the engine does not select between them. Secondary-source and analysis pages are not compared here.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  ctx.para('Where two record pages make claims about the same subject that the record cannot reconcile, both are set out below, each quoted from its page. This is an observation, not a conclusion: it does not say which statement is correct, who the owner is, or that any wrong was done — that is for the court. The engine does not select between the two pages. The quotes below are shown from the page; display may collapse whitespace for layout, and where a quote is shortened it is marked "(excerpted)" — the full, byte-faithful passage is kept in the machine-readable findings record and can be read at the cited page. Secondary-source and analysis pages are not compared here.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 10 });
+  // Display from the byte-faithful stored quote: collapse whitespace for layout
+  // only, show it whole where it fits, and mark an excerpt explicitly (Sourcery
+  // #7). The unedited passage stays in the record — the page never claims "verbatim".
+  var quoteLine = function (side) {
+    var full = String((side.quoteFull != null ? side.quoteFull : side.quote) || '');
+    var disp = full.replace(/\s+/g, ' ').trim();
+    if (disp.length <= 200) return 'Page ' + side.page + ': "' + disp + '"';
+    return 'Page ' + side.page + ': "' + disp.slice(0, 180).replace(/\s+\S*$/, '') + '…" (excerpted — the full passage is on the cited page and in the findings record)';
+  };
   for (var i = 0; i < cons.length; i++) {
     var c = cons[i];
     ctx.para((i + 1) + '. ' + c.statement, { size: 9.8, after: 4 });
-    if (c.a && c.a.quote) ctx.bullet('Page ' + c.a.page + ': "' + capText(String(c.a.quote).replace(/\s+/g, ' '), 180, '…') + '"', { size: 8.5, color: GRAY, after: 2 });
-    if (c.b && c.b.quote) ctx.bullet('Page ' + c.b.page + ': "' + capText(String(c.b.quote).replace(/\s+/g, ' '), 180, '…') + '"', { size: 8.5, color: GRAY, after: 8 });
+    if (c.a && (c.a.quoteFull || c.a.quote)) ctx.bullet(quoteLine(c.a), { size: 8.5, color: GRAY, after: 2 });
+    if (c.b && (c.b.quoteFull || c.b.quote)) ctx.bullet(quoteLine(c.b), { size: 8.5, color: GRAY, after: 8 });
   }
 }
 

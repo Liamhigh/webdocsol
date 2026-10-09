@@ -36,7 +36,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   40 suites, 2839 assertions (§10); many exist solely to stop the regressions in §4 and §12.
+   40 suites, 2843 assertions (§10); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -749,7 +749,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**40 suites · 2839 assertions** (counted 2026-10-09, with the photo-intake, Louw v Naidoo and cross-document changes, §12.18-§12.23; recount after any test change).
+**40 suites · 2843 assertions** (counted 2026-10-09, with the photo-intake, Louw v Naidoo and cross-document changes, §12.18-§12.23; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -771,7 +771,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
 | `annexure-eb-regression.test.mjs` | 497 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run, the evidence-bundle-4-docs run and the Public Protector submission run** (§12.10–§12.14): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans; and the Public Protector submission (§18, §18i, §18j): a status word inside its own negation (CT14), two government-suffix domains never a lookalike (CT37), a category plural is not one instrument and quotes are whole words (CT23), titles/addresses/headings are not parties, nesting-aware quotes with WHEN and LAW from the quote's own sentence, a party's submission citing other Verum seals read as secondary up to the first page that opens a new record, the dated-after-analysis note, attribution only to declared parties named whole or by initial and surname, the unsigned-agreement contract shape, the template's own Nine-Brain headers with a Finding line, and the technical report, court-ready narrative, Worker template, anchor certificate and verify.html read back, each confirmed defect of the verification pass pinned with the reviewer's reproduction |
 | `evidence-bundle-7-regression.test.mjs` | 47 | **The evidence-bundle-7-docs run** (§12.16), on a synthetic bundle of the same shape built from the bundle's own strings: the CIPC K-form and a bare "CIPC" cue (CT20), a reference to a document that records the custody (CT39), set-aside pages are not near-empty (CT26), a document ends at its stated last page, header words and possessives are not names, the count-only summary sentence, a Verum Omnis analysis's running title is secondary, the lookalike domain still fires end to end, and the technical report read back: template first, no explainer page, no "verified", severity or score words, the Thesis / Antithesis / Synthesis table, every finding under a brain; and §8, the review round: unnumbered runs keyed per run (D30, D04), a report page does not turn the evidence sealed with it into analysis, narrowed D11/D27 skips with positive controls, a clean report keeps sections 1-7, measured Finding lines, the AI-note table, the on-device summary |
-| `cross-doc-conflicts.test.mjs` | 31 | **Cross-document conflict detection** (§12.22, stage B; wording signed off): same previous owner transferring one vessel to two different people — type A (same date, both new owners named inline) and type B (different dates, chain-of-title gap), both sides quoted and paged; a same-party check (R. Louw ≈ Ritzema Louw) that avoids false conflicts; a legitimate A→B→C chain raises nothing; an analysis/secondary page can never raise one; a labelled-channel forbidden-words guard that filters engine prose only, leaving a verbatim quote (even one containing "valid title") intact; plus the shared negation gate and transfer-local date (§12.23) |
+| `cross-doc-conflicts.test.mjs` | 35 | **Cross-document conflict detection** (§12.22, stage B; wording signed off): same previous owner transferring one vessel to two different people — type A (same date, both new owners named inline) and type B (different dates, chain-of-title gap), both sides quoted and paged; a same-party check (R. Louw ≈ Ritzema Louw) that avoids false conflicts; a legitimate A→B→C chain raises nothing; an analysis/secondary page can never raise one; a labelled-channel forbidden-words guard that filters engine prose only, leaving a verbatim quote (even one containing "valid title") intact; plus the shared negation gate and transfer-local date (§12.23) |
 | `doc-fact-index.test.mjs` | 27 | **Document fact index** (§12.21, cross-doc stage A): page classification (ownership-notice/sale/swap/lease/permit/certificate/correspondence/analysis-secondary) and page-anchored fact extraction (vessel, parties + owner direction, date, amount, right, company reg) with a verbatim quote; descriptive only; secondary/analysis pages excluded from the record set |
 | `timeline-dates.test.mjs` | 17 | **Timeline date extraction** (§12.20): dates in the page text (text layer and OCR) become ordered, page-anchored events, not only dates a finding carries; impossible dates are excluded and never guessed; a finding date and the same calendar date in the text on one page are one event; finding-only when no page text is passed |
 | `louw-naidoo-regression.test.mjs` | 14 | **The Louw v Naidoo run** (§12.19): D06/CT09 identifier-type classification (an SA ID typed solid and spaced is one id; a fishing right `LF…`, a vessel `DTD…` and a company registration are not identities; a `said` pair fires only for the same resolved person) and D25/CT37 cluster de-duplication (one finding per lookalike cluster; a two-domain cluster keeps the original wording), each beside a positive control |
@@ -2492,10 +2492,19 @@ earlier date does not flip the same-day shape).
 - **A transfer stated in the title sentence is not stripped** (Sourcery #4). The
   leading-title strip is skipped when the opening sentence itself states a transfer
   (`voHasOwnerDir`), so "Deed: X sells DTD910Z to Y." keeps its transfer.
+- **Quote fidelity** (Sourcery #7). The record now stores a **byte-faithful** quote
+  (`ownerQuoteFull` via `voFactSnippetRaw` — exact whitespace, no normalisation, no
+  cap) alongside the normalised display `ownerQuote`, and the conflict carries both
+  (`a.quoteFull` / `a.quote`). The CROSS-DOCUMENT OBSERVATIONS section no longer
+  claims "quoted verbatim": it says the quotes are "shown from the page", notes that
+  display may collapse whitespace, shows the passage whole where it fits, marks an
+  excerpt "(excerpted)", and keeps the 180-char cap on the body excerpt only — the
+  byte-faithful passage stays in the findings record and at the cited page. (Not
+  done here, deliberately, to keep the PR narrow: adding the cross-document passages
+  to the printed §26 EVIDENCE APPENDIX — a separate, optional follow-on.)
 
-Pinned in `tests/cross-doc-conflicts.test.mjs`. Still to come: the quote-fidelity
-fix (Sourcery #7 — store the quote byte-faithfully, mark excerpts, "quoted from
-the page"). The O(n²) pairwise note (Sourcery #6) is deferred.
+Pinned in `tests/cross-doc-conflicts.test.mjs`. The O(n²) pairwise note
+(Sourcery #6) is deferred.
 
 ## 13. The court-ready narrative (the "human report")
 

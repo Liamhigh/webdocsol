@@ -183,5 +183,21 @@ const t4 = conflicts([
 ok(t4.length === 1 && t4[0].type === 'A',
   'a transfer in the same sentence as the document title ("Deed: X sells … to Y") is not lost to title-stripping (Sourcery #4)');
 
+// ---- #7 quote fidelity: the STORED quote is byte-faithful; DISPLAY is derived --
+// The record keeps the exact passage (whitespace and all); the report collapses
+// whitespace for layout and marks excerpts — so the page says "quoted from the
+// page", never a false "verbatim" (Sourcery #7). Each conflict side carries both.
+const wsp = conflicts([
+  'Notice.\n\n  Vessel DTD130A.  previous owner T.F. Hardouin new owner R. Louw.\n\n  Dated 1 February 2024.',
+  'Notice. Vessel DTD130A. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 1 February 2024.'
+]);
+ok(wsp.length === 1 && wsp[0].type === 'A', 'a conflict still fires when the source has irregular whitespace');
+ok(wsp.length === 1 && /\n|\s{2,}/.test(wsp[0].a.quoteFull || ''),
+  'quoteFull is byte-faithful — it keeps the original newlines/multi-spaces');
+ok(wsp.length === 1 && wsp[0].a.quote && !/\n|\s{2,}/.test(wsp[0].a.quote),
+  'quote (display) collapses whitespace — so it must not be presented as "verbatim"');
+ok(wsp.length === 1 && wsp[0].a.quoteFull !== wsp[0].a.quote,
+  'the two channels differ when the source whitespace is irregular: stored ≠ displayed');
+
 console.log('\ncross-doc-conflicts: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);
