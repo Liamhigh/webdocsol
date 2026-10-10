@@ -122,5 +122,122 @@ ok(conflicts([
 ]).length === 1,
   'the identical shape with a clean new-owner name fires — the only difference is the forbidden word');
 
+// ---- shared negation gate (voNegatedBefore): ONE matcher used by BOTH the CT11
+//      authority detector (bundle-19 F1) and the cross-document owner-direction
+//      extractor. Tested against both detectors' real text; the two paths are
+//      not fixed separately (founder directive, 9 Oct 2026).
+{
+  const ct11 = 'to show that the respondent’s document, on its face, was never signed by or on behalf of the respondent';
+  ok(E.voNegatedBefore(ct11, ct11.indexOf('signed')), 'voNegatedBefore: "was never signed …" is negated (CT11 path)');
+  const xdoc = 'the vessel DTD700X was never transferred from T.F. Hardouin to R. Louw';
+  ok(E.voNegatedBefore(xdoc, xdoc.indexOf('transferred')), 'voNegatedBefore: "was never transferred from …" is negated (cross-doc path)');
+  const notSigned = 'the memorandum was not signed by or on behalf of the firm';
+  ok(E.voNegatedBefore(notSigned, notSigned.indexOf('signed')), 'voNegatedBefore: "was not signed …" is negated');
+  const pos = 'T.F. Hardouin transferred DTD700X to R. Louw on 1 May 2024';
+  ok(!E.voNegatedBefore(pos, pos.indexOf('transferred')), 'voNegatedBefore: a plain positive transfer is NOT negated');
+  const noun = 'there is no dispute that T.F. Hardouin transferred DTD700X to R. Louw';
+  ok(!E.voNegatedBefore(noun, noun.indexOf('transferred')), 'voNegatedBefore: a distant noun-negation ("no dispute that …") does NOT suppress a real transfer');
+}
+
+// ---- a NEGATED transfer is not a transfer: it cannot raise a conflict --------
+ok(conflicts([
+  'The vessel DTD700X was never transferred from T.F. Hardouin to R. Louw.',
+  'Vessel DTD700X. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 21 June 2024.'
+]).length === 0,
+  'a page stating the vessel was NEVER transferred raises no conflict (negation gate, cross-doc path)');
+
+// ---- #5 transfer-local date: the shape is set by the TRANSFER date, not the
+//      first date on the page. An unrelated earlier date must not flip A→B.
+const td = conflicts([
+  'Registered 2 January 2020. Vessel DTD800Y. previous owner T.F. Hardouin new owner R. Louw. Dated 21 June 2024.',
+  'Vessel DTD800Y. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 21 June 2024.'
+]);
+ok(td.length === 1 && td[0].type === 'A',
+  'an unrelated earlier page date ("Registered 2 January 2020") does not flip a same-day conflict to Type B');
+ok(td.length === 1 && / on 21 June 2024\. /.test(td[0].statement) && !/2 January 2020/.test(td[0].statement),
+  'the Type A statement uses the transfer date (21 June 2024), never the unrelated page date');
+
+// ---- #1 precision: a shared surname ALONE does not merge two different people -
+ok(!E.voSameParty('John Smith', 'Jane Smith'), 'different given names, same surname → NOT the same party (Sourcery #1)');
+ok(E.voSameParty('John Smith', 'J. Smith') && E.voSameParty('John Smith', 'John Smith') && E.voSameParty('Smith', 'John Smith'),
+  'an initial, an exact first name, or a bare surname still matches (no over-correction)');
+const sn = conflicts([
+  'Vessel DTD120A. previous owner T.F. Hardouin new owner John Smith. Dated 1 April 2024.',
+  'Vessel DTD120A. previous owner T.F. Hardouin new owner Jane Smith. Dated 1 April 2024.'
+]);
+ok(sn.length === 1 && sn[0].type === 'A',
+  'two different new owners who share a surname (John vs Jane Smith) DO raise a conflict — the old shared-surname merge hid it');
+
+// ---- #2 precision: a transfer is bound to ITS vessel, not every vessel on page
+ok(conflicts([
+  'A fleet notice. T.F. Hardouin sells DTD200A to R. Louw on 1 May 2024. DTD300B remains unsold.',
+  'Vessel DTD300B. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 1 June 2024.'
+]).length === 0,
+  'a transfer of DTD200A on a page that also lists DTD300B is NOT paired against a DTD300B transfer (Sourcery #2)');
+
+// ---- #4 precision: a transfer stated in the title sentence is not stripped away
+const t4 = conflicts([
+  'Deed: Terry Hardouin sells DTD910Z to Ritzema Louw on 1 March 2024. Registered.',
+  'Deed: Terry Hardouin sells DTD910Z to Niven Naidoo on 1 March 2024. Registered.'
+]);
+ok(t4.length === 1 && t4[0].type === 'A',
+  'a transfer in the same sentence as the document title ("Deed: X sells … to Y") is not lost to title-stripping (Sourcery #4)');
+
+// ---- #1 (bare "no"): "no transfer from X to Y" is a non-event, not a claim ----
+{
+  const noT = 'The register records no transfer from T.F. Hardouin to R. Louw';
+  ok(E.voNegatedBefore(noT, noT.indexOf('transfer')), 'voNegatedBefore: "no transfer from …" is negated (Sourcery #1, bare "no")');
+  const nd = 'there is no dispute that T.F. Hardouin transferred DTD700X to R. Louw';
+  ok(!E.voNegatedBefore(nd, nd.indexOf('transferred')), 'voNegatedBefore: "no dispute that X transferred" is NOT suppressed (no over-correction)');
+}
+ok(conflicts([
+  'The register records no transfer from T.F. Hardouin to R. Louw.',
+  'Vessel DTD140A. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 1 April 2024.'
+]).length === 0,
+  'a page stating "no transfer from X to Y" raises no conflict (negation gate, bare "no")');
+
+// ---- #2 (before-vessel): a multi-vessel page whose transferred vessel is named in
+//      the PRECEDING sentence still binds to it — not lost (Sourcery #2) ----------
+ok(conflicts([
+  'Vessel DTD200A. previous owner T.F. Hardouin new owner R. Louw. DTD300B is also noted. Dated 1 May 2024.',
+  'Vessel DTD200A. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 1 June 2024.'
+]).length === 1,
+  'a transfer whose vessel (DTD200A) sits in the preceding sentence binds to it, not lost (Sourcery #2 before-vessel)');
+// a multi-vessel LISTING before the transfer is ambiguous → the transfer is NOT
+// bound to either vessel, so it cannot raise a false conflict (the risk that
+// motivated dropping the naive backward look — now pinned).
+ok(conflicts([
+  'Vessels DTD200A and DTD300B. previous owner T.F. Hardouin new owner R. Louw. Dated 1 May 2024.',
+  'Vessel DTD300B. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 1 June 2024.'
+]).length === 0,
+  'a multi-vessel listing before the transfer is ambiguous — not bound to either, no false conflict');
+
+// ---- #6 paired control: the multi-vessel transfer is RETAINED and conflicts with
+//      its OWN vessel, while staying isolated from the other listed vessel --------
+const mv = conflicts([
+  'A fleet notice. T.F. Hardouin sells DTD200A to R. Louw on 1 May 2024. DTD300B remains unsold.',
+  'T.F. Hardouin sells DTD200A to Niven Naidoo on 2 May 2024.',
+  'Vessel DTD300B. previous owner T.F. Hardouin new owner A. Third. Dated 3 May 2024.'
+]);
+ok(mv.length === 1 && mv[0].subject === 'DTD200A',
+  'the DTD200A transfer on a multi-vessel page is retained and conflicts with the other DTD200A transfer, isolated from DTD300B (Sourcery #6 paired control)');
+
+// ---- #7 quote fidelity: the STORED quote is the EXACT source slice (byte-faithful);
+// DISPLAY is derived from it. The record keeps a verbatim substring of the page with
+// its original whitespace — not a normalised or window-clipped excerpt — so the page
+// says "quoted from the page", never a false "verbatim" (Sourcery #7, #4, #3).
+const WS_PAGE1 = 'Notice.\n\n  Vessel DTD130A.  previous owner T.F. Hardouin new owner R. Louw.\n\n  Dated 1 February 2024.';
+const wsp = conflicts([
+  WS_PAGE1,
+  'Notice. Vessel DTD130A. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 1 February 2024.'
+]);
+ok(wsp.length === 1 && wsp[0].type === 'A', 'a conflict still fires when the source has irregular whitespace');
+ok(wsp.length === 1 && wsp[0].a.quoteFull === '  previous owner T.F. Hardouin new owner R. Louw.',
+  'quoteFull is the EXACT source slice (byte-faithful: original double-space kept, not normalised, not window-clipped)');
+ok(wsp.length === 1 && WS_PAGE1.indexOf(wsp[0].a.quoteFull) !== -1,
+  'quoteFull is a verbatim substring of the source page — a true slice, not an altered excerpt (Sourcery #3)');
+ok(wsp.length === 1 && wsp[0].a.quote && !/\n|\s{2,}/.test(wsp[0].a.quote) && wsp[0].a.quote !== wsp[0].a.quoteFull,
+  'quote (display) is whitespace-collapsed and differs from the stored slice — so it is never called "verbatim"');
+
 console.log('\ncross-doc-conflicts: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

@@ -432,7 +432,7 @@ marked.
   of systemic commercial fraud and theft". Each is fixed and pinned
   (`tests/combine-06-april-regression.test.mjs` and the suites named in §12.17); an independent
   review of the fixes found two blocking and eight minor defects, all fixed and pinned (§12.17
-  item 14). 40 suites, 2823 assertions. Findings JSON 1.8.0 adds `candidate_law`. Not fixed here: why no OCR-only finding was held on that run
+  item 14). 40 suites, 2853 assertions. Findings JSON 1.8.0 adds `candidate_law`. Not fixed here: why no OCR-only finding was held on that run
   (mitigated; Open today), and the Constitution's own SHA-512 placeholder (founder).
 - 6 October 2026: **photos sealed as documents** (`ENGINE.md` §12.18). The founder chose a photo
   on the live seal page from a phone and was refused ("Chat exports (.txt) and screenshots
@@ -442,7 +442,7 @@ marked.
   name and the original file's SHA-512 printed under the picture and set as the PDF subject) and
   joins the PDF bundle, where on-device OCR reads it. A voice-note batch keeps its screenshots
   as before; a chat `.txt` alone is still refused, with a way forward.
-  `tests/photo-intake.test.mjs` (41 assertions, after the Sourcery review on #219); 40 suites, 2823 assertions.
+  `tests/photo-intake.test.mjs` (41 assertions, after the Sourcery review on #219); 40 suites, 2853 assertions.
 - 6 October 2026: **the Louw v Naidoo run** (`evidence-bundle-6-docs`, Case 341/2025;
   `ENGINE.md` §12.19). A third-party AI review graded the deterministic engine a C-, but it
   mistook the anomaly engine for the **human forensic narrative** (a separate instrument that
@@ -494,6 +494,24 @@ marked.
   describing the record from (b) the record itself; any future engine-side filter (PII redaction,
   summarisation) is scoped to (a) only — the record is not editable. Next: the founder re-runs a
   real bundle on the live seal page so the output is verified against the originals.
+- 9 October 2026: **shape-correctness hardening** (`ENGINE.md` §12.23; `ENGINE-QA-BUNDLE-19.md`).
+  The `evidence-bundle-19` run drew two independent reviews — a third-party AI performance report
+  and Sourcery on #224 — that found the SAME defect: a detector reading a NEGATED clause as a
+  positive assertion ("…was never signed by or on behalf of…" raised a CT11 authority finding;
+  "…was never transferred from X to Y" could become a false cross-document conflict). One shared
+  matcher, `voNegatedBefore`, now gates BOTH D08 (CT11) and the cross-document owner-direction
+  extractor — not two separate patches (founder directive). Also shape-correctness: the conflict
+  date is read from the transfer's own clause (`ownerDate`/`voTransferDate`), never the first date
+  on the page, so an unrelated date cannot flip Type A↔B. The founder approved the shape pair, then
+  the **precision hardening** landed on the same branch: a shared surname alone no longer merges two
+  people (`voNameFirstCompatible`, #1), a transfer is bound to its own vessel on a multi-vessel page
+  (`ownerVessel`, #2), a transfer stated in the title sentence is not stripped (`voHasOwnerDir`, #4),
+  and the quote is stored **byte-faithfully** (`ownerQuoteFull`) with the report saying "quoted from
+  the page" and marking excerpts, never "verbatim" (#7). O(n²) pairwise (#6) deferred; printing the
+  cross-document passages in the §26 appendix is an optional follow-on. Pinned in
+  `detector-recall.test.mjs` (110) and `cross-doc-conflicts.test.mjs` (35). The bundle-6 re-run stays
+  blocked until this lands. Process note: #224 was merged while Sourcery's review was in flight; the
+  review then surfaced these — for court-facing paths, wait for the bot or annotate the merge.
 
 **What must never be done.** The founder rulings and the seven regressions below; the §15.2
 language gate and the PD2 anchor gate are never loosened; no secret is ever committed; no
@@ -510,9 +528,9 @@ failure looks like).
 
 ## Quick facts
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets. A Pages Function, `functions/[[path]].js`, runs only on the Pages project and has been dormant since 27 September.
-- Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.3.5-web`); findings JSON 1.8.0 (adds `candidate_law`; 1.7.0 added `display_name`, `brain`, `triple_verification`, `ai_review_note`).
+- Forensic engine: `forensic-engine-page.js` (CT01–CT46, detectors D01–D40, `VO_ENGINE_VERSION 5.3.5-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.3.5-web`); findings JSON 1.9.0 (adds `cross_document_observations` with a byte-faithful `quote_verbatim`; 1.8.0 added `candidate_law`; 1.7.0 added `display_name`, `brain`, `triple_verification`, `ai_review_note`).
 - The forensic scripts are ALSO inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing any source file, re-splice the inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module.
-- Tests: `node tests/run-all.js` — **40 suites, 2823 assertions** (counted 9 October 2026), **must be green before any push**. Many exist only to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **40 suites, 2853 assertions** (counted 9 October 2026), **must be green before any push**. Many exist only to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.

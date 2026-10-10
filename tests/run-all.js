@@ -49,18 +49,31 @@ const suites = [
   'cross-doc-conflicts.test.mjs',
 ];
 
+// A suite PASSES only if its own process exits 0. The runner prints its OWN
+// authoritative result line per suite, derived from the exit code (and signal),
+// NOT from any banner the suite printed — a suite's stdout can be misleading or
+// truncated, but spawnSync's status/signal cannot be hidden by adjacent output.
 let failed = 0;
+const results = [];
 for (const s of suites) {
   console.log('\n======================================================');
   console.log('RUN  ' + s);
   console.log('======================================================');
   const res = spawnSync(process.execPath, [path.join(__dirname, s)], { stdio: 'inherit' });
-  if (res.status !== 0) failed++;
+  const ok = res.status === 0 && !res.signal && !res.error;
+  if (!ok) failed++;
+  const why = res.error ? ('spawn error: ' + res.error.message)
+    : res.signal ? ('killed by signal ' + res.signal)
+    : ('exit ' + res.status);
+  results.push({ s, ok, why });
+  console.log('[run-all] ' + (ok ? 'PASS' : 'FAIL') + ' ' + s + ' (' + why + ')');
 }
 
 console.log('\n======================================================');
+console.log('[run-all] per-suite results (authoritative, by exit code):');
+for (const r of results) console.log('  ' + (r.ok ? 'PASS' : 'FAIL') + '  ' + r.s + '  (' + r.why + ')');
 if (failed) {
-  console.log('RESULT: ' + failed + ' suite(s) FAILED');
+  console.log('RESULT: ' + failed + ' of ' + suites.length + ' suite(s) FAILED');
   process.exit(1);
 }
-console.log('RESULT: all suites GREEN');
+console.log('RESULT: all ' + suites.length + ' suites GREEN');

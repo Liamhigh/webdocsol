@@ -1649,12 +1649,22 @@ var DETECTORS = {
       /authorized\s+by\s+.{0,40}?(?:intern|temp|contractor)/gi,
       /signed\s+by\s+.{0,40}?(?:on behalf of|p\.p\.|per pro)/gi
     ];
+    // Negation gate: a phrase like "signed by or on behalf of" read out of a
+    // NEGATED clause ("… was never signed by or on behalf of the respondent")
+    // is the ABSENCE of a signature, not an excess of authority. The first
+    // non-negated match per pattern raises the finding; if every match is
+    // negated, none does. `.exec` (not `.match`) so the match index is known.
     for (var i = 0; i < authorityPatterns.length; i++) {
-      var match = fullText.match(authorityPatterns[i]);
-      if (match) {
-        findings.push({ type: 'CT11', severity: 4,
-          evidence: 'Potential authority exceeded: "' + match[0] + '"',
-          location: 'Full document' });
+      var apat = authorityPatterns[i]; apat.lastIndex = 0;
+      var am;
+      while ((am = apat.exec(fullText)) !== null) {
+        if (!voNegatedBefore(fullText, am.index)) {
+          findings.push({ type: 'CT11', severity: 4,
+            evidence: 'Potential authority exceeded: "' + am[0] + '"',
+            location: 'Full document' });
+          break; // one finding per pattern, as before
+        }
+        if (am.index === apat.lastIndex) apat.lastIndex++;
       }
     }
 
@@ -5681,6 +5691,22 @@ var VO_FACT_COMPANYREG_RE = /\b\d{4}\/\d{6}\/\d{2}\b/g;
 var VO_FACT_PARTICLE = '(?:van(?:\\s+der|\\s+den)?|von|de(?:\\s+la|\\s+le)?|du|le|la|den|der|ter|ten|bin|al)';
 var VO_FACT_SUFFIX = '(?:\\s+\\(Pty\\)\\s+Ltd|\\s+\\(Pty\\)\\s+Limited|\\s+\\(Edms\\)\\s+Bpk|\\s+CC|\\s+Ltd|\\s+Limited|\\s+Inc|\\s+LLP|\\s+Trust|\\s+NPC)?';
 var VO_FACT_NAME = '([A-Z][A-Za-z.\'’-]+(?:\\s+(?:' + VO_FACT_PARTICLE + '|[A-Z][A-Za-z.\'’-]+)){0,4}' + VO_FACT_SUFFIX + ')';
+// Shared negation/context gate (used by the authority detector D08 and by the
+// cross-document owner-direction extractor). It answers one question: does the
+// phrase at `idx` sit inside a NEGATED clause — "was never signed by or on
+// behalf of…", "was never transferred from X to Y" — so a detector must not
+// read it as a positive assertion? The negator must be the operative token
+// immediately governing the phrase (end-anchored, at most a couple of adverbial
+// fillers between), so a distant noun-negation ("there is no dispute that X
+// transferred…") does NOT suppress a real claim. No regex lookbehind
+// (Safari < 16.4): the preceding clause text is sliced out and tested forward.
+var VO_NEGATOR_TAIL = /(?:\bno\b|\bnever\b|\bnot\b|\bcannot\b|\bwithout\b|\bneither\b|\bnor\b|\bun(?:signed|executed|dated)\b|\bfail(?:ed|s)?\s+to\b|\brefus(?:ed|es|e)\s+to\b|\bdeclin(?:ed|es|e)\s+to\b|\b\w*n['’]t\b)(?:\s+(?:been|yet|ever|actually|duly|validly|in\s+fact))*\s*$/i;
+function voNegatedBefore(text, idx) {
+  // the current clause only: drop everything up to the last clause terminator
+  // within a bounded look-back, so a negator in an earlier sentence is ignored.
+  var pre = String(text || '').slice(Math.max(0, idx - 48), idx).replace(/^[\s\S]*[.;:]\s/, '');
+  return VO_NEGATOR_TAIL.test(pre);
+}
 var VO_FACT_OWNER_DIR = [
   new RegExp('previous owner\\s*:?\\s*' + VO_FACT_NAME + '[\\s\\S]{0,60}?new owner\\s*:?\\s*' + VO_FACT_NAME, 'i'),
   new RegExp('(?:transferred|transfer|changed|passed|sold)\\s+from\\s+' + VO_FACT_NAME + '\\s+to\\s+' + VO_FACT_NAME, 'i'),
@@ -5697,6 +5723,90 @@ var VO_FACT_ACQUIRER = new RegExp('(?:sell[s]?|sold|transfer[s]?|transferred|con
 function voFactSnippet(raw, idx, len) {
   var s = raw.slice(Math.max(0, idx - 90), idx + (len || 0) + 90).replace(/\s+/g, ' ').trim();
   return s.length > 200 ? s.slice(0, 197) + '…' : s;
+}
+// The bounds [start,end) of the sentence/clause containing position `pos`,
+// bounded by a real terminator on each side and capped so a run-on with no
+// terminator cannot return the whole page. A terminator is [.;:] followed by
+// whitespace, or a newline — but NOT a period inside an initial ("T.F.", "R.")
+// nor inside a registration ("DTD200A."), which are masked first so they are not
+// read as sentence ends. The mask is length-preserving, so positions map 1:1 to
+// the original. Keyed off `pos` (a match START), never a match length, because
+// the owner-name regex can greedily consume a trailing word. No regex lookbehind.
+function voSentenceBounds(s, pos) {
+  s = String(s || '');
+  var MAX = 600;
+  var mask = s.replace(/\b[A-Z]\./g, function (x) { return x.charAt(0) + '\u0001'; });
+  var TERM = /[.;:](?=\s)|\n/g, t, start = 0, end = s.length;
+  while ((t = TERM.exec(mask)) !== null) {
+    if (t.index < pos) { start = t.index + 1; }
+    else { end = t.index + 1; break; }
+    if (t.index === TERM.lastIndex) TERM.lastIndex++;
+  }
+  if (pos - start > MAX) start = pos - MAX;
+  if (end - pos > MAX) end = pos + MAX;
+  return { start: start, end: end };
+}
+// The FULL transfer sentence, stored BYTE-FAITHFULLY from the PRISTINE text —
+// exact whitespace, the whole sentence (not a fixed window), read from the
+// untouched source (not the boilerplate-stripped `raw`), so the record's quote is
+// the real passage and "quoted from the page" is literally true (Sourcery #3/#4).
+function voFullQuote(orig, idx) {
+  var sb = voSentenceBounds(orig, idx);
+  return String(orig || '').slice(sb.start, sb.end);
+}
+// Every vessel registration named in a span, normalised to the vessel key.
+function voVesselsIn(str) {
+  var out = [], m;
+  VO_FACT_VESSEL_RE.lastIndex = 0;
+  while ((m = VO_FACT_VESSEL_RE.exec(String(str || ''))) !== null) {
+    out.push(m[0].replace(/\s+/g, '').toUpperCase());
+    if (m.index === VO_FACT_VESSEL_RE.lastIndex) VO_FACT_VESSEL_RE.lastIndex++;
+  }
+  return out;
+}
+// The date that belongs to a transfer, not just the first date on the page. It
+// is read from the transfer's own clause (the part of the sentence before the
+// owner-direction match, back to the last terminator) plus a bounded window
+// after it, where "on <date>" / "Dated <date>" sits. A date in another sentence
+// on the page is never used, so it cannot flip a conflict's Type A/B shape. Only
+// an established (four-digit-year) date qualifies; a two-digit year is ignored.
+function voTransferDate(raw, start, len) {
+  raw = String(raw || '');
+  var before = raw.slice(Math.max(0, start - 60), start).replace(/^[\s\S]*[.;:]\s/, '');
+  var win = before + raw.slice(start, start + (len || 0) + 100);
+  var ds = voExtractDates(win);
+  for (var i = 0; i < ds.length; i++) {
+    if (!/^\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2}$/.test(ds[i]) && voDateSortKey(ds[i]) !== null) return ds[i];
+  }
+  return null;
+}
+// The vessel a transfer is ABOUT, so on a page naming more than one vessel the
+// transfer binds to the right one, not to every vessel on the page (Sourcery #2).
+// (1) the vessel named in the transfer's OWN sentence; else (2) the immediately-
+// preceding sentence, but ONLY when it names exactly one vessel (a single-subject
+// "Vessel DTDxxx." line) — never a multi-vessel listing, which is ambiguous and
+// must not bind the transfer. Null when neither resolves to a single vessel.
+// Searched on the pristine text (same indices as `raw`, which is length-preserving).
+function voOwnerVessel(orig, idx) {
+  orig = String(orig || '');
+  var sb = voSentenceBounds(orig, idx);
+  var inSent = voVesselsIn(orig.slice(sb.start, sb.end));
+  if (inSent.length) return inSent[0];
+  if (sb.start > 0) {
+    var prev = voSentenceBounds(orig, sb.start - 1);
+    var inPrev = voVesselsIn(orig.slice(prev.start, prev.end));
+    if (inPrev.length === 1) return inPrev[0];
+  }
+  return null;
+}
+// Does a text span itself state a transfer (an owner direction or an acquirer)?
+// Used so a leading document title is NOT stripped when the opening sentence is
+// also the transfer ("Deed: Terry Hardouin sells DTD910Z to Ritzema Louw.") —
+// stripping it would lose the transfer (Sourcery #4).
+function voHasOwnerDir(s) {
+  s = String(s || '');
+  for (var i = 0; i < VO_FACT_OWNER_DIR.length; i++) if (VO_FACT_OWNER_DIR[i].test(s)) return true;
+  return VO_FACT_ACQUIRER.test(s);
 }
 // Every match of a repeatable field, each with the verbatim line it sits on,
 // so a page that names two vessels (a swap) shows both — never only the first.
@@ -5716,13 +5826,18 @@ function voFactAll(re, raw, norm) {
 // came from (per-value quote), and repeatable fields keep all their matches. A
 // field is empty/null when the page does not state it; nothing is inferred.
 function voExtractPageFacts(text) {
-  var raw = String(text || '').replace(VO_SEAL_BOILERPLATE_RE, ' ');
+  // `orig` is the pristine page text (byte-faithful quotes read from it). `raw`
+  // has seal boilerplate blanked for matching — but LENGTH-PRESERVING (each match
+  // replaced by an equal run of spaces) so an index in `raw` is the same index in
+  // `orig`, and a quote sliced from `orig` is the untouched source (Sourcery #3).
+  var orig = String(text || '');
+  var raw = orig.replace(VO_SEAL_BOILERPLATE_RE, function (m) { return Array(m.length + 1).join(' '); });
   var facts = {
     vessels: voFactAll(VO_FACT_VESSEL_RE, raw, function (x) { return x.replace(/\s+/g, '').toUpperCase(); }),
     rights: voFactAll(VO_FACT_RIGHT_RE, raw, function (x) { return x.toUpperCase(); }),
     amounts: voFactAll(VO_FACT_AMOUNT_RE, raw),
     companyRegs: voFactAll(VO_FACT_COMPANYREG_RE, raw),
-    date: null, dateQuote: null, ownerFrom: null, ownerTo: null, ownerQuote: null
+    date: null, dateQuote: null, ownerFrom: null, ownerTo: null, ownerQuote: null, ownerQuoteFull: null, ownerDate: null, ownerVessel: null
   };
   var ds = voExtractDates(raw);
   for (var di = 0; di < ds.length; di++) {
@@ -5743,16 +5858,36 @@ function voExtractPageFacts(text) {
   // Ownership of a Vessel.") before reading the owner direction, so a transferor
   // name is never captured from the title instead of the body. The offset is
   // kept so the quote still points into the real page text.
+  // …UNLESS the opening sentence is itself the transfer ("Deed: Terry Hardouin
+  // sells DTD910Z to Ritzema Louw."), in which case stripping it would lose the
+  // transfer — so only strip a title that does not itself state one (Sourcery #4).
   var titleM = raw.match(/^\s*[\s\S]{0,80}?\b(?:deed|notice|agreement|memorandum|certificate|licen[cs]e|lease|contract|minute|affidavit|letter|register|application)\b[^.]{0,80}?\.\s+/i);
-  var bodyAt = titleM ? titleM[0].length : 0;
+  var bodyAt = (titleM && !voHasOwnerDir(titleM[0])) ? titleM[0].length : 0;
   var body = raw.slice(bodyAt);
+  // A NEGATED transfer ("… was never transferred from X to Y") is not a transfer:
+  // skip it so a non-event never becomes a positive ownership claim. The date is
+  // read from the transfer's own clause (voTransferDate), never the first date on
+  // the page, so an unrelated page date cannot flip the conflict's shape.
   for (var oi = 0; oi < VO_FACT_OWNER_DIR.length; oi++) {
     var om = body.match(VO_FACT_OWNER_DIR[oi]);
-    if (om) { facts.ownerFrom = cleanName(om[1]); facts.ownerTo = cleanName(om[2]); facts.ownerQuote = voFactSnippet(raw, bodyAt + om.index, om[0].length); break; }
+    if (om && !voNegatedBefore(raw, bodyAt + om.index)) {
+      facts.ownerFrom = cleanName(om[1]); facts.ownerTo = cleanName(om[2]);
+      facts.ownerQuote = voFactSnippet(raw, bodyAt + om.index, om[0].length);
+      facts.ownerQuoteFull = voFullQuote(orig, bodyAt + om.index);
+      facts.ownerDate = voTransferDate(raw, bodyAt + om.index, om[0].length);
+      facts.ownerVessel = voOwnerVessel(orig, bodyAt + om.index);
+      break;
+    }
   }
   if (!facts.ownerTo) {
     var am = body.match(VO_FACT_ACQUIRER);
-    if (am) { facts.ownerTo = cleanName(am[1]); facts.ownerQuote = voFactSnippet(raw, bodyAt + am.index, am[0].length); }
+    if (am && !voNegatedBefore(raw, bodyAt + am.index)) {
+      facts.ownerTo = cleanName(am[1]);
+      facts.ownerQuote = voFactSnippet(raw, bodyAt + am.index, am[0].length);
+      facts.ownerQuoteFull = voFullQuote(orig, bodyAt + am.index);
+      facts.ownerDate = voTransferDate(raw, bodyAt + am.index, am[0].length);
+      facts.ownerVessel = voOwnerVessel(orig, bodyAt + am.index);
+    }
   }
   return facts;
 }
@@ -5789,7 +5924,7 @@ function voBuildFactIndex(textBlocks, secondaryPages) {
       rights: f.rights.map(function (x) { return x.value; }),
       amounts: f.amounts.map(function (x) { return x.value; }),
       companyRegs: f.companyRegs.map(function (x) { return x.value; }),
-      date: f.date, ownerFrom: f.ownerFrom, ownerTo: f.ownerTo, ownerQuote: f.ownerQuote
+      date: f.date, ownerFrom: f.ownerFrom, ownerTo: f.ownerTo, ownerQuote: f.ownerQuote, ownerQuoteFull: f.ownerQuoteFull, ownerDate: f.ownerDate, ownerVessel: f.ownerVessel
     });
   }
   return { records: records, excluded: excluded };
@@ -5816,17 +5951,36 @@ var VO_NAME_STOP_TOK = { pty: 1, ltd: 1, limited: 1, cc: 1, inc: 1, llp: 1, trus
 function voNameCore(n) { return String(n || '').toLowerCase().replace(/\(.*?\)/g, ' ').replace(/[^a-z0-9 ]+/g, ' ').replace(/\s+/g, ' ').trim(); }
 function voNameTokens(n) { return voNameCore(n).split(' ').filter(function (t) { return t && !VO_NAME_STOP_TOK[t]; }); }
 function voNameSurname(n) { var t = voNameTokens(n); return t.length ? t[t.length - 1] : ''; }
-// Two party names are treated as the SAME party when, after dropping titles and
-// non-name noise ("Mr", a mis-parsed trailing "REQUEST"), one core contains the
-// other (an initialled form of the same name) or they share a surname token.
-// Erring toward "same" keeps "R. Louw", "Ritzema Louw" and "Ritzema Louw
-// REQUEST" as one party — only clearly different parties raise a conflict.
+// Do two first-name sets belong to the same person? A bare surname (no first
+// name on one side) cannot disprove identity. Otherwise the leading given names
+// must be compatible: an initial against a name beginning with that letter
+// ("R." ↔ "Ritzema", "T." ↔ "Terry"), two equal names, or one a prefix of the
+// other ("Ritz" ⊂ "Ritzema"). Two different full first names ("John" vs "Jane")
+// are NOT compatible — a shared surname does not make them one party.
+function voNameFirstCompatible(a, b) {
+  var fa = voNameTokens(a), fb = voNameTokens(b);
+  fa = fa.slice(0, Math.max(0, fa.length - 1)); // drop the surname token
+  fb = fb.slice(0, Math.max(0, fb.length - 1));
+  if (!fa.length || !fb.length) return true;
+  var x = fa[0], y = fb[0];
+  if (x === y) return true;
+  if (x.length === 1 || y.length === 1) return x.charAt(0) === y.charAt(0);
+  return x.indexOf(y) === 0 || y.indexOf(x) === 0;
+}
+// Two party names are the SAME party when, after dropping titles and non-name
+// noise ("Mr", a mis-parsed trailing "REQUEST"), one core contains the other (an
+// initialled or sub-name form of the same name), OR they share a surname AND
+// their given names are compatible. A shared surname ALONE is not enough — two
+// different people can share one (Sourcery #1). An unreadable name is not assumed
+// to match. This keeps "R. Louw", "Ritzema Louw" and "Ritzema Louw REQUEST" as
+// one party while keeping, e.g., "John Smith" and "Jane Smith" apart.
 function voSameParty(a, b) {
   var ta = voNameTokens(a).join(' '), tb = voNameTokens(b).join(' ');
-  if (!ta || !tb) return true;
+  if (!ta || !tb) return false;
   if (ta === tb || ta.indexOf(tb) !== -1 || tb.indexOf(ta) !== -1) return true;
   var sa = voNameSurname(a), sb = voNameSurname(b);
-  return !!sa && sa === sb;
+  if (!sa || sa !== sb) return false;
+  return voNameFirstCompatible(a, b);
 }
 // No conflict statement may read as a verdict or a legal conclusion.
 var VO_CONFLICT_FORBIDDEN = /\b(fraud|fraudulent|forgery|forged|illegal|unlawful|the (?:true|rightful) owner|therefore|consequently|which (?:proves|shows)|guilty|crime|criminal|liable|wrongdoing|valid|invalid|void|title)\b/i;
@@ -5837,7 +5991,13 @@ function voCrossDocConflicts(factIndex) {
   for (var i = 0; i < recs.length; i++) {
     var r = recs[i];
     if (!r.ownerTo || !r.ownerFrom || !r.vessels || !r.vessels.length) continue; // need a transferor AND a new owner
-    for (var v = 0; v < r.vessels.length; v++) (byVessel[r.vessels[v]] = byVessel[r.vessels[v]] || []).push(r);
+    // Bind the transfer to ITS vessel, not every vessel on the page (Sourcery #2):
+    // the vessel named in the transfer passage, else the sole vessel on the page,
+    // else none — a multi-vessel page whose transfer names no vessel is not grouped.
+    var tv = (r.ownerVessel && r.vessels.indexOf(r.ownerVessel) !== -1) ? r.ownerVessel
+           : (r.vessels.length === 1 ? r.vessels[0] : null);
+    if (!tv) continue;
+    (byVessel[tv] = byVessel[tv] || []).push(r);
   }
   Object.keys(byVessel).sort().forEach(function (vessel) {
     var list = byVessel[vessel];
@@ -5850,33 +6010,35 @@ function voCrossDocConflicts(factIndex) {
         var key = vessel + '|' + Math.min(ra.page, rb.page) + '|' + Math.max(ra.page, rb.page);
         if (seen[key]) continue;
         seen[key] = true;
-        // order by date when known, else by page
-        var ka = voDateSortKey(ra.date || ''), kb = voDateSortKey(rb.date || '');
+        // Order and classify by the TRANSFER date (ownerDate — the date in the
+        // transfer's own clause), never the first date on the page, so an
+        // unrelated page date cannot flip Type A (same day) vs Type B (chain gap).
+        var ka = voDateSortKey(ra.ownerDate || ''), kb = voDateSortKey(rb.ownerDate || '');
         var lo, hi;
         if (ka !== null && kb !== null && ka !== kb) { lo = ka < kb ? ra : rb; hi = ka < kb ? rb : ra; }
         else { lo = ra.page <= rb.page ? ra : rb; hi = ra.page <= rb.page ? rb : ra; }
         var transferor = lo.ownerFrom;
-        var sameDate = (lo.date && hi.date && lo.date === hi.date);
+        var sameDate = (lo.ownerDate && hi.ownerDate && lo.ownerDate === hi.ownerDate);
         var type, statement;
         if (sameDate) {
           type = 'A';
           // Both owners named inline, symmetric with type B: a reader sees at a
           // glance which two parties are in conflict (founder sign-off, 9 Oct 2026).
-          statement = 'Page ' + lo.page + ' states ' + transferor + ' transferred ' + vessel + ' to ' + lo.ownerTo + ' on ' + lo.date + '. ' +
-            'Page ' + hi.page + ' states ' + transferor + ' transferred the same vessel to ' + hi.ownerTo + ' on the same date, ' + hi.date + '. ' +
+          statement = 'Page ' + lo.page + ' states ' + transferor + ' transferred ' + vessel + ' to ' + lo.ownerTo + ' on ' + lo.ownerDate + '. ' +
+            'Page ' + hi.page + ' states ' + transferor + ' transferred the same vessel to ' + hi.ownerTo + ' on the same date, ' + hi.ownerDate + '. ' +
             'The record states two transfers of the same vessel by the same previous owner on the same day to two different people; both cannot be the sole transfer.';
         } else {
           type = 'B';
-          var loDate = lo.date ? ' on ' + lo.date : '', hiDate = hi.date ? ' on ' + hi.date : '';
+          var loDate = lo.ownerDate ? ' on ' + lo.ownerDate : '', hiDate = hi.ownerDate ? ' on ' + hi.ownerDate : '';
           statement = 'Page ' + lo.page + ' states ' + transferor + ' transferred ' + vessel + ' to ' + lo.ownerTo + loDate + '. ' +
             'Page ' + hi.page + ' states ' + transferor + ' transferred the same vessel to ' + hi.ownerTo + hiDate + '. ' +
-            'The record states two transfers of the same vessel by the same previous owner to two different people, and does not explain how the previous owner retained the vessel to make the second transfer' + (lo.date && hi.date ? ' after the first' : '') + '.';
+            'The record states two transfers of the same vessel by the same previous owner to two different people, and does not explain how the previous owner retained the vessel to make the second transfer' + (lo.ownerDate && hi.ownerDate ? ' after the first' : '') + '.';
         }
         if (VO_CONFLICT_FORBIDDEN.test(statement)) continue; // never emit a statement that reads as a conclusion
         out.push({
           kind: 'ownership', type: type, subject: vessel, transferor: transferor,
-          a: { page: lo.page, owner: lo.ownerTo, date: lo.date || null, quote: lo.ownerQuote || null },
-          b: { page: hi.page, owner: hi.ownerTo, date: hi.date || null, quote: hi.ownerQuote || null },
+          a: { page: lo.page, owner: lo.ownerTo, date: lo.ownerDate || null, quote: lo.ownerQuote || null, quoteFull: lo.ownerQuoteFull || null },
+          b: { page: hi.page, owner: hi.ownerTo, date: hi.ownerDate || null, quote: hi.ownerQuote || null, quoteFull: hi.ownerQuoteFull || null },
           statement: statement
         });
       }
@@ -7385,6 +7547,8 @@ if (typeof module !== 'undefined' && module.exports) {
     voFactRows: voFactRows,
     voCrossDocConflicts: voCrossDocConflicts,
     voSameParty: voSameParty,
+    voNegatedBefore: voNegatedBefore,
+    voTransferDate: voTransferDate,
     voBuildPersonIndex: voBuildPersonIndex,
     VO_RULES_PUBLIC_KEY_ID: VO_RULES_PUBLIC_KEY_ID,
     VO_RULES_ALGORITHM: VO_RULES_ALGORITHM,

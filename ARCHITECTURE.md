@@ -131,10 +131,10 @@ The website is the centre of gravity: **all document verification happens at the
   which defines CT01–CT46 and D01–D40, and is never merged over the engine's taxonomy.
   (2) **The findings JSON.** `FINDINGS_JSON_SCHEMA.json` is kept in `1verum` and `firebase` at
   v1.0.0 (`findings_json_version` fixed at "1.0.0"); this repository has no copy. The website
-  builds its file in `seal-document.html` (`buildFindingsJson`) and is at v1.8.0, extended
+  builds its file in `seal-document.html` (`buildFindingsJson`) and is at v1.9.0, extended
   additively: `review_status` (1.3.0), `secondary_capped` and `ocr_anchored` (1.4.0), `ocr_held`
   (1.5.0), `analysis_reference_utc` (1.6.0), `display_name`, `brain`, `triple_verification` and
-  `ai_review_note` (1.7.0), `candidate_law` (1.8.0). A validator that enforces the schema's version constant would refuse
+  `ai_review_note` (1.7.0), `candidate_law` (1.8.0), `cross_document_observations` with a byte-faithful `quote_verbatim` (1.9.0). A validator that enforces the schema's version constant would refuse
   the website's file. That drift is open with the founder, and so is the schema's vocabulary: it
   requires `verification_status: "ENGINE-VERIFIED"`, band-word severity and confidence enums, and
   AI candidates inside `contradictions`, which the founder's 5 October 2026 rulings (no
