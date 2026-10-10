@@ -36,12 +36,12 @@ Its **"severity HIGH" point is correct** (read from the findings JSON; the repor
 only suppresses *printing* it). Its **F2 "mislabel" claim is unfounded** (the
 engine labels F2 correctly). F3 and F4 are **low-harm page-type observations**;
 F4's specific "seal page" reading **does not hold on the engine's SHA-verified
-input**, but the two differently-named copies should be reconciled (see below).
-The review's broad headline ("more false positives than true positives", "not
-suitable as a standalone engine") is too harsh for what the sealed record shows,
-but it is **not** the inversion the earlier draft of this note implied — two of
-this note's own first-draft "corrections" were themselves wrong and are fixed
-here (severity, and the confidence/framing on F4).
+input** — p. 45 is an email-tail/attachment page, confirmed from the raw text
+below. The review's broad headline ("more false positives than true positives",
+"not suitable as a standalone engine") is too harsh for what the sealed record
+shows, but it is **not** the inversion the earlier draft of this note implied —
+and this note's own first draft got the severity point wrong (said the engine
+"does not emit" severity; corrected below).
 
 ## The one real defect — CT11 negation false positive (CONFIRMED, now fixed)
 
@@ -78,25 +78,36 @@ to that file, not to any re-sealed copy.**
   true is narrow: the **sealed PDF report does not print** it (§29: "No score,
   band or severity label is printed", Prime Directive 1 §15.2). So the reviewer
   read "HIGH" from the JSON — not a fabrication.
-- **"F4 flagged its own seal page" — not supported on the engine's input, with a
-  file-identity caveat.** On the SHA-verified input, bundle **p. 45** is an email
-  sign-off page — *"Yours faithfully"* above a *REFUND FOR FUEL.pdf (206 KB)*
-  attachment, footer "45/48" — carrying the per-page seal **header** ("VERUM
-  OMNIS SEALED ORIGINAL — scan the code …") that appears on all 48 pages. It is
-  not a standalone seal page. Two checks agree: the engine's "37 chars" residual
-  is inconsistent with a seal page (a stripped seal line leaves ~0 chars, an
-  un-stripped one ~90; 37 matches the email-tail text after the header was
-  stripped), and §29 records seal furniture stripped from 42 pages. So on this
-  file F4 is a **page-type-awareness miss** (a structurally-normal sparse page,
-  the same class as F3), not a seal-exclusion failure.
-  **Caveat (court-facing):** the review quotes a p. 45 that *is* the seal line,
-  from a differently-named copy (`…-sealed-sealed.pdf`) whose hash differs. If
-  that re-sealed copy carries the seal line at p. 45, the two files genuinely
-  differ at that page. That does not change the engine's finding (computed on the
-  `a38d494f…` file), but **before this point is relied on, reconcile the two files
-  and verify the seal-exclusion path on the pristine input.** Confidence on the
-  engine's input: HIGH (SHA match + visible content + char-count + §29). On the
-  other copy's p. 45: INSUFFICIENT — not verified here.
+- **"F4 flagged its own seal page" — not supported on the engine's input.**
+  **The file this speaks for:** `9a46debf-evidence-bundle-19-docs-sealed.pdf`,
+  **SHA-512 `a38d494f6fb3233556960c41900d0d6692905d68b262f5806bf77e4f3b4c2128f154274e000c560d4ace9805bf422148c44d59f209dde665a832151875ab7cf4`**
+  — a byte-exact match to the source hash the engine printed. The raw text layer
+  of p. 45 from that file (`pdftotext -f 45 -l 45`) is:
+
+  ```
+  VERUM OMNIS SEALED ORIGINAL — scan the code or verify at verumglobal.foundation/verify.html
+
+  Yours faithfully
+
+      REFUND FOR FUEL.pdf
+      206 KB
+
+  PRIVATE SEAL — FREE TIER                       verumglobal.foundation | OpenTimestamps | Patent Pending
+  VERUM OMNIS SEALED ORIGINAL | Seal: VO-85D980AEFA4A | SHA-512: 85d980aefa4a0309... | 09/10/2026 14:17:19 Africa/Johannesburg | 45/48
+  ```
+
+  The `VERUM OMNIS SEALED ORIGINAL — scan the code …` line is the **per-page
+  header that appears on all 48 pages**; p. 45's own content is *"Yours
+  faithfully"* + the *REFUND FOR FUEL.pdf (206 KB)* attachment. So p. 45 is an
+  **email-tail / attachment page**, and the engine's F4 flag is a
+  **structurally-short-page issue** (the same class as F3), **not a seal
+  self-flag**. The seal-exclusion path worked: §29 records seal furniture
+  stripped from 42 pages, and the engine's "37 chars" residual matches the
+  email-tail text left after the header was stripped (a seal page would strip to
+  ~0). A review that read p. 45 as *being* the seal line was reading a
+  differently-named copy (`…-sealed-sealed.pdf`) with a different hash — a
+  different artefact, whose p. 45 is not this one. All page references in this
+  note are to the hash above.
 - **"F2 mislabelled as Signature Mismatch" — UNFOUNDED.** The engine labels F2
   *"Unsigned Agreement Stated (CT23)"* (report §3, §5, §11), which is correct, and
   it is the strongest, most central finding in the bundle (the unsigned MOU,
@@ -154,18 +165,18 @@ affidavits, which carry it well. Two notes:
 | O(n²) pairwise per vessel | Sourcery #6 | Deferred (note only) |
 | Exec-summary "substantive findings" wording | AI review 5.18 | Open (low) |
 | Page-type awareness (attachment lists, email tails) | AI review F3/F4, 5.2 | Open (low) |
-| Reconcile the two bundle copies at p. 45 (`…-sealed` vs `…-sealed-sealed`) and verify the seal-exclusion path on the pristine input | Founder QA re-check (9 Oct 2026) | Open — engine input SHA-verified; the re-sealed copy not verified here |
+| Two-copy p. 45 reconciliation (`…-sealed` vs `…-sealed-sealed`) | Founder QA re-check (9–10 Oct 2026) | **Resolved** — the two files differ at p. 45; the hash-matched engine input (`a38d494f…`) has the email-tail page, confirmed from its raw text layer; the seal-exclusion path worked (§29, 42 stripped) |
 
 **Correction log (this note):** the first draft of this note made two mistaken
 "corrections" of the review, both fixed above. (1) It said the engine "does not
 emit" severity; in fact the engine emits severity in its findings/JSON and only
-the printed report suppresses it. (2) It called the F4 "seal page" claim a bald
-"FALSE" at HIGH confidence without citing which file or acknowledging the two
-differently-named copies; the claim does not hold on the SHA-verified engine
-input, but the point now carries that verification, the file-identity caveat, and
-a reconciliation action. The lesson: a QA note that goes in front of an opponent
-must itself be QA'd — cite the file and its hash, and never state a "FALSE" that a
-re-check of the primary source can invert.
+the printed report suppresses it. (2) It stated the F4 "seal page" claim as a bald
+"FALSE" without citing which file; a re-check against a differently-named copy
+briefly made the point look contestable. It is now stated as a confirmed fact for
+one named, hash-identified file, with that file's raw p. 45 text quoted, so it
+cannot be contested again. The lesson: a QA note that goes in front of an opponent
+must itself be QA'd — cite the file and its hash, quote the primary source, and
+never state a conclusion a re-check of that source can invert.
 
 _Reviewer: Claude Code. This note records one run's assessment; it is evidence of
 the review that was done, not a certification of overall engine accuracy._

@@ -183,21 +183,61 @@ const t4 = conflicts([
 ok(t4.length === 1 && t4[0].type === 'A',
   'a transfer in the same sentence as the document title ("Deed: X sells … to Y") is not lost to title-stripping (Sourcery #4)');
 
-// ---- #7 quote fidelity: the STORED quote is byte-faithful; DISPLAY is derived --
-// The record keeps the exact passage (whitespace and all); the report collapses
-// whitespace for layout and marks excerpts — so the page says "quoted from the
-// page", never a false "verbatim" (Sourcery #7). Each conflict side carries both.
+// ---- #1 (bare "no"): "no transfer from X to Y" is a non-event, not a claim ----
+{
+  const noT = 'The register records no transfer from T.F. Hardouin to R. Louw';
+  ok(E.voNegatedBefore(noT, noT.indexOf('transfer')), 'voNegatedBefore: "no transfer from …" is negated (Sourcery #1, bare "no")');
+  const nd = 'there is no dispute that T.F. Hardouin transferred DTD700X to R. Louw';
+  ok(!E.voNegatedBefore(nd, nd.indexOf('transferred')), 'voNegatedBefore: "no dispute that X transferred" is NOT suppressed (no over-correction)');
+}
+ok(conflicts([
+  'The register records no transfer from T.F. Hardouin to R. Louw.',
+  'Vessel DTD140A. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 1 April 2024.'
+]).length === 0,
+  'a page stating "no transfer from X to Y" raises no conflict (negation gate, bare "no")');
+
+// ---- #2 (before-vessel): a multi-vessel page whose transferred vessel is named in
+//      the PRECEDING sentence still binds to it — not lost (Sourcery #2) ----------
+ok(conflicts([
+  'Vessel DTD200A. previous owner T.F. Hardouin new owner R. Louw. DTD300B is also noted. Dated 1 May 2024.',
+  'Vessel DTD200A. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 1 June 2024.'
+]).length === 1,
+  'a transfer whose vessel (DTD200A) sits in the preceding sentence binds to it, not lost (Sourcery #2 before-vessel)');
+// a multi-vessel LISTING before the transfer is ambiguous → the transfer is NOT
+// bound to either vessel, so it cannot raise a false conflict (the risk that
+// motivated dropping the naive backward look — now pinned).
+ok(conflicts([
+  'Vessels DTD200A and DTD300B. previous owner T.F. Hardouin new owner R. Louw. Dated 1 May 2024.',
+  'Vessel DTD300B. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 1 June 2024.'
+]).length === 0,
+  'a multi-vessel listing before the transfer is ambiguous — not bound to either, no false conflict');
+
+// ---- #6 paired control: the multi-vessel transfer is RETAINED and conflicts with
+//      its OWN vessel, while staying isolated from the other listed vessel --------
+const mv = conflicts([
+  'A fleet notice. T.F. Hardouin sells DTD200A to R. Louw on 1 May 2024. DTD300B remains unsold.',
+  'T.F. Hardouin sells DTD200A to Niven Naidoo on 2 May 2024.',
+  'Vessel DTD300B. previous owner T.F. Hardouin new owner A. Third. Dated 3 May 2024.'
+]);
+ok(mv.length === 1 && mv[0].subject === 'DTD200A',
+  'the DTD200A transfer on a multi-vessel page is retained and conflicts with the other DTD200A transfer, isolated from DTD300B (Sourcery #6 paired control)');
+
+// ---- #7 quote fidelity: the STORED quote is the EXACT source slice (byte-faithful);
+// DISPLAY is derived from it. The record keeps a verbatim substring of the page with
+// its original whitespace — not a normalised or window-clipped excerpt — so the page
+// says "quoted from the page", never a false "verbatim" (Sourcery #7, #4, #3).
+const WS_PAGE1 = 'Notice.\n\n  Vessel DTD130A.  previous owner T.F. Hardouin new owner R. Louw.\n\n  Dated 1 February 2024.';
 const wsp = conflicts([
-  'Notice.\n\n  Vessel DTD130A.  previous owner T.F. Hardouin new owner R. Louw.\n\n  Dated 1 February 2024.',
+  WS_PAGE1,
   'Notice. Vessel DTD130A. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 1 February 2024.'
 ]);
 ok(wsp.length === 1 && wsp[0].type === 'A', 'a conflict still fires when the source has irregular whitespace');
-ok(wsp.length === 1 && /\n|\s{2,}/.test(wsp[0].a.quoteFull || ''),
-  'quoteFull is byte-faithful — it keeps the original newlines/multi-spaces');
-ok(wsp.length === 1 && wsp[0].a.quote && !/\n|\s{2,}/.test(wsp[0].a.quote),
-  'quote (display) collapses whitespace — so it must not be presented as "verbatim"');
-ok(wsp.length === 1 && wsp[0].a.quoteFull !== wsp[0].a.quote,
-  'the two channels differ when the source whitespace is irregular: stored ≠ displayed');
+ok(wsp.length === 1 && wsp[0].a.quoteFull === '  previous owner T.F. Hardouin new owner R. Louw.',
+  'quoteFull is the EXACT source slice (byte-faithful: original double-space kept, not normalised, not window-clipped)');
+ok(wsp.length === 1 && WS_PAGE1.indexOf(wsp[0].a.quoteFull) !== -1,
+  'quoteFull is a verbatim substring of the source page — a true slice, not an altered excerpt (Sourcery #3)');
+ok(wsp.length === 1 && wsp[0].a.quote && !/\n|\s{2,}/.test(wsp[0].a.quote) && wsp[0].a.quote !== wsp[0].a.quoteFull,
+  'quote (display) is whitespace-collapsed and differs from the stored slice — so it is never called "verbatim"');
 
 console.log('\ncross-doc-conflicts: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

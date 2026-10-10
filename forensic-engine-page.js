@@ -5700,7 +5700,7 @@ var VO_FACT_NAME = '([A-Z][A-Za-z.\'’-]+(?:\\s+(?:' + VO_FACT_PARTICLE + '|[A-
 // fillers between), so a distant noun-negation ("there is no dispute that X
 // transferred…") does NOT suppress a real claim. No regex lookbehind
 // (Safari < 16.4): the preceding clause text is sliced out and tested forward.
-var VO_NEGATOR_TAIL = /(?:\bnever\b|\bnot\b|\bcannot\b|\bwithout\b|\bneither\b|\bnor\b|\bun(?:signed|executed|dated)\b|\bfail(?:ed|s)?\s+to\b|\brefus(?:ed|es|e)\s+to\b|\bdeclin(?:ed|es|e)\s+to\b|\b\w*n['’]t\b)(?:\s+(?:been|yet|ever|actually|duly|validly|in\s+fact))*\s*$/i;
+var VO_NEGATOR_TAIL = /(?:\bno\b|\bnever\b|\bnot\b|\bcannot\b|\bwithout\b|\bneither\b|\bnor\b|\bun(?:signed|executed|dated)\b|\bfail(?:ed|s)?\s+to\b|\brefus(?:ed|es|e)\s+to\b|\bdeclin(?:ed|es|e)\s+to\b|\b\w*n['’]t\b)(?:\s+(?:been|yet|ever|actually|duly|validly|in\s+fact))*\s*$/i;
 function voNegatedBefore(text, idx) {
   // the current clause only: drop everything up to the last clause terminator
   // within a bounded look-back, so a negator in an earlier sentence is ignored.
@@ -5724,12 +5724,45 @@ function voFactSnippet(raw, idx, len) {
   var s = raw.slice(Math.max(0, idx - 90), idx + (len || 0) + 90).replace(/\s+/g, ' ').trim();
   return s.length > 200 ? s.slice(0, 197) + '…' : s;
 }
-// The SAME passage window, stored BYTE-FAITHFULLY — exact whitespace, no
-// normalisation, no length cap (Sourcery #7). This is the record's quote; the
-// report may collapse whitespace and excerpt it FOR DISPLAY, but the unedited
-// text is kept here (and in the findings JSON) so "quoted from the page" is true.
-function voFactSnippetRaw(raw, idx, len) {
-  return String(raw || '').slice(Math.max(0, idx - 90), idx + (len || 0) + 90);
+// The bounds [start,end) of the sentence/clause containing position `pos`,
+// bounded by a real terminator on each side and capped so a run-on with no
+// terminator cannot return the whole page. A terminator is [.;:] followed by
+// whitespace, or a newline — but NOT a period inside an initial ("T.F.", "R.")
+// nor inside a registration ("DTD200A."), which are masked first so they are not
+// read as sentence ends. The mask is length-preserving, so positions map 1:1 to
+// the original. Keyed off `pos` (a match START), never a match length, because
+// the owner-name regex can greedily consume a trailing word. No regex lookbehind.
+function voSentenceBounds(s, pos) {
+  s = String(s || '');
+  var MAX = 600;
+  var mask = s.replace(/\b[A-Z]\./g, function (x) { return x.charAt(0) + '\u0001'; });
+  var TERM = /[.;:](?=\s)|\n/g, t, start = 0, end = s.length;
+  while ((t = TERM.exec(mask)) !== null) {
+    if (t.index < pos) { start = t.index + 1; }
+    else { end = t.index + 1; break; }
+    if (t.index === TERM.lastIndex) TERM.lastIndex++;
+  }
+  if (pos - start > MAX) start = pos - MAX;
+  if (end - pos > MAX) end = pos + MAX;
+  return { start: start, end: end };
+}
+// The FULL transfer sentence, stored BYTE-FAITHFULLY from the PRISTINE text —
+// exact whitespace, the whole sentence (not a fixed window), read from the
+// untouched source (not the boilerplate-stripped `raw`), so the record's quote is
+// the real passage and "quoted from the page" is literally true (Sourcery #3/#4).
+function voFullQuote(orig, idx) {
+  var sb = voSentenceBounds(orig, idx);
+  return String(orig || '').slice(sb.start, sb.end);
+}
+// Every vessel registration named in a span, normalised to the vessel key.
+function voVesselsIn(str) {
+  var out = [], m;
+  VO_FACT_VESSEL_RE.lastIndex = 0;
+  while ((m = VO_FACT_VESSEL_RE.exec(String(str || ''))) !== null) {
+    out.push(m[0].replace(/\s+/g, '').toUpperCase());
+    if (m.index === VO_FACT_VESSEL_RE.lastIndex) VO_FACT_VESSEL_RE.lastIndex++;
+  }
+  return out;
 }
 // The date that belongs to a transfer, not just the first date on the page. It
 // is read from the transfer's own clause (the part of the sentence before the
@@ -5747,18 +5780,24 @@ function voTransferDate(raw, start, len) {
   }
   return null;
 }
-// The vessel a transfer is ABOUT — read from the transfer's own passage (a tight
-// window around the owner-direction match), so on a page that names more than one
-// vessel the transfer is bound to the vessel in its own clause, not to every
-// vessel on the page (Sourcery #2). Null when the passage names no vessel.
-function voOwnerVessel(raw, start, len) {
-  // Within the transfer passage itself (the matched span) plus a short tail for a
-  // trailing "… of DTD200A". No backward look — a vessel listed BEFORE the passage
-  // is the page's subject list, not necessarily this transfer's vessel.
-  var win = String(raw || '').slice(start, start + (len || 0) + 40);
-  VO_FACT_VESSEL_RE.lastIndex = 0;
-  var m = VO_FACT_VESSEL_RE.exec(win);
-  return m ? m[0].replace(/\s+/g, '').toUpperCase() : null;
+// The vessel a transfer is ABOUT, so on a page naming more than one vessel the
+// transfer binds to the right one, not to every vessel on the page (Sourcery #2).
+// (1) the vessel named in the transfer's OWN sentence; else (2) the immediately-
+// preceding sentence, but ONLY when it names exactly one vessel (a single-subject
+// "Vessel DTDxxx." line) — never a multi-vessel listing, which is ambiguous and
+// must not bind the transfer. Null when neither resolves to a single vessel.
+// Searched on the pristine text (same indices as `raw`, which is length-preserving).
+function voOwnerVessel(orig, idx) {
+  orig = String(orig || '');
+  var sb = voSentenceBounds(orig, idx);
+  var inSent = voVesselsIn(orig.slice(sb.start, sb.end));
+  if (inSent.length) return inSent[0];
+  if (sb.start > 0) {
+    var prev = voSentenceBounds(orig, sb.start - 1);
+    var inPrev = voVesselsIn(orig.slice(prev.start, prev.end));
+    if (inPrev.length === 1) return inPrev[0];
+  }
+  return null;
 }
 // Does a text span itself state a transfer (an owner direction or an acquirer)?
 // Used so a leading document title is NOT stripped when the opening sentence is
@@ -5787,7 +5826,12 @@ function voFactAll(re, raw, norm) {
 // came from (per-value quote), and repeatable fields keep all their matches. A
 // field is empty/null when the page does not state it; nothing is inferred.
 function voExtractPageFacts(text) {
-  var raw = String(text || '').replace(VO_SEAL_BOILERPLATE_RE, ' ');
+  // `orig` is the pristine page text (byte-faithful quotes read from it). `raw`
+  // has seal boilerplate blanked for matching — but LENGTH-PRESERVING (each match
+  // replaced by an equal run of spaces) so an index in `raw` is the same index in
+  // `orig`, and a quote sliced from `orig` is the untouched source (Sourcery #3).
+  var orig = String(text || '');
+  var raw = orig.replace(VO_SEAL_BOILERPLATE_RE, function (m) { return Array(m.length + 1).join(' '); });
   var facts = {
     vessels: voFactAll(VO_FACT_VESSEL_RE, raw, function (x) { return x.replace(/\s+/g, '').toUpperCase(); }),
     rights: voFactAll(VO_FACT_RIGHT_RE, raw, function (x) { return x.toUpperCase(); }),
@@ -5829,9 +5873,9 @@ function voExtractPageFacts(text) {
     if (om && !voNegatedBefore(raw, bodyAt + om.index)) {
       facts.ownerFrom = cleanName(om[1]); facts.ownerTo = cleanName(om[2]);
       facts.ownerQuote = voFactSnippet(raw, bodyAt + om.index, om[0].length);
-      facts.ownerQuoteFull = voFactSnippetRaw(raw, bodyAt + om.index, om[0].length);
+      facts.ownerQuoteFull = voFullQuote(orig, bodyAt + om.index);
       facts.ownerDate = voTransferDate(raw, bodyAt + om.index, om[0].length);
-      facts.ownerVessel = voOwnerVessel(raw, bodyAt + om.index, om[0].length);
+      facts.ownerVessel = voOwnerVessel(orig, bodyAt + om.index);
       break;
     }
   }
@@ -5840,9 +5884,9 @@ function voExtractPageFacts(text) {
     if (am && !voNegatedBefore(raw, bodyAt + am.index)) {
       facts.ownerTo = cleanName(am[1]);
       facts.ownerQuote = voFactSnippet(raw, bodyAt + am.index, am[0].length);
-      facts.ownerQuoteFull = voFactSnippetRaw(raw, bodyAt + am.index, am[0].length);
+      facts.ownerQuoteFull = voFullQuote(orig, bodyAt + am.index);
       facts.ownerDate = voTransferDate(raw, bodyAt + am.index, am[0].length);
-      facts.ownerVessel = voOwnerVessel(raw, bodyAt + am.index, am[0].length);
+      facts.ownerVessel = voOwnerVessel(orig, bodyAt + am.index);
     }
   }
   return facts;

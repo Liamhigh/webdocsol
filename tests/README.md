@@ -50,7 +50,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**40 suites, 2843 assertions**, all green (counted 9 October 2026, with photos sealed as
+**40 suites, 2853 assertions**, all green (counted 9 October 2026, with photos sealed as
 documents (`ENGINE.md` §12.18), the Louw v Naidoo precision fixes (§12.19) and the
 cross-document conflict detection (§12.21-§12.22)). `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file
@@ -76,7 +76,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 13 | `digital-forensics` | `digital-forensics.test.mjs` | 16 | `voDigitalForensicsScan` (raw PDF structure) |
 | 14 | `ocr-rescue` | `ocr-rescue.test.mjs` | 44 | The page's OCR fallback, loader and deadline helper |
 | 15 | `rule-classify` | `rule-classify.test.mjs` | 9 | The deterministic classification fallback in `seal-document.html` |
-| 16 | `findings-json` | `findings-json.test.mjs` | 25 | `buildFindingsJson`, findings JSON contract 1.8.0 |
+| 16 | `findings-json` | `findings-json.test.mjs` | 29 | `buildFindingsJson`, findings JSON contract 1.9.0 |
 | 17 | `finding-anchors` | `finding-anchors.test.mjs` | 87 | WHO / WHERE / WHAT / WHEN anchoring per finding |
 | 18 | `wrangler-config` | `wrangler-config.test.mjs` | 34 | `wrangler.toml` drift lock |
 | 19 | `crop-normalize` | `crop-normalize.test.mjs` | 115 | CropBox normalisation, seal band, share ordering, certificate privacy, the voice-note path |
