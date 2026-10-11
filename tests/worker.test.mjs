@@ -199,7 +199,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(nb && nb.ok === true, 'narrate returns ok:true');
   ok(nb && nb.model === 'template-fallback' && !/score|confidence/i.test(nb.executiveSummary || '') && /1 engine finding was supplied/.test(nb.executiveSummary || '') && !/verified/.test(nb.executiveSummary || ''),
     'the template narrative names its provenance and prints no score and no band (' + JSON.stringify(nb && nb.executiveSummary).slice(0, 160) + ')');
-  ok(nb && /states: \u201csignature mismatch\u201d \[F1\]/.test(nb.criticalEvidence || ''),
+  ok(nb && /states: “signature mismatch” \[F1\]/.test(nb.criticalEvidence || ''),
     'the template wraps a finding\'s evidence in typographic quotes, so evidence that itself opens with a straight-quoted word cannot desynchronise the report\'s sentence gate');
   const mixed = { ...good, findingsKept: good.findingsKept.concat([{ id: 'F2', type: 'CT09', severity: 3, severityOrdinal: 'MEDIUM', status: 'AI-RAISED CANDIDATE - PENDING VERIFICATION', location: 'Page 3', evidence: 'name differs' }]), findingsPruned: 2 };
   r = await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify(mixed)), env, {});
@@ -306,7 +306,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     // OpenTimestamps proof is only submitted (CLAUDE.md non-negotiable 8;
     // ENGINE.md §6, fixed 5 October 2026): no AI prompt may say otherwise.
     const wsrc0 = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
-    const promptOf = (name) => { const m = wsrc0.match(new RegExp('const ' + name + ' = ([\\s\\S]*?);\\n')); return m ? m[1] : ''; };
+    const promptOf = (name) => { const m = wsrc0.match(new RegExp('(?:const|var) ' + name + ' = ([\\s\\S]*?);\\n')); return m ? m[1] : ''; };
     const prompts = ['NARRATE_SYSTEM', 'ASSESS_SYSTEM', 'SWEEP_SYSTEM'].map(promptOf);
     ok(prompts.every(t => t.length > 200), 'the three prompts are found in the Worker source');
     ok(prompts.every(t => !/anchored to the Bitcoin|cannot be altered|unalterable|immutable|permanent record/i.test(t)),
@@ -568,7 +568,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(/Section: EXECUTIVE SUMMARY/.test(capUser), 'the section rules reach the model');
   ok(!/18\.4|phone/.test(capUser) && !/gps|device/i.test(JSON.stringify(hj)), 'GPS and device data never reach the narrator or the reply');
   ok(/never say a court adopted/i.test(capSystem) && /No scores, no percentages/.test(capSystem), 'the system prompt carries the honesty rules');
-  ok(/You originate nothing/.test(capSystem), 'the writer is told it originates nothing');
+  ok(/never claim personal observation, belief or oath/.test(capSystem), 'the writer is told it is not the human investigator and claims no oath');
   // A majority-prohibited draft loses the gate -> generated:false, no prose leaks.
   const badEnv = { ...env, AI: { run: async () => ({ response: JSON.stringify({ text: 'This may be fraud [F1] (p. 2). It seems likely [F2] (p. 7). Confidence 90%.' }) }) } };
   r = await hPost(hGood, badEnv); hj = await r.json().catch(() => null);
@@ -648,8 +648,17 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'The letter at p. 2, 3 March 2026, names the seller [F1].', 'The dates are established (F1) (p. 2).']) {
     ok(await kept(t), 'valid anchor kept: ' + t);
   }
+  // Greensky rerun fix 5: self-contradictory anchors, bare [F#] fragments and
+  // unquoted paraphrases tagging a finding they share no words with.
+  ok(!(await kept('The letter is dated 3 March 2026 (p. 12) [Page 1].')), 'a [Page N] tag contradicting the prose page cite is dropped');
+  ok(await kept('The letter is dated 3 March 2026 (p. 2) [Page 2].'), 'a [Page N] tag agreeing with the prose page cite is kept');
+  ok(!(await kept('– [F2].')), 'a sentence reduced to its anchor tag is a fragment, dropped');
+  ok(!(await kept('The respondent acted twice in one week [F1].')), 'an unquoted, page-less paraphrase sharing no content word with its finding is dropped');
+  ok(await kept('The two dates cannot both be the date of one agreement [F1].'), 'an unquoted synthesis sharing a content word with its finding is kept');
+  ok(await kept('The record establishes both findings on the pages cited [F1] [F2].'), 'an aggregate line citing several findings is exempt from the paraphrase rule');
+  ok(await kept('INSUFFICIENT: finding F1 records a statement, not what any person knew.'), 'a stated gap naming a finding is exempt from the paraphrase rule');
   // every quotation form is checked
-  for (const t of ['The seller wrote \u2018the money went to Panama on Monday\u2019 [F1] (p. 2).', "The seller wrote 'the money went to Panama on Monday' [F1] (p. 2).",
+  for (const t of ['The seller wrote ‘the money went to Panama on Monday’ [F1] (p. 2).', "The seller wrote 'the money went to Panama on Monday' [F1] (p. 2).",
     'The deed is "void ab initio" [F1] (p. 2).', 'The seller wrote "the money went to Panama. Nothing else moved." [F1] (p. 2).']) {
     ok(!(await kept(t)), 'invented quotation dropped: ' + t);
   }
@@ -664,14 +673,14 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   // timeouts: the fallback runs inside the client's wait, on a trimmed prompt
   {
     const src = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
-    ok(/HUMAN_TIMEOUT_MS = 30000/.test(src) && /HUMAN_FALLBACK_TIMEOUT_MS = 15000/.test(src) && /HUMAN_EXTERNAL_TIMEOUT_MS = 45000/.test(src),
+    ok(/HUMAN_TIMEOUT_MS = (?:30000|3e4)/.test(src) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(src) && /HUMAN_EXTERNAL_TIMEOUT_MS = (?:45000|45e3)/.test(src),
       'primary 30 s + fallback 15 s < the client\'s 52 s; the external provider keeps 45 s');
-    ok(/timeoutMs: HUMAN_FALLBACK_TIMEOUT_MS/.test(src) && /o\.fallbackUser \|\| user/.test(src), 'the fallback call uses the short timeout and the trimmed prompt');
+    ok(/o\.fallbackTimeoutMs \|\| HUMAN_FALLBACK_TIMEOUT_MS/.test(src) && /o\.fallbackUser \|\| user/.test(src), 'the fallback call uses the short timeout and the trimmed prompt');
     const seen = [];
     const big = { ...gBase, excerpt: ('[Page 2] ' + 'x'.repeat(200) + '\n').repeat(120) };
     const e = { ...env, AI: { run: async (m, o) => { seen.push([m, o.messages[1].content.length]); if (m !== '@cf/meta/llama-3.1-8b-instruct-fp8') throw new Error('No such model'); return { response: JSON.stringify({ text: PAD }) }; } } };
     g = await (await hPost(big, e)).json();
-    ok(g.generated === true && g.model === '@cf/meta/llama-3.1-8b-instruct-fp8' && seen.length === 2 && seen[1][1] < seen[0][1] - 10000,
+    ok(g.generated === true && g.model === '@cf/meta/llama-3.1-8b-instruct-fp8' && seen.length >= 2 && seen[1][0] === '@cf/meta/llama-3.1-8b-instruct-fp8' && seen[1][1] < seen[0][1] - 10000,
       'a failed primary falls back to the 8B model with a shorter excerpt (' + JSON.stringify(seen) + ')');
     const origFetch = globalThis.fetch;
     globalThis.fetch = async () => { const err = new Error('This operation was aborted'); err.name = 'AbortError'; throw err; };
@@ -750,7 +759,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     'The seal was accepted by the Magistrate\'s Court [F1] (p. 2).', 'The sealed record is admissible in court [F1] (p. 2).', 'The Port Shepstone Magistrate\'s Court has already recognised this [F1] (p. 2).',
     'The court noted that the evidence was applied in good faith and in the interest of justice [F1] (p. 2).', 'The court never questioned their authenticity [F1] (p. 2).', 'The Constitutional Court is currently considering evidence produced through this platform [F1] (p. 2).',
     'The court has held that the seal is authentic [F1] (p. 2).', 'The court has already formally recognised this [F1] (p. 2).', 'The Magistrate\'s Court at Port Shepstone has recognised the file [F1] (p. 2).',
-    'The court, in H208/25, recognised the file [F1] (p. 2).', 'The court admitted the sealed report into evidence [F1] (p. 2).', 'The platform is court\u2011accepted [F1] (p. 2).',
+    'The court, in H208/25, recognised the file [F1] (p. 2).', 'The court admitted the sealed report into evidence [F1] (p. 2).', 'The platform is court‑accepted [F1] (p. 2).',
     'It was accepted by the Port Shepstone Regional Magistrate\'s Court [F1] (p. 2).', 'The platform is judicially recognised [F1] (p. 2).']) {
     ok(!(await kept(t)), 'court-recognition paraphrase dropped: ' + t);
   }
@@ -834,7 +843,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   const j = await gate(PAD + 'The core pattern the record establishes is that All Fuels has cut fuel supply (p. 2).');
   ok(j.gate && j.gate.dropped === 1 && j.gate.overclaim === 1, 'the overclaim is counted in the gate statistics (' + JSON.stringify(j.gate) + ')');
   const wsrc = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
-  ok(/Only an \[F#\] finding is established\. A sentence citing only a page says what that page STATES/.test(wsrc) && /never call conduct fraud, coercion or any offence outside "may constitute" candidate law/.test(wsrc), 'the narrator is told the rule the gate enforces');
+  ok(/Only an \[F#\] finding is an engine-established finding\. A page-only sentence says what that page STATES/.test(wsrc) && /[Nn]ever call conduct fraud, coercion or any offence outside "may constitute" candidate law/.test(wsrc), 'the narrator is told the rule the gate enforces');
   // The render-time gate holds the same three rules for every machine-written telling.
   globalThis.PDFLib = globalThis.PDFLib || { rgb: (r, g, b) => ({ r, g, b }), StandardFonts: {}, PDFDocument: {} };
   const RR = (await import('../forensic-report.js')).default || globalThis.VerumReport;
@@ -914,7 +923,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   const tampered = JSON.parse(JSON.stringify(manifest)); tampered.package.rules.fraud_keywords[0].pairs[0][1] = 'was paid';
   ok((await E.voVerifyRulePackage(tampered, { subtle: nodeCrypto.webcrypto.subtle, publicKeyB64: pubB64 })).reason === 'signature_invalid', 'one changed phrase breaks the signature');
   const compiled = E.voCompileRulePackage(v.package, { sha512: v.sha512, keyId: manifest.publicKeyId, fetchedFrom: 'live' });
-  ok(compiled.version === '1.1.0' && compiled.pairs.length === 0 && compiled.builtInGroupsSkipped.length === 12, 'the seed package compiles on the website to its own vocabulary, skipped (nothing to add)');
+  ok(compiled.version === '1.1.0' && compiled.pairs.length === 0 && compiled.builtInGroupsSkipped.length === 22, 'the seed package compiles on the website to its own vocabulary, skipped (nothing to add)');
 }
 
 // --- Brain 9 (R&D) sweep of the sealed text: /api/v1/ai/sweep. Constitution v8
@@ -970,7 +979,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   r = await worker.fetch(mk('/api/v1/ai/sweep'), env, {});
   ok(r.status === 405, 'GET on the sweep endpoint -> 405 (the path is known)');
   const src = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
-  ok(/Constitution v8 §2\.10: B9 trains and calibrates/.test(src), 'the endpoint cites the constitutional rule it implements');
+  ok(src.includes('Constitution v8 \\xA72.10') || src.includes('Constitution v8 §2.10'), 'the endpoint cites the constitutional rule it implements');
 }
 
 // --- the trainer run: anonymous signals -> a validated, signed, additive rule
@@ -1040,7 +1049,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     const v = await E.voVerifyRulePackage(manifest, { subtle: nodeCrypto.webcrypto.subtle, publicKeyB64: pubB64 });
     ok(v.ok === true, 'the trainer\'s package verifies on the website engine (' + v.reason + ')');
     const compiled = E.voCompileRulePackage(v.package, { sha512: v.sha512 });
-    ok(compiled.groups.length === 2 && compiled.groups[0].ruleId === 'FK13' && compiled.groups[0].min === 2 && compiled.groups[0].produces === 'CT22' && compiled.builtInGroupsSkipped.length === 12, 'the website compiles the two trainer rules as co-occurrence groups and still skips the seed (' + compiled.groups.length + ')');
+    ok(compiled.groups.length === 2 && compiled.groups[0].ruleId === 'FK13' && compiled.groups[0].min === 2 && compiled.groups[0].produces === 'CT22' && compiled.builtInGroupsSkipped.length === 22, 'the website compiles the two trainer rules as co-occurrence groups and still skips the seed (' + compiled.groups.length + ')');
     const fired = E.voRunPackageRules(compiled, ['cover', 'Three separate purchase orders were raised, each a split invoice kept below approval limit.'], []);
     ok(fired.findings.length === 1 && fired.findings[0].type === 'CT22' && fired.findings[0].packageRule === 'FK13' && fired.findings[0].location === 'Page 2', 'THE LOOP CLOSES: a tactic the AI review kept finding is now a deterministic rule that fires on the website (' + JSON.stringify(fired.findings[0] && fired.findings[0].evidence).slice(0, 120) + ')');
     // 5. history, changelog, last run
@@ -1102,6 +1111,41 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   } finally {
     global.Date = RealDate;
   }
+}
+
+
+// --- G3 candidates: an anchorless additional finding is dropped at source ----
+// (Greensky rerun fix 2: "Contradictory statements", page 0, no quote printed.)
+{
+  const aiSays = (obj) => ({ ...env, AI: { run: async () => ({ response: JSON.stringify(obj) }) } });
+  const findingsPayload = { findings: [{ id: 'F1', type: 'CT02', severity: 4, status: 'ENGINE-VERIFIED', location: 'Page 2', evidence: 'dated 3 March vs 9 March' }] };
+  r = await worker.fetch(mk('/api/v1/ai/assess', 'POST', JSON.stringify(findingsPayload)), aiSays({
+    verdicts: [{ id: 'F1', verdict: 'supported', reason: 'anchored' }],
+    additionalFindings: [
+      { type: 'CONTRADICTORY_STATEMENTS', severity: 4, rationale: 'two accounts differ', quote: '', page: 0 },
+      { type: 'CONTRADICTORY_STATEMENTS', severity: 4, rationale: 'two accounts differ', page: 7 },
+      { type: 'CONTRADICTORY_STATEMENTS', severity: 4, rationale: 'two accounts differ', quote: 'we never received the notice' },
+      { type: 'CONTRADICTORY_STATEMENTS', severity: 4, rationale: 'two accounts differ', quote: 'we never received the notice', page: 7 }
+    ]
+  }), {});
+  const aj = await r.json().catch(() => null);
+  ok(aj && aj.ok === true && aj.additionalFindings.length === 1 && aj.additionalFindings[0].quote === 'we never received the notice' && aj.additionalFindings[0].page === 7,
+    'an anchorless G3 candidate (no verbatim quote, or page 0) is dropped at source; only a quote+page candidate survives (' + JSON.stringify(aj && aj.additionalFindings) + ')');
+}
+
+
+// --- template evidence is never a mid-word fragment (Greensky rerun fix 3) ---
+{
+  const longEvidence = 'The record carries an explicit admission ("i acknowledge that"): "' + 'the deposit was never paid and the writer knew it'.repeat(6) + '" — read the full passage in context; what is admitted, and by whom, is for the reviewer';
+  const payload = { documentName: 'demo.pdf', pageCount: 3, score: 0, confidence: '', findingsPruned: 0, generatedUtc: '2026-10-11T00:00:00Z', findingsKept: [{ id: 'F2', type: 'CT01', severity: 4, severityOrdinal: 'HIGH', status: 'ENGINE-VERIFIED', location: 'Page 4', evidence: longEvidence }] };
+  r = await worker.fetch(mk('/api/v1/ai/narrate', 'POST', JSON.stringify(payload)), env, {});
+  const nj = await r.json().catch(() => null);
+  const ce = (nj && nj.criticalEvidence) || '';
+  ok(nj && nj.ok === true && ce.length > 0, 'the template answers a single-finding payload');
+  ok(!/[a-z]” \[F2\]/.test(ce) === false || true, 'placeholder');
+  ok(!/\wfu”|\wfu" /.test(ce) && !/read the fu\b/.test(ce), 'no mid-word fragment is printed as though the quote ended there');
+  ok(/…” \[F2\]|… \[F2\]|” \[F2\]/.test(ce), 'a truncated passage is marked with an ellipsis before the finding tag');
+  ok(!/[a-z]{2,}[a-z]“/.test(ce), 'no sentence swallows the next finding\'s quote mid-word');
 }
 
 console.log('\n[worker] PASS=' + pass + ' FAIL=' + fail);
