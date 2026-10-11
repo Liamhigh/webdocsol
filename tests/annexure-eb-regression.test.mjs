@@ -561,7 +561,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     pg.drawText(line, { x: 20, y: 800, size: 8, font: helv });
     pg.drawText('PRIVATE SEAL — FREE TIER “quoted” 04/08/2026', { x: 20, y: 780, size: 8, font: helv });
     const t = await pageText(await d.save({ useObjectStreams: false }));
-    ok(t.indexOf(line) >= 0 && !/[ -鿿]/.test(t), 'a standard-font footer of even length decodes as text, never as CJK (' + JSON.stringify(t.slice(0, 80)) + ')');
+    ok(t.indexOf(line) >= 0 && !/[　-鿿]/.test(t), 'a standard-font footer of even length decodes as text, never as CJK (' + JSON.stringify(t.slice(0, 80)) + ')');
     ok(/PRIVATE SEAL — FREE TIER “quoted”/.test(t), 'WinAnsi dashes and curly quotes survive the one-byte decode');
 
     // The report: two engine findings and one AI candidate; a prior report excluded; OCR pages.
@@ -595,7 +595,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
       'the offence-elements block says a matching finding is on the record, never that the element is evidenced');
     ok(/set aside before contradiction scanning/.test(T) && !/Every page of this bundle was read\./.test(T) && /Prior Verum Omnis report: 5 page/.test(T),
       'excluded pages are disclosed on the unread-pages page; "every page was read" is never printed beside an exclusion');
-    ok(!/[ -鿿]/.test(T), 'the report\'s own text reads back through the extractor without CJK');
+    ok(!/[　-鿿]/.test(T), 'the report\'s own text reads back through the extractor without CJK');
     ok(/COURT-READY NARRATIVE REPORT/.test(N) && (N.match(/PAGES READ THROUGH OCR/g) || []).length === 1, 'the court-ready narrative prints the OCR-provenance block once (' + (N.match(/PAGES READ THROUGH OCR/g) || []).length + ')');
     const nAnchor = N.slice(N.lastIndexOf('STATUTORY ANCHORING'), N.lastIndexOf('CANDIDATE OFFENCE MATRIX'));
     ok(nAnchor.length > 0 && !/DOMAIN_TYPO/.test(nAnchor) && /Numerical Discrepancy/.test(nAnchor) && /AI candidate:\s+DOMAIN_TYPO/.test(N),
@@ -796,6 +796,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   for (const v of ['Franchise Agreement — Extract prepared 30 Sept 2026 - pages reproduced', 'Annexure FA7 to the Founding Affidavit: Extract prepared 30 Sept 2026 - pages reproduced from the MOU', 'Extract from Mr. Bentz\'s affidavit, prepared 30 Sept 2026', 'Extract of pp. 12-15 reproduced from the Deed of Lease', 'Commentary on the MOU, 30 September 2026', 'Extracted pages, prepared 30 Sept 2026', 'Summarised by counsel on 30 September 2026'])
     ok(secOf(v, v + '. 1. …') === 3, 'secondary: "' + v + '"');
   ok(secOf('Account summary', 'STANDARD BANK Account summary prepared on 2024-01-01 for account 123') === 0 && secOf('Basis of preparation', 'SUMMARY OF ACCOUNTING POLICIES Summary prepared on the historical cost basis') === 0, 'an account summary on a bank statement and a policies summary "prepared on the historical cost basis" are the record');
+  // A quotation note and an AI-compiled page are accounts of the record (Document 5, p.444-449).
   ok(secOf('Here is the exact wording of the relevant portions of the Franchise Agreement', 'Here is the exact wording of the relevant portions of the Franchise Agreement: 3.5 The Franchisee …') === 3, '"Here is the exact wording of the relevant portions of …" is a quotation note, not the record');
   ok(secOf('Compiled by: Claude', 'Compiled by: Claude — the MOU in short. 1. …') === 3, 'a page compiled by an AI assistant is secondary wherever it sits in the bundle');
   // No stated documents: the file is tested from its first page; uncovered pages by their own head.
