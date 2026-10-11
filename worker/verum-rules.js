@@ -676,7 +676,7 @@ function asStr(v, max) {
   if (v === null || v === void 0) return "";
   return String(v).slice(0, max);
 }
-// Evidence text for printing: never a mid-word fragment (Greensky rerun fix 3 —
+// Evidence text for printing: never a mid-word fragment (Greensky rerun fix 3 \u2014
 // a 300-char hard slice ended a quoted finding sentence as "read the fu" [F2]).
 // Cut at the last word boundary inside the cap and say the passage continues.
 function asEvidenceStr(v, max) {
@@ -686,7 +686,7 @@ function asEvidenceStr(v, max) {
   const room = max - 2;
   let cut = s.lastIndexOf(" ", room);
   if (cut < room * 0.5) cut = room;
-  return s.slice(0, cut).replace(/[\s,;:—-]+$/, "") + " \u2026";
+  return s.slice(0, cut).replace(/[\s,;:\u2014-]+$/, "") + " \u2026";
 }
 __name(asStr, "asStr");
 function asCount(v) {
@@ -907,7 +907,7 @@ function sanitizeAdditionalFindings(value) {
     const pageNum = Number(f.page);
     const page = Number.isFinite(pageNum) && pageNum >= 0 && pageNum <= 1e6 ? Math.round(pageNum) : 0;
     // No anchor, no candidate (Greensky rerun fix 2): the assess prompt already
-    // rules "No verbatim quote, no additional finding" — enforce it here. An
+    // rules "No verbatim quote, no additional finding" \u2014 enforce it here. An
     // anchorless candidate ("Contradictory statements", page 0, no quote) would
     // otherwise reach the narrator and print in breach of PD2.
     if (!quote || page <= 0) continue;
@@ -1132,7 +1132,7 @@ function narrateTemplate(input, kept) {
     criticalEvidence = top.map(
       (f) => (
         // Typographic quotes around the evidence: a finding's own text may
-        // begin with a straight-quoted word ("amount" is stated as …), and
+        // begin with a straight-quoted word ("amount" is stated as \u2026), and
         // nesting straight quotes desynchronised the report's sentence gate.
         // No severity number in reader-facing text: the report states that
         // no band or score is printed, and the order carries the rank.
@@ -1403,7 +1403,7 @@ __name(sanitizeHumanTechnicalReport, "sanitizeHumanTechnicalReport");
 var HUMAN_DOT = "";
 var HUMAN_ABBREV_RE = /\b(?:mr|mrs|ms|dr|prof|hon|adv|inc|ltd|pty|cc|co|corp|no|nos|vs|v|etc|eg|ie|al|st|ave|rd|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|p|pp|para|paras|s|ss|cl|art|sec|fig|ch|ex)\.(?=\s|$)/gi;
 function humanSplitSentences(text) {
-  const masked = String(text || "").replace(/\.\.\./g, HUMAN_DOT + HUMAN_DOT + HUMAN_DOT).replace(/["“]([^"“”]{1,400}?)["”]/g, (m) => m.replace(/\./g, HUMAN_DOT)).replace(/(\d)\.(?=\d)/g, "$1" + HUMAN_DOT).replace(/\b(?:pp?|pgs?)\.(?=\s*\d)/gi, (m) => m.slice(0, -1) + HUMAN_DOT).replace(/\b([A-Z])\.(?=\s*[A-Z])/g, "$1" + HUMAN_DOT).replace(HUMAN_ABBREV_RE, (m) => m.slice(0, -1) + HUMAN_DOT);
+  const masked = String(text || "").replace(/\.\.\./g, HUMAN_DOT + HUMAN_DOT + HUMAN_DOT).replace(/["\u201C]([^"\u201C\u201D]{1,400}?)["\u201D]/g, (m) => m.replace(/\./g, HUMAN_DOT)).replace(/(\d)\.(?=\d)/g, "$1" + HUMAN_DOT).replace(/\b(?:pp?|pgs?)\.(?=\s*\d)/gi, (m) => m.slice(0, -1) + HUMAN_DOT).replace(/\b([A-Z])\.(?=\s*[A-Z])/g, "$1" + HUMAN_DOT).replace(HUMAN_ABBREV_RE, (m) => m.slice(0, -1) + HUMAN_DOT);
   const parts = masked.match(/[^.!?]+[.!?]+(?:["')\]]+)?\s*|[^.!?]+$/g) || [masked];
   const out = [];
   for (const p of parts) {
@@ -1414,11 +1414,11 @@ function humanSplitSentences(text) {
 }
 __name(humanSplitSentences, "humanSplitSentences");
 var HUMAN_BANNED_RES = [
-  // hedging and inference language (§15.2) — the prompt's BANNED list, enforced
+  // hedging and inference language (\xA715.2) \u2014 the prompt's BANNED list, enforced
   /\b(?:may|might|maybe|perhaps|possibly|possible|potentially|potential|could|would|seems?|seemed|appears?\s+(?:to|that)|appeared\s+to|apparently|allegedly|likely|unlikely|probably|probable|presumably|arguably|suggests?|suggested|suggesting|imply|implies|implied|indicat(?:es|ed|ing|ive)|consistent\s+with|I\s+(?:believe|think|suspect))\b/i,
   /\bred\s+flags?\b|\bindicators?\b|\banomal(?:y|ies)\b/i,
   // person-level judgment (the verdict is the court's)
-  /\bcredibility\b|\bguilt(?:y)?\b|\binnocen(?:t|ce)\b|\blied\b|\bliar\b|\bperjurer\b|\bfraudsters?\b|\bdefraud\w*\b|\bdishonest\w*\b|\bfraudulently\b|\bcloak(?:ed|ing|s)?\b[^.]{0,30}\b(?:crime|offence|fraud|coercion)\b/i,
+  /\bcredibility\b|\bguilt(?:y)?\b|\binnocen(?:t|ce)\b|\blied\b|\bliar\b|\bperjurer\b|\bfraudsters?\b|\bdefraud\w*\b|\bdishonest\w*\b|\bfraudulently\b|\bcloak(?:ed|ing|s)?\b\b[^.]{0,30}\b(?:crime|offence|fraud|coercion)\b/i,
   // scores in any dress: 85%, 90 percent, 9/10, nine out of ten, "confidence is high"
   /\b\d{1,3}(?:\.\d+)?\s*(?:%|percent)(?![A-Za-z])|\b\d{1,3}\s*\/\s*(?:10|100)\b(?!\/)|\bout\s+of\s+(?:ten|10|100)\b|\bscores?\b|\bscored\b|\b(?:confidence|probability)\s+(?:level|score|band|rating)\b|\bconfidence\s+is\s+(?:very\s+)?(?:high|low|moderate)\b/i,
   /\b(?:severity|confidence)\s*[:=]?\s*(?:critical|very[ _-]?high|high|moderate|low|insufficient)\b|\b(?:critical|high|moderate|low)\s+severity\b|\bVERY_HIGH\b/i,
@@ -1540,7 +1540,7 @@ var HUMAN_SHOW_RE = new RegExp("(?:\\b(?:record|records|documents?|evidence|bund
 var HUMAN_NEG_BEFORE_RE = /\b(?:no|not|never|nothing|nor|neither|cannot|can't|doesn't|don't|didn't|isn't|aren't|wasn't|weren't)\s+(?:[\w'-]+\s+){0,3}$/i;
 var HUMAN_NOT_A_NEGATION_RE = /\bno\s+doubt\b|\bnot\s+only\b|\bcannot\s+be\s+(?:disputed|denied|doubted|contested)\b|\bundisputed\b/i;
 var HUMAN_CONTRADICT_RE = /\bcontradict(?:s|ed|ing|ion|ions|ory)?\b|\bcannot\s+(?:both|all)\s+be\s+true\b/i;
-var HUMAN_REBUTTAL_FRAME_RE = /^\s*(?:[-•*]|\d{1,2}[.)])?\s*\**\s*(?:this (?:account|statement|version) conflicts|the record (?:at p\.|states|it conflicts)|assessment\s*[:—–-])/i;
+var HUMAN_REBUTTAL_FRAME_RE = /^\s*(?:[-\u2022*]|\d{1,2}[.)])?\s*\**\s*(?:this (?:account|statement|version) conflicts|the record (?:at p\.|states|it conflicts)|assessment\s*[:\u2014\u2013-])/i;
 var HUMAN_OFFENCE_NOUN = "(?:fraud|coercion|extortion|racketeering|theft|corruption|money\\s+laundering|forgery|bribery|blackmail|intimidation|duress|perjury)";
 var HUMAN_CHARACTERISE_RE = new RegExp(
   "\\b(?:constitut(?:e|es|ed|ing)|amount(?:s|ed|ing)?\\s+to|tantamount\\s+to)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:" + HUMAN_OFFENCE_NOUN + "|crim(?:e|inal)|(?:an?\\s+)?offen[cs]es?)\\b|\\b(?:is|are|was|were|be|been|being)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:" + HUMAN_OFFENCE_NOUN + "|crimes?)\\b|\\b(?:committed|perpetrated|engaged\\s+in)\\s+(?:an?\\s+|the\\s+)?(?:acts?\\s+of\\s+)?(?:" + HUMAN_OFFENCE_NOUN + "|crimes?|offen[cs]es?)\\b|\\b(?:establish(?:es|ed)?|proves?|proved|proven|shows?|demonstrates?|reveals?)\\s+(?:an?\\s+)?" + HUMAN_OFFENCE_NOUN + "\\b",
@@ -1591,9 +1591,9 @@ function humanOverclaim(s, ac, allowPageContradiction) {
   return false;
 }
 __name(humanOverclaim, "humanOverclaim");
-var HUMAN_QUOTE_RE = /["“”]([^"“”]{12,})["“”]|\u2018([^\u2018\u2019]{12,})\u2019|(?:^|[\s(\[])'([^']{12,}?)'(?=[\s.,;:)\]!?]|$)/g;
+var HUMAN_QUOTE_RE = /["\u201C\u201D]([^"\u201C\u201D]{12,})["\u201C\u201D]|\u2018([^\u2018\u2019]{12,})\u2019|(?:^|[\s(\[])'([^']{12,}?)'(?=[\s.,;:)\]!?]|$)/g;
 function humanNorm(s) {
-  return String(s || "").toLowerCase().replace(/[‘’“”`]/g, '"').replace(/[^a-z0-9]+/g, " ").trim();
+  return String(s || "").toLowerCase().replace(/[\u2018\u2019\u201C\u201D`]/g, '"').replace(/[^a-z0-9]+/g, " ").trim();
 }
 __name(humanNorm, "humanNorm");
 function humanPageTextNorms(texts) {
@@ -1656,7 +1656,7 @@ function humanPageContradictionAllowed(s, pageText, verifiedQuotePages) {
 }
 __name(humanPageContradictionAllowed, "humanPageContradictionAllowed");
 function humanGateSentenceKey(s) {
-  return String(s || "").replace(/^\s*(?:[-•*]|\d{1,2}[.)])\s+/, "").replace(/\s+/g, " ").trim();
+  return String(s || "").replace(/^\s*(?:[-\u2022*]|\d{1,2}[.)])\s+/, "").replace(/\s+/g, " ").trim();
 }
 __name(humanGateSentenceKey, "humanGateSentenceKey");
 var HUMAN_PILLAR_TYPES = {
@@ -1719,12 +1719,12 @@ function humanPillarBad(s, curPillars, idType, pillarMode) {
 }
 __name(humanPillarBad, "humanPillarBad");
 // A bracketed bundle tag ([Page N]) inside a sentence that also cites pages in
-// prose: the two must agree (Greensky rerun fix 5 — "p. 12 … [Page 1]" printed).
+// prose: the two must agree (Greensky rerun fix 5 \u2014 "p. 12 \u2026 [Page 1]" printed).
 var HUMAN_PAGE_TAG_RE = /\[\s*Pages?\s*(\d{1,4})\s*\]/g;
-// Greensky rerun fix 5: a sentence reduced to its anchors ("– [F2]") is a
+// Greensky rerun fix 5: a sentence reduced to its anchors ("\u2013 [F2]") is a
 // fragment, not a sentence; and an [F#] tag on a sentence that neither quotes
 // the record, cites a page, nor shares a single content word with the finding
-// it cites is a misattached anchor — both are dropped.
+// it cites is a misattached anchor \u2014 both are dropped.
 var HUMAN_STOP_WORDS = new Set(("the,a,an,and,or,but,of,to,in,on,at,for,with,by,from,as,is,was,were,are,be,been,being,it,its,this,that,these,those,there,here,not,no,nor,so,if,then,than,when,while,which,who,whom,whose,what,how,all,any,both,each,few,more,most,other,some,such,only,own,same,also,very,can,will,just,should,now,has,have,had,do,does,did,he,she,they,we,you,his,her,their,our,your,my,him,them,us,me,per,via,against,between,into,over,under,after,before,during,within,without,upon,about,said,says,states,stated,made,makes,make").split(","));
 function humanContentWords(s) {
   const out = [];
@@ -1745,7 +1745,7 @@ function humanGate(text, ctxIds, ctxPages, corpusNorm, idType, pillarMode, lawMa
   for (const para of paras) {
     const trimmed = para.trim();
     if (!trimmed) continue;
-    if (/^[=_\-—–]{3,}$/.test(trimmed)) {
+    if (/^[=_\-\u2014\u2013]{3,}$/.test(trimmed)) {
       out.push(trimmed);
       continue;
     }
@@ -1776,7 +1776,7 @@ function humanGate(text, ctxIds, ctxPages, corpusNorm, idType, pillarMode, lawMa
         keptLines.push(rawLine.replace(/[*_#`]/g, "").trim());
         continue;
       }
-      const bm = rawLine.match(/^\s*(?:[-•*]|\d{1,2}[.)])\s+(.*\S)\s*$/);
+      const bm = rawLine.match(/^\s*(?:[-\u2022*]|\d{1,2}[.)])\s+(.*\S)\s*$/);
       const body = bm ? bm[1] : rawLine;
       if (pillarMode) {
         const lab = body.match(/^\s*(?:\*\*|__)?([^:*_]{3,60}?)(?:\*\*|__)?\s*:\s+\S/);
@@ -1824,16 +1824,16 @@ function humanGate(text, ctxIds, ctxPages, corpusNorm, idType, pillarMode, lawMa
             if (prosePages.length && !tagPages.some((n) => prosePages.indexOf(n) >= 0)) bad = "anchor";
           }
         }
-        // A sentence reduced to its anchor tags is a fragment ("– [F2]").
+        // A sentence reduced to its anchor tags is a fragment ("\u2013 [F2]").
         if (!bad && ac.anchored) {
-          const stripped = s.replace(new RegExp(HUMAN_REF_RE.source, "gi"), " ").replace(new RegExp(HUMAN_PAGE_TAG_RE.source, "g"), " ").replace(new RegExp(HUMAN_PAGE_CITE_RE.source, "gi"), " ").replace(/[\s\-•*—–()\[\]"“”'.,;:]+/g, " ").trim();
+          const stripped = s.replace(new RegExp(HUMAN_REF_RE.source, "gi"), " ").replace(new RegExp(HUMAN_PAGE_TAG_RE.source, "g"), " ").replace(new RegExp(HUMAN_PAGE_CITE_RE.source, "gi"), " ").replace(/[\s\-\u2022*\u2014\u2013()\[\]"\u201C\u201D'.,;:]+/g, " ").trim();
           const wordsLeft = (stripped.match(/[A-Za-z]{3,}/g) || []).length;
           if (wordsLeft < 2) bad = "anchor";
         }
         // An [F#] tag on a sentence that neither quotes the record nor cites a
         // page must share at least one content word with the finding it cites.
         // Aggregate lines citing several findings and sanctioned one-line
-        // answers (verdict reservation, INSUFFICIENT gap) are exempt — they
+        // answers (verdict reservation, INSUFFICIENT gap) are exempt \u2014 they
         // synthesise the record rather than paraphrase one finding.
         if (!bad && ac.finding && !quoted && !citedPages.length && idText && !humanAnchorFree(s)) {
           const refRe2 = new RegExp(HUMAN_REF_RE.source, "gi");
