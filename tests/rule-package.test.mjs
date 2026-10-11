@@ -275,7 +275,7 @@ const key = makeKey();
     ok(fn(['this is the only block of text there is'])('the only block of text', 1).location === 'Full document', 'single-block documents anchor to Full document');
   }
   ok(/if \(f\.packageRule\) detectorId = \('SIGNED_RULE_' \+ String\(f\.packageRule\)\)\.slice\(0, 64\);/.test(html), 'a package hit feeds back as SIGNED_RULE_<id>, never as the detector whose type it borrows');
-  ok(/if \(!aType \|\| aType === 'SERIAL'\) continue;/.test(html) && !\/\^CT\(0\[1-9\]\|\[1-3\]\[0-9\]\|4\[0-6\]\)\$\/\.test\(aType\)\) continue;/.test(html), 'CT-typed AI candidates now reach the feedback loop (the engine-missed-a-CT01 signal)');
+  ok(/if \(!aType \|\| aType === 'SERIAL'\) continue;/.test(html) && ! /\/\^CT\(0\[1-9\]\|\[1-3\]\[0-9\]\|4\[0-6\]\)\$\/\.test\(aType\)\) continue;/.test(html), 'CT-typed AI candidates now reach the feedback loop (the engine-missed-a-CT01 signal)');
   ok(/detectorId: af\.anchored \? 'AI_IDENTIFIED' : 'AI_IDENTIFIED_UNANCHORED'/.test(html), 'feedback tells anchored from unanchored AI candidates');
   ok(!/AI consensus review \(multi-model/.test(html) && !/multi-model, Gemma/.test(html), 'the report no longer calls one Llama call a multi-model consensus');
   ok(/AI review \(Llama 3\.3 70B on Cloudflare Workers AI, 8B fallback; single model, advisory\)/.test(html), 'the report names the model honestly');
