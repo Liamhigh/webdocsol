@@ -1,8 +1,8 @@
-        evidence: 'The record contains the tampering indicator "' + tamperingIndicators[i] + '"',
-        location: 'Full document' });
+          evidence: 'The record contains the tampering indicator "' + tamperingIndicators[i] + '"',
+          location: 'Full document' });
+      }
     }
-  }
-  return findings;
+    return findings;
   },
 
   D20_DETECT_DIGITAL_FOOTPRINT_MISMATCH: function(pdfDoc) {
