@@ -1,0 +1,2283 @@
+    example: 'Page 3 has different header/footer suggesting inserted page'
+  },
+  CT28_IMAGE_INTEGRITY_FAILURE: {
+    id: 'CT28', name: 'Image Integrity Failure',
+    desc: 'Embedded images show signs of manipulation or replacement',
+    severity: 4, category: 'INTEGRITY',
+    example: 'Logo image has different compression than surrounding content'
+  },
+  CT29_TIMESTAMP_MANIPULATION: {
+    id: 'CT29', name: 'Timestamp Manipulation',
+    desc: 'Document timestamps are inconsistent or impossible',
+    severity: 5, category: 'INTEGRITY',
+    example: 'Document modification time precedes creation time'
+  },
+  CT30_VERSION_CONTROL_ANOMALY: {
+    id: 'CT30', name: 'Version Control Anomaly',
+    desc: 'Document version tracking is inconsistent or absent',
+    severity: 2, category: 'INTEGRITY',
+    example: 'Page footer says "Version 3" but header says "Version 1"'
+  },
+
+  // === CATEGORY 5: CROSS-REFERENCE CONTRADICTIONS (31-35) ===
+  // Failures in internal and external document references
+
+  CT31_CROSS_REFERENCE_FAILURE: {
+    id: 'CT31', name: 'Cross-Reference Failure',
+    desc: 'Referenced sections, clauses, or documents do not exist or conflict',
+    severity: 3, category: 'CROSS_REF',
+    example: '"See Appendix A" but no Appendix A exists in document'
+  },
+  CT32_SOURCE_ATTRIBUTION_FAILURE: {
+    id: 'CT32', name: 'Source Attribution Failure',
+    desc: 'Cited sources cannot be verified or do not support claims',
+    severity: 4, category: 'CROSS_REF',
+    example: 'Cites "Case 123/2024" but court records show no such case'
+  },
+  CT33_LEGAL_REFERENCE_INVALID: {
+    id: 'CT33', name: 'Legal Reference Invalid',
+    desc: 'Referenced legislation, cases, or regulations are incorrect',
+    severity: 4, category: 'CROSS_REF',
+    example: 'References "Section 42 of the Companies Act" but Act has no Section 42'
+  },
+  CT34_PRECEDENT_VIOLATION: {
+    id: 'CT34', name: 'Precedent Violation',
+    desc: 'Document contradicts established legal or procedural precedent',
+    severity: 3, category: 'CROSS_REF',
+    example: 'Court order format deviates from standard High Court requirements'
+  },
+  CT35_PROCEDURE_BREACH: {
+    id: 'CT35', name: 'Procedure Breach',
+    desc: 'Required procedural steps were skipped or incorrectly followed',
+    severity: 4, category: 'CROSS_REF',
+    example: 'Contract signed without required witness signatures'
+  },
+
+  // === CATEGORY 6: CONTACT & LOCATION CONTRADICTIONS (36-38) ===
+  // Physical address, contact details, and jurisdictional issues
+
+  CT36_ADDRESS_CONTRADICTION: {
+    id: 'CT36', name: 'Address Contradiction',
+    desc: 'Physical addresses are inconsistent or non-existent',
+    severity: 3, category: 'CONTACT',
+    example: 'Registered address on page 1 differs from address on page 10'
+  },
+  CT37_CONTACT_DETAIL_MISMATCH: {
+    id: 'CT37', name: 'Contact Detail Mismatch',
+    desc: 'Phone numbers, emails, or other contacts are inconsistent',
+    severity: 2, category: 'CONTACT',
+    example: 'Email domain changes from @company.co.za to @company-gmail.com'
+  },
+  CT38_JURISDICTIONAL_IMPOSSIBILITY: {
+    id: 'CT38', name: 'Jurisdictional Impossibility',
+    desc: 'Legal jurisdiction claims are impossible or contradictory',
+    severity: 4, category: 'CONTACT',
+    example: 'South African court order claims jurisdiction over Dubai entity'
+  },
+
+  // === CATEGORY 7: EVIDENCE & WITNESS CONTRADICTIONS (39-41) ===
+  // Issues with evidence handling and witness statements
+
+  CT39_CHAIN_OF_CUSTODY_BREAK: {
+    id: 'CT39', name: 'Chain of Custody Break',
+    desc: 'Evidence handling chain has gaps or inconsistencies',
+    severity: 5, category: 'EVIDENCE',
+    example: 'Evidence receipt shows transfer to Person A but next record shows Person B'
+  },
+  CT40_WITNESS_STATEMENT_CONFLICT: {
+    id: 'CT40', name: 'Witness Statement Conflict',
+    desc: 'Witness accounts contradict each other or physical evidence',
+    severity: 4, category: 'EVIDENCE',
+    example: 'Two witness statements describe mutually exclusive events'
+  },
+  CT41_EVIDENCE_TAMPERING_INDICATOR: {
+    id: 'CT41', name: 'Evidence Tampering Indicator',
+    desc: 'Evidence shows signs of alteration, substitution, or manipulation',
+    severity: 5, category: 'EVIDENCE',
+    example: 'Page numbers are non-sequential suggesting page removal'
+  },
+
+  // === CATEGORY 8: DIGITAL FORENSIC CONTRADICTIONS (42-43) ===
+  // Digital artifacts and technical inconsistencies
+
+  CT42_DIGITAL_FOOTPRINT_MISMATCH: {
+    id: 'CT42', name: 'Digital Footprint Mismatch',
+    desc: 'Digital traces (hashes, creation tools) conflict with claims',
+    severity: 4, category: 'DIGITAL',
+    example: 'Document claims scanned original but metadata shows created in Word'
+  },
+  CT43_DOCUMENT_INTERNAL_CONFLICT: {
+    id: 'CT43', name: 'Document Internal Conflict',
+    desc: 'Catch-all: any other internal contradiction not covered above',
+    severity: 3, category: 'DIGITAL',
+    example: 'Multiple anomalies detected that suggest systematic document fraud'
+  },
+
+  // === CATEGORY 9: FRANCHISE / LEASE CONTRADICTIONS (44-45) ===
+  // Conditional-right and asset-value contradictions surfaced by the AllFuels
+  // case, where the lease agreement had to be read against the ownership record.
+
+  CT44_CONDITIONAL_CLAUSE_MISINVOKED: {
+    id: 'CT44', name: 'Conditional Clause Misinvoked (Lessee/Owner Trap)',
+    desc: 'A termination or expiry rests on a clause conditioned on the party being the lessee (not the owner) under a head lease, but the record shows that party had become the owner of the premises — the triggering event never occurred; whether the termination is void is for the court.',
+    severity: 5, category: 'FRANCHISE_LEASE',
+    example: 'Franchise deemed "expired by effluxion" under cl. 3.2.3 (lessee-only), but the franchisor had purchased the site and was the registered owner.'
+  },
+  CT45_ASSET_VALUE_DENIAL: {
+    id: 'CT45', name: 'Asset Value Recognised Then Denied (Goodwill)',
+    desc: 'Goodwill or value of the business is recognised or quantified in one document but denied or said to have no compensable value in another — a forfeiture or clawback is itself an admission that the asset exists.',
+    severity: 5, category: 'FRANCHISE_LEASE',
+    example: 'The clawback table quantifies the Value of the Business, yet a later submission argues "goodwill has no compensable value".'
+  },
+
+  // === CATEGORY 10: ROLE / CAPACITY CONTRADICTION (46) ===
+  // An actor asserts one capacity but the record shows conduct that capacity
+  // cannot hold — surfaced by the Ritz/Moolla matter, where a corporate capacity
+  // was claimed while money moved through a personal account.
+  CT46_ROLE_CAPACITY_CONFLICT: {
+    id: 'CT46', name: 'Role / Capacity Contradiction',
+    desc: 'An actor asserts they act in a corporate or restricted capacity (e.g. on behalf of a company, or a role barred from certain dealings) but the same record shows conduct inconsistent with that capacity — money routed to a personal account, or a briefing accepted that the stated capacity prohibits.',
+    severity: 4, category: 'IDENTITY',
+    example: 'A party states they act "on behalf of X (Pty) Ltd" yet directs payment to their personal trust account; or states they "may not accept briefs from the public" yet accepted one.'
+  },
+
+  // === CATEGORY 11: CONDUCT INDICATORS (47) ===
+  // Coercion is conduct, not a contradiction — the 46 contradiction detectors
+  // are silent on it. CT47 surfaces the passages where threat, ultimatum or
+  // pressure language appears, as indicators for human review; it never
+  // determines that coercion occurred (a legal conclusion, for the court).
+  CT47_COERCIVE_CONDUCT: {
+    id: 'CT47', name: 'Coercive Conduct Indicators',
+    desc: 'Passages carrying threat, ultimatum or pressure language (consequences for refusal, supply or access cut off, lockout, "under protest/under duress" accounts) — indicators for human review, not a determination that coercion occurred.',
+    severity: 3, category: 'BEHAVIOUR',
+    example: '"Should you fail to sign the addendum, we will have no option but to stop all fuel deliveries."'
+  },
+
+  // Gaslighting is conduct, not a contradiction: a party denies a documented
+  // reality or attacks the other's recollection of it. CT48 surfaces the
+  // passages as indicators for human review; it never determines that
+  // gaslighting occurred (a psychological conclusion, not the engine's).
+  CT48_REALITY_DENIAL: {
+    id: 'CT48', name: 'Gaslighting / Reality-Denial Indicators',
+    desc: 'Passages denying a documented event or record, or attacking the other party\'s recollection ("that never happened", "we have no record of", "your recollection is wrong", "fabrication") — indicators for human review, not a determination of gaslighting.',
+    severity: 3, category: 'BEHAVIOUR',
+    example: '"No such agreement was ever concluded; your recollection of events is simply wrong."'
+  },
+
+  // DARVO — Deny, Attack, Reverse Victim and Offender: a party accused of
+  // wrongdoing responds by attacking the complainant and casting itself as
+  // the victim. CT49 surfaces the passages as indicators for human review;
+  // it never determines intent (for the court).
+  CT49_BLAME_REVERSAL: {
+    id: 'CT49', name: 'Blame-Reversal / DARVO Indicators',
+    desc: 'Passages where a party, facing a claim, attacks the claimant or casts itself as the injured party ("we are the injured party", "if anyone has been defrauded", "your harassment of our staff", "vexatious", threats of defamation or counterclaim) — indicators for human review, not a determination of intent.',
+    severity: 3, category: 'BEHAVIOUR',
+    example: '"Your client\'s harassment of our staff leaves us no option; if anyone has been defrauded here, it is us."'
+  },
+
+  // The signed-rule learning loop's behavioural entry point: a curated
+  // behavioral_markers rule (keyword set) the package teaches the engine
+  // between releases. CT50 is the generic label; a rule may name a more
+  // specific behavioural type via `produces` (CT47/CT48/CT49).
+  CT50_SIGNED_BEHAVIOURAL_MARKER: {
+    id: 'CT50', name: 'Behavioural Pattern Indicator (Signed Rule)',
+    desc: 'A behavioural keyword set from the signed rule package matched the record — an indicator for human review, not a determination.',
+    severity: 3, category: 'BEHAVIOUR',
+    example: 'A curated marker {stonewalling: "we are unable to comment", "your query is noted", "in due course"} matches two or more of its keywords on one page.'
+  }
+};
+
+// ===================== 37 DETECTOR FUNCTIONS =====================
+// Each detector scans for a specific type of contradiction or fraud indicator.
+// Detectors return an array of findings: [{ type, severity, evidence, location }]
+
+
+// ---- DOCUMENT BOUNDARIES IN A COMPILED BUNDLE ------------------------------
+// Once bundles hold several documents, a finding anchored to "p. 464" is
+// opaque: nothing tells the reader that page 464 is the third document. The
+// boundaries are recoverable from the documents' OWN internal page numbering
+// — "Page N of M" markers share an M within one document, and N restarts at 1
+// when the next begins. Deterministic, text-only, no guessing: a boundary is
+// reported only where the record states its own numbering.
+// Levenshtein distance for short strings (domains, names); deterministic.
+function voEditDistance(a, b) {
+  a = String(a || ''); b = String(b || '');
+  if (a === b) return 0;
+  if (!a.length) return b.length;
+  if (!b.length) return a.length;
+  var prev = [], cur = [], i, j;
+  for (j = 0; j <= b.length; j++) prev[j] = j;
+  for (i = 1; i <= a.length; i++) {
+    cur[0] = i;
+    for (j = 1; j <= b.length; j++) {
+      var cost = a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1;
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + cost);
+    }
+    var tmp = prev; prev = cur; cur = tmp;
+  }
+  return prev[b.length];
+}
+
+// Document boundaries are read from the seal footers (below), and the footers
+// are removed from the text before the detectors run (voStripSealFurniture):
+// the boundaries are therefore computed once, on the unstripped blocks, and
+// returned from this cache for the same array afterwards.
+var _voDocSegsCache = null;
+function voCacheDocSegs(textBlocks) {
+  _voDocSegsCache = null;
+  var segs = voDetectDocuments(textBlocks);
+  _voDocSegsCache = { blocks: textBlocks, segs: segs };
+  return segs;
+}
+// Which document a page belongs to, as a key two pages can be compared by.
+// A page no stated document covers (an unnumbered run after a document that
+// reached its last page, or a run too short to count) is NOT "the same
+// document" as every other such page: each contiguous run of them is its own
+// document. One shared "-1" bucket once paired an annexure after one
+// agreement with a schedule after another (definitions in D30, an expiry and
+// an invoice in D04) — the evidence-bundle-7 review, 5 October 2026.
+function voDocKeyOf(segs, pageCount) {
+  var ids = [];
+  for (var d = 0; d < (segs || []).length; d++) {
+    for (var q = segs[d].start; q <= segs[d].end; q++) ids[q - 1] = 'd' + d;
+  }
+  var run = 0;
+  for (var i = 0; i < pageCount; i++) {
+    if (ids[i] !== undefined) continue;
+    if (i === 0 || String(ids[i - 1]).charAt(0) !== 'u') run = i;
+    ids[i] = 'u' + run;
+  }
+  return function (pageIdx) { return ids[pageIdx] !== undefined ? ids[pageIdx] : 'u' + pageIdx; };
+}
+
+function voDetectDocuments(textBlocks) {
+  if (_voDocSegsCache && _voDocSegsCache.blocks === textBlocks) return _voDocSegsCache.segs;
+  if (!textBlocks || textBlocks.length < 6) return [];
+  var marks = [];
+  for (var i = 0; i < textBlocks.length; i++) {
+    var txt = String(textBlocks[i] || '');
+    var best = null;
+    var consider = function (n, tot) {
+      if (!isFinite(n) || !isFinite(tot) || tot < 2 || n < 1 || n > tot) return;
+      // The bundle's OWN running numbering ("Clean Bundle Page 326 of 528" on
+      // every page of a 528-page bundle) states nothing about the documents
+      // inside it; only an exhibit's own "Page 3 of 12" does. Annexure EB's
+      // footer made the whole bundle one document and hid every boundary.
+      if (tot === textBlocks.length && n === i + 1) return;
+      // Nested numberings on one page (a two-page letter sealed on its own,
+      // bound into a seven-page compilation, bound into the bundle): the
+      // smallest stated total is the document the sealer treated as a unit.
+      if (!best || tot < best.total) best = { n: n, total: tot };
+    };
+    var re = /\b(?:page|p\.?|pg)\s*(\d{1,4})\s*(?:of|\/)\s*(\d{1,4})\b/gi, m;
+    while ((m = re.exec(txt)) !== null) consider(parseInt(m[1], 10), parseInt(m[2], 10));
+    // This platform's own seal footer states each sealed exhibit's page count
+    // ("VERUM OMNIS SEALED ORIGINAL | Seal: VO-65C44F59360E | SHA-512: … |
+    // 04/08/2026 12:41:58 Africa/Johannesburg | 45/61"), so a bundle of
+    // previously sealed exhibits states its boundaries even when the exhibits
+    // print no "Page x of y" of their own. The n/N sits after the last pipe;
+    // the date's "04/08" is followed by "/2026" and is never read as one.
+    var sealRe = /\bVO-[0-9A-F]{6,}\b(?:\s*\|[^|]{0,90}){0,3}?\s*\|\s*(\d{1,4})\/(\d{1,4})(?![\/\d])/gi;
+    while ((m = sealRe.exec(txt)) !== null) consider(parseInt(m[1], 10), parseInt(m[2], 10));
+    marks.push(best);
+  }
+  // Walk the bundle, cutting where the stated total changes or the stated page
+  // number restarts. Pages with no marker inherit the run they sit in.
+  var segs = [], cur = null;
+  for (var p = 0; p < marks.length; p++) {
+    var mk = marks[p];
+    // An unmarked page inherits the run it sits in, unless that document has
+    // already reached its stated last page: three printed emails after the
+    // 49-page exhibit VO-553451FF1282 ("… | 49/49") were counted into it as
+    // "p. 9 – 60, 52 pages" (evidence-bundle-7-docs, 5 October 2026).
+    if (!mk) { if (cur && cur.lastN < cur.total) cur.end = p; continue; }
+    var isNew = !cur || mk.total !== cur.total || mk.n <= cur.lastN;
+    if (isNew) {
+      // The document starts at its own page 1, which sits (n-1) pages back.
+      var startIdx = Math.max(cur ? cur.end + 1 : 0, p - (mk.n - 1));
+      cur = { start: startIdx, end: p, total: mk.total, lastN: mk.n };
+      segs.push(cur);
+    } else {
+      cur.end = p;
+      cur.lastN = mk.n;
+    }
+  }
+  if (segs.length < 2) return [];
+  // A run must be substantial to count as a document, and the runs must cover
+  // enough of the bundle to be worth stating at all.
+  var out = [], covered = 0;
+  for (var s = 0; s < segs.length; s++) {
+    var len = segs[s].end - segs[s].start + 1;
+    if (len < 3) continue;
+    covered += len;
+    out.push({ start: segs[s].start + 1, end: segs[s].end + 1, pages: len, statedTotal: segs[s].total });
+  }
+  if (out.length < 2 || covered < textBlocks.length * 0.5) return [];
+  // Name each document from the first line of its own first page, so the
+  // reader sees "Caltex Franchise Agreement", not just a page range.
+  for (var d = 0; d < out.length; d++) {
+    var head = String(textBlocks[out[d].start - 1] || '').replace(/\s+/g, ' ').trim();
+    // A first page the engine set aside carries its placeholder, never a
+    // title ("prior verum omnis report page excluded" was printed as a
+    // document's name, evidence-bundle-7-docs).
+    if (/^prior verum omnis report page excluded\./.test(head)) { out[d].title = 'Verum Omnis analysis (set aside from scanning)'; continue; }
+    if (/^analysis template boilerplate excluded\./.test(head)) { out[d].title = 'Verum Omnis analysis template (set aside from scanning)'; continue; }
+    // Drop the page marker and any seal furniture before reading a title. No
+    // lookbehind here: Safari before 16.4 throws on it and the whole scan dies.
+    head = head.replace(/\b(?:page|p\.?|pg)\s*\d+\s*(?:of|\/)\s*\d+\b/gi, ' ');
+    head = head.replace(/^(?:verum omnis[^|]*\||[0-9a-f]{8,}\s*)/i, '').trim();
+    var title = (head.split(/[.;:]/)[0] || '')
+      .replace(/[^A-Za-z0-9 &'\/,()-]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+    if (title.length > 58) title = title.substring(0, 58).replace(/\s+\S*$/, '') + '…';
+    out[d].title = title.length >= 4 ? title : '';
+  }
+  return out;
+}
+
+// ===================== OATH-CONTEXT DETECTION =====================
+// Which pages carry the language of a sworn instrument? A contradiction whose
+// anchor page sits inside an affidavit is a materially different fact from one
+// in correspondence — the reader (and counsel) must know, because a false
+// statement under oath has its own legal character. The engine records ONLY
+// the measurement: oath language appears on the page. It never classifies a
+// statement as sworn testimony, and it never names the offence — "perjury" is
+// a verdict-adjacent word that appears nowhere in engine output (§15.2; the
+// report's candidate-law annex may cite statutes, which is PD16's one
+// sanctioned exception).
+//
+// Guards (precision over recall, as everywhere in this engine):
+//  - STRONG markers are execution formulae that essentially only occur inside
+//    a sworn instrument ("commissioner of oaths", "make oath and say", "sworn
+//    before me"). One suffices.
+//  - WEAK markers ("affidavit", "deponent", "under oath") also occur in pages
+//    that merely DISCUSS an affidavit — an index line reading "Supplementary
+//    Affidavit, 9pp" is not an oath. Two DISTINCT weak markers are required.
+//  - Body pages of a long affidavit may carry no markers at all and are not
+//    tagged: under-tagging is a gap, mis-tagging is a false statement of fact.
+var VO_OATH_STRONG = [
+  /commissioner\s+of\s+oaths/i,
+  /make[s]?\s+oath\s+and\s+(?:say|state)/i,
+  /solemnly\s+(?:and\s+sincerely\s+)?(?:declare|affirm)/i,
+  /depose[sd]?\s+and\s+(?:say|state)/i,
+  /duly\s+sworn/i,
+  /sworn\s+(?:to\s+)?before\s+me/i
+];
+var VO_OATH_WEAK = [
+  /\baffidavit\b/i,
+  /\bdeponent\b/i,
+  /\bunder\s+oath\b/i,
+  /\bi\s+make\s+oath\b/i
+];
+function voDetectSwornPages(textBlocks) {
+  var pages = [];
+  if (!textBlocks) return pages;
+  for (var p = 0; p < textBlocks.length; p++) {
+    var t = textBlocks[p] || '';
+    if (!t) continue;
+    var hit = false;
+    for (var s = 0; s < VO_OATH_STRONG.length; s++) {
+      if (VO_OATH_STRONG[s].test(t)) { hit = true; break; }
+    }
+    if (!hit) {
+      var weak = 0;
+      for (var w = 0; w < VO_OATH_WEAK.length; w++) {
+        if (VO_OATH_WEAK[w].test(t)) weak++;
+      }
+      hit = weak >= 2;
+    }
+    if (hit) pages.push(p + 1);
+  }
+  return pages;
+}
+
+var DETECTORS = {
+
+  // D01-D05: Statemental detectors
+  D01_DETECT_DIRECT_CONTRADICTION: function(textBlocks) {
+    var findings = [];
+    // Genuine same-subject action negations. The loose topic-word pairs that
+    // used to be here (true/false, valid/invalid, agreed/disputed,
+    // authorized/unauthorized) were removed: they co-occur in ordinary legal
+    // and constitutional prose and flagged clean documents. Just as important,
+    // the two terms must now appear TOGETHER (same passage), not merely both
+    // somewhere in the document -- "paid" on page 1 and "not paid" on page 12
+    // is not a contradiction.
+    var negationPairs = [
+      ['paid','not paid'],['received','not received'],['approved','rejected'],
+      ['accepted','declined'],['completed','incomplete'],['submitted','not submitted'],
+      ['confirmed','denied'],['registered','deregistered']
+    ];
+    var fullText = textBlocks.join(' ').toLowerCase();
+    var WINDOW = 80; // ~one clause; both terms must sit this close to be a local contradiction
+    function positions(term) {
+      var re = new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+      var m, out = [];
+      while ((m = re.exec(fullText)) !== null) out.push(m.index);
+      return out;
+    }
+    // Subject alignment (v5.2.9 lineage: opposing statements must be ABOUT THE
+    // SAME THING). "The invoice was paid ... the deposit was not paid" is two
+    // facts, not a contradiction. The last content word before each term is its
+    // approximate subject; pronouns (it/same/such/...) refer back and align
+    // with anything, and when no subject is visible we stay permissive.
+    var SUBJ_STOP = /^(?:the|a|an|was|were|is|are|be|been|being|has|have|had|later|also|then|and|or|nor|of|to|in|on|by|for|with|that|which|as|at|from|shall|will|may|must|not|never|no|any|all|both|each|his|her|their|our|your|s)$/;
+    var SUBJ_PRONOUN = /^(?:it|its|same|such|this|these|those|they|them|he|she|matter|latter|former|aforesaid|said)$/;
+    function subjectBefore(pos) {
+      var pre = fullText.slice(Math.max(0, pos - 48), pos);
+      var words = pre.replace(/[^a-z' -]/g, ' ').split(/\s+/).filter(Boolean);
+      for (var w = words.length - 1; w >= 0; w--) {
+        if (SUBJ_PRONOUN.test(words[w])) return '*'; // refers back: aligns with anything
+        if (!SUBJ_STOP.test(words[w]) && words[w].length > 2) return words[w];
+      }
+      return null; // no visible subject: stay permissive
+    }
+    function subjectsAligned(pa, pb) {
+      var sa = subjectBefore(pa), sb = subjectBefore(pb);
+      if (sa === null || sb === null || sa === '*' || sb === '*') return true;
+      return sa === sb;
+    }
+    for (var i = 0; i < negationPairs.length; i++) {
+      var a = negationPairs[i][0], b = negationPairs[i][1];
+      // A positive assertion of `a` is one NOT already negated by "not ".
+      var aPos = positions(a).filter(function(p) { return fullText.slice(Math.max(0, p - 4), p) !== 'not '; });
+      var bPos = positions(b);
+      var hit = null;
+      for (var hp = 0; hp < aPos.length && !hit; hp++) {
+        for (var hq = 0; hq < bPos.length; hq++) {
+          if (Math.abs(aPos[hp] - bPos[hq]) <= WINDOW && subjectsAligned(aPos[hp], bPos[hq])) { hit = [aPos[hp], bPos[hq]]; break; }
+        }
+      }
+      if (hit) {
+        findings.push({ type: 'CT01', severity: 4,
+          evidence: 'Opposing statements "' + a + '" and "' + b + '" appear in the same passage',
+          location: 'Same passage' });
+      }
+    }
+
+    // Generic same-token assertion-vs-negation. The fixed pairs above only know
+    // a hard-coded vocabulary ("paid"/"not paid"), so "payment was made ... no
+    // payment" or "the debt is owed ... denied ... debt" slipped through.
+    //
+    // It is restricted to a CURATED set of claim words. An earlier version keyed
+    // on any 4+ letter word near a negator, which on a real 341-page bundle
+    // over-fired (25 findings) and even grabbed PDF-extraction fragments -- "V
+    // alue" split across a line break was reported as negating "alue". Keying on
+    // whole known claim words kills both problems, and the finding now quotes
+    // BOTH the affirming and the negating passage so it is self-explanatory.
+    var CLAIM_WORDS = ['paid','payment','owed','signed','countersigned','witnessed','notarised','notarized','valid','agreed','consented','authorised','authorized','received','delivered','renewed','terminated','expired','entitled','breached','disclosed','refunded','cancelled','approved','accepted'];
+    // The negator must attach to the claim word itself: at most three
+    // intervening words, all from a closed set of auxiliaries and determiners
+    // ("not been paid", "never duly signed", "without any signed waiver").
+    // Under the old "any five words" rule the annexure EB lease's "without
+    // notice claim immediate payment" was read as a negation of "payment" and
+    // sealed as a Direct Statement Contradiction — "without" there qualifies
+    // "notice", and the passage affirms payment twice.
+    var NEG_FILLER = /^(?:been|be|being|is|are|was|were|has|have|had|yet|ever|any|a|an|the|duly|properly|fully|formally|validly|so|then|actually|in|fact|to|by|him|her|them|it|its|such|that|this|these|those|of|at|all|still|even|once|again|now|also|already|make|made|making|makes|effect|effected|render|rendered|give|given|gave|the|his|her|their|our|my|your)$/;
+    var NEG_WORD = /\b(?:no longer|not|never|without|denied|denies|refused to|refuses to|failed to|no)\b/g;
+    // The negator NEAREST the claim word decides ("It is not disputed that the
+    // Lessor never received the notice" negates through "never", not "not");
+    // "denied that the resolution was approved" keeps ONE content word (the
+    // subject) between negator and claim; "without notice claim immediate
+    // payment" keeps three, and is no negation of "payment". The word right
+    // before the claim word is its modifier ("royalty payment") and is free.
+    var NEG_BEFORE = { test: function (pre) {
+      var m, lastM = null;
+      NEG_WORD.lastIndex = 0;
+      while ((m = NEG_WORD.exec(pre)) !== null) lastM = m;
+      if (!lastM) return false;
+      var between = pre.slice(lastM.index + lastM[0].length).trim().split(/\s+/).filter(Boolean);
+      if (between.length > 5) return false;
+      var content = 0;
+      for (var w = 0; w < between.length; w++) {
+        if (NEG_FILLER.test(between[w])) continue;
+        if (w === between.length - 1) continue; // the claim word's own modifier
+        content++;
+      }
+      return content <= 1;
+    } };
+    // Object alignment: the affirmed and the negated occurrence must be about
+    // the same object when both name one. "entitled to effect repairs" and
+    // "not entitled to any compensation" share a word, not a proposition (the
+    // annexure EB lease, sealed as CT01). The first content word after the
+    // claim word, inside the same sentence, is the object; when either side
+    // ends its sentence there, the check stays permissive.
+    var OBJ_SKIP = /^(?:to|of|for|the|a|an|any|all|such|its|his|her|their|be|been|in|on|under|with|was|were|is|are|has|have|had|ever|never|not|both|either|also|then|so|that|which|as|at|from|and|or|during|within|before|after|between|full|part|whole|parties|party|lessor|lessee|franchisor|franchisee|january|february|march|april|may|june|july|august|september|october|november|december)$/;
+    function objectAfter(pos, word) {
+      var seg = fullText.slice(pos + word.length, pos + word.length + 60).split(/[.;:!?]/)[0];
+      var words = seg.replace(/[^a-z' -]/g, ' ').split(/\s+/).filter(Boolean);
+      if (words.length && words[0] === 'by') return null; // "signed by X": an agent, not an object — stay permissive
+      for (var w = 0; w < words.length && w < 6; w++) {
+        if (OBJ_SKIP.test(words[w]) || words[w].length <= 2) continue;
+        if (/ly$/.test(words[w])) continue; // adverb ("timeously")
+        return words[w];
+      }
+      return null;
+    }
+    function objectsAligned(pa, pb, word) {
+      var oa = objectAfter(pa, word), ob = objectAfter(pb, word);
+      if (oa === null || ob === null) return true;
+      return oa === ob;
+    }
+    // A negator whose path to the claim word passes through unless/until/
+    // except/provided is a CONDITIONAL REQUIREMENT, not a negation: "shall not
+    // be valid unless it is approved by X" states a rule about approval — it
+    // neither affirms nor denies that anything WAS approved. The Greensky MOA
+    // produced exactly this false CT01 ("approved by 75% majority" vs
+    // "approved by ras al khaimah") from two requirement clauses.
+    var REQ_BETWEEN = /\b(?:no longer|not|never|without|denied|denies|refused to|refuses to|failed to|no)\b(?:\s+\w+){0,4}?\s+(?:unless|until|except|save|provided)\b(?:\s+\w+){0,4}\s*$/;
+    var mkSnip = function (idx) { return fullText.slice(Math.max(0, idx - 30), idx + 45).replace(/\s+/g, ' ').trim(); };
+    for (var ci = 0; ci < CLAIM_WORDS.length; ci++) {
+      var cw = CLAIM_WORDS[ci];
+      var occRe = new RegExp('\\b' + cw + '\\b', 'g');
+      var occ, asserts = [], negs = [];
+      while ((occ = occRe.exec(fullText)) !== null) {
+        var pre = fullText.slice(Math.max(0, occ.index - 45), occ.index);
+        if (REQ_BETWEEN.test(pre)) continue; // requirement clause: neither an assertion nor a negation
+        if (NEG_BEFORE.test(pre)) negs.push(occ.index); else asserts.push(occ.index);
+      }
+      if (!asserts.length || !negs.length) continue;
+      // Require an affirmed and a negated occurrence of the SAME word inside one
+      // passage (240 chars) -- a document-wide coincidence is not a contradiction.
+      var pair = null;
+      for (var ai = 0; ai < asserts.length && !pair; ai++) {
+        for (var ni = 0; ni < negs.length; ni++) {
+          if (Math.abs(asserts[ai] - negs[ni]) <= 240 && subjectsAligned(asserts[ai], negs[ni]) && objectsAligned(asserts[ai], negs[ni], cw)) { pair = [asserts[ai], negs[ni]]; break; }
+        }
+      }
+      if (!pair) continue;
+      findings.push({ type: 'CT01', severity: 4,
+        evidence: 'The document both affirms and negates "' + cw + '": "…' + mkSnip(pair[0]) + '…" vs "…' + mkSnip(pair[1]) + '…"',
+        location: 'Same passage' });
+    }
+
+    // Explicit admission statements. The Greensky review's central miss: a
+    // written first-person admission ("I admit that…", "we concede…") is the
+    // strongest statement a record can carry, and the engine had no detector
+    // for admission LANGUAGE at all. Cite-or-stay-silent: only explicit
+    // first-person admission phrasing fires — the engine quotes the sentence,
+    // it does not judge what was admitted (narrative admissions that only
+    // read as admissions in context belong to the AI review layer). One
+    // aggregated finding, every stating page cited.
+    var admissionCues = ['i admit', 'we admit', 'i concede', 'we concede',
+      'i acknowledge that', 'we acknowledge that', 'i accept that', 'we accept that',
+      'i was wrong', 'we were wrong', 'i misled', 'we misled',
+      'admitted under oath', 'admission of guilt'];
+    // A pleading admits paragraphs, not facts: "AD PARAGRAPH 13 … I admit the
+    // contents of this paragraph" is the form of an answering affidavit, and
+    // the evidence-bundle-4 run sealed eight pages of it as a contradiction.
+    // The form test reads the cue's own sentence in the pleading grammar
+    // ("admit the contents/allegations contained in/of this/sub-/paragraph
+    // 13.2", "admit the correctness of the contents of this paragraph", "admit
+    // the contents hereof", "admit paragraph 13"). An AD PARAGRAPH heading on
+    // its own never suppresses a sentence — "AD PARAGRAPH 7: I admit that I
+    // signed the deed of suretyship" is an admission of fact — and every
+    // occurrence of a cue on a page is read, so a form sentence never hides a
+    // later sentence of fact.
+    var PLEADING_ADMISSION_RE = /\badmit(?:s|ted)?\s+(?:only\s+)?(?:the\s+)?(?:(?:contents?|allegations?|averments?|correctness|opening\s+sentence|first\s+sentence|remainder|balance|rest)\s+(?:of\s+the\s+(?:contents?|allegations?|averments?)\s+)?(?:contained\s+in\s+|set\s+out\s+in\s+|of\s+|in\s+)?(?:(?:this|the|these|that|said|each)\s+(?:said\s+|aforesaid\s+)?(?:sub-?)?para(?:graph)?s?\b|(?:sub-?)?para(?:graph)?s?\s+\d)|(?:contents?|allegations?|averments?)\s+(?:hereof|thereof|herein|therein)\b|(?:sub-?)?para(?:graph)?s?\s+\d)/i;
+    // A sentence that CALLS another statement an admission is analysis, not an
+    // admission: "Forensic Finding:** This is an explicit admission of guilt"
+    // (an AI-written case summary bound into the Greensky bundle, pp. 5, 63,
+    // 143, 272 of the 3 October 2026 run) was sealed as "The record carries an
+    // explicit admission". The admission the engine quotes must be the
+    // admitting party's own sentence, never a commentator's label for one.
+    // The test anchors on the words immediately BEFORE the cue — an equative
+    // verb reaching the cue ("is an explicit…", "constitutes a clear…",
+    // "treated as an…") — so the subject can be anything ("Mr Nortje's
+    // email", "that email", "his reply"), and it applies only to the
+    // noun-shaped cue: a first-person "I admit…" is never a label and is
+    // never guard-killed (the Greensky rerun review broke a closed subject
+    // list both ways).
+    var VO_ADM_CHARACTERISATION_RE = /\b(?:is|was|are|were|be|being|been|constitutes?|amount(?:s|ed)?\s+to|represent(?:s|ed)?|reads?\s+as|read\s+as|deem(?:s|ed)?|treat(?:s|ed)?\s+as|considered|regarded\s+as)\s+(?:an?\s+)?(?:\w+[-\s]+){0,3}?$/i;
+    var VO_ADM_NOUN_CUES = { 'admission of guilt': 1 };
+    var admPages = [], admQuote = null, admCue = null;
+    for (var ap = 0; ap < textBlocks.length; ap++) {
+      var lowA = (textBlocks[ap] || '').toLowerCase();
+      var admCounted = false;
+      for (var ac = 0; ac < admissionCues.length && !admCounted; ac++) {
+        var atA = lowA.indexOf(admissionCues[ac]);
+        while (atA !== -1) {
+          // The cue's own sentence: from the cue to the next sentence end (a
+          // clause number's "13.2" has no space after its point).
+          var sentA = lowA.slice(atA, atA + 200).split(/[.;!?]\s|\n/)[0];
+          // ...and the words reaching the cue, so a label for an admission
+          // ("this is an explicit admission of guilt") is read as the
+          // characterisation it is. Only the cue's own sentence is read.
+          if (VO_ADM_NOUN_CUES[admissionCues[ac]]) {
+            var headA = lowA.slice(Math.max(0, atA - 120), atA);
+            var headBreak = Math.max(headA.lastIndexOf('. '), headA.lastIndexOf('; '), headA.lastIndexOf('! '), headA.lastIndexOf('? '), headA.lastIndexOf('\n'));
+            if (headBreak !== -1) headA = headA.slice(headBreak + 1);
+            if (VO_ADM_CHARACTERISATION_RE.test(headA)) {
+              atA = lowA.indexOf(admissionCues[ac], atA + admissionCues[ac].length);
+              continue;
+            }
+          }
+          if (!PLEADING_ADMISSION_RE.test(sentA)) {
+            admPages.push(ap + 1);
+            if (!admQuote) {
+              admCue = admissionCues[ac];
+              admQuote = textBlocks[ap].substring(Math.max(0, atA - 40), atA + admissionCues[ac].length + 120).replace(/\s+/g, ' ').trim();
+            }
+            admCounted = true; // one count per page
+            break;
+          }
+          atA = lowA.indexOf(admissionCues[ac], atA + admissionCues[ac].length);
+        }
+      }
+    }
+    // CONDUCT ADMISSION — a party, in their own words, explaining WHY the
+    // disputed transaction went ahead. The explicit cues above never fire on
+    // real correspondence: nobody writes "I admit". The Greensky bundle
+    // carries the shape that DOES appear, from Marius Nortje's email of
+    // 6 April 2025 (pp. 53-54, requoted on 82, 86, 211, 215):
+    //   "Because you refused to communicate with Kevin's Export and me,
+    //    Kevin's Export proceeded with the deal, since Sealife Hong Kong was
+    //    already his client."
+    // Signature: a causal justification + the transaction proceeding + the
+    // writer placing themselves in it. Precision guards: contract boilerplate
+    // ("the parties shall proceed...") is excluded, and a bare first-person
+    // account with NO justification ("we completed the sale in 2019") does
+    // not fire — affidavits are full of those and would flood the report.
+    var VO_CAUSE_RE = /\b(?:because|since|as a result|due to|owing to|given that|seeing that)\b/i;
+    var VO_PROCEED_RE = /\b(?:proceeded|went\s+ahead|carried\s+on|continued|concluded|completed|finalised|finalized|executed)\b[^.]{0,80}\b(?:deal|transaction|sale|shipment|order|export|contract|agreement|payment|transfer)\b/i;
+    var VO_SELF_RE = /\b(?:i|we|me|my|our|us)\b/i;
+    var VO_BOILER_RE = /\b(?:shall|hereby|whereas|herein|the\s+parties\s+agree)\b/i;
+    var condPages = [], condQuote = null;
+    for (var cp = 0; cp < textBlocks.length; cp++) {
+      var sentsC = String(textBlocks[cp] || '').split(/[.!?]+\s+/);
+      for (var sc = 0; sc < sentsC.length; sc++) {
+        var senC = sentsC[sc];
+        if (senC.length < 30 || senC.length > 600) continue;
+        if (VO_BOILER_RE.test(senC)) continue;
+        if (!VO_CAUSE_RE.test(senC) || !VO_PROCEED_RE.test(senC) || !VO_SELF_RE.test(senC)) continue;
+        condPages.push(cp + 1);
+        if (!condQuote) {
+          // Where the passage is requoted under the bundle's own heading
+          // ("Marius Admission Email 6 April 2025 Quoted from ... :"), the
+          // sentence begins with that furniture and the real admission gets
+          // truncated away. Start the quote at the justification itself.
+          var cutC = senC.search(VO_CAUSE_RE);
+          condQuote = (cutC > 30 ? senC.slice(cutC) : senC).replace(/\s+/g, ' ').trim();
+        }
+        break; // one count per page
+      }
+    }
+    if (condPages.length) {
+      var cpList = condPages.length > 8
+        ? condPages.slice(0, 8).join(', ') + ' and ' + (condPages.length - 8) + ' more'
+        : condPages.join(', ');
+      findings.push({ type: 'CT01', severity: 4, conductAdmission: true,
+        evidence: 'A party gives their own account of why the disputed transaction went ahead: "' + condQuote + '"' +
+          (condPages.length > 1 ? ' — the same account appears on ' + condPages.length + ' pages (' + cpList + ')' : '') +
+          ' — the words are the writer\'s own; read the full passage in context and establish what it settles',
+        location: 'Page ' + cpList, pages: condPages.slice() });
+    }
+
+    if (admPages.length) {
+      var apList = admPages.length > 8
+        ? admPages.slice(0, 8).join(', ') + ' and ' + (admPages.length - 8) + ' more'
+        : admPages.join(', ');
+      findings.push({ type: 'CT01', severity: 4, conductAdmission: true,
+        evidence: 'The record carries an explicit admission ("' + admCue + '"): "' + admQuote + '"' +
+          (admPages.length > 1 ? ' — admission language appears on ' + admPages.length + ' pages (' + apList + ')' : '') +
+          ' — read the full passage in context; what is admitted, and by whom, is for the reviewer',
+        location: 'Page ' + apList, pages: admPages.slice() });
+    }
+    return findings;
+  },
+
+  // Flags a *labelled* quantity that the document states at two different
+  // values -- "Total: R450,000" on one page and "Total: R470,000" on another.
+  //
+  // This previously compared every amount in the document against every other
+  // amount and reported any pair differing by >10%. That is not a
+  // contradiction: a R150 line item and a R60,000 line item are simply
+  // different line items. On the repo's 10-page test document it emitted 739
+  // findings, drowning the 3 real ones, and being O(n^2) in amount count it
+  // also scaled badly. Comparing like with like is the actual signal.
+  D02_DETECT_NUMERICAL_DISCREPANCY: function(textBlocks) {
+    var findings = [];
+    var LABEL_RE = /\b(grand total|sub-?total|total|balance(?:\s+due)?|amount(?:\s+(?:due|payable|paid))?|invoice total|net(?:\s+amount)?|gross(?:\s+amount)?|vat|tax|deposit|purchase price|contract (?:value|price|sum))\b/gi;
+    // Magnitude words are part of the amount: "R231.3 million" is
+    // R231,300,000, not R231 (the AllFuels bundle's headline figure was read
+    // with its decimal and magnitude stripped). One or two decimals allowed
+    // when a magnitude word follows; bare amounts keep the strict two-decimal
+    // rule so reference numbers are not misread as money.
+    // Thousands may be grouped by a space as well as a comma ("R116 124.00"
+    // in a bank's outcome letter); a space-grouped figure needs its currency
+    // symbol so that two unrelated numbers are never joined into one amount.
+    // The evidence-bundle-2-docs run read "R116 124.00" as R116.
+    var AMOUNT_RE = /(?:[R$€£]\s*)\d+(?:[.,]\d{1,2})?\s*(?:million|billion|m|bn)\b|(?:[R$€£]\s*)\d{1,3}(?:[   ]\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)\d+(?:\.\d{2})?/i;
+    // The amount must follow its label directly, through at most a short
+    // connector ("Total: R…", "an amount of R…", "purchase price (excl. VAT)
+    // R…"). A label followed by other words is not stating that figure: the
+    // column header "Amount Merchant" above a table row "R 8000.00 Makro" was
+    // read as "amount = R8000" and set against "an amount of R116 124.00" in
+    // another letter.
+    var CONNECTOR_RE = /^[\s.:=\-–—(]*(?:of|is|was|be|at|to|due|payable|paid|owing|outstanding|\([^)]{0,40}\))?[\s.:=\-–—]*(?:of\s*)?$/i;
+    // A labelled figure is restated only inside ONE document. Where the bundle
+    // states its own boundaries (an exhibit's "Page x of y", a sealed
+    // exhibit's footer), entries from different documents are never compared:
+    // "an amount of R116 124.00" in one customer's outcome letter and an
+    // "Amount" in another customer's are two subjects, not one figure.
+    var d02Segs = voDetectDocuments(textBlocks) || [];
+    var d02DocOf = function (pageIdx) {
+      for (var d = 0; d < d02Segs.length; d++) { if (pageIdx + 1 >= d02Segs[d].start && pageIdx + 1 <= d02Segs[d].end) return d; }
+      return -1;
+    };
+
+    // How far after a label an amount may sit and still belong to it.
+    var MAX_LOOKAHEAD = 40;
+
+    var byLabel = {};
+    for (var i = 0; i < textBlocks.length; i++) {
+      var block = textBlocks[i];
+
+      // Collect every label position first so each one's search window can be
+      // stopped at the next label. Scanning a fixed distance forward let a
+      // label that states no amount of its own reach past the next label and
+      // adopt its figure -- "Total: refer to annexure. Deposit R900,000" was
+      // read as a Total of R900,000, manufacturing a discrepancy that is not
+      // in the document. Inventing an allegation is the worst thing a forensic
+      // detector can do, so a label's amount must lie strictly before the
+      // next label, and a label with no amount of its own is skipped.
+      var marks = [];
+      LABEL_RE.lastIndex = 0;
+      var m;
+      while ((m = LABEL_RE.exec(block)) !== null) {
+        marks.push({ text: m[0], start: m.index, end: m.index + m[0].length });
+      }
+
+      for (var k = 0; k < marks.length; k++) {
+        var from = marks[k].end;
+        var boundary = k + 1 < marks.length ? marks[k + 1].start : block.length;
+        var to = Math.min(boundary, from + MAX_LOOKAHEAD);
+        if (to <= from) continue;
+
+        var am = block.slice(from, to).match(AMOUNT_RE);
+        if (!am) continue;
+        if (!CONNECTOR_RE.test(block.slice(from, from + am.index))) continue;
+        var magM = am[0].match(/(million|billion|m|bn)\b\s*$/i);
+        var numPart = magM ? am[0].slice(0, magM.index) : am[0];
+        var value = parseFloat(numPart.replace(/[,   ](?=\d{3}\b)/g, '').replace(/[^0-9.,]/g, '').replace(',', '.'));
+        if (magM) value *= /^b/i.test(magM[1]) ? 1e9 : 1e6;
+        if (isNaN(value) || value <= 100) continue;
+
+        var label = marks[k].text.toLowerCase().replace(/\s+/g, ' ').replace(/^sub-total$/, 'subtotal');
+        // Subject alignment (v5.2.9 lineage): "Invoice INV-001 Total" and
+        // "Invoice INV-002 Total" are two subjects, not one figure restated.
+        // Capture an explicit qualifying identifier just before the label;
+        // entries with DIFFERENT qualifiers are never compared.
+        var qual = null;
+        var qm = block.slice(Math.max(0, marks[k].start - 40), marks[k].start)
+          .match(/(?:invoice|annexure|exhibit|order|quote|erf|case|claim|account|matter)\s*(?:no\.?|number|#)?\s*([a-z0-9][a-z0-9\/-]*)\s*[:\s]*$/i);
+        if (qm) qual = qm[1].toLowerCase();
+        if (!byLabel[label]) byLabel[label] = [];
+        byLabel[label].push({ value: value, raw: am[0].trim(), page: i, qual: qual });
+      }
+    }
+
+    for (var label in byLabel) {
+      if (!Object.prototype.hasOwnProperty.call(byLabel, label)) continue;
+      var entries = byLabel[label];
+      if (entries.length < 2) continue;
+
+      // A generic label ("amount", "total") that carries MANY different values is
+      // a line-item list -- e.g. a bill of costs where every row is an "amount",
+      // or a 180-page bundle of separate invoices -- NOT one figure restated. On
+      // the Louw v Moolla scan this produced 19 false "amount is R225 vs
+      // R275,000" findings. A genuine restatement is one labelled total stated
+      // at two (occasionally three) values; more distinct values than that means
+      // it is a list, so we skip the whole group rather than compare a min
+      // against everything.
+      var distinct = {};
+      for (var e = 0; e < entries.length; e++) distinct[entries[e].value] = true;
+      if (Object.keys(distinct).length > 3) continue;
+
+      // Compare each distinct stated value against the lowest one, rather than
+      // every pair, so N statements yield at most N-1 findings.
+      var sorted = entries.slice().sort(function(x, y) { return x.value - y.value; });
+      var base = sorted[0];
+      var seenVals = {};
+      for (var k = 1; k < sorted.length; k++) {
+        var cur = sorted[k];
+        if (seenVals[cur.value]) continue; // a repeated value is one discrepancy
+        seenVals[cur.value] = true;
+        // Different explicit qualifiers = different subjects, never a restatement.
+        if (base.qual && cur.qual && base.qual !== cur.qual) continue;
+        // Different stated documents = different subjects (see d02Segs above).
+        if (d02Segs.length && (d02DocOf(base.page) !== d02DocOf(cur.page) || d02DocOf(base.page) === -1)) continue;
+        var diff = cur.value - base.value;
+        var avg = (cur.value + base.value) / 2;
+        // For the SAME label restated at two/three values, any material
+        // difference is a genuine contradiction: >R1000 and >1% (the 1% floor
+        // ignores rounding on very large sums).
+        if (diff > 1000 && diff / avg > 0.01) {
+          findings.push({ type: 'CT02', severity: 4,
+            evidence: '"' + label + '" is stated as ' + base.raw + ' and as ' + cur.raw +
+              ' (variance: ' + Math.round(diff / avg * 100) + '%)',
+            location: 'Page ' + (base.page + 1) + ' vs Page ' + (cur.page + 1) });
+        }
+      }
+    }
+
+    // ---- Invoice-number-keyed totals ----
+    // External review of the test fixture: "Invoice #2023-001" was totalled
+    // at $125,000.00 on its own page and $128,500.00 in a supporting
+    // reference, and the label pass above missed it because "TOTAL" and
+    // "invoice total" key differently. An invoice number is a far stronger
+    // key than a label word — the same invoice cannot have two totals.
+    // Guards: only TOTAL-labelled amounts (or an amount immediately after
+    // "INVOICE #X:") count — line items inside the invoice never do; amounts
+    // are compared numerically so "$125,000" equals "$125,000.00"; one
+    // finding per invoice number.
+    var invTotals = {}; // invoice id -> [{val, raw, page}]
+    var invRe = /\binvoice\s*#?\s*([A-Z0-9][\w-]{2,15})\b/gi;
+    for (var ivp = 0; ivp < textBlocks.length; ivp++) {
+      var ivt = textBlocks[ivp] || '', ivm;
+      invRe.lastIndex = 0;
+      var mentions = [];
+      while ((ivm = invRe.exec(ivt)) !== null) {
+        // "invoice date:", "invoice total", "invoice number" — label words, not
+        // ids. Filter them HERE: if kept as mentions they would truncate the
+        // real invoice's window and its second total would fall outside it.
+        if (/^(date|no|number|total|amount)$/i.test(ivm[1])) continue;
+        mentions.push({ id: ivm[1].toUpperCase(), start: ivm.index, end: ivm.index + ivm[0].length });
+      }
+      for (var mi = 0; mi < mentions.length; mi++) {
+        var men = mentions[mi];
+        var wEnd = mi + 1 < mentions.length ? mentions[mi + 1].start : Math.min(ivt.length, men.end + 700);
+        var win2 = ivt.substring(men.end, wEnd);
+        var amts = [];
+        // TOTAL-labelled amount anywhere in this invoice's window
+        var totRe = /total[^$\d\n]{0,20}\$\s?([\d,]+(?:\.\d{2})?)/gi, tm2;
+        while ((tm2 = totRe.exec(win2)) !== null) amts.push(tm2[1]);
+        // ...or an amount immediately after "INVOICE #X:" (summary-row form)
+        var immediate = win2.match(/^\s*:?\s*\$\s?([\d,]+(?:\.\d{2})?)/);
+        if (immediate) amts.push(immediate[1]);
+        for (var ai = 0; ai < amts.length; ai++) {
+          var v = parseFloat(amts[ai].replace(/,/g, ''));
+          if (!isFinite(v) || v < 100) continue;
+          (invTotals[men.id] = invTotals[men.id] || []).push({ val: v, raw: '$' + amts[ai], page: ivp + 1 });
+        }
+      }
+    }
+    for (var iid in invTotals) {
+      var vs = invTotals[iid], uniq = [];
+      for (var u = 0; u < vs.length; u++) {
+        var dup = false;
+        for (var q = 0; q < uniq.length; q++) if (Math.abs(uniq[q].val - vs[u].val) < 0.005) { dup = true; break; }
+        if (!dup) uniq.push(vs[u]);
+      }
+      if (uniq.length >= 2) {
+        uniq.sort(function (a, b) { return a.val - b.val; });
+        var lo = uniq[0], hi = uniq[uniq.length - 1];
+        findings.push({ type: 'CT02', severity: 4,
+          evidence: 'Invoice ' + iid + ' is totalled at two different amounts in the record: ' +
+            lo.raw + ' (p.' + lo.page + ') and ' + hi.raw + ' (p.' + hi.page + ') — verify which total governs',
+          location: lo.page === hi.page ? 'Page ' + lo.page : 'Page ' + lo.page + ' vs Page ' + hi.page });
+      }
+    }
+    return findings;
+  },
+
+  D03_DETECT_DATE_INCONSISTENCY: function(textBlocks) {
+    var findings = [];
+    var dates = [];
+    // Match various date formats
+    var datePatterns = [
+      /\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})\b/g,     // DD/MM/YYYY
+      /\b(\d{4})[\/\-\.](\d{1,2})[\/\-\.](\d{1,2})\b/g,       // YYYY/MM/DD
+      /\b(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b/gi,
+      /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),?\s+(\d{4})\b/gi
+    ];
+    for (var i = 0; i < textBlocks.length; i++) {
+      for (var p = 0; p < datePatterns.length; p++) {
+        var match;
+        while ((match = datePatterns[p].exec(textBlocks[i])) !== null) {
+          dates.push({ raw: match[0], page: i, idx: match.index, text: textBlocks[i].substring(Math.max(0, match.index-30), match.index+30),
+            after: textBlocks[i].substring(match.index + match[0].length, match.index + match[0].length + 12) });
+        }
+      }
+    }
+    // A slash/dash/dot date is only "impossible" when it is invalid read BOTH
+    // ways -- as day/month/year AND as month/day/year. A South African bundle
+    // routinely mixes DD/MM (local) and MM/DD (US) conventions, so 10/18/2024
+    // is a perfectly valid US date (18 October) even though it is not a valid
+    // DD/MM date. Flagging it as an "invalid month" was a false positive: the
+    // engine must not manufacture an impossibility out of an ambiguous format.
+    // 31/02/2021 stays flagged because NEITHER reading is a real calendar date.
+    var months31 = [1,3,5,7,8,10,12];
+    function voDaysInMonth(m, y) {
+      if (m === 2) return ((y % 4 === 0 && y % 100 !== 0) || y % 400 === 0) ? 29 : 28;
+      return months31.indexOf(m) !== -1 ? 31 : (m >= 1 && m <= 12 ? 30 : 0);
+    }
+    function voValidMD(mo, dy, yr) {
+      return mo >= 1 && mo <= 12 && dy >= 1 && dy <= voDaysInMonth(mo, yr);
+    }
+    var voSawDMY = null, voSawMDY = null; // a clearly-DD/MM and a clearly-MM/DD example
+    // Identical impossible tokens are grouped: the 3 October 2026 Greensky run
+    // sealed "Impossible date: 15.20.9094" FOURTEEN times (the same two tokens
+    // on eight invoice pages), and fourteen copies of one observation read as
+    // fourteen contradictions. One finding per distinct token, every page cited.
+    var voImpRaw = [], voImpByRaw = {};
+    // A case, docket or reference number shaped like a date is not a date:
+    // "CAS 96/6/2026" (a SAPS case number) was sealed as "Impossible date:
+    // 96/6/2026" on the AllFuels timeline report (13 September 2026).
+    var VO_CASE_CUE = /\b(?:cas|case\s*(?:no|number|#)?|docket|ref(?:erence)?(?:\s*no)?|file\s*(?:no|number)|matter\s*no|our\s*ref|your\s*ref|enquiry|inquiry)\s*[:.#]?\s*$/i;
+    for (var d = 0; d < dates.length; d++) {
+      var dd = dates[d].raw.match(/\b(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{4})\b/);
+      if (!dd) continue;
+      var before = String(dates[d].text || '').slice(0, Math.max(0, String(dates[d].text || '').indexOf(dates[d].raw)));
+      if (VO_CASE_CUE.test(before)) continue;
+      var a = parseInt(dd[1]), b = parseInt(dd[2]), year = parseInt(dd[3]);
+      // A day or month of 0 is not a date anyone wrote: it is a digit OCR
+      // lost ("0/09/2026" for "30/09/2026" on this platform's own seal
+      // footer, 25 findings on the evidence-bundle-4 run). Not a claim of
+      // the record, so not an impossible date; the OCR provenance names the
+      // page for a person to read.
+      if (a === 0 || b === 0) continue;
+      // A date followed by a clock time in the company of a seal footer's
+      // other words (hash, seal id, zone name, page marker) is the stamp. An
+      // email header's or a till slip's own timestamp is the record's and
+      // is still checked.
+      if (VO_CLOCK_AFTER_RE.test(String(dates[d].after || '')) && voIsStampContext(textBlocks[dates[d].page], dates[d].idx, dates[d].raw.length)) continue;
+      var okDMY = voValidMD(b, a, year); // day=a, month=b  (DD/MM/YYYY)
+      var okMDY = voValidMD(a, b, year); // month=a, day=b  (MM/DD/YYYY)
+      if (!okDMY && !okMDY) {
+        // Year horizon. A dotted triplet whose "year" no document could carry
+        // is not a date anyone wrote: "15.20.9094" and "15.20.9115" on the
+        // Greensky customs invoices (3 October 2026 run, pp. 408-438) are
+        // commodity-code tokens, and the engine sealed them as fourteen
+        // "Impossible date" findings under fraud law. A date-shaped token is
+        // only a date when its year field could be one (1200-2200 spans every
+        // documentary horizon); an impossible day/month WITH a plausible year
+        // (31/02/2021, 15.20.2025) keeps firing - that is the signature of a
+        // fabricated or mistyped date, not of a part number.
+        if (year < 1200 || year > 2200) continue;
+        var why = (a === 2 || b === 2) ? 'February cannot have that many days' : 'not a real calendar date';
+        var impKey = dates[d].raw + '|' + why;
+        if (!voImpByRaw[impKey]) { voImpByRaw[impKey] = { raw: dates[d].raw, why: why, pages: [] }; voImpRaw.push(impKey); }
+        if (voImpByRaw[impKey].pages.indexOf(dates[d].page + 1) === -1) voImpByRaw[impKey].pages.push(dates[d].page + 1);
+      } else {
+        // Only one reading is valid -- record which convention it forces, so a
+        // bundle that genuinely mixes BOTH can be noted once (below).
+        if (okDMY && !okMDY && a > 12) voSawDMY = voSawDMY || dates[d]; // first field >12 -> must be DD/MM
+        if (okMDY && !okDMY && b > 12) voSawMDY = voSawMDY || dates[d]; // second field >12 -> must be MM/DD
+      }
+    }
+    // One finding per distinct impossible token, every page it appears on cited.
+    for (var ik = 0; ik < voImpRaw.length; ik++) {
+      var imp = voImpByRaw[voImpRaw[ik]];
+      var impList = imp.pages.length > 8 ? imp.pages.slice(0, 8).join(', ') + ' and ' + (imp.pages.length - 8) + ' more' : imp.pages.join(', ');
+      findings.push({ type: 'CT03', severity: 5,
+        evidence: 'Impossible date: ' + imp.raw + ' (' + imp.why + ' read as day/month/year or month/day/year)' +
+          (imp.pages.length > 1 ? ' — the same token appears on ' + imp.pages.length + ' pages (' + impList + ')' : ''),
+        location: 'Page ' + impList, pages: imp.pages.slice() });
+    }
+    // A single anchored, non-overclaiming note when ONE document mixes
+    // conventions. Two documents of a bundle written in two conventions are
+    // two documents, not one mixed one (Combine 06 April 2026: "31/07/2016"
+    // on p. 110 and "12/30/2020" on p. 147, in different documents).
+    var d03Segs = voDetectDocuments(textBlocks) || [];
+    var d03Key = voDocKeyOf(d03Segs, textBlocks.length);
+    // One stated document, or one unnumbered run within twenty pages (a
+    // schedule printed without page numbers is still one document).
+    var d03SameDoc = function (pa, pb) { return pa === pb || !d03Segs.length || (d03Key(pa) === d03Key(pb) && (d03Key(pa).charAt(0) === 'd' || Math.abs(pa - pb) <= 20)); };
+    if (voSawDMY && voSawMDY && d03SameDoc(voSawDMY.page, voSawMDY.page)) {
+      findings.push({ type: 'CT03', severity: 2,
+        evidence: 'Document mixes date formats: "' + voSawDMY.raw + '" reads as day/month/year while "' + voSawMDY.raw + '" reads as month/day/year -- numeric dates in this bundle are ambiguous; confirm the intended reading before relying on any date',
+        location: 'Page ' + (voSawDMY.page + 1) + ' vs Page ' + (voSawMDY.page + 1) });
+    }
+
+    // A *labelled* date stated at two different values -- "Effective Date:
+    // January 15, 2023" here, "Effective Date: March 1, 2023" there -- is the
+    // date analogue of D02's restated amounts, and was previously invisible:
+    // this detector only checked for impossible calendar dates. Same window
+    // discipline as D02: a date belongs to a label only if it appears before
+    // the next label, so a label with no date cannot borrow a neighbour's.
+    var DATE_LABEL_RE = /\b(effective date|execution date|date signed|signed on|dated|date of signature|signature date|commencement date|termination date|expiry date|expiration date|invoice date|due date|closing date|notice date|meeting date|date of birth)\b/gi;
+    var MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+    // Month-name formats plus ISO (YYYY-MM-DD). Ambiguous day/month numeric
+    // formats (DD/MM vs MM/DD) are still excluded because a false "restated
+    // date" is a fabricated allegation -- but ISO is unambiguous, so a labelled
+    // ISO date restated at two values is safe to flag.
+    var LABELLED_DATE_RE = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})|(\d{4})-(\d{2})-(\d{2}))\b/;
+    function normDate(m) {
+      var day, mon, year;
+      if (m[1]) { day = +m[1]; mon = MONTHS[m[2].slice(0, 3).toLowerCase()]; year = +m[3]; }
+      else if (m[4]) { mon = MONTHS[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
+      else { year = +m[7]; mon = +m[8]; day = +m[9]; }
+      if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
+      return { key: year * 10000 + mon * 100 + day, raw: m[0] };
+    }
+    var byDateLabel = {};
+    for (var b = 0; b < textBlocks.length; b++) {
+      var block = textBlocks[b];
+      var marks = [];
+      DATE_LABEL_RE.lastIndex = 0;
+      var lm;
+      while ((lm = DATE_LABEL_RE.exec(block)) !== null) {
+        marks.push({ text: lm[0], start: lm.index, end: lm.index + lm[0].length });
+      }
+      for (var k = 0; k < marks.length; k++) {
+        var from = marks[k].end;
+        var boundary = k + 1 < marks.length ? marks[k + 1].start : block.length;
+        var to = Math.min(boundary, from + 50);
+        if (to <= from) continue;
+        var dm = block.slice(from, to).match(LABELLED_DATE_RE);
+        if (!dm) continue;
+        var nd = normDate(dm);
+        if (!nd) continue;
+        var lab = marks[k].text.toLowerCase().replace(/\s+/g, ' ');
+        if (!byDateLabel[lab]) byDateLabel[lab] = [];
+        byDateLabel[lab].push({ key: nd.key, raw: nd.raw, page: b });
+      }
+    }
+    for (var lab2 in byDateLabel) {
+      if (!Object.prototype.hasOwnProperty.call(byDateLabel, lab2)) continue;
+      var st = byDateLabel[lab2].slice().sort(function (x, y) { return x.key - y.key; });
+      // A generic date label ("dated") carrying MANY distinct dates is an index
+      // of separately-dated documents in a bundle, not one date restated -- on
+      // the Louw v Moolla scan "dated" alone produced 10 false findings. A
+      // genuine restatement is one labelled date given as two (occasionally
+      // three) values; more than that means it is a list, so skip the group.
+      var distinctD = {};
+      for (var di = 0; di < st.length; di++) distinctD[st[di].key] = true;
+      if (Object.keys(distinctD).length > 3) continue;
+      // A GENERIC label ("dated", "signed on") may only pair values on the
+      // SAME page. Across a bundle, "dated 6 April" on p.5 and "dated 30
+      // April" on p.368 are two separately-dated letters, not one date
+      // restated — the Greensky run reported exactly that pair as a HIGH
+      // finding twice. A qualified label ("termination date", "effective
+      // date") names ONE event, so it still pairs across pages; and a generic
+      // label restated on one page (the p.95 termination conflict pattern)
+      // still fires.
+      // A label that every instrument of its kind carries ("invoice date",
+      // "due date", a person's "date of birth") names one date PER instrument:
+      // two invoices dated 20 January and 31 March are two invoices
+      // (Combine 06 April 2026, p. 49 vs p. 680). They pair on one page only.
+      var GENERIC_DATE_LABEL = { 'dated': 1, 'date signed': 1, 'signed on': 1, 'invoice date': 1, 'due date': 1, 'date of birth': 1, 'notice date': 1, 'meeting date': 1 };
+      var base2 = st[0];
+      var seenKeys2 = {};
+      for (var q = 1; q < st.length; q++) {
+        if (st[q].key === base2.key) continue;
+        if (seenKeys2[st[q].key]) continue; // a repeated value is one discrepancy, not many
+        if (GENERIC_DATE_LABEL[lab2] && st[q].page !== base2.page) continue;
+        // An event label ("termination date") names one event of ONE
+        // instrument: across the documents of a bundle it is compared only
+        // inside one stated document.
+        if (!d03SameDoc(base2.page, st[q].page)) continue;
+        seenKeys2[st[q].key] = true;
+        findings.push({ type: 'CT03', severity: 4,
+          evidence: '"' + lab2 + '" is stated as ' + base2.raw + ' and as ' + st[q].raw,
+          location: 'Page ' + (base2.page + 1) + ' vs Page ' + (st[q].page + 1) });
+      }
+    }
+    return findings;
+  },
+
+  D04_DETECT_TEMPORAL_IMPOSSIBILITY: function(textBlocks) {
+    var findings = [];
+    var fullText = textBlocks.join(' ').toLowerCase();
+    // A temporal conflict requires the two opposing markers to describe the SAME
+    // event, so they must sit close together (one clause/sentence). The old
+    // version flagged the pair if each word merely appeared SOMEWHERE in the
+    // document -- on a long legal bundle "preceding"/"following" and
+    // "earlier"/"later" are ordinary relational words that co-occur by default,
+    // so it fired on essentially every multi-page file (a confirmed false
+    // positive on the 148-page scanned bundle). The bare relational pairs are
+    // dropped entirely (no forensic signal); the phrase pairs are kept but only
+    // when they appear within a short window of each other.
+    var PROXIMITY = 140;
+    var impossibleSequences = [
+      ['before the incident','after the incident'],
+      ['prior to','subsequent to']
+    ];
+    for (var i = 0; i < impossibleSequences.length; i++) {
+      var a = impossibleSequences[i][0], b = impossibleSequences[i][1];
+      var near = false, from = 0, ai;
+      while ((ai = fullText.indexOf(a, from)) !== -1) {
+        // b within PROXIMITY chars on either side of this occurrence of a.
+        var windowStart = Math.max(0, ai - PROXIMITY);
+        var windowEnd = ai + a.length + PROXIMITY;
+        if (fullText.substring(windowStart, windowEnd).indexOf(b) !== -1) { near = true; break; }
+        from = ai + a.length;
+      }
+      if (near) {
+        findings.push({ type: 'CT04', severity: 3,
+          evidence: 'Temporal language conflict: "' + a + '" and "' + b + '" describe the same event',
+          location: 'Full document' });
+      }
+    }
+
+    // Billing after a stated expiry. On the AllFuels bundle, rent was invoiced
+    // in March 2026 under a lease the record says expired 31 July 2024 — the
+    // engine reported the amounts but missed the sequence, which is the
+    // load-bearing fact. Deterministic: a date labelled as a lease/agreement
+    // expiry or termination, and an invoice/statement dated LATER, both quoted
+    // and anchored. Month-name and ISO dates only (numeric DD/MM vs MM/DD is
+    // ambiguous — same discipline as D03). The latest stated expiry is the
+    // baseline, so a renewed agreement whose expiry postdates the invoices
+    // never fires; whether the invoice belongs to the expired instrument is
+    // for the reviewer — the finding says exactly that.
+    var VO_EXP_LABEL = /\b(?:lease|agreement|contract|licen[cs]e|franchise)\s+(?:(?:shall\s+)?(?:expire[sd]?|terminate[sd]?)(?:\s+on)?|expiry\s+date|expiration\s+date|termination\s+date)\b[:\s]*|\b(?:expiry|expiration|termination)\s+date\s+of\s+the\s+(?:lease|agreement|contract)\b[:\s]*/gi;
+    // On a real invoice page "TAX INVOICE" is a heading and "Date:" sits in
+    // the details block below it — the adjacency-only pattern never matched,
+    // so the AllFuels p.334 invoice was invisible to this check across two
+    // runs. The bridged alternative requires the strong "tax invoice" heading
+    // (bare "invoice" bridges too easily in prose) and an explicit Date label
+    // within 120 chars.
+    var VO_INV_LABEL = /\b(?:tax\s+invoice|invoice|statement)\s+(?:date[d]?|issued)(?:\s+on)?\b[:\s]*|\btax\s+invoice\b[^]{0,120}?\bdate\s*[:\-]\s*|\binvoiced\s+on\b[:\s]*/gi;
+    // Month-name, ISO, and numeric DD/MM/YYYY dates. A numeric date is
+    // ambiguous (01/03/2026 is 1 March or 3 January), so it carries BOTH
+    // readings as a range [keyMin, keyMax]; the comparison below only fires
+    // when it holds under EVERY reading — the invoice on the AllFuels bundle
+    // was dated "01/03/2026" and was invisible to the month-name-only check,
+    // even though both readings put it two years past the stated expiry.
+    var VO_TL_DATE = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})|(\d{4})-(\d{2})-(\d{2})|(\d{1,2})[\/\-.](\d{1,2})[\/\-.](\d{4}))\b/;
+    var VO_TL_MONTHS = { jan:1, feb:2, mar:3, apr:4, may:5, jun:6, jul:7, aug:8, sep:9, oct:10, nov:11, dec:12 };
+    function voTlKey(y, mo, d) { return y * 10000 + mo * 100 + d; }
+    function voTlDate(m) {
+      var day, mon, year;
+      if (m[1]) { day = +m[1]; mon = VO_TL_MONTHS[m[2].slice(0, 3).toLowerCase()]; year = +m[3]; }
+      else if (m[4]) { mon = VO_TL_MONTHS[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
+      else if (m[7]) { year = +m[7]; mon = +m[8]; day = +m[9]; }
+      else {
+        // Numeric: keep every valid reading (DD/MM and MM/DD).
+        var a = +m[10], b = +m[11], yr = +m[12];
+        var keys = [];
+        if (b >= 1 && b <= 12 && a >= 1 && a <= 31) keys.push(voTlKey(yr, b, a)); // DD/MM
+        if (a >= 1 && a <= 12 && b >= 1 && b <= 31) keys.push(voTlKey(yr, a, b)); // MM/DD
+        if (!keys.length) return null;
+        return { keyMin: Math.min.apply(null, keys), keyMax: Math.max.apply(null, keys), raw: m[0] };
+      }
+      if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
+      var k = voTlKey(year, mon, day);
+      return { keyMin: k, keyMax: k, raw: m[0] };
+    }
+    // Same window discipline as D02/D03: a label's date must lie strictly
+    // BEFORE the next label of either kind. A fixed lookahead let an expiry
+    // label with no date of its own ("Lease expiry date: see schedule.
+    // Invoice date: 31 July 2024") borrow the next field's date and
+    // manufacture an expiry the record never states.
+    function voTlCollect(blocks) {
+      var exp = [], inv = [];
+      for (var b = 0; b < blocks.length; b++) {
+        var block = blocks[b] || '';
+        var marks = [], lm;
+        VO_EXP_LABEL.lastIndex = 0;
+        while ((lm = VO_EXP_LABEL.exec(block)) !== null) marks.push({ kind: 'exp', start: lm.index, end: lm.index + lm[0].length });
+        VO_INV_LABEL.lastIndex = 0;
+        while ((lm = VO_INV_LABEL.exec(block)) !== null) marks.push({ kind: 'inv', start: lm.index, end: lm.index + lm[0].length });
+        marks.sort(function (x, y) { return x.start - y.start; });
+        for (var k = 0; k < marks.length; k++) {
+          var from = marks[k].end;
+          var boundary = k + 1 < marks.length ? marks[k + 1].start : block.length;
+          var to = Math.min(boundary, from + 50);
+          if (to <= from) continue;
+          var dm = block.slice(from, to).match(VO_TL_DATE);
+          if (!dm) continue;
+          var nd = voTlDate(dm);
+          if (!nd) continue;
+          var quote = block.slice(marks[k].start, from + dm.index + dm[0].length).replace(/\s+/g, ' ').trim();
+          (marks[k].kind === 'exp' ? exp : inv).push({ keyMin: nd.keyMin, keyMax: nd.keyMax, raw: nd.raw, page: b, quote: quote });
+        }
+      }
+      return { expiries: exp, invoices: inv };
+    }
+    var _tl = voTlCollect(textBlocks);
+    var expiries = _tl.expiries;
+    var invoices = _tl.invoices;
+    // The invoice must be billing under THE EXPIRED INSTRUMENT, not merely a
+    // later date somewhere in the bundle. Annexure EB sealed "agreement expired
+    // 28 Feb 2018" (p.326) against an invoice of 2025 (p.412) from a different
+    // exhibit. Two deterministic links are required where the record offers
+    // them: the pages lie in the same document when the bundle states its own
+    // document boundaries (voDetectDocuments), and the company names printed
+    // on the two pages overlap when both pages print any. A page that names no
+    // company cannot be excluded on that ground; the finding still tells the
+    // reader to verify the instrument.
+    var tlSegs = voDetectDocuments(textBlocks) || [];
+    var tlDocOf = voDocKeyOf(tlSegs, textBlocks.length);
+    var TL_COMPANY_RE = /\b([A-Z][A-Za-z&'.-]*(?:\s+[A-Z0-9][A-Za-z0-9&'.-]*){0,4})\s+(?:\(Pty\)\s*Ltd|Pty\s*Ltd|\(Proprietary\)\s*Limited|Limited|Ltd|CC|Inc\.?|Incorporated|LLC|PLC)\b/g;
+    var tlCompanies = function (pageIdx) {
+      var out = {}, any = false, m2, txt = String(textBlocks[pageIdx] || '');
+      TL_COMPANY_RE.lastIndex = 0;
+      while ((m2 = TL_COMPANY_RE.exec(txt)) !== null) {
+        var k = m2[1].toLowerCase().replace(/[^a-z0-9]/g, '');
+        if (k.length >= 4) { out[k] = true; any = true; }
+      }
+      return any ? out : null;
+    };
+    var tlLinked = function (a, b) {
+      if (a.page === b.page) return true;
+      if (tlSegs.length && tlDocOf(a.page) !== tlDocOf(b.page)) return false;
+      var ca = tlCompanies(a.page), cb = tlCompanies(b.page);
+      // Pages no stated document covers (a run of unnumbered pages in a
+      // bundle) are linked only by a positive mark — a company both pages
+      // name — never by default: "lease expires – never renewed 11 Dec 2018"
+      // in a page of notes and an invoice 48 pages away were sealed as
+      // "billing after the stated expiry" (Combine 06 April 2026, p. 97 vs
+      // p. 49).
+      // Adjacent pages of one unnumbered run (within five) are one schedule.
+      if (tlSegs.length && tlDocOf(a.page).charAt(0) === 'u' && Math.abs(a.page - b.page) > 5 && (!ca || !cb)) return false;
+      if (!ca || !cb) return true;
+      for (var k in ca) { if (cb[k]) return true; }
+      return false;
+    };
+    if (expiries.length && invoices.length) {
+      // Conservative under ambiguity: the baseline expiry is the LATEST
+      // reading of any stated expiry, and an invoice counts as late only when
+      // its EARLIEST reading is still after that — so no ambiguous numeric
+      // date can ever manufacture the finding.
+      var lastExp = expiries[0];
+      for (var e2 = 1; e2 < expiries.length; e2++) if (expiries[e2].keyMax > lastExp.keyMax) lastExp = expiries[e2];
+      var late = invoices.filter(function (iv) { return iv.keyMin > lastExp.keyMax && tlLinked(lastExp, iv); });
+      // Dedupe repeated identical invoice dates; cap the citation list.
+      var seenIv = {}, cited = [];
+      for (var v2 = 0; v2 < late.length; v2++) {
+        if (seenIv[late[v2].keyMin]) continue;
+        seenIv[late[v2].keyMin] = true;
+        cited.push(late[v2]);
+      }
+      if (cited.length) {
+        var ivDesc = cited.slice(0, 3).map(function (iv) { return iv.raw + ' (p.' + (iv.page + 1) + ')'; }).join(', ');
+        findings.push({ type: 'CT04', severity: 4,
+          evidence: 'Billing after the stated expiry: the record states an expiry/termination — "' + lastExp.quote + '" (p.' + (lastExp.page + 1) + ') — yet ' + (cited.length === 1 ? 'an invoice is' : cited.length + ' invoices are') + ' dated after it: ' + ivDesc + '. Verify the invoice(s) relate to the expired instrument and on what authority the billing continued',
+          location: 'Page ' + (lastExp.page + 1) + ' vs Page ' + cited.slice(0, 3).map(function (iv) { return iv.page + 1; }).join(', ') });
+      }
+    }
+    return findings;
+  },
+
+  D05_DETECT_LOGICAL_IMPOSSIBILITY: function(textBlocks) {
+    var findings = [];
+    // One flat phrase list. The old nested pairs were only ever read at index
+    // [0], so "registered and dissolved" and "appointed and removed" were
+    // unreachable. Each phrase must occur WITHIN one sentence — a state pair
+    // split across sentences is narrative, not an impossible state.
+    var impossibleStates = [
+      'active and deregistered',
+      'registered and dissolved',
+      'solvent and insolvent',
+      'employed and terminated',
+      'appointed and removed'
+    ];
+    var seen = {};
+    for (var i = 0; i < textBlocks.length; i++) {
+      var sentences = String(textBlocks[i] || '').toLowerCase().split(/[.!?;]+/);
+      for (var s = 0; s < sentences.length; s++) {
+        for (var p = 0; p < impossibleStates.length; p++) {
+          if (seen[impossibleStates[p]]) continue;
+          if (sentences[s].indexOf(impossibleStates[p]) !== -1) {
+            seen[impossibleStates[p]] = true;
+            findings.push({ type: 'CT06', severity: 5,
+              evidence: 'Logically impossible state: "' + impossibleStates[p] + '"',
+              location: 'Page ' + (i + 1) });
+          }
+        }
+      }
+    }
+    return findings;
+  },
+
+  // D06-D10: Identity detectors
+  D06_DETECT_IDENTITY_CONFLICT: function(textBlocks) {
+    var findings = [];
+    var idPatterns = [
+      /\b\d{6}\s?\d{4}\s?\d{2}\s?\d\b/g,        // SA ID: 13 digits (YYMMDD SSSS C A Z), spaces tolerated
+      /\b[A-Z]{2}\d{7,10}\b/g,                    // Passport patterns
+      /\b[A-Z]{1,2}\d{6,8}[A-Z]?\b/g              // Generic ID
+    ];
+    // Context, not shape alone. The old 13-digit pattern was one digit short
+    // (it matched 12) and the letter+digits pattern matched Rand amounts: the
+    // annexure EB run reported "R103509, R129749, R2489726, R2653184" — lease
+    // rentals — as "identity-shaped numbers". A currency prefix is never an
+    // identity, a 13-digit value must start with a plausible YYMMDD, and a
+    // lettered code counts only when the record labels it (ID, identity,
+    // passport) within the same passage.
+    var ID_CUE = /\b(?:id|i\.d\.|identity|identification|passport|id no\.?|id number|identity number)\b/i;
+    var CURRENCY_PREFIX = /^(?:R|ZAR|N|P|K|USD|GBP|EUR|AED|Rs)$/;
+    // Classify the identifier TYPE before comparing. The Louw v Naidoo run
+    // (evidence-bundle-6-docs) fused one man's SA ID, a DFFE fishing-right
+    // number and a second man's SA ID into "4 different identity numbers
+    // attributed to one labelled subject": the right number LF210223 is not an
+    // identity number at all, and "4805175068087" / "480517 5068 08 7" are the
+    // SAME ID typed solid and spaced. A finding only fires within ONE identifier
+    // type ('said' = 13-digit SA ID led by a plausible YYMMDD; 'alpha' = a
+    // labelled passport/lettered code). Fishing/sardine rights (LF…, KSBS…),
+    // vessel registrations (DTD…) and company registrations (NNNN/NNNNNN/NN,
+    // CK…) are other kinds of number and never an identity. The canonical form
+    // (digits only for 'said') is what dedupes the spaced/solid pair.
+    var idCanon = function (value) { return value.replace(/\s+/g, '').toUpperCase(); };
+    // A letter-prefixed code is only EXCLUDED as a right/vessel/company number
+    // when the surrounding text labels it one; otherwise a labelled passport or
+    // identity code that happens to share a reserved prefix (an "LF…"/"CK…"
+    // passport) is still classified. The 13-digit SA-ID and the
+    // NNNN/NNNNNN/NN company shapes are unambiguous and need no cue.
+    var RIGHT_CUE = /\b(?:right|permit|licen[cs]e|quota|fishing|linefish|sardine|seine|zone)\b/i;
+    var VESSEL_CUE = /\b(?:vessel|boat|ski-?boat|craft|hull|samsa|dinghy|registration of)\b/i;
+    var COMPANY_CUE = /\b(?:cc|close corp|\(pty\)|company reg|cipc|enterprise|holdings)\b/i;
+    var idClass = function (value, around) {
+      var cx = String(around || '');
+      var v = value.replace(/\s+/g, '');
+      if (/^\d{13}$/.test(v)) {
+        var mm = +v.slice(2, 4), dd = +v.slice(4, 6);
+        return (mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31) ? 'said' : null;
+      }
+      if (/^\d{4}\/\d{6}\/\d{2}$/.test(v)) return null;            // company registration (unambiguous shape)
+      if (/^(?:LF|KSBS)\d/i.test(v) && RIGHT_CUE.test(cx)) return null;   // fishing / sardine-beach-seine right
+      if (/^DTD\d+[A-Z]?$/i.test(v) && VESSEL_CUE.test(cx)) return null;  // vessel registration
+      if (/^CK\d/i.test(v) && COMPANY_CUE.test(cx)) return null;          // close-corporation registration
+      if (/^[A-Z]{1,2}\d{6,10}[A-Z]?$/.test(v)) return 'alpha';    // labelled passport / lettered identity code
+      return null;
+    };
+    // Whose identity? A lease names the lessor's and the lessee's identity
+    // numbers; an affidavit carries the deponent's and the commissioner's.
+    // Two people, two numbers, is the ordinary shape of a South African
+    // instrument, not a contradiction. The finding fires only when the SAME
+    // person (nearest capitalised name before the value) carries two
+    // different numbers, or when two labelled values with no visible name
+    // sit in one passage.
+    var personRe = /\b([A-Z][a-z]+(?:\s+[A-Z][a-z]+){1,3})\b/g;
+    var NOT_PERSON = /^(?:Identity|Passport|Number|South|Department|Republic|Home Affairs|Commissioner|Applicant|Deponent|Lessor|Lessee|Franchisor|Franchisee)/;
+    function personBefore(text, idx) {
+      var pre = text.slice(Math.max(0, idx - 120), idx), m, lastName = null;
+      personRe.lastIndex = 0;
+      while ((m = personRe.exec(pre)) !== null) {
+        var nm = m[1].replace(/^(?:Applicant|Deponent|Holder|Lessor|Lessee|Franchisor|Franchisee|Mr|Mrs|Ms|Dr|Adv|Prof)\s+/, '');
+        if (nm.indexOf(' ') === -1 || NOT_PERSON.test(nm)) continue;
+        lastName = nm;
+      }
+      return lastName ? lastName.toLowerCase() : null;
+    }
+    var ids = [];
+    for (var i = 0; i < textBlocks.length; i++) {
+      for (var p = 0; p < idPatterns.length; p++) {
+        var match;
+        while ((match = idPatterns[p].exec(textBlocks[i])) !== null) {
+          var val = match[0];
+          var around = textBlocks[i].slice(Math.max(0, match.index - 60), match.index + val.length + 20);
+          if (!ID_CUE.test(around)) continue; // an unlabelled number is a reference or a barcode, not an identity
+          if (p === 0) {
+            var digits = val.replace(/\s+/g, '');
+            var mm = +digits.slice(2, 4), dd = +digits.slice(4, 6);
+            if (mm < 1 || mm > 12 || dd < 1 || dd > 31) continue; // not a YYMMDD-led identity number
+          } else {
+            var letters = (val.match(/^[A-Z]+/) || [''])[0];
+            if (CURRENCY_PREFIX.test(letters)) continue; // R103509 is money, not a person
+          }
+          var cls = idClass(val, around);
+          if (!cls) continue; // a right/permit, vessel or company number is not an identity
+          ids.push({ value: val, canon: idCanon(val), cls: cls, page: i, pos: match.index, who: personBefore(textBlocks[i], match.index) });
+        }
+      }
+    }
+    // Check for same person with different IDs
+    var names = [];
+    var nameRe = /\b([A-Z][a-z]+\s+[A-Z][a-z]+)\b/g;
+    for (var j = 0; j < textBlocks.length; j++) {
+      var nm;
+      while ((nm = nameRe.exec(textBlocks[j])) !== null) {
+        names.push({ value: nm[1], page: j });
+      }
+    }
+    // Count DISTINCT values, not raw matches: on a bank statement the same
+    // reference code repeats on every line, which made the old count report
+    // "3 different ID numbers" when it was one code seen three times. And a
+    // finding that cannot say WHICH numbers is not actionable -- cite-or-stay-
+    // silent -- so name the values and stay honest that they are ID-*shaped*
+    // strings (a Capitec client reference matches the same pattern as an ID).
+    // Group distinct canonical values to ONE subject, and keep each subject's
+    // conflict SEPARATE: two people, each carrying two IDs, are two findings,
+    // never one list of four attributed to the last name seen. A subject is the
+    // SAME resolved name (keyed per identifier type), or — for ambiguous
+    // lettered codes with no visible name — one passage (same page). Two
+    // different 13-digit SA IDs with no name between them are the ordinary
+    // lessor/lessee shape, not one subject, so a 'said' pair never groups on the
+    // no-name branch. Values of different identifier types are never grouped;
+    // canonical de-duplication collapses the solid/spaced form of one ID.
+    var groups = {};
+    var addToGroup = function (key, whoName, e) {
+      var g = groups[key] || (groups[key] = { who: whoName || null, values: [], canon: {}, pages: {} });
+      if (!g.canon[e.canon]) { g.canon[e.canon] = 1; g.values.push(e.value); }
+      g.pages[e.page + 1] = 1;
+    };
+    for (var a = 0; a < ids.length; a++) {
+      for (var b = a + 1; b < ids.length; b++) {
+        var ea = ids[a], eb = ids[b];
+        if (ea.canon === eb.canon) continue;   // the same identity, solid vs spaced
+        if (ea.cls !== eb.cls) continue;        // an SA ID and a passport are two kinds of number, not a contradiction
+        var key = null, whoName = null;
+        if (ea.who && eb.who && ea.who === eb.who) { key = 'who:' + ea.cls + ':' + ea.who; whoName = ea.who; }
+        else if (!ea.who && !eb.who && ea.cls === 'alpha' && ea.page === eb.page && Math.abs(ea.pos - eb.pos) <= 200) { key = 'pg:' + ea.page; }
+        if (!key) continue;
+        addToGroup(key, whoName, ea); addToGroup(key, whoName, eb);
+      }
+    }
+    Object.keys(groups).forEach(function (key) {
+      var g = groups[key];
+      if (g.values.length < 2) return;
+      var pgs = Object.keys(g.pages).map(Number).sort(function (x, y) { return x - y; });
+      findings.push({ type: 'CT09', severity: 4,
+        evidence: g.values.length + ' different identity numbers are attributed to ' + (g.who ? 'the same person (' + g.who.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }) + ')' : 'one labelled subject in the same passage') + ': ' +
+          g.values.slice(0, 6).join(', ') + (g.values.length > 6 ? ' …' : '') +
+          ' — confirm which is that person\'s identity number',
+        location: 'Pages ' + pgs.join(', ') });
+    });
+    return findings;
+  },
+
+  D07_DETECT_ROLE_CONTRADICTION: function(textBlocks) {
+    var findings = [];
+    var fullText = textBlocks.join(' ').toLowerCase();
+    // Only flag a role when the text EXPLICITLY challenges its authority. The old
+    // version flagged a role whenever a supporting-document phrase ("power of
+    // attorney", "trust deed", ...) was merely absent from the document -- but
+    // absence is not a contradiction, and it fired on ordinary documents that
+    // simply named an "authorized signatory" or "trustee".
+    var roles = ['managing director','company secretary','authorized signatory','executor','trustee','liquidator'];
+    var challenge = /(?:without (?:the )?authority|no authority|not authoris|not authorized|unauthoris|unauthorized|lacked (?:the )?authority|purport(?:ed|s|ing)?|falsely (?:claim|represent)|had no (?:power|right|mandate))/;
+    for (var i = 0; i < roles.length; i++) {
+      var idx = fullText.indexOf(roles[i]);
+      while (idx !== -1) {
+        var windowText = fullText.slice(Math.max(0, idx - 90), idx + roles[i].length + 90);
+        if (challenge.test(windowText)) {
+          findings.push({ type: 'CT10', severity: 3,
+            evidence: 'Role "' + roles[i] + '" is expressly challenged as lacking authority',
+            location: 'Full document' });
+          break;
+        }
+        idx = fullText.indexOf(roles[i], idx + 1);
+      }
+    }
+    return findings;
+  },
+
+  D08_DETECT_AUTHORITY_EXCEEDED: function(textBlocks) {
+    var findings = [];
+    var fullText = textBlocks.join(' ').toLowerCase();
+    // Bound the gap: an unbounded .*? with match() stretched from the first
+    // "signed by" to any later anchor, capturing hundreds of chars (including
+    // seal-footer debris) as one "finding". Cap it so only a genuinely local
+    // "approved by <junior role>" phrase matches. Dots in p.p. are escaped.
+    var authorityPatterns = [
+      /approved\s+by\s+.{0,40}?(?:clerk|assistant|junior|trainee)/gi,
+      /authorized\s+by\s+.{0,40}?(?:intern|temp|contractor)/gi,
+      /signed\s+by\s+.{0,40}?(?:on behalf of|p\.p\.|per pro)/gi
+    ];
+    // Negation gate: a phrase like "signed by or on behalf of" read out of a
+    // NEGATED clause ("… was never signed by or on behalf of the respondent")
+    // is the ABSENCE of a signature, not an excess of authority. The first
+    // non-negated match per pattern raises the finding; if every match is
+    // negated, none does. `.exec` (not `.match`) so the match index is known.
+    for (var i = 0; i < authorityPatterns.length; i++) {
+      var apat = authorityPatterns[i]; apat.lastIndex = 0;
+      var am;
+      while ((am = apat.exec(fullText)) !== null) {
+        if (!voNegatedBefore(fullText, am.index)) {
+          findings.push({ type: 'CT11', severity: 4,
+            evidence: 'Potential authority exceeded: "' + am[0] + '"',
+            location: 'Full document' });
+          break; // one finding per pattern, as before
+        }
+        if (am.index === apat.lastIndex) apat.lastIndex++;
+      }
+    }
+
+    // ---- Revoked authority, later dated act ----
+    // External review of the test fixture: the record stated a person's
+    // signature authority was revoked on a date, and the same record showed
+    // that person signing and approving on later dates — and the engine said
+    // nothing. Both halves are the document's own words, so this is squarely
+    // detectable under cite-or-stay-silent. The finding states the two dated
+    // facts; whether the later act binds anyone is for the court.
+    // Guards:
+    //  - the revocation must be explicit ("authority revoked" / "revoked
+    //    signature authority" / "signature revoked") with a parseable date;
+    //  - the act needs an act word AND a date strictly AFTER the revocation,
+    //    close to the person's name — an act dated before the revocation was
+    //    within authority and stays silent;
+    //  - a dated re-grant/reinstatement after the revocation silences the
+    //    person entirely: the record answers its own question;
+    //  - name matching tolerates "M. Wellington" for "Marcus Wellington"
+    //    (initial + surname), nothing looser.
+    var VO_DATE_TXT = '(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\\.?\\s+\\d{1,2},?\\s+\\d{4}|\\d{1,2}\\s+(?:January|February|March|April|May|June|July|August|September|October|November|December|Jan|Feb|Mar|Apr|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)\\.?\\s+\\d{4}';
+    var revRe = new RegExp('([A-Z][\\w\'’.]*(?:\\s+[A-Z][\\w\'’.]*){0,3})[^.\\n]{0,60}?(?:(?:signature\\s+)?authority\\s+(?:was\\s+)?revoked|revoked\\s+signature\\s+authority)(?:[^A-Za-z0-9]{0,15}(' + VO_DATE_TXT + '))?', 'g');
+    var revokedPeople = {};
+    for (var rp = 0; rp < textBlocks.length; rp++) {
+      var rt = textBlocks[rp] || '', rm;
+      revRe.lastIndex = 0;
+      while ((rm = revRe.exec(rt)) !== null) {
+        var rname = rm[1].replace(/[,.]+$/, '').trim();
+        var rkey = voDateSortKey(rm[2] || '');
+        if (!rname || rkey === null) continue; // undated revocations cannot order an act
+        var rtoks = rname.split(/\s+/);
+        var surname = rtoks[rtoks.length - 1].toLowerCase();
+        if (!revokedPeople[surname] || rkey < revokedPeople[surname].dateKey) {
+          revokedPeople[surname] = { name: rname, firstInitial: rtoks[0].charAt(0).toLowerCase(),
+            dateKey: rkey, dateStr: rm[2], page: rp + 1,
+            quote: rt.substring(Math.max(0, rm.index - 10), rm.index + rm[0].length + 10).replace(/\s+/g, ' ').trim() };
+        }
+      }
+    }
+    for (var sk in revokedPeople) {
+      var person = revokedPeople[sk];
+      // Re-grant guard: a dated grant/reinstatement AFTER the revocation, near
+      // the same surname, means the record resolved itself — stay silent.
+      var regrantRe = new RegExp('\\b\\w*' + sk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b[^.\\n]{0,80}?authority[^.\\n]{0,20}?(?:granted|reinstated|restored)[^A-Za-z0-9]{0,15}(' + VO_DATE_TXT + ')', 'gi');
+      var regranted = false;
+      for (var gp = 0; gp < textBlocks.length && !regranted; gp++) {
+        var gm; regrantRe.lastIndex = 0;
+        while ((gm = regrantRe.exec(textBlocks[gp] || '')) !== null) {
+          var gkey = voDateSortKey(gm[1]);
+          if (gkey !== null && gkey > person.dateKey) { regranted = true; break; }
+        }
+      }
+      if (regranted) continue;
+      // Later dated act: the person's name (full, or initial + surname), an
+      // act word, and a parseable date after the revocation, all in one
+      // tight window.
+      var nameForms = new RegExp('\\b(?:' + person.name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '|' + person.firstInitial.toUpperCase() + '\\.?\\s+' + sk.charAt(0).toUpperCase() + sk.slice(1) + ')\\b');
+      var act = null;
+      for (var ap = 0; ap < textBlocks.length && !act; ap++) {
+        var at = textBlocks[ap] || '';
+        var nm2 = at.match(nameForms);
+        if (!nm2) continue;
+        var win = at.substring(Math.max(0, nm2.index - 120), nm2.index + 220);
+        if (!/sign|approv|authoriz/i.test(win)) continue;
+        var dre = new RegExp(VO_DATE_TXT, 'g'), dm2;
+        while ((dm2 = dre.exec(win)) !== null) {
+          var akey = voDateSortKey(dm2[0]);
+          if (akey !== null && akey > person.dateKey) {
+            act = { page: ap + 1, dateStr: dm2[0],
+              quote: win.replace(/\s+/g, ' ').trim().substring(0, 180) };
+            break;
+          }
+        }
+      }
+      if (act) {
+        findings.push({ type: 'CT11', severity: 4,
+          evidence: 'The record states ' + person.name + '’s signature authority was revoked ("' +
+            person.quote + '", p.' + person.page + ') and shows a later dated act by the same name ("' +
+            act.quote + '", p.' + act.page + ') — verify on what authority the later act was performed',
+          location: 'Pages ' + person.page + ', ' + act.page });
+      }
+    }
+    return findings;
+  },
+
+  D09_DETECT_ENTITY_STATUS_FAKE: function(textBlocks) {
+    var findings = [];
+    // A status word only counts when it is used ABOUT AN ENTITY. The old check
+    // paired any "registered" with any "liquidated" across the whole corpus, so
+    // "utilities is to be registered" (a lease clause) + a case-law mention of
+    // liquidation 200 pages away produced a CRITICAL "conflicting status"
+    // with no quotes — unverifiable, and read by reviewers as fabrication.
+    // Now: each status word must appear near an entity noun, common non-status
+    // uses of "registered" are excluded, and the finding quotes BOTH passages
+    // with their pages so it can be checked against the source in seconds.
+    var ENTITY_NEAR = /\b(compan(?:y|ies)|close corporation|\bcc\b|pty|ltd|limited|corporation|entity|entities|enterprise|business|firm|trust|incorporated)\b/i;
+    // Delivery-method uses may carry intervening words ("registered RECORDED
+    // DELIVERY letters" in the Greensky MOA notices clause slipped a strict
+    // "registered mail|letter" list and produced a CRITICAL false positive).
+    var NOT_STATUS_REGISTERED = /\bregistered\s+(?:[a-z]+\s+){0,2}?(?:mail|post|letters?|office|address|owner|deliver(?:y|ies))\b|\bto\s+be\s+registered\b|\bregistered\s+in\s+whose\s+name\b|\bregistered\s+against\b|\bis\s+to\s+be\s+registered\b/i;
+    // A status word inside a PROVISION ("shall be dissolved", "in the event of
+    // liquidation", "upon winding-up") describes a hypothetical, not the
+    // entity's current status — an MOA's dissolution clause is not a claim
+    // that the company IS dissolved.
+    var NOT_STATUS_PROVISION_BEFORE = /\b(?:shall|may|must|will|would|can|could|to)\s+be\s+(?:[a-z]+\s+){0,2}?$/i;
+    var NOT_STATUS_PROVISION_NEAR = /\bin\s+the\s+event\s+(?:of|that)\b|\bupon\s+(?:the\s+)?(?:dissolution|liquidation|winding[\s-]?up|deregistration)\b|\bon\s+(?:dissolution|liquidation|winding[\s-]?up)\b/i;
+    // Two more clause shapes seen in real franchise agreements (PD16 makes a
+    // false status "fact" the worst possible output, so these stay strict):
+    // (a) a conditional within the same sentence — "if/should/until the
+    //     Franchisee is finally liquidated ..." is a trigger, not a status;
+    // (b) an ENUMERATION of insolvency events joined by "or" — "liquidated or
+    //     placed under judicial management", "sequestrated or wound up". A
+    //     statement of an entity's actual status asserts ONE event; a clause
+    //     lists the menu. ("and" is excluded: "was liquidated in 2019 and
+    //     remains in liquidation" is an assertion, not a menu.)
+    var NOT_STATUS_CONDITIONAL = /\b(?:if|should|unless|until|where|whether)\b[^.!?]{0,80}\b(?:be|is|are|been|becomes?)\s+(?:finally\s+|provisionally\s+)?(?:liquidat|sequestrat|deregister|dissolv|wound|placed\s+under)/i;
+    var NOT_STATUS_EVENT_MENU = /\b(?:liquidat(?:ed|ion)|sequestrat(?:ed|ion)|deregist(?:ered|ration)|dissol(?:ved|ution)|wound\s+up|winding[\s-]?up)\b[^.!?]{0,40}\bor\b[^.!?]{0,40}\b(?:liquidat|sequestrat|deregist|dissolv|wound|winding|judicial\s+management|business\s+rescue|placed\s+under)/i;
+    var statusClaims = [
+      ['registered','deregistered','dissolved','liquidated'],
+      ['active','suspended','under administration'],
+      ['compliant','non-compliant','delinquent']
+    ];
+    function findStatusUse(word) {
+      // First occurrence of `word` used as an entity status; returns
+      // { page, snippet } or null.
+      // A Word-made "non‑compliant" carries U+2010-U+2013 or a soft hyphen.
+      var re = new RegExp('\\b' + word.replace(/ /g, '\\s+').replace(/-/g, '[-\‐-\–\­]') + '\\b', 'gi');
+      for (var b = 0; b < textBlocks.length; b++) {
+        var t = textBlocks[b] || '';
+        var m;
+        re.lastIndex = 0;
+        while ((m = re.exec(t)) !== null) {
+          var win = t.substring(Math.max(0, m.index - 90), Math.min(t.length, m.index + m[0].length + 90));
+          var pre = t.substring(Math.max(0, m.index - 40), m.index);
+          // "compliant" inside "non-compliant" is the negation itself, read a
+          // second time (\b falls at the hyphen): the Public Protector
+          // submission run paired one "non-compliant" with itself.
+          if (/\bnon[-‐-–­\s]?$/i.test(pre)) continue;
+          var excluded = ((word === 'registered') && NOT_STATUS_REGISTERED.test(win)) ||
+                         NOT_STATUS_PROVISION_BEFORE.test(pre) ||
+                         NOT_STATUS_PROVISION_NEAR.test(win) ||
+                         NOT_STATUS_CONDITIONAL.test(win) ||
+                         NOT_STATUS_EVENT_MENU.test(win);
+          if (!excluded && ENTITY_NEAR.test(win)) {
+            return { page: b + 1, idx: m.index, snippet: voSnapWindow(t, m.index - 90, m.index + m[0].length + 90) };
+          }
+        }
+      }
+      return null;
+    }
+    for (var i = 0; i < statusClaims.length; i++) {
+      var uses = [];
+      for (var j = 0; j < statusClaims[i].length; j++) {
+        var u = findStatusUse(statusClaims[i][j]);
+        if (!u) continue;
+        // Two status words at one place in the text are one claim, not two.
+        var overlaps = uses.some(function (x) { return x.page === u.page && Math.abs(x.idx - u.idx) < 24; });
+        if (!overlaps) uses.push({ word: statusClaims[i][j], page: u.page, idx: u.idx, snippet: u.snippet });
+      }
+      if (uses.length > 1) {
+        var a = uses[0], c = uses[1];
+        findings.push({ type: 'CT14', severity: 5,
+          evidence: 'Conflicting entity-status claims: "…' + a.snippet + '…" (' + a.word + ', page ' + a.page + ') vs "…' + c.snippet + '…" (' + c.word + ', page ' + c.page + ')',
+          location: a.page === c.page ? 'Page ' + a.page : 'Page ' + a.page + ' and Page ' + c.page });
+      }
+    }
+    return findings;
+  },
+
+  // D10-D15: Financial detectors
+  // D10 (VAT format) was removed: its regex only matched numbers already in
+  // the valid form, so the "invalid" branch was unreachable, and the claimed
+  // checksum does not exist for SA VAT numbers. A check that cannot fail is
+  // not a check. CT19 remains in the taxonomy for signed rule packages.
+
+  D11_DETECT_REGISTRATION_FAKE: function(textBlocks) {
+    var findings = [];
+    // A "registration number" is only what the document LABELS as one. The old
+    // detector matched any bare 14-digit run and flagged it "fake" merely
+    // because it recurred -- but a bank-statement reference (a Capitec client
+    // code is 14 digits) is not a registration number, and a genuine company
+    // registration number is SUPPOSED to recur across a document. Now: read the
+    // token sitting after an explicit registration cue, and flag it only when it
+    // is NOT a valid SA registration format. A number with no "registration"
+    // label (the bank reference) never fires; a valid one that recurs never
+    // fires. Each malformed value is reported once, anchored to its pages.
+    var cueRe = /(?:company\s+)?registration\s+(?:number|no\.?|nr\.?)|reg(?:istration)?\.?\s*(?:number|no\.?|nr\.?)|enterprise\s+(?:number|no\.?|nr\.?)|CIPC/gi;
+    // Every SA form: YYYY/NNNNNN/NN (companies), CKYYYY/NNNNNN/NN (close
+    // corporations, e.g. CK2000/071982/23 — the old pattern wanted two digits
+    // after CK and called a valid CC number fake on the annexure EB run), plus
+    // the compact CK forms.
+    // CK YY/NNNNN/NN is the classic close-corporation form ("CK 91/25755/23").
+    // K + YYYY + NNNNNN (optionally + NN, with or without slashes) is the form
+    // the CIPC portal itself prints an enterprise number in: "CIPC portal
+    // screenshots for Sanarth Fuels (K2016392549)" is enterprise number
+    // 2016/392549/07 and was sealed as "not a valid SA registration format"
+    // (evidence-bundle-7-docs, 5 October 2026).
+    var SA_REG = /^(?:\d{4}\/\d{6}\/\d{2}|CK\d{4}\/\d{6}\/\d{2}|CK\d{2}\/\d{5,6}\/\d{2}|CK\d{2}\/\d{5,6}|CK\d{7}|K(?:19|20)\d{2}\/?\d{6}(?:\/?\d{2})?)$/;
+    // One digit off the SA form (a middle group of 5 or 7): a typing or OCR
+    // slip is far likelier than a forgery — reported as a check, never as fake.
+    var NEAR_SA_REG = /^\d{4}\/\d{5,7}\/\d{2}$/;
+    // A VAT number (10 digits, leading 4) is not a company registration; the
+    // cue
+    // "VAT REGISTRATION NUMBER" is not a company registration label.
+    var VAT_SHAPE = /^4\d{9}$/;
+    // A 13-digit value led by a plausible YYMMDD is a natural person's identity
+    // number (a complainant on a CPA form gave one under "registration number").
+    var idShaped = function (v) {
+      if (!/^\d{12,13}$/.test(v)) return false;
+      var mm = +v.slice(2, 4), dd = +v.slice(4, 6);
+      return mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31;
+    };
+    // A registration issued by a FOREIGN registry is not supposed to match the
+    // SA format. On the Greensky run a RAKEZ (Ras Al Khaimah free-zone) licence
+    // number was reported "Registration Number Fake" at severity 4 because it
+    // failed the CIPC pattern — a false accusation manufactured out of a
+    // format mismatch. When the text around the cue names a foreign registry,
+    // the finding downgrades to a verification note against THAT registry.
+    var FOREIGN_REG_RE = /\brakez\b|ras\s+al\s+khaimah|free\s*zone|fz-?llc|\bfze\b|\bfzco\b|\buae\b|united arab emirates|dubai|abu dhabi|sharjah|ajman|\bdifc\b|\badgm\b|\bjafza\b|\bdmcc\b|companies house|\bein\b|delaware/i;
+    // Every clean SA registration number printed anywhere in the bundle, by its
+    // digits. A malformed token within two edits of one of them (a slash read
+    // as "1", a dropped slash, one digit misread) is an OCR reading of a known
+    // number, not a false number: the evidence-bundle-4 run sealed
+    // "20121226353/07" beside the clean "2012/226353/07" on another page.
+    // Clean numbers are harvested from native-text pages first (an OCR page's
+    // own misread can pass the format); only a bundle with no text page falls
+    // back to every page. The nearest twin wins, not the first in page order.
+    var cleanRegs = {}, cleanRegsAll = {};
+    var cleanRe = /\b(?:CK)?\d{4}\/\d{6}\/\d{2}\b|\bCK\s?\d{2}\/\d{5}\/\d{2}\b/g;
+    // A CK YY/NNNNN/NN number's twin is its long form 19YY/0NNNNN/NN, so an
+    // OCR reading "1991 1 G25755/" of "CK 91/25755/23" is repaired too.
+    var regDigits = function (v) {
+      var ck = /^CK\s?(\d{2})\/(\d{5})\/(\d{2})$/.exec(v);
+      return ck ? ['19' + ck[1] + '0' + ck[2] + ck[3], v.replace(/\D/g, '')] : [v.replace(/\D/g, '')];
+    };
+    for (var ci = 0; ci < textBlocks.length; ci++) {
+      var cmm, isOcrBlock = /^\s*\[OCR\]/.test(textBlocks[ci] || ''); cleanRe.lastIndex = 0;
+      while ((cmm = cleanRe.exec(textBlocks[ci] || '')) !== null) {
+        var rds = regDigits(cmm[0]);
+        for (var rd = 0; rd < rds.length; rd++) { cleanRegsAll[rds[rd]] = cmm[0]; if (!isOcrBlock) cleanRegs[rds[rd]] = cmm[0]; }
+      }
+    }
+    if (!Object.keys(cleanRegs).length) cleanRegs = cleanRegsAll;
+    var cleanDigits = Object.keys(cleanRegs);
+    // A short garbled token ("G25755/", "025755") is compared through every
+    // digit in the 40-character window after the cue ("1991 1 G25755/" reads
+    // 1991125755), and a reading OCR cut short is matched against the twin's
+    // leading digits.
+    var ocrVariantOf = function (v, win) {
+      var d = String(v).replace(/\D/g, '');
+      var wd = String(win || '').replace(/\D/g, '');
+      if (d.length < 10 && wd.length >= 8) d = wd;
+      if (d.length < 8 || d.length > 15) return null;
+      var best = null, bestDist = 3;
+      for (var k = 0; k < cleanDigits.length; k++) {
+        var full = cleanDigits[k], dist = 3;
+        if (Math.abs(full.length - d.length) <= 2) dist = full === d ? 0 : voEditDistance(full, d);
+        // A reading OCR cut short is matched against the twin's leading digits.
+        if (full.length > d.length) { var head = full.slice(0, d.length); var hd = head === d ? 0 : voEditDistance(head, d); if (hd < dist) dist = hd; }
+        if (dist < bestDist) { bestDist = dist; best = cleanRegs[full]; }
+      }
+      return best;
+    };
+    // "ID/Registration number" on a complaint form is one field for either
+    // number; a value that starts with a plausible date of birth is the
+    // person's identity number (OCR may have dropped a digit or two).
+    var idShapedLoose = function (v) {
+      var d = String(v).replace(/\D/g, '');
+      if (d.length < 10 || d.length > 13) return false;
+      var mm = +d.slice(2, 4), dd = +d.slice(4, 6);
+      return mm >= 1 && mm <= 12 && dd >= 1 && dd <= 31;
+    };
+    var bad = {}, repaired = [], unreadable = [];
+    for (var i = 0; i < textBlocks.length; i++) {
+      var block = textBlocks[i] || '';
+      var ocrPage = /^\s*\[OCR\]/.test(block);
+      cueRe.lastIndex = 0;
+      var cm;
+      while ((cm = cueRe.exec(block)) !== null) {
+        var before = block.slice(Math.max(0, cm.index - 12), cm.index);
+        if (/\bvat\s*$/i.test(before)) continue; // "VAT REGISTRATION NUMBER": a VAT number, not a company registration
+        var idField = /\b(?:id|identity(?:\s+number)?)\s*(?:\/|or|\|)\s*$/i.test(before);
+        var afterCue = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 40);
+        // "Registration number of complainant" is a person's field: a natural
+        // person's number there is an identity number (Combine 06 April 2026,
+        // p. 400, where OCR had dropped the form's "ID/").
+        if (!idField && /^\s*[:.]?\s*of\s+(?:the\s+)?(?:complainant|applicant|respondent|deponent|member|director|person|individual|claimant)\b/i.test(afterCue)) idField = true;
+        // The number must START within 40 characters of the cue but may run
+        // past that window: "CIPC company-history search on 2002/059909/23"
+        // was cut to "2002/059909/2" by a fixed 40-character slice and then
+        // called "not a valid SA registration format" (13 September 2026).
+        var after = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 40);
+        if (voLooksGarbled(after)) continue; // unreadable OCR around the cue: nothing to validate
+        var afterFull = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 70);
+        // "CK 91/25755/23" is written with a space after the prefix.
+        var tok = afterFull.match(/[A-Z]{0,2}\s?\d[\d\/]{5,19}/);
+        if (!tok || tok.index >= 40) continue;
+        // A bare "CIPC" names the registry, not a number: the number must sit
+        // right after it ("CIPC: 2016/392549/07"). Forty characters on, the
+        // first digits are whatever the sentence goes on to say — a document's
+        // seal id ("Cipc compilation (VO35E910616402, 31 pp") or a search date
+        // ("CIPC Search 20260907"), both sealed as false registration numbers
+        // in the evidence-bundle-7-docs index (5 October 2026).
+        // A "number" word between them still names the number ("listed with
+        // CIPC under the number 2016/39254/07").
+        if (/^cipc$/i.test(cm[0]) && tok.index > 12 && !/\b(?:number|no\.?|nr\.?)\s*[:#]?\s*$/i.test(afterFull.slice(0, tok.index))) continue;
+        var val = tok[0].replace(/\s+/g, '');
+        if (SA_REG.test(val)) continue; // a valid registration format is not "fake" (and the street number after it is not part of it)
+        // A token inside a Verum Omnis seal id (VO-XXXXXXXXXXXX, with or
+        // without the dash) is a seal, not a registration number.
+        var tokAt = cm.index + cm[0].length + tok.index;
+        if (/VO-?[0-9A-F]{0,12}$/i.test(block.slice(Math.max(0, tokAt - 14), tokAt)) && /^[0-9A-F]/i.test(block.charAt(tokAt))) continue;
+        // An eight-digit date (YYYYMMDD) after a bare "CIPC", or beside a
+        // "search" or "date" word, is a date stamp, not a registration. Under a
+        // registration label ("Registration No: 19991231") it is still checked.
+        var ymd = /^(19|20)\d{2}(\d{2})(\d{2})$/.exec(val);
+        if (ymd && +ymd[2] >= 1 && +ymd[2] <= 12 && +ymd[3] >= 1 && +ymd[3] <= 31 &&
+            (/^cipc$/i.test(cm[0]) || /\b(?:search(?:ed)?|dated?)\b[^.;]{0,12}$/i.test(block.slice(Math.max(0, tokAt - 24), tokAt)))) continue;
+        // An identity number typed with spaces ("510209 5091 08") reads as a
+        // shorter digit run: take the spaced digits only when the first run is
+        // digits alone and the spaced form is identity-length.
+        if (/^\d+$/.test(val)) {
+          var sp = after.match(/(\d[\d ]{9,16}\d)/);
+          if (sp) {
+            var spv = sp[1].replace(/\s+/g, '');
+            if (spv.length >= 12 && spv.length <= 13 && spv.indexOf(val) === 0) val = spv;
+            else if (idField && spv.indexOf(val) === 0 && idShapedLoose(spv)) val = spv; // an identity number OCR cut short
+          }
+        }
+        var context = block.slice(Math.max(0, cm.index - 300), cm.index + cm[0].length + 300);
+        if (VAT_SHAPE.test(val) && /\bvat\b/i.test(context)) continue; // a VAT number under a registration cue on a page that names VAT
+        // On an OCR page the characters are the recogniser's guess: a token
+        // within two edits of a clean number is a reading of it, and any other
+        // malformed token is unreadable — a note naming the page, never a
+        // finding (founder direction 14). On a native-text page the record
+        // printed exactly these characters: "1911/0001154/07" beside
+        // "1911/001154/07" in the same pleading is a one-digit discrepancy
+        // the Low check below reports as before.
+        // Under an "ID/Registration" cue a date-of-birth-shaped value is the
+        // person's identity number and is never "repaired" into a company
+        // number; under a plain registration cue a 12-digit run within two
+        // edits of a clean company number is that number with its slashes
+        // dropped (2002/059909/23 read as 200205930923), twin first.
+        var isIdField = idField && (idShaped(val) || idShapedLoose(val));
+        if (ocrPage && !isIdField) {
+          var cleanTwin = ocrVariantOf(val, after);
+          if (cleanTwin) { var rep1 = val + ' (p.' + (i + 1) + ') reads as ' + cleanTwin; if (repaired.indexOf(rep1) === -1) repaired.push(rep1); continue; }
+          if (!idShaped(val) && !FOREIGN_REG_RE.test(context)) {
+            var unr = '"' + block.substring(cm.index, cm.index + cm[0].length + tok.index + tok[0].length).replace(/\s+/g, ' ').trim() + '" (p.' + (i + 1) + ')';
+            if (unreadable.indexOf(unr) === -1) unreadable.push(unr);
+            continue;
+          }
+        }
+        // A person's field and a company's field are kept apart: one person's
+        // number in a complainant's field never silences the same number
+        // printed under a company's registration label elsewhere.
+        var bkey = isIdField ? val + '|id' : val;
+        if (!bad[bkey]) {
+          var quote = block.substring(cm.index, cm.index + cm[0].length + tok.index + tok[0].length).replace(/\s+/g, ' ').trim();
+          bad[bkey] = { pages: [], quote: quote, foreign: false, near: NEAR_SA_REG.test(val), idShaped: idShaped(val) || isIdField, idField: isIdField };
+        }
+        if (FOREIGN_REG_RE.test(context)) bad[bkey].foreign = true;
+        if (bad[bkey].pages.indexOf(i + 1) === -1) bad[bkey].pages.push(i + 1);
+      }
+    }
+    if (repaired.length) {
+      findings.push({ type: 'CT20', severity: 0, contextOnly: true,
+        evidence: 'Registration numbers read by OCR as variants of a number printed cleanly elsewhere in the bundle, not reported as findings: ' + repaired.slice(0, 8).join('; ') + (repaired.length > 8 ? ' and ' + (repaired.length - 8) + ' more' : ''),
+        location: 'Multiple pages' });
+    }
+    if (unreadable.length) {
+      findings.push({ type: 'CT20', severity: 0, contextOnly: true,
+        evidence: 'Registration numbers on OCR-recovered pages that could not be read reliably, not reported as findings until a person has read the page image: ' + unreadable.slice(0, 8).join('; ') + (unreadable.length > 8 ? ' and ' + (unreadable.length - 8) + ' more' : ''),
+        location: 'Multiple pages' });
+    }
+    for (var v in bad) {
+      if (!Object.prototype.hasOwnProperty.call(bad, v)) continue;
+      if (bad[v].foreign) {
+        findings.push({ type: 'CT20', severity: 2,
+          evidence: 'A registration number does not match the SA (CIPC) format, and the surrounding text names a foreign registry (e.g. RAKEZ/UAE) — verify it against that registry, not the SA format: "' + bad[v].quote + '"',
+          location: 'Page ' + bad[v].pages.join(', ') });
+      } else if (bad[v].idField) {
+        // An identity number in a person's ID/registration field is what the
+        // field asks for: an engine note, never a finding (it once counted as
+        // a Low finding; Combine 06 April 2026 printed two, pp. 400 and 425,
+        // for one person's number).
+        findings.push({ type: 'CT20', severity: 0, contextOnly: true,
+          evidence: 'An identity number in a person\'s ID/registration field is that person\'s identity number, not a company registration; not a finding: "' + bad[v].quote + '"',
+          location: 'Page ' + bad[v].pages.join(', ') });
+      } else if (bad[v].idShaped) {
+        findings.push({ type: 'CT20', severity: 2,
+          evidence: 'A number labelled as a registration is shaped like a natural person\'s identity number (13 digits led by a date of birth), not a company registration — confirm which the record means: "' + bad[v].quote + '"',
+          location: 'Page ' + bad[v].pages.join(', ') });
+      } else if (bad[v].near) {
+        findings.push({ type: 'CT20', severity: 2,
+          evidence: 'A number labelled as a registration is one digit off the SA (CIPC) format YYYY/NNNNNN/NN — a typing or OCR slip is likelier than a false number; verify against the CIPC record: "' + bad[v].quote + '"',
+          location: 'Page ' + bad[v].pages.join(', ') });
+      } else {
+        findings.push({ type: 'CT20', severity: 4,
+          evidence: 'A number labelled as a registration is not a valid SA registration format (expected YYYY/NNNNNN/NN or CK…): "' + bad[v].quote + '"',
+          location: 'Page ' + bad[v].pages.join(', ') });
+      }
+    }
+    return findings;
+  },
+
+  D12_DETECT_BANK_DETAIL_MISMATCH: function(textBlocks) {
+    var findings = [];
+    // Only treat a 9-12 digit number as a bank account when it sits next to
+    // banking context ("account", "a/c", "acc no", "bank", "branch", "iban").
+    // The old detector matched ANY 8+ digit run, so in a legal bundle it read
+    // dates (11122018 = 11/12/2018), concatenated years (20162017), reference
+    // and case numbers as "account numbers" and cried mismatch. False positives
+    // like that on a HIGH finding destroy the report's credibility.
+    // The floor is 9 digits: SA account numbers run 9-11 digits, and OCR of a
+    // scanned bundle sheds digits — a confirmed run counted the 8-digit OCR
+    // fragment "40821030" as a fourth account beside three real 10-digit ones,
+    // inflating the mismatch. An 8-digit run near banking context is far more
+    // likely a truncated read of a real account than a distinct account.
+    var CONTEXT = /(account|acc\.?\s*no|a\/c|bank|branch|iban|swift)/i;
+    // Reject values that are really dates or year-runs.
+    function looksLikeDateOrYears(n) {
+      if (/^(19|20)\d{2}(19|20)\d{2}$/.test(n)) return true;      // 20162017
+      if (/^\d{2}\d{2}(19|20)\d{2}$/.test(n)) {                    // DDMMYYYY / MMDDYYYY
+        var dd = +n.slice(0,2), mm = +n.slice(2,4);
+        if (dd >= 1 && dd <= 31 && mm >= 1 && mm <= 12) return true;
+        if (mm >= 1 && mm <= 31 && dd >= 1 && dd <= 12) return true;
+      }
+      if (/^(19|20)\d{2}\d{2}\d{2}$/.test(n)) {                    // YYYYMMDD
+        var m2 = +n.slice(4,6), d2 = +n.slice(6,8);
+        if (m2 >= 1 && m2 <= 12 && d2 >= 1 && d2 <= 31) return true;
+      }
+      return false;
+    }
+    // The jurisdictional length assumption lives in these two constants only
+    // (SA accounts run 9-11 digits; 12 is headroom for other formats). Adjust
+    // here — the matching regex is built from them.
+    var VO_ACCOUNT_MIN_DIGITS = 9, VO_ACCOUNT_MAX_DIGITS = 12;
+    var numRe = new RegExp('\\b\\d{' + VO_ACCOUNT_MIN_DIGITS + ',' + VO_ACCOUNT_MAX_DIGITS + '}\\b', 'g');
+    // Whose account? A bundle that names several parties carries several
+    // accounts, and that is not a mismatch: the annexure EB run counted the
+    // franchisor's, the landlord's and the operator's own accounts as "4
+    // different bank account numbers" at HIGH. The holder is the nearest
+    // preceding capitalised name (2-5 words, company suffixes allowed) or a
+    // "holder / beneficiary / in the name of" cue. Two accounts conflict only
+    // when the record attributes both to the SAME party, or when a holder is
+    // not visible and the accounts sit in the same payment instruction (same
+    // page, or both beside "pay / deposit / transfer / banking details" — the
+    // changed-bank-details redirection that the detector exists to catch).
+    var PAY_CTX = /\b(?:pay(?:ment|able)?|deposit|transfer|remit|eft|banking details|bank details|use (?:the )?account|new account)\b/i;
+    var BANK_NAME = /\b(?:bank|fnb|absa|nedbank|capitec|investec|standard|branch|swift|iban|first national|tyme|discovery)\b/i;
+    var LABEL_WORDS = /\b(?:account|number|no|holder|name|branch|code|details|banking|swift|iban|reference|type|sort|beneficiary|payee|invoice|statement|rental|total|amount|date|page|january|february|march|april|may|june|july|august|september|october|november|december)\b/i;
+    var ADDRESS_RE = /\b(?:road|street|str|avenue|ave|drive|lane|crescent|close|place|boulevard|highway|suite|floor|building|box)\b/i;
+    // The same party spelt two ways is one party: case, punctuation, company
+    // suffixes and honorifics are not identity.
+    function normHolder(s) {
+      var n = String(s || '').toLowerCase().replace(/\(pty\)|\bpty\b|\bltd\b|\bcc\b|\binc\b|\bt\/a\b|\bmr\b|\bmrs\b|\bms\b|\bdr\b/g, ' ').replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
+      return n || null;
+    }
+    function holderBefore(text, idx) {
+      var pre = text.slice(Math.max(0, idx - 220), idx);
+      var cue = /\b(?:account\s+holder|account\s+name|holder|beneficiary|in\s+the\s+name\s+of|payee)\b\s*[:\-]?\s*([^\n:;,|]{2,60})/i.exec(pre);
+      if (cue) { var c = normHolder(cue[1]); if (c && !LABEL_WORDS.test(c) && !BANK_NAME.test(c)) return c; }
+      // "payable to the Franchisor", "paid into the account of ABC (Pty) Ltd": the payee is the party.
+      // Names stop at a full stop: "the Lessor. Banking details" is "Lessor".
+      var roleRe = /\b(?:payable|paid|pay|remit(?:ted)?|transfer(?:red)?|deposit(?:ed)?)\s+(?:in\s+full\s+)?(?:to|into)\s+(?:the\s+)?(?:account\s+of\s+(?:the\s+)?)?([A-Z][A-Za-z&'-]*(?:\s+(?:[A-Z][A-Za-z&'-]*|\(Pty\)|Ltd|CC|Inc))*)/g, rm, roleLast = null;
+      while ((rm = roleRe.exec(pre)) !== null) { if (!BANK_NAME.test(rm[1]) && !LABEL_WORDS.test(rm[1])) roleLast = rm[1]; }
+      if (roleLast) { var rc = normHolder(roleLast); if (rc) return rc; }
+      // The nearest capitalised name that is not the bank, a field label or an
+      // address; candidates never cross a line, colon, pipe or semicolon.
+      var segs = pre.split(/[\n:|;]/), last = null;
+      var nameRe = /\b([A-Z][A-Za-z&'-]+(?:\s+(?:[A-Z][A-Za-z&'-]+|\(Pty\)|Ltd|CC|Inc|t\/a)){1,4})\b/g;
+      for (var sg = 0; sg < segs.length; sg++) {
+        var m; nameRe.lastIndex = 0;
+        while ((m = nameRe.exec(segs[sg])) !== null) {
+          if (BANK_NAME.test(m[1]) || LABEL_WORDS.test(m[1]) || ADDRESS_RE.test(m[1])) continue;
+          last = m[1];
+        }
+      }
+      return last ? normHolder(last) : null;
+    }
+    // "Kindly note our new banking details": the redirection letter itself.
+    var CHANGE_CUE = /\b(?:new|changed|updated|amended|revised)\s+(?:bank(?:ing)?\s+details|account(?:\s+number)?)|with\s+immediate\s+effect|please\s+(?:now\s+)?use|no\s+longer\s+use|instead\s+of\s+the\s+(?:previous|old)/i;
+    // A telephone number is not an account: "Mobile +27 638230461", "Tel:
+    // 011 636 9112", "Cell 0824583886". The cue, or a country code, sits
+    // right before the digits.
+    var PHONE_CUE = /(?:\b(?:tel|telephone|mobile|mob|cell|cellphone|phone|fax|whatsapp|contact)\b\.?\s*(?:no\.?|number|#)?\s*[:.\-]?\s*|\+\s?\d{1,3}\s*(?:\(0\))?\s*)$/i;
+    var entries = [];
+    for (var i = 0; i < textBlocks.length; i++) {
+      var text = textBlocks[i], match;
+      while ((match = numRe.exec(text)) !== null) {
+        var n = match[0];
+        if (looksLikeDateOrYears(n)) continue;
+        // Part of a longer reference, not a number of its own: "Case Ref:
+        // 2026-1099145183" (a bank's case number) was counted as an account.
+        var pre1 = text.slice(Math.max(0, match.index - 2), match.index);
+        var post1 = text.slice(match.index + n.length, match.index + n.length + 2);
+        if (/[A-Za-z0-9][\-\/.]$/.test(pre1) || /^[\-\/][A-Za-z0-9]/.test(post1)) continue;
+        if (PHONE_CUE.test(text.slice(Math.max(0, match.index - 24), match.index))) continue;
+        // require a banking keyword within 40 chars before the number
+        var windowStart = Math.max(0, match.index - 40);
+        if (!CONTEXT.test(text.slice(windowStart, match.index))) continue;
+        if (entries.some(function (e) { return e.n === n; })) continue;
+        entries.push({ n: n, page: i + 1, holder: holderBefore(text, match.index),
+          pay: PAY_CTX.test(text.slice(Math.max(0, match.index - 80), match.index + 40)),
+          change: CHANGE_CUE.test(text.slice(Math.max(0, match.index - 240), match.index + 60)) });
+      }
+    }
+    // Unknown holders: the accounts must at least sit in the same document
+    // (the bundle's own page numbering; a bundle without boundaries is one).
+    var segs = voDetectDocuments(textBlocks) || [];
+    var docOf = function (page) {
+      for (var d = 0; d < segs.length; d++) if (page >= segs[d].start && page <= segs[d].end) return d;
+      return -1;
+    };
+    var conflict = [], pages = [], holderNamed = null;
+    for (var a = 0; a < entries.length; a++) {
+      for (var b = a + 1; b < entries.length; b++) {
+        var ea = entries[a], eb = entries[b], qualifies = false;
+        if (ea.change || eb.change) qualifies = true; // a changed-details instruction is the very thing to report
+        else if (ea.holder && eb.holder) qualifies = (ea.holder === eb.holder);
+        else qualifies = (ea.page === eb.page) || (ea.pay && eb.pay) || (segs.length === 0) || (docOf(ea.page) === docOf(eb.page) && docOf(ea.page) !== -1);
+        if (!qualifies) continue;
+        if (conflict.indexOf(ea.n) === -1) conflict.push(ea.n);
+        if (conflict.indexOf(eb.n) === -1) conflict.push(eb.n);
+        if (pages.indexOf(ea.page) === -1) pages.push(ea.page);
+        if (pages.indexOf(eb.page) === -1) pages.push(eb.page);
+        if (ea.holder && ea.holder === eb.holder) holderNamed = ea.holder;
+      }
+    }
+    if (conflict.length >= 2) {
+      pages.sort(function (x, y) { return x - y; });
+      // Every number counted is listed: "4 different … : a, b, c" named four
+      // and printed three on the evidence-bundle-2-docs run.
+      var listed = conflict.slice(0, 6).join(', ') + (conflict.length > 6 ? ' and ' + (conflict.length - 6) + ' more' : '');
+      findings.push({ type: 'CT18', severity: 4,
+        evidence: conflict.length + ' different bank account numbers found near banking references' +
+          (holderNamed ? ' for the same party (' + holderNamed.replace(/\b[a-z]/g, function (c) { return c.toUpperCase(); }) + ')' : ' in the same payment context') +
+          ': ' + listed + ' — confirm which account the record authorises',
+        location: 'Page ' + pages.join(', ') });
+    }
+    return findings;
+  },
+
+  // An invoice's arithmetic is checked on ONE page at a time (the first
+  // subtotal, VAT and total anywhere in a 651-page bundle were being combined
+  // across pages), and only when the figures could be an invoice at all: a
+  // VAT line between zero and a quarter of the subtotal, a total between half
+  // and twice it. "subtotal R1161950, VAT R1, total R1.08" is an OCR reading
+  // of a scanned invoice, not a finding; it is noted for a person to read the
+  // page image.
+  D13_DETECT_CALCULATION_ERROR: function(textBlocks) {
+    var findings = [];
+    // A labelled amount: the label, an optional rate written before the
+    // amount ("VAT 15% R150.00", "VAT (@15%) R150.00"), an optional colon, an
+    // optional currency sign and the figure. Figures are read as this
+    // country's documents print them: thousands grouped by spaces or commas,
+    // decimals after a point or a comma ("R 1 161 950,00", "R1,336,242.50").
+    // A figure followed by "%" is a rate, never an amount; "Tax Invoice No.
+    // 1234" carries no amount at all.
+    var calcRe = /\b(sub-?\s?total|total|vat|tax)\b\s*(?:\(?\s*@?\s*1[45](?:[.,]5)?\s*%\s*\)?\s*)?[:=]?\s*(?:\(?\s*@?\s*1[45](?:[.,]5)?\s*%\s*\)?\s*)?[R$€£]?\s*(\d{1,3}(?:[  ,.]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d{1,2})?)(?!\s*%|\d)/gi;
+    // A discount, delivery or credit line between the subtotal and the VAT
+    // or total changes the sum and the VAT base; the page is then not checked.
+    var betweenRe = /\b(?:discount|delivery|shipping|less|credit|deposit|rounding|freight|handling)\b/i;
+    function parseAmount(tok) {
+      var t = String(tok).replace(/[\s ]/g, '');
+      var m = /^(.*?)([.,])(\d{1,2})$/.exec(t);
+      var whole = (m ? m[1] : t).replace(/[.,]/g, '');
+      return parseFloat(whole + (m ? '.' + m[3] : ''));
+    }
+    for (var i = 0; i < textBlocks.length; i++) {
+      var text = String(textBlocks[i] || '');
+      var ocrPage = /^\s*\[OCR\]/.test(text);
+      var amounts = [], match;
+      calcRe.lastIndex = 0;
+      while ((match = calcRe.exec(text)) !== null) {
+        var val = parseAmount(match[2]);
+        if (!isNaN(val)) amounts.push({ label: match[1].toLowerCase().replace(/[-\s]/g, ''), value: val, index: match.index });
+      }
+      var subtotal = amounts.find(function(a){return a.label==='subtotal';});
+      var vat = amounts.find(function(a){return a.label==='vat'||a.label==='tax';});
+      var total = amounts.find(function(a){return a.label==='total';});
+      if (!subtotal || !vat || !(subtotal.value > 0)) continue;
+      // Figures that could not be an invoice are a parse of the wrong figure
+      // far more often than an invoice: a VAT line that is neither zero
+      // (zero-rated) nor within a tenth to a quarter of the subtotal, or a
+      // total outside half to twice the subtotal. A note names the page and
+      // the figures; it claims OCR damage only on an OCR-recovered page.
+      var vatPlausible = vat.value === 0 || (vat.value >= subtotal.value * 0.10 && vat.value <= subtotal.value * 0.25);
+      var totalPlausible = !total || (total.value >= subtotal.value * 0.5 && total.value <= subtotal.value * 2);
+      if (!vatPlausible || !totalPlausible) {
+        findings.push({ type: 'CT22', severity: 0, contextOnly: true,
+          evidence: 'Figures ' + (ocrPage ? 'recognised ' : '') + 'on page ' + (i + 1) + ' do not read as one invoice (subtotal R' + subtotal.value + ', VAT R' + vat.value + (total ? ', total R' + total.value : '') + '): read the page' + (ocrPage ? ' image' : '') + ' before relying on any of them',
+          location: 'Page ' + (i + 1) });
+        continue;
+      }
+      var lo = Math.min(subtotal.index, vat.index, total ? total.index : subtotal.index);
+      var hi = Math.max(subtotal.index, vat.index, total ? total.index : subtotal.index);
+      if (betweenRe.test(text.slice(lo, hi))) continue;
+      // The standard rate is 15 per cent since 1 April 2018 and was 14 per cent
+      // before it; a zero VAT line is zero-rated. The printed words carry no
+      // percentage (PD1), only the two computed amounts.
+      var tol = subtotal.value * 0.005;  // 0.5% tolerance
+      if (vat.value !== 0 && Math.abs(vat.value - subtotal.value * 0.15) > tol && Math.abs(vat.value - subtotal.value * 0.14) > tol) {
+        findings.push({ type: 'CT22', severity: 4,
+          evidence: 'VAT mismatch: calculated R' + (subtotal.value * 0.15).toFixed(2) + ' at the standard rate (R' + (subtotal.value * 0.14).toFixed(2) + ' at the rate in force before April 2018) but stated R' + vat.value.toFixed(2),
+          location: 'Page ' + (i + 1) });
+      }
+      if (total) {
+        var expectedTotal = subtotal.value + vat.value;
+        if (Math.abs(total.value - expectedTotal) > 0.01) {
+          findings.push({ type: 'CT15', severity: 5,
+            evidence: 'Total mismatch: ' + subtotal.label + '(R' + subtotal.value + ') + ' + vat.label + '(R' + vat.value + ') = R' + expectedTotal + ' but stated R' + total.value,
+            location: 'Page ' + (i + 1) });
+        }
+      }
+    }
+    return findings;
+  },
+
+  D14_DETECT_AMOUNT_ROUNDING_ANOMALY: function(textBlocks) {
+    var findings = [];
+    // Suspiciously round amounts may indicate fabrication
+    var amountRe = /[R$€£]\s*([\d,]+(?:\.\d{2})?)/g;
+    var roundAmounts = 0, totalAmounts = 0;
+    for (var i = 0; i < textBlocks.length; i++) {
+      var match;
+      while ((match = amountRe.exec(textBlocks[i])) !== null) {
+        var val = parseFloat(match[1].replace(/,/g, ''));
+        if (val > 1000 && val % 1000 === 0) roundAmounts++;
+        if (val > 100) totalAmounts++;
+      }
+    }
+    if (totalAmounts >= 3 && roundAmounts / totalAmounts > 0.7) {
+      findings.push({ type: 'CT15', severity: 2,
+        evidence: roundAmounts + ' of ' + totalAmounts + ' amounts are suspiciously round (multiples of 1000)',
+        location: 'Financial sections' });
+    }
+    return findings;
+  },
+
+  // D15-D20: Document integrity detectors
+  D15_DETECT_METADATA_FRAUD: function(pdfDoc) {
+    var findings = [];
+    try {
+      var producer = (pdfDoc.getProducer() || '').toLowerCase();
+      var creator = (pdfDoc.getCreator() || '').toLowerCase();
+      var creationDate = pdfDoc.getCreationDate();
+      var modDate = pdfDoc.getModificationDate();
+      var suspiciousTools = ['photoshop','gimp','pixelmator','affinity','canva','paint','illustrator'];
+      for (var i = 0; i < suspiciousTools.length; i++) {
+        if (producer.indexOf(suspiciousTools[i]) !== -1 || creator.indexOf(suspiciousTools[i]) !== -1) {
+          findings.push({ type: 'CT24', severity: 4,
+            evidence: 'Document created/edited with image manipulation tool: ' + suspiciousTools[i],
+            location: 'PDF metadata' });
+        }
+      }
+      if (creationDate && modDate && modDate < creationDate) {
+        findings.push({ type: 'CT29', severity: 5,
+          evidence: 'Modification date (' + modDate + ') before creation date (' + creationDate + ')',
+          location: 'PDF metadata' });
+      }
+    } catch(e) {}
+    return findings;
+  },
+
+  D16_DETECT_FONT_ANOMALY: function(textBlocks, pdfDoc) {
+    var findings = [];
+    // Check for font changes mid-document via text characteristics
+    var fontMarkers = [];
+    for (var i = 0; i < textBlocks.length; i++) {
+      // Check for mixed character widths (indicates font mixing)
+      var lines = textBlocks[i].split('\n');
+      var widths = [];
+      for (var j = 0; j < lines.length; j++) {
+        if (lines[j].trim()) widths.push(lines[j].length);
+      }
+      if (widths.length > 1) {
+        var avg = widths.reduce(function(a,b){return a+b;},0) / widths.length;
+        var variance = widths.reduce(function(a,b){return a+Math.pow(b-avg,2);},0) / widths.length;
+        if (variance > 500) {
+          fontMarkers.push(i);
+        }
+      }
+    }
+    if (fontMarkers.length >= 2) {
+      findings.push({ type: 'CT25', severity: 3,
+        evidence: 'Font inconsistencies detected on ' + fontMarkers.length + ' pages',
+        location: 'Pages ' + fontMarkers.map(function(x){return x+1;}).join(', ') });
+    }
+    return findings;
+  },
+
+  D17_DETECT_FORMAT_ANOMALY: function(textBlocks) {
+    var findings = [];
+    // Generic page-length variance is NOT a forensic indicator -- title pages,
+    // dense pages and sparse pages are all normal, and flagging every one of
+    // them produced a "red cross on every page" report. The only version of
+    // this with real signal is a NEAR-BLANK page sitting among full ones, which
+    // can mark an inserted or removed page. Only that is flagged, at low
+    // severity.
+    // Content mass, not raw length: seal-footer layers on a re-sealed scan
+    // otherwise make an image-only page look like a text page (see voContentMass).
+    // A page the engine itself set aside (a prior Verum Omnis report, the
+    // analysis template) carries a placeholder, not the page's text: it is
+    // neither near-empty nor part of the average. The evidence-bundle-7-docs
+    // report would have sealed "35 near-empty pages (9-55) … image-only pages
+    // OCR did not capture" over the 35 report pages it had excluded on
+    // purpose (the AI review dropped that finding; since 5 October 2026 the
+    // AI drops nothing, so the engine must not raise it).
+    var setAside = textBlocks.map(function (t) { return /^\s*(?:prior verum omnis report page excluded\.|analysis template boilerplate excluded\.)/.test(String(t || '')); });
+    var lensAll = textBlocks.map(function(t){ return voContentMass(t); });
+    var lens = lensAll.filter(function (x, k) { return !setAside[k]; });
+    var pageOf = []; for (var pk = 0; pk < lensAll.length; pk++) if (!setAside[pk]) pageOf.push(pk);
+    if (lens.length >= 4) {
+      var avg = lens.reduce(function(a,b){ return a+b; }, 0) / lens.length;
+      // Distinct-word mass runs roughly half of raw character length on real
+      // prose (repeated words count once), so the old raw-length gate of 300
+      // rescales to ~180 here.
+      if (avg > 180) {
+        var blanks = [];
+        for (var i = 0; i < lens.length; i++) {
+          if (lens[i] < VO_NEAR_EMPTY_CHARS && lens[i] < avg * 0.1) blanks.push(pageOf[i]);
+        }
+        // A RUN of near-empty pages (or many of them) is the signature of an
+        // image-only / scanned section that OCR could not read — NOT surgical
+        // insertion. Flagging each as "possibly inserted/removed" produced false
+        // positives on exactly those pages. Collapse that case to one honest,
+        // low-severity note. Only a SINGLE near-empty page sitting between two
+        // full pages keeps the "possible inserted/removed" reading.
+        var consecutive = blanks.length > 1 && blanks.every(function (p, k) { return k === 0 || p === blanks[k-1] + 1; });
+        if (blanks.length > 3 || consecutive) {
+          var span = (blanks[0]+1) + (blanks.length > 1 ? '-' + (blanks[blanks.length-1]+1) : '');
+          findings.push({ type: 'CT26', severity: 1,
+            evidence: blanks.length + ' near-empty pages (' + span + ') among pages averaging ' + Math.round(avg) + ' chars — pages with no machine-readable text: image-only pages OCR did not capture, or intentional dividers. Establish which from the original; re-scan with OCR enabled to read them',
+            location: 'Pages ' + span });
+        } else {
+          for (var b = 0; b < blanks.length; b++) {
+            var pi = blanks[b];
+            var isolated = (pi > 0 && pi < lensAll.length - 1 && !setAside[pi-1] && !setAside[pi+1] && lensAll[pi-1] >= avg * 0.5 && lensAll[pi+1] >= avg * 0.5);
+            findings.push({ type: 'CT26', severity: 2,
+              evidence: 'Page ' + (pi+1) + ' is nearly empty (' + lensAll[pi] + ' chars) among pages averaging ' + Math.round(avg) +
+                (isolated ? ' — an isolated blank between two full pages. Whether a page was inserted or removed there is for the investigator to establish against the original' : ' — the page yielded almost no machine-readable text: either an image-only page OCR could not read, or a genuinely blank page. Establish which from the original'),
+              location: 'Page ' + (pi+1) });
+          }
+        }
+      }
+    }
+    return findings;
+  },
+
+  D18_DETECT_PAGE_MANIPULATION: function(textBlocks) {
+    var findings = [];
+    // Check for repeated internal page numbers. A couple of duplicates is worth
+    // flagging individually; MANY repeats just means a compiled bundle (each
+    // document restarts at page 1), so we collapse those into ONE summary rather
+    // than emitting 25 near-identical findings that drown the substantive ones.
+    var pageNumRe = /\b(page|p\.?|pg)\s*(\d+)\s*(?:of|\/)\s*(\d+)\b/gi;
+    var seenNumbers = {}, repeated = {};
+    for (var i = 0; i < textBlocks.length; i++) {
+      var match;
+      while ((match = pageNumRe.exec(textBlocks[i])) !== null) {
+        var num = parseInt(match[2]);
+        if (seenNumbers[num] !== undefined && seenNumbers[num] !== i) repeated[num] = true;
+        seenNumbers[num] = i;
+      }
+    }
+    var nums = Object.keys(repeated).map(Number).sort(function (a, b) { return a - b; });
+    if (nums.length === 0) return findings;
+    if (nums.length <= 2) {
+      for (var n = 0; n < nums.length; n++) {
+        findings.push({ type: 'CT27', severity: 4,
+          evidence: 'Page number ' + nums[n] + ' appears on multiple pages (a repeated page number; whether a page was duplicated or inserted is for the investigator)',
+          location: 'Multiple pages' });
+      }
+    } else {
+      findings.push({ type: 'CT27', severity: 4,
+        evidence: nums.length + ' internal page numbers repeat across the document (' +
+          nums.slice(0, 10).join(', ') + (nums.length > 10 ? ', …' : '') +
+          ') — typical of a compiled multi-document bundle; check the page order if this is meant to be one document',
+        location: 'Whole document' });
+    }
+    return findings;
+  },
+
+  D19_DETECT_EVIDENCE_TAMPERING: function(textBlocks) {
+    var findings = [];
+    // Only phrases that are themselves an allegation of tampering. "Scanned
+    // copy" was dropped: nearly every filed document says it is a scanned
+    // copy, so the phrase accused ordinary bundles of severity-5 tampering.
+    var tamperingIndicators = [
+      'white out','whited out','correction fluid','tippex','tipp-ex',
+      'photocopied signature','pasted signature','stamped signature',
+      'inserted page','removed page','replaced page','added later'
+    ];
+    var fullText = textBlocks.join(' ').toLowerCase();
+    for (var i = 0; i < tamperingIndicators.length; i++) {
+      if (fullText.indexOf(tamperingIndicators[i]) !== -1) {
+        findings.push({ type: 'CT41', severity: 5,
