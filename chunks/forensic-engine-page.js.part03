@@ -272,7 +272,7 @@ function voCapOcrFormatFindings(findings, ocrPages) {
 // general-punctuation ranges, a cent sign, a stray "=", a brace or a
 // backslash, a run of six consonants, or a short digit-letter fragment that
 // is not an ordinal (1st), an amount (R5) or a clause reference (12a, a2).
-var VO_GARBLE_SYMBOL = /[^\x20-\x7E -ÿ‐-‧‰-⁞]|[¢¦^{}\\=]/;
+var VO_GARBLE_SYMBOL = /[^\x20-\x7E -ÿ‐-‧‰-⁞]|[¢¦^{}\\=]/;
 function voLooksGarbled(text) {
   var t = String(text || '');
   if (!t.trim()) return false;
