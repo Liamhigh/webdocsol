@@ -732,7 +732,7 @@ function voExtractQuotes(text) {
   }
   // A term in single quotes ('Astron Motor Fuel' means …) with no inner
   // apostrophe and at least twelve characters is a quote too.
-  var sRe = /(?:^|[\s(\[:,])['‘]([^'‘’\n]{12,})['’](?=[\s.,;)\]]|$)/g;
+  var sRe = /(?:^|[\s(\[:,])['‘]([^'‘’\n]{12,})['’](?=[\s.,;:)\]]|$)/g;
   while ((m = sRe.exec(s)) !== null) push(m[1]);
   return out;
 }
