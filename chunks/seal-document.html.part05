@@ -583,7 +583,7 @@
       var low = (textBlocks[i] || '').toLowerCase();
       for (var p = 0; p < sigPatterns.length; p++) {
         var pat = sigPatterns[p];
-        var sre = new RegExp('(?:^|[^A-Za-z0-9])' + pat.replace(/[.*+?^${}()|[\]\\/]/g, '\\$&') + '(?![A-Za-z0-9])');
+        var sre = new RegExp('(?:^|[^A-Za-z0-9])' + pat.replace(/[.*+?^${}()|[\]\\\/]/g, '\\$&') + '(?![A-Za-z0-9])');
         var sm = sre.exec(low);
         if (!sm) continue;
         var idx = sm.index + sm[0].length - pat.length;
@@ -2000,7 +2000,7 @@ function voExcludeFooterOnlyPages(textBlocks) {
 // a footer the recogniser mangled: a date-shaped token followed by a clock
 // time is a stamp, never a stated date.
 var VO_SEAL_FURNITURE_RES = [
-  /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL\s*(?:[|—–-]\s*)?(?:Seal:\s*)?VO-[0-9A-F]{6,}[\s\S]{0,220}?\|\s*\d{1,4}\s*\/\s*\d{1,4}(![\/\d])(?:\s*\|\s*Chain:\s*\d+\s*prev)?/gi,
+  /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL\s*(?:[|—–-]\s*)?(?:Seal:\s*)?VO-[0-9A-F]{6,}[\s\S]{0,220}?\|\s*\d{1,4}\s*\/\s*\d{1,4}(?![\/\d])(?:\s*\|\s*Chain:\s*\d+\s*prev)?/gi,
   /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL\s*[—–-]*\s*scan\s+the\s+code\s+or\s+verify\s+at\s+verumglobal\.foundation\/verify\.html/gi,
   /Verum\s+Omnis\s+Sealed\s+Document\s+Source:[\s\S]{0,160}?Page\s+\d+\s+of\s+\d+\s+VERIFY\s+SEAL\s+VERUM\s+OMNIS\s+SEAL\s*\|[\s\S]{0,240}?\|\s*Constitution\s*\|\s*\d+/gi,
   /Blockchain\s+timestamping\s+via\s+OpenTimestamps\s+is\s+in\s+progress[^.]*\.(?:\s*[^.]*registration\s+pending\.)?/gi,
@@ -2008,7 +2008,7 @@ var VO_SEAL_FURNITURE_RES = [
   /verumglobal\.foundation\s*\|\s*OpenTimestamps\s*\|\s*Patent\s+Pending/gi,
   /\b20\d{2}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\s+UTC\b/g,
   // the brand line as OCR renders it (E read as 3, I as 1 or l, O as 0), through to the page marker, the tier line or the zone name
-  /V[E3]RUM\s*[O0]MN[I1l]S\s*S[E3]AL[E3]D\s*[O0]R[I1l]G[I1l]NAL[\s\S]{0,230}?(?:\|\s*\d{1,4}\s*\/\s*\d{1,4}(![\/\d])|Patent\s+Pending|Johannesburg)/gi,
+  /V[E3]RUM\s*[O0]MN[I1l]S\s*S[E3]AL[E3]D\s*[O0]R[I1l]G[I1l]NAL[\s\S]{0,230}?(?:\|\s*\d{1,4}\s*\/\s*\d{1,4}(?![\/\d])|Patent\s+Pending|Johannesburg)/gi,
   /\bAfrica\/Johannesburg\b/g,
   /\bVERIFY\s+SEAL\b/g
 ];
