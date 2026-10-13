@@ -2005,7 +2005,7 @@ var DETECTORS = {
       while ((cm = cueRe.exec(block)) !== null) {
         var before = block.slice(Math.max(0, cm.index - 12), cm.index);
         if (/\bvat\s*$/i.test(before)) continue; // "VAT REGISTRATION NUMBER": a VAT number, not a company registration
-        var idField = /\b(?:id|identity(?:\s+number)?)\s*(?:\/|\||or)\s*$/i.test(before);
+        var idField = /\b(?:id|identity(?:\s+number)?)\s*(?:\/|or|\|)\s*$/i.test(before);
         var afterCue = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 40);
         // "Registration number of complainant" is a person's field: a natural
         // person's number there is an identity number (Combine 06 April 2026,
