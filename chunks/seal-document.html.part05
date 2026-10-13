@@ -1,8 +1,8 @@
-          evidence: 'The record contains the tampering indicator "' + tamperingIndicators[i] + '"',
-          location: 'Full document' });
-      }
+        evidence: 'The record contains the tampering indicator "' + tamperingIndicators[i] + '"',
+        location: 'Full document' });
     }
-    return findings;
+  }
+  return findings;
   },
 
   D20_DETECT_DIGITAL_FOOTPRINT_MISMATCH: function(pdfDoc) {
@@ -381,7 +381,7 @@
     // A matched double-quote pair is read first, whatever it holds inside
     // ("Shareholders' Agreement", "Lessees' Improvements" — a plural
     // possessive is not a closing quote); the mixed pair follows.
-    var definitionRe = /(?:^|[\s(\[])(?:"[^"“”\n]{2,80}"|“[^"“”\n]{2,80}”|["“'‘]\s?(?:[^"“”'‘’\n]|['’](?=[A-Za-z])){2,80}["”'’])|([a-z][a-z'-]{3,}(?:\s+[a-z][a-z'-]{2,}){0,3}))\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
+    var definitionRe = /(?:^|[\s(\[])(?:("[^"“”\n]{2,80}"|“[^"“”\n]{2,80}”|["“'‘]\s?(?:[^"“”'‘’\n]|['’](?=[A-Za-z])){2,80}["”'’])|([a-z][a-z'-]{3,}(?:\s+[a-z][a-z'-]{2,}){0,3}))\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
     // Is the position at the end of `span` inside a quoted phrase that was
     // opened and never closed (a closer OCR dropped: `"Astron Motor Fuel
     // means …`)? Counted from the last clause boundary; no lookbehind.
