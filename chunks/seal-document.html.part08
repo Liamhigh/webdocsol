@@ -2068,9 +2068,8 @@ function buildLocalNarrative(findings, score, verdict) {
     CT23: 'INTEGRITY', CT24: 'INTEGRITY', CT25: 'INTEGRITY', CT26: 'INTEGRITY', CT27: 'INTEGRITY',
     CT28: 'INTEGRITY', CT29: 'INTEGRITY', CT30: 'INTEGRITY',
     CT31: 'CROSS_REF', CT32: 'CROSS_REF', CT33: 'CROSS_REF', CT34: 'CROSS_REF', CT35: 'CROSS_REF',
-    CT36: 'CONTACT', CT37: 'CONTACT', CT38: 'Jurisdictional Impossibility', CT39: 'Chain of Custody Break',
-    CT40: 'Witness Statement Conflict', CT41: 'Evidence Tampering Indicator', CT42: 'Digital Footprint Mismatch',
-    CT43: 'DIGITAL',
+    CT36: 'CONTACT', CT37: 'CONTACT', CT38: 'CONTACT', CT39: 'EVIDENCE', CT40: 'EVIDENCE', CT41: 'EVIDENCE',
+    CT42: 'DIGITAL', CT43: 'DIGITAL',
     CT44: 'FRANCHISE_LEASE', CT45: 'FRANCHISE_LEASE', CT46: 'IDENTITY', CT47: 'BEHAVIOUR', CT48: 'BEHAVIOUR', CT49: 'BEHAVIOUR', CT50: 'BEHAVIOUR'
   };
   // The report's measured labels where the report script loaded (CTNAME is
