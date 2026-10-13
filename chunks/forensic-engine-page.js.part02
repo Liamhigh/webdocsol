@@ -1651,7 +1651,7 @@ var SERIAL_PATTERNS = {
     severity: 4, category: 'DIGITAL_FRAUD'
   },
 
-  SP14_CONTRACT_FRAUD: {
+  SP14_CONTRACT_FRUAD: {
     name: 'Contract Fraud',
     stages: [
       { indicator: 'Bait terms', keywords: ['introductory rate','special offer','limited period'] },
