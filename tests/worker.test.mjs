@@ -553,7 +553,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     return { response: JSON.stringify({ text: hDraft }) };
   } } };
   r = await hPost(hGood, AIenvH); hj = await r.json().catch(() => null);
-  ok(hj && hj.generated === true && hj.machineGenerated === true && hj.model === '@cf/meta/llama-4-scout-17b-16e-instruct',
+  ok(hj && hj.generated === true && hj.machineGenerated === true && hj.model === '@cf/meta/llama-3.3-70b-instruct-fp8-fast',
     'a compliant draft is generated:true on the default keyless model (' + (hj && hj.model) + ')');
   ok(hj && /no signature on the page/.test(hj.text) && /dated twice/.test(hj.text), 'anchored, compliant sentences survive');
   ok(hj && !/might suggest/.test(hj.text), 'a hedged sentence is dropped (§15.2)');
