@@ -5,7 +5,7 @@
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<meta name="vo-seal-build" content="1.11.0-20260906-court-ready-narrative">
+<meta name="vo-seal-build" content="1.12.2-20261011-page-verified-contradictions">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <link rel="canonical" href="https://verumglobal.foundation/seal-document.html">
 <link rel="icon" type="image/png" sizes="96x96" href="/images/favicon.png">
@@ -386,7 +386,7 @@
       </button>
       <button type="button" class="mode-card" id="modeForensic" onclick="setSealMode('forensic')">
         <strong>&#128270; Seal document with forensic report</strong>
-        <span>Everything in Seal document, plus the on-device forensic scan (anchored findings, stated as fact), the AI review, the Brain 9 sweep of the sealed text, transcription of voice notes, and two sealed reports: the technical forensic report and the court-ready narrative. For the AI steps, finding metadata, text excerpts, the sealed page text and voice-note audio leave this device to Cloudflare Workers AI; nothing is stored there.</span>
+        <span>Everything in Seal document, plus the on-device forensic scan (anchored findings, stated as fact), the AI review, the Brain 9 sweep of the sealed text, transcription of voice notes, and two sealed reports: the technical forensic report and the court-ready narrative. For the AI steps, finding metadata, bounded sealed page text, the findings JSON, bounded technical-report text and voice-note audio leave this device to Cloudflare Workers AI; nothing is stored there.</span>
       </button>
     </div>
   </div>
@@ -438,8 +438,8 @@
 
   <!-- Forensic-report disclosure — forensic mode only. No switches: choosing "Seal document with forensic report" IS the choice. -->
   <div id="aiReviewSection" style="margin-bottom:24px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;display:none;">
-    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">What "Seal document with forensic report" does.</strong> Your document is analysed entirely on this device, in your browser, by the deterministic engine; its findings are stated as fact and anchored to quoted text on cited pages. Then the AI review runs on Cloudflare Workers AI: a short excerpt is classified for context, the findings are assessed before the report is built, <strong style="color:#F8F9FA;">Brain 9 reads the sealed page text</strong> (up to 16 windows of about 11,000 characters, pages without findings first) for anything the engine missed — every suggestion must quote the text verbatim or it is discarded — and the court-ready narrative is written section by section beside the technical report. Brain 9 recommendations are shown here and held outside the sealed reports; the verdict on any person is for the court.</p>
-    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;"><strong style="color:#F8F9FA;">What leaves this device for those steps:</strong> finding metadata — the type, severity and a short quote for each finding — plus text excerpts (up to 4,000 characters from the first pages for classification, up to 12,000 characters around the finding pages for the report narrative, the sealed page text in windows of about 11,000 characters for the Brain 9 sweep, and the pages the narrative sections cite); voice-note audio for transcription. Nothing is stored server-side; GPS, device and sealer identity are never sent. For privileged or sensitive matters choose <strong style="color:#F8F9FA;">Seal document</strong> instead: nothing leaves the device.</p>
+    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">What "Seal document with forensic report" does.</strong> Your document is analysed entirely on this device, in your browser, by the deterministic engine; its findings are stated as fact and anchored to quoted text on cited pages. Then the AI review runs on Cloudflare Workers AI: a short excerpt is classified for context, the findings are assessed before the report is built, <strong style="color:#F8F9FA;">Brain 9 reads the sealed page text</strong> (up to 16 windows of about 11,000 characters, pages without findings first) for anything the engine missed — every suggestion must quote the text verbatim or it is discarded — and the court-ready narrative is written section by section beside the technical report from the sealed page text, the findings JSON and the sealed technical report. The engine is the first extractor, not the limit of the narrative: a contradiction the engine missed can print only when both quoted sides verify against the cited sealed pages. Large bundles are supplied in a bounded, declared page set; the printed provenance states exactly what the narrator received. Brain 9 recommendations are shown here and held outside the sealed reports; the verdict on any person is for the court.</p>
+    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;"><strong style="color:#F8F9FA;">What leaves this device for those steps:</strong> finding metadata — the type, severity and a short quote for each finding — plus bounded text context (up to 4,000 characters from the first pages for classification, up to 24,000 characters around each narrative section's findings, up to 64,000 characters of page-tagged sealed bundle text, the findings JSON up to 32,000 characters, the technical report text up to 32,000 characters, and the sealed page text in windows of about 11,000 characters for the Brain 9 sweep); voice-note audio for transcription. Nothing is stored server-side; GPS, device and sealer identity are never sent. For privileged or sensitive matters choose <strong style="color:#F8F9FA;">Seal document</strong> instead: nothing leaves the device.</p>
     <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">I am sealing as (optional)</label>
     <select id="tierSelector" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
       <option value="">Prefer not to say</option>
@@ -793,7 +793,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // enforces the cross-file equality.
 var ENGINE_VERSION = '5.3.5-web';
 var CONSTITUTION_VERSION = '6.1';
-var DETECTOR_COUNT = 40, CT_COUNT = 46, SP_COUNT = 17;
+var DETECTOR_COUNT = 42, CT_COUNT = 50, SP_COUNT = 17;
 
 // ---------------- Verum Omnis Constitution v6.1 FINAL (canonical reference) ----------------
 // Sealed instrument: "Truth for All". Full text + machine-readable record are public.
@@ -838,7 +838,11 @@ var CT_NAMES = {
   CT40: 'Witness Statement Conflict', CT41: 'Evidence Tampering Indicator', CT42: 'Digital Footprint Mismatch',
   CT43: 'Document Internal Conflict',
   CT44: 'Conditional Clause Misinvoked (Lessee/Owner Trap)', CT45: 'Asset Value Recognised Then Denied (Goodwill)',
-  CT46: 'Role / Capacity Contradiction'
+  CT46: 'Role / Capacity Contradiction',
+  CT47: 'Coercive Conduct Indicators',
+  CT48: 'Gaslighting / Reality-Denial Indicators',
+  CT49: 'Blame-Reversal / DARVO Indicators',
+  CT50: 'Behavioural Pattern Indicator (Signed Rule)'
 };
 // Concrete next step for a human, by engine category (rendered per finding in
 // the plain-language narrative).
@@ -852,6 +856,7 @@ var VO_CHECK_HINTS = {
   EVIDENCE: 'Establish this item\'s handling history with the person who collected it, and obtain the original device or source where possible.',
   DIGITAL: 'Compare the file\'s digital traces (hashes, creating tool, timestamps) with the claimed origin of the document.',
   FRANCHISE_LEASE: 'Check the title deed and head-lease records for the property, and the ownership sequence, against the clause being invoked.',
+  BEHAVIOUR: 'Read each cited passage in full on its page — pressure language (threats, ultimatums, consequences for refusal) is an indicator for human review; whether it amounts to coercion in law is for the court to decide.',
   AI_IDENTIFIED: 'This is a candidate raised by the AI review layer, whose job is to surface leads the fixed rules do not cover. To promote it to evidence: locate the quoted passage on its cited page, confirm the quote is accurate in context, and verify the inconsistency it describes against the surrounding documents. Once verified by a human it stands like any other anchored fact.'
 };
 // Per-type overrides where the category hint would misdirect the reader (a
@@ -875,19 +880,19 @@ var CT_CATEGORY = {
   CT36: 'CONTACT', CT37: 'CONTACT', CT38: 'CONTACT',
   CT39: 'EVIDENCE', CT40: 'EVIDENCE', CT41: 'EVIDENCE',
   CT42: 'DIGITAL', CT43: 'DIGITAL',
-  CT44: 'FRANCHISE_LEASE', CT45: 'FRANCHISE_LEASE', CT46: 'IDENTITY'
+  CT44: 'FRANCHISE_LEASE', CT45: 'FRANCHISE_LEASE', CT46: 'IDENTITY', CT47: 'BEHAVIOUR', CT48: 'BEHAVIOUR', CT49: 'BEHAVIOUR', CT50: 'BEHAVIOUR'
 };
 // detector id responsible for each CT type (derived from forensic-engine.js source)
 var CT_DETECTOR = {
   CT01: 'D01', CT02: 'D02', CT03: 'D03', CT04: 'D04', CT05: 'D31', CT06: 'D05', CT07: 'D29', CT08: 'D30',
-  CT09: 'D06', CT10: 'D07', CT11: 'D08', CT14: 'D09', CT19: 'D10', CT20: 'D11', CT18: 'D12',
+  CT09: 'D06', CT10: 'D07', CT11: 'D08', CT14: 'D09', CT20: 'D11', CT18: 'D12',
   CT22: 'D13', CT15: 'D13/D14', CT24: 'D15', CT29: 'D15', CT25: 'D16', CT26: 'D17', CT27: 'D18',
   CT41: 'D19', CT42: 'D20', CT31: 'D21', CT33: 'D22', CT35: 'D23', CT36: 'D24', CT37: 'D25',
   CT38: 'D26', CT39: 'D27', CT40: 'D28', CT23: 'D32', CT28: 'D33', CT16: 'D34', CT30: 'D35',
-  CT32: 'D36', CT43: 'D37'
+  CT32: 'D36', CT43: 'D37', CT44: 'D38', CT45: 'D39', CT46: 'D40', CT47: 'D41', CT48: 'D42', CT49: 'D43', CT50: 'PKG'
 };
 // FRANCHISE_LEASE (CT44/CT45) was missing here, so the findings matrix of the evidence-bundle-4 run summed to 41 of 44.
-var CATEGORY_ORDER = ['STATEMENTAL', 'FRANCHISE_LEASE', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL'];
+var CATEGORY_ORDER = ['STATEMENTAL', 'FRANCHISE_LEASE', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL', 'BEHAVIOUR'];
 // Plain-English section names lead; the engine's technical category name is
 // kept in the explainer line below each heading so nothing is lost for experts.
 var CATEGORY_LABEL = {
@@ -899,7 +904,8 @@ var CATEGORY_LABEL = {
   CONTACT: 'Address & Location Conflicts',
   EVIDENCE: 'Evidence & Witness Conflicts',
   DIGITAL: 'Digital Consistency',
-  FRANCHISE_LEASE: 'Franchise / Lease & Goodwill'
+  FRANCHISE_LEASE: 'Franchise / Lease & Goodwill',
+  BEHAVIOUR: 'Conduct Indicators'
 };
 // One plain sentence under each category heading: what this group of findings
 // means to a reader who has never seen a forensic report.
@@ -1090,6 +1096,7 @@ var VO_DISPLAY_NAME = {
 function ctLabel(type) { return VO_DISPLAY_NAME[type] || CT_NAMES[type] || type || 'Contradiction'; }
 function findingName(f) {
   if (isUnsignedStatement(f)) return 'Unsigned Agreement Stated';
+  if (f && f.conductAdmission) return 'Conduct Admission';
   if (f && f.type === 'CT37' && /^Lookalike email domain/i.test(String(f.evidence || ''))) return 'Lookalike Email Domain';
   return ctLabel(f && f.type);
 }
@@ -1127,8 +1134,8 @@ function partyStronglyNamed(who, text) {
     var sur = parts[parts.length - 1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), ini = parts[0].charAt(0);
     return new RegExp('(?:^|[^a-z])' + ini + '\\.?\\s+' + sur + '(?![a-z])').test(t);
   }
-  var toks = name.split(' ').map(function (x) { return x.replace(/[^a-z\u00c0-\u024f'-]/g, ''); }).filter(function (x) { return x.length >= 4 && !VO_GENERIC_NAME_TOK[x]; });
-  for (var i = 0; i < toks.length; i++) if (new RegExp('(?:^|[^a-z\u00c0-\u024f])' + toks[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![a-z\u00c0-\u024f])').test(t)) return true;
+  var toks = name.split(' ').map(function (x) { return x.replace(/[^a-zÀ-ɏ'-]/g, ''); }).filter(function (x) { return x.length >= 4 && !VO_GENERIC_NAME_TOK[x]; });
+  for (var i = 0; i < toks.length; i++) if (new RegExp('(?:^|[^a-zÀ-ɏ])' + toks[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![a-zÀ-ɏ])').test(t)) return true;
   return false;
 }
 function declaredPartyFor(f, data, parties) {
@@ -1145,10 +1152,10 @@ function declaredPartyFor(f, data, parties) {
 // about the party is not the party's words.
 function speakerOf(side, data) {
   var declared = extractParties((data && data.identity && data.identity.parties) || '');
-  var lead = String(side || '').replace(/^[\u2026.\s"\u201C]+/, '').slice(0, 120);
+  var lead = String(side || '').replace(/^[….\s"“]+/, '').slice(0, 120);
   for (var i = 0; i < declared.length; i++) {
     var nm = declared[i].replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    if (new RegExp('^(?:[^.;:]{0,40}\\b)?' + nm + '(?:\'s|\u2019s|\')?\\s*(?:\\(pty\\)\\s*ltd\\s*)?(?:states?|stated|wrote|writes|says|said|avers|averred|contends|contended|admits|admitted|confirms|confirmed|replied|responded|position\\s*:|letter\\b|affidavit\\b|email\\b)', 'i').test(lead)) return declared[i];
+    if (new RegExp('^(?:[^.;:]{0,40}\\b)?' + nm + '(?:\'s|’s|\')?\\s*(?:\\(pty\\)\\s*ltd\\s*)?(?:states?|stated|wrote|writes|says|said|avers|averred|contends|contended|admits|admitted|confirms|confirmed|replied|responded|position\\s*:|letter\\b|affidavit\\b|email\\b)', 'i').test(lead)) return declared[i];
   }
   return null;
 }
@@ -1517,9 +1524,9 @@ function pageNumbers(location) {
   // real page anchors and previously yielded none.
   // Ranges ("Pages 12-14") expand to every page in them, so OCR provenance
   // is judged on the same page set the engine used.
-  var re = /Pages?\s+(\d+(?:\s*[-\u2013]\s*\d+)?(?:\s*(?:,|and|vs\.?)\s*(?:Pages?\s+)?\d+(?:\s*[-\u2013]\s*\d+)?)*)/gi, m;
+  var re = /Pages?\s+(\d+(?:\s*[-–]\s*\d+)?(?:\s*(?:,|and|vs\.?)\s*(?:Pages?\s+)?\d+(?:\s*[-–]\s*\d+)?)*)/gi, m;
   while ((m = re.exec(String(location))) !== null) {
-    var rr = /(\d+)(?:\s*[-\u2013]\s*(\d+))?/g, pm;
+    var rr = /(\d+)(?:\s*[-–]\s*(\d+))?/g, pm;
     while ((pm = rr.exec(m[1])) !== null) {
       var lo = parseInt(pm[1], 10), hi = pm[2] ? parseInt(pm[2], 10) : lo;
       if (!isFinite(lo)) continue;
@@ -1576,7 +1583,7 @@ function findingPagesOf(f) {
 function humanNumberable(f) {
   if (!isEngineFinding(f)) return false;
   if (/\[bundle context:/i.test(String(f.evidence || ''))) return false;
-  return cleanQuote(String(f.evidence || '')).replace(/["'\s.,;:\u2014-]/g, '').length > 0 && findingPagesOf(f).length > 0;
+  return cleanQuote(String(f.evidence || '')).replace(/["'\s.,;:—-]/g, '').length > 0 && findingPagesOf(f).length > 0;
 }
 // A finding held at reduced weight: anchored only on OCR-recovered pages (the
 // characters are the recogniser's guess) or on a secondary source (an extract
@@ -1666,7 +1673,7 @@ var ANCHOR_CAP = 12;     // STATUTORY ANCHORING: person->contradiction->page->la
 var NARRATIVE_CAP = 10;  // PLAIN-LANGUAGE NARRATIVE: story items
 // A display cap that cuts at a word and closes a quote it cut open: a hard
 // substring cut printed "verify execution again..." for "against" and left
-// "\u201C…eri..." unclosed (Public Protector submission run).
+// "“…eri..." unclosed (Public Protector submission run).
 function capText(s, max, ell) {
   s = String(s == null ? '' : s); ell = ell || '...';
   if (s.length <= max) return s;
@@ -1674,12 +1681,12 @@ function capText(s, max, ell) {
   // Only a mark the cut opened is closed: a record's own unbalanced mark
   // (odd in the whole string too) is left as the record has it.
   var cutOpensStraight = function (t) { return count(t, /"/g) % 2 === 1 && count(s, /"/g) % 2 === 0; };
-  var cutOpensCurly = function (t) { return count(t, /\u201C/g) > count(t, /\u201D/g) && count(s, /\u201C/g) <= count(s, /\u201D/g); };
+  var cutOpensCurly = function (t) { return count(t, /“/g) > count(t, /”/g) && count(s, /“/g) <= count(s, /”/g); };
   var room = max - ell.length - 1, cut = s.lastIndexOf(' ', room);
   if (cut < room * 0.6) cut = room;
-  var out = s.slice(0, cut).replace(/[\s,;:\u2013\u2014-]+$/, '');
+  var out = s.slice(0, cut).replace(/[\s,;:–—-]+$/, '');
   var closeS = cutOpensStraight(out), closeC = cutOpensCurly(out);
-  return out + ell + (closeS ? '"' : '') + (closeC && !closeS ? '\u201D' : '');
+  return out + ell + (closeS ? '"' : '') + (closeC && !closeS ? '”' : '');
 }
 function cleanQuote(ev) {
   ev = String(ev === null || ev === undefined ? '' : ev);
@@ -1775,7 +1782,7 @@ function voQuoteSpans(s) {
   var out = [], i = 0, n = s.length;
   while (i < n) {
     var o = -1;
-    for (var a = i; a < n; a++) { if (s[a] === '"' || s[a] === '\u201C') { o = a; break; } }
+    for (var a = i; a < n; a++) { if (s[a] === '"' || s[a] === '“') { o = a; break; } }
     if (o === -1) break;
     var qc = voQuoteClose(s, o), close = qc.close === -1 ? qc.last : qc.close;
     if (close <= o) break;
@@ -1800,14 +1807,14 @@ function anchorQuotes(f) {
     out.push(span);
   }
   if (!out.length) {
-    var sRe = /(?:^|[\s(\[:,])['\u2018]([^'\u2018\u2019\n]{12,})['\u2019](?=[\s.,;:)\]]|$)/g;
+    var sRe = /(?:^|[\s(\[:,])['‘]([^'‘’\n]{12,})['’](?=[\s.,;:)\]]|$)/g;
     while ((m = sRe.exec(ev)) !== null) out.push(m[1].trim());
   }
   return out;
 }
 function anchorQuote(f) {
   var q = anchorQuotes(f);
-  return q.length ? q.join(' \u2026 ') : null;
+  return q.length ? q.join(' … ') : null;
 }
 // The passage inside one side of a contradiction, when it has one: the
 // longest quoted span, so a short label ('"signed":') never wins over the
@@ -1816,7 +1823,7 @@ function quotedSpan(text) {
   var s = String(text || ''), qs = voQuoteSpans(s), m, best = null;
   for (var qi = 0; qi < qs.length; qi++) { var span = qs[qi].span.trim(); if (span.length >= 6 && (!best || span.length > best.length)) best = span; }
   if (best) return best;
-  m = s.match(/(?:^|[\s(\[:,])['\u2018]([^'\u2018\u2019\n]{12,})['\u2019](?=[\s.,;:)\]]|$)/);
+  m = s.match(/(?:^|[\s(\[:,])['‘]([^'‘’\n]{12,})['’](?=[\s.,;:)\]]|$)/);
   return m ? m[1].trim() : null;
 }
 // What the seal can truthfully say about the blockchain at the moment the
@@ -2132,6 +2139,9 @@ function drawCover(ctx, data) {
   var cjBasis = cj.homeBasis === 'gps' ? 'sealing location' : (cj.homeBasis === 'record' ? 'named in the engine\'s findings' : 'default home jurisdiction');
   var cjList = [(JURIS_LABEL[cj.home] || cj.home) + ' (' + cjBasis + ')'].concat(cj.foreign.map(function (c) { return (JURIS_LABEL[c] || c) + ' (named in the engine\'s findings)'; }));
   cLine('Jurisdiction(s): ' + (data.identity.jurisdiction ? data.identity.jurisdiction + ' (entered); ' : '') + cjList.join(', '), ctx.f.times, 9.5, COVER_TXT, 15);
+  // The GPS fix prints on the cover — the §15.4 header a reader sees first.
+  var _gpsCover = gpsLine(data);
+  if (_gpsCover) cLine(_gpsCover, ctx.f.times, 9.5, COVER_TXT, 15);
   cLine('Case Reference: ' + (data.identity.caseRefs || 'none entered'), ctx.f.times, 9.5, COVER_TXT, 15);
   cLine('Report Type: ' + (data.coverReportType || 'Combined — Forensic Extraction, Contradiction Analysis, Tamper Detection'), ctx.f.times, 9.5, COVER_TXT, 15);
 
@@ -3027,6 +3037,8 @@ function secMethodology(ctx, data) {
   ctx.para(VO_ORDER_NOTE + ' The findings JSON carries the internal rank for ordering only. A single contradiction on the record can be decisive; the counts describe the record, they do not grade it.', { size: 9.5, after: 10 });
 
   ctx.subHeading('Authentication');
+  var _gpsAuth = gpsLine(data);
+  if (_gpsAuth) ctx.para(_gpsAuth + ' For photographic evidence this ties the sealed record to the scene where the evidence was captured.', { size: 9.5, after: 6 });
   var rows = [];
   for (var i = 0; i < data.documents.length; i++) {
     var d = data.documents[i];
@@ -3673,7 +3685,7 @@ function secFindingDetails(ctx, data) {
 // / "Bright Idea Projects"). Never the scorecard's surname-and-initial rule,
 // which would join two different people.
 function sameNameVariant(a, b) {
-  var norm = function (x) { return String(x || '').toLowerCase().replace(/[.,()'\u2019]/g, ' ').replace(/\b(?:pty|ltd|limited|cc|inc|incorporated|t\/a)\b/g, ' ').replace(/\s+/g, ' ').trim(); };
+  var norm = function (x) { return String(x || '').toLowerCase().replace(/[.,()'’]/g, ' ').replace(/\b(?:pty|ltd|limited|cc|inc|incorporated|t\/a)\b/g, ' ').replace(/\s+/g, ' ').trim(); };
   var na = norm(a), nb = norm(b);
   if (!na || !nb) return false;
   if (na === nb || na.replace(/ /g, '') === nb.replace(/ /g, '')) return true;
@@ -4155,7 +4167,11 @@ var NARRATIVE_MEANING = {
   CT43: 'the document contradicts itself within its own pages',
   CT44: 'a right was exercised on a condition the record itself contradicts (the "Lessee/Owner trap")',
   CT45: 'value or goodwill recognised in one document is denied in another',
-  CT46: 'an actor claims one capacity (acting for a company, or a role barred from a dealing) yet the record shows conduct that capacity cannot hold'
+  CT46: 'an actor claims one capacity (acting for a company, or a role barred from a dealing) yet the record shows conduct that capacity cannot hold',
+  CT47: 'passages carry threat, ultimatum or pressure language — an indicator for human review, not a determination',
+  CT48: 'passages deny a documented event or attack the other party\'s recollection — an indicator for human review, not a determination',
+  CT49: 'passages attack the claimant or reverse who the injured party is — an indicator for human review, not a determination',
+  CT50: 'a behavioural keyword set from the signed rule package matched the record — an indicator for human review, not a determination'
 };
 
 function narrativeMeaning(f) {
@@ -4468,7 +4484,7 @@ function narrativeBlocks(narr) {
 // ellipses) are masked before the split and restored after. The masking errs
 // toward UNDER-splitting on purpose: merging two sentences at worst drops one
 // extra compliant sentence, while over-splitting puts fragments in the record.
-var VO_DOT = '\u0001'; // sentinel; never present in extracted PDF text
+var VO_DOT = '\x01'; // sentinel; never present in extracted PDF text
 var VO_ABBREV_RE = /\b(?:mr|mrs|ms|dr|prof|hon|adv|inc|ltd|pty|cc|co|corp|no|nos|vs|v|etc|eg|ie|al|st|ave|rd|jan|feb|mar|apr|jun|jul|aug|sep|sept|oct|nov|dec|p|pp|para|paras|s|ss|cl|art|sec|fig|ch|ex)\.(?=\s|$)/gi;
 
 function splitSentences(text) {
@@ -4481,7 +4497,7 @@ function splitSentences(text) {
     // the evidence-bundle-2-docs narrative printed "standardbank. co. za".
     .replace(/\.(?=[A-Za-z0-9@_-])/g, VO_DOT)
     // a quotation is one unit: "...was never signed. It was..." is not cut inside the quote
-    .replace(/["\u201c]([^"\u201c\u201d]{1,400}?)["\u201d]/g, function (m) { return m.replace(/\./g, VO_DOT); })
+    .replace(/["“]([^"“”]{1,400}?)["”]/g, function (m) { return m.replace(/\./g, VO_DOT); })
     .replace(/(\d)\.(?=\d)/g, '$1' + VO_DOT)                   // 3.5, 6.2.1, 000.00
     .replace(/\b(?:pp?|pgs?)\.(?=\s*\d)/gi, function (m) { return m.slice(0, -1) + VO_DOT; }) // (p.99): a citation, not a sentence end
     .replace(/\b([A-Z])\.(?=\s*[A-Z])/g, '$1' + VO_DOT)        // initials: M. Nortje
@@ -4527,23 +4543,38 @@ var VO_BANNED_SENTENCE_RE = new RegExp([
   '|\\bcredibility\\b|\\bguilt(?:y)?\\b|\\binnocen(?:t|ce)\\b|\\blied\\b|\\bliar\\b',
   // (the noun is spelled in two parts: tests/allfuels-regression locks the
   // word "perjury" to candidate-law lines, and this line bans it, not prints it)
-  '|\\bperj' + 'urer\\b|\\bfraudsters?\\b|\\bdefraud\\w*\\b|\\bdishonest\\w*\\b|\\bfraudulently\\b'
+  '|\\bperj' + 'urer\\b|\\bfraudsters?\\b|\\bdefraud\\w*\\b|\\bdishonest\\w*\\b|\\bfraudulently\\b|\\bcloak(?:ed|ing|s)?\\b[^.]{0,30}\\b(?:crime|offence|fraud|coercion)\\b'
 ].join(''), 'i');
 // "May" the month is not "may" the hedge: "3 May 2026", "May 2026", "May 3"
 // are dates, and a chronology that loses every May sentence is a broken
 // chronology. Only the date forms are masked; "may have signed" still drops.
 var VO_MONTH_MAY_RE = /\b(\d{1,2}(?:st|nd|rd|th)?\s+(?:of\s+)?)May\b|\bMay(?=\s+(?:\d{1,2}(?:st|nd|rd|th)?(?:,?\s+\d{4})?|\d{4})\b)/g;
-function voSentenceBanned(s) {
-  return VO_BANNED_SENTENCE_RE.test(String(s || '').replace(VO_MONTH_MAY_RE, '$1MonthV')) || voSentenceOverclaims(s);
+function voGateSentenceKey(s) {
+  return String(s || '').replace(/^\s*(?:[-•*]|\d{1,2}[.)])\s+/, '').replace(/\s+/g, ' ').trim();
+}
+function voAllowedPageContradiction(s, allowed) {
+  if (!allowed || !allowed.length) return false;
+  var key = voGateSentenceKey(s);
+  for (var i = 0; i < allowed.length; i++) if (voGateSentenceKey(allowed[i]) === key) return true;
+  return false;
+}
+function voSentenceBanned(s, allowPageContradiction) {
+  var raw = String(s || '').replace(VO_MONTH_MAY_RE, '$1MonthV');
+  // "may constitute" is the Constitution's sanctioned candidate-law framing;
+  // mask only that phrase for the hedge scan (the worker's gate does the same).
+  // Any other "may" still drops the sentence.
+  if (VO_CANDIDATE_LAW_RE.test(raw)) raw = raw.replace(/\bmay\s+constitute\b/gi, 'constitutes');
+  return VO_BANNED_SENTENCE_RE.test(raw) || voSentenceOverclaims(s, allowPageContradiction);
 }
 // The same three rules the Worker's court-ready gate enforces (humanOverclaim),
 // held again at render time for every machine-written telling (PD2, PD16;
 // evidence-bundle-7-docs, 5 October 2026: "The core pattern the record
 // establishes is that …" over the author's own email, "… constitute
 // coercion", "… contradicting the company's own documents"): only an [F#]
-// finding is established, proved, revealed, shown or confirmed; a
-// contradiction is stated only with its [F#]; conduct is never called an
-// offence outside candidate-law framing.
+// finding is established, proved, revealed, shown or confirmed; a contradiction
+// is stated either with its [F#] or as an exact sentence the worker verified
+// against both quoted source pages; conduct is never called an offence outside
+// candidate-law framing.
 var VO_FINDING_REF_RE = /\[F\d{1,3}\]|\(F\d{1,3}\)|\bfindings?\s+F\d{1,3}\b/i;
 // The rules read the sentence with its quotations masked (a quotation is
 // what the page says, "this contradicts your email" included) and judge each
@@ -4605,7 +4636,7 @@ function voCharacterises(s) {
   if (VO_CHARACTERISE_RE.test(t)) return true;
   return VO_OFFENCE_ANY_RE.test(t) && !VO_OFFENCE_OK_RE.test(t);
 }
-function voSentenceOverclaims(s) {
+function voSentenceOverclaims(s, allowPageContradiction) {
   var t0 = String(s || '');
   // Conduct is never called an offence outside candidate law, on any line —
   // a stated gap and an [F#] sentence included.
@@ -4618,7 +4649,7 @@ function voSentenceOverclaims(s) {
   // Contradiction") names an engine finding; it is not the sentence calling
   // two things contradictory.
   var tk = t.replace(voKindNameRe(), ' finding-kind ');
-  if (VO_CONTRADICT_RE.test(tk) && !REBUTTAL_OPEN_RE.test(t0) && !REBUTTAL_ASSESS_RE.test(t0)) return true;
+  if (VO_CONTRADICT_RE.test(tk) && allowPageContradiction !== true && !REBUTTAL_OPEN_RE.test(t0) && !REBUTTAL_ASSESS_RE.test(t0)) return true;
   return false;
 }
 var _voKindNameRe = null;
@@ -4652,7 +4683,7 @@ function voGatePasses(scrub) {
   return scrub.kept >= VO_GATE_MIN_KEPT && scrub.kept >= scrub.dropped;
 }
 
-function scrubNarrative(text) {
+function scrubNarrative(text, allowedPageContradictions) {
   var out = [], kept = 0, dropped = 0;
   var paras = String(text || '').split(/\n{2,}/);
   for (var p = 0; p < paras.length; p++) {
@@ -4672,7 +4703,7 @@ function scrubNarrative(text) {
     var sentences = splitSentences(trimmed);
     var keptHere = [];
     for (var s = 0; s < sentences.length; s++) {
-      if (voSentenceBanned(sentences[s])) { dropped++; continue; }
+      if (voSentenceBanned(sentences[s], voAllowedPageContradiction(sentences[s], allowedPageContradictions))) { dropped++; continue; }
       kept++;
       keptHere.push(sentences[s].trim());
     }
@@ -4692,11 +4723,11 @@ function scrubNarrative(text) {
 // claim never leaves a stray cite behind to keep its rebuttal alive. The
 // server's paragraphing survives: paragraphs stay split by blank lines (the
 // renderer splits on them), lines inside a paragraph by single newlines.
-var REBUTTAL_OPEN_RE = /^\s*(?:[-\u2022*]|\d{1,2}[.)])?\s*\**\s*(?:this (?:account|statement|version) conflicts|the record (?:at p\.|states|it conflicts)|assessment\s*[:\u2014\u2013-])/i;
-var REBUTTAL_ASSESS_RE = /\bassessment\s*[:\u2014\u2013-]\s*\**\s*(?:contradicted|not contradicted)/i;
-var TRAILING_CITE_RE = /\s*[\(\[]\s*pp?\.\s*\d[\d\s,\u2013-]*[\)\]]\s*$/;
+var REBUTTAL_OPEN_RE = /^\s*(?:[-•*]|\d{1,2}[.)])?\s*\**\s*(?:this (?:account|statement|version) conflicts|the record (?:at p\.|states|it conflicts)|assessment\s*[:—–-])/i;
+var REBUTTAL_ASSESS_RE = /\bassessment\s*[:—–-]\s*\**\s*(?:contradicted|not contradicted)/i;
+var TRAILING_CITE_RE = /\s*[\(\[]\s*pp?\.\s*\d[\d\s,–-]*[\)\]]\s*$/;
 function isRebuttal(t) { return REBUTTAL_OPEN_RE.test(t) || REBUTTAL_ASSESS_RE.test(t); }
-function scrubRebuttals(text) {
+function scrubRebuttals(text, allowedPageContradictions) {
   var paras = String(text || '').split(/\n{2,}/), out = [], kept = 0, dropped = 0, orphaned = 0, prevClaimKept = false;
   for (var p = 0; p < paras.length; p++) {
     var lines = paras[p].split(/\n/), keptLines = [];
@@ -4705,7 +4736,7 @@ function scrubRebuttals(text) {
       if (!line.trim()) continue;
       var cite = '', mc = line.match(TRAILING_CITE_RE);
       if (mc) { cite = mc[0].trim(); line = line.slice(0, mc.index); }
-      var sc = scrubNarrative(line);
+      var sc = scrubNarrative(line, allowedPageContradictions);
       if (isRebuttal(line)) {
         if (!prevClaimKept) { orphaned += sc.kept; dropped += sc.dropped; continue; }
       } else if (isRebuttal(sc.text)) {
@@ -4721,6 +4752,16 @@ function scrubRebuttals(text) {
     if (keptLines.length) out.push(keptLines.join('\n'));
   }
   return { text: out.join('\n\n'), kept: kept, dropped: dropped, orphaned: orphaned };
+}
+
+function voSectionPageContradictions(sec) {
+  var list = sec && Array.isArray(sec.pageContradictions) ? sec.pageContradictions : [];
+  var out = [];
+  for (var i = 0; i < list.length && out.length < 40; i++) {
+    var s = String(list[i] || '').replace(/\s+/g, ' ').trim();
+    if (s) out.push(s.slice(0, 500));
+  }
+  return out;
 }
 
 
@@ -5185,7 +5226,7 @@ function contradictionSides(ev) {
   var a = cleanQuote(m[0]), b = cleanQuote(m.slice(1).join(' '));
   if (a.length < 8 || b.length < 8) return null;
   var qa = quotedSpan(a), qb = quotedSpan(b);
-  var bare = function (x) { return x.replace(/^["\u201C\u201D'\s]+|["\u201C\u201D'\s]+$/g, ''); };
+  var bare = function (x) { return x.replace(/^["“”'\s]+|["“”'\s]+$/g, ''); };
   return { a: qa || bare(a), b: qb || bare(b), aQuoted: !!qa, bQuoted: !!qb };
 }
 
@@ -5302,7 +5343,7 @@ function engineNotes(data) {
   var notes = String((data && data.extractionNotes) || (data && data.findings && data.findings.extractionNotes) || '');
   var m = notes.match(/Engine notes \(\d+\):\s*([^]*?)(?=(?:\s+Score calibration|$))/);
   if (!m) return out;
-  var items = m[1].split(/\s+\u2022\s+/);
+  var items = m[1].split(/\s+•\s+/);
   for (var k = 0; k < items.length; k++) {
     var it = items[k].replace(/\s+/g, ' ').trim();
     if (!it) continue;
@@ -5875,11 +5916,13 @@ async function buildNarrative(opts) {
 
 // ================= COURT-READY NARRATIVE REPORT (the "human report") =========
 // A sealed companion document written by an AI narrator FROM the sealed
-// technical report and its findings JSON. Constitutional position (AGENTS.md
-// founder ruling 9): a separate covering document — it adds no findings, it is
-// advisory, the sealed technical report remains the record. Division of
-// labour is the GHRP contract: the engine supplies every table, page and
-// quotation below; the model supplies prose only, one section per call, and
+// technical report, findings JSON and supplied sealed bundle text.
+// Constitutional position (AGENTS.md founder ruling 9): a separate covering
+// document — it adds no engine findings, it is advisory, and the sealed
+// technical report remains the audit record. Division of labour is the GHRP
+// contract: the engine supplies every table below; the model supplies prose
+// only, one section per call. An engine-missed contradiction prints only when
+// the worker verifies both quoted sides against the cited source pages, and
 // every model sentence passes the §15.2 gate (scrubNarrative → voGatePasses)
 // here at render time — the same gate the technical report applies — after the
 // worker's own anchor gate. A section whose prose fails the gate renders its
@@ -5895,6 +5938,64 @@ var HUMAN_REPORT_SECTIONS = [
   'recommendations', 'court_ready_declaration', 'authentication', 'annexures'
 ];
 
+// The sealing location is evidence-tying data (founder ruling 2026-10-11): a
+// GPS fix captured on the sealing device at seal time binds the sealed record
+// to a place — for an officer photographing evidence at a scene, this is the
+// printed link between the sealed evidence and the scene. It appears wherever
+// the seal is provenanced, with the device's own accuracy figure, and never
+// appears when the user did not share a location.
+function gpsLine(data) {
+  var g = data && data.gps;
+  if (!g) return null;
+  var lat = Number(g.lat), lng = Number(g.lng);
+  if (!isFinite(lat) || !isFinite(lng)) return null;
+  var acc = Number(g.acc || g.accuracy);
+  return 'Sealing location (GPS): ' + lat.toFixed(6) + ', ' + lng.toFixed(6) +
+    (isFinite(acc) && acc > 0 ? ' ± ' + Math.round(acc) + ' m' : '') +
+    ' — captured on the sealing device at seal time and recorded in the seal metadata.';
+}
+
+// ==================== LAW-LANE VERIFICATION (B7) ====================
+// The worker's /api/v1/ai/verify-law checks every candidate statute the report
+// intends to name with up to three independent model lanes; a statute is cited
+// only when a 2-of-3 quorum confirms it (SPEC-triple-legal-verification).
+// Founder ruling 2026-10-11: disagreement is never silently out-voted and never
+// machine-tie-broken — the statute is excluded from findings and the report
+// directs the reader to a qualified lawyer. Verum Omnis never gives legal
+// advice: the standing disclaimer closes every LEGAL FRAMEWORK section whether
+// or not the lanes ran. These strings mirror the worker's exactly.
+var LAW_DISCLAIMER_TEXT = 'These citations are pointers for a qualified legal professional, not legal advice. Contact a lawyer before acting on them.';
+
+// Split a verify-law response into the statutes that may be cited and those
+// that may not. A fixed, deterministic function of the worker's response —
+// nothing here is recomputed or reinterpreted.
+function lawExclusionsOf(lawCheck) {
+  var out = { verified: [], excluded: [], declaration: '', disclaimer: LAW_DISCLAIMER_TEXT, direction: null };
+  if (!lawCheck || !Array.isArray(lawCheck.results)) return out;
+  out.declaration = String(lawCheck.declaration || '').slice(0, 300);
+  out.direction = lawCheck.direction ? String(lawCheck.direction).slice(0, 300) : null;
+  for (var i = 0; i < lawCheck.results.length; i++) {
+    var r = lawCheck.results[i] || {};
+    var item = {
+      statute: String(r.statute || '').slice(0, 200),
+      section: String(r.section || '').slice(0, 60),
+      status: (r.status === 'VERIFIED' || r.status === 'DISPUTED' || r.status === 'UNVERIFIED') ? r.status : 'UNVERIFIED',
+      note: ''
+    };
+    if (!item.statute) continue;
+    if (Array.isArray(r.lanes)) {
+      var ran = [];
+      for (var l = 0; l < r.lanes.length; l++) {
+        var ln = r.lanes[l];
+        if (ln && (ln.verdict === 'CONFIRMS' || ln.verdict === 'REJECTS')) ran.push(String(ln.lane) + ' ' + String(ln.verdict).toLowerCase().replace(/s$/, '') + 's');
+      }
+      item.note = ran.join('; ');
+    }
+    (item.status === 'VERIFIED' ? out.verified : out.excluded).push(item);
+  }
+  return out;
+}
+
 async function buildHumanReport(opts) {
   opts = opts || {};
   var fr = opts.findings || { clean: true, overallScore: 0, totalFindings: 0, findings: [], summary: '' };
@@ -5907,21 +6008,32 @@ async function buildHumanReport(opts) {
   var reference = identity.reference ||
     ('VO-WEB-' + fmtDateStamp(generatedAt) + '-' + (doc0.sealId ? String(doc0.sealId).replace(/^VO-/, '').substring(8, 12) : voDeterministicRefHex(doc0, generatedAt)) + '-N');
   var hs = opts.humanSections || {};
+  // B7 triple law verification (worker /api/v1/ai/verify-law): which candidate
+  // statutes the lanes confirmed and which are excluded. null = the lanes were
+  // not asked, and no verification is claimed anywhere in the report.
+  var lawCheck = (opts.lawCheck && Array.isArray(opts.lawCheck.results)) ? opts.lawCheck : null;
   var prov = opts.humanProvenance || {};
   // Whether any AI-written section can print (the same pass rule as the
   // render below): the cover and the certification say "machine-written" only
   // then; otherwise the document is the deterministic record.
-  var aiPrintable = (function () {
+  // The writer sections (worker HUMAN_SECTIONS writer:true): the nine the AI
+  // narrator can write; the rest of the report is always the deterministic
+  // record. The count feeds the honest-split certification (Greensky rerun
+  // fix 4): "drafted by an AI narrator" may not print when one section of
+  // nine is machine-written.
+  var VO_WRITER_SECTIONS = ['executive_summary', 'chronology', 'four_pillars', 'critical_evidence', 'counter_narratives', 'sworn_statements', 'coercive_conduct', 'legal_framework', 'recommendations'];
+  var aiCounts = (function () {
     var drafted = 0, passing = 0;
     for (var k in hs) {
       var x = hs[k];
       if (!x || x.provenance !== 'ai' || !x.text) continue;
       drafted++;
-      var sc = (k === 'counter_narratives') ? scrubRebuttals(x.text) : scrubNarrative(x.text);
+      var sc = (k === 'counter_narratives') ? scrubRebuttals(x.text, voSectionPageContradictions(x)) : scrubNarrative(x.text, voSectionPageContradictions(x));
       if (voGatePasses(sc) || (sc.dropped === 0 && String(x.text).trim().length < 200)) passing++;
     }
-    return passing > 0 && !(drafted >= 2 && passing * 2 < drafted);
+    return { drafted: drafted, passing: passing };
   })();
+  var aiPrintable = aiCounts.passing > 0 && !(aiCounts.drafted >= 2 && aiCounts.passing * 2 < aiCounts.drafted);
   var humanFindings = Array.isArray(opts.humanFindings) ? opts.humanFindings : [];
 
   var PDFDocument = PDFLibRef.PDFDocument, StandardFonts = PDFLibRef.StandardFonts;
@@ -5944,7 +6056,7 @@ async function buildHumanReport(opts) {
   if (wmBytes) { try { images.watermark = await doc.embedPng(wmBytes); } catch (e) { images.watermark = null; } }
 
   var ctx = makeCtx(doc, fonts, images, doc0.name || 'document.pdf', { headerTitle: 'Verum Omnis Court-Ready Narrative' });
-  if (!identity.subtitle) identity.subtitle = 'AI-drafted narrative over sealed deterministic findings — advisory';
+  if (!identity.subtitle) identity.subtitle = 'AI-drafted narrative over the sealed record and deterministic findings — advisory';
   var data = {
     findings: fr,
     documents: docs,
@@ -5969,14 +6081,18 @@ async function buildHumanReport(opts) {
     gps: opts.gps || null,
     coverTitle: 'COURT-READY NARRATIVE REPORT',
     coverReportType: 'Court-ready narrative — advisory companion to the sealed technical report',
-    coverProvenance: aiPrintable ? [
-      'This narrative was drafted by an AI narrator from the sealed technical forensic report and its findings JSON.',
-      'Every table, page reference and quotation is engine output; the prose is machine-written, gated, and advisory.',
-      'It adds no findings. The sealed technical report is the record; the verdict on any named person is for the court.'
+    coverProvenance: aiPrintable ? (aiCounts.passing >= VO_WRITER_SECTIONS.length ? [
+      'This narrative was drafted by an AI narrator from the sealed technical forensic report, its findings JSON and the supplied sealed bundle text.',
+      'Every table is engine output; machine-written prose is gated, and an AI-identified contradiction prints only when both quoted sides verify against the cited source pages.',
+      'The sealed technical report is the audit record; the verdict on any named person is for the court.'
     ] : [
+      aiCounts.passing + ' of ' + VO_WRITER_SECTIONS.length + ' narrative sections were drafted by an AI narrator and passed the §15.2 gates; the remaining sections print the deterministic record of the sealed technical report and its findings JSON.',
+      'Every table is engine output; machine-written prose is gated, and an AI-identified contradiction prints only when both quoted sides verify against the cited source pages.',
+      'The sealed technical report is the audit record; the verdict on any named person is for the court.'
+    ]) : [
       'No AI-written section passed the gates, so this narrative is the deterministic record of the sealed technical report and its findings JSON.',
       'Every table, page reference and quotation is engine output; nothing here is machine-written prose.',
-      'It adds no findings. The sealed technical report is the record; the verdict on any named person is for the court.'
+      'The sealed technical report is the audit record; the verdict on any named person is for the court.'
     ]
   };
 
@@ -6032,7 +6148,7 @@ async function buildHumanReport(opts) {
     var hsec = hs[hk];
     if (!hsec || hsec.provenance !== 'ai' || !hsec.text) continue;
     aiDrafted++;
-    var hsc = (hk === 'counter_narratives') ? scrubRebuttals(hsec.text) : scrubNarrative(hsec.text);
+    var hsc = (hk === 'counter_narratives') ? scrubRebuttals(hsec.text, voSectionPageContradictions(hsec)) : scrubNarrative(hsec.text, voSectionPageContradictions(hsec));
     // A sanctioned one-line answer ("None identified.") is short and gate-clean.
     if (voGatePasses(hsc) || (hsc.dropped === 0 && String(hsec.text).trim().length < 200)) aiPassing++;
   }
@@ -6041,7 +6157,7 @@ async function buildHumanReport(opts) {
     sectionsAll++;
     var sec = hs[id];
     if (narratorSuppressed && sec && sec.provenance === 'ai' && sec.text) {
-      var scrubS = (id === 'counter_narratives') ? scrubRebuttals(sec.text) : scrubNarrative(sec.text);
+      var scrubS = (id === 'counter_narratives') ? scrubRebuttals(sec.text, voSectionPageContradictions(sec)) : scrubNarrative(sec.text, voSectionPageContradictions(sec));
       gateDroppedServer += ((sec.gate && sec.gate.dropped) || 0) + (sec.discardedDropped | 0);
       draftsDiscarded += sec.discarded | 0;
       gateDroppedClient += scrubS.dropped;
@@ -6053,7 +6169,7 @@ async function buildHumanReport(opts) {
       return false;
     }
     if (sec && sec.provenance === 'ai' && sec.text) {
-      var scrub = (id === 'counter_narratives') ? scrubRebuttals(sec.text) : scrubNarrative(sec.text);
+      var scrub = (id === 'counter_narratives') ? scrubRebuttals(sec.text, voSectionPageContradictions(sec)) : scrubNarrative(sec.text, voSectionPageContradictions(sec));
       // The server's count is a fact about the draft whether or not the
       // section is printed (Sourcery, PR #212): accumulate it first.
       var serverDropped = (sec.gate && sec.gate.dropped) || 0;
@@ -6096,6 +6212,7 @@ async function buildHumanReport(opts) {
       gateDroppedServer += sec ? ((sec.discardedDropped | 0) + ((sec.gate && sec.gate.dropped) || 0)) : 0;
       var reasonText = {
         no_api_at_this_address: 'the address this page was opened from answered with a web page instead of the AI service — the site was being served by a host that has no API, so the narrator could not be asked',
+        seal_required: 'the sealed technical report was not available, so the narrator was not run',
         network: 'the AI service could not be reached from this page',
         timeout: 'the AI service did not answer within the time allowed',
         ai_unavailable: 'the AI model was unavailable',
@@ -6289,6 +6406,27 @@ async function buildHumanReport(opts) {
   aiBlock('legal_framework', function () {
     ctx.para('Candidate provisions for the anchored findings are listed under Statutory Anchoring below. They are starting points for counsel to confirm, not legal conclusions.', { size: 10.5, after: 6 });
   });
+  // Law-lane verification result (B7 triple verification). When the lanes ran,
+  // their honest declaration prints; every statute the quorum did not confirm
+  // is named in the exclusion annex and escalates to a human lawyer — never
+  // silently out-voted (founder ruling 2026-10-11). The standing
+  // not-legal-advice line closes the section whether or not the lanes ran.
+  if (lawCheck) {
+    var lw = lawExclusionsOf(lawCheck);
+    if (lw.declaration) {
+      ctx.gap(2);
+      ctx.para(lw.declaration, { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
+    }
+    if (lw.excluded.length) {
+      ctx.subHeading('NOT CONFIRMED — EXCLUDED FROM FINDINGS');
+      for (var lx = 0; lx < lw.excluded.length; lx++) {
+        var exl = lw.excluded[lx];
+        ctx.bullet(exl.statute + (exl.section ? ', ' + exl.section : '') + ' — ' + exl.status + (exl.note ? ' (' + exl.note + ')' : ''), { size: 9 });
+      }
+      if (lw.direction) ctx.para(lw.direction, { size: 10, font: ctx.f.timesBold, color: RED, after: 8 });
+    }
+  }
+  ctx.para(LAW_DISCLAIMER_TEXT, { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   engineUnder(secStatutoryAnchoring);
 
   // ---- 11. OFFENCE MATRIX (engine) ----------------------------------------
@@ -6327,31 +6465,61 @@ async function buildHumanReport(opts) {
   ctx.subHeading('Verdict reservation');
   ctx.para('The verdict on any named person is reserved for the court. This narrative records what the sealed documents state and measure — it makes no determination of guilt, liability, or wrongdoing.', { size: 10.5, after: 8 });
   ctx.subHeading('Certification');
-  ctx.box(null, [
-    'This narrative report is sealed under SHA-512 and ' + anchorPhrase(data) + '. ' + (sectionsAi ? 'It was drafted by an AI narrator' : 'No AI-written section passed the gates; it is the deterministic record built') + ' from the sealed technical forensic report and its findings JSON, under the Verum Omnis Constitution v' + CONSTITUTION.governance.version + ' (engine instrument v' + CONSTITUTION_VERSION + '). It adds no findings; every table, page reference and quotation is deterministic engine output' + (sectionsAi ? '; the prose is machine-written and advisory.' : '.') + ' The sealed technical report remains the evidentiary record. No language-model verification of the findings is claimed' + aiReviewQualifier(data) + '.'
-  ], { size: 10 });
+  var certAuthorship;
+  if (sectionsAi >= VO_WRITER_SECTIONS.length) {
+    certAuthorship = 'It was drafted by an AI narrator from the sealed technical forensic report, its findings JSON and the supplied sealed bundle text';
+  } else if (sectionsAi > 0) {
+    // Greensky rerun fix 4: a partial AI narrative is certified as a split,
+    // never as "drafted by an AI narrator" whole.
+    certAuthorship = sectionsAi + ' of ' + VO_WRITER_SECTIONS.length + ' narrative sections were drafted by an AI narrator; the remaining sections are the deterministic record, built from the sealed technical forensic report, its findings JSON and the supplied sealed bundle text';
+  } else {
+    certAuthorship = 'No AI-written section passed the gates; it is the deterministic record built from the sealed technical forensic report, its findings JSON and the supplied sealed bundle text';
+  }
+  var certText = 'This narrative report is sealed under SHA-512 and ' + anchorPhrase(data) + '. ' + certAuthorship + ', under the Verum Omnis Constitution v' + CONSTITUTION.governance.version + ' (engine instrument v' + CONSTITUTION_VERSION + '). It adds no engine findings; every table is deterministic engine output, and any AI-identified contradiction was verified against both quoted source pages before printing' + (sectionsAi ? '; the prose in the AI-written sections is machine-written and advisory.' : '.') + ' The sealed technical report remains the audit record. No language-model verification of the findings is claimed' + aiReviewQualifier(data) + '.';
+  // The law-lane declaration is part of the certification when the lanes ran:
+  // the report states exactly how many independent lanes verified its legal
+  // citations, and escalates every excluded statute to a human lawyer.
+  if (lawCheck) {
+    var lwCert = lawExclusionsOf(lawCheck);
+    if (lwCert.declaration) certText += ' ' + lwCert.declaration;
+    if (lwCert.direction) certText += ' ' + lwCert.direction;
+  }
+  ctx.box(null, [certText], { size: 10 });
 
   // ---- 14. AUTHENTICATION & PROVENANCE ------------------------------------
   ctx.newBodyPage();
   ctx.heading('AUTHENTICATION & PROVENANCE');
+  var recordCtx = prov.recordContext || null;
+  var narratorContextLine = recordCtx ? ('Narrator source context: ' +
+    (recordCtx.fullTextSupplied
+      ? 'full extracted sealed-bundle text supplied (' + (recordCtx.totalPages || 0) + ' pages)'
+      : (recordCtx.suppliedPageCount || 0) + ' of ' + (recordCtx.totalPages || 0) + ' sealed-bundle pages supplied' +
+        (recordCtx.truncatedPageCount ? '; ' + recordCtx.truncatedPageCount + ' supplied page(s) truncated' : '') +
+        (recordCtx.omittedPageCount ? '; ' + recordCtx.omittedPageCount + ' page(s) not supplied' : '')) +
+    '  |  findings JSON: ' + (recordCtx.findingsJsonSupplied ? 'supplied' : 'not supplied') +
+    '  |  technical report text: ' + (recordCtx.technicalReportSupplied
+      ? 'supplied (' + (recordCtx.technicalReportSuppliedPages || 0) + ' of ' + (recordCtx.technicalReportPageCount || 0) + ' pages' + (recordCtx.technicalReportTruncated ? ', truncated' : '') + ')'
+      : 'not supplied')) : null;
   var lines = [
     'Narrative report reference: ' + reference,
     'Generated: ' + generatedAt.toISOString(),
+    gpsLine(data),
     'Source document: ' + san(data.docName) + ' (' + data.pageCount + ' pages) — SHA-512 ' + truncHash(data.sha512, 24, 12),
     'Sealed technical report: ' + (prov.technicalSealId || 'n/a') + ' — SHA-512 ' + (prov.technicalSha512 ? truncHash(prov.technicalSha512, 24, 12) : 'n/a'),
     'Findings JSON (v' + (prov.findingsJsonVersion || '1.2.0') + '): SHA-512 ' + (prov.findingsJsonSha512 ? truncHash(prov.findingsJsonSha512, 24, 12) : 'n/a'),
     'AI narrator: ' + san(String(prov.model || (prov.sectionsAttempted > 0
       ? 'asked for ' + prov.sectionsAttempted + ' section' + (prov.sectionsAttempted === 1 ? '' : 's') + '; no draft passed the server\'s anchor and language gate, so nothing AI-written is printed'
-      : 'not run'))) + '  |  contract ' + san(String(prov.contract || 'human-v1')) + '  |  temperature 0',
-    'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the server\'s anchor and language gate: ' + gateDroppedServer + '  |  by the render-time §15.2 gate: ' + gateDroppedClient + (draftsDiscarded ? '  |  drafts the server\'s gate discarded whole: ' + draftsDiscarded : '') + (gateOrphaned ? '  |  rebuttal sentences dropped with a removed claim: ' + gateOrphaned : ''),
+      : 'not run'))) + '  |  contract ' + san(String(prov.contract || 'human-v1')) + '  |  temperature 0' + (prov.modelAttempts ? '  |  model drafts attempted: ' + prov.modelAttempts : ''),
+    narratorContextLine,
+    'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the server\'s anchor and language gate: ' + gateDroppedServer + '  |  by the render-time §15.2 gate: ' + gateDroppedClient + (draftsDiscarded ? '  |  drafts discarded before printing: ' + draftsDiscarded : '') + (gateOrphaned ? '  |  rebuttal sentences dropped with a removed claim: ' + gateOrphaned : ''),
     'Engine: Forensic Contradiction Engine v' + ENGINE_VERSION + ' — deterministic mode',
     rulePackageLine(data),
     brain9SweepLine(data),
     'Verification: verumglobal.foundation/verify.html checks the file against its seal and fetches the OpenTimestamps proof; an OpenTimestamps client can check the Bitcoin block independently'
   ];
-  ctx.box('Provenance record', lines, { size: 9 });
+  ctx.box('Provenance record', lines.filter(function (x) { return Boolean(x); }), { size: 9 });
   ctx.gap(6);
-  ctx.para((sectionsAi ? 'The prose in this document is machine-written. ' : 'No section of this document is machine-written prose: every AI draft was gated out or not generated. ') + 'The findings are not the opinion of a generative AI: they are the output of deterministic forensic software, sealed in the technical report named above. No language-model verification of those findings is claimed' + aiReviewQualifier(data) + '; the narrator was handed the findings and wrote about them under the Constitution. Every sentence that failed the anchor or language gate was removed, and every draft that failed it as a whole was discarded; both are counted in the provenance record above.', { size: 9.5, after: 6 });
+  ctx.para((sectionsAi ? 'The prose in this document is machine-written. ' : 'No section of this document is machine-written prose: every AI draft was gated out or not generated. ') + 'The engine findings are not the opinion of a generative AI: they are the output of deterministic forensic software, sealed in the technical report named above. No language-model verification of the findings is claimed' + aiReviewQualifier(data) + '; the narrator was handed the declared sealed-record context, the findings JSON and the technical-report text and wrote under the Constitution. An AI-identified contradiction is printed only when the server verified both quoted sides against the cited source pages. Every sentence that failed the anchor or language gate was removed, and every draft that failed it as a whole was discarded; both are counted in the provenance record above.', { size: 9.5, after: 6 });
 
   // ---- 15. ANNEXURES (engine) ---------------------------------------------
   ctx.newBodyPage();
@@ -6384,6 +6552,7 @@ var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buil
   _effectivePartiesWithRoles: effectivePartiesWithRoles,
   _splitSentences: splitSentences, _samePartyName: samePartyName, _isEngineFinding: isEngineFinding, _humanNumberable: humanNumberable, _speakerOf: speakerOf, _partyStronglyNamed: partyStronglyNamed, _capText: capText, _aiSectionName: aiSectionName, _findingName: findingName, _hasTwoSidedFinding: hasTwoSidedFinding, _isReducedWeight: isReducedWeight, _isCappedWeight: isCappedWeight, _voCountPhrase: voCountPhrase, _statutesForFinding: statutesForFinding, _engineNotes: engineNotes,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
+  _lawExclusionsOf: lawExclusionsOf, _lawDisclaimer: LAW_DISCLAIMER_TEXT, _gpsLine: gpsLine,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
 global.VerumReport = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
@@ -6438,7 +6607,7 @@ var VO_ENGINE_VERSION = '5.3.5-web';
 // seal-document.html) must stay >= this value, or the engine names a gap it
 // never tried to close. Exported and drift-locked by tests/ocr-rescue.
 var VO_NEAR_EMPTY_CHARS = 40;
-var VO_SEAL_BOILERPLATE_RE = /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL|PRIVATE\s+SEAL(?:\s*[-\u2013\u2014]+\s*FREE\s+TIER)?|VERIFY\s+SEAL|scan\s+the\s+code\s+or\s+verify\s+at|verumglobal\.foundation(?:\/verify\.html)?|OpenTimestamps|Patent\s+Pending|Africa\/Johannesburg|AI\s+FORENSICS\s+FOR\s+TRUTH|Founder,?\s+Verum\s+Omnis|\bVerum\s+Omnis\b|\bSeal:\s*|\bChain:\s*\d+\s*prev\b|\bUTC\b|\bFREE\s+TIER\b/gi;
+var VO_SEAL_BOILERPLATE_RE = /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL|PRIVATE\s+SEAL(?:\s*[-–—]+\s*FREE\s+TIER)?|VERIFY\s+SEAL|scan\s+the\s+code\s+or\s+verify\s+at|verumglobal\.foundation(?:\/verify\.html)?|OpenTimestamps|Patent\s+Pending|Africa\/Johannesburg|AI\s+FORENSICS\s+FOR\s+TRUTH|Founder,?\s+Verum\s+Omnis|\bVerum\s+Omnis\b|\bSeal:\s*|\bChain:\s*\d+\s*prev\b|\bUTC\b|\bFREE\s+TIER\b/gi;
 function voContentMass(t) {
   var s = String(t || '').toLowerCase()
     .replace(VO_SEAL_BOILERPLATE_RE, ' ')
@@ -6581,9 +6750,9 @@ var CONTRADICTION_TYPES = {
   },
   CT19_VAT_NUMBER_INVALID: {
     id: 'CT19', name: 'VAT Number Invalid',
-    desc: 'VAT number fails checksum validation or is inconsistent',
+    desc: 'VAT number is not in the valid South African form or is inconsistent',
     severity: 4, category: 'FINANCIAL',
-    example: 'VAT number 4120245773 fails mod-97 check (South Africa)'
+    example: 'a stated VAT number is not a 10-digit number beginning with 4'
   },
   CT20_REGISTRATION_NUMBER_FAKE: {
     id: 'CT20', name: 'Registration Number Fake',
@@ -6776,6 +6945,51 @@ var CONTRADICTION_TYPES = {
     desc: 'An actor asserts they act in a corporate or restricted capacity (e.g. on behalf of a company, or a role barred from certain dealings) but the same record shows conduct inconsistent with that capacity — money routed to a personal account, or a briefing accepted that the stated capacity prohibits.',
     severity: 4, category: 'IDENTITY',
     example: 'A party states they act "on behalf of X (Pty) Ltd" yet directs payment to their personal trust account; or states they "may not accept briefs from the public" yet accepted one.'
+  },
+
+  // === CATEGORY 11: CONDUCT INDICATORS (47) ===
+  // Coercion is conduct, not a contradiction — the 46 contradiction detectors
+  // are silent on it. CT47 surfaces the passages where threat, ultimatum or
+  // pressure language appears, as indicators for human review; it never
+  // determines that coercion occurred (a legal conclusion, for the court).
+  CT47_COERCIVE_CONDUCT: {
+    id: 'CT47', name: 'Coercive Conduct Indicators',
+    desc: 'Passages carrying threat, ultimatum or pressure language (consequences for refusal, supply or access cut off, lockout, "under protest/under duress" accounts) — indicators for human review, not a determination that coercion occurred.',
+    severity: 3, category: 'BEHAVIOUR',
+    example: '"Should you fail to sign the addendum, we will have no option but to stop all fuel deliveries."'
+  },
+
+  // Gaslighting is conduct, not a contradiction: a party denies a documented
+  // reality or attacks the other's recollection of it. CT48 surfaces the
+  // passages as indicators for human review; it never determines that
+  // gaslighting occurred (a psychological conclusion, not the engine's).
+  CT48_REALITY_DENIAL: {
+    id: 'CT48', name: 'Gaslighting / Reality-Denial Indicators',
+    desc: 'Passages denying a documented event or record, or attacking the other party\'s recollection ("that never happened", "we have no record of", "your recollection is wrong", "fabrication") — indicators for human review, not a determination of gaslighting.',
+    severity: 3, category: 'BEHAVIOUR',
+    example: '"No such agreement was ever concluded; your recollection of events is simply wrong."'
+  },
+
+  // DARVO — Deny, Attack, Reverse Victim and Offender: a party accused of
+  // wrongdoing responds by attacking the complainant and casting itself as
+  // the victim. CT49 surfaces the passages as indicators for human review;
+  // it never determines intent (for the court).
+  CT49_BLAME_REVERSAL: {
+    id: 'CT49', name: 'Blame-Reversal / DARVO Indicators',
+    desc: 'Passages where a party, facing a claim, attacks the claimant or casts itself as the injured party ("we are the injured party", "if anyone has been defrauded", "your harassment of our staff", "vexatious", threats of defamation or counterclaim) — indicators for human review, not a determination of intent.',
+    severity: 3, category: 'BEHAVIOUR',
+    example: '"Your client\'s harassment of our staff leaves us no option; if anyone has been defrauded here, it is us."'
+  },
+
+  // The signed-rule learning loop's behavioural entry point: a curated
+  // behavioral_markers rule (keyword set) the package teaches the engine
+  // between releases. CT50 is the generic label; a rule may name a more
+  // specific behavioural type via `produces` (CT47/CT48/CT49).
+  CT50_SIGNED_BEHAVIOURAL_MARKER: {
+    id: 'CT50', name: 'Behavioural Pattern Indicator (Signed Rule)',
+    desc: 'A behavioural keyword set from the signed rule package matched the record — an indicator for human review, not a determination.',
+    severity: 3, category: 'BEHAVIOUR',
+    example: 'A curated marker {stonewalling: "we are unable to comment", "your query is noted", "in due course"} matches two or more of its keywords on one page.'
   }
 };
 
@@ -7257,7 +7471,7 @@ var DETECTORS = {
       var cpList = condPages.length > 8
         ? condPages.slice(0, 8).join(', ') + ' and ' + (condPages.length - 8) + ' more'
         : condPages.join(', ');
-      findings.push({ type: 'CT01', severity: 4,
+      findings.push({ type: 'CT01', severity: 4, conductAdmission: true,
         evidence: 'A party gives their own account of why the disputed transaction went ahead: "' + condQuote + '"' +
           (condPages.length > 1 ? ' — the same account appears on ' + condPages.length + ' pages (' + cpList + ')' : '') +
           ' — the words are the writer\'s own; read the full passage in context and establish what it settles',
@@ -7268,7 +7482,7 @@ var DETECTORS = {
       var apList = admPages.length > 8
         ? admPages.slice(0, 8).join(', ') + ' and ' + (admPages.length - 8) + ' more'
         : admPages.join(', ');
-      findings.push({ type: 'CT01', severity: 4,
+      findings.push({ type: 'CT01', severity: 4, conductAdmission: true,
         evidence: 'The record carries an explicit admission ("' + admCue + '"): "' + admQuote + '"' +
           (admPages.length > 1 ? ' — admission language appears on ' + admPages.length + ' pages (' + apList + ')' : '') +
           ' — read the full passage in context; what is admitted, and by whom, is for the reviewer',
@@ -7298,14 +7512,14 @@ var DETECTORS = {
     // in a bank's outcome letter); a space-grouped figure needs its currency
     // symbol so that two unrelated numbers are never joined into one amount.
     // The evidence-bundle-2-docs run read "R116 124.00" as R116.
-    var AMOUNT_RE = /(?:[R$€£]\s*)\d+(?:[.,]\d{1,2})?\s*(?:million|billion|m|bn)\b|(?:[R$€£]\s*)\d{1,3}(?:[ \u00a0\u202f]\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)\d+(?:\.\d{2})?/i;
+    var AMOUNT_RE = /(?:[R$€£]\s*)\d+(?:[.,]\d{1,2})?\s*(?:million|billion|m|bn)\b|(?:[R$€£]\s*)\d{1,3}(?:[   ]\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)?\d{1,3}(?:,\d{3})+(?:\.\d{2})?|(?:[R$€£]\s*)\d+(?:\.\d{2})?/i;
     // The amount must follow its label directly, through at most a short
     // connector ("Total: R…", "an amount of R…", "purchase price (excl. VAT)
     // R…"). A label followed by other words is not stating that figure: the
     // column header "Amount Merchant" above a table row "R 8000.00 Makro" was
     // read as "amount = R8000" and set against "an amount of R116 124.00" in
     // another letter.
-    var CONNECTOR_RE = /^[\s.:=\-\u2013\u2014(]*(?:of|is|was|be|at|to|due|payable|paid|owing|outstanding|\([^)]{0,40}\))?[\s.:=\-\u2013\u2014]*(?:of\s*)?$/i;
+    var CONNECTOR_RE = /^[\s.:=\-–—(]*(?:of|is|was|be|at|to|due|payable|paid|owing|outstanding|\([^)]{0,40}\))?[\s.:=\-–—]*(?:of\s*)?$/i;
     // A labelled figure is restated only inside ONE document. Where the bundle
     // states its own boundaries (an exhibit's "Page x of y", a sealed
     // exhibit's footer), entries from different documents are never compared:
@@ -7350,7 +7564,7 @@ var DETECTORS = {
         if (!CONNECTOR_RE.test(block.slice(from, from + am.index))) continue;
         var magM = am[0].match(/(million|billion|m|bn)\b\s*$/i);
         var numPart = magM ? am[0].slice(0, magM.index) : am[0];
-        var value = parseFloat(numPart.replace(/[, \u00a0\u202f](?=\d{3}\b)/g, '').replace(/[^0-9.,]/g, '').replace(',', '.'));
+        var value = parseFloat(numPart.replace(/[,   ](?=\d{3}\b)/g, '').replace(/[^0-9.,]/g, '').replace(',', '.'));
         if (magM) value *= /^b/i.test(magM[1]) ? 1e9 : 1e6;
         if (isNaN(value) || value <= 100) continue;
 
@@ -7844,16 +8058,30 @@ var DETECTORS = {
 
   D05_DETECT_LOGICAL_IMPOSSIBILITY: function(textBlocks) {
     var findings = [];
-    var fullText = textBlocks.join(' ').toLowerCase();
+    // One flat phrase list. The old nested pairs were only ever read at index
+    // [0], so "registered and dissolved" and "appointed and removed" were
+    // unreachable. Each phrase must occur WITHIN one sentence — a state pair
+    // split across sentences is narrative, not an impossible state.
     var impossibleStates = [
-      ['active and deregistered','registered and dissolved'],[' solvent and insolvent'],
-      ['employed and terminated','appointed and removed']
+      'active and deregistered',
+      'registered and dissolved',
+      'solvent and insolvent',
+      'employed and terminated',
+      'appointed and removed'
     ];
-    for (var i = 0; i < impossibleStates.length; i++) {
-      if (fullText.indexOf(impossibleStates[i][0]) !== -1) {
-        findings.push({ type: 'CT06', severity: 5,
-          evidence: 'Logically impossible state: "' + impossibleStates[i][0] + '"',
-          location: 'Full document' });
+    var seen = {};
+    for (var i = 0; i < textBlocks.length; i++) {
+      var sentences = String(textBlocks[i] || '').toLowerCase().split(/[.!?;]+/);
+      for (var s = 0; s < sentences.length; s++) {
+        for (var p = 0; p < impossibleStates.length; p++) {
+          if (seen[impossibleStates[p]]) continue;
+          if (sentences[s].indexOf(impossibleStates[p]) !== -1) {
+            seen[impossibleStates[p]] = true;
+            findings.push({ type: 'CT06', severity: 5,
+              evidence: 'Logically impossible state: "' + impossibleStates[p] + '"',
+              location: 'Page ' + (i + 1) });
+          }
+        }
       }
     }
     return findings;
@@ -8186,7 +8414,7 @@ var DETECTORS = {
       // First occurrence of `word` used as an entity status; returns
       // { page, snippet } or null.
       // A Word-made "non‑compliant" carries U+2010-U+2013 or a soft hyphen.
-      var re = new RegExp('\\b' + word.replace(/ /g, '\\s+').replace(/-/g, '[-\\u2010-\\u2013\\u00AD]') + '\\b', 'gi');
+      var re = new RegExp('\\b' + word.replace(/ /g, '\\s+').replace(/-/g, '[-\‐-\–\­]') + '\\b', 'gi');
       for (var b = 0; b < textBlocks.length; b++) {
         var t = textBlocks[b] || '';
         var m;
@@ -8197,7 +8425,7 @@ var DETECTORS = {
           // "compliant" inside "non-compliant" is the negation itself, read a
           // second time (\b falls at the hyphen): the Public Protector
           // submission run paired one "non-compliant" with itself.
-          if (/\bnon[-\u2010-\u2013\u00AD\s]?$/i.test(pre)) continue;
+          if (/\bnon[-‐-–­\s]?$/i.test(pre)) continue;
           var excluded = ((word === 'registered') && NOT_STATUS_REGISTERED.test(win)) ||
                          NOT_STATUS_PROVISION_BEFORE.test(pre) ||
                          NOT_STATUS_PROVISION_NEAR.test(win) ||
@@ -8230,23 +8458,10 @@ var DETECTORS = {
   },
 
   // D10-D15: Financial detectors
-  D10_DETECT_VAT_INVALID: function(textBlocks) {
-    var findings = [];
-    var vatRe = /\b4\d{9,10}\b/g;
-    for (var i = 0; i < textBlocks.length; i++) {
-      var match;
-      while ((match = vatRe.exec(textBlocks[i])) !== null) {
-        var vat = match[0];
-        // SA VAT check: must start with 4, be 10 or 11 digits
-        if (vat.length < 10 || vat.length > 11 || vat[0] !== '4') {
-          findings.push({ type: 'CT19', severity: 4,
-            evidence: 'Invalid VAT number format: ' + vat,
-            location: 'Page ' + (i + 1) });
-        }
-      }
-    }
-    return findings;
-  },
+  // D10 (VAT format) was removed: its regex only matched numbers already in
+  // the valid form, so the "invalid" branch was unreachable, and the claimed
+  // checksum does not exist for SA VAT numbers. A check that cannot fail is
+  // not a check. CT19 remains in the taxonomy for signed rule packages.
 
   D11_DETECT_REGISTRATION_FAKE: function(textBlocks) {
     var findings = [];
@@ -8274,7 +8489,8 @@ var DETECTORS = {
     // One digit off the SA form (a middle group of 5 or 7): a typing or OCR
     // slip is far likelier than a forgery — reported as a check, never as fake.
     var NEAR_SA_REG = /^\d{4}\/\d{5,7}\/\d{2}$/;
-    // A VAT number (10 digits, leading 4) is validated by D10; the cue
+    // A VAT number (10 digits, leading 4) is not a company registration; the
+    // cue
     // "VAT REGISTRATION NUMBER" is not a company registration label.
     var VAT_SHAPE = /^4\d{9}$/;
     // A 13-digit value led by a plausible YYMMDD is a natural person's identity
@@ -8352,7 +8568,7 @@ var DETECTORS = {
       var cm;
       while ((cm = cueRe.exec(block)) !== null) {
         var before = block.slice(Math.max(0, cm.index - 12), cm.index);
-        if (/\bvat\s*$/i.test(before)) continue; // "VAT REGISTRATION NUMBER": a VAT number, D10's business
+        if (/\bvat\s*$/i.test(before)) continue; // "VAT REGISTRATION NUMBER": a VAT number, not a company registration
         var idField = /\b(?:id|identity(?:\s+number)?)\s*(?:\/|or|\|)\s*$/i.test(before);
         var afterCue = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 40);
         // "Registration number of complainant" is a person's field: a natural
@@ -8859,9 +9075,12 @@ var DETECTORS = {
 
   D19_DETECT_EVIDENCE_TAMPERING: function(textBlocks) {
     var findings = [];
+    // Only phrases that are themselves an allegation of tampering. "Scanned
+    // copy" was dropped: nearly every filed document says it is a scanned
+    // copy, so the phrase accused ordinary bundles of severity-5 tampering.
     var tamperingIndicators = [
       'white out','whited out','correction fluid','tippex','tipp-ex',
-      'scanned copy','photocopied signature','pasted signature','stamped signature',
+      'photocopied signature','pasted signature','stamped signature',
       'inserted page','removed page','replaced page','added later'
     ];
     var fullText = textBlocks.join(' ').toLowerCase();
@@ -9251,7 +9470,7 @@ var DETECTORS = {
     // A matched double-quote pair is read first, whatever it holds inside
     // ("Shareholders' Agreement", "Lessees' Improvements" — a plural
     // possessive is not a closing quote); the mixed pair follows.
-    var definitionRe = /(?:^|[\s(\[])(?:("[^"\u201C\u201D\n]{2,80}"|\u201C[^"\u201C\u201D\n]{2,80}\u201D|["\u201C'\u2018]\s?(?:[^"\u201C\u201D'\u2018\u2019\n]|['\u2019](?=[A-Za-z])){2,80}["\u201D'\u2019])|([a-z][a-z'-]{3,}(?:\s+[a-z][a-z'-]{2,}){0,3}))\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
+    var definitionRe = /(?:^|[\s(\[])(?:("[^"“”\n]{2,80}"|“[^"“”\n]{2,80}”|["“'‘]\s?(?:[^"“”'‘’\n]|['’](?=[A-Za-z])){2,80}["”'’])|([a-z][a-z'-]{3,}(?:\s+[a-z][a-z'-]{2,}){0,3}))\s+(?:shall mean|means|is defined as|refers to)\b(?!\s+of\b)/gi;
     // Is the position at the end of `span` inside a quoted phrase that was
     // opened and never closed (a closer OCR dropped: `"Astron Motor Fuel
     // means …`)? Counted from the last clause boundary; no lookbehind.
@@ -9267,9 +9486,9 @@ var DETECTORS = {
         var c = t.charAt(k), prev = k > 0 ? t.charAt(k - 1) : ' ', next = k + 1 < t.length ? t.charAt(k + 1) : ' ';
         var next2 = k + 2 < t.length ? t.charAt(k + 2) : ' ';
         if (c === '"') { open = open > 0 ? open - 1 : open + 1; continue; }
-        if (c === '\u201C' || c === '`') { open++; continue; }
-        if (c === '\u201D') { if (open > 0) open--; continue; }
-        if (c === "'" || c === '\u2018' || c === '\u2019') {
+        if (c === '“' || c === '`') { open++; continue; }
+        if (c === '”') { if (open > 0) open--; continue; }
+        if (c === "'" || c === '‘' || c === '’') {
           if (/[\s(\[]/.test(prev) && (c === "'" && next === "'")) { open++; k++; continue; } // '' drawn for "
           if (/[\s(\[]/.test(prev) && (/[A-Za-z]/.test(next) || (next === ' ' && /[A-Za-z]/.test(next2)))) { open++; continue; } // an opener
           if (/[A-Za-z]/.test(prev) && !/[A-Za-z]/.test(next) && open > 0) { open--; continue; } // a closer (not a possessive)
@@ -9297,19 +9516,9 @@ var DETECTORS = {
     // distance. OCR jitter perturbs a character or two; a real conflict
     // rewrites the wording ("Expiration Date" vs "Termination Date" still
     // fires; "other than" vs "other thari" stays silent).
-    function voEditDistance(a, b) {
-      var prev = [], cur = [], i, j;
-      for (j = 0; j <= b.length; j++) prev[j] = j;
-      for (i = 1; i <= a.length; i++) {
-        cur[0] = i;
-        for (j = 1; j <= b.length; j++) {
-          cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1,
-            prev[j - 1] + (a.charAt(i - 1) === b.charAt(j - 1) ? 0 : 1));
-        }
-        var swap = prev; prev = cur; cur = swap;
-      }
-      return prev[b.length];
-    }
+    // (The shared module-scope voEditDistance is used here — a local copy once
+    // shadowed it inside D30, so a fix to one would silently not reach the
+    // other.)
     // One definition read twice by OCR differs only in misread letters,
     // scattered from its first word: "auy information thai car be wed
     // directly" and "avy Information fiat cor 03 used directiy" (Combine 06
@@ -9364,7 +9573,7 @@ var DETECTORS = {
       while ((match = definitionRe.exec(textBlocks[i])) !== null) {
         var quoted = !!match[1];
         var rawTerm = quoted ? match[1].slice(1, -1) : match[2];
-        var term = rawTerm.toLowerCase().replace(/^["\u201C\u201D'\u2018\u2019\s]+|["\u201C\u201D'\u2018\u2019\s]+$/g, '').replace(/\s+/g, ' ').trim();
+        var term = rawTerm.toLowerCase().replace(/^["“”'‘’\s]+|["“”'‘’\s]+$/g, '').replace(/\s+/g, ' ').trim();
         if (!term) continue;
         // An unquoted run inside a quoted phrase whose closer was dropped is
         // the inside of that term, never a term of its own.
@@ -9382,7 +9591,7 @@ var DETECTORS = {
         // A term that is the tail of a longer defined phrase ('the Value of
         // the "Franchised Business" means the price …') is that phrase's
         // definition, not the term's (Combine 06 April 2026, p. 317).
-        if (/\b(?:of|for)\s+(?:the\s+|a\s+|an\s+)?["\u201C'\u2018]?$/i.test(String(textBlocks[i]).slice(Math.max(0, match.index - 24), match.index + 1).replace(/\s+/g, ' '))) continue;
+        if (/\b(?:of|for)\s+(?:the\s+|a\s+|an\s+)?["“'‘]?$/i.test(String(textBlocks[i]).slice(Math.max(0, match.index - 24), match.index + 1).replace(/\s+/g, ' '))) continue;
         var snippet = String(textBlocks[i]).substr(match.index + match[0].length, 90).replace(/\s+/g, ' ').trim();
         if (voLooksGarbled(snippet)) continue; // OCR debris is not a definition
         var norm = snippet.toLowerCase().replace(/[^a-z0-9 ]/g, '').replace(/\s+/g, ' ').slice(0, 60);
@@ -9614,15 +9823,40 @@ var DETECTORS = {
 
   D36_DETECT_SOURCE_FAILURE: function(textBlocks) {
     var findings = [];
-    var fullText = textBlocks.join(' ');
+    // The old guard — fullText.indexOf(match[2]) === match.index — compared
+    // the source's first occurrence with the start of the WHOLE match (cue
+    // phrase included), so it was almost never true and the detector was
+    // silent. The intended test: a source is cited but never appears anywhere
+    // else in the record — no heading, exhibit label or second reference — so
+    // the citation cannot be followed up. One finding per distinct source.
+    var fullText = textBlocks.join(' ').toLowerCase();
     var sourceRe = /\b(according to|as per|in accordance with|citing|referenced in)\s+["']?([^"'.]{5,50})["']?/gi;
-    var match;
-    while ((match = sourceRe.exec(fullText)) !== null) {
-      // If source is cited but no supporting document reference
-      if (fullText.indexOf(match[2]) === match.index) {
-        findings.push({ type: 'CT32', severity: 2,
-          evidence: 'Unverified source cited: "' + match[2] + '"',
-          location: 'References section' });
+    // A "source" for this detector is a document-like artefact — citing a
+    // person or a fact is not a missing-source signal.
+    var DOC_NOUN = /\b(agreement|contract|lease|report|statement|invoice|letter|annexure|exhibit|policy|record|affidavit|deed|certificate|valuation|assessment|notice|order)\b/i;
+    var seen = {};
+    for (var i = 0; i < textBlocks.length; i++) {
+      var raw = String(textBlocks[i] || '');
+      var match;
+      sourceRe.lastIndex = 0;
+      while ((match = sourceRe.exec(raw)) !== null) {
+        var m2 = match[2].trim().replace(/\s+/g, ' ');
+        var dn = DOC_NOUN.exec(m2);
+        if (!dn) continue;
+        // The source candidate ends at the document noun: "the lease
+        // agreement", not the trailing clause the regex also captured.
+        var src = m2.slice(0, dn.index + dn[0].length).trim();
+        if (src.length < 8) continue;
+        var key = src.toLowerCase();
+        if (seen[key]) continue;
+        // Occurrences across the record. One occurrence = this citation only.
+        var count = fullText.split(key).length - 1;
+        if (count <= 1) {
+          seen[key] = true;
+          findings.push({ type: 'CT32', severity: 2,
+            evidence: 'Source cited once and nowhere else in the record: "' + src + '"',
+            location: 'Page ' + (i + 1) });
+        }
       }
     }
     return findings;
@@ -10004,6 +10238,142 @@ var DETECTORS = {
       findings.push({ type: 'CT43', severity: 0, contextOnly: true,
         evidence: 'Breadth note: ' + typeCount + ' different finding types were triggered across the document by the engine run, before the advisory review and before any note or lead was set aside — a high count reflects variety of checks, not a determination of wrongdoing.',
         location: 'Full document' });
+    }
+    return findings;
+  },
+
+  // ---- Coercive-conduct indicators (CT47) --------------------------------
+  // Coercion is conduct, not a contradiction: a party pressing the other with
+  // threats, ultimatums or consequences. The 46 contradiction detectors say
+  // nothing about it, so a record full of pressure tactics could scan "clean".
+  // This detector surfaces the PASSAGES as indicators for human review — it
+  // never says conduct WAS coercion (a legal determination, for the court);
+  // it says these words appear, on these pages: read them in context.
+  //
+  // Precision guards:
+  //  - contract boilerplate ("shall", "notwithstanding", "in terms of",
+  //    "entitled to") is excluded — rights-reservation clauses in agreements
+  //    are standard drafting, not pressure tactics;
+  //  - sentence length 25-400 characters, one count per page;
+  //  - one aggregated finding per run, at most 3 example passages.
+  D41_DETECT_COERCIVE_CONDUCT: function(textBlocks) {
+    var findings = [];
+    var VO_COERCE_CUES = [
+      /\bfailing which\b/i,
+      /\bshould you (?:fail|refuse|not)\b/i,
+      /\bif you (?:fail|do not|refuse)\b[^.]{0,120}\b(?:will|shall)\b/i,
+      /\b(?:will|shall) be (?:forced|obliged|left with no (?:option|choice|alternative))(?: to| but)?\b/i,
+      /\bno (?:option|choice|alternative) but to\b/i,
+      /\b(?:cut|stop|suspend|terminate|disconnect|interrupt|withhold)\w*\s+(?:off\s+)?(?:the\s+|your\s+|all\s+)?(?:supply|supplies|fuel|deliver\w*|power|water|stock|payment\w*)\b/i,
+      /\block(?:ed|ing)?\s+(?:you|them|him|her)\s+out\b|\bchange[sd]?\s+the\s+locks\b|\brepossess\b/i,
+      /\btake it or leave it\b|\bnon-negotiable\b/i,
+      /\bunder protest\b|\bunder duress\b|\bpressur(?:ed|ised)(?:\s+(?:me|us|them|into))?\b|\bforced (?:me|us|them|into)\b|\bagainst (?:my|our|their) will\b|\bcoerc(?:ed|ion|ive)\b/i
+    ];
+    var VO_COERCE_BOILER = /\b(?:shall|hereby|notwithstanding|entitled to|in terms of|pursuant to|herein|thereof)\b/i;
+    var pages = [], examples = [];
+    for (var cp = 0; cp < textBlocks.length; cp++) {
+      var sents = String(textBlocks[cp] || '').split(/[.!?]+\s+/);
+      for (var si = 0; si < sents.length; si++) {
+        var sen = sents[si].replace(/\s+/g, ' ').trim();
+        if (sen.length < 25 || sen.length > 400) continue;
+        if (VO_COERCE_BOILER.test(sen)) continue;
+        var hit = false;
+        for (var ci = 0; ci < VO_COERCE_CUES.length; ci++) { if (VO_COERCE_CUES[ci].test(sen)) { hit = true; break; } }
+        if (!hit) continue;
+        pages.push(cp + 1);
+        if (examples.length < 3 && sen.length >= 40) {
+          examples.push(sen.length > 220 ? sen.slice(0, 220).replace(/\s+\S*$/, '') + '...' : sen);
+        }
+        break; // one count per page
+      }
+    }
+    if (pages.length) {
+      var plist = pages.length > 10 ? pages.slice(0, 10).join(', ') + ' and ' + (pages.length - 10) + ' more' : pages.join(', ');
+      findings.push({ type: 'CT47', severity: 3,
+        evidence: 'Coercive-conduct indicators: threat, ultimatum or pressure language appears on ' + pages.length + ' page(s) (' + plist + '). Example passage' + (examples.length > 1 ? 's' : '') + ': ' + examples.map(function (q) { return '"' + q + '"'; }).join(' ; ') + '. These are indicators for human review, not a determination that coercion occurred — read each passage in its full context.',
+        location: 'Page ' + plist, pages: pages.slice() });
+    }
+    return findings;
+  },
+
+  D42_DETECT_REALITY_DENIAL: function(textBlocks) {
+    var findings = [];
+    var VO_DENIAL_CUES = [
+      /\bthat never happened\b/i,
+      /\bno such (?:agreement|contract|arrangement|meeting|conversation|instruction|understanding)\b/i,
+      /\bwe have no record of\b|\bno record (?:exists|of)\b/i,
+      /\bnever received (?:your|the|any)\b/i,
+      /\byou are (?:mistaken|confused|incorrect)\b|\byou are simply wrong\b/i,
+      /\byour (?:recollection|version|account|memory) (?:of events )?is (?:wrong|incorrect|mistaken|false|flawed)\b/i,
+      /\bmis-?remember/i,
+      /\bfabricat(?:ion|ed)\b|\bfigment of\b/i,
+      /\bthat is not what (?:was )?(?:said|agreed|happened)\b|\bnot what (?:was )?(?:said|agreed|happened)\b/i,
+      /\byou (?:are )?(?:imagining|dreamt|dreamed)\b|\bmade (?:that|this|it) up\b/i
+    ];
+    var VO_DENIAL_BOILER = /\b(?:shall|hereby|notwithstanding|entitled to|in terms of|pursuant to|herein|thereof)\b/i;
+    var pages = [], examples = [];
+    for (var cp = 0; cp < textBlocks.length; cp++) {
+      var sents = String(textBlocks[cp] || '').split(/[.!?]+\s+/);
+      for (var si = 0; si < sents.length; si++) {
+        var sen = sents[si].replace(/\s+/g, ' ').trim();
+        if (sen.length < 25 || sen.length > 400) continue;
+        if (VO_DENIAL_BOILER.test(sen)) continue;
+        var hit = false;
+        for (var ci = 0; ci < VO_DENIAL_CUES.length; ci++) { if (VO_DENIAL_CUES[ci].test(sen)) { hit = true; break; } }
+        if (!hit) continue;
+        pages.push(cp + 1);
+        if (examples.length < 3 && sen.length >= 40) {
+          examples.push(sen.length > 220 ? sen.slice(0, 220).replace(/\s+\S*$/, '') + '...' : sen);
+        }
+        break; // one count per page
+      }
+    }
+    if (pages.length) {
+      var plist = pages.length > 10 ? pages.slice(0, 10).join(', ') + ' and ' + (pages.length - 10) + ' more' : pages.join(', ');
+      findings.push({ type: 'CT48', severity: 3,
+        evidence: 'Gaslighting / reality-denial indicators: denial-of-record or recollection-attack language appears on ' + pages.length + ' page(s) (' + plist + '). Example passage' + (examples.length > 1 ? 's' : '') + ': ' + examples.map(function (q) { return '"' + q + '"'; }).join(' ; ') + '. These are indicators for human review, not a determination that gaslighting occurred — read each passage in its full context.',
+        location: 'Page ' + plist, pages: pages.slice() });
+    }
+    return findings;
+  },
+
+  D43_DETECT_BLAME_REVERSAL: function(textBlocks) {
+    var findings = [];
+    var VO_DARVO_CUES = [
+      /\bwe are the (?:injured|aggrieved|real|true) (?:party|victims?)\b/i,
+      /\bif anyone (?:was|has been|is) (?:defrauded|deceived|misled|wronged|harmed)\b/i,
+      /\byour (?:harassment|intimidation|abuse|threats?) (?:of|towards?)\b/i,
+      /\bvexatious\b/i,
+      /\babuse of (?:process|court)\b/i,
+      /\bdefamatory\b|\bdefamation\b/i,
+      /\bcounter-?claim\b/i,
+      /\bhold you liable\b/i,
+      /\brecover.{0,40}(?:costs|damages) from you\b/i,
+      /\b(?:institute|bring|pursue) (?:counter-?)?proceedings against you\b/i
+    ];
+    var VO_DARVO_BOILER = /\b(?:shall|hereby|notwithstanding|entitled to|in terms of|pursuant to|herein|thereof)\b/i;
+    var pages = [], examples = [];
+    for (var cp = 0; cp < textBlocks.length; cp++) {
+      var sents = String(textBlocks[cp] || '').split(/[.!?]+\s+/);
+      for (var si = 0; si < sents.length; si++) {
+        var sen = sents[si].replace(/\s+/g, ' ').trim();
+        if (sen.length < 25 || sen.length > 400) continue;
+        if (VO_DARVO_BOILER.test(sen)) continue;
+        var hit = false;
+        for (var ci = 0; ci < VO_DARVO_CUES.length; ci++) { if (VO_DARVO_CUES[ci].test(sen)) { hit = true; break; } }
+        if (!hit) continue;
+        pages.push(cp + 1);
+        if (examples.length < 3 && sen.length >= 40) {
+          examples.push(sen.length > 220 ? sen.slice(0, 220).replace(/\s+\S*$/, '') + '...' : sen);
+        }
+        break; // one count per page
+      }
+    }
+    if (pages.length) {
+      var plist = pages.length > 10 ? pages.slice(0, 10).join(', ') + ' and ' + (pages.length - 10) + ' more' : pages.join(', ');
+      findings.push({ type: 'CT49', severity: 3,
+        evidence: 'Blame-reversal (DARVO) indicators: attack-the-claimant or reverse-victim language appears on ' + pages.length + ' page(s) (' + plist + '). Example passage' + (examples.length > 1 ? 's' : '') + ': ' + examples.map(function (q) { return '"' + q + '"'; }).join(' ; ') + '. These are indicators for human review, not a determination of intent — read each passage in its full context.',
+        location: 'Page ' + plist, pages: pages.slice() });
     }
     return findings;
   }
@@ -10580,7 +10950,7 @@ var VO_SECONDARY_REPORT_REF_RE = /Report\s+Reference\s*:\s*VO-/i;
 // case. The 27 Sep 2026 evidence-bundle-2-docs run excluded its first 38
 // pages (an email chain, statements, an affidavit) on those footers alone and
 // then reported that every page had been read.
-var VO_SECONDARY_REPORT_MASTHEAD_RE = /V\s?E\s?R\s?U\s?M\s+O\s?M\s?N\s?I\s?S[\s|\-\u2013\u2014:]{1,40}(?:FORENSIC\s+(?:EVIDENCE\s+)?REPORT|COURT-?\s?READY\s+NARRATIVE|NARRATIVE\s+REPORT)/i;
+var VO_SECONDARY_REPORT_MASTHEAD_RE = /V\s?E\s?R\s?U\s?M\s+O\s?M\s?N\s?I\s?S[\s|\-–—:]{1,40}(?:FORENSIC\s+(?:EVIDENCE\s+)?REPORT|COURT-?\s?READY\s+NARRATIVE|NARRATIVE\s+REPORT)/i;
 var VO_SECONDARY_REPORT_TITLE_RE = /\b((?:supplementary|forensic|final|interim|preliminary|investigation)\s+report\s*:\s*[^\n]{10,160})/i; // page text is space-joined, so the title is read from the cue, not from a line start
 var VO_SECONDARY_REPORT_PLACEHOLDER = new Array(11).join('prior verum omnis report page excluded. ');
 function voIsSecondaryReportPage(text) {
@@ -10638,7 +11008,7 @@ function voExcludeSecondaryReportPages(textBlocks) {
 // it cites (PD6). Never an exclusion: only Verum Omnis's own reports and the
 // analysis template are excluded (voExcludeSecondaryReportPages,
 // voExcludeTemplatePages).
-var VO_AI_COMPILED_RE = /\b(?:compiled|prepared|drafted|generated|written|produced|summari[sz]ed)\s+(?:by|with)\s*:?\s*(?:an?\s+)?(?:ai\b|ai[- ]assistant|claude|chatgpt|gpt-?\d|gemini|deepseek|copilot|grok|llama|mistral|perplexity|language\s+model)|\bI(?:'|\u2019)m\s+(?:claude|chatgpt|gemini|deepseek|copilot|an\s+ai\b)/i;
+var VO_AI_COMPILED_RE = /\b(?:compiled|prepared|drafted|generated|written|produced|summari[sz]ed)\s+(?:by|with)\s*:?\s*(?:an?\s+)?(?:ai\b|ai[- ]assistant|claude|chatgpt|gpt-?\d|gemini|deepseek|copilot|grok|llama|mistral|perplexity|language\s+model)|\bI(?:'|’)m\s+(?:claude|chatgpt|gemini|deepseek|copilot|an\s+ai\b)/i;
 function voNoteAiCompiledSummary(textBlocks) {
   if (!textBlocks || !textBlocks.length) return null;
   for (var i = 0; i < Math.min(2, textBlocks.length); i++) {
@@ -10687,7 +11057,7 @@ function voIsFooterOnlyPage(text) {
     .replace(/\d{4}-\d{2}-\d{2}(?:[ T]\d{2}:\d{2}(?::\d{2})?)?/g, ' ')
     .replace(/\b\d{1,2}\/\d{1,2}\/\d{4}(?:\s+\d{2}:\d{2}(?::\d{2})?)?/g, ' ') // the footer's own "04/08/2026 12:41:58"
     .replace(/\b\d{1,4}\s*\/\s*\d{1,4}\b/g, ' ')
-    .replace(/[|\u2026\u2013\u2014]/g, ' ');
+    .replace(/[|…–—]/g, ' ');
   // Any word of three letters or any run of three digits outside the footer
   // is evidence: a signature line, a figures-only table, an account number,
   // an "Annexure A" divider all stay. Only a page with nothing else goes.
@@ -10871,7 +11241,7 @@ var VO_REPORT_PLACEHOLDER_HEAD_RE = /^\s*prior verum omnis report page excluded\
 // are stripped before this runs), a bundle-page citation ("bundle pp 290") or
 // a compiled-bundle exhibit label ("CB9").
 var VO_ANALYSIS_SIGNAL_RE = /\bVerum\s+Omnis\b|\bVO-\s?[0-9A-F]{12}\b|\bCB\s?\d{1,3}\b|\bbundle\s+pp?\.?\s*\d/i;
-var VO_ANALYSIS_RUNNING_TITLE_RE = /\bVerum\s+Omnis\s*[\u2014\u2013-]\s*[^\u2022|]{3,90}?\b(?:index|narrative|report|summary|analysis|chronology|brief|submission|timeline)\b[^\u2022|]{0,40}\u2022\s*page\s+\d{1,4}\s+of\s+\d{1,4}\b/i;
+var VO_ANALYSIS_RUNNING_TITLE_RE = /\bVerum\s+Omnis\s*[—–-]\s*[^•|]{3,90}?\b(?:index|narrative|report|summary|analysis|chronology|brief|submission|timeline)\b[^•|]{0,40}•\s*page\s+\d{1,4}\s+of\s+\d{1,4}\b/i;
 function voIsVerumAnalysisPage(text) { return VO_ANALYSIS_RUNNING_TITLE_RE.test(String(text || '').replace(/\s+/g, ' ')); }
 function voSecondarySegments(segs, textBlocks) {
   var out = [], list = segs || [], blocks = textBlocks || [], covered = {};
@@ -11103,7 +11473,7 @@ function voCapOcrFormatFindings(findings, ocrPages) {
 // general-punctuation ranges, a cent sign, a stray "=", a brace or a
 // backslash, a run of six consonants, or a short digit-letter fragment that
 // is not an ordinal (1st), an amount (R5) or a clause reference (12a, a2).
-var VO_GARBLE_SYMBOL = /[^\x20-\x7E\u00A0-\u00FF\u2010-\u2027\u2030-\u205E]|[¢¦^{}\\=]/;
+var VO_GARBLE_SYMBOL = /[^\x20-\x7E -ÿ‐-‧‰-⁞]|[¢¦^{}\\=]/;
 function voLooksGarbled(text) {
   var t = String(text || '');
   if (!t.trim()) return false;
@@ -11348,12 +11718,12 @@ var VO_NON_PERSON_PHRASE = (function () {
 // A candidate run is a person/party name only if it is 2-4 tokens, carries no
 // stop token, and does not run through a sentence end (a word ending in "." that
 // is not an initial) — which is how "Kevin." glued itself to "Late Mares The".
-// "Kevin Lappeman\u2019s" and "Kevin Lappeman" are one party: strip a trailing
+// "Kevin Lappeman’s" and "Kevin Lappeman" are one party: strip a trailing
 // possessive before validity checks and dedupe, so both forms collapse.
 function voCleanPersonName(n) {
   // A courtesy title before a full name is not part of it ("Mr Jacob Mbele" is
   // "Jacob Mbele"); "Mrs Smith" keeps it, or one token would be left.
-  return String(n == null ? '' : n).replace(/[\u2019']s$/i, '').replace(/[\s.,;:]+$/, '').trim()
+  return String(n == null ? '' : n).replace(/[’']s$/i, '').replace(/[\s.,;:]+$/, '').trim()
     .replace(/^(?:Mr|Mrs|Ms|Miss|Dr|Adv|Prof|Advocate)\.?\s+(?=\S+\s+\S)/, '');
 }
 var VO_NON_PERSON_TOK6 = (function () { var out = []; for (var k in VO_NON_PERSON_TOK) if (k.length >= 6) out.push(k); return out; })();
@@ -11369,7 +11739,7 @@ function voNearNonPersonTok(tok) {
 var VO_NON_PERSON_PHRASE_TOKS = (function () { var out = []; for (var k in VO_NON_PERSON_PHRASE) out.push(k.split(' ')); return out; })();
 function voNearNonPersonPhrase(toks) {
   var low = [];
-  for (var t = 0; t < toks.length; t++) low.push(toks[t].replace(/[.'\u2019-]+$/, '').toLowerCase());
+  for (var t = 0; t < toks.length; t++) low.push(toks[t].replace(/[.'’-]+$/, '').toLowerCase());
   for (var i = 0; i < VO_NON_PERSON_PHRASE_TOKS.length; i++) {
     var ph = VO_NON_PERSON_PHRASE_TOKS[i];
     if (ph.length !== low.length) continue;
@@ -11397,7 +11767,7 @@ function voTrimPersonName(name) {
   // An address opens with "Corner" ("Corner Francis Baard and Meintjies
   // Streets"); as a last token it can be a surname, so only the lead is stopped.
   if (toks.length && /^(?:corner|cnr)$/i.test(toks[0].replace(/[.,]+$/, ''))) return '';
-  var lead = 0, low = function (t) { return t.replace(/[.,:;'\u2019]+$/, '').toLowerCase(); };
+  var lead = 0, low = function (t) { return t.replace(/[.,:;'’]+$/, '').toLowerCase(); };
   while (lead < toks.length && VO_ROLE_PREAMBLE_TOK[low(toks[lead])]) lead++;
   if (lead < toks.length && VO_ROLE_LEAD_TOK[low(toks[lead])]) {
     // "General" belongs to the role only directly after "Director" ("Director
@@ -11408,7 +11778,7 @@ function voTrimPersonName(name) {
   }
   var keep = toks.length;
   for (var i = 0; i < toks.length; i++) {
-    var bare = toks[i].replace(/[.'\u2019-]+$/, '').toLowerCase();
+    var bare = toks[i].replace(/[.'’-]+$/, '').toLowerCase();
     var stop = !!VO_NON_PERSON_TOK[bare] || (bare.length >= 6 && /^[a-z]+$/.test(bare) && voNearNonPersonTok(bare));
     for (var len = 3; len >= 2 && !stop; len--) {
       if (i + len <= toks.length && VO_NON_PERSON_PHRASE[toks.slice(i, i + len).join(' ').toLowerCase().replace(/[.,;:]+$/, '')]) stop = true;
@@ -11417,9 +11787,9 @@ function voTrimPersonName(name) {
   }
   toks = toks.slice(0, keep);
   // A possessive is not part of a name: "Brian Denny’s" is Brian Denny.
-  if (toks.length) toks[toks.length - 1] = toks[toks.length - 1].replace(/^([A-Za-z][A-Za-z-]{2,})['\u2019]s$/, '$1');
+  if (toks.length) toks[toks.length - 1] = toks[toks.length - 1].replace(/^([A-Za-z][A-Za-z-]{2,})['’]s$/, '$1');
   while (toks.length) {
-    var last = toks[toks.length - 1].replace(/[.'\u2019-]+$/, '');
+    var last = toks[toks.length - 1].replace(/[.'’-]+$/, '');
     if (/^(?:de|van|der|den|du|le|la|von|bin|al)$/.test(last) || /^(?:Van|Der|Den|Von|De|Al)$/.test(last)) { toks.pop(); continue; }
     break;
   }
@@ -11463,7 +11833,7 @@ function voLooksLikePerson(name) {
   // lowercase final particle, or one that never stands alone (Van, Der, Den,
   // Von, De, Al). A capitalised final Le, La, Du or Bin is the name as
   // written ("Thanh Le", "Li Bin").
-  var lastTok = toks[toks.length - 1].replace(/[.'\u2019-]+$/, '');
+  var lastTok = toks[toks.length - 1].replace(/[.'’-]+$/, '');
   if (/^(?:de|van|der|den|du|le|la|von|bin|al)$/.test(lastTok)) return false;
   if (/^(?:Van|Der|Den|Von|De|Al)$/.test(lastTok)) return false;
   return true;
@@ -11485,7 +11855,7 @@ function voExtractParties(text) {
   // A name never spans a line break ("Seton Smith & Associates\n\nTel 021"
   // is not "Associates Tel"), and one cut by a slash or a digit ("All Fue/s")
   // is a fragment.
-  var nameRe = new RegExp("(?<![" + VO_NAME_ANY + "])([" + VO_NAME_UC + "][a-z\u00DF-\u024F]{1,}(?:[ \\t]+[" + VO_NAME_UC + "][a-z\u00DF-\u024F'\u2019.]+){1,3})(?![" + VO_NAME_ANY + "])", "g"), nm;
+  var nameRe = new RegExp("(?<![" + VO_NAME_ANY + "])([" + VO_NAME_UC + "][a-zß-ɏ]{1,}(?:[ \\t]+[" + VO_NAME_UC + "][a-zß-ɏ'’.]+){1,3})(?![" + VO_NAME_ANY + "])", "g"), nm;
   while ((nm = nameRe.exec(s)) !== null) {
     if (/[\/\d]/.test(s.charAt(nm.index + nm[0].length))) continue;
     var cand = voTrimPersonName(nm[1]);
@@ -11516,13 +11886,13 @@ var VO_HEADER_COMPANY_RE = /<[^>\s]*@|\b[\w.+-]+@[\w-]+\.[a-z]{2,}|\b(?:sent|sub
 // der, du …) so "E de Waal" survives. Separators are spaces/tabs ONLY — using
 // \s let a name run across a line break and swallow the next email header
 // label, producing "Rabia Seedat Cc" instead of "Rabia Seedat".
-// \u00C0-\u024F covers Latin-1 Supplement + Extended-A/B, so "Nortjé" is one
+// À-ɏ covers Latin-1 Supplement + Extended-A/B, so "Nortjé" is one
 // token instead of truncating at the accent ("Marius Nortj" in the Greensky run).
-var VO_NAME_UC = "A-Z\u00C0-\u00DE";
-var VO_NAME_ANY = "A-Za-z\u00C0-\u024F";
-var VO_NAME_TOK = "(?:[" + VO_NAME_UC + "][" + VO_NAME_ANY + "'\u2019.-]*|de|van|der|den|du|le|la|von|bin|al)";
-var VO_TITLE_NAME_RE = new RegExp("\\b(?:Mr|Mrs|Ms|Miss|Dr|Prof|Adv|Advocate|Judge|Justice)\\.?[ \\t]+([" + VO_NAME_UC + "][" + VO_NAME_ANY + "'\u2019.-]*(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
-var VO_NAME_SEQ_RE = new RegExp("^([" + VO_NAME_UC + "][" + VO_NAME_ANY + "'\u2019.-]*(?:[ \\t]+" + VO_NAME_TOK + "){1,3})");
+var VO_NAME_UC = "A-ZÀ-Þ";
+var VO_NAME_ANY = "A-Za-zÀ-ɏ";
+var VO_NAME_TOK = "(?:[" + VO_NAME_UC + "][" + VO_NAME_ANY + "'’.-]*|de|van|der|den|du|le|la|von|bin|al)";
+var VO_TITLE_NAME_RE = new RegExp("\\b(?:Mr|Mrs|Ms|Miss|Dr|Prof|Adv|Advocate|Judge|Justice)\\.?[ \\t]+([" + VO_NAME_UC + "][" + VO_NAME_ANY + "'’.-]*(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
+var VO_NAME_SEQ_RE = new RegExp("^([" + VO_NAME_UC + "][" + VO_NAME_ANY + "'’.-]*(?:[ \\t]+" + VO_NAME_TOK + "){1,3})");
 function voExtractPersonsFromContext(text, cap) {
   var s = String(text == null ? '' : text);
   var out = [], seen = {}, lim = cap || 8, m;
@@ -11573,7 +11943,7 @@ var VO_ROSTER_MAX = 40;        // most-mentioned names kept
 var VO_ROSTER_PER_FINDING = 4; // roster names attachable to any one finding
 // Built once at load rather than per call (the roster runs over every page of a
 // 491-page bundle, so the object churn is pointless).
-var VO_ROSTER_NAME_RE = new RegExp("(?<![" + VO_NAME_ANY + "])([" + VO_NAME_UC + "][" + VO_NAME_ANY + "'\u2019-]{1,}(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
+var VO_ROSTER_NAME_RE = new RegExp("(?<![" + VO_NAME_ANY + "])([" + VO_NAME_UC + "][" + VO_NAME_ANY + "'’-]{1,}(?:[ \\t]+" + VO_NAME_TOK + "){1,3})", "g");
 function voBuildNameRoster(blocks, minMentions, secondaryPages) {
   var list = blocks || [];
   // A long bundle repeats a real party many times; a short one may name them
@@ -11649,9 +12019,9 @@ var VO_ABBREV_TOK = { mr: 1, mrs: 1, ms: 1, dr: 1, no: 1, nos: 1, s: 1, ss: 1, c
 // The first real sentence boundary in the first 60 characters of a quote, or
 // -1: never after an abbreviation, and never a ";" or ":" before a figure.
 function voFragmentCut(n) {
-  var re = /[.!?;:]\s+(?=[A-Z0-9"\u201C(])/g, m;
+  var re = /[.!?;:]\s+(?=[A-Z0-9"“(])/g, m;
   while ((m = re.exec(n)) !== null && m.index < 60) {
-    var tok = (n.slice(0, m.index).match(/(\S+)$/) || ['', ''])[1].replace(/^[("\u201C']+/, '').toLowerCase();
+    var tok = (n.slice(0, m.index).match(/(\S+)$/) || ['', ''])[1].replace(/^[("“']+/, '').toLowerCase();
     if (m[0].charAt(0) === '.' && (VO_ABBREV_TOK[tok] || /^[a-z]$/.test(tok))) continue;
     if (/[;:]/.test(m[0].charAt(0)) && /^\d/.test(n.charAt(m.index + m[0].length))) continue;
     return m.index;
@@ -11659,7 +12029,7 @@ function voFragmentCut(n) {
   return -1;
 }
 function voSentenceAround(text, needle) {
-  var s = String(text == null ? '' : text), n = String(needle == null ? '' : needle).replace(/\s+/g, ' ').replace(/^[\u2026.\s]+|[\u2026.\s]+$/g, '').trim();
+  var s = String(text == null ? '' : text), n = String(needle == null ? '' : needle).replace(/\s+/g, ' ').replace(/^[….\s]+|[….\s]+$/g, '').trim();
   // A quote that starts mid-word ("ication. The contradiction is stark …")
   // begins in the previous sentence: key it on its own sentence, or, with no
   // boundary in sight, on the words after the fragment.
@@ -11672,7 +12042,7 @@ function voSentenceAround(text, needle) {
     if (cutF !== -1) n = n.slice(cutF + 1).trim();
     else {
       var flatL = s.replace(/\s+/g, ' '), atL = flatL.toLowerCase().indexOf(n.slice(0, 60).toLowerCase());
-      if (atL > 0 && /[A-Za-z\u00C0-\u024F]/.test(flatL.charAt(atL - 1))) n = n.replace(/^\S+\s+/, '');
+      if (atL > 0 && /[A-Za-zÀ-ɏ]/.test(flatL.charAt(atL - 1))) n = n.replace(/^\S+\s+/, '');
     }
   }
   if (n.length < 12) return null;
@@ -11738,7 +12108,7 @@ function voExtractQuotes(text) {
   var push = function (q) { q = q.replace(/\s+/g, ' ').trim(); if (q.length >= 6 && !seen[q]) { seen[q] = true; out.push(q); } };
   while (i < n) {
     var o = -1;
-    for (var a = i; a < n; a++) { var ca = s.charAt(a); if (ca === '"' || ca === '\u201C' || ca === '\u201D') { o = a; break; } }
+    for (var a = i; a < n; a++) { var ca = s.charAt(a); if (ca === '"' || ca === '“' || ca === '”') { o = a; break; } }
     if (o === -1) break;
     var qc = voQuoteClose(s, o), close = qc.close === -1 ? qc.last : qc.close;
     if (close <= o) break;
@@ -11747,7 +12117,7 @@ function voExtractQuotes(text) {
   }
   // A term in single quotes ('Astron Motor Fuel' means …) with no inner
   // apostrophe and at least twelve characters is a quote too.
-  var sRe = /(?:^|[\s(\[:,])['\u2018]([^'\u2018\u2019\n]{12,})['\u2019](?=[\s.,;:)\]]|$)/g;
+  var sRe = /(?:^|[\s(\[:,])['‘]([^'‘’\n]{12,})['’](?=[\s.,;:)\]]|$)/g;
   while ((m = sRe.exec(s)) !== null) push(m[1]);
   return out;
 }
@@ -12130,7 +12500,7 @@ function voFactSnippet(raw, idx, len) {
 function voSentenceBounds(s, pos) {
   s = String(s || '');
   var MAX = 600;
-  var mask = s.replace(/\b[A-Z]\./g, function (x) { return x.charAt(0) + '\u0001'; });
+  var mask = s.replace(/\b[A-Z]\./g, function (x) { return x.charAt(0) + '\x01'; });
   var TERM = /[.;:](?=\s)|\n/g, t, start = 0, end = s.length;
   while ((t = TERM.exec(mask)) !== null) {
     if (t.index < pos) { start = t.index + 1; }
@@ -12621,8 +12991,8 @@ function _voDecodeParenString(raw) {
 }
 
 // WinAnsiEncoding 0x80-0x9F (the part that differs from Latin-1); '' = unassigned.
-var VO_WINANSI_HIGH = ['\u20AC', '', '\u201A', '\u0192', '\u201E', '\u2026', '\u2020', '\u2021', '\u02C6', '\u2030', '\u0160', '\u2039', '\u0152', '', '\u017D', '',
-  '', '\u2018', '\u2019', '\u201C', '\u201D', '\u2022', '\u2013', '\u2014', '\u02DC', '\u2122', '\u0161', '\u203A', '\u0153', '', '\u017E', '\u0178'];
+var VO_WINANSI_HIGH = ['€', '', '‚', 'ƒ', '„', '…', '†', '‡', 'ˆ', '‰', 'Š', '‹', 'Œ', '', 'Ž', '',
+  '', '‘', '’', '“', '”', '•', '–', '—', '˜', '™', 'š', '›', 'œ', '', 'ž', 'Ÿ'];
 function _voDecodeHexString(hex, cmap, simpleFont) {
   hex = hex.replace(/\s+/g, '');
   var out = '';
@@ -12703,7 +13073,7 @@ function _voGlyphTokens(t, texts) {
 //    separate words: kerned words drawn as separate strings keep their space
 //    ("a" + "lease" -> "a lease", exactly as before).
 var VO_TJ_SPACE_KERN = -180; // thousandths of an em; a word space is typically -250 to -333
-var VO_GLYPH_OPENER = /^[(\[{"\u201C\u2018]$/;   // never attaches backward; carried onto the next word
+var VO_GLYPH_OPENER = /^[(\[{"“‘]$/;   // never attaches backward; carried onto the next word
 var VO_GLYPH_JOINER = /[\/\-@']$/;               // a word ending in one of these pulls the next word onto itself ('&' is a word of its own: "Agreements & The")
 function _voMergeGlyphRuns(texts) {
   var merged = [], run = [], attach = false;
@@ -12737,7 +13107,7 @@ function _voMergeGlyphRuns(texts) {
       run.push(tok); continue;
     }
     // multi-character token
-    if (run.length && /[(\[{"\u201C\u2018\/\-@&']$/.test(run[run.length - 1])) { run.push(tok); flush(); attach = true; continue; } // "(" + "Pty" -> "(Pty"; "paid." + "No" stays two words
+    if (run.length && /[(\[{"“‘\/\-@&']$/.test(run[run.length - 1])) { run.push(tok); flush(); attach = true; continue; } // "(" + "Pty" -> "(Pty"; "paid." + "No" stays two words
     if (attach && merged.length && VO_GLYPH_JOINER.test(last()) && prevTok !== ' ') { merged[merged.length - 1] += tok; attach = false; continue; } // "12/" + "12" -> "12/12"
     flush(); merged.push(tok); attach = false;
   }
@@ -13013,7 +13383,6 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     DETECTORS.D07_DETECT_ROLE_CONTRADICTION,
     DETECTORS.D08_DETECT_AUTHORITY_EXCEEDED,
     DETECTORS.D09_DETECT_ENTITY_STATUS_FAKE,
-    DETECTORS.D10_DETECT_VAT_INVALID,
     DETECTORS.D11_DETECT_REGISTRATION_FAKE,
     DETECTORS.D12_DETECT_BANK_DETAIL_MISMATCH,
     DETECTORS.D13_DETECT_CALCULATION_ERROR,
@@ -13042,7 +13411,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     DETECTORS.D36_DETECT_SOURCE_FAILURE,
     DETECTORS.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED,
     DETECTORS.D39_DETECT_ASSET_VALUE_DENIAL,
-    DETECTORS.D40_DETECT_ROLE_CAPACITY_CONFLICT
+    DETECTORS.D40_DETECT_ROLE_CAPACITY_CONFLICT,
+    DETECTORS.D41_DETECT_COERCIVE_CONDUCT,
+    DETECTORS.D42_DETECT_REALITY_DENIAL,
+    DETECTORS.D43_DETECT_BLAME_REVERSAL
   ];
 
   for (var d = 0; d < detectors.length; d++) {
@@ -13185,7 +13557,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   try {
     var _gp = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
     var _pkg = _gp && _gp.voRulePackage;
-    if (_pkg && typeof _pkg === 'object' && _pkg.version && (Array.isArray(_pkg.pairs) || Array.isArray(_pkg.groups))) {
+    if (_pkg && typeof _pkg === 'object' && _pkg.version && (Array.isArray(_pkg.pairs) || Array.isArray(_pkg.groups) || Array.isArray(_pkg.markers))) {
       var _pr = voRunPackageRules(_pkg, textBlocks, allFindings);
       allFindings = allFindings.concat(_pr.findings);
       _rulePkgInfo = {
@@ -13337,7 +13709,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
       else _noteSeg.push((_cn.location ? _cn.location + ': ' : '') + _cn.text);
     }
     if (_ctxSeg.length) extractionNote += ' ' + _ctxSeg.join(' ');
-    if (_noteSeg.length) extractionNote += ' Engine notes (' + _noteSeg.length + '): ' + _noteSeg.join(' \u2022 ');
+    if (_noteSeg.length) extractionNote += ' Engine notes (' + _noteSeg.length + '): ' + _noteSeg.join(' • ');
   }
 
   // Calculate overall score — confidence-weighted per indicator type
@@ -13509,6 +13881,7 @@ var VO_PACKAGE_RULE_MAX_SEVERITY = 3;   // Android: MODERATE severity
 var VO_PACKAGE_RULE_WINDOW = 80;        // D01's one-clause window
 var VO_PACKAGE_RULE_MAX_FINDINGS = 25;  // per scan, before the per-type cap
 var VO_PACKAGE_RULE_FALLBACK_TYPE = 'CT43'; // Document Internal Conflict, when a rule names no type
+var VO_PACKAGE_MARKER_FALLBACK_TYPE = 'CT50'; // Behavioural Pattern Indicator, when a marker names no type
 var VO_PACKAGE_GROUP_WINDOW_PAGES = 3;      // co-occurrence groups: the serial detector's page window
 // The seed package (worker/seed-rules.json v1.0.0) is this engine's own
 // vocabulary exported for the apps: these twelve groups are skipped when a
@@ -13518,6 +13891,12 @@ var VO_PACKAGE_GROUP_WINDOW_PAGES = 3;      // co-occurrence groups: the serial 
 // -- is what the package adds. tests/rule-package.test.mjs locks this list
 // to the seed's groups whose source_detector is a built-in detector.
 var VO_ENGINE_OWN_RULE_GROUPS = ['FK01', 'FK02', 'FK03', 'FK04', 'FK05', 'FK06', 'FK07', 'FK08', 'FK09', 'FK10', 'FK11', 'FK12'];
+// Same discipline for the seed's behavioural markers (BM01-BM10): each is a
+// built-in detector's or serial pattern's own vocabulary (SP01, D07, D08,
+// D28, D29, SP16). Applying them here would be a looser second copy --
+// "confidential" + "private matter" firing beside the airtight SP01 stage.
+// Only CURATED markers (BM11+, the learning loop's output) are applied.
+var VO_ENGINE_OWN_MARKERS = ['BM01', 'BM02', 'BM03', 'BM04', 'BM05', 'BM06', 'BM07', 'BM08', 'BM09', 'BM10'];
 
 // Canonical JSON -- the signed bytes (rule-format.md): UTF-8, no whitespace,
 // object keys sorted recursively, arrays in order, JSON.stringify escaping.
@@ -13625,8 +14004,10 @@ function voRulesTrimLower(s) {
 // Compile a VERIFIED package into what the engine applies. meta carries the
 // provenance the report prints ({ sha512, keyId, fetchedFrom }). Mirrors the
 // Android RuleProvider: pairs from fraud_keywords[].pairs, flat string terms
-// from fraud_keywords[].terms, keywords from behavioral_markers[].keywords;
-// everything else is counted. `builtIn` names the groups skipped because
+// from fraud_keywords[].terms, keywords from behavioral_markers[].keywords
+// (applied as behavioural-indicator findings; the learning loop's way of
+// teaching the engine new behavioural patterns between releases); everything
+// else is counted. `builtIn` names the groups skipped because
 // their source_detector is one of this engine's own detectors.
 function voCompileRulePackage(pkg, meta) {
   meta = meta || {};
@@ -13687,7 +14068,7 @@ function voCompileRulePackage(pkg, meta) {
       if (phrases.length < 2) continue;
       var min = parseInt(entry.min_cooccur, 10);
       if (!isFinite(min) || min < 2) {
-        var dm = /(?:>=|\u2265|at least|minimum of|no fewer than)\s*(\d+)/i.exec(String(entry.description || ''));
+        var dm = /(?:>=|≥|at least|minimum of|no fewer than)\s*(\d+)/i.exec(String(entry.description || ''));
         min = dm ? parseInt(dm[1], 10) : Math.max(2, Math.ceil(phrases.length / 2));
       }
       min = Math.max(2, Math.min(min, phrases.length));
@@ -13698,13 +14079,19 @@ function voCompileRulePackage(pkg, meta) {
   for (var m = 0; m < bm.length; m++) {
     var mk = bm[m];
     if (!mk || typeof mk !== 'object') continue;
+    var mkId = (typeof mk.id === 'string' ? mk.id.slice(0, 32) : ('BM?' + m));
+    // The engine's own exported vocabulary (seed BM01-BM10) is skipped, the
+    // same discipline as the FK seed groups; curated markers are applied.
+    if (VO_ENGINE_OWN_MARKERS.indexOf(mkId) >= 0) { builtIn.push(mkId); continue; }
     var kws = [];
     var kl = Array.isArray(mk.keywords) ? mk.keywords : [];
     for (var kx = 0; kx < kl.length; kx++) {
       var kw = voRulesTrimLower(kl[kx]);
       if (kw) kws.push(kw);
     }
-    markers.push({ ruleId: (typeof mk.id === 'string' ? mk.id.slice(0, 32) : ('BM?' + m)), name: (typeof mk.name === 'string' ? mk.name.slice(0, 80) : ''), keywords: kws });
+    markers.push({ ruleId: mkId, name: (typeof mk.name === 'string' ? mk.name.slice(0, 80) : ''), keywords: kws,
+      produces: (typeof mk.produces === 'string' && /^CT\d{2}$/.test(mk.produces.trim()) && voCtById(mk.produces.trim())) ? mk.produces.trim() : null,
+      minCooccur: parseInt(mk.min_cooccur, 10) });
   }
   var counts = {};
   for (var g = 0; g < VO_RULE_GROUPS.length; g++) {
@@ -13765,7 +14152,7 @@ function voRulePagesOf(location) {
   var out = [], seen = {};
   // Every page named: single pages, lists ("Page 3, 12") and ranges
   // ("Pages 12-14", expanded), in one set.
-  var re = /(\d{1,5})(?:\s*[-\u2013]\s*(\d{1,5}))?/g, m;
+  var re = /(\d{1,5})(?:\s*[-–]\s*(\d{1,5}))?/g, m;
   while ((m = re.exec(loc)) !== null) {
     var lo = parseInt(m[1], 10), hi = m[2] ? parseInt(m[2], 10) : lo;
     if (!(lo > 0)) continue;
@@ -13785,12 +14172,13 @@ function voRunPackageRules(compiled, textBlocks, existing) {
   if (!compiled) return out;
   if (!Array.isArray(compiled.pairs)) compiled.pairs = [];
   if (!Array.isArray(compiled.groups)) compiled.groups = [];
-  if (!compiled.pairs.length && !compiled.groups.length) return out;
+  if (!Array.isArray(compiled.markers)) compiled.markers = [];
+  if (!compiled.pairs.length && !compiled.groups.length && !compiled.markers.length) return out;
   var blocks = (textBlocks && textBlocks.length) ? textBlocks : [''];
   // Lower-cased, with hyphen-like characters as spaces so "risk-free" meets
   // "risk free"; one character for one, so positions still index the page.
   var lower = [];
-  for (var b = 0; b < blocks.length; b++) lower.push(String(blocks[b] || '').toLowerCase().replace(/[-\u2010-\u2015\u00ad]/g, ' '));
+  for (var b = 0; b < blocks.length; b++) lower.push(String(blocks[b] || '').toLowerCase().replace(/[-‐-―­]/g, ' '));
   var reported = {};
   var ex = Array.isArray(existing) ? existing : [];
   for (var e = 0; e < ex.length; e++) {
@@ -13888,6 +14276,48 @@ function voRunPackageRules(compiled, textBlocks, existing) {
     });
     reported[gType + '@' + anchorPage] = true;
   }
+  // Behavioural markers: keyword sets the signed package teaches the engine
+  // (B4 of the constitution: gaslighting, deception, victim-stress). A marker
+  // fires on a page when enough of its DISTINCT keywords appear there:
+  // min_cooccur if the rule sets it, else 2 (or 1 for a single-keyword
+  // marker). A rule may name a specific behavioural type via `produces`;
+  // otherwise the generic CT50 applies. Doctrine wording travels on every
+  // finding: indicators for human review, not a determination.
+  for (var mr = 0; mr < compiled.markers.length && out.findings.length < VO_PACKAGE_RULE_MAX_FINDINGS; mr++) {
+    var mk = compiled.markers[mr];
+    if (!mk || !Array.isArray(mk.keywords) || !mk.keywords.length) continue;
+    var mType = mk.produces || VO_PACKAGE_MARKER_FALLBACK_TYPE;
+    var mCt = voCtById(mType) || voCtById(VO_PACKAGE_MARKER_FALLBACK_TYPE);
+    var mSev = Math.min(mCt && mCt.severity ? mCt.severity : 3, VO_PACKAGE_RULE_MAX_SEVERITY);
+    var mMin = (typeof mk.minCooccur === 'number' && isFinite(mk.minCooccur) && mk.minCooccur >= 1) ? mk.minCooccur : (mk.keywords.length === 1 ? 1 : 2);
+    mMin = Math.max(1, Math.min(mMin, mk.keywords.length));
+    for (var mp = 0; mp < lower.length && out.findings.length < VO_PACKAGE_RULE_MAX_FINDINGS; mp++) {
+      var mtext = lower[mp];
+      if (!mtext) continue;
+      var mHits = [];
+      for (var mkw = 0; mkw < mk.keywords.length && mHits.length < 4; mkw++) {
+        if (voRulePhrasePositions(mtext, mk.keywords[mkw]).length) mHits.push(mk.keywords[mkw]);
+      }
+      if (mHits.length < mMin) continue;
+      var mPage = mp + 1;
+      if (reported[mType + '@' + mPage]) { out.withheld++; continue; }
+      var mPos = voRulePhrasePositions(mtext, mHits[0])[0];
+      var mStart = Math.max(0, mPos - 60);
+      var mEnd = Math.min(String(blocks[mp] || '').length, mPos + mHits[0].length + 140);
+      var mPassage = String(blocks[mp] || '').slice(mStart, mEnd).replace(/\s+/g, ' ').trim();
+      if (mPassage.length > 220) mPassage = mPassage.slice(0, 220).replace(/\s+\S*$/, '') + '...';
+      out.findings.push({
+        type: mType,
+        severity: mSev,
+        evidence: 'Signed rule ' + mk.ruleId + ' (package v' + compiled.version + '): behavioural marker "' + (mk.name || mk.ruleId) + '" matched ' + mHits.length + ' keyword(s): ' + mHits.map(function (k) { return '"' + k + '"'; }).join(', ') + '. Passage: "' + mPassage + '". Behavioural indicators are for human review, not a determination.',
+        location: (lower.length <= 1) ? 'Full document' : ('Page ' + mPage),
+        packageRule: mk.ruleId,
+        packageVersion: compiled.version,
+        detectorId: 'DXX_SIGNED_RULE_PACKAGE'
+      });
+      reported[mType + '@' + mPage] = true;
+    }
+  }
   return out;
 }
 
@@ -13951,6 +14381,7 @@ if (typeof module !== 'undefined' && module.exports) {
     VO_PACKAGE_RULE_CONFIDENCE: VO_PACKAGE_RULE_CONFIDENCE,
     VO_PACKAGE_RULE_MAX_SEVERITY: VO_PACKAGE_RULE_MAX_SEVERITY,
     VO_ENGINE_OWN_RULE_GROUPS: VO_ENGINE_OWN_RULE_GROUPS,
+    VO_ENGINE_OWN_MARKERS: VO_ENGINE_OWN_MARKERS,
     VO_PACKAGE_GROUP_WINDOW_PAGES: VO_PACKAGE_GROUP_WINDOW_PAGES,
     voCanonicalJson: voCanonicalJson,
     voSemverNewer: voSemverNewer,
@@ -16869,7 +17300,7 @@ async function buildVoiceNoteReport(items, manifest, shots, generatedAt) {
     if (it.transcript) {
       para('MACHINE TRANSCRIPT — reading aid, not evidence', { font: helvB, size: 9, color: GOLD, after: 2 });
       para('Produced by an automatic speech-recognition model at the sealer\'s request. The model can mis-hear words; verify every quoted word against the sealed audio, which is the evidence. Nothing in this transcript identifies who is speaking.', { size: 8, color: GRAY, after: 3 });
-      para('\u201C' + it.transcript.substring(0, 4000) + (it.transcript.length > 4000 ? ' \u2026' : '') + '\u201D', { size: 9 });
+      para('“' + it.transcript.substring(0, 4000) + (it.transcript.length > 4000 ? ' …' : '') + '”', { size: 9 });
     } else if (it.transcriptNote) {
       para('Transcript: ' + it.transcriptNote + '.', { size: 8.5, color: GRAY });
     }
@@ -17774,7 +18205,7 @@ async function aiAssessFindings(findings) {
   // the same kind of finding (its type names the finding's CT code) or its
   // quote is most of that evidence. A different contradiction read from the
   // same words is the review's one permitted output, and is kept.
-  var normQ = function (t) { return String(t || '').toLowerCase().replace(/[\u2018\u2019\u201c\u201d"']/g, '').replace(/\s+/g, ' ').trim(); };
+  var normQ = function (t) { return String(t || '').toLowerCase().replace(/[‘’“”"']/g, '').replace(/\s+/g, ' ').trim(); };
   var pagesQ = function (loc) { return (typeof voRulePagesOf === 'function') ? voRulePagesOf(String(loc || '')) : (String(loc || '').match(/\d+/g) || []).map(Number); };
   var engineQ = findings.filter(function (f) { return f && f.source !== 'ai'; }).map(function (f) { return { ev: normQ(f.evidence), pages: pagesQ(f.location), type: String(f.type || '').toUpperCase() }; });
   var duplicates = 0;
@@ -17930,7 +18361,7 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
   var cjJur = null;
   try {
     if (VR && VR._detectJurisdictions) cjJur = VR._detectJurisdictions({ findings: result || {}, identity: { jurisdiction: (caseInfo && caseInfo.jurisdiction) || '' },
-      gps: (typeof gpsCoords !== 'undefined' && gpsCoords) ? { lat: gpsCoords.lat, lng: gpsCoords.lng } : null });
+      gps: (typeof gpsCoords !== 'undefined' && gpsCoords) ? { lat: gpsCoords.lat, lng: gpsCoords.lng, acc: gpsCoords.accuracy || null } : null });
   } catch (eJ) { cjJur = null; }
   var candidateLawOf = function (f) {
     if (!cjJur || !VR || !VR._statutesForFinding || !f || f.source === 'ai' || f.type === 'SERIAL') return [];
@@ -18131,9 +18562,9 @@ function buildLocalNarrative(findings, score, verdict) {
     FINANCIAL: 'Financial Conflicts', INTEGRITY: 'Document Structure & Integrity',
     CROSS_REF: 'Cross-Reference Checks', CONTACT: 'Address & Location Conflicts',
     EVIDENCE: 'Evidence & Witness Conflicts', DIGITAL: 'Digital Consistency',
-    FRANCHISE_LEASE: 'Franchise / Lease & Goodwill'
+    FRANCHISE_LEASE: 'Franchise / Lease & Goodwill', BEHAVIOUR: 'Conduct Indicators'
   };
-  var CATORD = ['STATEMENTAL', 'FRANCHISE_LEASE', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL'];
+  var CATORD = ['STATEMENTAL', 'FRANCHISE_LEASE', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL', 'BEHAVIOUR'];
   var CTNAME = {
     CT01: 'Direct Statement Contradiction', CT02: 'Numerical Discrepancy', CT03: 'Date Inconsistency',
     CT04: 'Temporal Sequence Break', CT05: 'Causal Impossibility', CT06: 'Logical Impossibility',
@@ -18151,7 +18582,11 @@ function buildLocalNarrative(findings, score, verdict) {
     CT40: 'Witness Statement Conflict', CT41: 'Evidence Tampering Indicator', CT42: 'Digital Footprint Mismatch',
     CT43: 'Document Internal Conflict',
     CT44: 'Conditional Clause Misinvoked (Lessee/Owner Trap)', CT45: 'Asset Value Recognised Then Denied (Goodwill)',
-    CT46: 'Role / Capacity Contradiction'
+    CT46: 'Role / Capacity Contradiction',
+    CT47: 'Coercive Conduct Indicators',
+    CT48: 'Gaslighting / Reality-Denial Indicators',
+    CT49: 'Blame-Reversal / DARVO Indicators',
+    CT50: 'Behavioural Pattern Indicator (Signed Rule)'
   };
   var CTCAT = {
     CT01: 'STATEMENTAL', CT02: 'STATEMENTAL', CT03: 'STATEMENTAL', CT04: 'STATEMENTAL', CT05: 'STATEMENTAL',
@@ -18164,7 +18599,7 @@ function buildLocalNarrative(findings, score, verdict) {
     CT31: 'CROSS_REF', CT32: 'CROSS_REF', CT33: 'CROSS_REF', CT34: 'CROSS_REF', CT35: 'CROSS_REF',
     CT36: 'CONTACT', CT37: 'CONTACT', CT38: 'CONTACT', CT39: 'EVIDENCE', CT40: 'EVIDENCE', CT41: 'EVIDENCE',
     CT42: 'DIGITAL', CT43: 'DIGITAL',
-    CT44: 'FRANCHISE_LEASE', CT45: 'FRANCHISE_LEASE', CT46: 'IDENTITY'
+    CT44: 'FRANCHISE_LEASE', CT45: 'FRANCHISE_LEASE', CT46: 'IDENTITY', CT47: 'BEHAVIOUR', CT48: 'BEHAVIOUR', CT49: 'BEHAVIOUR', CT50: 'BEHAVIOUR'
   };
   // The report's measured labels where the report script loaded (CTNAME is
   // the sealed taxonomy and stays equal to CT_NAMES).
@@ -18635,8 +19070,9 @@ async function aiNarrateReport(findings, score, verdict) {
 // request stays inside one model timeout and a failure costs one section, not
 // the document. Section ids mirror worker/verum-rules.js HUMAN_SECTIONS and
 // forensic-report.js HUMAN_REPORT_SECTIONS (tests pin all three). Part of
-// "Seal document with forensic report" (no switch since 2026-09-07): page
-// excerpts around the finding pages leave this device for the AI narrator.
+// "Seal document with forensic report" (no switch since 2026-09-07): the
+// bounded sealed page text, findings JSON and technical-report text leave this
+// device for the AI narrator.
 var VO_HUMAN_SECTIONS = [
   'executive_summary', 'evidence_index', 'chronology', 'four_pillars',
   'contradictions_matrix', 'critical_evidence', 'counter_narratives',
@@ -18649,7 +19085,11 @@ var VO_HUMAN_WRITER_SECTIONS = [
   'recommendations'
 ];
 var VO_HUMAN_CRITICAL_BATCH = 8;      // findings per critical-evidence call
-var VO_HUMAN_EXCERPT_CHARS = 24000;   // per-request excerpt cap (server caps at the same)
+var VO_HUMAN_EXCERPT_CHARS = 24000;   // per-request focused excerpt cap (server caps at the same)
+var VO_HUMAN_RECORD_CHARS = 196000;   // page-tagged sealed-bundle text shared by every writer section (Scout's 131k-token window; the Greensky 332-page rerun starved at 64k — 100 pages, 56 truncated)
+var VO_HUMAN_FINDINGS_JSON_CHARS = 32000; // bounded machine-readable confirmation record
+var VO_HUMAN_TECH_REPORT_CHARS = 32000;   // bounded sealed technical-report text (pre-overlay bytes)
+var VO_HUMAN_TECH_REPORT_PAGES = 40;      // enough for the findings and methodology; provenance states if truncated
 var VO_HUMAN_CALL_TIMEOUT_MS = 52000; // server: primary 30 s + 8B fallback 15 s, plus margin
 var VO_HUMAN_TOTAL_BUDGET_MS = 5 * 60 * 1000; // whole-narrative ceiling: sections past it are skipped, never left hanging
 
@@ -18738,10 +19178,188 @@ function voHumanPayloadFinding(item) {
   };
 }
 
+// The LEGAL FRAMEWORK narrator may name only law the B7 lanes confirmed.
+// Pass the fixed {statute, section} shape through; anything else is dropped.
+function voLawVerifiedForNarrative(lawCheck) {
+  var out = [], seen = {};
+  if (!lawCheck || !Array.isArray(lawCheck.results)) return out;
+  for (var i = 0; i < lawCheck.results.length && out.length < 12; i++) {
+    var r = lawCheck.results[i] || {};
+    var statute = String(r.statute || '').trim().slice(0, 200);
+    var section = String(r.section || '').trim().slice(0, 60);
+    if (r.status !== 'VERIFIED' || statute.length < 4) continue;
+    var key = (statute + '|' + section).toLowerCase();
+    if (seen[key]) continue;
+    seen[key] = true;
+    out.push({ statute: statute, section: section });
+  }
+  return out;
+}
+
+// The narrator reads the sealed record, not only the finding metadata. Small
+// bundles go across whole. Large bundles go across as a deterministic page set:
+// page 1 for identity, every finding/candidate page with its neighbours, every
+// timeline page, and the strongest capacity/account pages. The coverage object
+// is part of the payload and is printed in the narrative provenance, so a
+// truncated context can never masquerade as a full-bundle reading.
+function voBuildSealedRecordContext(textBlocks, payloadFindings, timeline, maxChars) {
+  maxChars = maxChars || VO_HUMAN_RECORD_CHARS;
+  var blocks = Array.isArray(textBlocks) ? textBlocks : [];
+  var totalPages = blocks.length;
+  var emptyCoverage = {
+    totalPages: totalPages, suppliedPages: [], suppliedPageCount: 0,
+    omittedPages: [], omittedPageCount: totalPages, truncatedPages: [],
+    truncatedPageCount: 0, fullTextSupplied: false, charCount: 0
+  };
+  if (!totalPages) return { text: '', coverage: emptyCoverage };
+
+  var normBlocks = blocks.map(function (b) { return String(b || '').replace(/\s+/g, ' ').trim(); });
+  var fullLen = 0;
+  for (var fl = 0; fl < totalPages; fl++) if (normBlocks[fl]) fullLen += normBlocks[fl].length + 12;
+  if (fullLen > 0 && fullLen <= maxChars) {
+    var fullText = [];
+    var fullPages = [];
+    for (var ap = 0; ap < totalPages; ap++) {
+      if (!normBlocks[ap]) continue;
+      fullPages.push(ap + 1);
+      fullText.push('[Page ' + (ap + 1) + '] ' + normBlocks[ap]);
+    }
+    return { text: fullText.join('\n\n'), coverage: {
+      totalPages: totalPages, suppliedPages: fullPages, suppliedPageCount: fullPages.length,
+      omittedPages: [], omittedPageCount: Math.max(0, totalPages - fullPages.length),
+      truncatedPages: [], truncatedPageCount: 0, fullTextSupplied: fullPages.length === totalPages,
+      charCount: fullText.join('\n\n').length
+    } };
+  }
+
+  var priority = {};
+  var mark = function (page, rank) {
+    page = parseInt(page, 10);
+    if (!isFinite(page) || page < 1 || page > totalPages) return;
+    if (priority[page] === undefined || rank < priority[page]) priority[page] = rank;
+  };
+  mark(1, 0);
+  var list = Array.isArray(payloadFindings) ? payloadFindings : [];
+  for (var i = 0; i < list.length; i++) {
+    var f = list[i] || {};
+    var pages = Array.isArray(f.pages) && f.pages.length ? f.pages : [f.page];
+    for (var j = 0; j < pages.length; j++) {
+      var p = parseInt(pages[j], 10);
+      if (!isFinite(p) || p < 1) continue;
+      mark(p, 10 + i);
+      mark(p - 1, 1000 + i);
+      mark(p + 1, 1000 + i);
+    }
+  }
+  if (Array.isArray(timeline)) {
+    for (var t = 0; t < timeline.length; t++) mark(timeline[t] && timeline[t].page, 2000 + t);
+  }
+  var capacity = [];
+  var capRe = /in (?:my|his|her) capacity as|capacity as (?:a |an )?(?:director|member|trustee|representative|agent)|on behalf of [A-Z]|personal (?:bank |trust )?account|trust account|nominated (?:bank )?account/i;
+  for (var cp = 0; cp < totalPages; cp++) {
+    if (priority[cp + 1] !== undefined) continue;
+    if (capRe.test(normBlocks[cp])) capacity.push(cp + 1);
+  }
+  for (var cq = 0; cq < capacity.length && cq < 5; cq++) mark(capacity[cq], 3000 + cq);
+
+  var selected = Object.keys(priority).map(Number).sort(function (a, b) {
+    return (priority[a] - priority[b]) || (a - b);
+  });
+  // Two passes (Greensky rerun review fix 1): the pages the findings, quotes and
+  // page 1 actually live on (rank < 1000) go across FULL — a truncated finding
+  // page is exactly the quote the narrator needs and cannot see. Neighbours,
+  // timeline and capacity pages then share what remains at a capped excerpt.
+  var FULL_RANK = 1000;
+  var core = selected.filter(function (p) { return priority[p] < FULL_RANK; });
+  var coreLen = 0;
+  for (var cl = 0; cl < core.length; cl++) coreLen += (normBlocks[core[cl] - 1] || '').length + 20;
+  // If even the core cannot fit, the core itself is capped — but at a floor that
+  // keeps a quoted sentence intact, never the old ~450-char shred.
+  var perPageCap = Math.max(1200, Math.floor(maxChars / Math.max(1, selected.length)));
+  var chosen = [], supplied = [], truncated = [], used = 0;
+  for (var op = 0; op < selected.length && used < maxChars; op++) {
+    var pageNo = selected[op];
+    var raw = normBlocks[pageNo - 1];
+    if (!raw) continue;
+    var room = maxChars - used;
+    var cap = (priority[pageNo] < FULL_RANK && coreLen <= maxChars * 0.8) ? Math.min(raw.length, room) : Math.min(perPageCap, room);
+    if (cap < 120) break;
+    var body = raw.length > cap ? raw.slice(0, cap) + ' [page text truncated here for the narrator context budget]' : raw;
+    var block = '[Page ' + pageNo + '] ' + body;
+    chosen.push({ page: pageNo, block: block });
+    supplied.push(pageNo);
+    if (raw.length > cap) truncated.push(pageNo);
+    used += block.length + 2;
+  }
+  chosen.sort(function (a, b) { return a.page - b.page; });
+  supplied.sort(function (a, b) { return a - b; });
+  truncated.sort(function (a, b) { return a - b; });
+  var out = chosen.map(function (x) { return x.block; });
+  var suppliedSet = {};
+  for (var sp = 0; sp < supplied.length; sp++) suppliedSet[supplied[sp]] = true;
+  var omitted = [];
+  for (var om = 1; om <= totalPages && omitted.length < 120; om++) if (!suppliedSet[om]) omitted.push(om);
+  var omittedCount = totalPages - supplied.length;
+  var text = out.join('\n\n');
+  return { text: text, coverage: {
+    totalPages: totalPages, suppliedPages: supplied, suppliedPageCount: supplied.length,
+    omittedPages: omitted, omittedPageCount: omittedCount,
+    truncatedPages: truncated, truncatedPageCount: truncated.length,
+    fullTextSupplied: false, charCount: text.length
+  } };
+}
+
+// Extract readable text from the technical report's PRE-SEAL bytes (the sealed
+// overlay adds certificate text the narrator does not need). This is local
+// pdf.js work; the bytes leave the device only inside the bounded narrator
+// prompt after the technical report has already been sealed.
+async function voTechnicalReportTextForNarrative(pdfBytes, maxChars, maxPages) {
+  maxChars = maxChars || VO_HUMAN_TECH_REPORT_CHARS;
+  maxPages = maxPages || VO_HUMAN_TECH_REPORT_PAGES;
+  var none = { text: '', pageCount: 0, suppliedPages: 0, truncated: false, charCount: 0 };
+  if (!pdfBytes || !(pdfBytes.byteLength || pdfBytes.length)) return none;
+  var VO_PDFJS_CDN = 'https://unpkg.com/pdfjs-dist@3.11.174/build/';
+  var pdfjsSrc = await voOcrLoadScript(
+    ['/vendor/pdf.min.js', VO_PDFJS_CDN + 'pdf.min.js'],
+    function () { return typeof pdfjsLib !== 'undefined'; }
+  );
+  try {
+    pdfjsLib.GlobalWorkerOptions.workerSrc =
+      (pdfjsSrc.indexOf('unpkg.com') !== -1) ? (VO_PDFJS_CDN + 'pdf.worker.min.js') : '/vendor/pdf.worker.min.js';
+  } catch (eW) {}
+  var pdf = await pdfjsLib.getDocument({ data: pdfBytes.slice ? pdfBytes.slice(0) : pdfBytes }).promise;
+  var reportPageCount = pdf.numPages || 0;
+  var out = [], used = 0, supplied = 0, truncated = reportPageCount > maxPages;
+  var limit = Math.min(reportPageCount, maxPages);
+  for (var p = 1; p <= limit && used < maxChars; p++) {
+    var page = await pdf.getPage(p);
+    var tc = await page.getTextContent();
+    var raw = (tc.items || []).map(function (it) { return String((it && it.str) || ''); }).join(' ').replace(/\s+/g, ' ').trim();
+    if (!raw) continue;
+    var room = maxChars - used;
+    var body = raw.length > room ? raw.slice(0, room) + ' [technical report text truncated here for the narrator context budget]' : raw;
+    if (raw.length > room) truncated = true;
+    out.push('[Report Page ' + p + '] ' + body);
+    supplied++;
+    used += body.length + 20;
+  }
+  try { await pdf.destroy(); } catch (eD) {}
+  var text = out.join('\n\n');
+  return { text: text, pageCount: reportPageCount, suppliedPages: supplied, truncated: truncated, charCount: text.length };
+}
+
 // Drive the writer sections one call at a time. Returns everything the PDF
 // builder needs. Never throws for a failed section — that section simply
 // records generated:false and the builder prints its deterministic twin.
 async function aiHumanReport(findings, ctxIn) {
+  // Hard ordering rule (founder, 2026-10-11): the narrator sees the record only
+  // AFTER the technical report exists under seal. The caller passes that seal's
+  // id/hash; without them no AI call is made and no narrative is claimed.
+  if (!ctxIn || !ctxIn.technicalSealId || !ctxIn.technicalSha512) {
+    var blocked = {};
+    for (var bs = 0; bs < VO_HUMAN_WRITER_SECTIONS.length; bs++) blocked[VO_HUMAN_WRITER_SECTIONS[bs]] = { provenance: 'none', reason: 'seal_required' };
+    return { sections: blocked, humanFindings: [], model: null, calls: 0, modelAttempts: 0, generated: 0, writerSections: VO_HUMAN_WRITER_SECTIONS.length, recordContext: null, generatedUtc: new Date().toISOString() };
+  }
   var ids = voHumanFindingList(findings);
   var fp = ids.findings.map(voHumanPayloadFinding);
   var cp = ids.candidates.map(voHumanPayloadFinding);
@@ -18752,9 +19370,20 @@ async function aiHumanReport(findings, ctxIn) {
       })
     : [];
   var unread = voHumanUnreadList(ctxIn && ctxIn.unreadPages);
+  var lawVerified = voLawVerifiedForNarrative(ctxIn && ctxIn.lawCheck);
+  var recordContext = voBuildSealedRecordContext(_pipelineTextBlocks, fp.concat(cp), timeline, VO_HUMAN_RECORD_CHARS);
+  var findingsJsonText = String((ctxIn && ctxIn.findingsJsonText) || '').slice(0, VO_HUMAN_FINDINGS_JSON_CHARS);
+  var technicalReport = (ctxIn && ctxIn.technicalReport && typeof ctxIn.technicalReport === 'object') ? {
+    text: String(ctxIn.technicalReport.text || '').slice(0, VO_HUMAN_TECH_REPORT_CHARS),
+    pageCount: parseInt(ctxIn.technicalReport.pageCount, 10) || 0,
+    suppliedPages: parseInt(ctxIn.technicalReport.suppliedPages, 10) || 0,
+    truncated: ctxIn.technicalReport.truncated === true,
+    sealId: String((ctxIn && ctxIn.technicalSealId) || ''),
+    sha512: String((ctxIn && ctxIn.technicalSha512) || '')
+  } : null;
   var startedAt = Date.now();
   var sections = {};
-  var model = null, calls = 0, generated = 0;
+  var model = null, calls = 0, generated = 0, modelAttempts = 0;
   var priorSummary = '';
   var rawList = ids.findings.map(function (x) { return x.f; });
   var progress = (ctxIn && typeof ctxIn.onProgress === 'function') ? ctxIn.onProgress : function () {};
@@ -18790,18 +19419,31 @@ async function aiHumanReport(findings, ctxIn) {
       timeline: timeline,
       unreadPages: unread,
       excerpt: excerptFor(subset),
+      sealedRecord: recordContext,
+      findingsJson: findingsJsonText,
+      technicalReport: technicalReport,
       priorSummary: priorSummary
     };
     if (caseInfo.caseName || caseInfo.caseRefs || caseInfo.parties || caseInfo.jurisdiction) payload.caseContext = caseInfo;
+    if (section === 'legal_framework') payload.lawVerified = lawVerified;
     calls++;
     var res = await aiApiPost('/api/v1/ai/human-report', payload, VO_HUMAN_CALL_TIMEOUT_MS);
     if (!res || typeof res !== 'object' || res.contract !== 'human-v1') return { provenance: 'none', reason: 'invalid_response' };
+    // attempts are model drafts inside the endpoint call (the worker can run
+    // one bounded repair/expansion pass); calls stay section requests.
+    var resAttempts = Math.max(1, Math.min(2, parseInt(res.attempts, 10) || 1));
+    modelAttempts += resAttempts;
+    var resDiscarded = Math.max(0, Math.min(2, parseInt(res.discardedDrafts, 10) || 0));
+    var resDiscardedDropped = Math.max(0, parseInt(res.discardedDropped, 10) || 0);
     if (res.generated === true && res.machineGenerated === true && typeof res.text === 'string' && res.text.trim()) {
       generated++;
       if (!model) model = res.model || null;
-      return { provenance: 'ai', text: res.text, plainTerms: res.plainTerms || {}, gate: res.gate || null, model: res.model || null };
+      return { provenance: 'ai', text: res.text, plainTerms: res.plainTerms || {}, gate: res.gate || null, model: res.model || null,
+        pageContradictions: Array.isArray(res.pageContradictions) ? res.pageContradictions.slice(0, 40).map(function (s) { return String(s || '').slice(0, 500); }).filter(Boolean) : [],
+        attempts: resAttempts, discarded: resDiscarded, discardedDropped: resDiscardedDropped, repair: res.repair || null };
     }
-    return { provenance: 'none', reason: res.reason || 'not_generated', gate: res.gate || null, model: res.model || null };
+    return { provenance: 'none', reason: res.reason || 'not_generated', gate: res.gate || null, model: res.model || null,
+      attempts: resAttempts, discarded: resDiscarded, discardedDropped: resDiscardedDropped, repair: res.repair || null };
   }
 
   var total = VO_HUMAN_WRITER_SECTIONS.length + Math.max(0, Math.ceil(fp.length / VO_HUMAN_CRITICAL_BATCH) - 1);
@@ -18821,7 +19463,7 @@ async function aiHumanReport(findings, ctxIn) {
     var section = VO_HUMAN_WRITER_SECTIONS[s];
     if (overBudget()) { step++; sections[section] = { provenance: 'none', reason: 'time_budget' }; continue; }
     if (section === 'critical_evidence') {
-      var merged = { provenance: 'none', reason: 'not_generated', text: '', plainTerms: {}, gate: { kept: 0, dropped: 0 } };
+      var merged = { provenance: 'none', reason: 'not_generated', text: '', plainTerms: {}, gate: { kept: 0, dropped: 0 }, pageContradictions: [], attempts: 0, discarded: 0, discardedDropped: 0 };
       var anyAi = false, texts = [];
       for (var b = 0; b < fp.length; b += VO_HUMAN_CRITICAL_BATCH) {
         step++; progress(step, total, section);
@@ -18835,12 +19477,21 @@ async function aiHumanReport(findings, ctxIn) {
           anyAi = true;
           texts.push(r.text);
           Object.keys(r.plainTerms || {}).forEach(function (k) { merged.plainTerms[k] = r.plainTerms[k]; });
+          (r.pageContradictions || []).forEach(function (s) { if (s && merged.pageContradictions.indexOf(s) < 0 && merged.pageContradictions.length < 40) merged.pageContradictions.push(s); });
           if (r.gate) { merged.gate.kept += r.gate.kept || 0; merged.gate.dropped += r.gate.dropped || 0; }
+          merged.attempts += r.attempts || 1;
+          merged.discarded += r.discarded || 0;
+          merged.discardedDropped += r.discardedDropped || 0;
           merged.model = r.model;
         } else {
           // A batch the server's gate discarded whole is counted, so the
-          // provenance record does not undercount the gate.
-          if (r.reason === 'gate_failed') { merged.discarded = (merged.discarded || 0) + 1; merged.discardedDropped = (merged.discardedDropped || 0) + ((r.gate && r.gate.dropped) || 0); }
+          // provenance record does not undercount the gate. With a repair pass
+          // a section can have discarded two drafts before reporting failure.
+          var disc = r.discarded || 0;
+          if (r.reason === 'gate_failed') disc = Math.max(1, disc);
+          merged.attempts += r.attempts || 0;
+          merged.discarded += disc;
+          merged.discardedDropped += (r.discardedDropped || 0) + (disc && !r.discardedDropped && r.gate ? (r.gate.dropped || 0) : 0);
           if (!merged.reason || merged.reason === 'not_generated') merged.reason = r.reason;
         }
       }
@@ -18866,10 +19517,123 @@ async function aiHumanReport(findings, ctxIn) {
     humanFindings: ids.findings,
     model: model,
     calls: calls,
+    modelAttempts: modelAttempts,
     generated: generated,
     writerSections: VO_HUMAN_WRITER_SECTIONS.length,
+    recordContext: {
+      totalPages: recordContext.coverage.totalPages,
+      suppliedPageCount: recordContext.coverage.suppliedPageCount,
+      truncatedPageCount: recordContext.coverage.truncatedPageCount,
+      omittedPageCount: recordContext.coverage.omittedPageCount,
+      fullTextSupplied: recordContext.coverage.fullTextSupplied === true,
+      findingsJsonSupplied: findingsJsonText.length > 0,
+      technicalReportSupplied: !!(technicalReport && technicalReport.text),
+      technicalReportPageCount: technicalReport ? technicalReport.pageCount : 0,
+      technicalReportSuppliedPages: technicalReport ? technicalReport.suppliedPages : 0,
+      technicalReportTruncated: !!(technicalReport && technicalReport.truncated)
+    },
     generatedUtc: new Date().toISOString()
   };
+}
+
+// B7 triple legal verification (founder ruling 2026-10-11): the candidate
+// statutes the report will name are checked by the worker's
+// /api/v1/ai/verify-law lanes (Workers AI + Mistral + DeepSeek, quorum 2/3)
+// BEFORE the court-ready narrative renders. Only VERIFIED statutes are cited;
+// DISPUTED/UNVERIFIED go to the report's exclusion annex with the
+// contact-a-lawyer direction. The candidates are the same deterministic
+// statutesForFinding provisions the Statutory Anchoring annex prints; the
+// contextHash is the SHA-512 of the findings JSON, anchoring the check to the
+// exact record the report seals. Returns null on ANY failure (offline, no API,
+// timeout): the report then claims no lane verification and keeps the standing
+// not-legal-advice disclaimer.
+async function aiVerifyLaw(fraudRes, contextHash) {
+  try {
+    if (typeof window.VerumReport === 'undefined' || typeof window.VerumReport._statutesForFinding !== 'function' || typeof window.VerumReport._detectJurisdictions !== 'function') return null;
+    var ci = voCaseDetails();
+    var jur = window.VerumReport._detectJurisdictions({ findings: fraudRes, identity: { jurisdiction: ci.jurisdiction || '' } });
+    var seen = {}, cands = [];
+    var list = (fraudRes && Array.isArray(fraudRes.findings)) ? fraudRes.findings : [];
+    for (var i = 0; i < list.length && cands.length < 12; i++) {
+      var f = list[i];
+      if (!f || f.source === 'ai') continue;   // candidates stay candidates: their law is not cited either
+      var sfl;
+      try { sfl = window.VerumReport._statutesForFinding(f, jur); } catch (e) { continue; }
+      for (var k = 0; k < (sfl || []).length && cands.length < 12; k++) {
+        var provs = (sfl[k] && sfl[k].provisions) || [];
+        for (var p = 0; p < provs.length && cands.length < 12; p++) {
+          var name = String(typeof provs[p] === 'string' ? provs[p] : '').trim();
+          // "No specific statute asserted" and pure evidentiary pointers are
+          // not citations — there is nothing for a lane to confirm.
+          if (!name || /^evidentiary\b/i.test(name)) continue;
+          var key = name.toLowerCase();
+          if (seen[key]) continue;
+          seen[key] = true;
+          // "Companies Act 71 of 2008 - s76 (...); s214 (...)" splits into one
+          // candidate per provision. A fragment that names no statute of its
+          // own (a bare "s214/s215" section, a trailing "misrepresentation"
+          // gloss) is a CONTINUATION of the previous statute, never a statute
+          // name — sending it as one makes the lanes reject a word, which the
+          // report would then print as a DISPUTED "law".
+          var VO_LAW_NAME_RE = /act\b|law\b|code\b|common-law|decree|directive|gdpr|uncac|untoc|rico|\busc\b|penal|evidence law/i;
+          var parts = name.split(/\s*;\s*/);
+          var lastStatute = '';
+          for (var q = 0; q < parts.length && cands.length < 12; q++) {
+            var part = parts[q].trim();
+            if (!part) continue;
+            var m = /^(.+?)(?:\s+-\s+((?:ss?|ch(?:apter)?)\s?[0-9][^(]*|art(?:icle)?\.?\s?[0-9][^(]*)(\((.*)\))?)?$/i.exec(part);
+            var head = (m && m[1] ? m[1] : part).trim();
+            var statute, section, claim;
+            if (VO_LAW_NAME_RE.test(head)) {
+              statute = head.slice(0, 200);
+              lastStatute = statute;
+              section = (m && m[2] ? m[2] : '').trim().slice(0, 60);
+              claim = (m && m[4] ? m[4] : 'candidate provision for the anchored findings').trim().slice(0, 200);
+              // Uncodified law is named for the lanes (founder ruling 2026-10-11,
+              // "broad"): common-law fraud IS the fraud law — the lane confirms
+              // recognition in the jurisdiction, not a statute number.
+              if (/^common[ -]law/i.test(statute)) claim = ('uncodified common-law crime or principle: ' + claim).slice(0, 200);
+            } else if (lastStatute) {
+              statute = lastStatute;
+              var secM = /^((?:ss?|ch(?:apter)?)\s?\d+(?:\/s?\d+)?(?:-\d+)?[a-z]?|art(?:icle)?\.?\s?\d+)/i.exec(head);
+              section = secM ? secM[0].trim().slice(0, 60) : '';
+              claim = part.replace(/^(?:ss?|ch(?:apter)?)\s?\d+(?:\/s?\d+)?(?:-\d+)?[a-z]?\s*/i, '').replace(/^\(|\)$/g, '').trim().slice(0, 200) || 'candidate provision for the anchored findings';
+            } else {
+              continue;   // a fragment with no statute anywhere: nothing to verify
+            }
+            if (seen['~' + statute.toLowerCase() + '|' + section.toLowerCase()]) continue;
+            seen['~' + statute.toLowerCase() + '|' + section.toLowerCase()] = true;
+            cands.push({ statute: statute, section: section, claim: claim });
+          }
+        }
+      }
+    }
+    if (!cands.length) return null;
+    var payload = { jurisdiction: [jur.home].concat(jur.foreign).join('+'), candidates: cands };
+    if (contextHash && /^[0-9a-f]{128}$/i.test(contextHash)) payload.contextHash = contextHash.toLowerCase();
+    var res = await aiApiPost('/api/v1/ai/verify-law', payload, VO_HUMAN_CALL_TIMEOUT_MS);
+    if (!res || res.ok !== true || !Array.isArray(res.results)) return null;
+    // Pass through only the fields the report prints, sanitized to the fixed
+    // vocabulary — the wire answer is data, never trusted prose.
+    return {
+      declaration: String(res.declaration || '').slice(0, 300),
+      disclaimer: String(res.disclaimer || '').slice(0, 300),
+      direction: res.direction ? String(res.direction).slice(0, 300) : null,
+      results: res.results.slice(0, 12).map(function (r) {
+        return {
+          statute: String(r && r.statute || '').slice(0, 200),
+          section: String(r && r.section || '').slice(0, 60),
+          status: (r && (r.status === 'VERIFIED' || r.status === 'DISPUTED')) ? r.status : 'UNVERIFIED',
+          lanes: Array.isArray(r && r.lanes) ? r.lanes.slice(0, 3).map(function (l) {
+            return { lane: String(l && l.lane || '').slice(0, 4), verdict: (l && (l.verdict === 'CONFIRMS' || l.verdict === 'REJECTS')) ? l.verdict : 'NOT_RUN' };
+          }) : []
+        };
+      })
+    };
+  } catch (e) {
+    console.warn('[VO-LAW] verification unavailable (report unaffected):', e && e.message ? e.message : e);
+    return null;
+  }
 }
 
 // Classify: triage call made BEFORE/WHILE the engine runs. Returns a normalised
@@ -20121,7 +20885,7 @@ async function runSealingPipeline() {
         unreadPages: _voUnreadPages,
         ocrPages: _voOcrRescuedPages,
         ocrConfidence: _voOcrConfidence || null,
-        gps: (typeof gpsCoords !== 'undefined' && gpsCoords) ? { lat: gpsCoords.lat, lng: gpsCoords.lng } : null,
+        gps: (typeof gpsCoords !== 'undefined' && gpsCoords) ? { lat: gpsCoords.lat, lng: gpsCoords.lng, acc: gpsCoords.accuracy || null } : null,
         aiReview: aiReviewInfo,
         aiNarrative: aiNarrativeText,
         aiNarrativeSource: aiNarrativeSource,
@@ -20174,6 +20938,19 @@ async function runSealingPipeline() {
       reportPack = { bytes: rSealedBytes, sealId: rSealId, sha512: rSha512, ots: rOts };
       window._voReportPack = reportPack;
 
+      // The narrator reads the technical report's text from the PRE-SEAL bytes:
+      // the seal overlay is proof, not case evidence. Extraction is local; the
+      // bounded text leaves only after the report's seal id and hash exist.
+      var technicalReportContext = null;
+      try {
+        technicalReportContext = await voTechnicalReportTextForNarrative(reportBytes, VO_HUMAN_TECH_REPORT_CHARS, VO_HUMAN_TECH_REPORT_PAGES);
+        technicalReportContext.sealId = reportPack.sealId;
+        technicalReportContext.sha512 = reportPack.sha512;
+      } catch (trcErr) {
+        console.warn('Technical-report narrator context unavailable (narrative will use findings and sealed page text):', trcErr);
+        technicalReportContext = { text: '', pageCount: 0, suppliedPages: 0, truncated: false, charCount: 0, sealId: reportPack.sealId, sha512: reportPack.sha512 };
+      }
+
       // The plain-language narrative PDF was retired on 2026-09-07 (founder:
       // "the human narrative is not necessary"): the forensic report's Part 1
       // already carries the plain-language telling, and the court-ready
@@ -20206,14 +20983,23 @@ async function runSealingPipeline() {
         if (isAiReviewEnabled() && reportFraudResult && !reportFraudResult.scanFailed &&
             Array.isArray(reportFraudResult.findings) && reportFraudResult.findings.length > 0 &&
             typeof window.VerumReport.buildHumanReport === 'function') {
+          updateStep(7, 'processing', 'Verifying the legal citations before drafting the narrative...');
+          var fjSha = null;
+          try { if (window._voFindingsJson) fjSha = await computeSHA512(new TextEncoder().encode(JSON.stringify(window._voFindingsJson, null, 2))); } catch (eFj) {}
+          // B7 law lanes: verify the candidate statutes before the narrative
+          // cites them (null when unreachable — the report claims nothing then).
+          var lawCheck = await aiVerifyLaw(reportFraudResult, fjSha);
           updateStep(7, 'processing', 'Drafting the court-ready narrative (AI, section by section)...');
           var hr = await aiHumanReport(reportFraudResult.findings, {
             timeline: reportFraudResult.timeline || null,
             unreadPages: _voUnreadPages,
+            lawCheck: lawCheck,
+            technicalSealId: reportPack.sealId,
+            technicalSha512: reportPack.sha512,
+            technicalReport: technicalReportContext,
+            findingsJsonText: window._voFindingsJson ? JSON.stringify(window._voFindingsJson, null, 2) : '',
             onProgress: function (i, n, sec) { updateStep(7, 'processing', 'Court-ready narrative: section ' + i + ' of ' + n + ' (' + String(sec).replace(/_/g, ' ') + ')...'); }
           });
-          var fjSha = null;
-          try { if (window._voFindingsJson) fjSha = await computeSHA512(new TextEncoder().encode(JSON.stringify(window._voFindingsJson, null, 2))); } catch (eFj) {}
           var hBytes = await window.VerumReport.buildHumanReport({
             findings: reportFraudResult,
             documents: [{ name: selectedFile.name, pageCount: _pipelinePageCount || null, sha512: sha512, sealId: sealId }],
@@ -20227,7 +21013,7 @@ async function runSealingPipeline() {
             unreadPages: _voUnreadPages,
             ocrPages: _voOcrRescuedPages || null,
             ocrConfidence: _voOcrConfidence || null,
-            gps: (typeof gpsCoords !== 'undefined' && gpsCoords) ? { lat: gpsCoords.lat, lng: gpsCoords.lng } : null,
+            gps: (typeof gpsCoords !== 'undefined' && gpsCoords) ? { lat: gpsCoords.lat, lng: gpsCoords.lng, acc: gpsCoords.accuracy || null } : null,
             aiReview: aiReviewInfo,
             classification: classification,
             serialLabels: { suppressed: serialInfo.suppressed, corroboratedNames: serialInfo.corroborated.map(serialNameOf), weakNames: serialInfo.weak.map(serialNameOf), supportCount: serialInfo.supportCount },
@@ -20235,11 +21021,13 @@ async function runSealingPipeline() {
             images: { watermark: watermarkBytes },
             humanSections: hr.sections,
             humanFindings: hr.humanFindings,
+            lawCheck: lawCheck,
             humanProvenance: {
               model: hr.model, contract: 'human-v1', generatedUtc: hr.generatedUtc,
               technicalSealId: reportPack.sealId, technicalSha512: reportPack.sha512,
               findingsJsonSha512: fjSha, findingsJsonVersion: window._voFindingsJson ? window._voFindingsJson.findings_json_version : null,
-              sectionsGenerated: hr.generated, sectionsWriter: hr.writerSections, sectionsAttempted: hr.calls
+              sectionsGenerated: hr.generated, sectionsWriter: hr.writerSections, sectionsAttempted: hr.calls, modelAttempts: hr.modelAttempts || 0,
+              recordContext: hr.recordContext || null
             }
           });
           var hSha512 = await computeSHA512(hBytes);
@@ -20575,7 +21363,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       var sealedSize = (sealedBytes && typeof sealedBytes.byteLength === 'number') ? sealedBytes.byteLength : (sealedBytes && sealedBytes.length) || null;
       if (sealedSize) {
         var sizeTxt = 'Sealed ' + voFmtBytes(sealedSize);
-        if (origSize) sizeTxt = 'Original ' + voFmtBytes(origSize) + '  \u2192  ' + sizeTxt + ' (' + (sealedSize >= origSize ? '+' : '\u2212') + voFmtBytes(Math.abs(sealedSize - origSize)) + ' for the watermark, QR and footer on every page)';
+        if (origSize) sizeTxt = 'Original ' + voFmtBytes(origSize) + '  →  ' + sizeTxt + ' (' + (sealedSize >= origSize ? '+' : '−') + voFmtBytes(Math.abs(sealedSize - origSize)) + ' for the watermark, QR and footer on every page)';
         document.getElementById('sizeDisplay').textContent = sizeTxt;
         sizeRow.style.display = 'block';
       } else { sizeRow.style.display = 'none'; }
@@ -21034,5 +21822,5 @@ function resetSealing() {
 
 function sleep(ms) { return new Promise(r => setTimeout(r, ms)); }
 </script>
-</body>
+<script>window.__CF$cv$params={r:'a4888d59a8b25d66',t:'MTc5MTY2NjAwMA==',u:'01a1279d9444741cb785f28b6572cdac',ut:'ZcP5Vp8NQ0SD7gDrjcU.Cg.Ac.Bb8Lpq2pFpzViaGyU-1791666000-1.2.1.1-OKlHHqNI9N00Kx8gS.7s.xg0PQX9tSci3jFhJ92dj5iGy7VSTZyTEOOxM8ZYQFa3Nh49vMFqelAQngVsoBHXzluIAbejuWYfm3ImG7Q7ExU',i:60};(function(){if(!document.body)return;var s=document.createElement('script');s.src='/cdn-cgi/challenge-platform/scripts/precursor/main.js';document.head.appendChild(s);})();</script><script>window.__CF$cv$params={r:'a48af4da8969cb3f',t:'MTc5MTY5MTIxMQ==',u:'01a1291e44b47701be71305093ae923a',ut:'VnEK9T78AseVFskuFEGm6YNNI1apc7W5XFCfngbsTCA-1791691211-1.2.1.1-3qum5nLuf5oEyVYquoC_39.AXMBRMjSXPod4EIN_OMLTL81HmpHSOq1SyFtC8jycXxYn23KsOJq54F7TptPLOAkIlKzzTO2TNk3Y5A3M1dQ',i:60};(function(){if(!document.body)return;var s=document.createElement('script');s.src='/cdn-cgi/challenge-platform/scripts/precursor/main.js';document.head.appendChild(s);})();</script></body>
 </html>

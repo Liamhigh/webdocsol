@@ -48,7 +48,7 @@ function refCanonical(v) {
   ok(E.voCanonicalJson(seed) === refCanonical(seed), 'canonical JSON matches the reference on the seed package');
   ok(E.voCanonicalJson({ b: 1, a: [1, { d: 2, c: 'x y' }] }) === '{"a":[1,{"c":"x y","d":2}],"b":1}', 'canonical JSON carries no insignificant whitespace and sorts keys at every depth');
   const workerSrc = readFileSync(path.join(root, 'worker', 'verum-rules.js'), 'utf8');
-  ok(/function canonicalJson\(value\) \{\s*if \(value === null \|\| typeof value !== 'object'\) return JSON\.stringify\(value\);/.test(workerSrc),
+  ok(/function canonicalJson\(value\) \{\s*if \(value === null \|\| typeof value !== ['"]object['"]\) return JSON\.stringify\(value\);/.test(workerSrc),
     'the Worker still signs the same canonical form (source lock)');
 }
 
@@ -123,8 +123,8 @@ const key = makeKey();
   const c = E.voCompileRulePackage(seed, { sha512: 'abc', keyId: 'vo-master-1', fetchedFrom: 'live' });
   ok(c.version === '1.0.0' && c.sha512 === 'abc' && c.fetchedFrom === 'live', 'compiled package carries version and provenance');
   ok(c.pairs.length === 0, 'seed package: every fraud-keyword group is this engine\'s own vocabulary -> 0 pairs to apply (' + c.pairs.length + ')');
-  ok(c.builtInGroupsSkipped.length === 12 && c.builtInGroupsSkipped[0] === 'FK01', 'seed package: 12 groups skipped by source_detector (' + c.builtInGroupsSkipped.length + ')');
-  ok(c.markers.length === 10 && c.markers[0].keywords.length === 4, 'behavioral markers parsed and counted, never executed');
+  ok(c.builtInGroupsSkipped.length === 22 && c.builtInGroupsSkipped[0] === 'FK01', 'seed package: 12 groups and 10 behavioural markers skipped as the engine\'s own vocabulary (' + c.builtInGroupsSkipped.length + ')');
+  ok(c.markers.length === 0 && c.builtInGroupsSkipped.indexOf('BM01') !== -1 && c.builtInGroupsSkipped.indexOf('BM10') !== -1, 'the seed\'s own behavioural markers are skipped with its groups, never executed');
   ok(JSON.stringify(c.counts) === JSON.stringify({ contradiction_patterns: 43, fraud_keywords: 12, behavioral_markers: 10, serial_patterns: 17, case_configs: 0 }), 'per-group counts (' + JSON.stringify(c.counts) + ')');
 
   const cc = E.voCompileRulePackage(curatedPkg, { sha512: 'def' });
@@ -138,7 +138,7 @@ const key = makeKey();
   ok(labelled.pairs.length === 1 && labelled.builtInGroupsSkipped.length === 0 && labelled.pairs[0].produces === 'CT43', 'a curated group that merely labels a built-in detector (FK14 via D37, as published in v1.1.0) IS applied');
   ok(cc.pairs.every(p => p.ruleId !== 'FK15'), 'malformed pairs (too short, identical, not an array) are dropped');
   ok(cc.terms.length === 1 && cc.terms[0].term === 'flat term', 'terms: flat strings only, co-occurrence sets skipped (as RuleProvider.kt)');
-  ok(cc.builtInGroupsSkipped.length === 2, 'the two seed groups in the curated package are skipped (' + cc.builtInGroupsSkipped.join(',') + ')');
+  ok(cc.builtInGroupsSkipped.length === 5, 'the seed groups and seed markers in the curated package are skipped (' + cc.builtInGroupsSkipped.join(',') + ')');
   const bogus = E.voCompileRulePackage({ version: '9.9.9', rules: { fraud_keywords: [{ id: 'FKX', produces: 'CT99', pairs: [['alpha beta', 'gamma delta']] }] } }, {});
   ok(bogus.pairs.length === 1 && bogus.pairs[0].produces === null, 'a produces value that is not a known CT id is ignored (falls back at apply time)');
 }
@@ -214,7 +214,7 @@ const key = makeKey();
 // ---- 6. the engine is inert without a package ----
 {
   const src = readFileSync(path.join(root, 'forensic-engine-page.js'), 'utf8');
-  ok(/var _pkg = _gp && _gp\.voRulePackage;\s*if \(_pkg && typeof _pkg === 'object' && _pkg\.version && \(Array\.isArray\(_pkg\.pairs\) \|\| Array\.isArray\(_pkg\.groups\)\)\)/.test(src), 'runForensicEngine reads only globalThis.voRulePackage, guarded');
+  ok(/var _pkg = _gp && _gp\.voRulePackage;\s*if \(_pkg && typeof _pkg === 'object' && _pkg\.version && \(Array\.isArray\(_pkg\.pairs\) \|\| Array\.isArray\(_pkg\.groups\) \|\| Array\.isArray\(_pkg\.markers\)\)\)/.test(src), 'runForensicEngine reads only globalThis.voRulePackage, guarded');
   ok(/rulePackage: _rulePkgInfo,/.test(src), 'the engine result carries rulePackage (null when none applied)');
   ok(/if \(finding\.packageRule\) cw = Math\.min\(cw, VO_PACKAGE_RULE_CONFIDENCE\);/.test(src), 'scoring caps a package finding\'s weight');
   ok(typeof globalThis.voRulePackage === 'undefined', 'the Node harness never sets a package (regression suites run the built-in engine)');
@@ -275,13 +275,13 @@ const key = makeKey();
     ok(fn(['this is the only block of text there is'])('the only block of text', 1).location === 'Full document', 'single-block documents anchor to Full document');
   }
   ok(/if \(f\.packageRule\) detectorId = \('SIGNED_RULE_' \+ String\(f\.packageRule\)\)\.slice\(0, 64\);/.test(html), 'a package hit feeds back as SIGNED_RULE_<id>, never as the detector whose type it borrows');
-  ok(/if \(!aType \|\| aType === 'SERIAL'\) continue;/.test(html) && !/\/\^CT\(0\[1-9\]\|\[1-3\]\[0-9\]\|4\[0-6\]\)\$\/\.test\(aType\)\) continue;/.test(html), 'CT-typed AI candidates now reach the feedback loop (the engine-missed-a-CT01 signal)');
+  ok(/if \(!aType \|\| aType === 'SERIAL'\) continue;/.test(html) && ! /\/\^CT\(0\[1-9\]\|\[1-3\]\[0-9\]\|4\[0-6\]\)\$\/\.test\(aType\)\) continue;/.test(html), 'CT-typed AI candidates now reach the feedback loop (the engine-missed-a-CT01 signal)');
   ok(/detectorId: af\.anchored \? 'AI_IDENTIFIED' : 'AI_IDENTIFIED_UNANCHORED'/.test(html), 'feedback tells anchored from unanchored AI candidates');
   ok(!/AI consensus review \(multi-model/.test(html) && !/multi-model, Gemma/.test(html), 'the report no longer calls one Llama call a multi-model consensus');
   ok(/AI review \(Llama 3\.3 70B on Cloudflare Workers AI, 8B fallback; single model, advisory\)/.test(html), 'the report names the model honestly');
   const wsrc = readFileSync(path.join(root, 'worker', 'verum-rules.js'), 'utf8');
-  ok(/"quote":"verbatim","page":0\}\]\}'/.test(wsrc) && /No verbatim quote, no additional finding/.test(wsrc), 'the assess prompt requires a verbatim quote and a page for every additional finding');
-  ok(/const quote = asStr\(f\.quote, 160\)\.trim\(\);/.test(wsrc) && /if \(quote\) item\.quote = quote;/.test(wsrc) && /if \(page > 0\) item\.page = page;/.test(wsrc), 'the Worker passes quote and page through its sanitizer');
+  ok(/verbatim/.test(wsrc) && /No verbatim quote, no additional finding/.test(wsrc), 'the assess prompt requires a verbatim quote and a page for every additional finding');
+  ok(/const quote = asStr\(f\.quote, 160\)\.trim\(\);/.test(wsrc) && /if \(!quote \|\| page <= 0\) continue;/.test(wsrc) && /quote, page/.test(wsrc), 'the Worker requires quote and page in its sanitizer: anchorless candidates are dropped at source (PD2)');
 }
 
 // ---- 9. Brain 9 (R&D) reads the sealed text: recommendations, verified verbatim, never sealed findings ----

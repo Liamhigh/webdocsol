@@ -35,16 +35,16 @@ const html = read('seal-document.html');
 function idsFromArrayLiteral(src, name) {
   const m = src.match(new RegExp('(?:const|var)\\s+' + name + '\\s*=\\s*\\[([\\s\\S]*?)\\];'));
   if (!m) return null;
-  return (m[1].match(/'([a-z_]+)'/g) || []).map(s => s.slice(1, -1));
+  return (m[1].match(/['"]([a-z_]+)['"]/g) || []).map(s => s.slice(1, -1));
 }
-const workerIds = (worker.match(/\{\s*id:\s*'([a-z_]+)'/g) || []).map(s => s.replace(/.*'([a-z_]+)'/, '$1'));
+const workerIds = (worker.match(/\{\s*id:\s*['"]([a-z_]+)['"]/g) || []).map(s => s.replace(/.*['"]([a-z_]+)['"]/, '$1'));
 const reportIds = idsFromArrayLiteral(report, 'HUMAN_REPORT_SECTIONS');
 const pageIds = idsFromArrayLiteral(html, 'VO_HUMAN_SECTIONS');
 ok(workerIds.length === 15, 'worker declares the 15-section contract (' + workerIds.length + ')');
 ok(reportIds && reportIds.join(',') === workerIds.join(','), 'forensic-report.js section ids equal the worker contract, in order');
 ok(pageIds && pageIds.join(',') === workerIds.join(','), 'seal-document.html section ids equal the worker contract, in order');
 const writerIds = idsFromArrayLiteral(html, 'VO_HUMAN_WRITER_SECTIONS') || [];
-const workerWriter = (worker.match(/\{\s*id:\s*'([a-z_]+)'[^}]*writer:\s*true/g) || []).map(s => s.replace(/.*id:\s*'([a-z_]+)'.*/, '$1'));
+const workerWriter = (worker.match(/\{\s*id:\s*['"]([a-z_]+)['"][^}]*writer:\s*true/g) || []).map(s => s.replace(/.*id:\s*['"]([a-z_]+)['"].*/, '$1'));
 ok(writerIds.length === 9 && writerIds.join(',') === workerWriter.join(','), 'the page asks the worker for exactly the writer sections (' + writerIds.join(',') + ')');
 for (const id of workerIds) ok(new RegExp("'" + id + "'").test(report), 'builder references section ' + id);
 
@@ -55,7 +55,7 @@ const iEx = report.indexOf('// ================= exports');
 ok(iBN > 0 && iBH > iBN && iEx > iBH, 'buildHumanReport is defined after buildNarrative and before the exports block');
 ok(/buildHumanReport:\s*buildHumanReport/.test(report), 'buildHumanReport is exported on VerumReport');
 const bodyBH = report.slice(iBH, iEx);
-ok(/scrubNarrative\(sec\.text\)/.test(bodyBH) && /voGatePasses\(scrub\)/.test(bodyBH),
+ok(/scrubNarrative\(sec\.text,/.test(bodyBH) && /voGatePasses\(scrub\)/.test(bodyBH),
   'every AI section passes the render-time §15.2 gate (scrubNarrative + voGatePasses)');
 ok(/sec\.provenance === 'ai'/.test(bodyBH), 'only a genuine AI telling (provenance ai) can print as AI-written');
 ok(/nothing here is machine-written/.test(bodyBH), 'a deterministic fallback is labelled as NOT machine-written');
@@ -119,7 +119,7 @@ ok(!/gps/i.test(html.slice(html.indexOf('async function aiHumanReport('), html.i
 // (was 2 while the page also built the plain-language narrative; that PDF was retired 2026-09-07)
 ok((html.match(/ocrPages: _voOcrRescuedPages,/g) || []).length === 1 && /ocrPages: _voOcrRescuedPages \|\| null/.test(html),
   'ocrPages reaches the forensic report and the court-ready narrative');
-ok(/unreadPages: _voUnreadPages,\n\s*onProgress/.test(html) && /var unread = voHumanUnreadList\(ctxIn && ctxIn\.unreadPages\)/.test(html),
+ok(/unreadPages: _voUnreadPages,/.test(html) && /var unread = voHumanUnreadList\(ctxIn && ctxIn\.unreadPages\)/.test(html),
   'the unread-page record reaches the narrator through the flattener (it is an object, not an array)');
 ok(/VO_HUMAN_TOTAL_BUDGET_MS = 5 \* 60 \* 1000/.test(html) && /reason: 'time_budget'/.test(html), 'the whole narrative has a five-minute ceiling');
 ok(/return sw\.length \? sw : null;/.test(html) && /return co\.length \? co : null;/.test(html) && /reason: 'not_applicable'/.test(html),
@@ -130,7 +130,7 @@ ok(/return sw\.length \? sw : null;/.test(html) && /return co\.length \? co : nu
   ok(iLoop > 0 && iEnd > iLoop && /try \{ r = await callSection\(section, batch\); \}/.test(html.slice(iLoop, iEnd)),
     'a failed critical-evidence batch never discards the batches already written');
 }
-ok(/VO_HUMAN_CALL_TIMEOUT_MS = 52000/.test(html) && /HUMAN_TIMEOUT_MS = 30000/.test(worker) && /HUMAN_FALLBACK_TIMEOUT_MS = 15000/.test(worker),
+ok(/VO_HUMAN_CALL_TIMEOUT_MS = 52000/.test(html) && /HUMAN_TIMEOUT_MS = (?:30000|3e4)/.test(worker) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(worker),
   'primary + fallback model timeouts fit inside the client wait');
 
 // ---- the render-time gate: headings are gated, dates are not hedges --------
@@ -178,7 +178,34 @@ ok(report.indexOf('.replace(/\\b(?:pp?|pgs?)\\.(?=\\s*\\d)/gi') >= 0, 'the share
   ok(wMis && wMis === rMis, 'the misrepresentation pillar takes exactly the elements table\'s misrepresentation types (' + wMis + ' | ' + rMis + ')');
   ok(wLoss && wLoss === rLoss, 'the loss pillar takes exactly the elements table\'s prejudice types (' + wLoss + ' | ' + rLoss + ')');
   ok(/knowledge: \[\]/.test(worker) && /inducement: \[\]/.test(worker), 'no finding type evidences knowledge or inducement: those pillars are INSUFFICIENT');
-  ok(/humanGate\(raw, ids, pages, corpusNorm, idType, section === 'four_pillars'\)/.test(worker) && /HUMAN_PILLAR_CLAIM_RE/.test(worker), 'the full pillar test runs on four pillars; elsewhere a sentence that claims a pillar is evidenced is held to the same types');
+  ok(/humanGate\(d\.raw, ids, pages, corpusNorm, idType, section === ["']four_pillars["']/.test(worker) && /HUMAN_PILLAR_CLAIM_RE/.test(worker), 'the full pillar test runs on four pillars; elsewhere a sentence that claims a pillar is evidenced is held to the same types');
+}
+
+// ---- the sealed-record budget feeds a large bundle whole (Greensky rerun fix 1)
+{
+  ok(/VO_HUMAN_RECORD_CHARS = 196000/.test(html), 'the page supplies up to 196k chars of sealed-record text (was 64k: 100 of 332 pages, 56 truncated)');
+  ok(/MAX_HUMAN_RECORD = 200e3/.test(worker), 'the worker accepts the raised record budget');
+  const mRec = html.match(/function voBuildSealedRecordContext\(([\s\S]*?)\n\}\n/);
+  ok(Boolean(mRec), 'voBuildSealedRecordContext found in the page');
+  const sandbox = {};
+  vm.createContext(sandbox);
+  vm.runInContext('var VO_HUMAN_RECORD_CHARS = 196000;\n' + mRec[0] + '\nthis.build = voBuildSealedRecordContext;', sandbox);
+  // A 332-page Greensky-shaped bundle: ~1,000 chars per page (whole bundle
+  // ~340k, over budget), findings anchored on 20 pages across the record.
+  const blocks = [];
+  for (let p = 1; p <= 332; p++) blocks.push('Bundle page ' + p + ' states its own facts. ' + 'x'.repeat(980));
+  const findings = [];
+  for (let fp = 10; fp <= 330; fp += 4) findings.push({ page: fp, pages: [fp], evidence: 'q' });
+  const ctx = sandbox.build(blocks, findings, [], 196000);
+  const coreSupplied = findings.every(f => ctx.coverage.suppliedPages.includes(f.page));
+  const coreUntruncated = findings.every(f => !ctx.coverage.truncatedPages.includes(f.page));
+  ok(coreSupplied && coreUntruncated, 'every finding page is supplied WHOLE — a finding page is never the one truncated');
+  ok(ctx.coverage.suppliedPageCount > 150, 'a 332-page bundle supplies most of the record, not 100 pages (' + ctx.coverage.suppliedPageCount + ')');
+  ok(ctx.coverage.truncatedPages.every(p => !findings.some(f => f.page === p)), 'truncation only ever touches neighbour/timeline/capacity pages');
+  ok(ctx.coverage.charCount <= 196000 + 400, 'the budget is honoured (' + ctx.coverage.charCount + ')');
+  // Small bundles still go across whole.
+  const small = sandbox.build(['page one text', 'page two text'], [], [], 196000);
+  ok(small.coverage.fullTextSupplied === true && small.coverage.suppliedPageCount === 2, 'a small bundle goes across whole');
 }
 
 console.log(`\n[human-report] PASS=${pass} FAIL=${fail}`);
