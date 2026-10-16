@@ -673,8 +673,8 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   // timeouts: the fallback runs inside the client's wait, on a trimmed prompt
   {
     const src = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
-    ok(/HUMAN_TIMEOUT_MS = (?:30000|3e4)/.test(src) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(src) && /HUMAN_EXTERNAL_TIMEOUT_MS = (?:45000|45e3)/.test(src),
-      'primary 30 s + fallback 15 s < the client\'s 52 s; the external provider keeps 45 s');
+    ok(/HUMAN_TIMEOUT_MS = (?:28000|28e3)/.test(src) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(src) && /HUMAN_EXTERNAL_TIMEOUT_MS = (?:45000|45e3)/.test(src),
+      'primary 28 s + repair 18 s fits the 48 s endpoint budget under the client\'s 52 s; the external provider keeps 45 s');
     ok(/o\.fallbackTimeoutMs \|\| HUMAN_FALLBACK_TIMEOUT_MS/.test(src) && /o\.fallbackUser \|\| user/.test(src), 'the fallback call uses the short timeout and the trimmed prompt');
     const seen = [];
     const big = { ...gBase, excerpt: ('[Page 2] ' + 'x'.repeat(200) + '\n').repeat(120) };
