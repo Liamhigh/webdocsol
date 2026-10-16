@@ -1930,9 +1930,12 @@ function humanDraftBetter(next, cur, section, findingCount) {
 __name(humanDraftBetter, "humanDraftBetter");
 async function runHumanModel(env2, system, user, opts) {
   const o = opts || {};
-  const base = String(env2.LLM_API_BASE || "").trim();
-  const key = String(env2.LLM_API_KEY || "").trim();
-  const extModel = String(env2.LLM_MODEL || "").trim();
+  // Narrator provider: dedicated LLM_API_* secrets win; otherwise reuse the
+  // already-configured lane-2 provider (LLM2_*, DeepSeek) so the narrative is
+  // written by the stronger external model rather than the small Workers AI one.
+  const base = String(env2.LLM_API_BASE || env2.LLM2_API_BASE || "").trim();
+  const key = String(env2.LLM_API_KEY || env2.LLM2_API_KEY || "").trim();
+  const extModel = String(env2.LLM_MODEL || env2.LLM2_MODEL || "").trim();
   if (base && key && extModel) {
     const url = base.replace(/\/+$/, "") + "/chat/completions";
     const ctrl = new AbortController();
