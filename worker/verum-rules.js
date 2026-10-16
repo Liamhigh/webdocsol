@@ -1930,12 +1930,13 @@ function humanDraftBetter(next, cur, section, findingCount) {
 __name(humanDraftBetter, "humanDraftBetter");
 async function runHumanModel(env2, system, user, opts) {
   const o = opts || {};
-  // Narrator provider: dedicated LLM_API_* secrets win; otherwise reuse the
-  // already-configured lane-2 provider (LLM2_*, DeepSeek) so the narrative is
-  // written by the stronger external model rather than the small Workers AI one.
-  const base = String(env2.LLM_API_BASE || env2.LLM2_API_BASE || "").trim();
-  const key = String(env2.LLM_API_KEY || env2.LLM2_API_KEY || "").trim();
-  const extModel = String(env2.LLM_MODEL || env2.LLM2_MODEL || "").trim();
+  // Narrator provider: dedicated LLM_API_* secrets win; then the lane-3
+  // provider (LLM3_*, DeepSeek — the intended narrator); then lane-2 (LLM2_*,
+  // Mistral). Any of them beats the small Workers AI model at the strict
+  // anchor-and-language format.
+  const base = String(env2.LLM_API_BASE || env2.LLM3_API_BASE || env2.LLM2_API_BASE || "").trim();
+  const key = String(env2.LLM_API_KEY || env2.LLM3_API_KEY || env2.LLM2_API_KEY || "").trim();
+  const extModel = String(env2.LLM_MODEL || env2.LLM3_MODEL || env2.LLM2_MODEL || "").trim();
   if (base && key && extModel) {
     const url = base.replace(/\/+$/, "") + "/chat/completions";
     const ctrl = new AbortController();
@@ -1948,7 +1949,10 @@ async function runHumanModel(env2, system, user, opts) {
           model: extModel,
           messages: [{ role: "system", content: system }, { role: "user", content: user }],
           temperature: 0,
-          max_tokens: o.maxTokens || HUMAN_SECTION_MAX_TOKENS
+          max_tokens: o.maxTokens || HUMAN_SECTION_MAX_TOKENS,
+          // LPC rerun: free-form replies came back empty or non-JSON under load
+          // ("no_json"); both Mistral and DeepSeek honour JSON mode.
+          response_format: { type: "json_object" }
         }),
         signal: ctrl.signal
       });
@@ -1958,6 +1962,9 @@ async function runHumanModel(env2, system, user, opts) {
       const text = msg ? String(msg.content || "") : "";
       if (!text.trim()) throw new Error("LLM provider returned no text");
       return { text, model: "external:" + extModel };
+    } catch (e) {
+      // A failing external provider must not kill the section: fall through
+      // to the Workers AI models below rather than returning no narrative.
     } finally {
       clearTimeout(timer);
     }
