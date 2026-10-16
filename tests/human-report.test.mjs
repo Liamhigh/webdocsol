@@ -130,7 +130,7 @@ ok(/return sw\.length \? sw : null;/.test(html) && /return co\.length \? co : nu
   ok(iLoop > 0 && iEnd > iLoop && /try \{ r = await callSection\(section, batch\); \}/.test(html.slice(iLoop, iEnd)),
     'a failed critical-evidence batch never discards the batches already written');
 }
-ok(/VO_HUMAN_CALL_TIMEOUT_MS = 52000/.test(html) && /HUMAN_TIMEOUT_MS = (?:30000|3e4)/.test(worker) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(worker),
+ok(/VO_HUMAN_CALL_TIMEOUT_MS = 52000/.test(html) && /HUMAN_TIMEOUT_MS = (?:28000|28e3)/.test(worker) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(worker),
   'primary + fallback model timeouts fit inside the client wait');
 
 // ---- the render-time gate: headings are gated, dates are not hedges --------
