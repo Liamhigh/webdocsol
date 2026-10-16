@@ -686,7 +686,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     globalThis.fetch = async () => { const err = new Error('This operation was aborted'); err.name = 'AbortError'; throw err; };
     try { g = await (await hPost(gBase, { ...env, LLM_API_BASE: 'https://llm.example.test/v1', LLM_API_KEY: 'sk-test', LLM_MODEL: 'narrator-1' })).json(); }
     finally { globalThis.fetch = origFetch; }
-    ok(g.generated === false && g.reason === 'timeout', 'an aborted external provider call reports timeout, not ai_unavailable');
+    ok(g.generated === false && g.reason === 'ai_unavailable', 'an aborted external provider falls through to the Workers AI models (none bound here, so ai_unavailable) — the section is never killed by a dead external');
   }
   // FOUR PILLARS: a finding is cited under a pillar only when its type
   // evidences that pillar (Public Protector submission run: "The record
