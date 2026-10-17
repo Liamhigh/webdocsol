@@ -27,8 +27,16 @@ ok(/\/images\/logo-full\.png/.test(builder) && /doc\.embedPng\(logoBytes\)/.test
   'the title page embeds the existing Verum Omnis PNG logo');
 ok(/FORENSIC NARRATIVE/.test(builder) && /PART '\s*\+ roman/.test(builder) &&
   /From '\s*\+ first\.startDate/.test(builder), 'the title page and chronological PART headings are rendered');
-ok(!/ctx\.table|overallScore|confidence|ENGINE_VERSION|technical report/i.test(builder),
-  'the standalone narrative body has no tables, score, bands, or technical report machinery');
+ok(/Source document: '\s*\+ String\(sourceDoc\.name/.test(builder) &&
+  /Source SHA-512: '\s*\+ truncHash\(sourceDoc\.sha512, 24, 12\)/.test(builder) &&
+  /Advisory — the findings and their anchors are the evidence; the verdict belongs to the court\./.test(builder),
+  'the cover carries the source anchor, preparation, and advisory lines');
+ok(/PROVENANCE & CERTIFICATION/.test(builder) && /human-v1; section: forensic_narrative/.test(builder) &&
+  /droppedSentences/.test(builder) && /Findings JSON SHA-512:/.test(builder) &&
+  /Verify free at https:\/\/verumglobal\.foundation\/verify\.html/.test(builder),
+  'the final page records narrator provenance, gate counts, hashes, and the verification pointer');
+ok(!/ctx\.table|overallScore|confidence|ENGINE_VERSION|function (?:build|seal)\(/i.test(builder),
+  'the standalone narrative body has no tables, score, bands, or technical-report builder machinery');
 
 const dateStart = html.indexOf('function voForensicNarrativeDate(');
 const plannerEnd = html.indexOf('function voHumanFirstPage(', dateStart);
@@ -74,7 +82,14 @@ const inputDelete = html.indexOf('delete runPacks.forensicNarrativeInput;', narr
 const narrativeFlow = html.slice(narrativeFlowStart, inputDelete);
 ok(/unreadPages: voHumanUnreadList\(_voUnreadPages\)/.test(html.slice(inputStart, html.indexOf('// This run\'s private output slot', inputStart))) &&
   /unreadPages: forensicNarrativeInput\.unreadPages/.test(narrativeFlow) &&
-  /sourceName: runPacks\.forensicNarrativeInput\.documentName/.test(narrativeFlow),
+  /sourceName: runPacks\.forensicNarrativeInput\.documentName/.test(narrativeFlow) &&
+  /sha512: sha512, sealId: sealId/.test(narrativeFlow) &&
+  /generatedAt: new Date\(\)\.toISOString\(\)/.test(narrativeFlow) &&
+  /technicalSealId: runPacks\.reportPack\.sealId/.test(narrativeFlow) &&
+  /technicalSha512: runPacks\.reportPack\.sha512/.test(narrativeFlow) &&
+  /findingsJsonSha512: forensicFindingsJsonSha512/.test(narrativeFlow) &&
+  /model: forensicDraft\.model/.test(narrativeFlow) &&
+  /gateStats: forensicDraft\.parts\.map/.test(narrativeFlow),
   'the run snapshot supplies unread-page data and source metadata through sealing');
 ok(/runPacks\.forensicNarrativePack/.test(html) && /window\._voShareFiles\.push\(\{ bytes: runPacks\.forensicNarrativePack\.bytes/.test(html),
   'the standalone sealed output is run-isolated and included in the share bundle');
@@ -116,19 +131,41 @@ ok(failedBuild.bytes === null && failedBuild.passingParts === 0,
   'a gate-failed part creates no PDF bytes');
 const built = await globalThis.VerumReport.buildForensicNarrative({
   images: { logo: new Uint8Array([1]) },
-  documents: [{ name: 'record.pdf' }],
+  documents: [{ name: 'record.pdf', pageCount: 12, sha512: 'a'.repeat(128), sealId: 'VO-SOURCE' }],
+  generatedAt: '2026-10-17T06:25:14.548Z',
+  technicalSealId: 'VO-TECHNICAL',
+  technicalSha512: 'b'.repeat(128),
+  findingsJsonSha512: 'c'.repeat(128),
+  model: 'test-narrator',
+  gateStats: [{ dropped: 2 }],
   narrativeParts: [
     { index: 1, count: 2, startDate: '1 January 2020', endDate: '2 January 2020', provenance: 'ai',
-      text: 'PART I — WHAT THE DOCUMENTS SHOWED\n\nThe document records a payment on 1 January 2020 on p. 1. The letter records a second payment on 2 January 2020 on p. 2.' },
+      text: 'PART I — WHAT THE DOCUMENTS SHOWED\n\nThe document records a payment on 1 January 2020 on p. 1. The letter records a second payment on 2 January 2020 on p. 2. The directors committed fraud.' },
     { index: 2, count: 2, provenance: 'none', reason: 'gate_failed' }
   ]
 });
 ok(built.bytes instanceof Uint8Array && built.passingParts === 1 && built.totalParts === 2 && built.droppedParts === 1,
   'only the gated part is included in a standalone PDF');
-ok(pages.length === 2 && drawnText.includes('FORENSIC NARRATIVE') &&
+ok(built.gateStats.droppedSentences === 1 && built.gateStats.workerDroppedSentences === 2,
+  'the renderer returns render-time and worker gate statistics');
+const renderedText = drawnText.join(' ').replace(/\s+/g, ' ');
+ok(pages.length === 3 && drawnText.includes('FORENSIC NARRATIVE') &&
   drawnText.some((text) => text.indexOf('PART I — WHAT THE DOCUMENTS SHOWED') === 0) &&
-  drawnText.some((text) => text.indexOf('The document records a payment') === 0),
-  'the renderer draws the title page, a PART heading, and flowing prose without a table layout');
+  drawnText.some((text) => text.indexOf('The document records a payment') === 0) &&
+  renderedText.includes('Source document: record.pdf (12 pages)') &&
+  renderedText.includes('Source SHA-512: ' + 'a'.repeat(24) + '…' + 'a'.repeat(12)) &&
+  renderedText.includes('Source seal: VO-SOURCE') &&
+  renderedText.includes('Generated: 2026-10-17T06:25:14.548Z') &&
+  renderedText.includes('Prepared by Verum Omnis — AI forensic narrator over the sealed record') &&
+  renderedText.includes('Advisory — the findings and their anchors are the evidence; the verdict belongs to the court.') &&
+  renderedText.includes('PROVENANCE & CERTIFICATION') &&
+  renderedText.includes('Narrator model: test-narrator. Contract: human-v1; section: forensic_narrative.') &&
+  renderedText.includes('1 sentence was removed by those gates.') &&
+  renderedText.includes('Sealed technical report SHA-512: ' + 'b'.repeat(24) + '…' + 'b'.repeat(12) + '; seal id: VO-TECHNICAL.') &&
+  renderedText.includes('Findings JSON SHA-512: ' + 'c'.repeat(24) + '…' + 'c'.repeat(12) + '.') &&
+  renderedText.includes("This narrative's own seal id and SHA-512 appear in the seal footer of every page.") &&
+  renderedText.includes('Verify free at https://verumglobal.foundation/verify.html'),
+  'the renderer draws the anchored cover and final provenance page as flowing prose');
 const pageCountBeforeLong = pages.length, textCountBeforeLong = drawnY.length;
 await globalThis.VerumReport.buildForensicNarrative({
   images: { logo: new Uint8Array([1]) },

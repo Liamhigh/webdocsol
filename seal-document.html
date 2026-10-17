@@ -6543,6 +6543,7 @@ async function buildForensicNarrative(opts) {
   var parts = Array.isArray(opts.narrativeParts) ? opts.narrativeParts : [];
   var passing = [];
   var dropped = 0;
+  var droppedSentences = 0;
   for (var i = 0; i < parts.length; i++) {
     var part = parts[i] || {};
     if (part.provenance !== 'ai' || typeof part.text !== 'string' || !part.text.trim()) { dropped++; continue; }
@@ -6558,6 +6559,7 @@ async function buildForensicNarrative(opts) {
     }
     if (tabular) { dropped++; continue; }
     var scrub = scrubNarrative(prose.join('\n\n'), voSectionPageContradictions(part));
+    droppedSentences += scrub.dropped;
     if (!voGatePasses(scrub)) { dropped++; continue; }
     passing.push({
       index: Math.max(1, parseInt(part.index, 10) || i + 1),
@@ -6604,6 +6606,23 @@ async function buildForensicNarrative(opts) {
   for (var sl = 0; sl < subtitleLines.length; sl++) {
     cover.drawText(subtitleLines[sl], { x: centerX(subtitleLines[sl], fonts.timesItalic, 13), y: PH * 0.46 - 30 - sl * 18, size: 13, font: fonts.timesItalic, color: COVER_SUB });
   }
+  var sourceDoc = docs[0] || {};
+  var coverDetails = [
+    'Source document: ' + String(sourceDoc.name || 'document') + ' (' + (sourceDoc.pageCount || 'n/a') + ' pages)',
+    'Source SHA-512: ' + truncHash(sourceDoc.sha512, 24, 12),
+    'Source seal: ' + String(sourceDoc.sealId || 'n/a'),
+    'Generated: ' + String(opts.generatedAt || 'n/a'),
+    'Prepared by Verum Omnis — AI forensic narrator over the sealed record',
+    'Advisory — the findings and their anchors are the evidence; the verdict belongs to the court.'
+  ];
+  var coverY = PH * 0.46 - 30 - subtitleLines.length * 18 - 10;
+  for (var cd = 0; cd < coverDetails.length; cd++) {
+    var detailLines = wrapText(coverDetails[cd], fonts.times, 9, PW - 80);
+    for (var cdl = 0; cdl < detailLines.length; cdl++) {
+      cover.drawText(detailLines[cdl], { x: centerX(detailLines[cdl], fonts.times, 9), y: coverY, size: 9, font: fonts.times, color: COVER_SUB });
+      coverY -= 12;
+    }
+  }
   var wordmark = 'VERUM OMNIS';
   cover.drawText(wordmark, { x: centerX(wordmark, fonts.timesBold, 11), y: 74, size: 11, font: fonts.timesBold, color: GOLD });
 
@@ -6644,11 +6663,58 @@ async function buildForensicNarrative(opts) {
       y -= 10;
     }
   }
+  var workerGateStats = Array.isArray(opts.gateStats) ? opts.gateStats : [];
+  var workerDroppedSentences = 0, workerGateStatsAvailable = false;
+  for (var wgs = 0; wgs < workerGateStats.length; wgs++) {
+    var workerStats = workerGateStats[wgs];
+    if (workerStats && isFinite(Number(workerStats.dropped))) {
+      workerDroppedSentences += Number(workerStats.dropped);
+      workerGateStatsAvailable = true;
+    }
+  }
+  var gateStats = {
+    passingParts: passing.length,
+    totalParts: parts.length,
+    droppedParts: dropped,
+    droppedSentences: droppedSentences,
+    workerDroppedSentences: workerGateStatsAvailable ? workerDroppedSentences : null
+  };
+  newPage();
+  var provenanceTitle = 'PROVENANCE & CERTIFICATION';
+  var provenanceHeading = wrapText(provenanceTitle, fonts.timesBold, 14, PW - left - right);
+  for (var ph = 0; ph < provenanceHeading.length; ph++) {
+    y -= leading;
+    bodyPage.drawText(provenanceHeading[ph], { x: left, y: y, size: 14, font: fonts.timesBold, color: NAVY2 });
+  }
+  y -= 18;
+  bodyPage.drawLine({ start: { x: left, y: y + 9 }, end: { x: PW - right, y: y + 9 }, thickness: 0.8, color: GOLD });
+  var provenanceParagraphs = [
+    'Narrator model: ' + String(opts.model || 'unavailable') + '. Contract: human-v1; section: forensic_narrative. ' +
+      gateStats.passingParts + ' of ' + gateStats.totalParts + ' parts passed the render-time gates; ' +
+      gateStats.droppedSentences + (gateStats.droppedSentences === 1 ? ' sentence was' : ' sentences were') + ' removed by those gates.',
+    (workerGateStatsAvailable ? 'The worker gates removed ' + workerDroppedSentences +
+      (workerDroppedSentences === 1 ? ' sentence. ' : ' sentences. ') : '') +
+      'Parts withheld by the render-time gates: ' + gateStats.droppedParts + '.',
+    'Source document SHA-512: ' + truncHash(sourceDoc.sha512, 24, 12) + '; seal id: ' + String(sourceDoc.sealId || 'n/a') + '.',
+    'Sealed technical report SHA-512: ' + truncHash(opts.technicalSha512, 24, 12) + '; seal id: ' + String(opts.technicalSealId || 'n/a') + '.',
+    'Findings JSON SHA-512: ' + (opts.findingsJsonSha512 ? truncHash(opts.findingsJsonSha512, 24, 12) : 'unavailable') + '.',
+    'This narrative\'s own seal id and SHA-512 appear in the seal footer of every page.',
+    'Verify free at https://verumglobal.foundation/verify.html'
+  ];
+  for (var pp = 0; pp < provenanceParagraphs.length; pp++) {
+    var provenanceLines = wrapText(provenanceParagraphs[pp], fonts.times, size, PW - left - right - 16);
+    for (var pl = 0; pl < provenanceLines.length; pl++) {
+      if (y - leading < bottom) newPage();
+      y -= leading;
+      bodyPage.drawText(provenanceLines[pl], { x: left + (pl === 0 ? 16 : 0), y: y, size: size, font: fonts.times, color: INK });
+    }
+    y -= 10;
+  }
   try { doc.setTitle('Verum Omnis Forensic Narrative — ' + String(docs[0].name || 'document')); } catch (e) {}
   try { doc.setAuthor('Verum Omnis'); } catch (e) {}
   try { doc.setProducer('Verum Omnis Forensic Narrative Builder (pdf-lib)'); } catch (e) {}
   if (opts.generatedAt) { try { doc.setCreationDate(new Date(opts.generatedAt)); } catch (e) {} }
-  return { bytes: await doc.save(), passingParts: passing.length, totalParts: parts.length, droppedParts: dropped };
+  return { bytes: await doc.save(), passingParts: passing.length, totalParts: parts.length, droppedParts: dropped, gateStats: gateStats };
 }
 
 // ================= exports =================
@@ -21372,9 +21438,21 @@ async function runSealingPipeline() {
               runInput: runPacks.forensicNarrativeInput,
               onProgress: function (i, n) { updateStep(7, 'processing', 'Writing the standalone forensic narrative: part ' + i + ' of ' + n + '...'); }
             }, narrativePlan);
+            var forensicFindingsJsonSha512 = null;
+            try {
+              if (runPacks.findingsJson) {
+                forensicFindingsJsonSha512 = await computeSHA512(new TextEncoder().encode(JSON.stringify(runPacks.findingsJson, null, 2)));
+              }
+            } catch (fnFjErr) {}
             var narrativeDocument = await window.VerumReport.buildForensicNarrative({
               narrativeParts: forensicDraft.parts,
               documents: [{ name: runPacks.forensicNarrativeInput.documentName, pageCount: runPacks.forensicNarrativeInput.pageCount || null, sha512: sha512, sealId: sealId }],
+              generatedAt: new Date().toISOString(),
+              technicalSealId: runPacks.reportPack.sealId,
+              technicalSha512: runPacks.reportPack.sha512,
+              findingsJsonSha512: forensicFindingsJsonSha512,
+              model: forensicDraft.model,
+              gateStats: forensicDraft.parts.map(function (part) { return part && part.gate ? part.gate : null; }),
               identity: {
                 caseName: runPacks.forensicNarrativeInput.caseContext.caseName || undefined,
                 caseRefs: runPacks.forensicNarrativeInput.caseContext.caseRefs || undefined
