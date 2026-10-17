@@ -31,6 +31,7 @@ const suites = [
   'ai-assess-batch.test.mjs',
   'narrate-excerpt.test.mjs',
   'human-report.test.mjs',
+  'forensic-narrative.test.mjs',
   'site-serving.test.mjs',
   'pages-bridge.test.mjs',
   'zip-intake.test.mjs',

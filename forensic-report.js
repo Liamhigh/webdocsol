@@ -5814,8 +5814,121 @@ async function buildHumanReport(opts) {
   return await doc.save();
 }
 
+async function buildForensicNarrative(opts) {
+  opts = opts || {};
+  var parts = Array.isArray(opts.narrativeParts) ? opts.narrativeParts : [];
+  var passing = [];
+  var dropped = 0;
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i] || {};
+    if (part.provenance !== 'ai' || typeof part.text !== 'string' || !part.text.trim()) { dropped++; continue; }
+    var rawBlocks = part.text.split(/\n{2,}/);
+    var prose = [];
+    var tabular = false;
+    for (var b = 0; b < rawBlocks.length; b++) {
+      var block = rawBlocks[b].trim();
+      if (!block) continue;
+      if (b === 0 && /^PART\s+[IVX]+\s*[—-]/i.test(block)) continue;
+      if (/^\s*(?:\||[-*•]\s|\d+[.)]\s)/m.test(block)) { tabular = true; break; }
+      prose.push(block);
+    }
+    if (tabular) { dropped++; continue; }
+    var scrub = scrubNarrative(prose.join('\n\n'), voSectionPageContradictions(part));
+    if (!voGatePasses(scrub)) { dropped++; continue; }
+    passing.push({
+      index: Math.max(1, parseInt(part.index, 10) || i + 1),
+      startDate: String(part.startDate || ''),
+      endDate: String(part.endDate || ''),
+      text: scrub.text
+    });
+  }
+  if (!passing.length) return { bytes: null, passingParts: 0, totalParts: parts.length, droppedParts: dropped };
+
+  var docs = opts.documents && opts.documents.length ? opts.documents : [{ name: 'document.pdf' }];
+  var identity = opts.identity || {};
+  var PDFDocument = PDFLibRef.PDFDocument, StandardFonts = PDFLibRef.StandardFonts;
+  var doc = await PDFDocument.create();
+  var fonts = {
+    times: await doc.embedFont(StandardFonts.TimesRoman),
+    timesBold: await doc.embedFont(StandardFonts.TimesRomanBold),
+    timesItalic: await doc.embedFont(StandardFonts.TimesRomanItalic)
+  };
+  var images = { logo: null };
+  var logoBytes = opts.images && opts.images.logo;
+  if (!logoBytes) logoBytes = await fetchPng('/images/logo-full.png');
+  if (logoBytes) { try { images.logo = await doc.embedPng(logoBytes); } catch (e) { images.logo = null; } }
+
+  var cover = doc.addPage([PW, PH]);
+  cover.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: NAVY });
+  cover.drawRectangle({ x: 0, y: 0, width: PW, height: 6, color: GOLD });
+  cover.drawRectangle({ x: 0, y: PH - 6, width: PW, height: 6, color: GOLD });
+  var logoW = images.logo ? Math.min(270, PW - 100) : 0;
+  if (images.logo) {
+    var logoH = logoW * (images.logo.height / images.logo.width);
+    cover.drawImage(images.logo, { x: (PW - logoW) / 2, y: PH * 0.68 - logoH / 2, width: logoW, height: logoH });
+  } else {
+    var brand = 'VERUM OMNIS';
+    cover.drawText(brand, { x: centerX(brand, fonts.timesBold, 28), y: PH * 0.68, size: 28, font: fonts.timesBold, color: WHITE });
+  }
+  var title = 'FORENSIC NARRATIVE';
+  cover.drawText(title, { x: centerX(title, fonts.timesBold, 25), y: PH * 0.46, size: 25, font: fonts.timesBold, color: WHITE });
+  var first = passing[0], last = passing[passing.length - 1];
+  var subtitle = first.startDate && last.endDate
+    ? 'From ' + first.startDate + ' to ' + last.endDate
+    : (identity.caseName || docs[0].name || 'A narrative of the sealed record');
+  var subtitleLines = wrapText(subtitle, fonts.timesItalic, 13, PW - 100);
+  for (var sl = 0; sl < subtitleLines.length; sl++) {
+    cover.drawText(subtitleLines[sl], { x: centerX(subtitleLines[sl], fonts.timesItalic, 13), y: PH * 0.46 - 30 - sl * 18, size: 13, font: fonts.timesItalic, color: COVER_SUB });
+  }
+  var wordmark = 'VERUM OMNIS';
+  cover.drawText(wordmark, { x: centerX(wordmark, fonts.timesBold, 11), y: 74, size: 11, font: fonts.timesBold, color: GOLD });
+
+  var bodyPage = null, y = 0;
+  var left = 66, right = 66, top = PH - 76, bottom = 62, size = 11.5, leading = 16;
+  function newPage() {
+    bodyPage = doc.addPage([PW, PH]);
+    bodyPage.drawRectangle({ x: 0, y: PH - 5, width: PW, height: 5, color: GOLD });
+    y = top;
+  }
+  function drawHeading(part) {
+    newPage();
+    var roman = ['I', 'II', 'III'][Math.min(2, Math.max(0, part.index - 1))];
+    var span = part.startDate && part.endDate ? ' (' + part.startDate + ' – ' + part.endDate + ')' : '';
+    var heading = 'PART ' + roman + ' — WHAT THE DOCUMENTS SHOWED' + span;
+    var lines = wrapText(heading, fonts.timesBold, 14, PW - left - right);
+    for (var h = 0; h < lines.length; h++) {
+      if (y - leading < bottom) newPage();
+      y -= leading;
+      bodyPage.drawText(lines[h], { x: left, y: y, size: 14, font: fonts.timesBold, color: NAVY2 });
+    }
+    y -= 18;
+    bodyPage.drawLine({ start: { x: left, y: y + 9 }, end: { x: PW - right, y: y + 9 }, thickness: 0.8, color: GOLD });
+  }
+  for (var p = 0; p < passing.length; p++) {
+    var current = passing[p];
+    drawHeading(current);
+    var paragraphs = current.text.split(/\n{2,}/);
+    for (var q = 0; q < paragraphs.length; q++) {
+      var paragraph = paragraphs[q].replace(/\s+/g, ' ').trim();
+      if (!paragraph) continue;
+      var lines = wrapText(paragraph, fonts.times, size, PW - left - right - 16);
+      if (y - lines.length * leading < bottom) newPage();
+      for (var ln = 0; ln < lines.length; ln++) {
+        y -= leading;
+        bodyPage.drawText(lines[ln], { x: left + (ln === 0 ? 16 : 0), y: y, size: size, font: fonts.times, color: INK });
+      }
+      y -= 10;
+    }
+  }
+  try { doc.setTitle('Verum Omnis Forensic Narrative — ' + String(docs[0].name || 'document')); } catch (e) {}
+  try { doc.setAuthor('Verum Omnis'); } catch (e) {}
+  try { doc.setProducer('Verum Omnis Forensic Narrative Builder (pdf-lib)'); } catch (e) {}
+  if (opts.generatedAt) { try { doc.setCreationDate(new Date(opts.generatedAt)); } catch (e) {} }
+  return { bytes: await doc.save(), passingParts: passing.length, totalParts: parts.length, droppedParts: dropped };
+}
+
 // ================= exports =================
-var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buildHumanReport, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
+var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buildHumanReport, buildForensicNarrative: buildForensicNarrative, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
   _rulePackageLine: rulePackageLine, _brain9SweepLine: brain9SweepLine,
   _extractParties: extractParties, _extractPartiesWithRoles: extractPartiesWithRoles,
   _partyRoleMap: partyRoleMap, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
