@@ -68,6 +68,14 @@ ok(/priorSummary:\s*priorSummary/.test(caller) && /priorSummary = res\.text\.sli
 ok(/ctxIn\.runInput/.test(caller) && /runPacks\.forensicNarrativeInput = forensicNarrativeInput/.test(html) &&
   !/_pipelineTextBlocks|_pipelineTextSample|_pipelinePageCount|selectedFile/.test(caller),
   'narrative calls use the current run snapshot rather than shared pipeline globals');
+const inputStart = html.indexOf('var forensicNarrativeInput =');
+const narrativeFlowStart = html.indexOf('runPacks.forensicNarrativePack = null;', inputStart);
+const inputDelete = html.indexOf('delete runPacks.forensicNarrativeInput;', narrativeFlowStart);
+const narrativeFlow = html.slice(narrativeFlowStart, inputDelete);
+ok(/unreadPages: voHumanUnreadList\(_voUnreadPages\)/.test(html.slice(inputStart, html.indexOf('// This run\'s private output slot', inputStart))) &&
+  /unreadPages: forensicNarrativeInput\.unreadPages/.test(narrativeFlow) &&
+  /sourceName: runPacks\.forensicNarrativeInput\.documentName/.test(narrativeFlow),
+  'the run snapshot supplies unread-page data and source metadata through sealing');
 ok(/runPacks\.forensicNarrativePack/.test(html) && /window\._voShareFiles\.push\(\{ bytes: runPacks\.forensicNarrativePack\.bytes/.test(html),
   'the standalone sealed output is run-isolated and included in the share bundle');
 ok(/The forensic narrative could not be written within the Constitution\\?'s rules this run/.test(html),

@@ -20760,6 +20760,7 @@ async function runSealingPipeline() {
     pageCount: _pipelinePageCount || 0,
     textBlocks: Array.isArray(_pipelineTextBlocks) ? _pipelineTextBlocks : null,
     textSample: String(_pipelineTextSample || ''),
+    unreadPages: voHumanUnreadList(_voUnreadPages),
     caseContext: voCaseDetails()
   };
   // This run's private output slot — see RUN ISOLATION at _pipelineRunSeq.
@@ -21363,7 +21364,7 @@ async function runSealingPipeline() {
           } else {
             var forensicDraft = await aiHumanForensicNarrative(reportFraudResult.findings, {
               timeline: reportFraudResult.timeline || null,
-              unreadPages: _voUnreadPages,
+              unreadPages: forensicNarrativeInput.unreadPages,
               technicalSealId: runPacks.reportPack.sealId,
               technicalSha512: runPacks.reportPack.sha512,
               technicalReport: technicalReportContext,
@@ -21394,7 +21395,7 @@ async function runSealingPipeline() {
                 fnQr = await generateQRDataURL(fnQrContent, 400);
               } catch (fnQrErr) { console.warn('Forensic narrative QR generation failed; sealing continues without a QR.', fnQrErr); }
               var fnSealed = await window.VerumReport.seal(narrativeDocument.bytes, {
-                sealId: fnSealId, sha512: fnSha512, qrDataURL: fnQr, sourceName: selectedFile.name,
+                sealId: fnSealId, sha512: fnSha512, qrDataURL: fnQr, sourceName: runPacks.forensicNarrativeInput.documentName,
                 tag: 'FORENSIC NARRATIVE', titleSuffix: ' — Sealed Forensic Narrative'
               });
               runPacks.forensicNarrativePack = {
