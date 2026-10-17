@@ -40,7 +40,7 @@ function idsFromArrayLiteral(src, name) {
 const workerIds = (worker.match(/\{\s*id:\s*['"]([a-z_]+)['"]/g) || []).map(s => s.replace(/.*['"]([a-z_]+)['"]/, '$1'));
 const reportIds = idsFromArrayLiteral(report, 'HUMAN_REPORT_SECTIONS');
 const pageIds = idsFromArrayLiteral(html, 'VO_HUMAN_SECTIONS');
-ok(workerIds.length === 15, 'worker declares the 15-section contract (' + workerIds.length + ')');
+ok(workerIds.length === 16, 'worker declares the 16-section contract (' + workerIds.length + ')');
 ok(reportIds && reportIds.join(',') === workerIds.join(','), 'forensic-report.js section ids equal the worker contract, in order');
 ok(pageIds && pageIds.join(',') === workerIds.join(','), 'seal-document.html section ids equal the worker contract, in order');
 const writerIds = idsFromArrayLiteral(html, 'VO_HUMAN_WRITER_SECTIONS') || [];
