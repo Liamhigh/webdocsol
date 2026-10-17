@@ -65,6 +65,9 @@ ok(/section:\s*'forensic_narrative'/.test(caller) && /narrativePart:\s*\{\s*inde
   'each worker request names the standalone section and its date-focused part');
 ok(/priorSummary:\s*priorSummary/.test(caller) && /priorSummary = res\.text\.slice\(0, 1500\)/.test(caller),
   'successful parts feed their bounded text into the next part');
+ok(/ctxIn\.runInput/.test(caller) && /runPacks\.forensicNarrativeInput = forensicNarrativeInput/.test(html) &&
+  !/_pipelineTextBlocks|_pipelineTextSample|_pipelinePageCount|selectedFile/.test(caller),
+  'narrative calls use the current run snapshot rather than shared pipeline globals');
 ok(/runPacks\.forensicNarrativePack/.test(html) && /window\._voShareFiles\.push\(\{ bytes: runPacks\.forensicNarrativePack\.bytes/.test(html),
   'the standalone sealed output is run-isolated and included in the share bundle');
 ok(/The forensic narrative could not be written within the Constitution\\?'s rules this run/.test(html),
@@ -79,7 +82,7 @@ const fakePdf = {
     const page = {
       drawRectangle: () => {},
       drawImage: () => {},
-      drawText: (text) => drawnText.push(String(text)),
+      drawText: (text, options) => { drawnText.push(String(text)); if (options) drawnY.push(options.y); },
       drawLine: () => {}
     };
     pages.push(page);
@@ -91,6 +94,7 @@ const fakePdf = {
   setCreationDate: () => {},
   save: async () => new Uint8Array([1, 2, 3])
 };
+const drawnY = [];
 globalThis.PDFLib = {
   rgb: (r, g, b) => ({ r, g, b }),
   StandardFonts: { TimesRoman: 'times', TimesRomanBold: 'times-bold', TimesRomanItalic: 'times-italic' },
@@ -117,6 +121,14 @@ ok(pages.length === 2 && drawnText.includes('FORENSIC NARRATIVE') &&
   drawnText.some((text) => text.indexOf('PART I — WHAT THE DOCUMENTS SHOWED') === 0) &&
   drawnText.some((text) => text.indexOf('The document records a payment') === 0),
   'the renderer draws the title page, a PART heading, and flowing prose without a table layout');
+const pageCountBeforeLong = pages.length, textCountBeforeLong = drawnY.length;
+await globalThis.VerumReport.buildForensicNarrative({
+  images: { logo: new Uint8Array([1]) },
+  narrativeParts: [{ index: 1, count: 1, startDate: '1 January 2020', endDate: '2 January 2020', provenance: 'ai',
+    text: 'The record states a dated event on p. 1. ' + 'The record states another dated event on p. 2. '.repeat(1200) }]
+});
+ok(pages.length - pageCountBeforeLong > 2 && drawnY.slice(textCountBeforeLong).every((y) => y >= 62),
+  'long narrative paragraphs continue across pages without drawing below the bottom margin');
 
 console.log(`\n[forensic-narrative] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) process.exit(1);

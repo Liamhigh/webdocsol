@@ -5912,8 +5912,8 @@ async function buildForensicNarrative(opts) {
       var paragraph = paragraphs[q].replace(/\s+/g, ' ').trim();
       if (!paragraph) continue;
       var lines = wrapText(paragraph, fonts.times, size, PW - left - right - 16);
-      if (y - lines.length * leading < bottom) newPage();
       for (var ln = 0; ln < lines.length; ln++) {
+        if (y - leading < bottom) newPage();
         y -= leading;
         bodyPage.drawText(lines[ln], { x: left + (ln === 0 ? 16 : 0), y: y, size: size, font: fonts.times, color: INK });
       }
