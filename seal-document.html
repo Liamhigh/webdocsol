@@ -21326,6 +21326,17 @@ function voFmtBytes(n) {
   return (n / 1024 / 1024).toFixed(2) + ' MB';
 }
 function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, forensicResult) {
+  // SHARE STATE RESET: _voShareBytes/_voShareName/_voShareType survive
+  // resetSealing() by design (they are read by the share button), so without
+  // this reset a failed SEAL GUARD in a later run of the same page session
+  // left the PREVIOUS run's sealed PDF in _voShareBytes while the report and
+  // findings below came from the current run — a mixed bundle whose sealed
+  // document anchors a different ORIG hash than the findings corpus (observed
+  // in the field 2026-10-17). Share payload must always be this run's bytes
+  // or nothing.
+  window._voShareBytes = null;
+  window._voShareName = null;
+  window._voShareType = null;
   document.getElementById('sha256Display').textContent = sha256;
   document.getElementById('sha512Display').textContent = sha512;
   document.getElementById('sealIdDisplay').textContent = sealId;
@@ -21683,6 +21694,12 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     window._voShareType = 'application/pdf';
     window._voShareText =
       'This document is cryptographically sealed with Verum Omnis — a SHA-512 fingerprint, submitted to OpenTimestamps for anchoring to the Bitcoin blockchain. Any change to it is detectable, and once Bitcoin confirms the anchor it fixes the latest time by which the document existed. Anyone can check it free, no account needed, at https://verumglobal.foundation/verify.html';
+  } else {
+    // SEAL GUARD failed for every branch: share NOTHING. With the reset at the
+    // top of showResults this cannot leak a previous run's document into the
+    // bundle; silence would hide a failed seal, so say it plainly.
+    console.warn('SEAL GUARD: sealed bytes failed verification — the document is excluded from the share bundle.');
+    window._voShareText = 'This run did not produce a verified sealed document, so nothing was shared. Re-seal the document and try again.';
   }
 
   // The whole bundle in one share. A password-protected forensic seal used to
