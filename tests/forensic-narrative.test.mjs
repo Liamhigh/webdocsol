@@ -166,6 +166,30 @@ ok(pages.length === 3 && drawnText.includes('FORENSIC NARRATIVE') &&
   renderedText.includes("This narrative's own seal id and SHA-512 appear in the seal footer of every page.") &&
   renderedText.includes('Verify free at https://verumglobal.foundation/verify.html'),
   'the renderer draws the anchored cover and final provenance page as flowing prose');
+// Sourcery finding on Liamhigh/webdocsol#252: a gate-failing part with AI provenance must be
+// dropped even when a sibling passes — the 'none' fixture above is rejected
+// before the gate and cannot catch a gate-bypass regression.
+const mixedBuild = await globalThis.VerumReport.buildForensicNarrative({
+  images: { logo: new Uint8Array([1]) },
+  documents: [{ name: 'record.pdf' }],
+  narrativeParts: [
+    { index: 1, count: 2, startDate: '1 January 2020', endDate: '2 January 2020', provenance: 'ai',
+      text: 'The document records a payment on 1 January 2020 on p. 1. The letter records a second payment on 2 January 2020 on p. 2.' },
+    { index: 2, count: 2, startDate: '3 January 2020', endDate: '4 January 2020', provenance: 'ai',
+      text: 'The affidavit clearly proves the respondents fraudulent intentions beyond any doubt.' }
+  ]
+});
+ok(mixedBuild.bytes instanceof Uint8Array && mixedBuild.passingParts === 1 && mixedBuild.droppedParts === 1,
+  'a gate-failing AI part is omitted even when a sibling part passes');
+// Sourcery finding on Liamhigh/webdocsol#252: the planner must accept every engine date format.
+{
+  const htmlSrc = await import('node:fs').then((fs) => fs.readFileSync(new URL('../seal-document.html', import.meta.url), 'utf8'));
+  const fnMatch = htmlSrc.match(/function voForensicNarrativeDate\([\s\S]*?\n\}/);
+  const voForensicNarrativeDate = new Function('value', 'return (function(value){' + fnMatch[0].replace(/^function voForensicNarrativeDate\(value\) \{/, '').replace(/\n\}$/, '') + '})(value)');
+  const formats = ['2020-01-05', '5 January 2020', '5 jan 2020', 'January 5, 2020', 'jan 5 2020', '05/01/2020', '5-1-2020', '05.01.2020', '5.1.20'];
+  ok(formats.every((f) => { const v = voForensicNarrativeDate(f); return v && v.key === 20200105; }),
+    'the narrative planner accepts every date format the forensic engine tokenizes');
+}
 const pageCountBeforeLong = pages.length, textCountBeforeLong = drawnY.length;
 await globalThis.VerumReport.buildForensicNarrative({
   images: { logo: new Uint8Array([1]) },

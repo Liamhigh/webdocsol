@@ -19286,18 +19286,29 @@ var VO_HUMAN_TOTAL_BUDGET_MS = 5 * 60 * 1000; // whole-narrative ceiling: sectio
 
 function voForensicNarrativeDate(value) {
   var s = String(value || '').trim(), y, m, d, hit;
+  // Accept every format the forensic engine's date tokenizer accepts
+  // (VO_DATE_TOKEN_RE): ISO, day-first month names, month-first month names,
+  // slashed/dashed numerics (2- or 4-digit year) and dotted numerics —
+  // otherwise engine-dated events silently produce NO narrative parts
+  // (Sourcery finding on Liamhigh/webdocsol#252).
+  var VO_FN_MONTHS = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12,
+    january: 1, february: 2, march: 3, april: 4, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
   hit = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
   if (hit) { y = +hit[1]; m = +hit[2]; d = +hit[3]; }
   if (!hit) {
-    hit = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
-    if (hit) {
-      var months = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
-      d = +hit[1]; m = months[hit[2].toLowerCase()]; y = +hit[3];
-    }
+    // day-first month name: "5 jan 2020", "5 January, 2020"
+    hit = s.match(/^(\d{1,2})\s+([A-Za-z]+)\.?,?\s+(\d{4})$/);
+    if (hit) { d = +hit[1]; m = VO_FN_MONTHS[hit[2].toLowerCase()]; y = +hit[3]; }
   }
   if (!hit) {
-    hit = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
-    if (hit) { d = +hit[1]; m = +hit[2]; y = +hit[3]; }
+    // month-first month name: "jan 5 2020", "January 5, 2020"
+    hit = s.match(/^([A-Za-z]+)\.?\s+(\d{1,2}),?\s+(\d{4})$/);
+    if (hit) { m = VO_FN_MONTHS[hit[1].toLowerCase()]; d = +hit[2]; y = +hit[3]; }
+  }
+  if (!hit) {
+    // slashed / dashed / dotted numerics, 2- or 4-digit year (day-first, as the engine reads them)
+    hit = s.match(/^(\d{1,2})[/.-](\d{1,2})[/.-](\d{2,4})$/);
+    if (hit) { d = +hit[1]; m = +hit[2]; y = +hit[3]; if (y < 100) y += 2000; }
   }
   if (!hit || !y || !m || !d || m > 12 || d > 31) return null;
   var stamp = Date.UTC(y, m - 1, d);
@@ -21417,6 +21428,7 @@ async function runSealingPipeline() {
         console.warn('Court-ready narrative generation failed (seal, report and JSON unaffected):', hErr);
       }
       runPacks.forensicNarrativePack = null;
+      window._voForensicNarrativePack = null;
       runPacks.forensicNarrativeStatus = null;
       runPacks.forensicNarrativeInput = forensicNarrativeInput;
       try {
@@ -21480,6 +21492,7 @@ async function runSealingPipeline() {
                 bytes: fnSealed, sealId: fnSealId, sha512: fnSha512, ots: fnOts,
                 passingParts: narrativeDocument.passingParts, totalParts: narrativeDocument.totalParts
               };
+              window._voForensicNarrativePack = runPacks.forensicNarrativePack;
               if (narrativeDocument.passingParts < narrativeDocument.totalParts) {
                 runPacks.forensicNarrativeStatus = 'Forensic narrative: ' + narrativeDocument.passingParts + ' of ' + narrativeDocument.totalParts + ' parts passed the Constitution\'s gates; the other parts were withheld.';
               }
