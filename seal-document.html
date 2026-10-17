@@ -6538,8 +6538,121 @@ async function buildHumanReport(opts) {
   return await doc.save();
 }
 
+async function buildForensicNarrative(opts) {
+  opts = opts || {};
+  var parts = Array.isArray(opts.narrativeParts) ? opts.narrativeParts : [];
+  var passing = [];
+  var dropped = 0;
+  for (var i = 0; i < parts.length; i++) {
+    var part = parts[i] || {};
+    if (part.provenance !== 'ai' || typeof part.text !== 'string' || !part.text.trim()) { dropped++; continue; }
+    var rawBlocks = part.text.split(/\n{2,}/);
+    var prose = [];
+    var tabular = false;
+    for (var b = 0; b < rawBlocks.length; b++) {
+      var block = rawBlocks[b].trim();
+      if (!block) continue;
+      if (b === 0 && /^PART\s+[IVX]+\s*[—-]/i.test(block)) continue;
+      if (/^\s*(?:\||[-*•]\s|\d+[.)]\s)/m.test(block)) { tabular = true; break; }
+      prose.push(block);
+    }
+    if (tabular) { dropped++; continue; }
+    var scrub = scrubNarrative(prose.join('\n\n'), voSectionPageContradictions(part));
+    if (!voGatePasses(scrub)) { dropped++; continue; }
+    passing.push({
+      index: Math.max(1, parseInt(part.index, 10) || i + 1),
+      startDate: String(part.startDate || ''),
+      endDate: String(part.endDate || ''),
+      text: scrub.text
+    });
+  }
+  if (!passing.length) return { bytes: null, passingParts: 0, totalParts: parts.length, droppedParts: dropped };
+
+  var docs = opts.documents && opts.documents.length ? opts.documents : [{ name: 'document.pdf' }];
+  var identity = opts.identity || {};
+  var PDFDocument = PDFLibRef.PDFDocument, StandardFonts = PDFLibRef.StandardFonts;
+  var doc = await PDFDocument.create();
+  var fonts = {
+    times: await doc.embedFont(StandardFonts.TimesRoman),
+    timesBold: await doc.embedFont(StandardFonts.TimesRomanBold),
+    timesItalic: await doc.embedFont(StandardFonts.TimesRomanItalic)
+  };
+  var images = { logo: null };
+  var logoBytes = opts.images && opts.images.logo;
+  if (!logoBytes) logoBytes = await fetchPng('/images/logo-full.png');
+  if (logoBytes) { try { images.logo = await doc.embedPng(logoBytes); } catch (e) { images.logo = null; } }
+
+  var cover = doc.addPage([PW, PH]);
+  cover.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: NAVY });
+  cover.drawRectangle({ x: 0, y: 0, width: PW, height: 6, color: GOLD });
+  cover.drawRectangle({ x: 0, y: PH - 6, width: PW, height: 6, color: GOLD });
+  var logoW = images.logo ? Math.min(270, PW - 100) : 0;
+  if (images.logo) {
+    var logoH = logoW * (images.logo.height / images.logo.width);
+    cover.drawImage(images.logo, { x: (PW - logoW) / 2, y: PH * 0.68 - logoH / 2, width: logoW, height: logoH });
+  } else {
+    var brand = 'VERUM OMNIS';
+    cover.drawText(brand, { x: centerX(brand, fonts.timesBold, 28), y: PH * 0.68, size: 28, font: fonts.timesBold, color: WHITE });
+  }
+  var title = 'FORENSIC NARRATIVE';
+  cover.drawText(title, { x: centerX(title, fonts.timesBold, 25), y: PH * 0.46, size: 25, font: fonts.timesBold, color: WHITE });
+  var first = passing[0], last = passing[passing.length - 1];
+  var subtitle = first.startDate && last.endDate
+    ? 'From ' + first.startDate + ' to ' + last.endDate
+    : (identity.caseName || docs[0].name || 'A narrative of the sealed record');
+  var subtitleLines = wrapText(subtitle, fonts.timesItalic, 13, PW - 100);
+  for (var sl = 0; sl < subtitleLines.length; sl++) {
+    cover.drawText(subtitleLines[sl], { x: centerX(subtitleLines[sl], fonts.timesItalic, 13), y: PH * 0.46 - 30 - sl * 18, size: 13, font: fonts.timesItalic, color: COVER_SUB });
+  }
+  var wordmark = 'VERUM OMNIS';
+  cover.drawText(wordmark, { x: centerX(wordmark, fonts.timesBold, 11), y: 74, size: 11, font: fonts.timesBold, color: GOLD });
+
+  var bodyPage = null, y = 0;
+  var left = 66, right = 66, top = PH - 76, bottom = 62, size = 11.5, leading = 16;
+  function newPage() {
+    bodyPage = doc.addPage([PW, PH]);
+    bodyPage.drawRectangle({ x: 0, y: PH - 5, width: PW, height: 5, color: GOLD });
+    y = top;
+  }
+  function drawHeading(part) {
+    newPage();
+    var roman = ['I', 'II', 'III'][Math.min(2, Math.max(0, part.index - 1))];
+    var span = part.startDate && part.endDate ? ' (' + part.startDate + ' – ' + part.endDate + ')' : '';
+    var heading = 'PART ' + roman + ' — WHAT THE DOCUMENTS SHOWED' + span;
+    var lines = wrapText(heading, fonts.timesBold, 14, PW - left - right);
+    for (var h = 0; h < lines.length; h++) {
+      if (y - leading < bottom) newPage();
+      y -= leading;
+      bodyPage.drawText(lines[h], { x: left, y: y, size: 14, font: fonts.timesBold, color: NAVY2 });
+    }
+    y -= 18;
+    bodyPage.drawLine({ start: { x: left, y: y + 9 }, end: { x: PW - right, y: y + 9 }, thickness: 0.8, color: GOLD });
+  }
+  for (var p = 0; p < passing.length; p++) {
+    var current = passing[p];
+    drawHeading(current);
+    var paragraphs = current.text.split(/\n{2,}/);
+    for (var q = 0; q < paragraphs.length; q++) {
+      var paragraph = paragraphs[q].replace(/\s+/g, ' ').trim();
+      if (!paragraph) continue;
+      var lines = wrapText(paragraph, fonts.times, size, PW - left - right - 16);
+      for (var ln = 0; ln < lines.length; ln++) {
+        if (y - leading < bottom) newPage();
+        y -= leading;
+        bodyPage.drawText(lines[ln], { x: left + (ln === 0 ? 16 : 0), y: y, size: size, font: fonts.times, color: INK });
+      }
+      y -= 10;
+    }
+  }
+  try { doc.setTitle('Verum Omnis Forensic Narrative — ' + String(docs[0].name || 'document')); } catch (e) {}
+  try { doc.setAuthor('Verum Omnis'); } catch (e) {}
+  try { doc.setProducer('Verum Omnis Forensic Narrative Builder (pdf-lib)'); } catch (e) {}
+  if (opts.generatedAt) { try { doc.setCreationDate(new Date(opts.generatedAt)); } catch (e) {} }
+  return { bytes: await doc.save(), passingParts: passing.length, totalParts: parts.length, droppedParts: dropped };
+}
+
 // ================= exports =================
-var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buildHumanReport, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
+var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buildHumanReport, buildForensicNarrative: buildForensicNarrative, seal: seal, _sanitize: san, _cleanQuote: cleanQuote,
   _rulePackageLine: rulePackageLine, _brain9SweepLine: brain9SweepLine,
   _extractParties: extractParties, _extractPartiesWithRoles: extractPartiesWithRoles,
   _partyRoleMap: partyRoleMap, _legalSubjectOf: LEGAL_SUBJECT_OF, _dishonestyOf: DISHONESTY_OF,
@@ -19105,6 +19218,77 @@ var VO_HUMAN_TECH_REPORT_PAGES = 40;      // enough for the findings and methodo
 var VO_HUMAN_CALL_TIMEOUT_MS = 52000; // server: primary 30 s + 8B fallback 15 s, plus margin
 var VO_HUMAN_TOTAL_BUDGET_MS = 5 * 60 * 1000; // whole-narrative ceiling: sections past it are skipped, never left hanging
 
+function voForensicNarrativeDate(value) {
+  var s = String(value || '').trim(), y, m, d, hit;
+  hit = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})$/);
+  if (hit) { y = +hit[1]; m = +hit[2]; d = +hit[3]; }
+  if (!hit) {
+    hit = s.match(/^(\d{1,2})\s+([A-Za-z]+)\s+(\d{4})$/);
+    if (hit) {
+      var months = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
+      d = +hit[1]; m = months[hit[2].toLowerCase()]; y = +hit[3];
+    }
+  }
+  if (!hit) {
+    hit = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{4})$/);
+    if (hit) { d = +hit[1]; m = +hit[2]; y = +hit[3]; }
+  }
+  if (!hit || !y || !m || !d || m > 12 || d > 31) return null;
+  var stamp = Date.UTC(y, m - 1, d);
+  var check = new Date(stamp);
+  if (check.getUTCFullYear() !== y || check.getUTCMonth() + 1 !== m || check.getUTCDate() !== d) return null;
+  return { key: y * 10000 + m * 100 + d, day: stamp / 86400000, label: s };
+}
+
+function voForensicNarrativePartPlan(fraudResult) {
+  var events = [], seen = {};
+  var timeline = fraudResult && fraudResult.timeline && Array.isArray(fraudResult.timeline.events) ? fraudResult.timeline.events : [];
+  function add(date, page, evidence) {
+    var parsed = voForensicNarrativeDate(date);
+    if (!parsed) return;
+    var key = parsed.key + '|' + (page || 0) + '|' + String(evidence || '').slice(0, 80);
+    if (seen[key]) return;
+    seen[key] = true;
+    events.push({ key: parsed.key, day: parsed.day, date: parsed.label, page: page || 0 });
+  }
+  for (var i = 0; i < timeline.length; i++) {
+    var ev = timeline[i] || {};
+    add(ev.date, ev.page, ev.evidence || ev.what);
+  }
+  var findings = fraudResult && Array.isArray(fraudResult.findings) ? fraudResult.findings : [];
+  for (var f = 0; f < findings.length; f++) {
+    var finding = findings[f] || {}, when = finding.anchor && Array.isArray(finding.anchor.when) ? finding.anchor.when : [];
+    for (var w = 0; w < when.length; w++) add(when[w], finding.page || (finding.anchor.where && finding.anchor.where[0]), finding.evidence);
+    if (finding.date) add(finding.date, finding.page, finding.evidence);
+  }
+  events.sort(function (a, b) { return (a.key - b.key) || (a.page - b.page); });
+  if (!events.length) return [];
+  var uniqueDays = [];
+  for (var u = 0; u < events.length; u++) if (!uniqueDays.length || uniqueDays[uniqueDays.length - 1].key !== events[u].key) uniqueDays.push(events[u]);
+  var spanDays = uniqueDays[uniqueDays.length - 1].day - uniqueDays[0].day;
+  var count = spanDays <= 365 ? 1 : Math.min(3, uniqueDays.length, Math.ceil((spanDays + 1) / 365));
+  var groups = [];
+  for (var g = 0; g < uniqueDays.length; g++) {
+    var bucket = Math.min(count - 1, Math.floor(g * count / uniqueDays.length));
+    if (!groups[bucket]) groups[bucket] = [];
+    groups[bucket].push(uniqueDays[g].key);
+  }
+  var plans = [];
+  for (var p = 0; p < groups.length; p++) {
+    if (!groups[p] || !groups[p].length) continue;
+    var first = events.filter(function (e) { return e.key === groups[p][0]; })[0];
+    var last = events.filter(function (e) { return e.key === groups[p][groups[p].length - 1]; }).slice(-1)[0];
+    var index = plans.length + 1;
+    var partCount = groups.filter(Boolean).length;
+    plans.push({
+      index: index, count: partCount, startDate: first.date, endDate: last.date,
+      focus: 'From ' + first.date + ' through ' + last.date + ', in date order. State undated gaps as INSUFFICIENT.'
+    });
+  }
+  for (var n = 0; n < plans.length; n++) plans[n].count = plans.length;
+  return plans;
+}
+
 function voHumanFirstPage(f) {
   if (!f) return 0;
   if (f.page && isFinite(f.page)) return parseInt(f.page, 10) || 0;
@@ -19546,6 +19730,96 @@ async function aiHumanReport(findings, ctxIn) {
     },
     generatedUtc: new Date().toISOString()
   };
+}
+
+async function aiHumanForensicNarrative(findings, ctxIn, plan) {
+  ctxIn = ctxIn || {};
+  plan = Array.isArray(plan) ? plan.slice(0, 3) : [];
+  if (!plan.length || !ctxIn.technicalSealId || !ctxIn.technicalSha512) {
+    return { parts: [], calls: 0, model: null };
+  }
+  var runInput = ctxIn.runInput || {};
+  var textBlocks = Array.isArray(runInput.textBlocks) ? runInput.textBlocks : null;
+  var ids = voHumanFindingList(findings);
+  var fp = ids.findings.map(voHumanPayloadFinding);
+  var cp = ids.candidates.map(voHumanPayloadFinding);
+  if (!fp.length) return { parts: [], calls: 0, model: null };
+  var caseInfo = runInput.caseContext || {};
+  var timeline = (ctxIn.timeline && Array.isArray(ctxIn.timeline.events))
+    ? ctxIn.timeline.events.slice(0, 40).map(function (e) {
+        return { date: String(e.date || ''), who: Array.isArray(e.who) ? e.who.slice(0, 2).join(', ') : String(e.who || ''), what: String(e.evidence || e.what || '').slice(0, 240), page: e.page || 0 };
+      })
+    : [];
+  var recordContext = voBuildSealedRecordContext(textBlocks, ids.findings.map(function (x) { return x.f; }), timeline, VO_HUMAN_RECORD_CHARS);
+  var findingsJsonText = String(ctxIn.findingsJsonText || '').slice(0, VO_HUMAN_FINDINGS_JSON_CHARS);
+  var technicalReport = (ctxIn.technicalReport && typeof ctxIn.technicalReport === 'object') ? {
+    text: String(ctxIn.technicalReport.text || '').slice(0, VO_HUMAN_TECH_REPORT_CHARS),
+    pageCount: parseInt(ctxIn.technicalReport.pageCount, 10) || 0,
+    suppliedPages: parseInt(ctxIn.technicalReport.suppliedPages, 10) || 0,
+    truncated: ctxIn.technicalReport.truncated === true,
+    sealId: String(ctxIn.technicalSealId),
+    sha512: String(ctxIn.technicalSha512)
+  } : null;
+  var excerpt = '';
+  try {
+    if (textBlocks && textBlocks.length) {
+      excerpt = voBuildNarrateExcerpt(textBlocks, ids.findings.map(function (x) { return x.f; }), VO_HUMAN_EXCERPT_CHARS);
+    }
+  } catch (eEx) {}
+  if (!excerpt && runInput.textSample) excerpt = String(runInput.textSample).slice(0, VO_HUMAN_EXCERPT_CHARS);
+  var unread = voHumanUnreadList(ctxIn.unreadPages);
+  var priorSummary = '';
+  var output = [], calls = 0, model = null, startedAt = Date.now();
+  for (var i = 0; i < plan.length; i++) {
+    var part = plan[i];
+    if (Date.now() - startedAt > VO_HUMAN_TOTAL_BUDGET_MS) {
+      output.push(Object.assign({}, part, { provenance: 'none', reason: 'time_budget' }));
+      continue;
+    }
+    if (typeof ctxIn.onProgress === 'function') ctxIn.onProgress(i + 1, plan.length, 'forensic_narrative');
+    var payload = {
+      section: 'forensic_narrative',
+      documentName: runInput.documentName || 'sealed document',
+      pageCount: runInput.pageCount || 0,
+      findings: fp,
+      candidates: cp,
+      timeline: timeline,
+      unreadPages: unread,
+      excerpt: excerpt,
+      sealedRecord: recordContext,
+      findingsJson: findingsJsonText,
+      technicalReport: technicalReport,
+      narrativePart: { index: part.index, count: part.count, focus: part.focus },
+      priorSummary: priorSummary
+    };
+    if (caseInfo.caseName || caseInfo.caseRefs || caseInfo.parties || caseInfo.jurisdiction) payload.caseContext = caseInfo;
+    calls++;
+    try {
+      var res = await aiApiPost('/api/v1/ai/human-report', payload, VO_HUMAN_CALL_TIMEOUT_MS);
+      if (res && res.contract === 'human-v1' && res.generated === true && res.machineGenerated === true &&
+          typeof res.text === 'string' && res.text.trim()) {
+        var accepted = Object.assign({}, part, {
+          provenance: 'ai', text: res.text, gate: res.gate || null, model: res.model || null,
+          pageContradictions: Array.isArray(res.pageContradictions) ? res.pageContradictions.slice(0, 40) : []
+        });
+        output.push(accepted);
+        priorSummary = res.text.slice(0, 1500);
+        if (!model) model = res.model || null;
+      } else {
+        output.push(Object.assign({}, part, {
+          provenance: 'none', reason: (res && res.reason) || 'not_generated',
+          gate: (res && res.gate) || null
+        }));
+      }
+    } catch (e) {
+      var message = String((e && e.message) || '');
+      var reason = e && e.name === 'AbortError' ? 'timeout'
+        : ((e && e.name === 'SyntaxError') || /JSON|Unexpected token|returned HTTP 404|returned HTTP 405/.test(message))
+          ? 'no_api_at_this_address' : 'network';
+      output.push(Object.assign({}, part, { provenance: 'none', reason: reason }));
+    }
+  }
+  return { parts: output, calls: calls, model: model };
 }
 
 // B7 triple legal verification (founder ruling 2026-10-11): the candidate
@@ -20481,9 +20755,19 @@ async function runSealingPipeline() {
   var sha256 = _pipelineSha256;
   var sha512 = _pipelineSha512;
   var runSeq = _pipelineRunSeq;
+  var forensicNarrativeInput = {
+    documentName: selectedFile && selectedFile.name ? selectedFile.name : 'sealed document',
+    pageCount: _pipelinePageCount || 0,
+    textBlocks: Array.isArray(_pipelineTextBlocks) ? _pipelineTextBlocks : null,
+    textSample: String(_pipelineTextSample || ''),
+    unreadPages: voHumanUnreadList(_voUnreadPages),
+    caseContext: voCaseDetails()
+  };
   // This run's private output slot — see RUN ISOLATION at _pipelineRunSeq.
   window._voPacks = window._voPacks || {};
-  var runPacks = window._voPacks[runSeq] = { reportPack: null, findingsJson: null, humanReportPack: null };
+  var runPacks = window._voPacks[runSeq] = {
+    reportPack: null, findingsJson: null, humanReportPack: null, forensicNarrativePack: null, forensicNarrativeStatus: null
+  };
   var sealId = _pipelineSealId;
   var otsDigestHex = _pipelineOtsDigestHex;
   var chain = _pipelineChain;
@@ -21066,6 +21350,76 @@ async function runSealingPipeline() {
       } catch (hErr) {
         console.warn('Court-ready narrative generation failed (seal, report and JSON unaffected):', hErr);
       }
+      runPacks.forensicNarrativePack = null;
+      runPacks.forensicNarrativeStatus = null;
+      runPacks.forensicNarrativeInput = forensicNarrativeInput;
+      try {
+        if (isAiReviewEnabled() && reportFraudResult && !reportFraudResult.scanFailed &&
+            Array.isArray(reportFraudResult.findings) &&
+            runPacks.reportPack && runPacks.reportPack.sealId && runPacks.reportPack.sha512 &&
+            typeof window.VerumReport.buildForensicNarrative === 'function') {
+          var narrativePlan = voForensicNarrativePartPlan(reportFraudResult);
+          if (!narrativePlan.length) {
+            runPacks.forensicNarrativeStatus = 'The forensic narrative could not be written within the Constitution\'s rules this run';
+          } else {
+            var forensicDraft = await aiHumanForensicNarrative(reportFraudResult.findings, {
+              timeline: reportFraudResult.timeline || null,
+              unreadPages: forensicNarrativeInput.unreadPages,
+              technicalSealId: runPacks.reportPack.sealId,
+              technicalSha512: runPacks.reportPack.sha512,
+              technicalReport: technicalReportContext,
+              findingsJsonText: runPacks.findingsJson ? JSON.stringify(runPacks.findingsJson, null, 2) : '',
+              runInput: runPacks.forensicNarrativeInput,
+              onProgress: function (i, n) { updateStep(7, 'processing', 'Writing the standalone forensic narrative: part ' + i + ' of ' + n + '...'); }
+            }, narrativePlan);
+            var narrativeDocument = await window.VerumReport.buildForensicNarrative({
+              narrativeParts: forensicDraft.parts,
+              documents: [{ name: runPacks.forensicNarrativeInput.documentName, pageCount: runPacks.forensicNarrativeInput.pageCount || null, sha512: sha512, sealId: sealId }],
+              identity: {
+                caseName: runPacks.forensicNarrativeInput.caseContext.caseName || undefined,
+                caseRefs: runPacks.forensicNarrativeInput.caseContext.caseRefs || undefined
+              }
+            });
+            if (!narrativeDocument || !narrativeDocument.bytes || !narrativeDocument.passingParts) {
+              runPacks.forensicNarrativeStatus = 'The forensic narrative could not be written within the Constitution\'s rules this run';
+            } else {
+              var fnSha512 = await computeSHA512(narrativeDocument.bytes);
+              var fnSealId = 'VO-' + fnSha512.substring(0, 12).toUpperCase();
+              var fnDigestHex = await computeSHA256(new TextEncoder().encode(fnSha512));
+              var fnOts = await submitToOTS(fnDigestHex);
+              var fnMeta = collectSealMetadata();
+              fnMeta.sha512 = fnSha512; fnMeta.otsDigest = fnDigestHex; fnMeta.otsStatus = !!(fnOts && fnOts.success); fnMeta.sealId = fnSealId; fnMeta.report = true;
+              var fnQr = null;
+              try {
+                var fnQrContent = 'https://verumglobal.foundation/verify.html?h=' + fnSha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(fnMeta, null))));
+                fnQr = await generateQRDataURL(fnQrContent, 400);
+              } catch (fnQrErr) { console.warn('Forensic narrative QR generation failed; sealing continues without a QR.', fnQrErr); }
+              var fnSealed = await window.VerumReport.seal(narrativeDocument.bytes, {
+                sealId: fnSealId, sha512: fnSha512, qrDataURL: fnQr, sourceName: runPacks.forensicNarrativeInput.documentName,
+                tag: 'FORENSIC NARRATIVE', titleSuffix: ' — Sealed Forensic Narrative'
+              });
+              runPacks.forensicNarrativePack = {
+                bytes: fnSealed, sealId: fnSealId, sha512: fnSha512, ots: fnOts,
+                passingParts: narrativeDocument.passingParts, totalParts: narrativeDocument.totalParts
+              };
+              if (narrativeDocument.passingParts < narrativeDocument.totalParts) {
+                runPacks.forensicNarrativeStatus = 'Forensic narrative: ' + narrativeDocument.passingParts + ' of ' + narrativeDocument.totalParts + ' parts passed the Constitution\'s gates; the other parts were withheld.';
+              }
+              updateStep(7, 'processing', 'Standalone forensic narrative sealed.');
+            }
+          }
+        }
+      } catch (fnErr) {
+        console.warn('Standalone forensic narrative generation failed (other sealed outputs unaffected):', fnErr);
+        runPacks.forensicNarrativePack = null;
+        runPacks.forensicNarrativeStatus = 'The forensic narrative could not be sealed this run';
+      }
+      if (isAiReviewEnabled() && reportFraudResult && !reportFraudResult.scanFailed &&
+          Array.isArray(reportFraudResult.findings) && !runPacks.forensicNarrativePack &&
+          !runPacks.forensicNarrativeStatus) {
+        runPacks.forensicNarrativeStatus = 'The forensic narrative could not be written because the sealed technical report was unavailable this run';
+      }
+      delete runPacks.forensicNarrativeInput;
       console.log('[VO-REPORT-DEBUG] Report pack created and stored');
       updateStep(7, 'complete');
     } else {
@@ -21347,7 +21701,7 @@ function voFmtBytes(n) {
 }
 function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, forensicResult, runSeq) {
   // Assemble from THIS run's slot only (RUN ISOLATION, field bug 2026-10-17).
-  var runPacks = (window._voPacks && window._voPacks[runSeq]) || { reportPack: null, findingsJson: null, humanReportPack: null };
+  var runPacks = (window._voPacks && window._voPacks[runSeq]) || { reportPack: null, findingsJson: null, humanReportPack: null, forensicNarrativePack: null, forensicNarrativeStatus: null };
   // SHARE STATE RESET: _voShareBytes/_voShareName/_voShareType survive
   // resetSealing() by design (they are read by the share button), so without
   // this reset a failed SEAL GUARD in a later run of the same page session
@@ -21530,6 +21884,8 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   if (oldReportBtn) oldReportBtn.remove();
   var oldReportNote = document.getElementById('reportSealNote');
   if (oldReportNote) oldReportNote.remove();
+  var oldForensicNarrativeBtn = document.getElementById('downloadForensicNarrative');
+  if (oldForensicNarrativeBtn) oldForensicNarrativeBtn.remove();
   var oldShareNote = document.getElementById('patternShareNote');
   if (oldShareNote) oldShareNote.remove();
   if (runPacks.reportPack && runPacks.reportPack.bytes && window.VoSealGuard.isSealed(runPacks.reportPack.bytes)) {
@@ -21569,8 +21925,42 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       var hAnchor = rL;
       if (hAnchor.nextSibling) dg.insertBefore(hL, hAnchor.nextSibling); else dg.appendChild(hL);
     }
+    if (runPacks.forensicNarrativePack && runPacks.forensicNarrativePack.bytes &&
+        window.VoSealGuard.isSealed(runPacks.forensicNarrativePack.bytes)) {
+      var fnp = runPacks.forensicNarrativePack;
+      var fnU = voMakeObjectURL(new Blob([fnp.bytes], {type: 'application/pdf'}));
+      var fnL = document.createElement('a');
+      fnL.href = fnU;
+      fnL.download = base + '-forensic-narrative-sealed.pdf';
+      fnL.className = 'download-btn';
+      fnL.id = 'downloadForensicNarrative';
+      fnL.innerHTML = '&#11015; Download Sealed Forensic Narrative';
+      var fnAnchor = document.getElementById('downloadHumanReport') || rL;
+      if (fnAnchor.nextSibling) dg.insertBefore(fnL, fnAnchor.nextSibling); else dg.appendChild(fnL);
+    }
   } else if (sealMode === 'forensic') {
     console.warn('Forensic report unavailable for this seal (generation skipped or failed); document seal is unaffected.');
+  }
+  var oldForensicNarrativeNote = document.getElementById('forensicNarrativeNote');
+  if (oldForensicNarrativeNote) oldForensicNarrativeNote.remove();
+  if (runPacks.forensicNarrativeStatus) {
+    var fnNote = document.createElement('div');
+    fnNote.id = 'forensicNarrativeNote';
+    fnNote.style.cssText = 'font-size:12px;color:#8ea3b5;margin-top:10px;line-height:1.6;';
+    fnNote.textContent = runPacks.forensicNarrativeStatus + (runPacks.forensicNarrativePack
+      ? ' Sealed separately: ' + runPacks.forensicNarrativePack.sealId + '  |  SHA-512 ' + runPacks.forensicNarrativePack.sha512.substring(0, 16) + '...'
+      : '');
+    var noteGrid = document.getElementById('downloadGrid');
+    if (noteGrid && noteGrid.parentNode) noteGrid.parentNode.insertBefore(fnNote, noteGrid.nextSibling);
+  } else if (runPacks.forensicNarrativePack) {
+    var fnSealNote = document.createElement('div');
+    fnSealNote.id = 'forensicNarrativeNote';
+    fnSealNote.style.cssText = 'font-size:12px;color:#8ea3b5;margin-top:10px;line-height:1.6;';
+    fnSealNote.textContent = 'Forensic narrative sealed separately: ' + runPacks.forensicNarrativePack.sealId +
+      '  |  SHA-512 ' + runPacks.forensicNarrativePack.sha512.substring(0, 16) + '...' +
+      '  |  OpenTimestamps: ' + (runPacks.forensicNarrativePack.ots && runPacks.forensicNarrativePack.ots.success ? 'submitted — Bitcoin confirmation pending' : 'offline — hash recorded for retry');
+    var fnNoteGrid = document.getElementById('downloadGrid');
+    if (fnNoteGrid && fnNoteGrid.parentNode) fnNoteGrid.parentNode.insertBefore(fnSealNote, fnNoteGrid.nextSibling);
   }
 
   // Findings JSON download (1verum GHRP contract v1.0.0) — the machine-readable
@@ -21739,6 +22129,10 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   if (runPacks.humanReportPack && runPacks.humanReportPack.bytes && window.VoSealGuard.isSealed(runPacks.humanReportPack.bytes)) {
     window._voShareFiles.push({ bytes: runPacks.humanReportPack.bytes, name: base + '-court-ready-narrative-sealed.pdf', type: 'application/pdf' });
   }
+  if (runPacks.forensicNarrativePack && runPacks.forensicNarrativePack.bytes &&
+      window.VoSealGuard.isSealed(runPacks.forensicNarrativePack.bytes)) {
+    window._voShareFiles.push({ bytes: runPacks.forensicNarrativePack.bytes, name: base + '-forensic-narrative-sealed.pdf', type: 'application/pdf' });
+  }
   if (runPacks.findingsJson) {
     try {
       window._voShareFiles.push({
@@ -21839,6 +22233,10 @@ function resetSealing() {
   if (oldReportNote2) oldReportNote2.remove();
   var oldHumanBtn2 = document.getElementById('downloadHumanReport');
   if (oldHumanBtn2) oldHumanBtn2.remove();
+  var oldForensicNarrativeBtn2 = document.getElementById('downloadForensicNarrative');
+  if (oldForensicNarrativeBtn2) oldForensicNarrativeBtn2.remove();
+  var oldForensicNarrativeNote2 = document.getElementById('forensicNarrativeNote');
+  if (oldForensicNarrativeNote2) oldForensicNarrativeNote2.remove();
   var oldShareNote2 = document.getElementById('patternShareNote');
   if (oldShareNote2) oldShareNote2.remove();
   var oldCertBtn2 = document.getElementById('downloadSealCertificate');
