@@ -5211,7 +5211,8 @@ var HUMAN_REPORT_SECTIONS = [
   'executive_summary', 'evidence_index', 'chronology', 'four_pillars',
   'contradictions_matrix', 'critical_evidence', 'counter_narratives',
   'sworn_statements', 'coercive_conduct', 'legal_framework', 'offence_matrix',
-  'recommendations', 'court_ready_declaration', 'authentication', 'annexures'
+  'recommendations', 'court_ready_declaration', 'authentication', 'annexures',
+  'forensic_narrative' // standalone blow-by-blow narrative product; never in the 9-section writer loop
 ];
 
 // The sealing location is evidence-tying data (founder ruling 2026-10-11): a
