@@ -16475,6 +16475,14 @@ let _pipelineFileBytes = null;
 let _pipelineSha256 = '';
 let _pipelineSha512 = '';
 let _pipelineSealId = '';
+// RUN ISOLATION (field bug 2026-10-17): two pipeline runs in one page session
+// (the user re-sealed while the first run was still drafting its narrative)
+// shared the window._voReportPack/_voFindingsJson/_voHumanReportPack slots, so
+// the slower run's share bundle picked up the faster run's report and findings
+// — a sealed document, report and narrative anchoring DIFFERENT hashes in one
+// zip. Every run now stamps its outputs with its own sequence number and
+// showResults assembles the bundle from its own run's slot only.
+let _pipelineRunSeq = 0;
 let _pipelineOtsDigestHex = '';
 let _pipelineChain = [];
 let _pipelineDetection = null;
@@ -17765,6 +17773,8 @@ async function startSealing() {
     _pipelineSha256 = sha256;
     _pipelineSha512 = sha512;
     _pipelineSealId = sealId;
+    _pipelineRunSeq = (window._voRunSeq || 0) + 1;
+    window._voRunSeq = _pipelineRunSeq;
     _pipelineOtsDigestHex = otsDigestHex;
     _pipelineChain = chain;
     _pipelineDetection = detection;
@@ -20470,6 +20480,10 @@ async function runSealingPipeline() {
   var fileBytes = _pipelineFileBytes;
   var sha256 = _pipelineSha256;
   var sha512 = _pipelineSha512;
+  var runSeq = _pipelineRunSeq;
+  // This run's private output slot — see RUN ISOLATION at _pipelineRunSeq.
+  window._voPacks = window._voPacks || {};
+  var runPacks = window._voPacks[runSeq] = { reportPack: null, findingsJson: null, humanReportPack: null };
   var sealId = _pipelineSealId;
   var otsDigestHex = _pipelineOtsDigestHex;
   var chain = _pipelineChain;
@@ -20939,6 +20953,7 @@ async function runSealingPipeline() {
 
       reportPack = { bytes: rSealedBytes, sealId: rSealId, sha512: rSha512, ots: rOts };
       window._voReportPack = reportPack;
+      runPacks.reportPack = reportPack;
 
       // The narrator reads the technical report's text from the PRE-SEAL bytes:
       // the seal overlay is proof, not case evidence. Extraction is local; the
@@ -20964,10 +20979,12 @@ async function runSealingPipeline() {
       // Findings JSON (1verum GHRP contract v1.0.0) — the machine-readable
       // twin of the report, offered as its own download. Never blocks the seal.
       window._voFindingsJson = null;
+      runPacks.findingsJson = null;
       try {
         window._voAiReviewApplied = !!(aiReviewInfo && aiReviewInfo.applied === true);
         window._voFindingsJson = buildFindingsJson(
           reportFraudResult, selectedFile.name, sha512, _pipelinePageCount || 0, voCaseDetails());
+        runPacks.findingsJson = window._voFindingsJson;
       } catch (fjErr) {
         console.warn('Findings JSON generation failed (report unaffected):', fjErr);
       }
@@ -20979,6 +20996,7 @@ async function runSealingPipeline() {
       // findings JSON so it can cite both by hash; never blocks the seal, the
       // report or the JSON.
       window._voHumanReportPack = null;
+      runPacks.humanReportPack = null;
       try {
         // The court-ready narrative is part of "Seal document with forensic
         // report": no separate switch (founder direction 2026-09-07).
@@ -20987,7 +21005,7 @@ async function runSealingPipeline() {
             typeof window.VerumReport.buildHumanReport === 'function') {
           updateStep(7, 'processing', 'Verifying the legal citations before drafting the narrative...');
           var fjSha = null;
-          try { if (window._voFindingsJson) fjSha = await computeSHA512(new TextEncoder().encode(JSON.stringify(window._voFindingsJson, null, 2))); } catch (eFj) {}
+          try { if (runPacks.findingsJson) fjSha = await computeSHA512(new TextEncoder().encode(JSON.stringify(runPacks.findingsJson, null, 2))); } catch (eFj) {}
           // B7 law lanes: verify the candidate statutes before the narrative
           // cites them (null when unreachable — the report claims nothing then).
           var lawCheck = await aiVerifyLaw(reportFraudResult, fjSha);
@@ -20999,7 +21017,7 @@ async function runSealingPipeline() {
             technicalSealId: reportPack.sealId,
             technicalSha512: reportPack.sha512,
             technicalReport: technicalReportContext,
-            findingsJsonText: window._voFindingsJson ? JSON.stringify(window._voFindingsJson, null, 2) : '',
+            findingsJsonText: runPacks.findingsJson ? JSON.stringify(runPacks.findingsJson, null, 2) : '',
             onProgress: function (i, n, sec) { updateStep(7, 'processing', 'Court-ready narrative: section ' + i + ' of ' + n + ' (' + String(sec).replace(/_/g, ' ') + ')...'); }
           });
           var hBytes = await window.VerumReport.buildHumanReport({
@@ -21027,7 +21045,7 @@ async function runSealingPipeline() {
             humanProvenance: {
               model: hr.model, contract: 'human-v1', generatedUtc: hr.generatedUtc,
               technicalSealId: reportPack.sealId, technicalSha512: reportPack.sha512,
-              findingsJsonSha512: fjSha, findingsJsonVersion: window._voFindingsJson ? window._voFindingsJson.findings_json_version : null,
+              findingsJsonSha512: fjSha, findingsJsonVersion: runPacks.findingsJson ? runPacks.findingsJson.findings_json_version : null,
               sectionsGenerated: hr.generated, sectionsWriter: hr.writerSections, sectionsAttempted: hr.calls, modelAttempts: hr.modelAttempts || 0,
               recordContext: hr.recordContext || null
             }
@@ -21042,6 +21060,7 @@ async function runSealingPipeline() {
           var hQr = await generateQRDataURL(hQrContent, 400);
           var hSealedBytes = await window.VerumReport.seal(hBytes, { sealId: hSealId, sha512: hSha512, qrDataURL: hQr, sourceName: selectedFile.name, tag: 'NARRATIVE REPORT', titleSuffix: ' — Sealed Court-Ready Narrative' });
           window._voHumanReportPack = { bytes: hSealedBytes, sealId: hSealId, sha512: hSha512, ots: hOts, generated: hr.generated, writerSections: hr.writerSections, model: hr.model };
+          runPacks.humanReportPack = window._voHumanReportPack;
           updateStep(7, 'processing', 'Court-ready narrative sealed (' + hr.generated + ' of ' + hr.writerSections + ' sections AI-written)');
         }
       } catch (hErr) {
@@ -21064,10 +21083,11 @@ async function runSealingPipeline() {
     });
     reportPack = null;
     window._voReportPack = reportPack;
+    runPacks.reportPack = null;
     updateStep(7, 'complete');
   }
 
-  showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, fraudResult);
+  showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, fraudResult, runSeq);
 
   // Brain 9 recommendations on screen and as an unsealed file — never in the sealed report.
   voRenderBrain9Recommendations();
@@ -21325,7 +21345,9 @@ function voFmtBytes(n) {
   if (n < 1024 * 1024) return (n / 1024).toFixed(1) + ' KB';
   return (n / 1024 / 1024).toFixed(2) + ' MB';
 }
-function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, forensicResult) {
+function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, password, senderEmail, chain, encryptedBytes, forensicResult, runSeq) {
+  // Assemble from THIS run's slot only (RUN ISOLATION, field bug 2026-10-17).
+  var runPacks = (window._voPacks && window._voPacks[runSeq]) || { reportPack: null, findingsJson: null, humanReportPack: null };
   // SHARE STATE RESET: _voShareBytes/_voShareName/_voShareType survive
   // resetSealing() by design (they are read by the share button), so without
   // this reset a failed SEAL GUARD in a later run of the same page session
@@ -21510,10 +21532,10 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   if (oldReportNote) oldReportNote.remove();
   var oldShareNote = document.getElementById('patternShareNote');
   if (oldShareNote) oldShareNote.remove();
-  if (window._voReportPack && window._voReportPack.bytes && window.VoSealGuard.isSealed(window._voReportPack.bytes)) {
+  if (runPacks.reportPack && runPacks.reportPack.bytes && window.VoSealGuard.isSealed(runPacks.reportPack.bytes)) {
     // SEAL GUARD (VO-SG): only offer the forensic report if it actually carries
     // a seal. An unsealed report is suppressed, never handed over.
-    var rp = window._voReportPack;
+    var rp = runPacks.reportPack;
     var rU = voMakeObjectURL(new Blob([rp.bytes], {type: 'application/pdf'}));
     var rL = document.createElement('a');
     rL.href = rU;
@@ -21711,16 +21733,16 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   if (window._voShareBytes) {
     window._voShareFiles.push({ bytes: window._voShareBytes, name: window._voShareName, type: window._voShareType });
   }
-  if (window._voReportPack && window._voReportPack.bytes && window.VoSealGuard.isSealed(window._voReportPack.bytes)) {
-    window._voShareFiles.push({ bytes: window._voReportPack.bytes, name: base + '-forensic-report-sealed.pdf', type: 'application/pdf' });
+  if (runPacks.reportPack && runPacks.reportPack.bytes && window.VoSealGuard.isSealed(runPacks.reportPack.bytes)) {
+    window._voShareFiles.push({ bytes: runPacks.reportPack.bytes, name: base + '-forensic-report-sealed.pdf', type: 'application/pdf' });
   }
-  if (window._voHumanReportPack && window._voHumanReportPack.bytes && window.VoSealGuard.isSealed(window._voHumanReportPack.bytes)) {
-    window._voShareFiles.push({ bytes: window._voHumanReportPack.bytes, name: base + '-court-ready-narrative-sealed.pdf', type: 'application/pdf' });
+  if (runPacks.humanReportPack && runPacks.humanReportPack.bytes && window.VoSealGuard.isSealed(runPacks.humanReportPack.bytes)) {
+    window._voShareFiles.push({ bytes: runPacks.humanReportPack.bytes, name: base + '-court-ready-narrative-sealed.pdf', type: 'application/pdf' });
   }
-  if (window._voFindingsJson) {
+  if (runPacks.findingsJson) {
     try {
       window._voShareFiles.push({
-        bytes: new TextEncoder().encode(JSON.stringify(window._voFindingsJson, null, 2)),
+        bytes: new TextEncoder().encode(JSON.stringify(runPacks.findingsJson, null, 2)),
         name: base + '-findings.json', type: 'application/json'
       });
     } catch (e) {}

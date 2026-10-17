@@ -370,10 +370,12 @@ for (const page of PAGES) {
 
   // Whole-bundle share: report + findings JSON ride along with the document.
   ok(html.includes('function voShareFileList'), 'share builds the full bundle file list');
-  ok(/_voShareFiles\.push\(\{ bytes: window\._voReportPack\.bytes/.test(html),
-    'sealed forensic report is included in the share bundle');
-  ok(/window\._voFindingsJson/.test(html) && /-findings\.json/.test(html),
-    'findings JSON is included in the share bundle');
+  ok(/_voShareFiles\.push\(\{ bytes: runPacks\.reportPack\.bytes/.test(html),
+    'sealed forensic report is included in the share bundle (from the current run\'s isolated slot)');
+  ok(/runPacks\.findingsJson/.test(html) && /-findings\.json/.test(html),
+    'findings JSON is included in the share bundle (from the current run\'s isolated slot)');
+  ok(/window\._voPacks\[runSeq\]/.test(html),
+    'showResults assembles the bundle from the current run\'s slot only (run isolation)');
 
   // Human-readable findings: plain names lead, codes trail; the deterministic
   // narrative lists top findings as sentences under KEY FINDINGS (engine
