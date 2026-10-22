@@ -1336,7 +1336,11 @@ var DETECTORS = {
     var findings = [];
     var blocks = textBlocks || [];
     var MONTHS2 = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
-    var DATE_G = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})|(\d{4})-(\d{2})-(\d{2}))\b/g;
+    // Ordinal suffixes included ("31st December 2017") — litigation prose
+    // uses them heavily. Month-year dates with no day were tried and
+    // rejected: "during February 2016" / "in March 2015" pair across a
+    // correspondence narrative and multiplied false findings.
+    var DATE_G = /\b(?:(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2})(?:st|nd|rd|th)?,?\s+(\d{4})|(\d{4})-(\d{2})-(\d{2}))\b/g;
     function normD(m) {
       var day, mon, year;
       if (m[1]) { day = +m[1]; mon = MONTHS2[m[2].slice(0, 3).toLowerCase()]; year = +m[3]; }
@@ -1345,13 +1349,17 @@ var DETECTORS = {
       if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
       var stamp = Date.UTC(year, mon - 1, day), chk = new Date(stamp);
       if (chk.getUTCFullYear() !== year || chk.getUTCMonth() + 1 !== mon || chk.getUTCDate() !== day) return null;
-      return { key: year * 10000 + mon * 100 + day, raw: m[0] };
+      return { key: year * 10000 + mon * 100 + day, raw: m[0], day: day };
     }
     var STOP = { the: 1, and: 1, that: 1, this: 1, with: 1, from: 1, which: 1, have: 1, has: 1, had: 1, was: 1, were: 1, are: 1, not: 1, but: 1, for: 1, said: 1, been: 1, being: 1, into: 1, upon: 1, shall: 1, will: 1, would: 1, could: 1, should: 1, must: 1, any: 1, all: 1, its: 1, his: 1, her: 1, their: 1, there: 1, here: 1, then: 1, than: 1, thus: 1, also: 1, such: 1, same: 1, more: 1, most: 1, other: 1, between: 1, under: 1, over: 1, after: 1, before: 1, each: 1, both: 1, about: 1, above: 1, against: 1, within: 1, without: 1, through: 1, during: 1, these: 1, those: 1, them: 1, they: 1, what: 1, when: 1, where: 1, while: 1, whom: 1, whose: 1, case: 1, court: 1, page: 1, paragraph: 1, annexure: 1, supra: 1, infra: 1, honourable: 1, respectfully: 1, applicant: 1, respondent: 1, deponent: 1, affidavit: 1, matter: 1, terms: 1, regard: 1, refer: 1, referred: 1, refers: 1, contents: 1, record: 1, records: 1, document: 1, documents: 1, dated: 1, date: 1, does: 1, done: 1, made: 1, make: 1, take: 1, taken: 1, give: 1, given: 1, state: 1, states: 1, stated: 1 };
     var sents = [];
     for (var b = 0; b < blocks.length; b++) {
       var raw = String(blocks[b] || '');
-      var parts = raw.split(/[.!?]+\s+|\n+/);
+      // PDF text wraps mid-sentence; a bare newline is a line break, not a
+      // sentence boundary. Splitting on it severed "the franchise agreement"
+      // from its verb ("terminated by the effluxion of time") on
+      // evidence-bundle-4 and the pair died.
+      var parts = raw.split(/[.!?]+\s+/);
       for (var sp = 0; sp < parts.length; sp++) {
         var sen = parts[sp].replace(/\s+/g, ' ').trim();
         if (sen.length < 40 || sen.length > 600) continue;
@@ -1359,7 +1367,7 @@ var DETECTORS = {
         var m, dates = [], spans = [];
         while ((m = DATE_G.exec(sen)) !== null) {
           var nd = normD(m);
-          if (nd) { dates.push(nd); spans.push([m.index, m.index + m[0].length]); }
+          if (nd) { nd.idx = m.index; dates.push(nd); spans.push([m.index, m.index + m[0].length]); }
         }
         if (!dates.length) continue;
         var stripped = sen.toLowerCase();
@@ -1393,7 +1401,7 @@ var DETECTORS = {
         var bg2 = sents[i2].bigrams[j2];
         if (added[bg2]) continue;
         var w = bg2.split(' ');
-        if ((df[bg2] || 0) >= 2 && df[bg2] <= 8 && (tdf[w[0]] || 0) <= tokCap && (tdf[w[1]] || 0) <= tokCap) {
+        if ((df[bg2] || 0) >= 2 && df[bg2] <= 20 && (tdf[w[0]] || 0) <= tokCap && (tdf[w[1]] || 0) <= tokCap) {
           added[bg2] = 1;
           (byBigram[bg2] = byBigram[bg2] || []).push(i2);
         }
@@ -1425,16 +1433,45 @@ var DETECTORS = {
             if (Object.prototype.hasOwnProperty.call(A.set, tok2) && C.set[tok2] && !TLEX[tok2]) { sharedOk = 1; break; }
           }
           if (!sharedOk) continue;
-          for (var da = 0; da < A.dates.length; da++) {
-            for (var dc = 0; dc < C.dates.length; dc++) {
-              if (A.dates[da].key === C.dates[dc].key) continue;
-              var lo = A.dates[da].key < C.dates[dc].key
-                ? { d: A.dates[da], page: A.page, text: A.text }
-                : { d: C.dates[dc], page: C.page, text: C.text };
-              var hi = A.dates[da].key < C.dates[dc].key
-                ? { d: C.dates[dc], page: C.page, text: C.text }
-                : { d: A.dates[da], page: A.page, text: A.text };
-              var ck = lo.d.key + '|' + hi.d.key;
+          var bw3 = bg3.split(' ');
+          // Unique-event guard: the shared bigram must carry a UNIQUE-event
+          // verb — an agreement terminates once, a judgment is delivered
+          // once — so a restatement at two dates is a true conflict.
+          // Repeatable events ("attorneys sent a letter on X" / "...on Y")
+          // share party names and vocabulary while describing DIFFERENT
+          // letters; without this guard they flooded the findings (29 pairs
+          // on evidence-bundle-4, mostly correspondence noise).
+          var VERB_BG = { terminated: 1, terminates: 1, termination: 1, effluxion: 1, expires: 1, expiry: 1, expired: 1, cancelled: 1, cancellation: 1, granted: 1, awarded: 1, judgment: 1, judgement: 1, dismissed: 1, reserved: 1, delivered: 1 };
+          if (!VERB_BG[bw3[0]] && !VERB_BG[bw3[1]]) continue;
+          // A sentence can hold several dates ("bought in February 2003 ...
+          // owned until August 2021"); only the date NEAREST the shared
+          // subject belongs to the restated event. Pairing every date in
+          // one sentence with every date in the other fused the tenure
+          // endpoint into the acquisition conflict.
+          function nearestDate(S, w0) {
+            var pos = S.text.toLowerCase().indexOf(w0);
+            if (pos < 0) pos = 0;
+            var best = S.dates[0], bd = Infinity;
+            for (var q = 0; q < S.dates.length; q++) {
+              var dd = Math.abs(S.dates[q].idx - pos);
+              if (dd < bd) { bd = dd; best = S.dates[q]; }
+            }
+            return best;
+          }
+          var dA = nearestDate(A, bw3[0]), dC = nearestDate(C, bw3[0]);
+          var pairs = [[dA, dC]];
+          for (var da = 0; da < pairs.length; da++) {
+            var dc = 0;
+            {
+              var ka2 = pairs[da][0].key, kc2 = pairs[da][1].key;
+              if (ka2 === kc2) continue;
+              var lo = ka2 < kc2
+                ? { d: pairs[da][0], page: A.page, text: A.text, k: ka2 }
+                : { d: pairs[da][1], page: C.page, text: C.text, k: kc2 };
+              var hi = ka2 < kc2
+                ? { d: pairs[da][1], page: C.page, text: C.text, k: kc2 }
+                : { d: pairs[da][0], page: A.page, text: A.text, k: ka2 };
+              var ck = lo.k + '|' + hi.k;
               if (!conflicts[ck]) conflicts[ck] = { lo: lo.d, hi: hi.d, loPages: {}, hiPages: {}, loQuote: lo.text, hiQuote: hi.text };
               conflicts[ck].loPages[lo.page] = 1;
               conflicts[ck].hiPages[hi.page] = 1;
@@ -1456,6 +1493,90 @@ var DETECTORS = {
       findings.push({ type: 'CT03', severity: 5,
         evidence: 'The same event is stated at two different dates: "' + snap(cf.loQuote) + '" (' + cf.lo.raw + ', p. ' + plistOf(cf.loPages) + ') versus "' + snap(cf.hiQuote) + '" (' + cf.hi.raw + ', p. ' + plistOf(cf.hiPages) + '). One event cannot carry both dates; which date is true is for the record, not the engine.',
         location: 'Page ' + plistOf(cf.loPages) + ' vs Page ' + plistOf(cf.hiPages) });
+    }
+    return findings;
+  },
+
+  // D03C: term arithmetic. The All Fuels letter of 1 September 2017 (master
+  // pp. 383-385) grants "a franchise license ... for a period of 15 (fifteen)
+  // years" over an agreement "dated 01 March 2013" and then states the same
+  // agreement "finally terminates by the effluxion of time at midnight (00h00)
+  // on the 28 February 2018" — five years, not fifteen. A start date, a
+  // stated term and a stated end date form a sum the engine can check;
+  // anchors must sit close together (one letter, one clause set), day-first
+  // month-name dates only (the D03 rule: no fabricated allegation), and a
+  // 60-day tolerance absorbs expiry-at-midnight phrasing.
+  D03C_DETECT_TERM_ARITHMETIC: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var MONTHS3 = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+    var FDATE_G = /\b(\d{1,2})(?:st|nd|rd|th)?\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})\b/g;
+    function normF(m) {
+      var day = +m[1], mon = MONTHS3[m[2].slice(0, 3).toLowerCase()], year = +m[3];
+      if (!mon || day < 1 || day > 31) return null;
+      var stamp = Date.UTC(year, mon - 1, day), chk = new Date(stamp);
+      if (chk.getUTCFullYear() !== year || chk.getUTCMonth() + 1 !== mon || chk.getUTCDate() !== day) return null;
+      return { stamp: stamp, raw: m[0] };
+    }
+    function dateAfter(W, fromIdx, within) {
+      FDATE_G.lastIndex = fromIdx;
+      var m = FDATE_G.exec(W);
+      if (m && m.index - fromIdx <= within) { var d = normF(m); if (d) { d.idx = m.index; return d; } }
+      return null;
+    }
+    var TERM_G = /period of (\d{1,2})\s*(?:\([a-z]+\))?\s*years\b/gi;
+    var START_G = /(?:agreement|contract|franchise agreement)\s+dated\s+/gi;
+    var END_G = /\b(?:finally\s+)?(?:terminates?|expiry|expires?|expiring)\b/gi;
+    var DAYMS = 86400000;
+    function snip(W, i) {
+      var s = Math.max(0, i - 60), e = Math.min(W.length, i + 120);
+      var t = W.slice(s, e).replace(/\s+/g, ' ').trim();
+      return (s > 0 ? '…' : '') + t + (e < W.length ? '…' : '');
+    }
+    var seen = {};
+    for (var b = 0; b < blocks.length; b++) {
+      var W = String(blocks[b] || '') + ' ' + String(blocks[b + 1] || '');
+      if (W.length > 20000) W = W.slice(0, 20000);
+      var terms = [], mT;
+      TERM_G.lastIndex = 0;
+      while ((mT = TERM_G.exec(W)) !== null) {
+        var yrs = +mT[1];
+        if (yrs >= 1 && yrs <= 99) terms.push({ years: yrs, idx: mT.index });
+      }
+      if (!terms.length) continue;
+      var starts = [], mS;
+      START_G.lastIndex = 0;
+      while ((mS = START_G.exec(W)) !== null) {
+        var sd = dateAfter(W, START_G.lastIndex, 40);
+        if (sd) starts.push({ d: sd, idx: mS.index });
+      }
+      var ends = [], mE;
+      END_G.lastIndex = 0;
+      while ((mE = END_G.exec(W)) !== null) {
+        var ed = dateAfter(W, END_G.lastIndex, 160);
+        if (ed) ends.push({ d: ed, idx: mE.index });
+      }
+      if (!starts.length || !ends.length) continue;
+      for (var ti = 0; ti < terms.length; ti++) {
+        for (var si = 0; si < starts.length; si++) {
+          if (Math.abs(terms[ti].idx - starts[si].idx) > 450) continue;
+          for (var ei = 0; ei < ends.length; ei++) {
+            if (Math.abs(ends[ei].idx - starts[si].idx) > 600) continue;
+            var expected = starts[si].d.stamp + terms[ti].years * 365.25 * DAYMS;
+            var diffDays = Math.abs(ends[ei].d.stamp - expected) / DAYMS;
+            if (diffDays <= 60) continue;
+            var ck = terms[ti].years + '|' + starts[si].d.stamp + '|' + ends[ei].d.stamp;
+            if (seen[ck]) continue;
+            seen[ck] = 1;
+            var exp = new Date(expected);
+            var expStr = exp.getUTCDate() + ' ' + ['January','February','March','April','May','June','July','August','September','October','November','December'][exp.getUTCMonth()] + ' ' + exp.getUTCFullYear();
+            var onePage = ends[ei].idx < blocks[b].length && starts[si].idx < blocks[b].length && terms[ti].idx < blocks[b].length;
+            findings.push({ type: 'CT03', severity: 5,
+              evidence: 'The agreement is dated ' + starts[si].d.raw + ' ("' + snip(W, starts[si].idx) + '") with a stated period of ' + terms[ti].years + ' years ("' + snip(W, terms[ti].idx) + '"), yet the record states it ends on ' + ends[ei].d.raw + ' ("' + snip(W, ends[ei].idx) + '"). ' + terms[ti].years + ' years from ' + starts[si].d.raw + ' runs to about ' + expStr + ', not ' + ends[ei].d.raw + '. Which figure governs is for the record, not the engine.',
+              location: onePage ? 'Page ' + (b + 1) : 'Pages ' + (b + 1) + '-' + (b + 2) });
+          }
+        }
+      }
     }
     return findings;
   },
@@ -3699,6 +3820,21 @@ var DETECTORS = {
       findings.push({ type: 'CT45', severity: 5,
         evidence: 'Goodwill is said to die with the agreement: "' + extinct.quote + '" — yet the same record prices the tenure of that franchise as a saleable asset: "' + priced.quote + '". An asset that can never remain cannot carry a sale value. Its legal characterisation is for the court.',
         location: loc(extinct, priced) });
+    }
+    // Path D — defined as asset, barred absolutely. The master bundle holds
+    // the franchisor's own franchise agreement defining goodwill as "a
+    // quantifiable asset ... calculated as part of its value when it is sold"
+    // (cl. 1.1.50) while its MOU (cl. 7, 11 Dec 2018) states the operator
+    // "shall not be entitled to goodwill under any circumstances". The two
+    // halves sit in DIFFERENT instruments by the SAME party, so the
+    // one-agreement guard does not apply; both phrases are distinctive
+    // enough that they never appear in ordinary prose.
+    var defAsset = pageOf(/goodwill[^.]{0,40}means[^.]{0,200}quantifiable\s+asset/);
+    var barred = pageOf(/shall\s+not\s+be\s+entitled\s+to\s+(?:any\s+)?goodwill[^.]{0,80}(under\s+any\s+circumstances?|in\s+any\s+circumstances?|whatsoever)/);
+    if (defAsset && barred) {
+      findings.push({ type: 'CT45', severity: 5,
+        evidence: 'Goodwill is defined as a quantifiable asset: "' + defAsset.quote + '" — yet the same record bars any entitlement to it: "' + barred.quote + '". A party cannot define goodwill into the sale value of every business it franchises while contracting that the operator can never be entitled to it. Its legal characterisation is for the court.',
+        location: loc(defAsset, barred) });
     }
     return findings;
   },
@@ -6970,6 +7106,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY,
     DETECTORS.D03_DETECT_DATE_INCONSISTENCY,
     DETECTORS.D03B_DETECT_EVENT_DATE_CONFLICT,
+    DETECTORS.D03C_DETECT_TERM_ARITHMETIC,
     DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY,
     DETECTORS.D05_DETECT_LOGICAL_IMPOSSIBILITY,
     DETECTORS.D06_DETECT_IDENTITY_CONFLICT,

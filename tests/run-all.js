@@ -46,6 +46,7 @@ const suites = [
   'combine-06-april-regression.test.mjs',
   'louw-naidoo-regression.test.mjs',
   'event-date-conflict.test.mjs',
+  'term-arithmetic.test.mjs',
   'timeline-dates.test.mjs',
   'doc-fact-index.test.mjs',
   'cross-doc-conflicts.test.mjs',
