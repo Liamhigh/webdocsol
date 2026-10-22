@@ -119,6 +119,25 @@ ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
 ]).length === 0,
   'CT45 Path C stays silent on a lone extinguish clause (needs the paired pricing)');
 
+// ===== Path D: goodwill defined as asset, barred absolutely (folder review item 1) =====
+// The master bundle holds the franchisor's own franchise agreement defining
+// goodwill as a quantifiable asset calculated into sale value, while its MOU
+// (cl. 7, 11 Dec 2018) says the operator "shall not be entitled to goodwill
+// under any circumstances". Different instruments, same party's record.
+const masterBundle = [
+  'Filler cover page. '.repeat(40),
+  '7. The Operator shall not be entitled to goodwill under any circumstances, at the end of the Contract Period which is for Five (5) years only.',
+  'Filler middle page. '.repeat(40),
+  '"Goodwill" means the established reputation of a business regarded as a quantifiable asset and calculated as part of its value when it is sold which arises out of the use of the Franchised Business by the Franchisor and all Franchisees.',
+];
+const pd = DET.D39_DETECT_ASSET_VALUE_DENIAL(masterBundle);
+ok(pd.some(x => x.type === 'CT45' && /quantifiable asset/.test(x.evidence) && /under any circumstances/.test(x.evidence)),
+  'CT45 Path D catches goodwill defined-as-asset yet absolutely barred');
+// A lone definition, or a lone bar, is an ordinary contract clause — silent.
+ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
+  '"Goodwill" means the established reputation of a business regarded as a quantifiable asset and calculated as part of its value when it is sold.'
+]).length === 0, 'CT45 Path D silent on a lone goodwill definition');
+
 console.log(`\n[franchise-lease] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[franchise-lease] FAILURES'); process.exit(1); }
 console.log('[franchise-lease] ALL GREEN');

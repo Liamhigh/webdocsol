@@ -74,4 +74,17 @@ const html = require('node:fs').readFileSync(path.join(__dirname, '..', 'seal-do
 t.ok(/put\('B4', \['CT47', 'CT48', 'CT49', 'CT50'\]\)/.test(html),
   'the inline report copy carries the same brain mapping');
 
+// ---- Ordinal suffixes (litigation prose: "31st December 2017") ----
+// The termination-date tangle in bundles 3 and 4 is stated with ordinals
+// ("terminated ... on 31st December 2017" vs "on 28 February 2018").
+t.ok(D03B([
+  'It is common cause that the Franchise Agreement forming the basis of the occupation, terminated by the effluxion of time on 31st December 2017, as recorded here at length.',
+  'Moreover, the franchise agreement terminated by the effluxion of time on 28 February 2018, a sentence long enough to qualify for scanning here.',
+]).some(f => f.type === 'CT03' && f.evidence.includes('31st December 2017') && f.evidence.includes('28 February 2018')),
+  'D03B reads ordinal dates and pairs the 31-Dec-2017 vs 28-Feb-2018 termination tangle');
+// NOTE: month-year-only dates ("February 2003") are deliberately NOT parsed:
+// on the real bundles they paired across a correspondence narrative and
+// multiplied false findings. The Bester acquisition (Feb 2003 vs 1 Mar 2003)
+// is a documented miss for the AI review lane.
+
 t.done('event-date-conflict');
