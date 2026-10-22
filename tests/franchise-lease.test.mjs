@@ -95,6 +95,30 @@ ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
 ]).length === 0,
   'CT45 stays silent on a lone purchase-at-value clause (needs the paired no-compensation clause)');
 
+// ===== Path C: goodwill extinguished yet priced (the Timol 261-vs-274 trap) =====
+// Evidence-bundle-3 external review (22 Oct 2026): the Timol affidavit says
+// goodwill "terminates and can never be argued to remain on the locality",
+// then prices the remaining six months of that same tenure at R16.5 million.
+// An asset that can never remain cannot carry a sale value — this internal
+// contradiction was missed because the older paths needed a denial verb, not
+// extinguish language.
+const timol = [
+  'Filler page one. '.repeat(40),
+  '261. The goodwill of the franchise terminates upon expiry of the agreement and can never be argued to remain on the locality, since it dies with the tenure itself.',
+  'Filler page three. '.repeat(40),
+  '274. The applicant sought to sell the remaining six months of tenure of the franchise for the value of R16.5 million, failing which he would not recover his investment in the business.',
+];
+const pc = DET.D39_DETECT_ASSET_VALUE_DENIAL(timol);
+ok(pc.some(x => x.type === 'CT45' && x.severity === 5),
+  'CT45 Path C catches goodwill extinguished-yet-priced (Timol 261 vs 274)');
+ok(pc.some(x => x.type === 'CT45' && /Page 2/.test(x.location) && /Page 4/.test(x.location)),
+  'the Path C CT45 anchors both pages (no anchor, no sentence)');
+// An extinguish clause ALONE is a lawful no-goodwill clause, not a contradiction.
+ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
+  'The goodwill of the franchise terminates upon expiry of the agreement and can never be argued to remain on the locality.'
+]).length === 0,
+  'CT45 Path C stays silent on a lone extinguish clause (needs the paired pricing)');
+
 console.log(`\n[franchise-lease] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[franchise-lease] FAILURES'); process.exit(1); }
 console.log('[franchise-lease] ALL GREEN');

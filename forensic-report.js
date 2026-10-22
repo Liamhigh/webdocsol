@@ -2490,13 +2490,18 @@ var VO_BRAIN_OF_CT = (function () {
   // Two conflicting addresses, or a party in two places at once, are two
   // statements that cannot both be true.
   put('B1', ['CT36', 'CT38']);
+  // Conduct indicators are BEHAVIOUR, not contradictions: the bundle-3
+  // external review (22 Oct 2026) caught CT47/48/49 findings printed under
+  // the B1 "CONTRADICTION FOUND" header — an indicator is a passage for
+  // human review, never a conflicting-statement finding.
+  put('B4', ['CT47', 'CT48', 'CT49', 'CT50']);
   return m; // everything else -> B1; SERIAL -> B4
 })();
 // The kinds a brain's §15.4 block header does not describe: printed under
 // their brain as FINDING RECORDED. B2's "TAMPER FOUND" is for file and page
 // measurements only; B3's block is a thread gap, which no detector measures;
 // B7's block maps a fact to a statute, which the Statutory Anchoring annex does.
-var VO_NEUTRAL_BLOCK_CT = { CT23: 1, CT39: 1, CT31: 1, CT32: 1, CT37: 1, CT33: 1, CT35: 1, CT07: 1 };
+var VO_NEUTRAL_BLOCK_CT = { CT23: 1, CT39: 1, CT31: 1, CT32: 1, CT37: 1, CT33: 1, CT35: 1, CT07: 1, CT47: 1, CT48: 1, CT49: 1, CT50: 1 };
 var VO_BRAIN_META = {
   B1: { name: 'B1 — Contradiction Brain', label: 'CONTRADICTION FOUND' },
   // The block headers are the §15.4 template's own (PD19: no deviation). Each
@@ -2511,6 +2516,10 @@ var VO_BRAIN_META = {
 };
 function brainOf(f) { return (f && f.type === 'SERIAL') ? 'B4' : (VO_BRAIN_OF_CT[f && f.type] || 'B1'); }
 function brainBlockLabel(f) {
+  // An admission is one party's own statement, not "a fact and its negation"
+  // (the bundle-3 review): it prints as a recorded finding, never under a
+  // contradiction header.
+  if (f && f.conductAdmission) return 'FINDING RECORDED';
   if (f && f.type !== 'SERIAL' && VO_NEUTRAL_BLOCK_CT[f.type]) return 'FINDING RECORDED';
   return VO_BRAIN_META[brainOf(f)].label;
 }
