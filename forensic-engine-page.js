@@ -1318,6 +1318,7 @@ var DETECTORS = {
     return findings;
   },
 
+
   // D03B: narrative event-date conflicts. D03 needs a LABEL ("termination
   // date: X" vs "termination date: Y"); real affidavits state events
   // narratively — "... terminated by the effluxion of time on 28 February
