@@ -1122,6 +1122,109 @@ var DETECTORS = {
     return findings;
   },
 
+  // D02B: one instrument, two invoice numbers. The Marius-folder schedule
+  // (item 16): the same "Damages October 2026" charge for R199,405.63 is
+  // cited as invoice INV98185 in FA8 and as INV69816 in FA11 — the same
+  // amount, for the same thing, cannot bear two invoice numbers. Grouped by
+  // exact amount; a shared context word ("damages") must sit near both
+  // mentions so a deposit/balance pair on one account is not fused.
+  D02B_DETECT_INVOICE_IDENTITY_CONFLICT: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var STOPW = { invoice: 1, amount: 1, payment: 1, refund: 1, refunded: 1, account: 1, dated: 1, total: 1, value: 1, being: 1, which: 1, their: 1, there: 1, shall: 1, would: 1, could: 1, should: 1, about: 1, above: 1 };
+    var INV_G = /\bINV[-\s]?(\d{4,6})\b/gi;
+    var AMT_G = /R\s?(\d[\d,]*\.\d{2})/g;
+    var mentions = [];
+    for (var b = 0; b < blocks.length; b++) {
+      var W = String(blocks[b] || '');
+      INV_G.lastIndex = 0;
+      var m;
+      while ((m = INV_G.exec(W)) !== null) {
+        var winRaw = W.slice(Math.max(0, m.index - 250), m.index + 250);
+        AMT_G.lastIndex = 0;
+        var am, amt = null;
+        while ((am = AMT_G.exec(winRaw)) !== null) { amt = am[1]; }
+        if (!amt) continue;
+        var ctx = {};
+        var toks = winRaw.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/);
+        for (var ti = 0; ti < toks.length; ti++) if (toks[ti].length >= 5 && !STOPW[toks[ti]]) ctx[toks[ti]] = 1;
+        mentions.push({ inv: m[1], amt: amt, page: b + 1, ctx: ctx, quote: W.slice(Math.max(0, m.index - 80), m.index + 80).replace(/\s+/g, ' ').trim() });
+      }
+    }
+    var byAmt = {};
+    for (var i = 0; i < mentions.length; i++) (byAmt[mentions[i].amt] = byAmt[mentions[i].amt] || []).push(mentions[i]);
+    var seen = {};
+    for (var amt2 in byAmt) {
+      if (!Object.prototype.hasOwnProperty.call(byAmt, amt2)) continue;
+      var grp = byAmt[amt2];
+      for (var a = 0; a < grp.length; a++) {
+        for (var c = a + 1; c < grp.length; c++) {
+          var A = grp[a], C = grp[c];
+          if (A.inv === C.inv) continue;
+          var shared = 0;
+          for (var tk in A.ctx) if (Object.prototype.hasOwnProperty.call(A.ctx, tk) && C.ctx[tk]) { shared = 1; break; }
+          if (!shared) continue;
+          var key = amt2 + '|' + [A.inv, C.inv].sort().join('|');
+          if (seen[key]) continue;
+          seen[key] = 1;
+          findings.push({ type: 'CT02', severity: 4,
+            evidence: 'The same charge of R' + amt2 + ' is recorded under two invoice numbers: INV' + A.inv + ' ("' + A.quote + '", p. ' + A.page + ') and INV' + C.inv + ' ("' + C.quote + '", p. ' + C.page + '). One charge cannot bear two invoice numbers; which is the true instrument is for the record, not the engine.',
+            location: A.page === C.page ? 'Page ' + A.page : 'Page ' + A.page + ' vs Page ' + C.page });
+        }
+      }
+    }
+    return findings;
+  },
+
+  // D02C: paid vs its own disclaimer. The schedule (items 14-15): an email
+  // attaches "POP for refund for fuel in the amount of R 2 000 000" while
+  // the attachment itself records a single unreleased R1,000,000 capture
+  // and states it "IS NOT A PROOF OF PAYMENT". The disclaimer phrase is
+  // rare in ordinary prose; a differing claimed amount near it is the trap.
+  D02C_DETECT_PAYMENT_PROOF_MISMATCH: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    // Amounts tolerate spaced or comma'd thousands ("R 2 000 000" =
+    // "R2,000,000.00") and compare NUMERICALLY — a string difference in
+    // formatting is not a difference in money.
+    var AMT_G = /R\s?(\d[\d, ]{0,14}\d(?:\.\d{2})?)/g;
+    function amtVal(s) { return parseFloat(s.replace(/[,\s]/g, '')); }
+    function amountsOf(W) {
+      var out = [], m;
+      AMT_G.lastIndex = 0;
+      while ((m = AMT_G.exec(W)) !== null) out.push({ amt: m[1], val: amtVal(m[1]), idx: m.index });
+      return out;
+    }
+    function snip(W, i) {
+      var s = Math.max(0, i - 70), e = Math.min(W.length, i + 120);
+      var t = W.slice(s, e).replace(/\s+/g, ' ').trim();
+      return (s > 0 ? '…' : '') + t + (e < W.length ? '…' : '');
+    }
+    for (var b = 0; b < blocks.length; b++) {
+      var W = String(blocks[b] || '');
+      if (!/not\s+a\s+proof\s+of\s+payment/i.test(W)) continue;
+      var disIdx = W.search(/not\s+a\s+proof\s+of\s+payment/i);
+      var disAmts = amountsOf(W);
+      if (!disAmts.length) continue;
+      for (var w = Math.max(0, b - 2); w <= Math.min(blocks.length - 1, b + 2); w++) {
+        var V = String(blocks[w] || '');
+        var pm = /(?:\bPOP\b|proof\s+of\s+payment)[^.]{0,120}?(?:R\s?\d[\d, ]{0,14}\d(?:\.\d{2})?)|(?:paid|refund(?:ed)?)[^.]{0,80}?(?:R\s?\d[\d, ]{0,14}\d(?:\.\d{2})?)[^.]{0,60}(?:\bPOP\b|proof\s+of\s+payment)/i.exec(V);
+        if (!pm) continue;
+        var claimAmts = amountsOf(pm[0]);
+        for (var ci = 0; ci < claimAmts.length; ci++) {
+          for (var di = 0; di < disAmts.length; di++) {
+            if (claimAmts[ci].val === disAmts[di].val) continue;
+            findings.push({ type: 'CT02', severity: 4,
+              evidence: 'An amount is presented as paid: "' + snip(V, pm.index) + '" (p. ' + (w + 1) + ') — yet the proof itself records R' + disAmts[di].amt + ' and states it is not a proof of payment: "' + snip(W, disIdx) + '" (p. ' + (b + 1) + '). A document that disclaims being proof cannot prove a different amount; what was actually paid is for the record, not the engine.',
+              location: w === b ? 'Page ' + (b + 1) : 'Page ' + (w + 1) + ' vs Page ' + (b + 1) });
+            ci = claimAmts.length; di = disAmts.length; // one finding per disclaimer page pair
+          }
+        }
+      }
+    }
+    return findings;
+  },
+
   D03_DETECT_DATE_INCONSISTENCY: function(textBlocks) {
     var findings = [];
     var dates = [];
@@ -1576,6 +1679,55 @@ var DETECTORS = {
               location: onePage ? 'Page ' + (b + 1) : 'Pages ' + (b + 1) + '-' + (b + 2) });
           }
         }
+      }
+    }
+    return findings;
+  },
+
+  // D04B: a document that predates its own contents. The Marius-folder
+  // schedule (item 9): Annexure L is dated 13 April 2025 on its cover yet
+  // records a "Structural Repair Date: 21 April 2025" inside — a report
+  // finalised on the 13th cannot record an accomplished repair dated the
+  // 21st. Only LABELLED completion-type dates count ("Repair Date:",
+  // "Completion Date:" ...), so a report legitimately referencing a future
+  // hearing or deadline is not flagged.
+  D04B_DETECT_DOCUMENT_PREDATES_CONTENT: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var MONTHS4 = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+    var DAY_RE = '(\\d{1,2})(?:st|nd|rd|th)?\\s+([A-Za-z]{3,9})\\.?,?\\s+(\\d{4})';
+    function normG(day, monS, year) {
+      var mon = MONTHS4[monS.slice(0, 3).toLowerCase()];
+      if (!mon) return null;
+      var stamp = Date.UTC(+year, mon - 1, +day), chk = new Date(stamp);
+      if (chk.getUTCFullYear() !== +year || chk.getUTCMonth() + 1 !== mon || chk.getUTCDate() !== +day) return null;
+      return stamp;
+    }
+    // The document's own date: a labelled "Date:" on one of the first two
+    // pages (cover conventions), month-name dates only (the D03 rule).
+    var COVER_RE = new RegExp('\\bDate:\\s*' + DAY_RE);
+    var docStamp = null, docRaw = '', docPage = 0;
+    for (var b = 0; b < Math.min(2, blocks.length); b++) {
+      var cm = COVER_RE.exec(String(blocks[b] || ''));
+      if (cm) {
+        var st = normG(cm[1], cm[2], cm[3]);
+        if (st) { docStamp = st; docRaw = cm[1] + ' ' + cm[2] + ' ' + cm[3]; docPage = b + 1; break; }
+      }
+    }
+    if (docStamp === null) return findings;
+    var INNER_G = new RegExp('(?:structural\\s+repair|repair|completion|completed|finalised|finalized|revised|updated|signature)\\s+date[:\\s]+' + DAY_RE, 'gi');
+    for (var b2 = 0; b2 < blocks.length; b2++) {
+      var W = String(blocks[b2] || '');
+      INNER_G.lastIndex = 0;
+      var m;
+      while ((m = INNER_G.exec(W)) !== null) {
+        var ist = normG(m[1], m[2], m[3]);
+        if (!ist || ist <= docStamp) continue;
+        var raw = m[1] + ' ' + m[2] + ' ' + m[3];
+        var s = Math.max(0, m.index - 60), e = Math.min(W.length, m.index + m[0].length + 60);
+        findings.push({ type: 'CT04', severity: 5,
+          evidence: 'The document is dated ' + docRaw + ' (p. ' + docPage + ') yet records an accomplished fact dated later: "' + W.slice(s, e).replace(/\s+/g, ' ').trim() + '" (' + raw + ', p. ' + (b2 + 1) + '). A document finalised on ' + docRaw + ' cannot record as done something dated ' + raw + '. Which date is true is for the record, not the engine.',
+          location: 'Page ' + docPage + ' vs Page ' + (b2 + 1) });
       }
     }
     return findings;
@@ -7107,6 +7259,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     DETECTORS.D03_DETECT_DATE_INCONSISTENCY,
     DETECTORS.D03B_DETECT_EVENT_DATE_CONFLICT,
     DETECTORS.D03C_DETECT_TERM_ARITHMETIC,
+    DETECTORS.D02B_DETECT_INVOICE_IDENTITY_CONFLICT,
+    DETECTORS.D02C_DETECT_PAYMENT_PROOF_MISMATCH,
+    DETECTORS.D04B_DETECT_DOCUMENT_PREDATES_CONTENT,
     DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY,
     DETECTORS.D05_DETECT_LOGICAL_IMPOSSIBILITY,
     DETECTORS.D06_DETECT_IDENTITY_CONFLICT,
