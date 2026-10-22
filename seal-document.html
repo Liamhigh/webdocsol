@@ -3214,13 +3214,18 @@ var VO_BRAIN_OF_CT = (function () {
   // Two conflicting addresses, or a party in two places at once, are two
   // statements that cannot both be true.
   put('B1', ['CT36', 'CT38']);
+  // Conduct indicators are BEHAVIOUR, not contradictions: the bundle-3
+  // external review (22 Oct 2026) caught CT47/48/49 findings printed under
+  // the B1 "CONTRADICTION FOUND" header — an indicator is a passage for
+  // human review, never a conflicting-statement finding.
+  put('B4', ['CT47', 'CT48', 'CT49', 'CT50']);
   return m; // everything else -> B1; SERIAL -> B4
 })();
 // The kinds a brain's §15.4 block header does not describe: printed under
 // their brain as FINDING RECORDED. B2's "TAMPER FOUND" is for file and page
 // measurements only; B3's block is a thread gap, which no detector measures;
 // B7's block maps a fact to a statute, which the Statutory Anchoring annex does.
-var VO_NEUTRAL_BLOCK_CT = { CT23: 1, CT39: 1, CT31: 1, CT32: 1, CT37: 1, CT33: 1, CT35: 1, CT07: 1 };
+var VO_NEUTRAL_BLOCK_CT = { CT23: 1, CT39: 1, CT31: 1, CT32: 1, CT37: 1, CT33: 1, CT35: 1, CT07: 1, CT47: 1, CT48: 1, CT49: 1, CT50: 1 };
 var VO_BRAIN_META = {
   B1: { name: 'B1 — Contradiction Brain', label: 'CONTRADICTION FOUND' },
   // The block headers are the §15.4 template's own (PD19: no deviation). Each
@@ -3235,6 +3240,10 @@ var VO_BRAIN_META = {
 };
 function brainOf(f) { return (f && f.type === 'SERIAL') ? 'B4' : (VO_BRAIN_OF_CT[f && f.type] || 'B1'); }
 function brainBlockLabel(f) {
+  // An admission is one party's own statement, not "a fact and its negation"
+  // (the bundle-3 review): it prints as a recorded finding, never under a
+  // contradiction header.
+  if (f && f.conductAdmission) return 'FINDING RECORDED';
   if (f && f.type !== 'SERIAL' && VO_NEUTRAL_BLOCK_CT[f.type]) return 'FINDING RECORDED';
   return VO_BRAIN_META[brainOf(f)].label;
 }
@@ -8062,6 +8071,148 @@ var DETECTORS = {
     return findings;
   },
 
+
+  // D03B: narrative event-date conflicts. D03 needs a LABEL ("termination
+  // date: X" vs "termination date: Y"); real affidavits state events
+  // narratively — "... terminated by the effluxion of time on 28 February
+  // 2018" (ten pages of evidence-bundle-3) versus "as on 28 February 2019,
+  // the franchise agreement terminated ..." (p. 136) — the same event at two
+  // dates a year apart, missed until the external review of 22 October 2026.
+  // The event is identified by a RARE shared bigram (two adjacent content
+  // words, frequency 2-8 among dated sentences) whose tokens are not
+  // commonplace, plus topical overlap, so two different letters' ordinary
+  // dates never pair. A cluster carrying more than three distinct dates is a
+  // list of separately-dated events, not a restatement. Month-name and ISO
+  // dates only: an ambiguous day/month numeric pair is a fabricated
+  // allegation, not a finding (the D03 rule).
+  D03B_DETECT_EVENT_DATE_CONFLICT: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var MONTHS2 = { jan: 1, feb: 2, mar: 3, apr: 4, may: 5, jun: 6, jul: 7, aug: 8, sep: 9, oct: 10, nov: 11, dec: 12 };
+    var DATE_G = /\b(?:(\d{1,2})\s+([A-Za-z]{3,9})\.?,?\s+(\d{4})|([A-Za-z]{3,9})\.?\s+(\d{1,2}),?\s+(\d{4})|(\d{4})-(\d{2})-(\d{2}))\b/g;
+    function normD(m) {
+      var day, mon, year;
+      if (m[1]) { day = +m[1]; mon = MONTHS2[m[2].slice(0, 3).toLowerCase()]; year = +m[3]; }
+      else if (m[4]) { mon = MONTHS2[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
+      else { year = +m[7]; mon = +m[8]; day = +m[9]; }
+      if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
+      var stamp = Date.UTC(year, mon - 1, day), chk = new Date(stamp);
+      if (chk.getUTCFullYear() !== year || chk.getUTCMonth() + 1 !== mon || chk.getUTCDate() !== day) return null;
+      return { key: year * 10000 + mon * 100 + day, raw: m[0] };
+    }
+    var STOP = { the: 1, and: 1, that: 1, this: 1, with: 1, from: 1, which: 1, have: 1, has: 1, had: 1, was: 1, were: 1, are: 1, not: 1, but: 1, for: 1, said: 1, been: 1, being: 1, into: 1, upon: 1, shall: 1, will: 1, would: 1, could: 1, should: 1, must: 1, any: 1, all: 1, its: 1, his: 1, her: 1, their: 1, there: 1, here: 1, then: 1, than: 1, thus: 1, also: 1, such: 1, same: 1, more: 1, most: 1, other: 1, between: 1, under: 1, over: 1, after: 1, before: 1, each: 1, both: 1, about: 1, above: 1, against: 1, within: 1, without: 1, through: 1, during: 1, these: 1, those: 1, them: 1, they: 1, what: 1, when: 1, where: 1, while: 1, whom: 1, whose: 1, case: 1, court: 1, page: 1, paragraph: 1, annexure: 1, supra: 1, infra: 1, honourable: 1, respectfully: 1, applicant: 1, respondent: 1, deponent: 1, affidavit: 1, matter: 1, terms: 1, regard: 1, refer: 1, referred: 1, refers: 1, contents: 1, record: 1, records: 1, document: 1, documents: 1, dated: 1, date: 1, does: 1, done: 1, made: 1, make: 1, take: 1, taken: 1, give: 1, given: 1, state: 1, states: 1, stated: 1 };
+    var sents = [];
+    for (var b = 0; b < blocks.length; b++) {
+      var raw = String(blocks[b] || '');
+      var parts = raw.split(/[.!?]+\s+|\n+/);
+      for (var sp = 0; sp < parts.length; sp++) {
+        var sen = parts[sp].replace(/\s+/g, ' ').trim();
+        if (sen.length < 40 || sen.length > 600) continue;
+        DATE_G.lastIndex = 0;
+        var m, dates = [], spans = [];
+        while ((m = DATE_G.exec(sen)) !== null) {
+          var nd = normD(m);
+          if (nd) { dates.push(nd); spans.push([m.index, m.index + m[0].length]); }
+        }
+        if (!dates.length) continue;
+        var stripped = sen.toLowerCase();
+        for (var rr = spans.length - 1; rr >= 0; rr--) stripped = stripped.slice(0, spans[rr][0]) + ' ' + stripped.slice(spans[rr][1]);
+        var seq = stripped.replace(/[^a-z\s]/g, ' ').split(/\s+/).filter(function (t) { return t.length >= 4 && !STOP[t]; });
+        if (seq.length < 3) continue;
+        var set = {}, bigr = [];
+        for (var tq = 0; tq < seq.length; tq++) set[seq[tq]] = 1;
+        for (var g = 1; g < seq.length; g++) bigr.push(seq[g - 1] + ' ' + seq[g]);
+        sents.push({ page: b + 1, text: sen, dates: dates, set: set, n: Object.keys(set).length, bigrams: bigr, seq: seq });
+        if (sents.length > 8000) return findings; // safety valve: absurd corpus
+      }
+    }
+    // Frequencies over dated sentences: rare bigrams of uncommon tokens.
+    var df = {}, tdf = {};
+    for (var i = 0; i < sents.length; i++) {
+      var seenB = {}, seenT = {};
+      for (var j = 0; j < sents[i].bigrams.length; j++) {
+        var bg = sents[i].bigrams[j];
+        if (!seenB[bg]) { seenB[bg] = 1; df[bg] = (df[bg] || 0) + 1; }
+      }
+      for (var tk in sents[i].set) {
+        if (Object.prototype.hasOwnProperty.call(sents[i].set, tk) && !seenT[tk]) { seenT[tk] = 1; tdf[tk] = (tdf[tk] || 0) + 1; }
+      }
+    }
+    var tokCap = Math.max(4, Math.floor(sents.length * 0.2));
+    var byBigram = {};
+    for (var i2 = 0; i2 < sents.length; i2++) {
+      var added = {};
+      for (var j2 = 0; j2 < sents[i2].bigrams.length; j2++) {
+        var bg2 = sents[i2].bigrams[j2];
+        if (added[bg2]) continue;
+        var w = bg2.split(' ');
+        if ((df[bg2] || 0) >= 2 && df[bg2] <= 8 && (tdf[w[0]] || 0) <= tokCap && (tdf[w[1]] || 0) <= tokCap) {
+          added[bg2] = 1;
+          (byBigram[bg2] = byBigram[bg2] || []).push(i2);
+        }
+      }
+    }
+    // Candidate conflicts, aggregated by date pair: one finding per event
+    // restated at two values, every stating page cited on its own side.
+    var conflicts = {};
+    for (var bg3 in byBigram) {
+      if (!Object.prototype.hasOwnProperty.call(byBigram, bg3)) continue;
+      var group = byBigram[bg3];
+      for (var a = 0; a < group.length; a++) {
+        for (var c = a + 1; c < group.length; c++) {
+          var A = sents[group[a]], C = sents[group[c]];
+          var inter = 0;
+          for (var tok in A.set) if (Object.prototype.hasOwnProperty.call(A.set, tok) && C.set[tok]) inter++;
+          var union = A.n + C.n - inter;
+          if (!union || inter / union < 0.2) continue;
+          // Template guard: two DIFFERENT instruments recite the same legal
+          // boilerplate ("commenced ... for an initial period ... expiring by
+          // effluxion of time thereafter as stipulated"), which shares enough
+          // bigrams to pass Jaccard while describing different events. A true
+          // restatement shares a token OUTSIDE the template lexicon -- the
+          // subject of the event ("the FRANCHISE AGREEMENT terminated ...").
+          // Require at least one shared content token not in the lexicon.
+          var TLEX = { commenced: 1, commencing: 1, initial: 1, period: 1, expiring: 1, expires: 1, expired: 1, effluxion: 1, thereafter: 1, stipulated: 1, terminated: 1, terminates: 1, terminating: 1, termination: 1, time: 1, signed: 1, executed: 1, concluded: 1, entered: 1, renewed: 1, extended: 1, effective: 1 };
+          var sharedOk = 0;
+          for (var tok2 in A.set) {
+            if (Object.prototype.hasOwnProperty.call(A.set, tok2) && C.set[tok2] && !TLEX[tok2]) { sharedOk = 1; break; }
+          }
+          if (!sharedOk) continue;
+          for (var da = 0; da < A.dates.length; da++) {
+            for (var dc = 0; dc < C.dates.length; dc++) {
+              if (A.dates[da].key === C.dates[dc].key) continue;
+              var lo = A.dates[da].key < C.dates[dc].key
+                ? { d: A.dates[da], page: A.page, text: A.text }
+                : { d: C.dates[dc], page: C.page, text: C.text };
+              var hi = A.dates[da].key < C.dates[dc].key
+                ? { d: C.dates[dc], page: C.page, text: C.text }
+                : { d: A.dates[da], page: A.page, text: A.text };
+              var ck = lo.d.key + '|' + hi.d.key;
+              if (!conflicts[ck]) conflicts[ck] = { lo: lo.d, hi: hi.d, loPages: {}, hiPages: {}, loQuote: lo.text, hiQuote: hi.text };
+              conflicts[ck].loPages[lo.page] = 1;
+              conflicts[ck].hiPages[hi.page] = 1;
+            }
+          }
+        }
+      }
+    }
+    function plistOf(map) {
+      var ps = Object.keys(map).map(Number).sort(function (x, y) { return x - y; });
+      return ps.length > 8 ? ps.slice(0, 8).join(', ') + ' and ' + (ps.length - 8) + ' more' : ps.join(', ');
+    }
+    function snap(t) { return t.length > 180 ? t.slice(0, 177).trim() + '…' : t; }
+    for (var ck2 in conflicts) {
+      if (!Object.prototype.hasOwnProperty.call(conflicts, ck2)) continue;
+      var cf = conflicts[ck2];
+      // More than three pages on EACH side with many distinct dates was already
+      // filtered by the date-pair key; a restatement pair is the finding.
+      findings.push({ type: 'CT03', severity: 5,
+        evidence: 'The same event is stated at two different dates: "' + snap(cf.loQuote) + '" (' + cf.lo.raw + ', p. ' + plistOf(cf.loPages) + ') versus "' + snap(cf.hiQuote) + '" (' + cf.hi.raw + ', p. ' + plistOf(cf.hiPages) + '). One event cannot carry both dates; which date is true is for the record, not the engine.',
+        location: 'Page ' + plistOf(cf.loPages) + ' vs Page ' + plistOf(cf.hiPages) });
+    }
+    return findings;
+  },
+
   D04_DETECT_TEMPORAL_IMPOSSIBILITY: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
@@ -10287,6 +10438,20 @@ var DETECTORS = {
       findings.push({ type: 'CT45', severity: 5,
         evidence: 'The franchisee is denied any compensation for its own improvements to the premises: "' + noComp.quote + '" — while the franchisor is entitled to acquire the property itself at value: "' + acquires.quote + '". Value denied to the party who built it, yet realised by the other. Its legal characterisation is for the court.',
         location: loc(noComp, acquires) });
+    }
+    // Path C — extinguished yet priced. Evidence-bundle-3 (Timol, paras
+    // 261 vs 274): goodwill "terminates and can never be argued to remain on
+    // the locality" while the SAME affidavit treats the remaining tenure of
+    // that franchise as a saleable R16.5 million asset the purchaser "would
+    // not recover his investment" in — an asset that can never remain cannot
+    // carry a sale value. Both halves must sit in one stated document (the
+    // Path B guard), so two different parties' affidavits are not fused.
+    var extinct = pageOf(/goodwill[^.]{0,100}(terminates?|ceases?|extinguish(?:es|ed)?|dies\b)[^.]{0,80}(never|remain|survive|exist)|goodwill[^.]{0,100}can\s+never[^.]{0,60}(remain|survive|exist|argued)/);
+    var priced = pageOf(/(?:sell|sale of|sold)[^.]{0,100}(?:tenure|franchise|business)[^.]{0,90}R\s?[\d]|would not recover (?:his|the|their|its) investment/);
+    if (extinct && priced && d39OneAgreement(extinct, priced)) {
+      findings.push({ type: 'CT45', severity: 5,
+        evidence: 'Goodwill is said to die with the agreement: "' + extinct.quote + '" — yet the same record prices the tenure of that franchise as a saleable asset: "' + priced.quote + '". An asset that can never remain cannot carry a sale value. Its legal characterisation is for the court.',
+        location: loc(extinct, priced) });
     }
     return findings;
   },
@@ -13557,6 +13722,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     DETECTORS.D01_DETECT_DIRECT_CONTRADICTION,
     DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY,
     DETECTORS.D03_DETECT_DATE_INCONSISTENCY,
+    DETECTORS.D03B_DETECT_EVENT_DATE_CONFLICT,
     DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY,
     DETECTORS.D05_DETECT_LOGICAL_IMPOSSIBILITY,
     DETECTORS.D06_DETECT_IDENTITY_CONFLICT,
