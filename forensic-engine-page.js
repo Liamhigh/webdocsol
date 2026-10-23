@@ -1733,6 +1733,145 @@ var DETECTORS = {
     return findings;
   },
 
+  // D01B: theft vs scam. The camera case: the record carries "the theft
+  // case against you ... will continue" and "the camera was stolen" beside
+  // "you tried to sell the camera ... and got conned" and "lost in a
+  // courier scam, not stolen". A taking with intent to deprive and a
+  // disclosed sale that ended in a scam are different events; the record
+  // cannot carry both characterisations of the same property.
+  D01B_DETECT_THEFT_VS_SCAM_CHARACTERISATION: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var THEFT_G = /\b(?:theft|stolen|stealing)\b/gi;
+    var SCAM_G = /\b(?:scam(?:med)?|conned)\b/gi;
+    var theft = [], scam = [];
+    for (var b = 0; b < blocks.length; b++) {
+      var W = String(blocks[b] || '');
+      var m;
+      THEFT_G.lastIndex = 0;
+      while ((m = THEFT_G.exec(W)) !== null) theft.push({ page: b + 1, quote: W.slice(Math.max(0, m.index - 70), m.index + 70).replace(/\s+/g, ' ').trim() });
+      SCAM_G.lastIndex = 0;
+      while ((m = SCAM_G.exec(W)) !== null) scam.push({ page: b + 1, quote: W.slice(Math.max(0, m.index - 70), m.index + 70).replace(/\s+/g, ' ').trim() });
+    }
+    if (theft.length && scam.length) {
+      var tp = [], sp = [], i;
+      for (i = 0; i < theft.length; i++) if (tp.indexOf(theft[i].page) < 0) tp.push(theft[i].page);
+      for (i = 0; i < scam.length; i++) if (sp.indexOf(scam[i].page) < 0) sp.push(scam[i].page);
+      findings.push({ type: 'CT01', severity: 4,
+        evidence: 'The record characterises the same property event in two incompatible ways: as theft ("' + theft[0].quote + '", p. ' + theft[0].page + (tp.length > 1 ? '; also p. ' + tp.slice(1).join(', ') : '') + ') and as a scam in which the seller was deceived ("' + scam[0].quote + '", p. ' + scam[0].page + (sp.length > 1 ? '; also p. ' + sp.slice(1).join(', ') : '') + '). Theft requires an intention to deprive; a disclosed attempted sale ending in a scam records the opposite. Which characterisation is true is for the record, not the engine.',
+        location: 'Pages ' + tp.join(', ') + ' vs Pages ' + sp.join(', ') });
+    }
+    return findings;
+  },
+
+  // D01C: denial then admission of the same transaction. The camera case
+  // and the Greensky file: "there were no sales" / "we never invoiced at
+  // all" beside "Kevin's Export proceeded with the deal". Both are in the
+  // record; where one side quoted the other ("You told me ..."), the quote
+  // still records that the denial was made.
+  D01C_DETECT_DENIAL_ADMISSION_PAIR: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var DENY_G = /\b(?:there were no sales|no sales were (?:made|recorded)|never invoiced|nothing was sold|the deal fell through|the deal did not happen|the deal didn't happen|order (?:did not|didn't) happen)\b/gi;
+    var ADMIT_G = /\b(?:proceeded with the deal|the deal happened|the deal went ahead|sale was made|sales were made|invoiced and exported)\b/gi;
+    var denials = [], admissions = [];
+    for (var b = 0; b < blocks.length; b++) {
+      var W = String(blocks[b] || '');
+      var m;
+      DENY_G.lastIndex = 0;
+      while ((m = DENY_G.exec(W)) !== null) denials.push({ page: b + 1, quote: W.slice(Math.max(0, m.index - 80), m.index + m[0].length + 80).replace(/\s+/g, ' ').trim() });
+      ADMIT_G.lastIndex = 0;
+      while ((m = ADMIT_G.exec(W)) !== null) admissions.push({ page: b + 1, quote: W.slice(Math.max(0, m.index - 80), m.index + m[0].length + 80).replace(/\s+/g, ' ').trim() });
+    }
+    if (denials.length && admissions.length) {
+      var dn = denials[0], ad = admissions[0];
+      for (var di = 0; di < denials.length; di++) for (var ai = 0; ai < admissions.length; ai++) {
+        if (denials[di].page !== admissions[ai].page) { dn = denials[di]; ad = admissions[ai]; break; }
+      }
+      findings.push({ type: 'CT01', severity: 4,
+        evidence: 'The record carries both a denial of the transaction ("' + dn.quote + '", p. ' + dn.page + ') and an admission that it went ahead ("' + ad.quote + '", p. ' + ad.page + '). A transaction that never happened cannot later be admitted to have proceeded; which statement was true when made is for the record, not the engine.',
+        location: 'Page ' + dn.page + ' vs Page ' + ad.page });
+    }
+    return findings;
+  },
+
+  // D04C: the meeting reversal. The camera case: "refused to attend a
+  // meeting I had requested" / "refused to meet and blocked" sit in the
+  // same record as "I've asked quite a few times to have a meeting with
+  // you" and "I requested a meeting on March 9th". The requester and the
+  // refuser cannot be the same person in the same record.
+  D04C_DETECT_MEETING_REQUEST_REFUSAL_REVERSAL: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var REFUSE_G = /\brefused to (?:attend|meet)|refus(?:ed|ing) (?:my|the|a) meeting/gi;
+    var REQUEST_G = /\b(?:asked|asking|requested|request)(?:[^.]{0,60}?)(?:a\s+)?(?:private\s+|personal\s+)?meeting|meeting[^.]{0,40}\b(?:request|asked)\b/gi;
+    var refusals = [], requests = [];
+    for (var b = 0; b < blocks.length; b++) {
+      var W = String(blocks[b] || '');
+      var m;
+      REFUSE_G.lastIndex = 0;
+      while ((m = REFUSE_G.exec(W)) !== null) refusals.push({ page: b + 1, idx: m.index, quote: W.slice(Math.max(0, m.index - 80), m.index + m[0].length + 80).replace(/\s+/g, ' ').trim() });
+      REQUEST_G.lastIndex = 0;
+      while ((m = REQUEST_G.exec(W)) !== null) requests.push({ page: b + 1, idx: m.index, quote: W.slice(Math.max(0, m.index - 80), m.index + m[0].length + 80).replace(/\s+/g, ' ').trim() });
+    }
+    // A single sentence like "he refused the meeting I requested" is one
+    // event, not a reversal: require a refusal and a request that are not
+    // the same passage.
+    var pair = null;
+    for (var i = 0; i < refusals.length && !pair; i++) {
+      for (var j = 0; j < requests.length && !pair; j++) {
+        if (refusals[i].page !== requests[j].page || Math.abs(refusals[i].idx - requests[j].idx) > 400) pair = { r: refusals[i], q: requests[j] };
+      }
+    }
+    if (pair) {
+      findings.push({ type: 'CT01', severity: 4,
+        evidence: 'The record carries both an accusation that a meeting was refused ("' + pair.r.quote + '", p. ' + pair.r.page + ') and statements that meetings were requested and went unanswered ("' + pair.q.quote + '", p. ' + pair.q.page + '). The requester of meetings and the refuser of meetings cannot be the same person in the same record; who actually refused is for the record, not the engine.',
+        location: 'Page ' + pair.r.page + ' vs Page ' + pair.q.page });
+    }
+    return findings;
+  },
+
+  // D06B: same asset, two owners. The camera case: Marius's message calls
+  // it "my camera, valued at approximately R7,000" while the same record
+  // styles it the "Greensky Ornamentals camera" and "property belonging to
+  // Greensky ...". One asset cannot be both a party's personal property
+  // and the company's.
+  D06B_DETECT_OWNERSHIP_ATTRIBUTION_CONFLICT: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var STOPN = { name: 1, account: 1, email: 1, emails: 1, phone: 1, signature: 1, opinion: 1, understanding: 1, recollection: 1, statement: 1, affidavit: 1, client: 1, attorney: 1, attorneys: 1, lawyer: 1, wife: 1, girlfriend: 1, husband: 1, partner: 1, brother: 1, sister: 1, mother: 1, father: 1, son: 1, daughter: 1, friend: 1, colleague: 1, time: 1, life: 1, mind: 1, view: 1, position: 1, case: 1, matter: 1, side: 1, word: 1, words: 1, hands: 1, way: 1, part: 1, share: 1, shares: 1, exit: 1, salary: 1, drawing: 1, drawings: 1, dad: 1, attention: 1, knowledge: 1, behalf: 1, own: 1, response: 1, reply: 1, input: 1, request: 1, company: 1, business: 1, complaint: 1, contentions: 1, submissions: 1, papers: 1, pleadings: 1, version: 1, application: 1, opposition: 1, evidence: 1, defence: 1, defense: 1, argument: 1, story: 1 };
+    // A possessable asset is a concrete noun: not an -ing form, not a plural.
+    function isAsset(a) { return !STOPN[a] && !/ing$/.test(a) && !/s$/.test(a); }
+    var MY_G = /\bmy\s+([a-z][a-z-]{2,20})\b/g;
+    var ENT_G = /\b([A-Z][A-Za-z&]+(?:\s+[A-Z][A-Za-z&]+){1,3})\s+([a-z][a-z-]{2,20})\b/g;
+    var personal = {}, entity = {};
+    function add(map, asset, rec) { (map[asset] = map[asset] || []).push(rec); }
+    for (var b = 0; b < blocks.length; b++) {
+      var W = String(blocks[b] || '');
+      var m;
+      MY_G.lastIndex = 0;
+      while ((m = MY_G.exec(W)) !== null) {
+        var a = m[1].toLowerCase();
+        if (!isAsset(a)) continue;
+        add(personal, a, { page: b + 1, quote: W.slice(Math.max(0, m.index - 70), m.index + m[0].length + 70).replace(/\s+/g, ' ').trim() });
+      }
+      ENT_G.lastIndex = 0;
+      while ((m = ENT_G.exec(W)) !== null) {
+        var a2 = m[2].toLowerCase();
+        if (!isAsset(a2)) continue;
+        add(entity, a2, { page: b + 1, ent: m[1], quote: W.slice(Math.max(0, m.index - 70), m.index + m[0].length + 70).replace(/\s+/g, ' ').trim() });
+      }
+    }
+    for (var asset in personal) {
+      if (!Object.prototype.hasOwnProperty.call(personal, asset) || !entity[asset]) continue;
+      var P = personal[asset][0], Erec = entity[asset][0];
+      findings.push({ type: 'CT06', severity: 4,
+        evidence: 'The same asset ("' + asset + '") is claimed as personal property ("' + P.quote + '", p. ' + P.page + ') and attributed to an entity ("' + Erec.quote + '" — ' + Erec.ent + ', p. ' + Erec.page + '). One asset cannot be both a party\'s personal property and the entity\'s; whose it is — and what the invoice shows — is for the record, not the engine.',
+        location: 'Page ' + P.page + ' vs Page ' + Erec.page });
+    }
+    return findings;
+  },
+
   D04_DETECT_TEMPORAL_IMPOSSIBILITY: function(textBlocks) {
     var findings = [];
     var fullText = textBlocks.join(' ').toLowerCase();
@@ -7262,6 +7401,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     DETECTORS.D02B_DETECT_INVOICE_IDENTITY_CONFLICT,
     DETECTORS.D02C_DETECT_PAYMENT_PROOF_MISMATCH,
     DETECTORS.D04B_DETECT_DOCUMENT_PREDATES_CONTENT,
+    DETECTORS.D01B_DETECT_THEFT_VS_SCAM_CHARACTERISATION,
+    DETECTORS.D01C_DETECT_DENIAL_ADMISSION_PAIR,
+    DETECTORS.D04C_DETECT_MEETING_REQUEST_REFUSAL_REVERSAL,
+    DETECTORS.D06B_DETECT_OWNERSHIP_ATTRIBUTION_CONFLICT,
     DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY,
     DETECTORS.D05_DETECT_LOGICAL_IMPOSSIBILITY,
     DETECTORS.D06_DETECT_IDENTITY_CONFLICT,

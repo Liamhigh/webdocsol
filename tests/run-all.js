@@ -48,6 +48,7 @@ const suites = [
   'event-date-conflict.test.mjs',
   'term-arithmetic.test.mjs',
   'batch3-detectors.test.mjs',
+  'batch4-detectors.test.mjs',
   'timeline-dates.test.mjs',
   'doc-fact-index.test.mjs',
   'cross-doc-conflicts.test.mjs',
