@@ -426,6 +426,39 @@ var CONTRADICTION_TYPES = {
     desc: 'A behavioural keyword set from the signed rule package matched the record — an indicator for human review, not a determination.',
     severity: 3, category: 'BEHAVIOUR',
     example: 'A curated marker {stonewalling: "we are unable to comment", "your query is noted", "in due course"} matches two or more of its keywords on one page.'
+  },
+
+  // === BATCH 5 (defamation-record patterns, case 2026-179949, Oct 2026) ===
+
+  CT51_BILLING_AFTER_CLAIMED_END: {
+    id: 'CT51', name: 'Billing After Claimed End',
+    desc: 'A charge is raised for a period after the record says the relationship ended',
+    severity: 4, category: 'STATEMENTAL',
+    example: 'Lease pleaded to have ended 31 July, yet an invoice charges rent for October'
+  },
+  CT52_UNEVIDENCED_AUTHORITY_CLAIM: {
+    id: 'CT52', name: 'Unevidenced Authority Claim',
+    desc: 'Authority to depose or litigate is claimed but no supporting instrument appears anywhere in the record',
+    severity: 3, category: 'IDENTITY',
+    example: '"I am duly authorised to depose" with no resolution cited or annexed anywhere in the filing'
+  },
+  CT53_BLANK_EXECUTION_BLOCK: {
+    id: 'CT53', name: 'Blank Execution Block',
+    desc: 'An instrument the record treats as operative carries unsigned signature blocks',
+    severity: 3, category: 'INTEGRITY',
+    example: 'Tripartite agreement with all three "SIGNED at ___" blocks blank while payment moved under it'
+  },
+  CT54_UNREADABLE_PAGE: {
+    id: 'CT54', name: 'Unreadable Page',
+    desc: 'Pages carry no machine-readable text and so went unchecked — a limit of the examination, not a defect found',
+    severity: 2, category: 'INTEGRITY',
+    example: 'Pages 340-360 are image-only scans inside an otherwise text-bearing bundle'
+  },
+  CT55_COORDINATED_DRAFTING_INDICATOR: {
+    id: 'CT55', name: 'Coordinated Drafting Indicator',
+    desc: 'Near-identical texts under different closing blocks — an indicator for human review, never a determination of collusion',
+    severity: 3, category: 'EVIDENCE',
+    example: 'Two firms\u2019 letters two days apart are word-for-word identical bar the letterhead and signature'
   }
 };
 
@@ -1868,6 +1901,303 @@ var DETECTORS = {
       findings.push({ type: 'CT06', severity: 4,
         evidence: 'The same asset ("' + asset + '") is claimed as personal property ("' + P.quote + '", p. ' + P.page + ') and attributed to an entity ("' + Erec.quote + '" — ' + Erec.ent + ', p. ' + Erec.page + '). One asset cannot be both a party\'s personal property and the entity\'s; whose it is — and what the invoice shows — is for the record, not the engine.',
         location: 'Page ' + P.page + ' vs Page ' + Erec.page });
+    }
+    return findings;
+  },
+
+  // ---- BATCH 5: shapes from the defamation record (case 2026-179949) -------
+  // Each detector below is anchored to a real instance in the sealed record
+  // (LH19 schedule / LH30 narrative / evidence schedule A7-A10 / the two
+  // firms' letters of 7 and 9 July 2026) and is worded as an observation of
+  // the record, never a conclusion of law.
+
+  // D02D: billed for a period after the record says it ended. The narrative
+  // pleads the lease ended 31 July 2026, yet INV98185 charges "Damages
+  // October 2026" and INV68876/INV68913 charge August 2026; 87 months of
+  // rent are claimed after the purported expiry. A charge for a period after
+  // the claimed end is either an admission that it had not ended or a charge
+  // that should not exist — which it is, is for the record, not the engine.
+  D02D_DETECT_BILLING_AFTER_CLAIMED_END: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var MONTHS = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
+    var END_G = /\b(?:lease|tenancy|agreement|contract|occupation|employment|mandate|engagement|appointment|supply|membership)\b[^.\n]{0,200}?\b(?:terminated|came to an end|ended|expired|lapsed|cancelled|canceled|ceased)\b[^.\n]{0,120}?(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/gi;
+    var CHARGE_G = /\b(?:rent|rental|invoice|damages|occupation|levy|instalment|installment|fee|charge)s?\b[^.\n]{0,80}?\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/gi;
+    function snip(W, i) {
+      var s = Math.max(0, i - 60), e = Math.min(W.length, i + 110);
+      var t = W.slice(s, e).replace(/\s+/g, ' ').trim();
+      return (s > 0 ? '…' : '') + t + (e < W.length ? '…' : '');
+    }
+    var ends = [], charges = [];
+    for (var b = 0; b < blocks.length; b++) {
+      var W = String(blocks[b] || '');
+      var m;
+      END_G.lastIndex = 0;
+      while ((m = END_G.exec(W)) !== null) {
+        ends.push({ key: parseInt(m[3], 10) * 12 + MONTHS[m[2].toLowerCase()], raw: m[1] + ' ' + m[2] + ' ' + m[3], page: b + 1, quote: snip(W, m.index) });
+      }
+      CHARGE_G.lastIndex = 0;
+      while ((m = CHARGE_G.exec(W)) !== null) {
+        // A month preceded by a day number is a full date ("from 7 July
+        // 2026"), not a billing period — mora interest and dated events are
+        // not period charges.
+        var pre = m[0].slice(0, m[0].length - m[0].match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}$/i)[0].length);
+        if (/\d\s*$/.test(pre)) continue;
+        charges.push({ key: parseInt(m[2], 10) * 12 + MONTHS[m[1].toLowerCase()], raw: m[1] + ' ' + m[2], page: b + 1, quote: snip(W, m.index) });
+      }
+    }
+    var seen = {};
+    for (var e = 0; e < ends.length; e++) {
+      for (var c = 0; c < charges.length; c++) {
+        if (charges[c].key <= ends[e].key) continue;
+        var k = ends[e].key + '|' + charges[c].key;
+        if (seen[k]) continue;
+        seen[k] = 1;
+        if (findings.length >= 6) return findings;
+        findings.push({ type: 'CT51', severity: 4,
+          evidence: 'The record says the relationship ended ' + ends[e].raw + ' ("' + ends[e].quote + '", p. ' + ends[e].page + ') yet a charge is raised for the later period of ' + charges[c].raw + ' ("' + charges[c].quote + '", p. ' + charges[c].page + '). A charge for a period after the claimed end is either an admission that it had not ended or a charge that should not exist; which it is, is for the record, not the engine.',
+          location: ends[e].page === charges[c].page ? 'Page ' + ends[e].page : 'Page ' + ends[e].page + ' vs Page ' + charges[c].page });
+      }
+    }
+    return findings;
+  },
+
+  // D01D: the same charge under two names. The record: INV68876 bills
+  // "Rental August 2026" of R199,405.63 and INV68913 bills "Damages August
+  // 2026" of the same R199,405.63. One charge for one period cannot be both
+  // rent and damages — the label decides what must be proved for it. The
+  // pair is caught only when the SAME amount AND the SAME period carry two
+  // different charge-nouns; an amount match alone is coincidence too often.
+  D01D_DETECT_RELABELLING_PAIR: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var NOUN_G = /\b(rent|rental|damages|penalty|penalties|levy|deposit|refund|instalment|installment)\b/gi;
+    var AMT_G = /R\s?(\d[\d, ]{0,14}\d(?:\.\d{2})?)/g;
+    var MY_G = /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})\b/gi;
+    function amtVal(s) { return parseFloat(s.replace(/[,\s]/g, '')); }
+    var mentions = [];
+    for (var b = 0; b < blocks.length; b++) {
+      var W = String(blocks[b] || '');
+      NOUN_G.lastIndex = 0;
+      var m;
+      while ((m = NOUN_G.exec(W)) !== null) {
+        var noun = m[1].toLowerCase();
+        if (noun === 'rental') noun = 'rent';
+        if (noun === 'penalties') noun = 'penalty';
+        if (noun === 'installment') noun = 'instalment';
+        var win = W.slice(Math.max(0, m.index - 60), m.index + 180);
+        AMT_G.lastIndex = 0;
+        var vals = {}, am;
+        while ((am = AMT_G.exec(win)) !== null) vals[amtVal(am[1])] = am[1];
+        MY_G.lastIndex = 0;
+        var my = null, ym;
+        while ((ym = MY_G.exec(win)) !== null) {
+          // skip full dates ("7 July 2026"): a day number before the month
+          // means the period is not a billing label
+          if (/\d\s*$/.test(win.slice(0, ym.index))) continue;
+          my = ym[1] + ' ' + ym[2];
+          break;
+        }
+        if (!my) continue;
+        mentions.push({ noun: noun, vals: vals, my: my, page: b + 1,
+          quote: W.slice(Math.max(0, m.index - 60), m.index + m[0].length + 90).replace(/\s+/g, ' ').trim() });
+      }
+    }
+    var seen = {};
+    for (var a = 0; a < mentions.length; a++) {
+      for (var c = 0; c < mentions.length; c++) {
+        if (a === c) continue;
+        var A = mentions[a], C = mentions[c];
+        if (A.noun === C.noun || A.my !== C.my) continue;
+        for (var v in A.vals) {
+          if (!Object.prototype.hasOwnProperty.call(A.vals, v) || !C.vals[v]) continue;
+          var k = [A.noun, C.noun].sort().join('|') + '|' + v + '|' + A.my;
+          if (seen[k]) continue;
+          seen[k] = 1;
+          if (findings.length >= 5) return findings;
+          findings.push({ type: 'CT01', severity: 4,
+            evidence: 'The same amount of R' + A.vals[v] + ' for ' + A.my + ' is called "' + A.noun + '" in one place ("' + A.quote + '", p. ' + A.page + ') and "' + C.noun + '" in another ("' + C.quote + '", p. ' + C.page + '). One charge for one period cannot be both; which it truly is decides what must be proved for it — and that is for the record, not the engine.',
+            location: A.page === C.page ? 'Page ' + A.page : 'Page ' + A.page + ' vs Page ' + C.page });
+          break;
+        }
+      }
+    }
+    return findings;
+  },
+
+  // D07A: authority claimed, instrument absent. LH19 Contradiction 2: two
+  // answering affidavits each depose "I am duly authorised" yet across the
+  // whole filing no board resolution, power of attorney or written consent
+  // is cited or annexed. The engine cannot know whether such an instrument
+  // exists — only that none appears IN this record. Worded as the gap it is.
+  // Gated on litigation language ("affidavit"/"deponent") so an ordinary
+  // contract's "authorised signatory" clause stays silent.
+  D07A_DETECT_UNEVIDENCED_AUTHORITY: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var joined = blocks.join('\n');
+    if (!/\b(?:affidavit|deponent|founding|answering)\b/i.test(joined)) return findings;
+    var CLAIM_G = /\b(?:i\s+am\s+)?(?:duly\s+)?authori[sz]ed\s+to\s+(?:depose|bring|institute|launch)/gi;
+    var INSTRUMENT_G = /\b(?:board|directors'?|members'?|shareholders'?|special|written|company)\s+resolution\b|\bresolution\b[^.\n]{0,50}?\b(?:annexed|attached|furnished|provided)\b|\bannexure\s+["']?[A-Z]{1,3}\d*["']?[^.\n]{0,60}?\bresolution\b|\bpower\s+of\s+attorney\b/gi;
+    var claims = [], instruments = 0;
+    for (var b = 0; b < blocks.length; b++) {
+      var W = String(blocks[b] || '');
+      var m;
+      CLAIM_G.lastIndex = 0;
+      while ((m = CLAIM_G.exec(W)) !== null) {
+        claims.push({ page: b + 1, quote: W.slice(Math.max(0, m.index - 60), m.index + m[0].length + 60).replace(/\s+/g, ' ').trim() });
+      }
+      INSTRUMENT_G.lastIndex = 0;
+      while (INSTRUMENT_G.exec(W) !== null) instruments++;
+    }
+    if (claims.length && instruments === 0) {
+      findings.push({ type: 'CT52', severity: 3,
+        evidence: 'Authority to act is claimed ("' + claims[0].quote + '", p. ' + claims[0].page + (claims.length > 1 ? ' — ' + claims.length + ' such claim(s) in all' : '') + ') but no resolution, power of attorney or written consent is cited or annexed anywhere in this record. The engine cannot know whether such an instrument exists — only that none appears here. Whether one does, and what it authorises, is for a person to establish.',
+        location: 'Page ' + claims[0].page });
+    }
+    return findings;
+  },
+
+  // D07B: an instrument treated as operative with its execution blocks
+  // blank. The record: a tripartite agreement under which R1.5m moved
+  // carries three "SIGNED at ___" blocks, every one blank; a goodwill-
+  // forfeiture MOU was never countersigned. A blank block alone is a
+  // template; a blank block on an instrument the record elsewhere treats
+  // as binding is the finding.
+  D07B_DETECT_BLANK_SIGNATURE_BLOCKS: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var BLANKS = [
+      /\bSIGNED\s+at\s+(?:_{2,}|\.{3,}|…+|\[\s*•?\s*\])/i,
+      /\bon\s+this\s+(?:_{2,}|\.{3,}|…+)\s+day\s+of\b/i,
+      /\b(?:signature|deponent|witness(?:es)?|signed)\b\s*[:\-]?\s*(?:_{3,}|\.{4,}|…{2,})/i
+    ];
+    var INSTRUMENT_WORD = /\b(?:agreement|contract|memorandum|MOU|deed|lease|affidavit)\b/i;
+    var OPERATIVE_G = /\b(?:in terms of|pursuant to|under|breach of|cancelled|terminated|bound by)\s+(?:the\s+|this\s+|that\s+)?(?:agreement|contract|memorandum|MOU|deed|lease)\b/i;
+    var joined = blocks.join('\n');
+    if (!OPERATIVE_G.test(joined)) return findings;
+    for (var b = 0; b < blocks.length && findings.length < 3; b++) {
+      var W = String(blocks[b] || '');
+      if (!INSTRUMENT_WORD.test(W)) continue;
+      var hit = null;
+      for (var p = 0; p < BLANKS.length; p++) { var m = BLANKS[p].exec(W); if (m) { hit = m; break; } }
+      if (!hit) continue;
+      var quote = W.slice(Math.max(0, hit.index - 70), hit.index + hit[0].length + 70).replace(/\s+/g, ' ').trim();
+      findings.push({ type: 'CT53', severity: 3,
+        evidence: 'An execution block on this page is blank ("' + quote + '", p. ' + (b + 1) + ') while the record elsewhere treats the instrument as operative. A blank block alone is a template; a blank block on an instrument relied on is not. Whether a signed counterpart exists is for a person to establish.',
+        location: 'Page ' + (b + 1) });
+    }
+    return findings;
+  },
+
+  // D08A: pages the engine could not read. The defamation record's own
+  // evidence bundle holds runs of image-only pages, and every one of the
+  // plaintiffs' pleaded filings is a scan with no text layer. A page with no
+  // machine-readable text is not evidence of anything — but the report must
+  // say those pages went unchecked, so the reader knows the record was only
+  // partially examined. This is a limit of the examination, never a defect
+  // found in the record.
+  D08A_DETECT_SCAN_ONLY_PAGE: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    if (blocks.length < 3) return findings;
+    var lens = [];
+    for (var b = 0; b < blocks.length; b++) lens.push(String(blocks[b] || '').replace(/\s+/g, ' ').trim().length);
+    var nonzero = lens.filter(function(l) { return l > 0; }).sort(function(a, b) { return a - b; });
+    if (!nonzero.length) {
+      // Every page is empty: the whole document is an image-only scan (or
+      // extraction failed entirely) — the single most important case in the
+      // defamation record, where the pleaded filings carry no text layer.
+      findings.push({ type: 'CT54', severity: 2,
+        evidence: 'No page of this document carries machine-readable text: it is an image-only scan, or extraction failed. Nothing in it could be checked. OCR the pages and re-run before this record is treated as examined.',
+        location: 'Entire document' });
+      return findings;
+    }
+    var median = nonzero[Math.floor(nonzero.length / 2)];
+    if (median < 400) return findings; // a short document: thin pages are not anomalous
+    var runs = [], cur = null;
+    for (var p = 0; p < lens.length; p++) {
+      if (lens[p] < 40) {
+        if (!cur) cur = { from: p + 1, to: p + 1 };
+        else cur.to = p + 1;
+      } else if (cur) { runs.push(cur); cur = null; }
+    }
+    if (cur) runs.push(cur);
+    var wholeDoc = runs.length === 1 && runs[0].from === 1 && runs[0].to === lens.length;
+    for (var r = 0; r < runs.length && findings.length < 4; r++) {
+      var run = runs[r];
+      findings.push({ type: 'CT54', severity: 2,
+        evidence: wholeDoc
+          ? 'No page of this document carries machine-readable text: it is an image-only scan, or extraction failed. Nothing in it could be checked. OCR the pages and re-run before this record is treated as examined.'
+          : (run.from === run.to ? 'Page ' + run.from : 'Pages ' + run.from + '–' + run.to) + ' ' + (run.from === run.to ? 'carries' : 'carry') + ' no machine-readable text while the surrounding record is text-bearing — an image-only scan or an extraction gap. ' + (run.from === run.to ? 'This page went' : 'These pages went') + ' unchecked; OCR and re-run before treating ' + (run.from === run.to ? 'it' : 'them') + ' as examined. This is a limit of the examination, not a defect found in the record.',
+        location: wholeDoc ? 'Entire document' : (run.from === run.to ? 'Page ' + run.from : 'Pages ' + run.from + '–' + run.to) });
+    }
+    return findings;
+  },
+
+  // D09A: two documents in the record drafted as one. The record: a letter
+  // of 7 July 2026 from one firm and a letter of 9 July 2026 from another
+  // are word-for-word the same bar the letterhead and signature. Form
+  // letters explain some overlap, so this threshold is the strictest in the
+  // engine: near-total token overlap on substantial texts (85%+ of distinct
+  // vocabulary, 40+ distinct words each, comparable length) AND a closing
+  // block that differs — same words, different hand. An indicator for human
+  // review, never a determination of collusion.
+  D09A_DETECT_COORDINATION_NEAR_DUP: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var STOP = { the: 1, and: 1, for: 1, that: 1, this: 1, with: 1, from: 1, are: 1, was: 1, were: 1, has: 1, have: 1, had: 1, not: 1, but: 1, you: 1, your: 1, yours: 1, our: 1, ours: 1, their: 1, they: 1, them: 1, his: 1, her: 1, its: 1, who: 1, whom: 1, which: 1, will: 1, would: 1, shall: 1, should: 1, can: 1, could: 1, may: 1, might: 1, must: 1, any: 1, all: 1, per: 1, via: 1, ref: 1, dear: 1, sir: 1, madam: 1, regards: 1, faithfully: 1, sincerely: 1, herein: 1, thereto: 1, thereof: 1, hereby: 1, above: 1, below: 1, upon: 1, into: 1, out: 1, off: 1, over: 1, under: 1, then: 1, than: 1, too: 1, also: 1, such: 1, same: 1, been: 1, being: 1, between: 1, without: 1, within: 1, during: 1, before: 1, after: 1, against: 1, about: 1 };
+    function prof(W) {
+      // Seal furniture off first: the footer carries the seal id and hash,
+      // and a fixed-width tail window can slice mid-word through it,
+      // manufacturing a spurious "different closing block" (b3 corpus,
+      // pp. 61/129: "stamps" vs "tamps" was one footer cut at two offsets).
+      var T = voStripSealFurniture(String(W || ''));
+      var toks = T.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/);
+      var set = {}, n = 0;
+      for (var i = 0; i < toks.length; i++) { var tk = toks[i]; if (tk.length < 3 || STOP[tk]) continue; if (!set[tk]) { set[tk] = 1; n++; } }
+      var tailRaw = T.slice(-160);
+      if (T.length > 160) {
+        // The window cut can land mid-word; a leading fragment ("oller" from
+        // "Roller") is not a token and would fake a closing-block difference.
+        var sp = tailRaw.search(/\s/);
+        if (sp >= 0) tailRaw = tailRaw.slice(sp + 1);
+      }
+      var tail = tailRaw.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/);
+      var tset = {};
+      for (var j = 0; j < tail.length; j++) { var u = tail[j]; if (u.length >= 3 && !STOP[u]) tset[u] = 1; }
+      return { set: set, n: n, tail: tset };
+    }
+    var profs = [];
+    for (var b = 0; b < blocks.length; b++) {
+      var pr = prof(blocks[b]);
+      if (pr.n >= 40) profs.push({ page: b + 1, p: pr });
+    }
+    var pairs = [];
+    for (var a = 0; a < profs.length; a++) {
+      for (var c = a + 1; c < profs.length; c++) {
+        var A = profs[a].p, B = profs[c].p;
+        var lo = Math.min(A.n, B.n), hi = Math.max(A.n, B.n);
+        if (lo / hi < 0.7) continue;
+        var small = A.n <= B.n ? A.set : B.set, big = A.n <= B.n ? B.set : A.set;
+        var inter = 0;
+        for (var t in small) if (Object.prototype.hasOwnProperty.call(small, t) && big[t]) inter++;
+        var jac = inter / (A.n + B.n - inter);
+        if (jac < 0.85) continue;
+        // The closing blocks must differ — same words, different hand.
+        // Identical duplicates (a page scanned twice) stay silent.
+        var diff = 0;
+        for (var u in A.tail) if (Object.prototype.hasOwnProperty.call(A.tail, u) && !B.tail[u]) diff++;
+        for (var v in B.tail) if (Object.prototype.hasOwnProperty.call(B.tail, v) && !A.tail[v]) diff++;
+        if (diff < 2) continue;
+        pairs.push({ a: profs[a].page, b: profs[c].page, sim: Math.round(jac * 100) });
+      }
+    }
+    pairs.sort(function(x, y) { return y.sim - x.sim; });
+    for (var k = 0; k < pairs.length && findings.length < 5; k++) {
+      findings.push({ type: 'CT55', severity: 3,
+        evidence: 'Pages ' + pairs[k].a + ' and ' + pairs[k].b + ' are near-identical texts (' + pairs[k].sim + '% shared vocabulary) under different closing blocks. Form letters explain some overlap; near-total identity under two hands is the signature of coordinated drafting. This is an indicator for human review, not a determination of collusion.',
+        location: 'Page ' + pairs[k].a + ' vs Page ' + pairs[k].b });
     }
     return findings;
   },
@@ -7405,6 +7735,12 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     DETECTORS.D01C_DETECT_DENIAL_ADMISSION_PAIR,
     DETECTORS.D04C_DETECT_MEETING_REQUEST_REFUSAL_REVERSAL,
     DETECTORS.D06B_DETECT_OWNERSHIP_ATTRIBUTION_CONFLICT,
+    DETECTORS.D02D_DETECT_BILLING_AFTER_CLAIMED_END,
+    DETECTORS.D01D_DETECT_RELABELLING_PAIR,
+    DETECTORS.D07A_DETECT_UNEVIDENCED_AUTHORITY,
+    DETECTORS.D07B_DETECT_BLANK_SIGNATURE_BLOCKS,
+    DETECTORS.D08A_DETECT_SCAN_ONLY_PAGE,
+    DETECTORS.D09A_DETECT_COORDINATION_NEAR_DUP,
     DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY,
     DETECTORS.D05_DETECT_LOGICAL_IMPOSSIBILITY,
     DETECTORS.D06_DETECT_IDENTITY_CONFLICT,
@@ -7752,7 +8088,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     CT01: 0.85, CT02: 0.9, CT03: 0.9, CT06: 0.9, CT07: 0.85, CT09: 0.85,
     CT10: 0.8, CT13: 0.9, CT14: 0.85, CT24: 0.9, CT29: 0.9, CT42: 0.9,
     CT35: 0.8, CT04: 0.5, CT08: 0.7, CT26: 0.7, CT27: 0.6, CT28: 0.6,
-    CT05: 0.6, CT31: 0.6, CT36: 0.6, CT39: 0.6, SERIAL: 0.7
+    CT05: 0.6, CT31: 0.6, CT36: 0.6, CT39: 0.6, SERIAL: 0.7,
+    CT51: 0.85, CT52: 0.8, CT53: 0.8, CT54: 0.9, CT55: 0.6
   };
   var totalScore = 0;
   var maxScore = 0;

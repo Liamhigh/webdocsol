@@ -118,7 +118,9 @@ var CT_NAMES = {
   CT47: 'Coercive Conduct Indicators',
   CT48: 'Gaslighting / Reality-Denial Indicators',
   CT49: 'Blame-Reversal / DARVO Indicators',
-  CT50: 'Behavioural Pattern Indicator (Signed Rule)'
+  CT50: 'Behavioural Pattern Indicator (Signed Rule)',
+  CT51: 'Billing After Claimed End', CT52: 'Unevidenced Authority Claim', CT53: 'Blank Execution Block',
+  CT54: 'Unreadable Page', CT55: 'Coordinated Drafting Indicator'
 };
 // Concrete next step for a human, by engine category (rendered per finding in
 // the plain-language narrative).
@@ -156,7 +158,8 @@ var CT_CATEGORY = {
   CT36: 'CONTACT', CT37: 'CONTACT', CT38: 'CONTACT',
   CT39: 'EVIDENCE', CT40: 'EVIDENCE', CT41: 'EVIDENCE',
   CT42: 'DIGITAL', CT43: 'DIGITAL',
-  CT44: 'FRANCHISE_LEASE', CT45: 'FRANCHISE_LEASE', CT46: 'IDENTITY', CT47: 'BEHAVIOUR', CT48: 'BEHAVIOUR', CT49: 'BEHAVIOUR', CT50: 'BEHAVIOUR'
+  CT44: 'FRANCHISE_LEASE', CT45: 'FRANCHISE_LEASE', CT46: 'IDENTITY', CT47: 'BEHAVIOUR', CT48: 'BEHAVIOUR', CT49: 'BEHAVIOUR', CT50: 'BEHAVIOUR',
+  CT51: 'STATEMENTAL', CT52: 'IDENTITY', CT53: 'INTEGRITY', CT54: 'INTEGRITY', CT55: 'EVIDENCE'
 };
 // detector id responsible for each CT type (derived from forensic-engine.js source)
 var CT_DETECTOR = {
@@ -165,7 +168,8 @@ var CT_DETECTOR = {
   CT22: 'D13', CT15: 'D13/D14', CT24: 'D15', CT29: 'D15', CT25: 'D16', CT26: 'D17', CT27: 'D18',
   CT41: 'D19', CT42: 'D20', CT31: 'D21', CT33: 'D22', CT35: 'D23', CT36: 'D24', CT37: 'D25',
   CT38: 'D26', CT39: 'D27', CT40: 'D28', CT23: 'D32', CT28: 'D33', CT16: 'D34', CT30: 'D35',
-  CT32: 'D36', CT43: 'D37', CT44: 'D38', CT45: 'D39', CT46: 'D40', CT47: 'D41', CT48: 'D42', CT49: 'D43', CT50: 'PKG'
+  CT32: 'D36', CT43: 'D37', CT44: 'D38', CT45: 'D39', CT46: 'D40', CT47: 'D41', CT48: 'D42', CT49: 'D43', CT50: 'PKG',
+  CT51: 'D02D', CT52: 'D07A', CT53: 'D07B', CT54: 'D08A', CT55: 'D09A'
 };
 // FRANCHISE_LEASE (CT44/CT45) was missing here, so the findings matrix of the evidence-bundle-4 run summed to 41 of 44.
 var CATEGORY_ORDER = ['STATEMENTAL', 'FRANCHISE_LEASE', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL', 'BEHAVIOUR'];
@@ -2475,13 +2479,13 @@ function secDishonestyMatrix(ctx, data) {
 var VO_BRAIN_OF_CT = (function () {
   var m = {};
   var put = function (b, list) { for (var i = 0; i < list.length; i++) m[list[i]] = b; };
-  put('B5', ['CT03', 'CT04', 'CT29']);
+  put('B5', ['CT03', 'CT04', 'CT29', 'CT51']);
   put('B6', ['CT02', 'CT15', 'CT16', 'CT17', 'CT18', 'CT19', 'CT20', 'CT21', 'CT22', 'CT34']);
   // B2 — the document: file and page measurements, signatures (§2.1 "forgery
   // signatures") and the artifact's handling record (custody).
   // A reference the document makes to material it does not carry (CT31,
   // CT32) is a measurement of the document, not a contradiction.
-  put('B2', ['CT23', 'CT24', 'CT25', 'CT26', 'CT27', 'CT28', 'CT30', 'CT31', 'CT32', 'CT39', 'CT41', 'CT42']);
+  put('B2', ['CT23', 'CT24', 'CT25', 'CT26', 'CT27', 'CT28', 'CT30', 'CT31', 'CT32', 'CT39', 'CT41', 'CT42', 'CT53', 'CT54']);
   // B3 — communications: sender verification (§2.4) is where a lookalike
   // address belongs.
   put('B3', ['CT37']);
@@ -2495,13 +2499,20 @@ var VO_BRAIN_OF_CT = (function () {
   // the B1 "CONTRADICTION FOUND" header — an indicator is a passage for
   // human review, never a conflicting-statement finding.
   put('B4', ['CT47', 'CT48', 'CT49', 'CT50']);
+  // CT55 (coordinated-drafting indicator) is an indicator for human review
+  // too — B4, never the contradiction brain. Separate line: the line above
+  // is pinned byte-exact by event-date-conflict.test.mjs (bundle-3 review).
+  put('B4', ['CT55']);
   return m; // everything else -> B1; SERIAL -> B4
 })();
 // The kinds a brain's §15.4 block header does not describe: printed under
 // their brain as FINDING RECORDED. B2's "TAMPER FOUND" is for file and page
 // measurements only; B3's block is a thread gap, which no detector measures;
 // B7's block maps a fact to a statute, which the Statutory Anchoring annex does.
-var VO_NEUTRAL_BLOCK_CT = { CT23: 1, CT39: 1, CT31: 1, CT32: 1, CT37: 1, CT33: 1, CT35: 1, CT07: 1, CT47: 1, CT48: 1, CT49: 1, CT50: 1 };
+// CT52 (a gap in the record, not a statement pair), CT53/CT54 (document
+// measurements) and CT55 (an indicator for review) never print under a
+// "CONTRADICTION FOUND" or "TAMPER FOUND" header.
+var VO_NEUTRAL_BLOCK_CT = { CT23: 1, CT39: 1, CT31: 1, CT32: 1, CT37: 1, CT33: 1, CT35: 1, CT07: 1, CT47: 1, CT48: 1, CT49: 1, CT50: 1, CT52: 1, CT53: 1, CT54: 1, CT55: 1 };
 var VO_BRAIN_META = {
   B1: { name: 'B1 — Contradiction Brain', label: 'CONTRADICTION FOUND' },
   // The block headers are the §15.4 template's own (PD19: no deviation). Each
@@ -3456,7 +3467,12 @@ var NARRATIVE_MEANING = {
   CT47: 'passages carry threat, ultimatum or pressure language — an indicator for human review, not a determination',
   CT48: 'passages deny a documented event or attack the other party\'s recollection — an indicator for human review, not a determination',
   CT49: 'passages attack the claimant or reverse who the injured party is — an indicator for human review, not a determination',
-  CT50: 'a behavioural keyword set from the signed rule package matched the record — an indicator for human review, not a determination'
+  CT50: 'a behavioural keyword set from the signed rule package matched the record — an indicator for human review, not a determination',
+  CT51: 'a charge is raised for a period after the record says the relationship ended',
+  CT52: 'authority to act is claimed but no resolution, power of attorney or written consent appears anywhere in the record',
+  CT53: 'an instrument the record treats as operative carries unsigned signature blocks',
+  CT54: 'pages carry no machine-readable text and went unchecked — a limit of the examination, not a defect found',
+  CT55: 'near-identical texts appear under different closing blocks — an indicator for human review, not a determination'
 };
 
 function narrativeMeaning(f) {
