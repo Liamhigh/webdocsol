@@ -34,14 +34,21 @@ t.ok([D02D, D01D, D07A, D07B, D08A, D09A].every(f => typeof f === 'function'),
 
 // ---- D02D: billing after claimed end ----
 const ended = [
-  'The lease agreement between the parties terminated on 31 July 2026 by effluxion of time, as pleaded in the particulars.',
+  'The lease agreement for the Port Edward service station terminated on 31 July 2026 by effluxion of time, as pleaded in the particulars.',
   'Filler page of record text. '.repeat(40),
-  'Invoice INV98185: Damages October 2026 — R1,133,618.40. Payment due within 7 days of presentation.',
+  'Invoice INV98185: Damages October 2026 — Port Edward service station: R1,133,618.40. Payment due within 7 days of presentation.',
 ];
 const outEnd = D02D(ended);
 t.ok(outEnd.length === 1 && outEnd[0].type === 'CT51' && outEnd[0].severity === 4,
   'D02D fires once on a charge for a period after the claimed end');
 t.ok(/Page 1 vs Page 3/.test(outEnd[0].location), 'D02D anchors the end claim vs the later charge');
+// Codex review (PR #266): an end and a charge from DIFFERENT matters must
+// not pair — no shared distinguishing token, so silent.
+t.ok(D02D([
+  'The lease agreement for the Port Edward service station terminated on 31 July 2026 by effluxion of time.',
+  'Filler page of record text. '.repeat(40),
+  'Invoice INV77701: Rental October 2026 — Kokstad depot: R88,000.00.',
+]).length === 0, 'D02D silent when the end and the charge concern different sites');
 // A charge for a period BEFORE the end is ordinary billing — silent.
 t.ok(D02D([
   'The lease agreement terminated on 31 July 2026.',
@@ -117,6 +124,13 @@ t.ok(D07B([
   'AGREEMENT. SIGNED at Gqeberha on this 11th day of December 2018.',
   'The parties acted in terms of the agreement throughout. '.repeat(2),
 ]).length === 0, 'D07B silent on an executed block');
+// Codex review (PR #266): a blank specimen far from the operative treatment
+// is not the instrument the record relies on — silent.
+const farSpecimen = ['SPECIMEN AGREEMENT. SIGNED at _________ on this ___ day of __________.'];
+for (let i = 0; i < 13; i++) farSpecimen.push('Unrelated bundle page. '.repeat(30));
+farSpecimen.push('The parties acted in terms of the lease agreement throughout the period.');
+t.ok(D07B(farSpecimen).length === 0,
+  'D07B silent when the operative treatment sits outside the blank block\u2019s window');
 
 // ---- D08A: unreadable pages ----
 const bundle = [];
@@ -135,6 +149,12 @@ t.ok(D08A(fullText).length === 0, 'D08A silent when every page is text-bearing')
 const allScan = ['', '', '', ''];
 t.ok(D08A(allScan).length === 1 && D08A(allScan)[0].location === 'Entire document',
   'D08A reports a wholly unreadable document once');
+// Sourcery review (PR #266): a wholly unreadable one- or two-page filing is
+// exactly the defamation-record case — reported, not gated away.
+t.ok(D08A(['', '']).length === 1 && D08A(['', ''])[0].location === 'Entire document',
+  'D08A reports a wholly unreadable two-page document');
+t.ok(D08A(['']).length === 1 && D08A([''])[0].location === 'Entire document',
+  'D08A reports a wholly unreadable one-page document');
 // Short documents: thin pages are not anomalous — silent.
 t.ok(D08A(['short', '', 'brief note']).length === 0,
   'D08A silent on short documents');
