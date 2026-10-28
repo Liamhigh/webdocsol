@@ -8686,12 +8686,25 @@ var DETECTORS = {
   // rent are claimed after the purported expiry. A charge for a period after
   // the claimed end is either an admission that it had not ended or a charge
   // that should not exist — which it is, is for the record, not the engine.
+  // Codex review (PR #266): pair an end with a charge only when their
+  // contexts share a distinguishing token — in a bundle spanning two matters,
+  // Site A's lease ending in July must not pair with Site B's October rental.
   D02D_DETECT_BILLING_AFTER_CLAIMED_END: function(textBlocks) {
     var findings = [];
     var blocks = textBlocks || [];
     var MONTHS = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
     var END_G = /\b(?:lease|tenancy|agreement|contract|occupation|employment|mandate|engagement|appointment|supply|membership)\b[^.\n]{0,200}?\b(?:terminated|came to an end|ended|expired|lapsed|cancelled|canceled|ceased)\b[^.\n]{0,120}?(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/gi;
     var CHARGE_G = /\b(?:rent|rental|invoice|damages|occupation|levy|instalment|installment|fee|charge)s?\b[^.\n]{0,80}?\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/gi;
+    // Distinguishing tokens only: party, site and instrument names. The
+    // generic vocabulary of ends and charges (agreement, invoice, payment…)
+    // is shared by EVERY matter in a bundle, so it cannot pair them.
+    var STOPW = { lease: 1, tenancy: 1, agreement: 1, contract: 1, occupation: 1, employment: 1, mandate: 1, engagement: 1, appointment: 1, supply: 1, membership: 1, terminated: 1, ended: 1, expired: 1, lapsed: 1, cancelled: 1, canceled: 1, ceased: 1, invoice: 1, rental: 1, damages: 1, instalment: 1, installment: 1, charge: 1, charges: 1, payment: 1, payable: 1, amount: 1, period: 1, between: 1, parties: 1, plaintiff: 1, defendant: 1, respondent: 1, applicant: 1, effluxion: 1, pleaded: 1, particulars: 1, within: 1, presentation: 1, october: 1, january: 1, february: 1, march: 1, april: 1, june: 1, july: 1, august: 1, september: 1, november: 1, december: 1 };
+    function ctxOf(W, i) {
+      var win = W.slice(Math.max(0, i - 250), i + 250).toLowerCase().replace(/[^a-z\s]/g, ' ');
+      var toks = win.split(/\s+/), ctx = {};
+      for (var ti = 0; ti < toks.length; ti++) if (toks[ti].length >= 5 && !STOPW[toks[ti]]) ctx[toks[ti]] = 1;
+      return ctx;
+    }
     function snip(W, i) {
       var s = Math.max(0, i - 60), e = Math.min(W.length, i + 110);
       var t = W.slice(s, e).replace(/\s+/g, ' ').trim();
@@ -8703,7 +8716,7 @@ var DETECTORS = {
       var m;
       END_G.lastIndex = 0;
       while ((m = END_G.exec(W)) !== null) {
-        ends.push({ key: parseInt(m[3], 10) * 12 + MONTHS[m[2].toLowerCase()], raw: m[1] + ' ' + m[2] + ' ' + m[3], page: b + 1, quote: snip(W, m.index) });
+        ends.push({ key: parseInt(m[3], 10) * 12 + MONTHS[m[2].toLowerCase()], raw: m[1] + ' ' + m[2] + ' ' + m[3], page: b + 1, quote: snip(W, m.index), ctx: ctxOf(W, m.index) });
       }
       CHARGE_G.lastIndex = 0;
       while ((m = CHARGE_G.exec(W)) !== null) {
@@ -8712,13 +8725,16 @@ var DETECTORS = {
         // not period charges.
         var pre = m[0].slice(0, m[0].length - m[0].match(/(January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{4}$/i)[0].length);
         if (/\d\s*$/.test(pre)) continue;
-        charges.push({ key: parseInt(m[2], 10) * 12 + MONTHS[m[1].toLowerCase()], raw: m[1] + ' ' + m[2], page: b + 1, quote: snip(W, m.index) });
+        charges.push({ key: parseInt(m[2], 10) * 12 + MONTHS[m[1].toLowerCase()], raw: m[1] + ' ' + m[2], page: b + 1, quote: snip(W, m.index), ctx: ctxOf(W, m.index) });
       }
     }
     var seen = {};
     for (var e = 0; e < ends.length; e++) {
       for (var c = 0; c < charges.length; c++) {
         if (charges[c].key <= ends[e].key) continue;
+        var shared = 0;
+        for (var tk in ends[e].ctx) if (Object.prototype.hasOwnProperty.call(ends[e].ctx, tk) && charges[c].ctx[tk]) { shared = 1; break; }
+        if (!shared) continue;
         var k = ends[e].key + '|' + charges[c].key;
         if (seen[k]) continue;
         seen[k] = 1;
@@ -8843,11 +8859,21 @@ var DETECTORS = {
     ];
     var INSTRUMENT_WORD = /\b(?:agreement|contract|memorandum|MOU|deed|lease|affidavit)\b/i;
     var OPERATIVE_G = /\b(?:in terms of|pursuant to|under|breach of|cancelled|terminated|bound by)\s+(?:the\s+|this\s+|that\s+)?(?:agreement|contract|memorandum|MOU|deed|lease)\b/i;
-    var joined = blocks.join('\n');
-    if (!OPERATIVE_G.test(joined)) return findings;
+    // Codex review (PR #266): the operative check must sit near the blank
+    // block, not anywhere in the record — a compiled bundle can hold an
+    // operative lease AND an unrelated blank specimen, and the specimen is
+    // not the instrument the record relies on. A ±10-page window keeps the
+    // anchor (the tripartite's own payment clause is pages from its blank
+    // blocks) and drops the unrelated specimen.
     for (var b = 0; b < blocks.length && findings.length < 3; b++) {
       var W = String(blocks[b] || '');
       if (!INSTRUMENT_WORD.test(W)) continue;
+      var operative = false;
+      for (var q = Math.max(0, b - 10); q <= Math.min(blocks.length - 1, b + 10); q++) {
+        OPERATIVE_G.lastIndex = 0;
+        if (OPERATIVE_G.test(String(blocks[q] || ''))) { operative = true; break; }
+      }
+      if (!operative) continue;
       var hit = null;
       for (var p = 0; p < BLANKS.length; p++) { var m = BLANKS[p].exec(W); if (m) { hit = m; break; } }
       if (!hit) continue;
@@ -8869,7 +8895,7 @@ var DETECTORS = {
   D08A_DETECT_SCAN_ONLY_PAGE: function(textBlocks) {
     var findings = [];
     var blocks = textBlocks || [];
-    if (blocks.length < 3) return findings;
+    if (!blocks.length) return findings;
     var lens = [];
     for (var b = 0; b < blocks.length; b++) lens.push(String(blocks[b] || '').replace(/\s+/g, ' ').trim().length);
     var nonzero = lens.filter(function(l) { return l > 0; }).sort(function(a, b) { return a - b; });
@@ -8877,11 +8903,16 @@ var DETECTORS = {
       // Every page is empty: the whole document is an image-only scan (or
       // extraction failed entirely) — the single most important case in the
       // defamation record, where the pleaded filings carry no text layer.
+      // Sourcery review (PR #266): this must run before any page-count gate —
+      // a wholly unreadable one- or two-page filing is exactly the case.
       findings.push({ type: 'CT54', severity: 2,
         evidence: 'No page of this document carries machine-readable text: it is an image-only scan, or extraction failed. Nothing in it could be checked. OCR the pages and re-run before this record is treated as examined.',
         location: 'Entire document' });
       return findings;
     }
+    // A mixed short document stays silent: with fewer than three pages a
+    // thin page is not statistically anomalous against its neighbours.
+    if (blocks.length < 3) return findings;
     var median = nonzero[Math.floor(nonzero.length / 2)];
     if (median < 400) return findings; // a short document: thin pages are not anomalous
     var runs = [], cur = null;
