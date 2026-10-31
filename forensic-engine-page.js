@@ -459,6 +459,12 @@ var CONTRADICTION_TYPES = {
     desc: 'Near-identical texts under different closing blocks — an indicator for human review, never a determination of collusion',
     severity: 3, category: 'EVIDENCE',
     example: 'Two firms\u2019 letters two days apart are word-for-word identical bar the letterhead and signature'
+  },
+  CT56_S12B_LICENCE_PREDICATE_CONFLICT: {
+    id: 'CT56', name: 'Section 12B Predicate Conflict Indicator',
+    desc: 'A party staffs the s 12B statutory arbitration track while asserting the counterparty’s licence is terminated/expired/inoperative — s 12B exists between licensed participants; an indicator for legal review, never a determination',
+    severity: 3, category: 'EVIDENCE',
+    example: 'Same letter nominates three arbitrators "strictly in compliance with section 12B" and asserts the retailer’s licence "has terminated and/or expired"'
   }
 };
 
@@ -2233,6 +2239,72 @@ var DETECTORS = {
       findings.push({ type: 'CT55', severity: 3,
         evidence: 'Pages ' + pairs[k].a + ' and ' + pairs[k].b + ' are near-identical texts (' + pairs[k].sim + '% shared vocabulary) under different closing blocks. Form letters explain some overlap; near-total identity under two hands is the signature of coordinated drafting. This is an indicator for human review, not a determination of collusion.',
         location: 'Page ' + pairs[k].a + ' vs Page ' + pairs[k].b });
+    }
+    return findings;
+  },
+
+  // D10A: a party STAFFS the section 12B statutory arbitration track
+  // (nominating arbitrators, agreeing to an appointment, acting "in
+  // compliance with section 12B of the Act") while the same instrument
+  // asserts the counterparty's petroleum licence is dead (terminated,
+  // expired, defunct, cancelled, lapsed, no longer valid or operative).
+  // Section 12B of the Petroleum Products Act 120 of 1977 exists between
+  // licensed participants, so the two positions sit in tension. The live-run
+  // record: F&R letter to G.L. Seethal Attorneys, 29 Sep 2026 — nomination
+  // "strictly in compliance with the process contemplated in section 12B"
+  // at paras 3.1-3.2, licence "terminated and / or expired and / or is
+  // otherwise no longer valid or operative" at para 3.9. A party CAN
+  // legitimately arbitrate the consequences of a termination, so this is an
+  // indicator for legal review, never a determination of inconsistency.
+  // Mere mention of a pending s 12B process stays silent — the cue is active
+  // participation (nominating/appointing arbitrators), not the word
+  // "arbitration".
+  D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT: function(textBlocks) {
+    var findings = [];
+    var blocks = textBlocks || [];
+    var TRACK_G = /\b(?:section|s)\s*12b\b|\b12b\s+of\s+the\s+act\b/gi;
+    var PART_G = /\bnominat\w*|appoint\w*\s+(?:an?\s+|the\s+)?arbitrator|prospective\s+arbitrators?\b/gi;
+    var DEAD_G = /\blicen[cs]e\b[^.]{0,100}\b(?:terminat\w*|expir\w*|defunct|cancel\w*|laps\w*|inoperative|invalid|no\s+longer\s+(?:valid|operative)|not\s+valid)\b|\b(?:terminat\w*|expir\w*|defunct|cancelled|canceled|lapsed|inoperative|invalid|no\s+longer\s+(?:valid|operative))\b[^.]{0,100}\blicen[cs]e\b/gi;
+    function flags(s) {
+      TRACK_G.lastIndex = 0; PART_G.lastIndex = 0; DEAD_G.lastIndex = 0;
+      return { track: TRACK_G.test(s), part: PART_G.test(s), dead: DEAD_G.test(s) };
+    }
+    function quote(s, re) {
+      re.lastIndex = 0;
+      var m = re.exec(s);
+      if (!m) return '';
+      var start = Math.max(0, m.index - 40);
+      var q = s.slice(start, m.index + m[0].length + 80).replace(/\s+/g, ' ').trim();
+      if (q.length > 160) q = q.slice(0, 157) + '...';
+      return q;
+    }
+    var F = [];
+    var seen = {};
+    for (var i = 0; i < blocks.length; i++) F.push(flags(String(blocks[i] || '')));
+    for (var a = 0; a < blocks.length && findings.length < 3; a++) {
+      // Participation on the statutory track: the s 12B reference and the
+      // arbitrator-staffing act on the same or the following page (forward
+      // scan only — a lookbehind here re-finds the region just reported).
+      var tp = -1;
+      for (var w = a; w <= Math.min(blocks.length - 1, a + 1); w++) {
+        if (F[w].track && F[w].part) { tp = w; break; }
+      }
+      if (tp < 0) continue;
+      // The licence-death assertion within two pages either side.
+      var dp = -1;
+      for (var w2 = Math.max(0, tp - 2); w2 <= Math.min(blocks.length - 1, tp + 2); w2++) {
+        if (F[w2].dead) { dp = w2; break; }
+      }
+      if (dp < 0) continue;
+      var key = tp + ':' + dp;
+      if (seen[key]) continue;
+      seen[key] = 1;
+      var q1 = quote(String(blocks[tp] || ''), TRACK_G);
+      var q2 = quote(String(blocks[dp] || ''), DEAD_G);
+      findings.push({ type: 'CT56', severity: 3,
+        evidence: 'The record staffs the section 12B statutory arbitration track ("' + q1 + '", p. ' + (tp + 1) + ') while asserting the counterparty\'s licence is dead ("' + q2 + '", p. ' + (dp + 1) + '). Section 12B of the Petroleum Products Act 120 of 1977 exists between licensed participants, so the two positions sit in tension; a party may still arbitrate the consequences of a termination, so this is an indicator for legal review, not a determination of inconsistency.',
+        location: 'Page ' + (tp + 1) + ' vs Page ' + (dp + 1) });
+      a = Math.max(a, Math.max(tp, dp));
     }
     return findings;
   },
@@ -7784,6 +7856,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     DETECTORS.D07B_DETECT_BLANK_SIGNATURE_BLOCKS,
     DETECTORS.D08A_DETECT_SCAN_ONLY_PAGE,
     DETECTORS.D09A_DETECT_COORDINATION_NEAR_DUP,
+    DETECTORS.D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT,
     DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY,
     DETECTORS.D05_DETECT_LOGICAL_IMPOSSIBILITY,
     DETECTORS.D06_DETECT_IDENTITY_CONFLICT,
@@ -8132,7 +8205,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     CT10: 0.8, CT13: 0.9, CT14: 0.85, CT24: 0.9, CT29: 0.9, CT42: 0.9,
     CT35: 0.8, CT04: 0.5, CT08: 0.7, CT26: 0.7, CT27: 0.6, CT28: 0.6,
     CT05: 0.6, CT31: 0.6, CT36: 0.6, CT39: 0.6, SERIAL: 0.7,
-    CT51: 0.85, CT52: 0.8, CT53: 0.8, CT54: 0.9, CT55: 0.6
+    CT51: 0.85, CT52: 0.8, CT53: 0.8, CT54: 0.9, CT55: 0.6, CT56: 0.6
   };
   var totalScore = 0;
   var maxScore = 0;
