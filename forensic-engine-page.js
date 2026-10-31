@@ -1872,7 +1872,11 @@ var DETECTORS = {
   D06B_DETECT_OWNERSHIP_ATTRIBUTION_CONFLICT: function(textBlocks) {
     var findings = [];
     var blocks = textBlocks || [];
-    var STOPN = { name: 1, account: 1, email: 1, emails: 1, phone: 1, signature: 1, opinion: 1, understanding: 1, recollection: 1, statement: 1, affidavit: 1, client: 1, attorney: 1, attorneys: 1, lawyer: 1, wife: 1, girlfriend: 1, husband: 1, partner: 1, brother: 1, sister: 1, mother: 1, father: 1, son: 1, daughter: 1, friend: 1, colleague: 1, time: 1, life: 1, mind: 1, view: 1, position: 1, case: 1, matter: 1, side: 1, word: 1, words: 1, hands: 1, way: 1, part: 1, share: 1, shares: 1, exit: 1, salary: 1, drawing: 1, drawings: 1, dad: 1, attention: 1, knowledge: 1, behalf: 1, own: 1, response: 1, reply: 1, input: 1, request: 1, company: 1, business: 1, complaint: 1, contentions: 1, submissions: 1, papers: 1, pleadings: 1, version: 1, application: 1, opposition: 1, evidence: 1, defence: 1, defense: 1, argument: 1, story: 1 };
+    var STOPN = { name: 1, account: 1, email: 1, emails: 1, phone: 1, signature: 1, opinion: 1, understanding: 1, recollection: 1, statement: 1, affidavit: 1, client: 1, attorney: 1, attorneys: 1, lawyer: 1, wife: 1, girlfriend: 1, husband: 1, partner: 1, brother: 1, sister: 1, mother: 1, father: 1, son: 1, daughter: 1, friend: 1, colleague: 1, time: 1, life: 1, mind: 1, view: 1, position: 1, case: 1, matter: 1, side: 1, word: 1, words: 1, hands: 1, way: 1, part: 1, share: 1, shares: 1, exit: 1, salary: 1, drawing: 1, drawings: 1, dad: 1, attention: 1, knowledge: 1, behalf: 1, own: 1, response: 1, reply: 1, input: 1, request: 1, company: 1, business: 1, complaint: 1, contentions: 1, submissions: 1, papers: 1, pleadings: 1, version: 1, application: 1, opposition: 1, evidence: 1, defence: 1, defense: 1, argument: 1, story: 1,
+      // Court-process and document nouns can never be possessable ASSETS —
+      // "my rescission" vs "the Constitutional Court rescission" is not two
+      // owners of one asset (LPC complaint bundle, 31 Oct 2026 live run).
+      rescission: 1, proceedings: 1, proceeding: 1, referral: 1, arbitration: 1, litigation: 1, action: 1, counterclaim: 1, summons: 1, plea: 1, replication: 1, rejoinder: 1, surrejoinder: 1, judgment: 1, judgement: 1, order: 1, appeal: 1, condonation: 1, interdict: 1, mediation: 1, motion: 1, hearing: 1, trial: 1, discovery: 1, subpoena: 1, notice: 1, report: 1, document: 1, letter: 1 };
     // A possessable asset is a concrete noun: not an -ing form, not a plural.
     function isAsset(a) { return !STOPN[a] && !/ing$/.test(a) && !/s$/.test(a); }
     var MY_G = /\bmy\s+([a-z][a-z-]{2,20})\b/g;
@@ -5122,10 +5126,18 @@ function voDigitalForensicsScan(pdfBytes, pdfDoc, opts) {
     // "pdf-lib", XMP 2025-06-23 vs Info 2026-08-05 — the seal date). When the
     // page text carries our seal furniture, the file has by definition been
     // through our sealer and the Info dictionary describes the seal pass.
+    // Live-run fix (LPC complaint bundle, 31 Oct 2026): the current sealer
+    // (v1.3.0) writes "Verum Omnis Document Sealing Service v1.3.0" into the
+    // XMP pdf:Producer, and a pdf-lib re-serialisation in the pipeline reverts
+    // the Info dictionary to pdf-lib's default — so OUR name can sit in EITHER
+    // store. Check both stores before comparing them against each other,
+    // otherwise every website-sealed file self-flags CT24/CT29.
+    var _xmpSelfTool = xmp ? (voXmpValue(xmp, 'pdf:Producer') || voXmpValue(xmp, 'xmp:CreatorTool') || '') : '';
     var _isVerumSealed = /verum\s*omnis/i.test(_selfProducer) ||
+      /verum\s*omnis/i.test(_xmpSelfTool) ||
       !!(opts && opts.sealedByThisPlatform);
     if (_isVerumSealed && xmp) {
-      findings.voSelfSealNote = 'Metadata comparison suppressed: this file was sealed by Verum Omnis, so its Info dictionary carries the SEAL\'s tool and timestamp, not the source document\'s. The XMP-vs-Info creation-date and producer differences that follow from that are artefacts of sealing, not evidence about the document, and were NOT reported as findings. To test the original document\'s metadata, scan the unsealed original.';
+      findings.voSelfSealNote = 'Metadata comparison suppressed: this file was sealed by Verum Omnis, so one of its metadata stores describes the SEAL pass (our tool, the seal date) rather than the source document. The XMP-vs-Info creation-date and producer differences that follow from that are artefacts of sealing, not evidence about the document, and were NOT reported as findings. To test the original document\'s metadata, scan the unsealed original.';
     }
     if (xmp && pdfDoc && !_isVerumSealed) {
       var xmpCreate = voXmpValue(xmp, 'xmp:CreateDate');

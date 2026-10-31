@@ -48,6 +48,14 @@ t.ok(D06B([
   'Attached hereto as annexure A which was also as attached in turn to my answering affidavit in the matter.',
   'Consequently, my attorneys appointed a consultant. The contentions of Former Way Properties require response.',
 ]).length === 0, 'D06B silent on affidavits/attorneys/contentions (drafting nouns)');
+// Court-process nouns are not assets either — LPC complaint bundle live run
+// (31 Oct 2026): "my rescission application" paired with an entity's
+// "rescission" produced a nonsense CT06. Silence required.
+t.ok(D06B([
+  'On 3 July 2026, my rescission application in the Constitutional Court proceedings under case number CCT 19/20 was served.',
+  'Filler page of record text. '.repeat(40),
+  'The Constitutional Court rescission relief sought by Bright Idea Projects is opposed in the proceedings.',
+]).length === 0, 'D06B silent on court-process nouns (rescission/proceedings)');
 
 // ---- D01B: theft vs scam ----
 const theft = [
