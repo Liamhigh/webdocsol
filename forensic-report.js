@@ -69,7 +69,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // enforces the cross-file equality.
 var ENGINE_VERSION = '5.3.5-web';
 var CONSTITUTION_VERSION = '6.1';
-var DETECTOR_COUNT = 42, CT_COUNT = 50, SP_COUNT = 17;
+var DETECTOR_COUNT = 43, CT_COUNT = 51, SP_COUNT = 17;
 
 // ---------------- Verum Omnis Constitution v6.1 FINAL (canonical reference) ----------------
 // Sealed instrument: "Truth for All". Full text + machine-readable record are public.

@@ -29,7 +29,8 @@ const D07A = E.DETECTORS.D07A_DETECT_UNEVIDENCED_AUTHORITY;
 const D07B = E.DETECTORS.D07B_DETECT_BLANK_SIGNATURE_BLOCKS;
 const D08A = E.DETECTORS.D08A_DETECT_SCAN_ONLY_PAGE;
 const D09A = E.DETECTORS.D09A_DETECT_COORDINATION_NEAR_DUP;
-t.ok([D02D, D01D, D07A, D07B, D08A, D09A].every(f => typeof f === 'function'),
+const D10A = E.DETECTORS.D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT;
+t.ok([D02D, D01D, D07A, D07B, D08A, D09A, D10A].every(f => typeof f === 'function'),
   'batch-5 detectors are registered');
 
 // ---- D02D: billing after claimed end ----
@@ -176,9 +177,59 @@ t.ok(D09A([letterA, 'Filler page. '.repeat(30), letterA]).length === 0,
 t.ok(D09A([letterA, 'An entirely different passage about invoices, banking, transfers and amounts paid in March. '.repeat(8)]).length === 0,
   'D09A silent on distinct texts');
 
+// ---- D10A: s 12B statutory track staffed while the licence is declared dead ----
+// The live-run record (F&R letter to G.L. Seethal Attorneys, 29 Sep 2026,
+// seal VO-3464E3F30514): nomination of three arbitrators "strictly in
+// compliance with the process contemplated in section 12B of the Act" at
+// paras 3.1-3.2; licence "terminated and / or expired and / or is otherwise
+// no longer valid or operative" at para 3.9.
+const s12bStaffing = [
+  'We refer to the Notice issued by the Controller of Petroleum Products pursuant to section 12B of the Petroleum Products Act 120 of 1977. ' +
+    'We are instructed to nominate the following Advocates of the KwaZulu-Natal Bar, in no particular order, for consideration by the parties: ' +
+    'Advocate Zuanite Ploos van Amstel; Advocate Keshini Govender; and Advocate Mark Tucker. The nomination is made strictly in compliance ' +
+    'with the process contemplated in section 12B of the Act and without prejudice to all of our client\'s rights.',
+  'Our client has been informed by the Department of Mineral and Petroleum Resources that your client\'s retail licence in respect of ' +
+    'trading at the subject premises has terminated and / or expired and / or is otherwise no longer valid or operative. Your client is ' +
+    'hereby called upon to immediately cease all retailing of prescribed petroleum products.',
+];
+const outS12b = D10A(s12bStaffing);
+t.ok(outS12b.length === 1 && outS12b[0].type === 'CT56' && outS12b[0].severity === 3,
+  'D10A fires once on s 12B staffing plus licence-death assertion');
+t.ok(/Page 1 vs Page 2/.test(outS12b[0].location), 'D10A anchors both pages');
+t.ok(/indicator for legal review, not a determination/i.test(outS12b[0].evidence),
+  'D10A is worded as an indicator, never a determination');
+// Contractual arbitration clause (no s 12B) plus an expired lease — silent:
+// arbitrating a termination dispute is legitimate.
+t.ok(D10A([
+  'Any dispute shall be referred to arbitration in terms of clause 14, and the parties shall nominate an arbitrator by agreement.',
+  'The lease agreement expired on 31 July 2026 by effluxion of time.',
+]).length === 0, 'D10A silent on contractual arbitration without the s 12B track');
+// Mere mention of a pending s 12B process without staffing it — silent.
+t.ok(D10A([
+  'A notice under section 12B of the Act was issued by the Controller of Petroleum Products and remains pending.',
+  'Our records show the retail licence was cancelled by the Controller last year.',
+]).length === 0, 'D10A silent on a pending s 12B mention without arbitrator staffing');
+// Staffing without any licence-death assertion — silent.
+t.ok(D10A([
+  'We nominate the following advocates as prospective arbitrators strictly in compliance with section 12B of the Act.',
+  'The parties remain in discussion about supply terms and branding.',
+]).length === 0, 'D10A silent on staffing alone');
+// Licence-death assertion alone — silent.
+t.ok(D10A([
+  'Your client\'s retail licence has expired and is no longer valid or operative.',
+  'Kindly govern yourself accordingly.',
+]).length === 0, 'D10A silent on licence-death alone');
+// Adjacent-page staffing and death with a second staffing page — one pair, no duplicate.
+t.ok(D10A([
+  s12bStaffing[0],
+  s12bStaffing[0],
+  s12bStaffing[1],
+]).every((f, i, arr) => arr.findIndex(g => g.location === f.location) === i),
+  'D10A never emits the same page pair twice');
+
 // Robustness: no throw on edge inputs.
 for (const bad of [[], [''], ['   '], ['x'.repeat(100000)], null]) {
-  t.ok([D02D, D01D, D07A, D07B, D08A, D09A].every(f => Array.isArray(f(bad))),
+  t.ok([D02D, D01D, D07A, D07B, D08A, D09A, D10A].every(f => Array.isArray(f(bad))),
     'batch-5 detectors robust on edge input');
 }
 
