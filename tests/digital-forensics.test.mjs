@@ -112,6 +112,28 @@ const fakeDoc = (over = {}) => ({
   ok(typeof f.voSelfSealNote === 'string' && /sealed by Verum Omnis/.test(f.voSelfSealNote),
     'the suppression is disclosed via voSelfSealNote, never silent');
 }
+// XMP-CARRIED SELF-SEAL (LPC complaint bundle live run, 31 Oct 2026): the
+// v1.3.0 sealer writes its own name into the XMP pdf:Producer while a pdf-lib
+// re-serialisation in the pipeline reverts the Info dictionary to pdf-lib's
+// default — our name can sit in EITHER store, and both orientations must be
+// recognised or every website-sealed file self-flags CT24/CT29.
+{
+  const xmp = '<x:xmpmeta><pdf:Producer>Verum Omnis Document Sealing Service v1.3.0</pdf:Producer>' +
+              '<xmp:CreatorTool>Chromium</xmp:CreatorTool></x:xmpmeta>';
+  const f = SCAN(bytes('%PDF-1.7\n' + xmp + '\n' + pad + '%%EOF\n'),
+    fakeDoc({ producer: 'pdf-lib (https://github.com/Hopding/pdf-lib)' }));
+  ok(!f.some(x => x.type === 'CT24'),
+    'XMP naming Verum Omnis with pdf-lib Info does NOT self-flag CT24 (LPC bundle orientation)');
+  ok(typeof f.voSelfSealNote === 'string' && /sealed by Verum Omnis/.test(f.voSelfSealNote),
+    'the XMP-orientation suppression is also disclosed via voSelfSealNote');
+}
+// A genuinely third-party XMP producer still flags against pdf-lib Info.
+{
+  const xmp = '<x:xmpmeta><pdf:Producer>Microsoft Word 2016</pdf:Producer></x:xmpmeta>';
+  const f = SCAN(bytes('%PDF-1.7\n' + xmp + '\n' + pad + '%%EOF\n'),
+    fakeDoc({ producer: 'pdf-lib (https://github.com/Hopding/pdf-lib)' }));
+  ok(f.some(x => x.type === 'CT24'), 'third-party XMP producer vs pdf-lib Info still flags CT24');
+}
 // A non-Verum producer is unaffected — real disagreements still flag.
 {
   const xmp = '<x:xmpmeta xmlns:x="adobe:ns:meta/"><xmp:CreateDate>2018-05-01T09:00:00Z</xmp:CreateDate></x:xmpmeta>';
