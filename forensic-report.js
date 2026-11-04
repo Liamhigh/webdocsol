@@ -67,9 +67,13 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.3.5-web';
+var ENGINE_VERSION = '5.4.0-web';
 var CONSTITUTION_VERSION = '6.1';
-var DETECTOR_COUNT = 43, CT_COUNT = 51, SP_COUNT = 17;
+// Counts mirror the live registry and run-list in forensic-engine-page.js.
+// The report recomputes from the registry at runtime when the engine is
+// loaded (the seal page inlines both); these constants are the standalone
+// fallback. Keep them in sync when detectors or CT kinds change.
+var DETECTOR_COUNT = 59, CT_COUNT = 58, SP_COUNT = 17;
 
 // ---------------- Verum Omnis Constitution v6.1 FINAL (canonical reference) ----------------
 // Sealed instrument: "Truth for All". Full text + machine-readable record are public.
@@ -1644,7 +1648,7 @@ function secExecSummary(ctx, data, opts) {
     fbVerified++; fbList.push(fbAll[fb]);
     var fbs = Math.max(1, Math.min(5, fbAll[fb].severity || 1)); fbCounts[fbs]++;
   }
-  var boxH = 86;
+  var boxH = 98;
   ctx.ensure(boxH + 8);
   ctx.page.drawRectangle({ x: LM, y: ctx.y - boxH, width: CW, height: boxH, color: BOXBG, borderColor: GOLD, borderWidth: 1 });
   ctx.page.drawText(String(fbVerified), { x: LM + 18, y: ctx.y - 44, size: 26, font: ctx.f.timesBold, color: NAVY2 });
@@ -1652,8 +1656,19 @@ function secExecSummary(ctx, data, opts) {
   // Founder ruling (AGENTS.md, v8.0 §15.2): severity word-bands do not print,
   // and no ratio either ("4 / 46" read as a score, evidence-bundle-7-docs).
   ctx.page.drawText('Kinds of finding recorded: ' + (fr.contradictionTypesUsed || 0), { x: LM + 200, y: ctx.y - 34, size: 11, font: ctx.f.timesBold, color: NAVY2 });
-  ctx.page.drawText('(the engine checks for ' + CT_COUNT + ' kinds).', { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
-  if (fbAiCands > 0) ctx.page.drawText('AI-raised candidates: ' + fbAiCands + ' (advisory, not findings)', { x: LM + 200, y: ctx.y - 64, size: 10, font: ctx.f.times, color: INK });
+  // Prefer the live registry over the fallback constants when the engine is
+  // loaded, so the kinds count can never drift from the ruleset again.
+  var ctTotal = (typeof CONTRADICTION_TYPES !== 'undefined' && CONTRADICTION_TYPES) ? Object.keys(CONTRADICTION_TYPES).length : CT_COUNT;
+  ctx.page.drawText('(the engine checks for ' + ctTotal + ' kinds).', { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
+  if (typeof CONTRADICTION_TYPES !== 'undefined' && CONTRADICTION_TYPES) {
+    var scopeN = { self: 0, pair: 0, conditional: 0 };
+    for (var scopeK in CONTRADICTION_TYPES) {
+      var scopeV = CONTRADICTION_TYPES[scopeK].scope || [];
+      for (var scopeI = 0; scopeI < scopeV.length; scopeI++) if (scopeN[scopeV[scopeI]] !== undefined) scopeN[scopeV[scopeI]]++;
+    }
+    ctx.page.drawText('Scope: ' + scopeN.self + ' self / ' + scopeN.pair + ' pair / ' + scopeN.conditional + ' conditional.', { x: LM + 200, y: ctx.y - 62, size: 8.5, font: ctx.f.times, color: INK });
+  }
+  if (fbAiCands > 0) ctx.page.drawText('AI-raised candidates: ' + fbAiCands + ' (advisory, not findings)', { x: LM + 200, y: ctx.y - 74, size: 10, font: ctx.f.times, color: INK });
   ctx.y -= boxH + 12;
 
   // AI document classification (optional; only shown when the classifier ran)
