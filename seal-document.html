@@ -791,9 +791,13 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.3.5-web';
+var ENGINE_VERSION = '5.4.0-web';
 var CONSTITUTION_VERSION = '6.1';
-var DETECTOR_COUNT = 43, CT_COUNT = 51, SP_COUNT = 17;
+// Counts mirror the live registry and run-list in forensic-engine-page.js.
+// The report recomputes from the registry at runtime when the engine is
+// loaded (the seal page inlines both); these constants are the standalone
+// fallback. Keep them in sync when detectors or CT kinds change.
+var DETECTOR_COUNT = 59, CT_COUNT = 58, SP_COUNT = 17;
 
 // ---------------- Verum Omnis Constitution v6.1 FINAL (canonical reference) ----------------
 // Sealed instrument: "Truth for All". Full text + machine-readable record are public.
@@ -2368,7 +2372,7 @@ function secExecSummary(ctx, data, opts) {
     fbVerified++; fbList.push(fbAll[fb]);
     var fbs = Math.max(1, Math.min(5, fbAll[fb].severity || 1)); fbCounts[fbs]++;
   }
-  var boxH = 86;
+  var boxH = 98;
   ctx.ensure(boxH + 8);
   ctx.page.drawRectangle({ x: LM, y: ctx.y - boxH, width: CW, height: boxH, color: BOXBG, borderColor: GOLD, borderWidth: 1 });
   ctx.page.drawText(String(fbVerified), { x: LM + 18, y: ctx.y - 44, size: 26, font: ctx.f.timesBold, color: NAVY2 });
@@ -2376,8 +2380,19 @@ function secExecSummary(ctx, data, opts) {
   // Founder ruling (AGENTS.md, v8.0 §15.2): severity word-bands do not print,
   // and no ratio either ("4 / 46" read as a score, evidence-bundle-7-docs).
   ctx.page.drawText('Kinds of finding recorded: ' + (fr.contradictionTypesUsed || 0), { x: LM + 200, y: ctx.y - 34, size: 11, font: ctx.f.timesBold, color: NAVY2 });
-  ctx.page.drawText('(the engine checks for ' + CT_COUNT + ' kinds).', { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
-  if (fbAiCands > 0) ctx.page.drawText('AI-raised candidates: ' + fbAiCands + ' (advisory, not findings)', { x: LM + 200, y: ctx.y - 64, size: 10, font: ctx.f.times, color: INK });
+  // Prefer the live registry over the fallback constants when the engine is
+  // loaded, so the kinds count can never drift from the ruleset again.
+  var ctTotal = (typeof CONTRADICTION_TYPES !== 'undefined' && CONTRADICTION_TYPES) ? Object.keys(CONTRADICTION_TYPES).length : CT_COUNT;
+  ctx.page.drawText('(the engine checks for ' + ctTotal + ' kinds).', { x: LM + 200, y: ctx.y - 50, size: 10, font: ctx.f.times, color: INK });
+  if (typeof CONTRADICTION_TYPES !== 'undefined' && CONTRADICTION_TYPES) {
+    var scopeN = { self: 0, pair: 0, conditional: 0 };
+    for (var scopeK in CONTRADICTION_TYPES) {
+      var scopeV = CONTRADICTION_TYPES[scopeK].scope || [];
+      for (var scopeI = 0; scopeI < scopeV.length; scopeI++) if (scopeN[scopeV[scopeI]] !== undefined) scopeN[scopeV[scopeI]]++;
+    }
+    ctx.page.drawText('Scope: ' + scopeN.self + ' self / ' + scopeN.pair + ' pair / ' + scopeN.conditional + ' conditional.', { x: LM + 200, y: ctx.y - 62, size: 8.5, font: ctx.f.times, color: INK });
+  }
+  if (fbAiCands > 0) ctx.page.drawText('AI-raised candidates: ' + fbAiCands + ' (advisory, not findings)', { x: LM + 200, y: ctx.y - 74, size: 10, font: ctx.f.times, color: INK });
   ctx.y -= boxH + 12;
 
   // AI document classification (optional; only shown when the classifier ran)
@@ -6767,14 +6782,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 </script>
 <script>
 /* VO-INLINE:forensic-engine-page.js:START */
-// ============== FORENSIC CONTRADICTION ENGINE v5.3.5-web ================
-// 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
+// ============== FORENSIC CONTRADICTION ENGINE v5.4.0-web ================
+// 58 Contradiction Types | 60 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.3.5-web
-// 43 Contradiction Types | 37 Detectors | 17 Serial Patterns
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.4.0-web
+// 58 Contradiction Types | 60 Detectors | 17 Serial Patterns
 // + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
 // This engine analyzes documents for internal contradictions, fraudulent
@@ -6795,7 +6810,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.3.5-web';
+var VO_ENGINE_VERSION = '5.4.0-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
@@ -6840,49 +6855,49 @@ var CONTRADICTION_TYPES = {
   CT01_DIRECT_STATEMENT: {
     id: 'CT01', name: 'Direct Statement Contradiction',
     desc: 'Two statements in the document directly oppose each other',
-    severity: 5, category: 'STATEMENTAL',
+    severity: 5, category: 'STATEMENTAL', scope: ['self', 'pair'],
     example: '"Payment was made on 15 March" vs "No payment was ever made"'
   },
   CT02_NUMERICAL_DISCREPANCY: {
     id: 'CT02', name: 'Numerical Discrepancy',
     desc: 'Numbers, amounts, or quantities do not match across the document',
-    severity: 4, category: 'STATEMENTAL',
+    severity: 4, category: 'STATEMENTAL', scope: ['self', 'pair'],
     example: 'Invoice total R50,000 but supporting docs show R45,000'
   },
   CT03_DATE_INCONSISTENCY: {
     id: 'CT03', name: 'Date Inconsistency',
     desc: 'Dates, timestamps, or chronological references conflict',
-    severity: 5, category: 'STATEMENTAL',
+    severity: 5, category: 'STATEMENTAL', scope: ['self', 'pair'],
     example: 'Contract dated 2024-01-15 references an event from 2024-03-20'
   },
   CT04_TEMPORAL_SEQUENCE_BREAK: {
     id: 'CT04', name: 'Temporal Sequence Break',
     desc: 'Events are described in an impossible chronological order',
-    severity: 4, category: 'STATEMENTAL',
+    severity: 4, category: 'STATEMENTAL', scope: ['self'],
     example: 'Document claims discovery happened before the incident occurred'
   },
   CT05_CAUSAL_IMPOSSIBILITY: {
     id: 'CT05', name: 'Causal Impossibility',
     desc: 'A claimed cause could not have produced the stated effect',
-    severity: 3, category: 'STATEMENTAL',
+    severity: 3, category: 'STATEMENTAL', scope: ['self'],
     example: 'Email claims response was sent before the original was received'
   },
   CT06_LOGICAL_IMPOSSIBILITY: {
     id: 'CT06', name: 'Logical Impossibility',
     desc: 'The document asserts something that is logically impossible',
-    severity: 5, category: 'STATEMENTAL',
+    severity: 5, category: 'STATEMENTAL', scope: ['self'],
     example: 'Entity claims to be both registered and deregistered simultaneously'
   },
   CT07_SCOPE_CREEP: {
     id: 'CT07', name: 'Scope Creep Indicator',
     desc: 'Document scope expands beyond original stated boundaries',
-    severity: 2, category: 'STATEMENTAL',
+    severity: 2, category: 'STATEMENTAL', scope: ['pair'],
     example: 'Quote for kitchen renovation includes pool construction'
   },
   CT08_TERM_DEFINITION_CONFLICT: {
     id: 'CT08', name: 'Term Definition Contradiction',
     desc: 'Key terms are defined differently in different sections',
-    severity: 3, category: 'STATEMENTAL',
+    severity: 3, category: 'STATEMENTAL', scope: ['self'],
     example: '"Net profit" defined one way in section 2, another in section 8'
   },
 
@@ -6892,37 +6907,37 @@ var CONTRADICTION_TYPES = {
   CT09_IDENTITY_CONTRADICTION: {
     id: 'CT09', name: 'Identity Contradiction',
     desc: 'The same person/entity is described with conflicting attributes',
-    severity: 5, category: 'IDENTITY',
+    severity: 5, category: 'IDENTITY', scope: ['self', 'pair'],
     example: 'Director listed as John Smith (ID 760101) and John Smit (ID 850202)'
   },
   CT10_ROLE_CONTRADICTION: {
     id: 'CT10', name: 'Role Contradiction',
     desc: 'Person acts in a capacity they do not hold',
-    severity: 4, category: 'IDENTITY',
+    severity: 4, category: 'IDENTITY', scope: ['self', 'pair'],
     example: 'Person signs as "Managing Director" but company records show different MD'
   },
   CT11_AUTHORITY_CONTRADICTION: {
     id: 'CT11', name: 'Authority Contradiction',
     desc: 'Action taken exceeds stated authority or delegation',
-    severity: 5, category: 'IDENTITY',
+    severity: 5, category: 'IDENTITY', scope: ['self', 'pair'],
     example: 'Junior employee approves R5 million expenditure without authorization'
   },
   CT12_NAME_SPELLING_VARIATION: {
     id: 'CT12', name: 'Name Spelling Variation',
     desc: 'Same entity/person spelled differently across document',
-    severity: 2, category: 'IDENTITY',
+    severity: 2, category: 'IDENTITY', scope: ['self', 'pair'],
     example: '"Johannes van der Merwe" vs "Johannes van der Merve"'
   },
   CT13_TITLE_INCONSISTENCY: {
     id: 'CT13', name: 'Title Inconsistency',
     desc: 'Professional titles, ranks, or designations do not match',
-    severity: 2, category: 'IDENTITY',
+    severity: 2, category: 'IDENTITY', scope: ['self', 'pair'],
     example: 'Signatory titled "Dr" in one section, "Mr" in another'
   },
   CT14_ENTITY_STATUS_CONFLICT: {
     id: 'CT14', name: 'Entity Status Contradiction',
     desc: 'Organization claimed status does not match reality',
-    severity: 5, category: 'IDENTITY',
+    severity: 5, category: 'IDENTITY', scope: ['self', 'pair'],
     example: 'Company claims "registered and active" but CIPC shows deregistered'
   },
 
@@ -6932,49 +6947,49 @@ var CONTRADICTION_TYPES = {
   CT15_AMOUNT_DISCREPANCY: {
     id: 'CT15', name: 'Amount Discrepancy',
     desc: 'Financial amounts do not reconcile across the document',
-    severity: 5, category: 'FINANCIAL',
+    severity: 5, category: 'FINANCIAL', scope: ['self', 'pair'],
     example: 'Subtotal R100,000 + VAT R15,000 = Total R120,000 (should be R115,000)'
   },
   CT16_CURRENCY_MISMATCH: {
     id: 'CT16', name: 'Currency Mismatch',
     desc: 'Currency conversions or references are inconsistent',
-    severity: 4, category: 'FINANCIAL',
+    severity: 4, category: 'FINANCIAL', scope: ['self', 'pair'],
     example: 'Contract in USD but invoice in ZAR without conversion rate'
   },
   CT17_ACCOUNT_NUMBER_INVALID: {
     id: 'CT17', name: 'Account Number Invalidity',
     desc: 'Bank account numbers fail validation or are inconsistent',
-    severity: 5, category: 'FINANCIAL',
+    severity: 5, category: 'FINANCIAL', scope: ['self'],
     example: 'Bank account number changes between pages of same document'
   },
   CT18_BANK_DETAIL_MISMATCH: {
     id: 'CT18', name: 'Bank Detail Mismatch',
     desc: 'Banking details conflict with known or stated information',
-    severity: 5, category: 'FINANCIAL',
+    severity: 5, category: 'FINANCIAL', scope: ['pair'],
     example: 'Payment instruction to Bank A but company normally uses Bank B'
   },
   CT19_VAT_NUMBER_INVALID: {
     id: 'CT19', name: 'VAT Number Invalid',
     desc: 'VAT number is not in the valid South African form or is inconsistent',
-    severity: 4, category: 'FINANCIAL',
+    severity: 4, category: 'FINANCIAL', scope: ['self'],
     example: 'a stated VAT number is not a 10-digit number beginning with 4'
   },
   CT20_REGISTRATION_NUMBER_FAKE: {
     id: 'CT20', name: 'Registration Number Fake',
     desc: 'Company or entity registration number is invalid or fabricated',
-    severity: 5, category: 'FINANCIAL',
+    severity: 5, category: 'FINANCIAL', scope: ['self'],
     example: 'CIPC registration number does not match entity name'
   },
   CT21_QUOTATION_MISMATCH: {
     id: 'CT21', name: 'Quotation Mismatch',
     desc: 'Quoted terms, prices, or conditions differ from final document',
-    severity: 3, category: 'FINANCIAL',
+    severity: 3, category: 'FINANCIAL', scope: ['pair'],
     example: 'Quote states 30-day payment but invoice demands immediate payment'
   },
   CT22_FINANCIAL_CALCULATION_ERROR: {
     id: 'CT22', name: 'Financial Calculation Error',
     desc: 'Mathematical calculations in financial sections are incorrect',
-    severity: 4, category: 'FINANCIAL',
+    severity: 4, category: 'FINANCIAL', scope: ['self'],
     example: 'VAT calculated at 20% when standard rate is 15%'
   },
 
@@ -6984,49 +6999,49 @@ var CONTRADICTION_TYPES = {
   CT23_SIGNATURE_MISMATCH: {
     id: 'CT23', name: 'Signature Mismatch',
     desc: 'Signature does not match known specimen or appears forged',
-    severity: 5, category: 'INTEGRITY',
+    severity: 5, category: 'INTEGRITY', scope: ['self'],
     example: 'Signature on page 1 visibly different from signature on page 5'
   },
   CT24_METADATA_CONTRADICTION: {
     id: 'CT24', name: 'Metadata Contradiction',
     desc: 'PDF metadata conflicts with document content or claims',
-    severity: 4, category: 'INTEGRITY',
+    severity: 4, category: 'INTEGRITY', scope: ['self'],
     example: 'Document claims created 2024-01-01 but metadata shows 2024-06-15'
   },
   CT25_FONT_INCONSISTENCY: {
     id: 'CT25', name: 'Font Inconsistency',
     desc: 'Different fonts used where consistency is expected',
-    severity: 3, category: 'INTEGRITY',
+    severity: 3, category: 'INTEGRITY', scope: ['self'],
     example: 'Body text uses Arial on some pages, Times New Roman on others'
   },
   CT26_FORMAT_ANOMALY: {
     id: 'CT26', name: 'Format Anomaly',
     desc: 'Document formatting shows signs of editing or manipulation',
-    severity: 3, category: 'INTEGRITY',
+    severity: 3, category: 'INTEGRITY', scope: ['self'],
     example: 'Margins, headers, or page numbering change mid-document'
   },
   CT27_LAYOUT_MANIPULATION: {
     id: 'CT27', name: 'Layout Manipulation',
     desc: 'Page layout shows content was added, removed, or rearranged',
-    severity: 4, category: 'INTEGRITY',
+    severity: 4, category: 'INTEGRITY', scope: ['self'],
     example: 'Page 3 has different header/footer suggesting inserted page'
   },
   CT28_IMAGE_INTEGRITY_FAILURE: {
     id: 'CT28', name: 'Image Integrity Failure',
     desc: 'Embedded images show signs of manipulation or replacement',
-    severity: 4, category: 'INTEGRITY',
+    severity: 4, category: 'INTEGRITY', scope: ['self'],
     example: 'Logo image has different compression than surrounding content'
   },
   CT29_TIMESTAMP_MANIPULATION: {
     id: 'CT29', name: 'Timestamp Manipulation',
     desc: 'Document timestamps are inconsistent or impossible',
-    severity: 5, category: 'INTEGRITY',
+    severity: 5, category: 'INTEGRITY', scope: ['self'],
     example: 'Document modification time precedes creation time'
   },
   CT30_VERSION_CONTROL_ANOMALY: {
     id: 'CT30', name: 'Version Control Anomaly',
     desc: 'Document version tracking is inconsistent or absent',
-    severity: 2, category: 'INTEGRITY',
+    severity: 2, category: 'INTEGRITY', scope: ['self', 'pair'],
     example: 'Page footer says "Version 3" but header says "Version 1"'
   },
 
@@ -7036,31 +7051,31 @@ var CONTRADICTION_TYPES = {
   CT31_CROSS_REFERENCE_FAILURE: {
     id: 'CT31', name: 'Cross-Reference Failure',
     desc: 'Referenced sections, clauses, or documents do not exist or conflict',
-    severity: 3, category: 'CROSS_REF',
+    severity: 3, category: 'CROSS_REF', scope: ['self', 'pair'],
     example: '"See Appendix A" but no Appendix A exists in document'
   },
   CT32_SOURCE_ATTRIBUTION_FAILURE: {
     id: 'CT32', name: 'Source Attribution Failure',
     desc: 'Cited sources cannot be verified or do not support claims',
-    severity: 4, category: 'CROSS_REF',
+    severity: 4, category: 'CROSS_REF', scope: ['self', 'pair'],
     example: 'Cites "Case 123/2024" but court records show no such case'
   },
   CT33_LEGAL_REFERENCE_INVALID: {
     id: 'CT33', name: 'Legal Reference Invalid',
     desc: 'Referenced legislation, cases, or regulations are incorrect',
-    severity: 4, category: 'CROSS_REF',
+    severity: 4, category: 'CROSS_REF', scope: ['self'],
     example: 'References "Section 42 of the Companies Act" but Act has no Section 42'
   },
   CT34_PRECEDENT_VIOLATION: {
     id: 'CT34', name: 'Precedent Violation',
     desc: 'Document contradicts established legal or procedural precedent',
-    severity: 3, category: 'CROSS_REF',
+    severity: 3, category: 'CROSS_REF', scope: ['conditional'],
     example: 'Court order format deviates from standard High Court requirements'
   },
   CT35_PROCEDURE_BREACH: {
     id: 'CT35', name: 'Procedure Breach',
     desc: 'Required procedural steps were skipped or incorrectly followed',
-    severity: 4, category: 'CROSS_REF',
+    severity: 4, category: 'CROSS_REF', scope: ['conditional'],
     example: 'Contract signed without required witness signatures'
   },
 
@@ -7070,19 +7085,19 @@ var CONTRADICTION_TYPES = {
   CT36_ADDRESS_CONTRADICTION: {
     id: 'CT36', name: 'Address Contradiction',
     desc: 'Physical addresses are inconsistent or non-existent',
-    severity: 3, category: 'CONTACT',
+    severity: 3, category: 'CONTACT', scope: ['self', 'pair'],
     example: 'Registered address on page 1 differs from address on page 10'
   },
   CT37_CONTACT_DETAIL_MISMATCH: {
     id: 'CT37', name: 'Contact Detail Mismatch',
     desc: 'Phone numbers, emails, or other contacts are inconsistent',
-    severity: 2, category: 'CONTACT',
+    severity: 2, category: 'CONTACT', scope: ['self', 'pair'],
     example: 'Email domain changes from @company.co.za to @company-gmail.com'
   },
   CT38_JURISDICTIONAL_IMPOSSIBILITY: {
     id: 'CT38', name: 'Jurisdictional Impossibility',
     desc: 'Legal jurisdiction claims are impossible or contradictory',
-    severity: 4, category: 'CONTACT',
+    severity: 4, category: 'CONTACT', scope: ['conditional'],
     example: 'South African court order claims jurisdiction over Dubai entity'
   },
 
@@ -7092,19 +7107,19 @@ var CONTRADICTION_TYPES = {
   CT39_CHAIN_OF_CUSTODY_BREAK: {
     id: 'CT39', name: 'Chain of Custody Break',
     desc: 'Evidence handling chain has gaps or inconsistencies',
-    severity: 5, category: 'EVIDENCE',
+    severity: 5, category: 'EVIDENCE', scope: ['pair'],
     example: 'Evidence receipt shows transfer to Person A but next record shows Person B'
   },
   CT40_WITNESS_STATEMENT_CONFLICT: {
     id: 'CT40', name: 'Witness Statement Conflict',
     desc: 'Witness accounts contradict each other or physical evidence',
-    severity: 4, category: 'EVIDENCE',
+    severity: 4, category: 'EVIDENCE', scope: ['pair'],
     example: 'Two witness statements describe mutually exclusive events'
   },
   CT41_EVIDENCE_TAMPERING_INDICATOR: {
     id: 'CT41', name: 'Evidence Tampering Indicator',
     desc: 'Evidence shows signs of alteration, substitution, or manipulation',
-    severity: 5, category: 'EVIDENCE',
+    severity: 5, category: 'EVIDENCE', scope: ['self'],
     example: 'Page numbers are non-sequential suggesting page removal'
   },
 
@@ -7114,13 +7129,13 @@ var CONTRADICTION_TYPES = {
   CT42_DIGITAL_FOOTPRINT_MISMATCH: {
     id: 'CT42', name: 'Digital Footprint Mismatch',
     desc: 'Digital traces (hashes, creation tools) conflict with claims',
-    severity: 4, category: 'DIGITAL',
+    severity: 4, category: 'DIGITAL', scope: ['pair'],
     example: 'Document claims scanned original but metadata shows created in Word'
   },
   CT43_DOCUMENT_INTERNAL_CONFLICT: {
     id: 'CT43', name: 'Document Internal Conflict',
     desc: 'Catch-all: any other internal contradiction not covered above',
-    severity: 3, category: 'DIGITAL',
+    severity: 3, category: 'DIGITAL', scope: ['self'],
     example: 'Multiple anomalies detected that suggest systematic document fraud'
   },
 
@@ -7131,13 +7146,13 @@ var CONTRADICTION_TYPES = {
   CT44_CONDITIONAL_CLAUSE_MISINVOKED: {
     id: 'CT44', name: 'Conditional Clause Misinvoked (Lessee/Owner Trap)',
     desc: 'A termination or expiry rests on a clause conditioned on the party being the lessee (not the owner) under a head lease, but the record shows that party had become the owner of the premises — the triggering event never occurred; whether the termination is void is for the court.',
-    severity: 5, category: 'FRANCHISE_LEASE',
+    severity: 5, category: 'FRANCHISE_LEASE', scope: ['conditional'],
     example: 'Franchise deemed "expired by effluxion" under cl. 3.2.3 (lessee-only), but the franchisor had purchased the site and was the registered owner.'
   },
   CT45_ASSET_VALUE_DENIAL: {
     id: 'CT45', name: 'Asset Value Recognised Then Denied (Goodwill)',
     desc: 'Goodwill or value of the business is recognised or quantified in one document but denied or said to have no compensable value in another — a forfeiture or clawback is itself an admission that the asset exists.',
-    severity: 5, category: 'FRANCHISE_LEASE',
+    severity: 5, category: 'FRANCHISE_LEASE', scope: ['self', 'pair'],
     example: 'The clawback table quantifies the Value of the Business, yet a later submission argues "goodwill has no compensable value".'
   },
 
@@ -7148,7 +7163,7 @@ var CONTRADICTION_TYPES = {
   CT46_ROLE_CAPACITY_CONFLICT: {
     id: 'CT46', name: 'Role / Capacity Contradiction',
     desc: 'An actor asserts they act in a corporate or restricted capacity (e.g. on behalf of a company, or a role barred from certain dealings) but the same record shows conduct inconsistent with that capacity — money routed to a personal account, or a briefing accepted that the stated capacity prohibits.',
-    severity: 4, category: 'IDENTITY',
+    severity: 4, category: 'IDENTITY', scope: ['self', 'pair'],
     example: 'A party states they act "on behalf of X (Pty) Ltd" yet directs payment to their personal trust account; or states they "may not accept briefs from the public" yet accepted one.'
   },
 
@@ -7160,7 +7175,7 @@ var CONTRADICTION_TYPES = {
   CT47_COERCIVE_CONDUCT: {
     id: 'CT47', name: 'Coercive Conduct Indicators',
     desc: 'Passages carrying threat, ultimatum or pressure language (consequences for refusal, supply or access cut off, lockout, "under protest/under duress" accounts) — indicators for human review, not a determination that coercion occurred.',
-    severity: 3, category: 'BEHAVIOUR',
+    severity: 3, category: 'BEHAVIOUR', scope: ['self', 'pair'],
     example: '"Should you fail to sign the addendum, we will have no option but to stop all fuel deliveries."'
   },
 
@@ -7171,7 +7186,7 @@ var CONTRADICTION_TYPES = {
   CT48_REALITY_DENIAL: {
     id: 'CT48', name: 'Gaslighting / Reality-Denial Indicators',
     desc: 'Passages denying a documented event or record, or attacking the other party\'s recollection ("that never happened", "we have no record of", "your recollection is wrong", "fabrication") — indicators for human review, not a determination of gaslighting.',
-    severity: 3, category: 'BEHAVIOUR',
+    severity: 3, category: 'BEHAVIOUR', scope: ['pair'],
     example: '"No such agreement was ever concluded; your recollection of events is simply wrong."'
   },
 
@@ -7182,7 +7197,7 @@ var CONTRADICTION_TYPES = {
   CT49_BLAME_REVERSAL: {
     id: 'CT49', name: 'Blame-Reversal / DARVO Indicators',
     desc: 'Passages where a party, facing a claim, attacks the claimant or casts itself as the injured party ("we are the injured party", "if anyone has been defrauded", "your harassment of our staff", "vexatious", threats of defamation or counterclaim) — indicators for human review, not a determination of intent.',
-    severity: 3, category: 'BEHAVIOUR',
+    severity: 3, category: 'BEHAVIOUR', scope: ['pair'],
     example: '"Your client\'s harassment of our staff leaves us no option; if anyone has been defrauded here, it is us."'
   },
 
@@ -7193,7 +7208,7 @@ var CONTRADICTION_TYPES = {
   CT50_SIGNED_BEHAVIOURAL_MARKER: {
     id: 'CT50', name: 'Behavioural Pattern Indicator (Signed Rule)',
     desc: 'A behavioural keyword set from the signed rule package matched the record — an indicator for human review, not a determination.',
-    severity: 3, category: 'BEHAVIOUR',
+    severity: 3, category: 'BEHAVIOUR', scope: ['pair'],
     example: 'A curated marker {stonewalling: "we are unable to comment", "your query is noted", "in due course"} matches two or more of its keywords on one page.'
   },
 
@@ -7202,42 +7217,54 @@ var CONTRADICTION_TYPES = {
   CT51_BILLING_AFTER_CLAIMED_END: {
     id: 'CT51', name: 'Billing After Claimed End',
     desc: 'A charge is raised for a period after the record says the relationship ended',
-    severity: 4, category: 'STATEMENTAL',
+    severity: 4, category: 'STATEMENTAL', scope: ['pair'],
     example: 'Lease pleaded to have ended 31 July, yet an invoice charges rent for October'
   },
   CT52_UNEVIDENCED_AUTHORITY_CLAIM: {
     id: 'CT52', name: 'Unevidenced Authority Claim',
     desc: 'Authority to depose or litigate is claimed but no supporting instrument appears anywhere in the record',
-    severity: 3, category: 'IDENTITY',
+    severity: 3, category: 'IDENTITY', scope: ['self'],
     example: '"I am duly authorised to depose" with no resolution cited or annexed anywhere in the filing'
   },
   CT53_BLANK_EXECUTION_BLOCK: {
     id: 'CT53', name: 'Blank Execution Block',
     desc: 'An instrument the record treats as operative carries unsigned signature blocks',
-    severity: 3, category: 'INTEGRITY',
+    severity: 3, category: 'INTEGRITY', scope: ['self'],
     example: 'Tripartite agreement with all three "SIGNED at ___" blocks blank while payment moved under it'
   },
   CT54_UNREADABLE_PAGE: {
     id: 'CT54', name: 'Unreadable Page',
     desc: 'Pages carry no machine-readable text and so went unchecked — a limit of the examination, not a defect found',
-    severity: 2, category: 'INTEGRITY',
+    severity: 2, category: 'INTEGRITY', scope: ['self'],
     example: 'Pages 340-360 are image-only scans inside an otherwise text-bearing bundle'
   },
   CT55_COORDINATED_DRAFTING_INDICATOR: {
     id: 'CT55', name: 'Coordinated Drafting Indicator',
     desc: 'Near-identical texts under different closing blocks — an indicator for human review, never a determination of collusion',
-    severity: 3, category: 'EVIDENCE',
+    severity: 3, category: 'EVIDENCE', scope: ['pair'],
     example: 'Two firms\u2019 letters two days apart are word-for-word identical bar the letterhead and signature'
   },
   CT56_S12B_LICENCE_PREDICATE_CONFLICT: {
     id: 'CT56', name: 'Section 12B Predicate Conflict Indicator',
     desc: 'A party staffs the s 12B statutory arbitration track while asserting the counterparty’s licence is terminated/expired/inoperative — s 12B exists between licensed participants; an indicator for legal review, never a determination',
-    severity: 3, category: 'EVIDENCE',
+    severity: 3, category: 'EVIDENCE', scope: ['conditional'],
     example: 'Same letter nominates three arbitrators "strictly in compliance with section 12B" and asserts the retailer’s licence "has terminated and/or expired"'
+  },
+  CT57_FACTIVE_COMMITMENT_DENIAL: {
+    id: 'CT57', name: 'Factive Commitment vs Denial Indicator',
+    desc: 'A factive verb (confirmed/admitted/acknowledged/certified/declared) commits the author to the truth of a proposition which the record elsewhere denies — an indicator for legal review, never a determination',
+    severity: 3, category: 'EVIDENCE', scope: ['self', 'pair'],
+    example: 'p.3 "the Controller confirmed that the account held cleared funds" vs p.9 "the account never held sufficient funds"'
+  },
+  CT58_FRAME_POLARITY_CONFLICT: {
+    id: 'CT58', name: 'Same-Statement Polarity Conflict',
+    desc: 'Two statements share an identical frame of six or more content words and differ only in polarity (a negation particle or an antonym pole) — an indicator for legal review, never a determination',
+    severity: 4, category: 'EVIDENCE', scope: ['self', 'pair'],
+    example: '"the defendant is liable for the loss" vs "the defendant is not liable for the loss"'
   }
 };
 
-// ===================== 37 DETECTOR FUNCTIONS =====================
+// ===================== 60 DETECTOR FUNCTIONS =====================
 // Each detector scans for a specific type of contradiction or fraud indicator.
 // Detectors return an array of findings: [{ type, severity, evidence, location }]
 
@@ -9074,6 +9101,147 @@ var DETECTORS = {
         evidence: 'The record staffs the section 12B statutory arbitration track ("' + q1 + '", p. ' + (tp + 1) + ') while asserting the counterparty\'s licence is dead ("' + q2 + '", p. ' + (dp + 1) + '). Section 12B of the Petroleum Products Act 120 of 1977 exists between licensed participants, so the two positions sit in tension; a party may still arbitrate the consequences of a termination, so this is an indicator for legal review, not a determination of inconsistency.',
         location: 'Page ' + (tp + 1) + ' vs Page ' + (dp + 1) });
       a = Math.max(a, Math.max(tp, dp));
+    }
+    return findings;
+  },
+
+  D10B_DETECT_FACTIVE_COMMITMENT_DENIAL: function(textBlocks) {
+    // CT57. A factive verb (confirmed/admitted/acknowledged/certified/declared)
+    // commits the author to the truth of its complement. A statement elsewhere
+    // in the record that denies the same proposition cannot stand with the
+    // commitment. Cross-vocabulary denials ("not cancelled" vs "terminated")
+    // need domain patterns like D10A; this detector covers the same-vocabulary
+    // case generally.
+    var findings = [];
+    var blocks = textBlocks || [];
+    var FACT_G = /\b(confirm\w+|admit\w+|acknowledg\w+|certif\w+|declar(?:e|es|ed|ing|ation|ations))\s+(?:that\s+)?([^.!?]{10,140})/gi;
+    var NEG_G = /\b(not|never|no\s+longer|deny|denies|denied|denial|false|falsely|incorrect|untrue|retract\w*|withdraw(?:s|n|ing|al|als)?\b(?!\s+from\b)|repudiat\w*|disput\w+)\b/i;
+    var STOP = { that:1, this:1, with:1, from:1, have:1, has:1, had:1, been:1, were:1, was:1, are:1, and:1, the:1, for:1, which:1, shall:1, will:1, would:1, could:1, should:1, must:1, into:1, upon:1, under:1, over:1, such:1, any:1, all:1, each:1, other:1, than:1, then:1, them:1, they:1, their:1, there:1, these:1, those:1, when:1, where:1, what:1, who:1, whom:1, whose:1, how:1, but:1, not:1, nor:1, its:1, his:1, her:1, our:1, your:1, out:1, off:1, per:1, via:1, within:1, without:1, between:1, against:1, about:1, above:1, below:1, after:1, before:1, during:1, until:1, since:1, while:1, applicant:1, applicants:1, respondent:1, respondents:1, plaintiff:1, plaintiffs:1, defendant:1, defendants:1, appellant:1, appellants:1 };
+    // A recital of authority is not a party commitment: "confirmed by the
+    // Supreme Court of Appeal" or "declared ... in the case of X v Y" reports
+    // what a court held, not what the author stands behind (b3/b4 corpora).
+    var CITE_G = /\b(?:court|appeal|tribunal|judg[em]ent|constitutional|supreme|magistrate|arbitrat\w+|case\s+of|\bv\.?\s+[A-Z])/i;
+    function lemmas(s) {
+      var ws = String(s).toLowerCase().match(/[a-z]{4,}/g) || [];
+      var out = {};
+      for (var i = 0; i < ws.length; i++) if (!STOP[ws[i]]) out[ws[i]] = 1;
+      return out;
+    }
+    function overlap(a, b) { var n = 0; for (var k in a) if (b[k]) n++; return n; }
+    function size(a) { var n = 0; for (var k in a) n++; return n; }
+    function snap(s, i0, i1) {
+      var q = String(s).slice(Math.max(0, i0), Math.min(String(s).length, i1)).replace(/\s+/g, ' ').trim();
+      if (q.length > 140) q = q.slice(0, 137) + '...';
+      return q;
+    }
+    var commits = [];
+    for (var b = 0; b < blocks.length; b++) {
+      var t = voStripSealFurniture(String(blocks[b] || ''));
+      FACT_G.lastIndex = 0;
+      var m;
+      while ((m = FACT_G.exec(t)) !== null) {
+        var prop = m[2];
+        NEG_G.lastIndex = 0;
+        if (NEG_G.test(prop)) continue; // a negative commitment is not a deniable positive
+        CITE_G.lastIndex = 0;
+        if (CITE_G.test(m[0])) continue; // authority recital, not a party commitment
+        // Negation BEFORE the verb makes the sentence itself the denial
+        // ("the Respondent does not acknowledge any rights ...", b3/b4).
+        var sentStart = Math.max(t.lastIndexOf('.', m.index), t.lastIndexOf('!', m.index), t.lastIndexOf('?', m.index)) + 1;
+        if (/\b(do(?:es|id)?\s+not|never|no\s+longer|no|deny|denies|denied|denial|refus\w+|fail\w*\s+to|cannot|can't|won't|would\s+not)\b/i.test(t.slice(sentStart, m.index))) continue;
+        var lm = lemmas(prop);
+        if (size(lm) < 3) continue;     // too thin to match reliably
+        commits.push({ page: b + 1, prop: prop, lm: lm, verb: m[1], snippet: snap(t, m.index, m.index + m[0].length) });
+      }
+    }
+    if (!commits.length) return findings;
+    var seen = {};
+    for (var b2 = 0; b2 < blocks.length && findings.length < 3; b2++) {
+      var t2 = voStripSealFurniture(String(blocks[b2] || ''));
+      var sents = t2.split(/[.!?]+\s/);
+      for (var si = 0; si < sents.length && findings.length < 3; si++) {
+        var s = sents[si];
+        // A parenthetical aside denies the clause it glosses, not the
+        // sentence's proposition ("(a proposition that is vehemently
+        // denied)", b3/b4) — test and read the sentence without its asides.
+        var sNoAsides = s.replace(/\([^()]*\)|\[[^\[\]]*\]/g, ' ');
+        NEG_G.lastIndex = 0;
+        if (!NEG_G.test(sNoAsides)) continue;
+        // A sentence carrying BOTH a standalone negator and a denial verb
+        // has ambiguous negation scope ("bear no merit ... nowhere does it
+        // dispute X's ownership" AFFIRMS ownership, b3/b4) — skip it rather
+        // than guess which way the scope falls.
+        if (/\b(not|never|nowhere|no)\b/i.test(sNoAsides) &&
+            /\b(deny|denies|denied|denial|disput\w+|retract\w+|repudiat\w+|withdraw(?:s|n|ing|al|als)?)\b/i.test(sNoAsides)) continue;
+        var dl = lemmas(sNoAsides);
+        if (size(dl) < 3) continue;
+        for (var ci = 0; ci < commits.length; ci++) {
+          var c = commits[ci];
+          var ov = overlap(c.lm, dl);
+          if (ov < 4 || ov < 0.6 * size(c.lm)) continue;
+          if (c.page === b2 + 1 && s.indexOf(c.prop.slice(0, 40)) !== -1) continue; // the commitment sentence itself
+          var key = c.page + ':' + Object.keys(c.lm).sort().join(',').slice(0, 60) + ':' + (b2 + 1);
+          if (seen[key]) continue;
+          seen[key] = 1;
+          findings.push({ type: 'CT57', severity: 3,
+            evidence: 'Factive commitment ("' + c.verb.toLowerCase() + '": "' + c.snippet + '", p. ' + c.page + ') versus denial of the same proposition ("' + snap(s, 0, 150) + '", p. ' + (b2 + 1) + '). A factive verb presupposes the truth of its complement, so the two cannot both stand; this is an indicator for legal review, not a determination.',
+            location: c.page === (b2 + 1) ? 'Page ' + c.page : 'Page ' + c.page + ' vs Page ' + (b2 + 1) });
+          break;
+        }
+      }
+    }
+    return findings;
+  },
+
+  D10C_DETECT_FRAME_POLARITY_CONFLICT: function(textBlocks) {
+    // CT58. Frame collision: two statements share an identical frame of >= 6
+    // content words and differ only in polarity (a negation particle or an
+    // antonym pole). Frame identity is the precision guard; boilerplate repeats
+    // share polarity and stay silent.
+    var findings = [];
+    var blocks = textBlocks || [];
+    var NEG = { not:1, never:1, cannot:1, "can't":1, "won't":1, "didn't":1, "doesn't":1, "isn't":1, "wasn't":1, "aren't":1, "weren't":1, neither:1, nor:1 };
+    var PAIRS = [
+      ['include', 'exclude'], ['included', 'excluded'], ['including', 'excluding'],
+      ['granted', 'refused'], ['valid', 'invalid'], ['operative', 'inoperative'],
+      ['binding', 'non-binding'], ['paid', 'unpaid'], ['disclosed', 'withheld'],
+      ['delivered', 'undelivered'], ['accepted', 'rejected'], ['present', 'absent'],
+      ['true', 'false'], ['lawful', 'unlawful'], ['authorised', 'unauthorised'], ['authorized', 'unauthorized']
+    ];
+    var POLE = {};
+    for (var pi = 0; pi < PAIRS.length; pi++) { POLE[PAIRS[pi][0]] = 'A' + pi + 'a'; POLE[PAIRS[pi][1]] = 'A' + pi + 'b'; }
+    var byFrame = {};
+    for (var b = 0; b < blocks.length; b++) {
+      var t = String(blocks[b] || '');
+      var sents = t.split(/[.!?]+\s+/);
+      for (var si = 0; si < sents.length; si++) {
+        var raw = sents[si];
+        if (raw.length < 25 || raw.length > 400) continue;
+        var toks = raw.toLowerCase().match(/[a-z][a-z'-]*/g) || [];
+        var frame = [], poles = [];
+        for (var ti = 0; ti < toks.length; ti++) {
+          var w = toks[ti];
+          if (NEG[w]) { poles.push('NEG'); continue; }
+          if (POLE[w]) { poles.push(POLE[w]); frame.push(POLE[w].slice(0, 2)); continue; }
+          frame.push(w);
+        }
+        if (frame.length < 6) continue;
+        var key = frame.join(' ');
+        var pk = poles.slice().sort().join('+');
+        if (!byFrame[key]) byFrame[key] = [];
+        var dup = false;
+        for (var ri = 0; ri < byFrame[key].length; ri++) if (byFrame[key][ri].pk === pk) { dup = true; break; }
+        if (!dup) byFrame[key].push({ page: b + 1, pk: pk, snippet: raw.replace(/\s+/g, ' ').trim().slice(0, 150) });
+      }
+    }
+    for (var key in byFrame) {
+      if (findings.length >= 3) break;
+      var recs = byFrame[key];
+      if (recs.length < 2) continue;
+      var a = recs[0], c = recs[1];
+      findings.push({ type: 'CT58', severity: 4,
+        evidence: 'Two statements share one frame and differ only in polarity: "' + a.snippet + '" (p. ' + a.page + ') versus "' + c.snippet + '" (p. ' + c.page + '). Identical framing with opposite polarity is a direct conflict between the statements; an indicator for legal review, not a determination of which is true.',
+        location: a.page === c.page ? 'Page ' + a.page : 'Page ' + a.page + ' vs Page ' + c.page });
     }
     return findings;
   },
@@ -14605,7 +14773,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     extractionNote += ' Markdown-formatted analysis: ' + _mdPages.length + ' page(s) (' + _mdList + ') carry chat-style markdown markup ("**" bold marks) and read as a rendered AI or chat analysis, not the record; their claims are treated as a secondary source and any observation resting only on them is a lead, never a finding.';
   }
 
-  // Run every detector
+  // Run every detector (59 -- keep DETECTOR_COUNT in forensic-report.js in sync)
   var detectors = [
     DETECTORS.D01_DETECT_DIRECT_CONTRADICTION,
     DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY,
@@ -14626,6 +14794,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     DETECTORS.D08A_DETECT_SCAN_ONLY_PAGE,
     DETECTORS.D09A_DETECT_COORDINATION_NEAR_DUP,
     DETECTORS.D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT,
+    DETECTORS.D10B_DETECT_FACTIVE_COMMITMENT_DENIAL,
+    DETECTORS.D10C_DETECT_FRAME_POLARITY_CONFLICT,
     DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY,
     DETECTORS.D05_DETECT_LOGICAL_IMPOSSIBILITY,
     DETECTORS.D06_DETECT_IDENTITY_CONFLICT,
@@ -14974,7 +15144,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     CT10: 0.8, CT13: 0.9, CT14: 0.85, CT24: 0.9, CT29: 0.9, CT42: 0.9,
     CT35: 0.8, CT04: 0.5, CT08: 0.7, CT26: 0.7, CT27: 0.6, CT28: 0.6,
     CT05: 0.6, CT31: 0.6, CT36: 0.6, CT39: 0.6, SERIAL: 0.7,
-    CT51: 0.85, CT52: 0.8, CT53: 0.8, CT54: 0.9, CT55: 0.6, CT56: 0.6
+    CT51: 0.85, CT52: 0.8, CT53: 0.8, CT54: 0.9, CT55: 0.6, CT56: 0.6, CT57: 0.6, CT58: 0.7
   };
   var totalScore = 0;
   var maxScore = 0;
@@ -18194,12 +18364,16 @@ async function buildSealCertificate(opts) {
   row('OPENTIMESTAMPS STATUS', otsLines, helv, 8.5);
 
   // Canonical statement box
-  var boxTop = 240, boxH = 74;
+  var boxTop = 240, boxH = 110;
   page.drawRectangle({ x: 70, y: boxTop - boxH, width: PW - 140, height: boxH, borderColor: GOLD, borderWidth: 1, color: rgb(1, 1, 1), opacity: 0.04 });
   var c1 = 'This seal proves two things only — integrity and time.';
   var c2 = 'It is not a verification of the document’s contents.';
-  page.drawText(c1, { x: cx(c1, timesItalic, 12), y: boxTop - 30, size: 12, font: timesItalic, color: WHITE });
-  page.drawText(c2, { x: cx(c2, timesItalic, 12), y: boxTop - 48, size: 12, font: timesItalic, color: WHITE });
+  var c3 = 'Aligned with the evidence-handling principles of ISO/IEC 27037:';
+  var c4 = 'auditability, repeatability, reproducibility, justifiability.';
+  page.drawText(c1, { x: cx(c1, timesItalic, 12), y: boxTop - 28, size: 12, font: timesItalic, color: WHITE });
+  page.drawText(c2, { x: cx(c2, timesItalic, 12), y: boxTop - 46, size: 12, font: timesItalic, color: WHITE });
+  page.drawText(c3, { x: cx(c3, helv, 8), y: boxTop - 72, size: 8, font: helv, color: MUTE });
+  page.drawText(c4, { x: cx(c4, helv, 8), y: boxTop - 84, size: 8, font: helv, color: MUTE });
 
   // Footer
   page.drawText('VERUM OMNIS FOUNDATION  |  PATENT PENDING', { x: cx('VERUM OMNIS FOUNDATION  |  PATENT PENDING', helvBold, 7.5), y: 52, size: 7.5, font: helvBold, color: MUTE });

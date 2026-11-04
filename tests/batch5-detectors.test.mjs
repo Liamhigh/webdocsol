@@ -30,7 +30,9 @@ const D07B = E.DETECTORS.D07B_DETECT_BLANK_SIGNATURE_BLOCKS;
 const D08A = E.DETECTORS.D08A_DETECT_SCAN_ONLY_PAGE;
 const D09A = E.DETECTORS.D09A_DETECT_COORDINATION_NEAR_DUP;
 const D10A = E.DETECTORS.D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT;
-t.ok([D02D, D01D, D07A, D07B, D08A, D09A, D10A].every(f => typeof f === 'function'),
+const D10B = E.DETECTORS.D10B_DETECT_FACTIVE_COMMITMENT_DENIAL;
+const D10C = E.DETECTORS.D10C_DETECT_FRAME_POLARITY_CONFLICT;
+t.ok([D02D, D01D, D07A, D07B, D08A, D09A, D10A, D10B, D10C].every(f => typeof f === 'function'),
   'batch-5 detectors are registered');
 
 // ---- D02D: billing after claimed end ----
@@ -226,6 +228,115 @@ t.ok(D10A([
   s12bStaffing[1],
 ]).every((f, i, arr) => arr.findIndex(g => g.location === f.location) === i),
   'D10A never emits the same page pair twice');
+
+// ---- D10B: factive commitment vs denial (CT57) ----
+// A factive verb presupposes the truth of its complement; a later denial of
+// the same proposition cannot stand with the commitment.
+const factivePair = [
+  'The bank confirmed that the account held sufficient cleared funds for the transfer.',
+  'Filler page of record text. '.repeat(40),
+  'The account never held sufficient funds; the transfer could not proceed.',
+];
+const outFactive = D10B(factivePair);
+t.ok(outFactive.length === 1 && outFactive[0].type === 'CT57' && outFactive[0].severity === 3,
+  'D10B fires once on factive commitment vs denial');
+t.ok(/Page 1 vs Page 3/.test(outFactive[0].location), 'D10B anchors both pages');
+t.ok(/indicator for legal review, not a determination/i.test(outFactive[0].evidence),
+  'D10B is worded as an indicator, never a determination');
+// Commitment alone — silent.
+t.ok(D10B([
+  'The bank confirmed that the account held sufficient cleared funds for the transfer.',
+  'Nothing further is recorded on this point.',
+]).length === 0, 'D10B silent on commitment without denial');
+// Denial alone — silent.
+t.ok(D10B([
+  'The account never held sufficient funds for the transfer.',
+  'Nothing further is recorded on this point.',
+]).length === 0, 'D10B silent on denial without commitment');
+// Denial with low lemma overlap — silent (different proposition).
+t.ok(D10B([
+  'The attorney confirmed that the mandate was terminated in writing.',
+  'The weather was not pleasant during that week at the coast.',
+]).length === 0, 'D10B silent on denial of a different proposition');
+// A negative commitment ("confirmed that no payment...") is not treated as a
+// positive proposition to be denied — silent.
+t.ok(D10B([
+  'The officer confirmed that no payment was received from the applicant.',
+  'The applicant states that payment was not made because the invoice was disputed.',
+]).length === 0, 'D10B silent on negative commitments');
+
+// ---- D10B false-positive regressions (b3/b4 sealed corpora) ----
+// "Declaratory order" is an adjective, not a factive verb — silent.
+t.ok(D10B([
+  'The court granted a declaratory order as to whether a contract was concluded between the parties.',
+  'Filler page of record text. '.repeat(40),
+  'Nowhere in the Act does it afford a power in an arbitration to make an award which constitutes a declaratory order as to whether a contract was concluded.',
+]).length === 0, 'D10B silent on "declaratory order" (not a factive verb)');
+// A recital of authority is not a party commitment — silent.
+t.ok(D10B([
+  'The judgment was confirmed by the Supreme Court of Appeal on the merits of the referral.',
+  'Filler page of record text. '.repeat(40),
+  'The referral was never determined on its merits by any court of appeal.',
+]).length === 0, 'D10B silent on court-authority recitals');
+// Negation BEFORE the verb makes the sentence the denial, not a commitment — silent.
+t.ok(D10B([
+  'There is no legal obligation on the respondent to acknowledge any rights of occupation pursuant to any agreement allegedly concluded prior to the written lease.',
+  'Filler page of record text. '.repeat(40),
+  'The respondent never acknowledged any rights of occupation pursuant to any agreement allegedly concluded prior to the written lease.',
+]).length === 0, 'D10B silent on pre-verb negated factives');
+// A parenthetical aside denies the clause it glosses, not the sentence — silent.
+t.ok(D10B([
+  'The applicant admits that it signed the Cession and Assignment Agreement on 28 February 2016.',
+  'Filler page of record text. '.repeat(40),
+  'To the extent that the negotiations that preceded the agreement of 28 February 2016 may have culminated in an oral agreement (a proposition that is vehemently denied), such was clearly superseded by the written cession and assignment agreement concluded on 28 February 2016.',
+]).length === 0, 'D10B silent on parenthetical aside denials');
+// A negated denial verb affirms rather than denies — silent.
+t.ok(D10B([
+  'The franchisor admits that Bright Idea is the owner of the premises at all relevant times.',
+  'Filler page of record text. '.repeat(40),
+  'In regard to the remaining contentions of ownership rights, such contentions bear no merit in that nowhere in the request for referral does it dispute Bright Idea as owner of the premises or raise any such challenge.',
+]).length === 0, 'D10B silent on negated denial verbs (double negation affirms)');
+// Narrative withdrawal is not a denial of a proposition — silent.
+t.ok(D10B([
+  'The applicant admits that it signed the Cession and Assignment Agreement on 28 February 2016.',
+  'Filler page of record text. '.repeat(40),
+  'The respondent is withdrawing from the signed cession and assignment agreement negotiations of February 2016.',
+]).length === 0, 'D10B silent on "withdrawing from" narrative use');
+
+// ---- D10C: same-frame polarity conflict (CT58) ----
+// Identical frame of 6+ content words, opposite polarity — the frame-identity
+// requirement is the false-positive guard.
+const polarityPair = [
+  'The defendant is liable for the loss suffered by the plaintiff in full.',
+  'Filler page of record text. '.repeat(40),
+  'The defendant is not liable for the loss suffered by the plaintiff in full.',
+];
+const outPolarity = D10C(polarityPair);
+t.ok(outPolarity.length === 1 && outPolarity[0].type === 'CT58' && outPolarity[0].severity === 4,
+  'D10C fires once on a negation polarity flip');
+t.ok(/Page 1 vs Page 3/.test(outPolarity[0].location), 'D10C anchors both pages');
+t.ok(/indicator for legal review, not a determination/i.test(outPolarity[0].evidence),
+  'D10C is worded as an indicator, never a determination');
+// Antonym pole flip — fires.
+t.ok(D10C([
+  'The licence remains valid for the period of the agreement between the parties.',
+  'Filler page of record text. '.repeat(40),
+  'The licence remains invalid for the period of the agreement between the parties.',
+]).length === 1, 'D10C fires on an antonym pole flip');
+// Identical repeats share polarity — silent (boilerplate is not a conflict).
+t.ok(D10C([
+  'The parties shall attempt settlement before any trial date is allocated.',
+  'The parties shall attempt settlement before any trial date is allocated.',
+]).length === 0, 'D10C silent on same-polarity repeats');
+// Short frames below the six-word floor — silent.
+t.ok(D10C(['He was not there.', 'She was there.']).length === 0,
+  'D10C silent below the frame-length floor');
+// Different frames with a negation present — silent.
+t.ok(D10C([
+  'The purchase price was paid in full on registration of transfer.',
+  'The vehicle was never delivered to the buyer at the agreed time.',
+]).length === 0, 'D10C silent on different frames');
+
 
 // Robustness: no throw on edge inputs.
 for (const bad of [[], [''], ['   '], ['x'.repeat(100000)], null]) {
