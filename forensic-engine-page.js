@@ -1,10 +1,10 @@
-// ============== FORENSIC CONTRADICTION ENGINE v5.4.0-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.5.0-web ================
 // 58 Contradiction Types | 60 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.4.0-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.5.0-web
 // 58 Contradiction Types | 60 Detectors | 17 Serial Patterns
 // + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
@@ -26,7 +26,7 @@
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.4.0-web';
+var VO_ENGINE_VERSION = '5.5.0-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
@@ -7440,7 +7440,7 @@ function detectSerialPatterns(textBlocks) {
 
     for (var w = 0; w < nWin; w++) {
       var windowText = blocks.slice(w, w + SERIAL_WINDOW_PAGES).join(' ');
-      var matchedStages = 0, matchedDetails = [];
+      var matchedStages = 0, matchedDetails = [], matchedTrace = [];
       for (var s = 0; s < pattern.stages.length; s++) {
         var stage = pattern.stages[s];
         for (var k = 0; k < stage.keywords.length; k++) {
@@ -7449,12 +7449,22 @@ function detectSerialPatterns(textBlocks) {
           if (voSerialKeywordHit(windowText, kw)) {
             matchedStages++;
             matchedDetails.push(stage.indicator + ': "' + kw + '"');
+            // Trace anchor (batch 5f): the first page of this window whose own
+            // text carries the keyword, so a corroborated pattern can be read
+            // stage by stage, page by page, in the scheme's own order. A hit
+            // that only spans the page boundary of the joined window text
+            // anchors to the window's first page.
+            var kwPage = w + 1;
+            for (var pg = w; pg < Math.min(blocks.length, w + SERIAL_WINDOW_PAGES); pg++) {
+              if (voSerialKeywordHit(blocks[pg], kw)) { kwPage = pg + 1; break; }
+            }
+            matchedTrace.push({ stage: stage.indicator, keyword: kw, page: kwPage });
             break;
           }
         }
       }
       if (!best || matchedStages > best.matchedStages) {
-        best = { matchedStages: matchedStages, details: matchedDetails, startPage: w + 1, endPage: Math.min(blocks.length, w + SERIAL_WINDOW_PAGES) };
+        best = { matchedStages: matchedStages, details: matchedDetails, trace: matchedTrace, startPage: w + 1, endPage: Math.min(blocks.length, w + SERIAL_WINDOW_PAGES) };
       }
     }
 
@@ -7473,6 +7483,11 @@ function detectSerialPatterns(textBlocks) {
       category: pattern.category,
       evidence: pattern.name + ' detected: ' + best.matchedStages + '/' + pattern.stages.length + ' stages matched within a ' +
         SERIAL_WINDOW_PAGES + '-page window. ' + best.details.join('; '),
+      // Stage-by-stage trace in scheme order, each stage anchored to the page
+      // where its keyword was found (batch 5f; rendered as the trace view in
+      // the report's Serial Pattern Analysis section, exported as
+      // serial_trace in the findings JSON).
+      trace: best.trace,
       location: loc
     });
   }
@@ -7872,6 +7887,109 @@ function _voMapLiteral(text, cmap) {
 // Yields to the event loop so the browser can repaint mid-scan.
 function _voYield() {
   return new Promise(function (r) { setTimeout(r, 0); });
+}
+
+// ===================== WELL-FORMEDNESS GATE (batch 5f) =====================
+// Borrowed from formal-verification practice (component contracts, and the
+// well-formedness checks a model must pass before verification may run): a
+// fixed set of integrity checks on the CONTAINER, disclosed ahead of the
+// findings on the CONTENTS. The gate changes no finding, no score and no
+// verdict; it states the condition of the record the detectors ran against,
+// so a reader can see the ground the analysis stands on. Every check is
+// deterministic and derived from signals the pipeline already computed.
+function voWellFormedness(o) {
+  o = o || {};
+  var checks = [];
+  var blocks = o.textBlocks || [];
+  var nPages = blocks.length;
+  var avgChars = nPages ? Math.round((o.contentChars || 0) / nPages) : 0;
+  var capList = function (pages) {
+    var l = pages.slice(0, 12).join(', ');
+    return pages.length > 12 ? l + ', … (' + pages.length + ' in total)' : l;
+  };
+
+  // WF1 — text layer. The unreadable guard below trusts the same 200
+  // characters/page line; the gate states it up front as a container check.
+  checks.push({
+    id: 'WF1', name: 'Machine-readable text layer',
+    pass: avgChars >= 200,
+    note: avgChars >= 200
+      ? 'the record averages ' + avgChars + ' machine-readable characters per page over ' + nPages + ' page(s)'
+      : 'the record averages only ' + avgChars + ' machine-readable characters per page — effectively no text layer; zero findings here means the content was not examined'
+  });
+
+  // WF2 — page coverage: every page readable after OCR rescue.
+  var io = o.imageOnlyPages || [];
+  checks.push({
+    id: 'WF2', name: 'Every page carries readable text',
+    pass: io.length === 0,
+    note: io.length === 0
+      ? ((o.ocrRan && (o.ocrPages || []).length) ? 'yes — ' + o.ocrPages.length + ' image page(s) were recovered by OCR rescue' : 'yes — no image-only pages')
+      : io.length + ' page(s) carry no machine-readable text (p. ' + capList(io) + '); those pages were not examined'
+  });
+
+  // WF3 — the record is the record, not an analysis of it. Identified
+  // analysis pages are quarantined as secondary sources, so a few do not
+  // fail the gate; a bundle that is ALL rendered analysis has no underlying
+  // record to examine.
+  var md = o.markdownPages || [];
+  var allMd = nPages > 0 && md.length >= nPages;
+  checks.push({
+    id: 'WF3', name: 'Record is the record, not an analysis of it',
+    pass: !allMd,
+    note: md.length === 0
+      ? 'no rendered AI or chat analysis pages found'
+      : (allMd
+        ? 'every page reads as a rendered AI or chat analysis — there is no underlying record to examine'
+        : md.length + ' page(s) (p. ' + capList(md) + ') read as a rendered AI or chat analysis and were quarantined as a secondary source')
+  });
+
+  // WF4 — at least one party identified, so findings can be attributed.
+  var parties = o.parties || [];
+  checks.push({
+    id: 'WF4', name: 'At least one party identified',
+    pass: parties.length >= 1,
+    note: parties.length >= 1
+      ? parties.length + ' part' + (parties.length === 1 ? 'y' : 'ies') + ' or person(s) identified in the record'
+      : 'no party or person could be identified — findings cannot be attributed to anyone'
+  });
+
+  // WF5 — at least one parseable date, so sequence can be tested at all.
+  var dates = o.dates || [];
+  checks.push({
+    id: 'WF5', name: 'At least one parseable date',
+    pass: dates.length >= 1,
+    note: dates.length >= 1
+      ? dates.length + ' distinct date(s) parse from the record'
+      : 'no date could be parsed — temporal contradictions cannot be tested'
+  });
+
+  // WF6 — bundle structure segmented: the engine distinguished the documents
+  // inside the file (one segment = a single-document file; zero means there
+  // was nothing to examine).
+  var segs = o.docSegs || [];
+  checks.push({
+    id: 'WF6', name: 'Bundle structure segmented',
+    pass: segs.length >= 1,
+    note: segs.length >= 1
+      ? segs.length + ' document segment(s) distinguished within the file'
+      : 'no document structure could be distinguished'
+  });
+
+  // WF7 — prior-seal recognition. A file that is itself a prior Verum Omnis
+  // sealed output is disclosed, never silently re-analysed as fresh evidence
+  // (disclosure only; the report-page exclusion handles it).
+  checks.push({
+    id: 'WF7', name: 'Prior sealed output recognised',
+    pass: true,
+    note: o.selfSealed
+      ? 'this file is itself a prior Verum Omnis sealed output; its report pages were excluded from contradiction scanning'
+      : 'this file is not a prior Verum Omnis sealed output'
+  });
+
+  var passed = 0;
+  for (var wfi = 0; wfi < checks.length; wfi++) if (checks[wfi].pass) passed++;
+  return { checks: checks, passed: passed, total: checks.length };
 }
 
 // ===================== MAIN FORENSIC ENGINE =====================
@@ -8420,6 +8538,26 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   }
 
   var _factIndex = voBuildFactIndex(textBlocks, _secondaryAllPages);
+  var _timeline = voBuildTimeline(allFindings, textBlocks, _secondaryAllPages);
+  var _personIndex = voBuildPersonIndex(allFindings);
+  // Batch 5f: the well-formedness gate — container checks disclosed ahead of
+  // the contents' findings (see voWellFormedness). Parties and dates are
+  // extracted once over the full record for the gate; both extractors
+  // already skip seal-stamp text.
+  var _wfText = textBlocks.join('\n');
+  var _wellFormed = voWellFormedness({
+    textBlocks: textBlocks,
+    contentChars: _contentChars,
+    imageOnlyPages: _imageOnlyPages,
+    ocrRan: _ocrRan,
+    ocrPages: _ocrPages,
+    markdownPages: _mdPages,
+    docSegs: _docSegs || [],
+    footerOnlyPages: _footer.pages,
+    selfSealed: _voSelfSealed,
+    parties: voExtractParties(_wfText),
+    dates: voExtractDates(_wfText)
+  });
 
   return {
     engineVersion: VO_ENGINE_VERSION,
@@ -8443,8 +8581,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     factIndex: _factIndex,
     crossDocConflicts: voCrossDocConflicts(_factIndex),
     swornPages: swornPages,
-    timeline: voBuildTimeline(allFindings, textBlocks, _secondaryAllPages),
-    personIndex: voBuildPersonIndex(allFindings),
+    timeline: _timeline,
+    personIndex: _personIndex,
+    wellFormedness: _wellFormed,
     findingsByType: findingsByType,
     findingsByCategory: findingsByCategory,
     contradictionTypesUsed: Object.keys(findingsByType).length,
@@ -8959,7 +9098,7 @@ function voRunPackageRules(compiled, textBlocks, existing) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    generateSummary: generateSummary, voEditDistance: voEditDistance,
+    generateSummary: generateSummary, voEditDistance: voEditDistance, voWellFormedness: voWellFormedness,
     voStripSealFurniture: voStripSealFurniture, voStripSealFurnitureBlocks: voStripSealFurnitureBlocks, voCacheDocSegs: voCacheDocSegs,
     voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voIsVerumAnalysisPage: voIsVerumAnalysisPage, voMarkdownAnalysisPages: voMarkdownAnalysisPages, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSnapWindow: voSnapWindow, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voIsSubmissionOnSealed: voIsSubmissionOnSealed, voSubmissionSpan: voSubmissionSpan, voFragmentCut: voFragmentCut, voDemoteSecondarySource: voDemoteSecondarySource, voImageOnlyCt26ToNotes: voImageOnlyCt26ToNotes, voSentenceAround: voSentenceAround, voDatedAfterReference: voDatedAfterReference, voIsStampContext: voIsStampContext,
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,

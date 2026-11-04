@@ -791,7 +791,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.4.0-web';
+var ENGINE_VERSION = '5.5.0-web';
 var CONSTITUTION_VERSION = '6.1';
 // Counts mirror the live registry and run-list in forensic-engine-page.js.
 // The report recomputes from the registry at runtime when the engine is
@@ -2773,6 +2773,18 @@ function serialDisplay(fnd, data) {
   return name;
 }
 
+// Batch 5f: render a serial pattern's trace — the matched stages in scheme
+// order, each anchored to the page where its keyword was found, so the
+// reviewer walks the chain instead of trusting a label.
+function fmtSerialTrace(trace) {
+  var parts = [];
+  for (var i = 0; i < trace.length; i++) {
+    var e = trace[i] || {};
+    parts.push((e.stage || 'stage') + ' — "' + (e.keyword || '') + '" (p. ' + (e.page || '?') + ')');
+  }
+  return parts.join('  ->  ');
+}
+
 function secSerial(ctx, data) {
   ctx.newBodyPage();
   ctx.heading('SERIAL PATTERN ANALYSIS');
@@ -2829,6 +2841,14 @@ function secSerial(ctx, data) {
       rows,
       { size: 8 }
     );
+    // Batch 5f: stage-by-stage trace under the corroborated table — the
+    // pattern read in scheme order, page by page.
+    for (var s2 = 0; s2 < labelled.length; s2++) {
+      var _tr = labelled[s2].trace;
+      if (_tr && _tr.length) {
+        ctx.para('Trace (' + (labelled[s2].serialName || 'pattern') + '): ' + fmtSerialTrace(_tr), { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 4 });
+      }
+    }
     // Pattern & racketeering consideration. A corroborated multi-stage pattern is
     // the kind of conduct organised-crime law addresses; surfaced as a hypothesis
     // only, never a determination (Prime Directive 4).
@@ -3050,6 +3070,22 @@ function secMethodology(ctx, data) {
   ctx.bullet(rulePackageLine(data), { size: 9.5 });
   ctx.bullet(brain9SweepLine(data), { size: 9.5 });
   ctx.bullet('Text extraction: ' + (data.extractionNotes || 'per-page PDF content-stream decoding with ToUnicode CMaps.'), { size: 9.5 });
+  ctx.gap(4);
+
+  // Batch 5f: the well-formedness gate — the container checks the record
+  // passed (or failed) before its contents were analysed. Disclosed, never
+  // scored: a FAIL is a limit of the record, not a defect of the analysis.
+  ctx.subHeading('Pre-analysis integrity checks');
+  var _wf = (data.findings && data.findings.wellFormedness) || null;
+  if (_wf && _wf.checks && _wf.checks.length) {
+    ctx.para(_wf.passed + ' of ' + _wf.total + ' checks passed. These checks describe the container the detectors ran against — text layer, page coverage, contamination by rendered analysis, party and date identifiability, bundle structure. They change no finding and no score.', { size: 9.5, after: 4 });
+    for (var _wfi = 0; _wfi < _wf.checks.length; _wfi++) {
+      var _wfc = _wf.checks[_wfi];
+      ctx.bullet((_wfc.pass ? 'PASS' : 'FAIL') + ' — ' + _wfc.id + ' ' + _wfc.name + ': ' + _wfc.note + '.', { size: 9, after: 3 });
+    }
+  } else {
+    ctx.para('Not recorded for this report (engine pre-5.5.0).', { size: 9, font: ctx.f.timesItalic, color: GRAY });
+  }
   ctx.gap(4);
 
   ctx.subHeading('Order of findings');
@@ -3301,6 +3337,7 @@ function secNineBrain(ctx, data) {
       ctx.para(brainBlockLabel(f) + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 1 });
       ctx.para('- Type: ' + (f.type === 'SERIAL' ? (f.serialPattern || f.type) : findingName(f)) + (f.type === 'SERIAL' ? '' : ' (' + f.type + ')'), { size: 9, indent: 10, after: 1 });
       ctx.para('- Evidence: ' + quoteEvidence(f.evidence), { size: 9, indent: 10, after: 1 });
+      if (f.type === 'SERIAL' && f.trace && f.trace.length) ctx.para('- Trace: ' + fmtSerialTrace(f.trace), { size: 9, indent: 10, after: 1 });
       if (f.type !== 'SERIAL') ctx.para('- Finding: ' + establishesOf(f), { size: 9, indent: 10, after: 1 });
       ctx.para('- Anchor: ' + fmtLocation(f.location), { size: 9, indent: 10, after: 5 });
     }
@@ -6782,13 +6819,13 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 </script>
 <script>
 /* VO-INLINE:forensic-engine-page.js:START */
-// ============== FORENSIC CONTRADICTION ENGINE v5.4.0-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.5.0-web ================
 // 58 Contradiction Types | 60 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.4.0-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.5.0-web
 // 58 Contradiction Types | 60 Detectors | 17 Serial Patterns
 // + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
@@ -6810,7 +6847,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.4.0-web';
+var VO_ENGINE_VERSION = '5.5.0-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
@@ -14224,7 +14261,7 @@ function detectSerialPatterns(textBlocks) {
 
     for (var w = 0; w < nWin; w++) {
       var windowText = blocks.slice(w, w + SERIAL_WINDOW_PAGES).join(' ');
-      var matchedStages = 0, matchedDetails = [];
+      var matchedStages = 0, matchedDetails = [], matchedTrace = [];
       for (var s = 0; s < pattern.stages.length; s++) {
         var stage = pattern.stages[s];
         for (var k = 0; k < stage.keywords.length; k++) {
@@ -14233,12 +14270,22 @@ function detectSerialPatterns(textBlocks) {
           if (voSerialKeywordHit(windowText, kw)) {
             matchedStages++;
             matchedDetails.push(stage.indicator + ': "' + kw + '"');
+            // Trace anchor (batch 5f): the first page of this window whose own
+            // text carries the keyword, so a corroborated pattern can be read
+            // stage by stage, page by page, in the scheme's own order. A hit
+            // that only spans the page boundary of the joined window text
+            // anchors to the window's first page.
+            var kwPage = w + 1;
+            for (var pg = w; pg < Math.min(blocks.length, w + SERIAL_WINDOW_PAGES); pg++) {
+              if (voSerialKeywordHit(blocks[pg], kw)) { kwPage = pg + 1; break; }
+            }
+            matchedTrace.push({ stage: stage.indicator, keyword: kw, page: kwPage });
             break;
           }
         }
       }
       if (!best || matchedStages > best.matchedStages) {
-        best = { matchedStages: matchedStages, details: matchedDetails, startPage: w + 1, endPage: Math.min(blocks.length, w + SERIAL_WINDOW_PAGES) };
+        best = { matchedStages: matchedStages, details: matchedDetails, trace: matchedTrace, startPage: w + 1, endPage: Math.min(blocks.length, w + SERIAL_WINDOW_PAGES) };
       }
     }
 
@@ -14257,6 +14304,11 @@ function detectSerialPatterns(textBlocks) {
       category: pattern.category,
       evidence: pattern.name + ' detected: ' + best.matchedStages + '/' + pattern.stages.length + ' stages matched within a ' +
         SERIAL_WINDOW_PAGES + '-page window. ' + best.details.join('; '),
+      // Stage-by-stage trace in scheme order, each stage anchored to the page
+      // where its keyword was found (batch 5f; rendered as the trace view in
+      // the report's Serial Pattern Analysis section, exported as
+      // serial_trace in the findings JSON).
+      trace: best.trace,
       location: loc
     });
   }
@@ -14656,6 +14708,109 @@ function _voMapLiteral(text, cmap) {
 // Yields to the event loop so the browser can repaint mid-scan.
 function _voYield() {
   return new Promise(function (r) { setTimeout(r, 0); });
+}
+
+// ===================== WELL-FORMEDNESS GATE (batch 5f) =====================
+// Borrowed from formal-verification practice (component contracts, and the
+// well-formedness checks a model must pass before verification may run): a
+// fixed set of integrity checks on the CONTAINER, disclosed ahead of the
+// findings on the CONTENTS. The gate changes no finding, no score and no
+// verdict; it states the condition of the record the detectors ran against,
+// so a reader can see the ground the analysis stands on. Every check is
+// deterministic and derived from signals the pipeline already computed.
+function voWellFormedness(o) {
+  o = o || {};
+  var checks = [];
+  var blocks = o.textBlocks || [];
+  var nPages = blocks.length;
+  var avgChars = nPages ? Math.round((o.contentChars || 0) / nPages) : 0;
+  var capList = function (pages) {
+    var l = pages.slice(0, 12).join(', ');
+    return pages.length > 12 ? l + ', … (' + pages.length + ' in total)' : l;
+  };
+
+  // WF1 — text layer. The unreadable guard below trusts the same 200
+  // characters/page line; the gate states it up front as a container check.
+  checks.push({
+    id: 'WF1', name: 'Machine-readable text layer',
+    pass: avgChars >= 200,
+    note: avgChars >= 200
+      ? 'the record averages ' + avgChars + ' machine-readable characters per page over ' + nPages + ' page(s)'
+      : 'the record averages only ' + avgChars + ' machine-readable characters per page — effectively no text layer; zero findings here means the content was not examined'
+  });
+
+  // WF2 — page coverage: every page readable after OCR rescue.
+  var io = o.imageOnlyPages || [];
+  checks.push({
+    id: 'WF2', name: 'Every page carries readable text',
+    pass: io.length === 0,
+    note: io.length === 0
+      ? ((o.ocrRan && (o.ocrPages || []).length) ? 'yes — ' + o.ocrPages.length + ' image page(s) were recovered by OCR rescue' : 'yes — no image-only pages')
+      : io.length + ' page(s) carry no machine-readable text (p. ' + capList(io) + '); those pages were not examined'
+  });
+
+  // WF3 — the record is the record, not an analysis of it. Identified
+  // analysis pages are quarantined as secondary sources, so a few do not
+  // fail the gate; a bundle that is ALL rendered analysis has no underlying
+  // record to examine.
+  var md = o.markdownPages || [];
+  var allMd = nPages > 0 && md.length >= nPages;
+  checks.push({
+    id: 'WF3', name: 'Record is the record, not an analysis of it',
+    pass: !allMd,
+    note: md.length === 0
+      ? 'no rendered AI or chat analysis pages found'
+      : (allMd
+        ? 'every page reads as a rendered AI or chat analysis — there is no underlying record to examine'
+        : md.length + ' page(s) (p. ' + capList(md) + ') read as a rendered AI or chat analysis and were quarantined as a secondary source')
+  });
+
+  // WF4 — at least one party identified, so findings can be attributed.
+  var parties = o.parties || [];
+  checks.push({
+    id: 'WF4', name: 'At least one party identified',
+    pass: parties.length >= 1,
+    note: parties.length >= 1
+      ? parties.length + ' part' + (parties.length === 1 ? 'y' : 'ies') + ' or person(s) identified in the record'
+      : 'no party or person could be identified — findings cannot be attributed to anyone'
+  });
+
+  // WF5 — at least one parseable date, so sequence can be tested at all.
+  var dates = o.dates || [];
+  checks.push({
+    id: 'WF5', name: 'At least one parseable date',
+    pass: dates.length >= 1,
+    note: dates.length >= 1
+      ? dates.length + ' distinct date(s) parse from the record'
+      : 'no date could be parsed — temporal contradictions cannot be tested'
+  });
+
+  // WF6 — bundle structure segmented: the engine distinguished the documents
+  // inside the file (one segment = a single-document file; zero means there
+  // was nothing to examine).
+  var segs = o.docSegs || [];
+  checks.push({
+    id: 'WF6', name: 'Bundle structure segmented',
+    pass: segs.length >= 1,
+    note: segs.length >= 1
+      ? segs.length + ' document segment(s) distinguished within the file'
+      : 'no document structure could be distinguished'
+  });
+
+  // WF7 — prior-seal recognition. A file that is itself a prior Verum Omnis
+  // sealed output is disclosed, never silently re-analysed as fresh evidence
+  // (disclosure only; the report-page exclusion handles it).
+  checks.push({
+    id: 'WF7', name: 'Prior sealed output recognised',
+    pass: true,
+    note: o.selfSealed
+      ? 'this file is itself a prior Verum Omnis sealed output; its report pages were excluded from contradiction scanning'
+      : 'this file is not a prior Verum Omnis sealed output'
+  });
+
+  var passed = 0;
+  for (var wfi = 0; wfi < checks.length; wfi++) if (checks[wfi].pass) passed++;
+  return { checks: checks, passed: passed, total: checks.length };
 }
 
 // ===================== MAIN FORENSIC ENGINE =====================
@@ -15204,6 +15359,26 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   }
 
   var _factIndex = voBuildFactIndex(textBlocks, _secondaryAllPages);
+  var _timeline = voBuildTimeline(allFindings, textBlocks, _secondaryAllPages);
+  var _personIndex = voBuildPersonIndex(allFindings);
+  // Batch 5f: the well-formedness gate — container checks disclosed ahead of
+  // the contents' findings (see voWellFormedness). Parties and dates are
+  // extracted once over the full record for the gate; both extractors
+  // already skip seal-stamp text.
+  var _wfText = textBlocks.join('\n');
+  var _wellFormed = voWellFormedness({
+    textBlocks: textBlocks,
+    contentChars: _contentChars,
+    imageOnlyPages: _imageOnlyPages,
+    ocrRan: _ocrRan,
+    ocrPages: _ocrPages,
+    markdownPages: _mdPages,
+    docSegs: _docSegs || [],
+    footerOnlyPages: _footer.pages,
+    selfSealed: _voSelfSealed,
+    parties: voExtractParties(_wfText),
+    dates: voExtractDates(_wfText)
+  });
 
   return {
     engineVersion: VO_ENGINE_VERSION,
@@ -15227,8 +15402,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     factIndex: _factIndex,
     crossDocConflicts: voCrossDocConflicts(_factIndex),
     swornPages: swornPages,
-    timeline: voBuildTimeline(allFindings, textBlocks, _secondaryAllPages),
-    personIndex: voBuildPersonIndex(allFindings),
+    timeline: _timeline,
+    personIndex: _personIndex,
+    wellFormedness: _wellFormed,
     findingsByType: findingsByType,
     findingsByCategory: findingsByCategory,
     contradictionTypesUsed: Object.keys(findingsByType).length,
@@ -15743,7 +15919,7 @@ function voRunPackageRules(compiled, textBlocks, existing) {
 
 if (typeof module !== 'undefined' && module.exports) {
   module.exports = {
-    generateSummary: generateSummary, voEditDistance: voEditDistance,
+    generateSummary: generateSummary, voEditDistance: voEditDistance, voWellFormedness: voWellFormedness,
     voStripSealFurniture: voStripSealFurniture, voStripSealFurnitureBlocks: voStripSealFurnitureBlocks, voCacheDocSegs: voCacheDocSegs,
     voSecondaryPages: voSecondaryPages, voSecondarySegments: voSecondarySegments, voIsVerumAnalysisPage: voIsVerumAnalysisPage, voMarkdownAnalysisPages: voMarkdownAnalysisPages, voFindingPages: voFindingPages, voTrimPersonName: voTrimPersonName, voSnapWindow: voSnapWindow, voSecondaryWhere: voSecondaryWhere, voIsSecondaryHead: voIsSecondaryHead, voIsSubmissionOnSealed: voIsSubmissionOnSealed, voSubmissionSpan: voSubmissionSpan, voFragmentCut: voFragmentCut, voDemoteSecondarySource: voDemoteSecondarySource, voImageOnlyCt26ToNotes: voImageOnlyCt26ToNotes, voSentenceAround: voSentenceAround, voDatedAfterReference: voDatedAfterReference, voIsStampContext: voIsStampContext,
     VO_ENGINE_VERSION: VO_ENGINE_VERSION,
@@ -19917,7 +20093,10 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
       secondary_capped: !!f.secondaryCapped,
       ocr_anchored: !!f.ocrAnchored,
       // v1.5.0: a contradiction anchored only on OCR pages held at severity 3.
-      ocr_held: !!f.ocrHeld
+      ocr_held: !!f.ocrHeld,
+      // v1.10.0 (batch 5f): a serial pattern's stage-by-stage trace — scheme
+      // order, each stage anchored to the page where its keyword was found.
+      serial_trace: (f.type === 'SERIAL' && Array.isArray(f.trace)) ? f.trace : null
     });
   }
   var candidates = records.filter(function (r) {
@@ -19933,7 +20112,7 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
     // v1.9.0 (Sourcery #5, 10 Oct 2026): cross_document_observations are exported,
     // each carrying the byte-faithful passage (quote_verbatim) as well as the
     // display quote — so the record, not only the PDF, holds the unedited text.
-    findings_json_version: '1.9.0',
+    findings_json_version: '1.10.0',
     generated_utc: new Date().toISOString(),
     analysis_reference_utc: (result && result.referenceTime) || null,
     source_bundle: docName,
@@ -19955,6 +20134,11 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
     engine_verified_count: records.length - candidates,
     g3_candidate_count: candidates,
     integrity_findings: (result && result.extractionNotes) ? [String(result.extractionNotes)] : [],
+    // v1.10.0 (batch 5f): the well-formedness gate — the container checks the
+    // record passed or failed before its contents were analysed (text layer,
+    // page coverage, analysis contamination, parties, dates, structure,
+    // prior-seal recognition). Disclosed, never scored.
+    wellformedness: (result && result.wellFormedness) || null,
     // v1.9.0 (Sourcery #5): the cross-document observations, each anchored to two
     // pages and carrying BOTH the display quote and the byte-faithful passage
     // (quote_verbatim). These are descriptive observations, not findings — no
