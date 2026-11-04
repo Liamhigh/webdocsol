@@ -67,7 +67,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.4.0-web';
+var ENGINE_VERSION = '5.5.0-web';
 var CONSTITUTION_VERSION = '6.1';
 // Counts mirror the live registry and run-list in forensic-engine-page.js.
 // The report recomputes from the registry at runtime when the engine is
@@ -2049,6 +2049,18 @@ function serialDisplay(fnd, data) {
   return name;
 }
 
+// Batch 5f: render a serial pattern's trace — the matched stages in scheme
+// order, each anchored to the page where its keyword was found, so the
+// reviewer walks the chain instead of trusting a label.
+function fmtSerialTrace(trace) {
+  var parts = [];
+  for (var i = 0; i < trace.length; i++) {
+    var e = trace[i] || {};
+    parts.push((e.stage || 'stage') + ' — "' + (e.keyword || '') + '" (p. ' + (e.page || '?') + ')');
+  }
+  return parts.join('  ->  ');
+}
+
 function secSerial(ctx, data) {
   ctx.newBodyPage();
   ctx.heading('SERIAL PATTERN ANALYSIS');
@@ -2105,6 +2117,14 @@ function secSerial(ctx, data) {
       rows,
       { size: 8 }
     );
+    // Batch 5f: stage-by-stage trace under the corroborated table — the
+    // pattern read in scheme order, page by page.
+    for (var s2 = 0; s2 < labelled.length; s2++) {
+      var _tr = labelled[s2].trace;
+      if (_tr && _tr.length) {
+        ctx.para('Trace (' + (labelled[s2].serialName || 'pattern') + '): ' + fmtSerialTrace(_tr), { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 4 });
+      }
+    }
     // Pattern & racketeering consideration. A corroborated multi-stage pattern is
     // the kind of conduct organised-crime law addresses; surfaced as a hypothesis
     // only, never a determination (Prime Directive 4).
@@ -2326,6 +2346,22 @@ function secMethodology(ctx, data) {
   ctx.bullet(rulePackageLine(data), { size: 9.5 });
   ctx.bullet(brain9SweepLine(data), { size: 9.5 });
   ctx.bullet('Text extraction: ' + (data.extractionNotes || 'per-page PDF content-stream decoding with ToUnicode CMaps.'), { size: 9.5 });
+  ctx.gap(4);
+
+  // Batch 5f: the well-formedness gate — the container checks the record
+  // passed (or failed) before its contents were analysed. Disclosed, never
+  // scored: a FAIL is a limit of the record, not a defect of the analysis.
+  ctx.subHeading('Pre-analysis integrity checks');
+  var _wf = (data.findings && data.findings.wellFormedness) || null;
+  if (_wf && _wf.checks && _wf.checks.length) {
+    ctx.para(_wf.passed + ' of ' + _wf.total + ' checks passed. These checks describe the container the detectors ran against — text layer, page coverage, contamination by rendered analysis, party and date identifiability, bundle structure. They change no finding and no score.', { size: 9.5, after: 4 });
+    for (var _wfi = 0; _wfi < _wf.checks.length; _wfi++) {
+      var _wfc = _wf.checks[_wfi];
+      ctx.bullet((_wfc.pass ? 'PASS' : 'FAIL') + ' — ' + _wfc.id + ' ' + _wfc.name + ': ' + _wfc.note + '.', { size: 9, after: 3 });
+    }
+  } else {
+    ctx.para('Not recorded for this report (engine pre-5.5.0).', { size: 9, font: ctx.f.timesItalic, color: GRAY });
+  }
   ctx.gap(4);
 
   ctx.subHeading('Order of findings');
@@ -2577,6 +2613,7 @@ function secNineBrain(ctx, data) {
       ctx.para(brainBlockLabel(f) + ':', { size: 9.5, font: ctx.f.timesBold, color: NAVY2, after: 1 });
       ctx.para('- Type: ' + (f.type === 'SERIAL' ? (f.serialPattern || f.type) : findingName(f)) + (f.type === 'SERIAL' ? '' : ' (' + f.type + ')'), { size: 9, indent: 10, after: 1 });
       ctx.para('- Evidence: ' + quoteEvidence(f.evidence), { size: 9, indent: 10, after: 1 });
+      if (f.type === 'SERIAL' && f.trace && f.trace.length) ctx.para('- Trace: ' + fmtSerialTrace(f.trace), { size: 9, indent: 10, after: 1 });
       if (f.type !== 'SERIAL') ctx.para('- Finding: ' + establishesOf(f), { size: 9, indent: 10, after: 1 });
       ctx.para('- Anchor: ' + fmtLocation(f.location), { size: 9, indent: 10, after: 5 });
     }
