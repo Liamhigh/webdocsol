@@ -52,6 +52,41 @@ const byId = {};
 for (const c of img.checks) byId[c.id] = c;
 t.ok(!byId.WF1.pass, 'no text layer fails WF1');
 t.ok(!byId.WF2.pass && /p\. 1, 2, 3/.test(byId.WF2.note), 'image-only pages fail WF2 and are listed');
+
+// ---- WF2 after OCR rescue: only the UNEXAMINED remainder fails the gate ----
+// The image-only list holds both OCR-recovered and unrecovered pages (the
+// rescue loop marks both); the gate may only fail on the pages nobody read.
+// Greensky, 5 Nov 2026: 30 image-only pages were reported "not examined"
+// while 22 of them had been OCR-recovered and examined — only 8 were truly
+// unreadable. The report cover's own count was the correct 8.
+const mkWf2 = (io, ocr) => {
+  const g = E.voWellFormedness({
+    textBlocks: ['x'.repeat(300)],
+    contentChars: 300,
+    imageOnlyPages: io, ocrRan: ocr.length > 0, ocrPages: ocr,
+    markdownPages: [], docSegs: [{ start: 1 }], footerOnlyPages: [],
+    selfSealed: false,
+    parties: E.voExtractParties(DATED), dates: E.voExtractDates(DATED)
+  });
+  return g.checks.find(c => c.id === 'WF2');
+};
+const greenskyIo = []; for (let gi = 1; gi <= 30; gi++) greenskyIo.push(gi);
+const greenskyRescued = greenskyIo.slice(0, 22); // pages 1-22 rescued, 23-30 unreadable
+const wf2g = mkWf2(greenskyIo, greenskyRescued);
+t.ok(!wf2g.pass, 'WF2 still fails when pages remain unreadable after OCR');
+t.ok(/8 page\(s\) carry no machine-readable text/.test(wf2g.note) && /p\. 23, 24, 25, 26, 27, 28, 29, 30/.test(wf2g.note),
+  'WF2 names only the 8 unexamined pages, not the 30 image-only pages');
+t.ok(/22 image page\(s\) were recovered by OCR rescue and examined/.test(wf2g.note),
+  'WF2 discloses the 22 rescued pages as examined');
+const wf2full = mkWf2([5, 9], [5, 9]);
+t.ok(wf2full.pass, 'full OCR rescue passes WF2');
+t.ok(/2 image page\(s\).*recovered by OCR rescue and examined/.test(wf2full.note),
+  'full-rescue note says the pages were examined');
+const wf2noOcr = mkWf2([4, 7], []);
+t.ok(!wf2noOcr.pass && /p\. 4, 7/.test(wf2noOcr.note) && !/OCR rescue/.test(wf2noOcr.note),
+  'no OCR rescue: all image-only pages fail, no rescue claim');
+const wf2clean = mkWf2([], []);
+t.ok(wf2clean.pass && /no image-only pages/.test(wf2clean.note), 'clean record keeps the original pass note');
 t.ok(!byId.WF4.pass, 'no parties fails WF4');
 t.ok(!byId.WF5.pass, 'no dates fails WF5');
 t.ok(!byId.WF6.pass, 'no segments fails WF6');

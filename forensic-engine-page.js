@@ -7918,14 +7918,25 @@ function voWellFormedness(o) {
       : 'the record averages only ' + avgChars + ' machine-readable characters per page — effectively no text layer; zero findings here means the content was not examined'
   });
 
-  // WF2 — page coverage: every page readable after OCR rescue.
+  // WF2 — page coverage: every page readable after OCR rescue. The
+  // image-only list holds BOTH the pages OCR recovered and the pages it
+  // could not (the rescue loop marks both), so the gate may only fail on
+  // the UNEXAMINED remainder. Greensky (5 Nov 2026): 30 image-only pages
+  // were reported as "not examined" while 22 of them had been OCR-recovered
+  // and examined — only 8 were truly unreadable.
   var io = o.imageOnlyPages || [];
+  var rescued = o.ocrPages || [];
+  var unexamined = [];
+  for (var wfi = 0; wfi < io.length; wfi++) if (rescued.indexOf(io[wfi]) === -1) unexamined.push(io[wfi]);
   checks.push({
     id: 'WF2', name: 'Every page carries readable text',
-    pass: io.length === 0,
-    note: io.length === 0
-      ? ((o.ocrRan && (o.ocrPages || []).length) ? 'yes — ' + o.ocrPages.length + ' image page(s) were recovered by OCR rescue' : 'yes — no image-only pages')
-      : io.length + ' page(s) carry no machine-readable text (p. ' + capList(io) + '); those pages were not examined'
+    pass: unexamined.length === 0,
+    note: unexamined.length === 0
+      ? (rescued.length
+        ? 'yes — ' + rescued.length + ' image page(s) had no text layer and were recovered by OCR rescue and examined'
+        : 'yes — no image-only pages')
+      : unexamined.length + ' page(s) carry no machine-readable text (p. ' + capList(unexamined) + '); those pages were not examined' +
+        (rescued.length ? ' — a further ' + rescued.length + ' image page(s) were recovered by OCR rescue and examined' : '')
   });
 
   // WF3 — the record is the record, not an analysis of it. Identified
