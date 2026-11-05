@@ -52,6 +52,7 @@ const suites = [
   'batch5-detectors.test.mjs',
   'batch5f-gate-trace.test.mjs',
   'batch6-finding-classes.test.mjs',
+  'batch7-conduct-ledger.test.mjs',
   'timeline-dates.test.mjs',
   'doc-fact-index.test.mjs',
   'cross-doc-conflicts.test.mjs',

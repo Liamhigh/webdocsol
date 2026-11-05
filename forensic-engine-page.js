@@ -1,11 +1,11 @@
-// ============== FORENSIC CONTRADICTION ENGINE v5.6.0-web ================
-// 58 Contradiction Types | 60 Detectors | 17 Serial Patterns
+// ============== FORENSIC CONTRADICTION ENGINE v5.7.0-web ================
+// 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.6.0-web
-// 58 Contradiction Types | 60 Detectors | 17 Serial Patterns
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.0-web
+// 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
 // This engine analyzes documents for internal contradictions, fraudulent
@@ -26,7 +26,7 @@
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.6.0-web';
+var VO_ENGINE_VERSION = '5.7.0-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
@@ -460,6 +460,9 @@ var CONTRADICTION_TYPES = {
     severity: 3, category: 'EVIDENCE', scope: ['pair'],
     example: 'Two firms\u2019 letters two days apart are word-for-word identical bar the letterhead and signature'
   },
+  // CT56 is RETAINED in the taxonomy (old sealed runs cite it) but no longer
+  // dispatched: v6.1 §1 merges it into CT61 (horns-of-dilemma), implemented by
+  // D63. CT56 and CT61 never both run.
   CT56_S12B_LICENCE_PREDICATE_CONFLICT: {
     id: 'CT56', name: 'Section 12B Predicate Conflict Indicator',
     desc: 'A party staffs the s 12B statutory arbitration track while asserting the counterparty’s licence is terminated/expired/inoperative — s 12B exists between licensed participants; an indicator for legal review, never a determination',
@@ -477,10 +480,32 @@ var CONTRADICTION_TYPES = {
     desc: 'Two statements share an identical frame of six or more content words and differ only in polarity (a negation particle or an antonym pole) — an indicator for legal review, never a determination',
     severity: 4, category: 'EVIDENCE', scope: ['self', 'pair'],
     example: '"the defendant is liable for the loss" vs "the defendant is not liable for the loss"'
+  },
+  // Batch 7a (engine instrument v6.1 §1): the conduct detectors. A pleading's
+  // word against the record's own dated conduct (CT59), a benefit taken while
+  // its burden is denied (CT60), and a statutory mechanism invoked across the
+  // death of its own predicate (CT61).
+  CT59_CONDUCT_VS_PLEADING: {
+    id: 'CT59', name: 'Conduct vs Pleading Contradiction',
+    desc: 'The record pleads that a performance never happened (no rental paid, no agreement existed, nothing owing) while the record’s own sealed conduct ledger — dated invoices, receipts, payments — records that performance sustained (six or more dated events, or a span of 24 months or more): the assertion and the conduct cannot both stand',
+    severity: 4, category: 'STATEMENTAL', scope: ['pair'],
+    example: 'p.4 "no rental was ever paid for the premises" vs the ledger: 14 dated rental invoices and payments, March 2023 to March 2026 (pp. 87-214)'
+  },
+  CT60_BENEFIT_BURDEN_ASYMMETRY: {
+    id: 'CT60', name: 'Benefit Taken / Burden Denied Indicator',
+    desc: 'A party accepts a benefit under an instrument (occupies the premises, retains the deposit, trades under the licence) while denying the burden of the same instrument (the rental, the agreement’s binding force) — approbate and reprobate, named as candidate law only: an indicator for legal review, never a determination',
+    severity: 3, category: 'FRANCHISE_LEASE', scope: ['pair'],
+    example: 'Occupies and trades from the premises under the lease (p. 12) while denying any obligation to pay rental under that lease (p. 40)'
+  },
+  CT61_HORNS_OF_DILEMMA: {
+    id: 'CT61', name: 'Horns-of-Dilemma Indicator',
+    desc: 'A statutory mechanism operates only while a relationship exists; the record invokes the mechanism while asserting the relationship is dead — if the relationship lives the assertion fails, if it is dead the mechanism has no subject: either horn is adverse to the party advancing both. An indicator for legal review, never a determination',
+    severity: 3, category: 'EVIDENCE', scope: ['conditional'],
+    example: 'The letter nominates arbitrators "strictly in compliance with section 12B" (a track between licensed participants) and asserts the retailer’s licence "has terminated and/or expired" (subsumes CT56)'
   }
 };
 
-// ===================== 60 DETECTOR FUNCTIONS =====================
+// ===================== 63 DETECTOR FUNCTIONS =====================
 // Each detector scans for a specific type of contradiction or fraud indicator.
 // Detectors return an array of findings: [{ type, severity, evidence, location }]
 
@@ -2477,6 +2502,252 @@ var DETECTORS = {
       findings.push({ type: 'CT58', severity: 4,
         evidence: 'Two statements share one frame and differ only in polarity: "' + a.snippet + '" (p. ' + a.page + ') versus "' + c.snippet + '" (p. ' + c.page + '). Identical framing with opposite polarity is a direct conflict between the statements; an indicator for legal review, not a determination of which is true.',
         location: a.page === c.page ? 'Page ' + a.page : 'Page ' + a.page + ' vs Page ' + c.page });
+    }
+    return findings;
+  },
+
+  // ------------------------------------------------------------------
+  // Batch 7a (engine instrument v6.1 §1, §6): the conduct detectors. They
+  // measure the record's pleadings against the record's own dated conduct —
+  // the sealed conduct ledger (voExtractConductLedger). An unsealed ledger
+  // cannot found a finding: the ledger travels inside the findings JSON
+  // (SHA-512'd as findingsJsonSha512) and every finding built on it cites
+  // the ledger's pages.
+  // ------------------------------------------------------------------
+
+  D61_DETECT_CONDUCT_VS_PLEADING: function(textBlocks, conductLedger) {
+    // CT59. A negative-existence pleading assertion ("no rental was ever
+    // paid", "no agreement existed") measured against the record's own dated
+    // conduct for the same subject. Fires only on a SUSTAINED ledger: six or
+    // more dated events, or a span of 24 months or more (v6.1 §1) — severity
+    // CRITICAL (5) when both, HIGH (4) otherwise. A stray invoice is a
+    // dispute about one document; years of dated rental invoices against
+    // "nothing was ever paid" is a contradiction.
+    var findings = [];
+    var blocks = textBlocks || [];
+    var ledger = conductLedger || voExtractConductLedger(blocks);
+    var events = (ledger && ledger.events) || [];
+    // One event can never found the claim: no span, no sustained pattern.
+    if (events.length < 2) return findings;
+    var SUBJECT_KINDS = {
+      rental: { rental: 1, invoice: 1, payment: 1, receipt: 1, statement: 1, remittance: 1 },
+      agreement: { payment: 1, invoice: 1, receipt: 1, remittance: 1 },
+      payment: { payment: 1, receipt: 1, invoice: 1, remittance: 1, statement: 1 },
+      occupation: { rental: 1, invoice: 1, payment: 1 }
+    };
+    // Each: a negative-existence pleading shape and the ledger subject it
+    // answers. Performance language alone stays silent — the ledger decides.
+    var DENIALS = [
+      { re: /\bno\s+(?:rental|rent)\s+(?:(?:was|were|is|has\s+been|had\s+been)\s+)?(?:ever\s+)?(?:paid|received|made)\b/gi, subject: 'rental' },
+      { re: /\b(?:never|not)\s+(?:ever\s+)?(?:paid|received)\s+(?:any\s+)?(?:rental|rent)\b/gi, subject: 'rental' },
+      { re: /\bno\s+(?:lease|agreement|contract)\s+(?:ever\s+)?(?:existed|exists|came\s+into\s+(?:being|effect)|was\s+(?:ever\s+)?(?:concluded|entered\s+into|signed))\b/gi, subject: 'agreement' },
+      { re: /\bthere\s+(?:was|is|has\s+been)\s+no\s+(?:lease|agreement|contract)\b/gi, subject: 'agreement' },
+      { re: /\bno\s+(?:payment|payments|amount|sum|monies|moneys)\s+(?:(?:was|were|is|has\s+been|have\s+been)\s+)?(?:ever\s+)?(?:paid|received|made|owing|due|payable)\b/gi, subject: 'payment' },
+      { re: /\bno\s+amount\s+is\s+(?:due|owing|payable)\b/gi, subject: 'payment' }
+    ];
+    var ROLE_RE = /\b(?:applicant|respondent|plaintiff|defendant|lessor|lessee|landlord|tenant|franchisor|franchisee|seller|purchaser)\b/i;
+    var bestBySubject = {};
+    for (var i = 0; i < blocks.length; i++) {
+      var s = String(blocks[i] || '');
+      for (var dI = 0; dI < DENIALS.length; dI++) {
+        var re = DENIALS[dI].re;
+        re.lastIndex = 0;
+        var m;
+        while ((m = re.exec(s)) !== null) {
+          var subject = DENIALS[dI].subject;
+          var quote = voSentenceAround(s, m[0]) || m[0];
+          quote = quote.replace(/\s+/g, ' ').trim();
+          if (quote.length > 220) quote = quote.slice(0, 217) + '...';
+          // The matching conduct for this subject, excluding the assertion's
+          // own page: a page is not cross-reference against itself.
+          var hits = [];
+          for (var e = 0; e < events.length; e++) {
+            if (!SUBJECT_KINDS[subject][events[e].kind]) continue;
+            if (events[e].source_page === i + 1) continue;
+            hits.push(events[e]);
+          }
+          var n = hits.length;
+          var span = 0;
+          if (n) span = voConductSpanMonths(hits[0].date_key, hits[n - 1].date_key);
+          if (n < 6 && span < 24) continue;
+          var cand = { page: i + 1, quote: quote, subject: subject, hits: hits, count: n, span: span };
+          var prev = bestBySubject[subject];
+          if (!prev || n > prev.count || (n === prev.count && span > prev.span)) bestBySubject[subject] = cand;
+        }
+      }
+    }
+    var ORDER = ['rental', 'payment', 'agreement', 'occupation'];
+    for (var o = 0; o < ORDER.length && findings.length < 4; o++) {
+      var cand = bestBySubject[ORDER[o]];
+      if (!cand) continue;
+      var both = cand.count >= 6 && cand.span >= 24;
+      var ev1 = cand.hits[0], evLast = cand.hits[cand.hits.length - 1];
+      var pages = [], seenP = {};
+      for (var h = 0; h < cand.hits.length; h++) {
+        var pg = cand.hits[h].source_page;
+        if (!seenP[pg]) { seenP[pg] = 1; pages.push(pg); }
+      }
+      pages.sort(function (x, y) { return x - y; });
+      if (pages.length > 12) pages = pages.slice(0, 12);
+      var roleM = ROLE_RE.exec(cand.quote);
+      findings.push({
+        type: 'CT59',
+        severity: both ? 5 : 4,
+        evidence: 'The record pleads that there was no such performance ("' + cand.quote + '", p. ' + cand.page + '), yet the record’s own conduct ledger — sealed with this bundle inside the findings JSON (SHA-512) — contains ' + cand.count + ' dated ' + cand.subject + ' events spanning ' + cand.span + ' months (p. ' + ev1.source_page + ': "' + ev1.snippet.slice(0, 120) + '"; p. ' + evLast.source_page + ': "' + evLast.snippet.slice(0, 120) + '"). A denial of any performance and a sustained dated record of that same performance cannot both stand. An unsealed ledger cannot found a finding; this ledger is sealed, and any tampering changes the fingerprint.',
+        location: 'Page ' + cand.page + ' vs Pages ' + pages.join(', '),
+        conduct_vs_pleading: {
+          asserting_party: roleM ? roleM[0].toLowerCase() : null,
+          proposition: cand.quote,
+          proposition_page: cand.page,
+          conduct_type: cand.subject,
+          conduct_pages: pages,
+          span_months: cand.span,
+          event_count: cand.count,
+          confidence: both ? 'HIGH' : 'MODERATE'
+        }
+      });
+    }
+    return findings;
+  },
+
+  D62_DETECT_BENEFIT_BURDEN_ASYMMETRY: function(textBlocks) {
+    // CT60. Approbate and reprobate: a benefit is taken under an instrument
+    // (occupation, trading, money kept) while the burden of the SAME
+    // instrument is denied (no obligation to pay, not bound). The doctrine is
+    // named as candidate law only — the engine records the asymmetry; whether
+    // it bars the denial is for the court. Indicator, never a determination.
+    var findings = [];
+    var blocks = textBlocks || [];
+    var GROUPS = [
+      { g: 'lease',     re: /\b(?:lease|premises|rental|rent|occupation|possession)\b/i },
+      { g: 'agreement', re: /\b(?:agreement|contract|terms)\b/i },
+      { g: 'licence',   re: /\blicen[cs]e\b/i },
+      { g: 'assets',    re: /\b(?:stock|assets?|goodwill|proceeds)\b/i }
+    ];
+    var INSTR = '(?:lease|premises|rental|rent|agreement|contract|licen[cs]e|deposit|stock|assets?|goodwill|proceeds)';
+    // Possessive verbs near any instrument word, either order ("occupied the
+    // premises", "the deposit was retained"). Accept/receive count only with
+    // money in hand — "received the agreement" is post, not a benefit.
+    var VERB_POS = '(?:took|taken|enjoy\\w*|retain\\w*|kept|collect\\w*|pocket\\w*|occup(?:y|ies|ied|ying)|possession\\s+of|trad(?:e|es|ed|ing)\\s+(?:from|at|under))';
+    var MONEY = '(?:rental|rent|deposit|payment|proceeds|stock|assets?|goodwill)';
+    var BENEFIT_RE = new RegExp('\\b' + VERB_POS + '\\b[^.;]{0,90}?\\b' + INSTR + '\\b|\\b' + INSTR + '\\b[^.;]{0,90}?\\b' + VERB_POS + '\\b|\\b(?:accept\\w*|receiv\\w*)\\b[^.;]{0,60}?\\b' + MONEY + '\\b', 'gi');
+    var DENIAL_RE = new RegExp('\\b(?:den(?:y|ies|ied|ying)|refus\\w+|reject\\w+|repudiat\\w+|not\\s+(?:liable|bound|obliged|obligated|responsible)|no\\s+(?:obligation|liability|duty))\\b[^.;]{0,110}?\\b(?:pay\\w*|rental|rent|arrears|obligation\\w*|liabilit\\w+|terms?|lease|agreement|contract|debt|perform\\w*)\\b|\\b(?:rental|rent|arrears|obligation\\w*|liabilit\\w+|debt)\\b[^.;]{0,60}?\\b(?:denied|refused|rejected|repudiated)\\b', 'gi');
+    var ROLE_RE = /\b(?:applicant|respondent|plaintiff|defendant|lessor|lessee|landlord|tenant|franchisor|franchisee|seller|purchaser)\b/i;
+    var benefits = [], denials = [];
+    var collect = function (list, re, pageText, pageNo) {
+      re.lastIndex = 0;
+      var m;
+      while ((m = re.exec(pageText)) !== null) {
+        var quote = voSentenceAround(pageText, m[0]) || m[0];
+        quote = quote.replace(/\s+/g, ' ').trim();
+        if (quote.length > 220) quote = quote.slice(0, 217) + '...';
+        // The instrument is named by the SENTENCE, not by the matched span:
+        // the lazy match stops at the first burden word ("denies any
+        // obligation") while the instrument ("...under the lease") follows it.
+        var group = null;
+        for (var gI = 0; gI < GROUPS.length; gI++) {
+          if (GROUPS[gI].re.test(quote)) { group = GROUPS[gI].g; break; }
+        }
+        if (!group) continue;
+        list.push({ page: pageNo, quote: quote, group: group });
+      }
+    };
+    for (var i = 0; i < blocks.length; i++) {
+      var s = String(blocks[i] || '');
+      collect(benefits, BENEFIT_RE, s, i + 1);
+      collect(denials, DENIAL_RE, s, i + 1);
+    }
+    for (var g2 = 0; g2 < GROUPS.length && findings.length < 3; g2++) {
+      var g = GROUPS[g2].g;
+      var bs = [], ds = [];
+      for (var bI = 0; bI < benefits.length; bI++) if (benefits[bI].group === g) bs.push(benefits[bI]);
+      for (var dI2 = 0; dI2 < denials.length; dI2++) if (denials[dI2].group === g) ds.push(denials[dI2]);
+      if (!bs.length || !ds.length) continue;
+      var b0 = bs[0], d0 = ds[0];
+      // The same sentence is one position, not an asymmetry.
+      if (b0.page === d0.page && b0.quote === d0.quote) continue;
+      var bps = [], dps = [], sp = {};
+      var j;
+      for (j = 0; j < bs.length && bps.length < 6; j++) if (!sp['b' + bs[j].page]) { sp['b' + bs[j].page] = 1; bps.push(bs[j].page); }
+      for (j = 0; j < ds.length && dps.length < 6; j++) if (!sp['d' + ds[j].page]) { sp['d' + ds[j].page] = 1; dps.push(ds[j].page); }
+      var roleM = ROLE_RE.exec(d0.quote) || ROLE_RE.exec(b0.quote);
+      findings.push({
+        type: 'CT60', severity: 3,
+        evidence: 'The record takes a benefit under the ' + g + ' ("' + b0.quote + '", p. ' + b0.page + ') while denying the burden of the same instrument ("' + d0.quote + '", p. ' + d0.page + '). Taking the benefit of an instrument while rejecting its burden is the approbate-and-reprobate asymmetry — the doctrine is named as candidate law only: an indicator for legal review, never a determination.',
+        location: b0.page === d0.page ? 'Page ' + b0.page : 'Page ' + b0.page + ' vs Page ' + d0.page,
+        benefit_burden: {
+          party: roleM ? roleM[0].toLowerCase() : null,
+          benefit_pages: bps,
+          burden_denial_pages: dps,
+          instrument_reference: g,
+          indicator: true
+        }
+      });
+    }
+    return findings;
+  },
+
+  D63_DETECT_HORNS_OF_DILEMMA: function(textBlocks) {
+    // CT61. Horns of dilemma: a statutory mechanism operates only while a
+    // relationship exists; the record invokes the mechanism while asserting
+    // the relationship is dead — if the relationship lives the assertion
+    // fails, if it is dead the mechanism has no subject, and either horn is
+    // adverse to the party advancing both. v6.1 §1 merges CT56 into CT61: the
+    // s 12B subtype below IS that merge (D10A stays exported for
+    // compatibility but no longer runs in the pipeline — CT56 and CT61 never
+    // both run). An indicator for legal review, never a determination.
+    var findings = [];
+    var blocks = textBlocks || [];
+    var TRACK_G = /\b(?:section|s)\s*12b\b|\b12b\s+of\s+the\s+act\b/gi;
+    var PART_G = /\bnominat\w*|appoint\w*\s+(?:an?\s+|the\s+)?arbitrator|prospective\s+arbitrators?\b/gi;
+    var DEAD_G = /\blicen[cs]e\b[^.]{0,100}\b(?:terminat\w*|expir\w*|defunct|cancel\w*|laps\w*|inoperative|invalid|no\s+longer\s+(?:valid|operative)|not\s+valid)\b|\b(?:terminat\w*|expir\w*|defunct|cancelled|canceled|lapsed|inoperative|invalid|no\s+longer\s+(?:valid|operative))\b[^.]{0,100}\blicen[cs]e\b/gi;
+    function flags(s) {
+      TRACK_G.lastIndex = 0; PART_G.lastIndex = 0; DEAD_G.lastIndex = 0;
+      return { track: TRACK_G.test(s), part: PART_G.test(s), dead: DEAD_G.test(s) };
+    }
+    function quote(s, re) {
+      re.lastIndex = 0;
+      var m = re.exec(s);
+      if (!m) return '';
+      var start = Math.max(0, m.index - 40);
+      var q = s.slice(start, m.index + m[0].length + 80).replace(/\s+/g, ' ').trim();
+      if (q.length > 160) q = q.slice(0, 157) + '...';
+      return q;
+    }
+    var F = [];
+    var seen = {};
+    for (var i = 0; i < blocks.length; i++) F.push(flags(String(blocks[i] || '')));
+    for (var a = 0; a < blocks.length && findings.length < 3; a++) {
+      // Participation on the statutory track: the s 12B reference and the
+      // arbitrator-staffing act on the same or the following page (forward
+      // scan only — a lookbehind here re-finds the region just reported).
+      var tp = -1;
+      for (var w = a; w <= Math.min(blocks.length - 1, a + 1); w++) {
+        if (F[w].track && F[w].part) { tp = w; break; }
+      }
+      if (tp < 0) continue;
+      // The licence-death assertion within two pages either side.
+      var dp = -1;
+      for (var w2 = Math.max(0, tp - 2); w2 <= Math.min(blocks.length - 1, tp + 2); w2++) {
+        if (F[w2].dead) { dp = w2; break; }
+      }
+      if (dp < 0) continue;
+      var key = tp + ':' + dp;
+      if (seen[key]) continue;
+      seen[key] = 1;
+      var q1 = quote(String(blocks[tp] || ''), TRACK_G);
+      var q2 = quote(String(blocks[dp] || ''), DEAD_G);
+      findings.push({ type: 'CT61', severity: 3,
+        evidence: 'The record invokes section 12B of the Petroleum Products Act 120 of 1977 — a mechanism that operates between licensed participants ("' + q1 + '", p. ' + (tp + 1) + ') — while asserting the counterparty\'s licence is terminated, expired or inoperative ("' + q2 + '", p. ' + (dp + 1) + '). If the licence lives, the licence-death assertion fails; if the licence is dead, the s 12B track has no subject: either horn is adverse to the party advancing both. An indicator for legal review, never a determination.',
+        location: 'Page ' + (tp + 1) + ' vs Page ' + (dp + 1),
+        horns: {
+          statute: 'section 12B, Petroleum Products Act 120 of 1977',
+          branch_a: 'the record staffs the statutory arbitration track (nominating arbitrators under s 12B)',
+          branch_a_pages: [tp + 1],
+          branch_b: 'the record asserts the counterparty\'s licence is terminated, expired or inoperative',
+          branch_b_pages: [dp + 1]
+        } });
+      a = Math.max(a, Math.max(tp, dp));
     }
     return findings;
   },
@@ -6849,6 +7120,136 @@ function voDateSortKey(str) {
   return null;
 }
 
+// ===================== CONDUCT LEDGER (batch 7a, v6.1 §6) =====================
+// Bank statements, rent receipts, invoices and remittances are not argument —
+// they are the dated ledger of what the parties actually DID. The engine reads
+// each dated conduct event out of the record ({date, kind, amount, reference,
+// source_page, snippet}) and the ledger is sealed with the bundle: it travels
+// inside the findings JSON (SHA-512'd as findingsJsonSha512), so an unsealed
+// ledger cannot found a finding and any tampering changes the fingerprint.
+var VO_CONDUCT_KIND_RES = [
+  { kind: 'invoice',    re: /\b(?:tax\s+)?invoice\b/i },
+  { kind: 'rental',     re: /\b(?:rent|rental)\b/i },
+  { kind: 'remittance', re: /\bremittance\b/i },
+  { kind: 'receipt',    re: /\breceipt\b/i },
+  { kind: 'statement',  re: /\b(?:bank|account)\s+statement\b/i },
+  { kind: 'payment',    re: /\b(?:payment|paid|deposit|eft|electronic\s+transfer)\b/i }
+];
+// ZA money: R173,396.20 or R 173 396,20 or R1 234.00. An amount needs a
+// decimal part, a thousands group, or four or more digits — a bare "R120" is
+// more often an Act number ("Act 120 of 1977") or a rule than money.
+var VO_CONDUCT_AMOUNT_RE = /\bR\s?-?\d{1,3}(?:(?:[,\s]\d{3})+|\d{3,})(?:[.,]\d{2})\b|\bR\s?-?\d{1,3}(?:[,\s]\d{3})+\b|\bR\s?-?\d{4,}\b/g;
+// A reference only when the record labels it ("invoice no: INV98185") and the
+// token carries a digit — never guessed.
+var VO_CONDUCT_REF_RE = /\b(?:invoice|inv|receipt|remittance|statement|ref(?:erence)?)\s*(?:no|number|nr|#)\s*[:.]?\s*([A-Za-z]{0,6}[0-9][A-Za-z0-9\/-]{1,}|\d{3,})/i;
+
+// "173,396.20" and "173 396,20" are one number: with two separator kinds the
+// rightmost is the decimal; one separator kind is decimal when its tail is
+// two digits and it is not a clean thousands chain ("1,234,567").
+function voParseAmountSa(s) {
+  var t = String(s == null ? '' : s).replace(/^[Rr]\s?/, '').replace(/\s/g, '');
+  if (!/^\d[\d.,]*$/.test(t)) return null;
+  var lastComma = t.lastIndexOf(','), lastDot = t.lastIndexOf('.');
+  var dec = Math.max(lastComma, lastDot);
+  if (dec === -1) return parseFloat(t);
+  var sep = t.charAt(dec) === ',' ? ',' : '.';
+  var thousandsChain = new RegExp('^\\d{1,3}(\\' + sep + '\\d{3})+$');
+  var n;
+  if (lastComma !== -1 && lastDot !== -1) n = t.slice(0, dec).replace(/[.,]/g, '') + '.' + t.slice(dec + 1);
+  else if ((t.length - dec - 1) === 2 && !thousandsChain.test(t)) n = t.slice(0, dec).replace(/[.,]/g, '') + '.' + t.slice(dec + 1);
+  else n = t.replace(/[.,]/g, '');
+  var v = parseFloat(n);
+  return isFinite(v) ? v : null;
+}
+
+// Inclusive month span between two YYYYMMDD sort keys: March 2023 to March
+// 2026 is 37 months.
+function voConductSpanMonths(minKey, maxKey) {
+  var mo = function (k) { return Math.floor(k / 10000) * 12 + (Math.floor(k / 100) % 100); };
+  return mo(maxKey) - mo(minKey) + 1;
+}
+
+function voExtractConductLedger(textBlocks) {
+  var blocks = textBlocks || [];
+  var events = [], byEvent = {};
+  for (var i = 0; i < blocks.length; i++) {
+    var s = String(blocks[i] || '').replace(VO_SEAL_BOILERPLATE_RE, ' ');
+    VO_DATE_TOKEN_RE.lastIndex = 0;
+    var m;
+    while ((m = VO_DATE_TOKEN_RE.exec(s)) !== null) {
+      var dateText = m[0].replace(/\s+/g, ' ').trim();
+      var key = voDateSortKey(dateText);
+      if (key === null) continue;
+      // The same guards as voExtractDates: a seal stamp is not a stated date,
+      // and a dotted triple after "clause" is a clause number (the AllFuels
+      // "clause 1.1.10" lesson).
+      var after = s.slice(m.index + m[0].length, m.index + m[0].length + 60);
+      if (VO_CLOCK_AFTER_RE.test(after.slice(0, 14)) && voIsStampContext(s, m.index, m[0].length)) continue;
+      if (/^\d/.test(m[0]) && VO_CLAUSE_CUE_RE.test(s.slice(Math.max(0, m.index - 12), m.index))) continue;
+      var from = Math.max(0, m.index - 160), to = Math.min(s.length, m.index + m[0].length + 160);
+      var win = s.slice(from, to);
+      var kind = null;
+      for (var kI = 0; kI < VO_CONDUCT_KIND_RES.length; kI++) {
+        if (VO_CONDUCT_KIND_RES[kI].re.test(win)) { kind = VO_CONDUCT_KIND_RES[kI].kind; break; }
+      }
+      VO_CONDUCT_AMOUNT_RE.lastIndex = 0;
+      var am = VO_CONDUCT_AMOUNT_RE.exec(win);
+      // A bare date is not conduct: the window must name a money instrument
+      // (invoice/rental/payment/receipt/remittance/statement) or an amount.
+      if (!kind && !am) continue;
+      var refM = VO_CONDUCT_REF_RE.exec(win);
+      var rel = m.index - from;
+      var snippet = win.replace(/\s+/g, ' ').trim();
+      if (snippet.length > 200) {
+        var flat = win.replace(/\s+/g, ' ');
+        snippet = flat.slice(Math.max(0, rel - 100), rel + 100).trim();
+        if (snippet.length > 200) snippet = snippet.slice(0, 197) + '...';
+      }
+      // One real-world event cited on two pages (the invoice and the covering
+      // letter) is one event: merge by date + kind + amount, keeping every
+      // page it appears on.
+      var ekey = key + '|' + (kind || '-') + '|' + (am ? am[0].replace(/\s+/g, '') : '-');
+      if (byEvent[ekey]) {
+        var ex = byEvent[ekey];
+        if (ex.source_page !== i + 1 && ex.also_on_pages.indexOf(i + 1) === -1) ex.also_on_pages.push(i + 1);
+        continue;
+      }
+      var ev = {
+        date: Math.floor(key / 10000) + '-' + ('0' + (Math.floor(key / 100) % 100)).slice(-2) + '-' + ('0' + (key % 100)).slice(-2),
+        date_key: key,
+        date_text: dateText,
+        kind: kind || 'entry',
+        amount: am ? voParseAmountSa(am[0]) : null,
+        amount_text: am ? am[0].replace(/\s+/g, ' ').trim() : null,
+        reference: refM ? refM[1] : null,
+        // Payer/payee are NOT guessed from a snippet: the engine records what
+        // the page shows and leaves attribution to the documents that state it.
+        payer: null,
+        payee: null,
+        source_page: i + 1,
+        also_on_pages: [],
+        snippet: snippet
+      };
+      byEvent[ekey] = ev;
+      events.push(ev);
+    }
+  }
+  events.sort(function (a, b) { return a.date_key - b.date_key || a.source_page - b.source_page; });
+  var kinds = {}, total = 0, anyAmount = false;
+  for (var e = 0; e < events.length; e++) {
+    kinds[events[e].kind] = (kinds[events[e].kind] || 0) + 1;
+    if (typeof events[e].amount === 'number') { total += events[e].amount; anyAmount = true; }
+  }
+  var summary = { event_count: events.length, span_months: 0, total_value: null, first_date: null, last_date: null, kinds: kinds };
+  if (events.length) {
+    summary.first_date = events[0].date;
+    summary.last_date = events[events.length - 1].date;
+    summary.span_months = voConductSpanMonths(events[0].date_key, events[events.length - 1].date_key);
+    if (anyAmount) summary.total_value = Math.round(total * 100) / 100;
+  }
+  return { ledger_version: '1.0.0', events: events, summary: summary };
+}
+
 // The flat statement: the finding stated as a declarative fact, no hedge words,
 // with its anchors bound in. Legal characterisation (fraud/misrepresentation)
 // is named once as the court's, so the fact is never weakened by the caveat.
@@ -6937,11 +7338,11 @@ var VO_FINDING_CLASS = {
   CT19: 'CONTRADICTION', CT20: 'CONTRADICTION', CT21: 'CONTRADICTION', CT22: 'CONTRADICTION',
   CT24: 'CONTRADICTION', CT29: 'CONTRADICTION', CT36: 'CONTRADICTION', CT37: 'CONTRADICTION',
   CT39: 'CONTRADICTION', CT40: 'CONTRADICTION', CT42: 'CONTRADICTION', CT44: 'CONTRADICTION',
-  CT45: 'CONTRADICTION', CT46: 'CONTRADICTION', CT51: 'CONTRADICTION',
+  CT45: 'CONTRADICTION', CT46: 'CONTRADICTION', CT51: 'CONTRADICTION', CT59: 'CONTRADICTION',
   CT07: 'TENSION', CT12: 'TENSION', CT23: 'TENSION', CT25: 'TENSION', CT26: 'TENSION',
   CT27: 'TENSION', CT28: 'TENSION', CT30: 'TENSION', CT34: 'TENSION', CT35: 'TENSION',
   CT38: 'TENSION', CT41: 'TENSION', CT43: 'TENSION', CT52: 'TENSION', CT55: 'TENSION',
-  CT56: 'TENSION', CT57: 'TENSION', CT58: 'TENSION',
+  CT56: 'TENSION', CT57: 'TENSION', CT58: 'TENSION', CT60: 'TENSION', CT61: 'TENSION',
   CT31: 'COMPLETENESS', CT32: 'COMPLETENESS', CT33: 'COMPLETENESS', CT53: 'COMPLETENESS',
   CT54: 'EXAMINATION_LIMIT',
   CT47: 'BEHAVIORAL', CT48: 'BEHAVIORAL', CT49: 'BEHAVIORAL', CT50: 'BEHAVIORAL'
@@ -8326,7 +8727,14 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     extractionNote += ' Markdown-formatted analysis: ' + _mdPages.length + ' page(s) (' + _mdList + ') carry chat-style markdown markup ("**" bold marks) and read as a rendered AI or chat analysis, not the record; their claims are treated as a secondary source and any observation resting only on them is a lead, never a finding.';
   }
 
-  // Run every detector (59 -- keep DETECTOR_COUNT in forensic-report.js in sync)
+  // Batch 7a: the conduct ledger is extracted once over the final page texts
+  // (after any OCR rescue) and handed to the detectors that measure pleadings
+  // against it (D61). It is sealed with the bundle — it travels inside the
+  // findings JSON, SHA-512'd as findingsJsonSha512 — because an unsealed
+  // ledger cannot found a finding.
+  var _conductLedger = voExtractConductLedger(textBlocks);
+
+  // Run every detector (61 -- keep DETECTOR_COUNT in forensic-report.js in sync)
   var detectors = [
     DETECTORS.D01_DETECT_DIRECT_CONTRADICTION,
     DETECTORS.D02_DETECT_NUMERICAL_DISCREPANCY,
@@ -8346,9 +8754,14 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     DETECTORS.D07B_DETECT_BLANK_SIGNATURE_BLOCKS,
     DETECTORS.D08A_DETECT_SCAN_ONLY_PAGE,
     DETECTORS.D09A_DETECT_COORDINATION_NEAR_DUP,
-    DETECTORS.D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT,
+    // D10A is retained (exported, directly testable) but no longer runs in
+    // the pipeline: v6.1 §1 merges CT56 into CT61 (D63). CT56 and CT61 never
+    // both run.
     DETECTORS.D10B_DETECT_FACTIVE_COMMITMENT_DENIAL,
     DETECTORS.D10C_DETECT_FRAME_POLARITY_CONFLICT,
+    DETECTORS.D61_DETECT_CONDUCT_VS_PLEADING,
+    DETECTORS.D62_DETECT_BENEFIT_BURDEN_ASYMMETRY,
+    DETECTORS.D63_DETECT_HORNS_OF_DILEMMA,
     DETECTORS.D04_DETECT_TEMPORAL_IMPOSSIBILITY,
     DETECTORS.D05_DETECT_LOGICAL_IMPOSSIBILITY,
     DETECTORS.D06_DETECT_IDENTITY_CONFLICT,
@@ -8402,6 +8815,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
         // a page OCR rendered but could not read is an OCR-attempted limit,
         // not a page that "went unchecked" (WF2 counts it as examined).
         detectorFindings = detectors[d](textBlocks, { ocrRan: _ocrRan, ocrPages: _ocrPages });
+      } else if (detectors[d] === DETECTORS.D61_DETECT_CONDUCT_VS_PLEADING) {
+        // Batch 7a: the pleading is measured against the sealed conduct
+        // ledger extracted above — never against a re-read of the pages.
+        detectorFindings = detectors[d](textBlocks, _conductLedger);
       } else {
         detectorFindings = detectors[d](textBlocks);
       }
@@ -8800,6 +9217,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     confidence: confidence,
     totalFindings: allFindings.length,
     findings: allFindings,
+    // Batch 7a (v6.1 §6): the dated conduct ledger the findings were measured
+    // against — invoices, receipts, payments, statements. Sealed with the
+    // bundle (it is exported inside the findings JSON, SHA-512'd as
+    // findingsJsonSha512): an unsealed ledger cannot found a finding.
+    conductLedger: _conductLedger,
     // Per-page extracted text, in page order (index 0 = page 1). Exposed so the
     // caller can build an AI-narrator excerpt centred on the pages the findings
     // actually anchor to, rather than the first N characters of the bundle. It
@@ -9367,6 +9789,9 @@ if (typeof module !== 'undefined' && module.exports) {
     voExtractQuotes: voExtractQuotes,
     voParsePages: voParsePages,
     voDateSortKey: voDateSortKey,
+    voExtractConductLedger: voExtractConductLedger,
+    voParseAmountSa: voParseAmountSa,
+    voConductSpanMonths: voConductSpanMonths,
     voStatement: voStatement,
     voAnchorEnrich: voAnchorEnrich,
     voClassifyFinding: voClassifyFinding,

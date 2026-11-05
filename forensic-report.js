@@ -67,13 +67,13 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.6.0-web';
+var ENGINE_VERSION = '5.7.0-web';
 var CONSTITUTION_VERSION = '6.1';
 // Counts mirror the live registry and run-list in forensic-engine-page.js.
 // The report recomputes from the registry at runtime when the engine is
 // loaded (the seal page inlines both); these constants are the standalone
 // fallback. Keep them in sync when detectors or CT kinds change.
-var DETECTOR_COUNT = 59, CT_COUNT = 58, SP_COUNT = 17;
+var DETECTOR_COUNT = 61, CT_COUNT = 61, SP_COUNT = 17;
 
 // ---------------- Verum Omnis Constitution v6.1 FINAL (canonical reference) ----------------
 // Sealed instrument: "Truth for All". Full text + machine-readable record are public.
@@ -124,7 +124,10 @@ var CT_NAMES = {
   CT49: 'Blame-Reversal / DARVO Indicators',
   CT50: 'Behavioural Pattern Indicator (Signed Rule)',
   CT51: 'Billing After Claimed End', CT52: 'Unevidenced Authority Claim', CT53: 'Blank Execution Block',
-  CT54: 'Unreadable Page', CT55: 'Coordinated Drafting Indicator'
+  CT54: 'Unreadable Page', CT55: 'Coordinated Drafting Indicator',
+  CT56: 'Section 12B Predicate Conflict Indicator', CT57: 'Factive Commitment vs Denial Indicator',
+  CT58: 'Same-Statement Polarity Conflict', CT59: 'Conduct vs Pleading Contradiction',
+  CT60: 'Benefit Taken / Burden Denied Indicator', CT61: 'Horns-of-Dilemma Indicator'
 };
 // Concrete next step for a human, by engine category (rendered per finding in
 // the plain-language narrative).
@@ -147,7 +150,10 @@ var VO_CHECK_HINTS = {
 var VO_CHECK_HINTS_TYPE = {
   CT14: 'Check the company\'s status on the CIPC companies register (search by name and registration number) for the dates the record refers to, and compare it with the original document.',
   CT45: 'Compare the goodwill definition in the agreement with the schedule entry and the clause that denies compensation; obtain the valuation or the figure the parties used.',
-  CT20: 'Check the number against the CIPC companies register (search by both the entity name and the number), and against the original document — scanned copies can misread digits. Record what the register returns for this entity.'
+  CT20: 'Check the number against the CIPC companies register (search by both the entity name and the number), and against the original document — scanned copies can misread digits. Record what the register returns for this entity.',
+  CT59: 'Read the pleaded denial on its cited page, then read the conduct-ledger events on theirs (the ledger is sealed inside the findings JSON — recompute the SHA-512 to confirm it is untouched). Bank records behind the ledger entries settle which side is true.',
+  CT60: 'Identify the instrument named on the cited pages and list what the party took under it against what it denies owing under it; whether the asymmetry bars the denial (approbate and reprobate) is for the court.',
+  CT61: 'Read the statutory citation and the relationship-death assertion on their cited pages together: if the relationship exists the assertion fails, if it does not the mechanism has no subject. Which horn applies is for the court.'
 };
 
 var CT_CATEGORY = {
@@ -163,7 +169,8 @@ var CT_CATEGORY = {
   CT39: 'EVIDENCE', CT40: 'EVIDENCE', CT41: 'EVIDENCE',
   CT42: 'DIGITAL', CT43: 'DIGITAL',
   CT44: 'FRANCHISE_LEASE', CT45: 'FRANCHISE_LEASE', CT46: 'IDENTITY', CT47: 'BEHAVIOUR', CT48: 'BEHAVIOUR', CT49: 'BEHAVIOUR', CT50: 'BEHAVIOUR',
-  CT51: 'STATEMENTAL', CT52: 'IDENTITY', CT53: 'INTEGRITY', CT54: 'INTEGRITY', CT55: 'EVIDENCE'
+  CT51: 'STATEMENTAL', CT52: 'IDENTITY', CT53: 'INTEGRITY', CT54: 'INTEGRITY', CT55: 'EVIDENCE',
+  CT56: 'EVIDENCE', CT57: 'EVIDENCE', CT58: 'EVIDENCE', CT59: 'STATEMENTAL', CT60: 'FRANCHISE_LEASE', CT61: 'EVIDENCE'
 };
 // detector id responsible for each CT type (derived from forensic-engine.js source)
 var CT_DETECTOR = {
@@ -173,7 +180,8 @@ var CT_DETECTOR = {
   CT41: 'D19', CT42: 'D20', CT31: 'D21', CT33: 'D22', CT35: 'D23', CT36: 'D24', CT37: 'D25',
   CT38: 'D26', CT39: 'D27', CT40: 'D28', CT23: 'D32', CT28: 'D33', CT16: 'D34', CT30: 'D35',
   CT32: 'D36', CT43: 'D37', CT44: 'D38', CT45: 'D39', CT46: 'D40', CT47: 'D41', CT48: 'D42', CT49: 'D43', CT50: 'PKG',
-  CT51: 'D02D', CT52: 'D07A', CT53: 'D07B', CT54: 'D08A', CT55: 'D09A'
+  CT51: 'D02D', CT52: 'D07A', CT53: 'D07B', CT54: 'D08A', CT55: 'D09A',
+  CT56: 'D10A', CT57: 'D10B', CT58: 'D10C', CT59: 'D61', CT60: 'D62', CT61: 'D63'
 };
 // FRANCHISE_LEASE (CT44/CT45) was missing here, so the findings matrix of the evidence-bundle-4 run summed to 41 of 44.
 var CATEGORY_ORDER = ['STATEMENTAL', 'FRANCHISE_LEASE', 'IDENTITY', 'FINANCIAL', 'INTEGRITY', 'CROSS_REF', 'CONTACT', 'EVIDENCE', 'DIGITAL', 'BEHAVIOUR'];
@@ -549,11 +557,11 @@ var VO_FINDING_CLASS_FALLBACK = {
   CT19: 'CONTRADICTION', CT20: 'CONTRADICTION', CT21: 'CONTRADICTION', CT22: 'CONTRADICTION',
   CT24: 'CONTRADICTION', CT29: 'CONTRADICTION', CT36: 'CONTRADICTION', CT37: 'CONTRADICTION',
   CT39: 'CONTRADICTION', CT40: 'CONTRADICTION', CT42: 'CONTRADICTION', CT44: 'CONTRADICTION',
-  CT45: 'CONTRADICTION', CT46: 'CONTRADICTION', CT51: 'CONTRADICTION',
+  CT45: 'CONTRADICTION', CT46: 'CONTRADICTION', CT51: 'CONTRADICTION', CT59: 'CONTRADICTION',
   CT07: 'TENSION', CT12: 'TENSION', CT23: 'TENSION', CT25: 'TENSION', CT26: 'TENSION',
   CT27: 'TENSION', CT28: 'TENSION', CT30: 'TENSION', CT34: 'TENSION', CT35: 'TENSION',
   CT38: 'TENSION', CT41: 'TENSION', CT43: 'TENSION', CT52: 'TENSION', CT55: 'TENSION',
-  CT56: 'TENSION', CT57: 'TENSION', CT58: 'TENSION',
+  CT56: 'TENSION', CT57: 'TENSION', CT58: 'TENSION', CT60: 'TENSION', CT61: 'TENSION',
   CT31: 'COMPLETENESS', CT32: 'COMPLETENESS', CT33: 'COMPLETENESS', CT53: 'COMPLETENESS',
   CT54: 'EXAMINATION_LIMIT',
   CT47: 'BEHAVIORAL', CT48: 'BEHAVIORAL', CT49: 'BEHAVIORAL', CT50: 'BEHAVIORAL'
@@ -2611,6 +2619,13 @@ var VO_BRAIN_OF_CT = (function () {
   // too — B4, never the contradiction brain. Separate line: the line above
   // is pinned byte-exact by event-date-conflict.test.mjs (bundle-3 review).
   put('B4', ['CT55']);
+  // The batch-5 indicators (CT56-58) and batch 7a's review indicators
+  // (CT60 benefit/burden, CT61 horns-of-dilemma) are indicators for human
+  // review too — B4, never the contradiction brain. CT59 is a true
+  // contradiction (a pleaded denial against the sealed conduct ledger) and
+  // stays with B1.
+  put('B4', ['CT56', 'CT57', 'CT58']);
+  put('B4', ['CT60', 'CT61']);
   return m; // everything else -> B1; SERIAL -> B4
 })();
 // The kinds a brain's §15.4 block header does not describe: printed under
@@ -2620,7 +2635,7 @@ var VO_BRAIN_OF_CT = (function () {
 // CT52 (a gap in the record, not a statement pair), CT53/CT54 (document
 // measurements) and CT55 (an indicator for review) never print under a
 // "CONTRADICTION FOUND" or "TAMPER FOUND" header.
-var VO_NEUTRAL_BLOCK_CT = { CT23: 1, CT39: 1, CT31: 1, CT32: 1, CT37: 1, CT33: 1, CT35: 1, CT07: 1, CT47: 1, CT48: 1, CT49: 1, CT50: 1, CT52: 1, CT53: 1, CT54: 1, CT55: 1 };
+var VO_NEUTRAL_BLOCK_CT = { CT23: 1, CT39: 1, CT31: 1, CT32: 1, CT37: 1, CT33: 1, CT35: 1, CT07: 1, CT47: 1, CT48: 1, CT49: 1, CT50: 1, CT52: 1, CT53: 1, CT54: 1, CT55: 1, CT56: 1, CT57: 1, CT58: 1, CT60: 1, CT61: 1 };
 var VO_BRAIN_META = {
   B1: { name: 'B1 — Contradiction Brain', label: 'CONTRADICTION FOUND' },
   // The block headers are the §15.4 template's own (PD19: no deviation). Each
@@ -3591,7 +3606,13 @@ var NARRATIVE_MEANING = {
   CT52: 'authority to act is claimed but no resolution, power of attorney or written consent appears anywhere in the record',
   CT53: 'an instrument the record treats as operative carries unsigned signature blocks',
   CT54: 'pages carry no machine-readable text and went unchecked — a limit of the examination, not a defect found',
-  CT55: 'near-identical texts appear under different closing blocks — an indicator for human review, not a determination'
+  CT55: 'near-identical texts appear under different closing blocks — an indicator for human review, not a determination',
+  CT56: 'a statutory arbitration track is staffed while the licence it presupposes is asserted to be dead — an indicator for legal review, not a determination',
+  CT57: 'a statement of record (confirmed/admitted/acknowledged) stands against a denial of the same fact elsewhere — an indicator for legal review, not a determination',
+  CT58: 'two statements share one frame of words and differ only in polarity — an indicator for legal review, not a determination',
+  CT59: 'a pleaded denial that a performance ever happened stands against the record’s own dated conduct ledger of that performance, sealed with this bundle',
+  CT60: 'a benefit is taken under an instrument while the burden of the same instrument is denied — approbate and reprobate, named as candidate law only',
+  CT61: 'a statutory mechanism is invoked that operates only while a relationship the record also denies exists — either horn is adverse; an indicator for legal review, not a determination'
 };
 
 function narrativeMeaning(f) {
