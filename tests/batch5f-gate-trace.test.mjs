@@ -21,7 +21,7 @@ const t = require('./_assert');
 
 t.ok(typeof E.voWellFormedness === 'function', 'voWellFormedness is exported');
 t.ok(typeof E.detectSerialPatterns === 'function', 'detectSerialPatterns is exported');
-t.ok(E.VO_ENGINE_VERSION === '5.5.0-web', 'engine version is 5.5.0-web');
+t.ok(E.VO_ENGINE_VERSION === '5.6.0-web', 'engine version is 5.6.0-web');
 
 const DATED = 'The applicant John Smith confirmed on 12 March 2026 that payment of R50,000 was made.';
 

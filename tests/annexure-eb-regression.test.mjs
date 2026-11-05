@@ -1190,7 +1190,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ok(!/Behavioural Scorecard|Top liabilities|top liabilities/.test(TN) && /Parties named on the pages carrying findings/.test(T) && /Leading findings:/.test(T) && !/Most serious findings/.test(T), 'no "scorecard" over the people a record names, no "liabilities", and no severity word in the actionable output');
     ok(!/\(confidence:/.test(TN) && /Document classification \(AI, advisory\): Other/.test(T), 'the classification prints no confidence band');
     ok(!/Highest severity/.test(T) && !/\bSev\.\s/.test(T), 'no severity column in the matrix, for engine findings or AI candidates');
-    ok(/A candidate marked "unanchored" has no quote in the sealed text/.test(T), 'an unanchored AI candidate is called a question, not a lead to a page');
+    ok(/a candidate the review could not anchor to a quote in the sealed text is not recorded at all/.test(T), 'an unanchored AI candidate is not recorded at all (batch 6: a question, not a lead)');
     ok(/The operator is "errant" and non-compliant/.test(T), 'the evidence prints the record\'s own word in its quotation marks');
     const dish = T.slice(T.lastIndexOf('2. DISHONESTY DETECTION MATRIX'), T.indexOf('3. NINE-BRAIN', T.lastIndexOf('2. DISHONESTY DETECTION MATRIX')));
     ok(dish.length > 50 && !/Evasion \/ Deflection/.test(dish) && dish.indexOf('Contradictions') !== -1 && (dish.indexOf('Selective Omissions') === -1 || dish.indexOf('Contradictions') < dish.indexOf('Selective Omissions')), 'a contact conflict is a contradiction, not evasion, and rows are ordered by their most serious finding (' + dish.slice(0, 300).replace(/\s+/g, ' ') + ')');
