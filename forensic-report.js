@@ -67,7 +67,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.7.0-web';
+var ENGINE_VERSION = '5.7.1-web';
 var CONSTITUTION_VERSION = '6.1';
 // Counts mirror the live registry and run-list in forensic-engine-page.js.
 // The report recomputes from the registry at runtime when the engine is
@@ -578,6 +578,7 @@ var VO_CLASS_EXPLAIN = {
 };
 function voFindingClassOf(f) {
   if (!f || f.type === 'SERIAL' || f.source === 'ai') return null;
+  if (f.conductAdmission || f.meetingDispute) return 'TENSION';
   return f.findingClass || VO_FINDING_CLASS_FALLBACK[f.type] || 'TENSION';
 }
 function voClassBreakdownSentence(list) {
@@ -2539,6 +2540,9 @@ function secCriticalSubjects(ctx, data) {
 
 function secDishonestyMatrix(ctx, data) {
   var L = voLegalPrelude(data);
+  // An admission or an unresolved meeting-account dispute is an evidence lead,
+  // not a dishonesty pattern. Keep it in the findings, out of this matrix.
+  L.substantive = L.substantive.filter(function (f) { return !f.conductAdmission && !f.meetingDispute; });
   if (L.substantive.length === 0) return voEmptyTemplateSection(ctx, '2. DISHONESTY DETECTION MATRIX', 'No row: the engine recorded no substantive finding to place in the matrix.');
   ctx.newBodyPage();
   ctx.heading('2. DISHONESTY DETECTION MATRIX');
@@ -5415,8 +5419,8 @@ function gpsLine(data) {
 var LAW_DISCLAIMER_TEXT = 'These citations are pointers for a qualified legal professional, not legal advice. Contact a lawyer before acting on them.';
 
 // Split a verify-law response into the statutes that may be cited and those
-// that may not. A fixed, deterministic function of the worker's response —
-// nothing here is recomputed or reinterpreted.
+// that may not. Each candidate's status is authoritative. The renderer also
+// replaces a stale blanket-success declaration whenever any candidate is excluded.
 function lawExclusionsOf(lawCheck) {
   var out = { verified: [], excluded: [], declaration: '', disclaimer: LAW_DISCLAIMER_TEXT, direction: null };
   if (!lawCheck || !Array.isArray(lawCheck.results)) return out;
@@ -5440,6 +5444,12 @@ function lawExclusionsOf(lawCheck) {
       item.note = ran.join('; ');
     }
     (item.status === 'VERIFIED' ? out.verified : out.excluded).push(item);
+  }
+  // Defend the court narrative against a stale or malformed worker declaration:
+  // a positive blanket claim is printable only when every candidate is verified.
+  if (out.excluded.length && /Law citations verified by/i.test(out.declaration)) {
+    out.declaration = out.verified.length + ' of ' + (out.verified.length + out.excluded.length) +
+      ' candidate citations reached a two-lane quorum; unconfirmed citations are excluded from findings.';
   }
   return out;
 }

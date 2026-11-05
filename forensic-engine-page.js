@@ -1,10 +1,10 @@
-// ============== FORENSIC CONTRADICTION ENGINE v5.7.0-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.7.1-web ================
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.0-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.1-web
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
@@ -26,7 +26,7 @@
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.7.0-web';
+var VO_ENGINE_VERSION = '5.7.1-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
@@ -708,6 +708,26 @@ function voDetectSwornPages(textBlocks) {
   return pages;
 }
 
+// Behavioural detectors record direct language, not a complainant's
+// second-hand characterisation of what another person said. Express quotation
+// marks keep a quoted passage available for review; narrative attribution alone
+// does not establish independent opposing-party conduct.
+function voBehaviouralSecondhand(sen) {
+  var s = String(sen || '');
+  var attributed = /\b(?:wrote|claimed|alleged|narrative|submits?|argues?|according\s+to)\b/i.test(s);
+  if (!attributed) {
+    // Passive wording inside the denial itself ("that is not what was said")
+    // is direct language, not a narrator attributing a position to someone else.
+    var withoutPassiveSaid = s.replace(/\b(?:was|were|is|are|been|be)\s+said\b/ig, '');
+    attributed = /\bsaid\b/i.test(withoutPassiveSaid);
+  }
+  if (!attributed) return false;
+  return !/["“]/.test(s);
+}
+function voBehaviouralKey(sen) {
+  return String(sen || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+}
+
 var DETECTORS = {
 
   // D01-D05: Statemental detectors
@@ -907,7 +927,7 @@ var DETECTORS = {
     // list both ways).
     var VO_ADM_CHARACTERISATION_RE = /\b(?:is|was|are|were|be|being|been|constitutes?|amount(?:s|ed)?\s+to|represent(?:s|ed)?|reads?\s+as|read\s+as|deem(?:s|ed)?|treat(?:s|ed)?\s+as|considered|regarded\s+as)\s+(?:an?\s+)?(?:\w+[-\s]+){0,3}?$/i;
     var VO_ADM_NOUN_CUES = { 'admission of guilt': 1 };
-    var admPages = [], admQuote = null, admCue = null;
+    var admPages = [], admQuote = null, admCue = null, admSeen = {};
     for (var ap = 0; ap < textBlocks.length; ap++) {
       var lowA = (textBlocks[ap] || '').toLowerCase();
       var admCounted = false;
@@ -929,7 +949,17 @@ var DETECTORS = {
               continue;
             }
           }
-          if (!PLEADING_ADMISSION_RE.test(sentA)) {
+          // A prediction or hypothetical put into another person's mouth is
+          // the writer's argument, not that person's admission ("perhaps later
+          // you'll think … I was wrong" in Liam's Greensky letter).
+          var beforeCueA = lowA.slice(Math.max(0, atA - 90), atA);
+          if (/\b(?:you|he|she|they)\b[^.;!?]{0,80}\b(?:think|may|might|could|would|predict|expect)\b[^.;!?]{0,45}$/i.test(beforeCueA)) {
+            atA = lowA.indexOf(admissionCues[ac], atA + admissionCues[ac].length);
+            continue;
+          }
+          var admKey = sentA.replace(/[^a-z0-9]+/g, ' ').trim();
+          if (!PLEADING_ADMISSION_RE.test(sentA) && !admSeen[admKey]) {
+            admSeen[admKey] = true;
             admPages.push(ap + 1);
             if (!admQuote) {
               admCue = admissionCues[ac];
@@ -959,7 +989,7 @@ var DETECTORS = {
     var VO_PROCEED_RE = /\b(?:proceeded|went\s+ahead|carried\s+on|continued|concluded|completed|finalised|finalized|executed)\b[^.]{0,80}\b(?:deal|transaction|sale|shipment|order|export|contract|agreement|payment|transfer)\b/i;
     var VO_SELF_RE = /\b(?:i|we|me|my|our|us)\b/i;
     var VO_BOILER_RE = /\b(?:shall|hereby|whereas|herein|the\s+parties\s+agree)\b/i;
-    var condPages = [], condQuote = null;
+    var condPages = [], condQuote = null, condSeen = {};
     for (var cp = 0; cp < textBlocks.length; cp++) {
       var sentsC = String(textBlocks[cp] || '').split(/[.!?]+\s+/);
       for (var sc = 0; sc < sentsC.length; sc++) {
@@ -967,6 +997,9 @@ var DETECTORS = {
         if (senC.length < 30 || senC.length > 600) continue;
         if (VO_BOILER_RE.test(senC)) continue;
         if (!VO_CAUSE_RE.test(senC) || !VO_PROCEED_RE.test(senC) || !VO_SELF_RE.test(senC)) continue;
+        var condKey = senC.toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+        if (condSeen[condKey]) continue;
+        condSeen[condKey] = true;
         condPages.push(cp + 1);
         if (!condQuote) {
           // Where the passage is requoted under the bundle's own heading
@@ -1825,16 +1858,32 @@ var DETECTORS = {
       var W = String(blocks[b] || '');
       var m;
       THEFT_G.lastIndex = 0;
-      while ((m = THEFT_G.exec(W)) !== null) theft.push({ page: b + 1, quote: W.slice(Math.max(0, m.index - 70), m.index + 70).replace(/\s+/g, ' ').trim() });
+      while ((m = THEFT_G.exec(W)) !== null) {
+        if (voNegatedBefore(W, m.index)) continue; // "not stolen" alleges no theft
+        theft.push({ page: b + 1, idx: m.index, quote: (voSentenceAround(W, m[0]) || m[0]).replace(/\s+/g, ' ').trim() });
+      }
       SCAM_G.lastIndex = 0;
-      while ((m = SCAM_G.exec(W)) !== null) scam.push({ page: b + 1, quote: W.slice(Math.max(0, m.index - 70), m.index + 70).replace(/\s+/g, ' ').trim() });
+      while ((m = SCAM_G.exec(W)) !== null) {
+        if (voNegatedBefore(W, m.index)) continue;
+        scam.push({ page: b + 1, idx: m.index, quote: (voSentenceAround(W, m[0]) || m[0]).replace(/\s+/g, ' ').trim() });
+      }
     }
-    if (theft.length && scam.length) {
+    var tsPair = null;
+    for (var ti = 0; ti < theft.length && !tsPair; ti++) {
+      for (var si = 0; si < scam.length; si++) {
+        // One sentence ("lost in a courier scam, not stolen") is one position,
+        // not two opposing statements. Separate events need separate passages.
+        if (theft[ti].page !== scam[si].page || Math.abs(theft[ti].idx - scam[si].idx) > 400) {
+          tsPair = { theft: theft[ti], scam: scam[si] }; break;
+        }
+      }
+    }
+    if (tsPair) {
       var tp = [], sp = [], i;
       for (i = 0; i < theft.length; i++) if (tp.indexOf(theft[i].page) < 0) tp.push(theft[i].page);
       for (i = 0; i < scam.length; i++) if (sp.indexOf(scam[i].page) < 0) sp.push(scam[i].page);
       findings.push({ type: 'CT01', severity: 4,
-        evidence: 'The record characterises the same property event in two incompatible ways: as theft ("' + theft[0].quote + '", p. ' + theft[0].page + (tp.length > 1 ? '; also p. ' + tp.slice(1).join(', ') : '') + ') and as a scam in which the seller was deceived ("' + scam[0].quote + '", p. ' + scam[0].page + (sp.length > 1 ? '; also p. ' + sp.slice(1).join(', ') : '') + '). Theft requires an intention to deprive; a disclosed attempted sale ending in a scam records the opposite. Which characterisation is true is for the record, not the engine.',
+        evidence: 'The record characterises the same property event in two incompatible ways: as theft ("' + tsPair.theft.quote + '", p. ' + tsPair.theft.page + (tp.length > 1 ? '; also p. ' + tp.slice(1).join(', ') : '') + ') and as a scam in which the seller was deceived ("' + tsPair.scam.quote + '", p. ' + tsPair.scam.page + (sp.length > 1 ? '; also p. ' + sp.slice(1).join(', ') : '') + '). Theft requires an intention to deprive; a disclosed attempted sale ending in a scam records the opposite. Which characterisation is true is for the record, not the engine.',
         location: 'Pages ' + tp.join(', ') + ' vs Pages ' + sp.join(', ') });
     }
     return findings;
@@ -1842,22 +1891,42 @@ var DETECTORS = {
 
   // D01C: denial then admission of the same transaction. The camera case
   // and the Greensky file: "there were no sales" / "we never invoiced at
-  // all" beside "Kevin's Export proceeded with the deal". Both are in the
-  // record; where one side quoted the other ("You told me ..."), the quote
-  // still records that the denial was made.
+  // all" beside "Kevin's Export proceeded with the deal". Both positions must
+  // be direct: a narrator's report of someone else's denial is not paired with
+  // a third party's conduct as if one actor had contradicted himself.
   D01C_DETECT_DENIAL_ADMISSION_PAIR: function(textBlocks) {
     var findings = [];
     var blocks = textBlocks || [];
     var DENY_G = /\b(?:there were no sales|no sales were (?:made|recorded)|never invoiced|nothing was sold|the deal fell through|the deal did not happen|the deal didn't happen|order (?:did not|didn't) happen)\b/gi;
     var ADMIT_G = /\b(?:proceeded with the deal|the deal happened|the deal went ahead|sale was made|sales were made|invoiced and exported)\b/gi;
     var denials = [], admissions = [];
+    function reportedPosition(W, idx, quote) {
+      // Generic speaker attribution only — never a party-name list. An express
+      // quotation remains reviewable; narrative attribution is not a direct
+      // statement by the person whose conduct is reported.
+      if (/["“]/.test(quote)) return false;
+      var before = W.slice(Math.max(0, idx - 100), idx);
+      return /\b(?:[\w'’-]+\s+){1,3}(?:told\s+me|said|claimed|alleged|stated)\b[^.;]{0,90}$/i.test(before);
+    }
     for (var b = 0; b < blocks.length; b++) {
       var W = String(blocks[b] || '');
       var m;
       DENY_G.lastIndex = 0;
-      while ((m = DENY_G.exec(W)) !== null) denials.push({ page: b + 1, quote: W.slice(Math.max(0, m.index - 80), m.index + m[0].length + 80).replace(/\s+/g, ' ').trim() });
+      while ((m = DENY_G.exec(W)) !== null) {
+        // A narrator's report that someone else denied a transaction is not
+        // paired with a third party's conduct as if one actor contradicted himself.
+        var denialQuote = (voSentenceAround(W, m[0]) || m[0]).replace(/\s+/g, ' ').trim();
+        if (reportedPosition(W, m.index, denialQuote)) continue;
+        denials.push({ page: b + 1, quote: denialQuote });
+      }
       ADMIT_G.lastIndex = 0;
-      while ((m = ADMIT_G.exec(W)) !== null) admissions.push({ page: b + 1, quote: W.slice(Math.max(0, m.index - 80), m.index + m[0].length + 80).replace(/\s+/g, ' ').trim() });
+      while ((m = ADMIT_G.exec(W)) !== null) {
+        // The admission must be direct too: both sides of this pair need the
+        // same source-quality discipline.
+        var admissionQuote = (voSentenceAround(W, m[0]) || m[0]).replace(/\s+/g, ' ').trim();
+        if (reportedPosition(W, m.index, admissionQuote)) continue;
+        admissions.push({ page: b + 1, quote: admissionQuote });
+      }
     }
     if (denials.length && admissions.length) {
       var dn = denials[0], ad = admissions[0];
@@ -1871,11 +1940,11 @@ var DETECTORS = {
     return findings;
   },
 
-  // D04C: the meeting reversal. The camera case: "refused to attend a
+  // D04C: competing meeting accounts. The camera case: "refused to attend a
   // meeting I had requested" / "refused to meet and blocked" sit in the
   // same record as "I've asked quite a few times to have a meeting with
-  // you" and "I requested a meeting on March 9th". The requester and the
-  // refuser cannot be the same person in the same record.
+  // you" and "I requested a meeting on March 9th". Private/group meetings
+  // and different periods require review; this is a tension, not an impossibility.
   D04C_DETECT_MEETING_REQUEST_REFUSAL_REVERSAL: function(textBlocks) {
     var findings = [];
     var blocks = textBlocks || [];
@@ -1900,8 +1969,8 @@ var DETECTORS = {
       }
     }
     if (pair) {
-      findings.push({ type: 'CT01', severity: 4,
-        evidence: 'The record carries both an accusation that a meeting was refused ("' + pair.r.quote + '", p. ' + pair.r.page + ') and statements that meetings were requested and went unanswered ("' + pair.q.quote + '", p. ' + pair.q.page + '). The requester of meetings and the refuser of meetings cannot be the same person in the same record; who actually refused is for the record, not the engine.',
+      findings.push({ type: 'CT01', severity: 4, meetingDispute: true,
+        evidence: 'The record carries an accusation that a meeting was refused ("' + pair.r.quote + '", p. ' + pair.r.page + ') and statements that meetings were requested and went unanswered ("' + pair.q.quote + '", p. ' + pair.q.page + '). These accounts require review of whether they concern the same meeting, a private or group meeting, and the same period; they do not by themselves establish a direct contradiction.',
         location: 'Page ' + pair.r.page + ' vs Page ' + pair.q.page });
     }
     return findings;
@@ -1919,7 +1988,13 @@ var DETECTORS = {
       // Court-process and document nouns can never be possessable ASSETS —
       // "my rescission" vs "the Constitutional Court rescission" is not two
       // owners of one asset (LPC complaint bundle, 31 Oct 2026 live run).
-      rescission: 1, proceedings: 1, proceeding: 1, referral: 1, arbitration: 1, litigation: 1, action: 1, counterclaim: 1, summons: 1, plea: 1, replication: 1, rejoinder: 1, surrejoinder: 1, judgment: 1, judgement: 1, order: 1, appeal: 1, condonation: 1, interdict: 1, mediation: 1, motion: 1, hearing: 1, trial: 1, discovery: 1, subpoena: 1, notice: 1, report: 1, document: 1, letter: 1 };
+      rescission: 1, proceedings: 1, proceeding: 1, referral: 1, arbitration: 1, litigation: 1, action: 1, counterclaim: 1, summons: 1, plea: 1, replication: 1, rejoinder: 1, surrejoinder: 1, judgment: 1, judgement: 1, order: 1, appeal: 1, condonation: 1, interdict: 1, mediation: 1, motion: 1, hearing: 1, trial: 1, discovery: 1, subpoena: 1, notice: 1, report: 1, document: 1, letter: 1,
+      // Communications and legal acts are not ownable physical assets. The
+      // Greensky run paired "my message" with a CIPC disclaimer and "my
+      // resignation" with a company-secretary narrative as two asset owners.
+      message: 1, call: 1, text: 1, sms: 1, voicemail: 1, conversation: 1, correspondence: 1,
+      resignation: 1, decision: 1, dismissal: 1, termination: 1, appointment: 1,
+      demand: 1, instruction: 1, confirmation: 1, approval: 1 };
     // A possessable asset is a concrete noun: not an -ing form, not a plural.
     function isAsset(a) { return !STOPN[a] && !/ing$/.test(a) && !/s$/.test(a); }
     var MY_G = /\bmy\s+([a-z][a-z-]{2,20})\b/g;
@@ -2244,12 +2319,25 @@ var DETECTORS = {
     var findings = [];
     var blocks = textBlocks || [];
     var STOP = { the: 1, and: 1, for: 1, that: 1, this: 1, with: 1, from: 1, are: 1, was: 1, were: 1, has: 1, have: 1, had: 1, not: 1, but: 1, you: 1, your: 1, yours: 1, our: 1, ours: 1, their: 1, they: 1, them: 1, his: 1, her: 1, its: 1, who: 1, whom: 1, which: 1, will: 1, would: 1, shall: 1, should: 1, can: 1, could: 1, may: 1, might: 1, must: 1, any: 1, all: 1, per: 1, via: 1, ref: 1, dear: 1, sir: 1, madam: 1, regards: 1, faithfully: 1, sincerely: 1, herein: 1, thereto: 1, thereof: 1, hereby: 1, above: 1, below: 1, upon: 1, into: 1, out: 1, off: 1, over: 1, under: 1, then: 1, than: 1, too: 1, also: 1, such: 1, same: 1, been: 1, being: 1, between: 1, without: 1, within: 1, during: 1, before: 1, after: 1, against: 1, about: 1 };
+    function stripEmailBoilerplate(T) {
+      // Standard confidentiality/transmission language is shared by unrelated
+      // firms. It cannot supply the substantive vocabulary for coordination.
+      var parts = String(T || '').match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
+      var keep = [];
+      for (var i = 0; i < parts.length; i++) {
+        var p = parts[i];
+        var standard = /\b(?:confidential|intended\s+solely|named\s+recipient|received\s+this\s+email\s+in\s+error|notify\s+the\s+sender|transmission\s+errors?|interception|corruption|viruses?|email\s+disclaimer)\b/i.test(p) ||
+          (/\bunauthori[sz]ed\s+(?:review|use|disclosure|copying|distribution)\b/i.test(p) && /\b(?:prohibited|delete|email|attachments?)\b/i.test(p));
+        if (!standard) keep.push(p);
+      }
+      return keep.join(' ');
+    }
     function prof(W) {
       // Seal furniture off first: the footer carries the seal id and hash,
       // and a fixed-width tail window can slice mid-word through it,
       // manufacturing a spurious "different closing block" (b3 corpus,
       // pp. 61/129: "stamps" vs "tamps" was one footer cut at two offsets).
-      var T = voStripSealFurniture(String(W || ''));
+      var T = stripEmailBoilerplate(voStripSealFurniture(String(W || '')));
       var toks = T.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/);
       var set = {}, n = 0;
       for (var i = 0; i < toks.length; i++) { var tk = toks[i]; if (tk.length < 3 || STOP[tk]) continue; if (!set[tk]) { set[tk] = 1; n++; } }
@@ -2517,12 +2605,13 @@ var DETECTORS = {
 
   D61_DETECT_CONDUCT_VS_PLEADING: function(textBlocks, conductLedger) {
     // CT59. A negative-existence pleading assertion ("no rental was ever
-    // paid", "no agreement existed") measured against the record's own dated
-    // conduct for the same subject. Fires only on a SUSTAINED ledger: six or
-    // more dated events, or a span of 24 months or more (v6.1 §1) — severity
-    // CRITICAL (5) when both, HIGH (4) otherwise. A stray invoice is a
-    // dispute about one document; years of dated rental invoices against
-    // "nothing was ever paid" is a contradiction.
+    // paid", "no payment was made") measured against the record's own dated
+    // completed-payment conduct for the same subject. Fires only on a SUSTAINED ledger: six or
+    // more dated COMPLETED-PAYMENT events, or a span of 24 months or more —
+    // severity CRITICAL (5) when both, HIGH (4) otherwise. An invoice, demand,
+    // shipment or receipt-of-notice is not payment performance and cannot
+    // disprove non-payment. A named payee must match the receiving direction
+    // stated in the event; an unknown or different recipient stays silent.
     var findings = [];
     var blocks = textBlocks || [];
     var ledger = conductLedger || voExtractConductLedger(blocks);
@@ -2530,20 +2619,17 @@ var DETECTORS = {
     // One event can never found the claim: no span, no sustained pattern.
     if (events.length < 2) return findings;
     var SUBJECT_KINDS = {
-      rental: { rental: 1, invoice: 1, payment: 1, receipt: 1, statement: 1, remittance: 1 },
-      agreement: { payment: 1, invoice: 1, receipt: 1, remittance: 1 },
-      payment: { payment: 1, receipt: 1, invoice: 1, remittance: 1, statement: 1 },
-      occupation: { rental: 1, invoice: 1, payment: 1 }
+      rental: { payment: 1, receipt: 1, statement: 1, remittance: 1 },
+      payment: { payment: 1, receipt: 1, remittance: 1, statement: 1 }
     };
-    // Each: a negative-existence pleading shape and the ledger subject it
-    // answers. Performance language alone stays silent — the ledger decides.
+    // Each denial is a negative-existence claim about PAST PERFORMANCE. A
+    // payment cannot prove that an agreement existed, and historic payments do
+    // not disprove a denial that a present balance remains due; those are
+    // different propositions and stay outside CT59.
     var DENIALS = [
       { re: /\bno\s+(?:rental|rent)\s+(?:(?:was|were|is|has\s+been|had\s+been)\s+)?(?:ever\s+)?(?:paid|received|made)\b/gi, subject: 'rental' },
       { re: /\b(?:never|not)\s+(?:ever\s+)?(?:paid|received)\s+(?:any\s+)?(?:rental|rent)\b/gi, subject: 'rental' },
-      { re: /\bno\s+(?:lease|agreement|contract)\s+(?:ever\s+)?(?:existed|exists|came\s+into\s+(?:being|effect)|was\s+(?:ever\s+)?(?:concluded|entered\s+into|signed))\b/gi, subject: 'agreement' },
-      { re: /\bthere\s+(?:was|is|has\s+been)\s+no\s+(?:lease|agreement|contract)\b/gi, subject: 'agreement' },
-      { re: /\bno\s+(?:payment|payments|amount|sum|monies|moneys)\s+(?:(?:was|were|is|has\s+been|have\s+been)\s+)?(?:ever\s+)?(?:paid|received|made|owing|due|payable)\b/gi, subject: 'payment' },
-      { re: /\bno\s+amount\s+is\s+(?:due|owing|payable)\b/gi, subject: 'payment' }
+      { re: /\bno\s+(?:payment|payments|amount|sum|monies|moneys)\s+(?:(?:was|were|is|has\s+been|have\s+been)\s+)?(?:ever\s+)?(?:paid|received|made)\b/gi, subject: 'payment' }
     ];
     var ROLE_RE = /\b(?:applicant|respondent|plaintiff|defendant|lessor|lessee|landlord|tenant|franchisor|franchisee|seller|purchaser)\b/i;
     var bestBySubject = {};
@@ -2558,12 +2644,17 @@ var DETECTORS = {
           var quote = voSentenceAround(s, m[0]) || m[0];
           quote = quote.replace(/\s+/g, ' ').trim();
           if (quote.length > 220) quote = quote.slice(0, 217) + '...';
-          // The matching conduct for this subject, excluding the assertion's
-          // own page: a page is not cross-reference against itself.
+          // Only affirmative money movement answers a denial of performance.
+          // Invoices, demands, shipments and receipt-of-notice are not payment.
+          // Where the denial names a payee, an unknown or different payee cannot
+          // contradict it: the recipient and subject must match the proposition.
+          var denialPayee = voConductPayee(quote);
           var hits = [];
           for (var e = 0; e < events.length; e++) {
             if (!SUBJECT_KINDS[subject][events[e].kind]) continue;
+            if (events[e].proves_payment !== true) continue;
             if (events[e].source_page === i + 1) continue;
+            if (denialPayee && !voSameConductPayee(denialPayee, events[e].payee)) continue;
             hits.push(events[e]);
           }
           var n = hits.length;
@@ -2576,7 +2667,7 @@ var DETECTORS = {
         }
       }
     }
-    var ORDER = ['rental', 'payment', 'agreement', 'occupation'];
+    var ORDER = ['rental', 'payment'];
     for (var o = 0; o < ORDER.length && findings.length < 4; o++) {
       var cand = bestBySubject[ORDER[o]];
       if (!cand) continue;
@@ -5163,19 +5254,23 @@ var DETECTORS = {
   //  - one aggregated finding per run, at most 3 example passages.
   D41_DETECT_COERCIVE_CONDUCT: function(textBlocks) {
     var findings = [];
-    var VO_COERCE_CUES = [
+    var VO_COERCE_ADVICE_SHAPED_CUES = [
       /\bfailing which\b/i,
       /\bshould you (?:fail|refuse|not)\b/i,
       /\bif you (?:fail|do not|refuse)\b[^.]{0,120}\b(?:will|shall)\b/i,
       /\b(?:will|shall) be (?:forced|obliged|left with no (?:option|choice|alternative))(?: to| but)?\b/i,
-      /\bno (?:option|choice|alternative) but to\b/i,
+      /\bno (?:option|choice|alternative) but to\b/i
+    ];
+    var VO_COERCE_CONCRETE_CUES = [
       /\b(?:cut|stop|suspend|terminate|disconnect|interrupt|withhold)\w*\s+(?:off\s+)?(?:the\s+|your\s+|all\s+)?(?:supply|supplies|fuel|deliver\w*|power|water|stock|payment\w*)\b/i,
       /\block(?:ed|ing)?\s+(?:you|them|him|her)\s+out\b|\bchange[sd]?\s+the\s+locks\b|\brepossess\b/i,
       /\btake it or leave it\b|\bnon-negotiable\b/i,
       /\bunder protest\b|\bunder duress\b|\bpressur(?:ed|ised)(?:\s+(?:me|us|them|into))?\b|\bforced (?:me|us|them|into)\b|\bagainst (?:my|our|their) will\b|\bcoerc(?:ed|ion|ive)\b/i
     ];
+    var VO_COERCE_CUES = VO_COERCE_ADVICE_SHAPED_CUES.concat(VO_COERCE_CONCRETE_CUES);
     var VO_COERCE_BOILER = /\b(?:shall|hereby|notwithstanding|entitled to|in terms of|pursuant to|herein|thereof)\b/i;
-    var pages = [], examples = [];
+    var VO_COERCE_ADVICE = /\b(?:seek|obtain|take|get)\s+(?:legal\s+|professional\s+)?(?:advice|counsel)\b|\blegal\s+advice\b|\bconsult(?:ing)?\s+(?:our|my)\s+(?:attorneys?|lawyers?)\b/i;
+    var pages = [], examples = [], seenPassages = {};
     for (var cp = 0; cp < textBlocks.length; cp++) {
       var sents = String(textBlocks[cp] || '').split(/[.!?]+\s+/);
       for (var si = 0; si < sents.length; si++) {
@@ -5185,6 +5280,18 @@ var DETECTORS = {
         var hit = false;
         for (var ci = 0; ci < VO_COERCE_CUES.length; ci++) { if (VO_COERCE_CUES[ci].test(sen)) { hit = true; break; } }
         if (!hit) continue;
+        if (VO_COERCE_ADVICE.test(sen)) {
+          // Ordinary recourse to lawyers is not coercion. A concrete threat in
+          // the same sentence remains visible on its own evidentiary footing.
+          var independentCue = false;
+          for (var ac = 0; ac < VO_COERCE_CONCRETE_CUES.length; ac++) {
+            if (VO_COERCE_CONCRETE_CUES[ac].test(sen)) { independentCue = true; break; }
+          }
+          if (!independentCue) continue;
+        }
+        var passageKey = voBehaviouralKey(sen);
+        if (seenPassages[passageKey]) continue;
+        seenPassages[passageKey] = true;
         pages.push(cp + 1);
         if (examples.length < 3 && sen.length >= 40) {
           examples.push(sen.length > 220 ? sen.slice(0, 220).replace(/\s+\S*$/, '') + '...' : sen);
@@ -5211,21 +5318,26 @@ var DETECTORS = {
       /\byou are (?:mistaken|confused|incorrect)\b|\byou are simply wrong\b/i,
       /\byour (?:recollection|version|account|memory) (?:of events )?is (?:wrong|incorrect|mistaken|false|flawed)\b/i,
       /\bmis-?remember/i,
-      /\bfabricat(?:ion|ed)\b|\bfigment of\b/i,
+      // "Fabricated allegations" is a complainant's case theory, not by itself
+      // an opposing party's denial of reality. "Figment of" remains direct language.
+      /\bfigment of\b/i,
       /\bthat is not what (?:was )?(?:said|agreed|happened)\b|\bnot what (?:was )?(?:said|agreed|happened)\b/i,
       /\byou (?:are )?(?:imagining|dreamt|dreamed)\b|\bmade (?:that|this|it) up\b/i
     ];
     var VO_DENIAL_BOILER = /\b(?:shall|hereby|notwithstanding|entitled to|in terms of|pursuant to|herein|thereof)\b/i;
-    var pages = [], examples = [];
+    var pages = [], examples = [], seenPassages = {};
     for (var cp = 0; cp < textBlocks.length; cp++) {
       var sents = String(textBlocks[cp] || '').split(/[.!?]+\s+/);
       for (var si = 0; si < sents.length; si++) {
         var sen = sents[si].replace(/\s+/g, ' ').trim();
         if (sen.length < 25 || sen.length > 400) continue;
-        if (VO_DENIAL_BOILER.test(sen)) continue;
+        if (VO_DENIAL_BOILER.test(sen) || voBehaviouralSecondhand(sen)) continue;
         var hit = false;
         for (var ci = 0; ci < VO_DENIAL_CUES.length; ci++) { if (VO_DENIAL_CUES[ci].test(sen)) { hit = true; break; } }
         if (!hit) continue;
+        var passageKey = voBehaviouralKey(sen);
+        if (seenPassages[passageKey]) continue;
+        seenPassages[passageKey] = true;
         pages.push(cp + 1);
         if (examples.length < 3 && sen.length >= 40) {
           examples.push(sen.length > 220 ? sen.slice(0, 220).replace(/\s+\S*$/, '') + '...' : sen);
@@ -5248,25 +5360,28 @@ var DETECTORS = {
       /\bwe are the (?:injured|aggrieved|real|true) (?:party|victims?)\b/i,
       /\bif anyone (?:was|has been|is) (?:defrauded|deceived|misled|wronged|harmed)\b/i,
       /\byour (?:harassment|intimidation|abuse|threats?) (?:of|towards?)\b/i,
-      /\bvexatious\b/i,
-      /\babuse of (?:process|court)\b/i,
-      /\bdefamatory\b|\bdefamation\b/i,
-      /\bcounter-?claim\b/i,
+      /\byou(?:r|\s+are)\b[^.;]{0,40}\bvexatious\b/i,
+      /\byour\s+abuse\s+of\s+(?:process|court)\b/i,
+      /\byour\b[^.;]{0,40}\b(?:defamatory|defamation)\b/i,
+      /\byour\s+counter-?claim\b/i,
       /\bhold you liable\b/i,
       /\brecover.{0,40}(?:costs|damages) from you\b/i,
       /\b(?:institute|bring|pursue) (?:counter-?)?proceedings against you\b/i
     ];
     var VO_DARVO_BOILER = /\b(?:shall|hereby|notwithstanding|entitled to|in terms of|pursuant to|herein|thereof)\b/i;
-    var pages = [], examples = [];
+    var pages = [], examples = [], seenPassages = {};
     for (var cp = 0; cp < textBlocks.length; cp++) {
       var sents = String(textBlocks[cp] || '').split(/[.!?]+\s+/);
       for (var si = 0; si < sents.length; si++) {
         var sen = sents[si].replace(/\s+/g, ' ').trim();
         if (sen.length < 25 || sen.length > 400) continue;
-        if (VO_DARVO_BOILER.test(sen)) continue;
+        if (VO_DARVO_BOILER.test(sen) || voBehaviouralSecondhand(sen)) continue;
         var hit = false;
         for (var ci = 0; ci < VO_DARVO_CUES.length; ci++) { if (VO_DARVO_CUES[ci].test(sen)) { hit = true; break; } }
         if (!hit) continue;
+        var passageKey = voBehaviouralKey(sen);
+        if (seenPassages[passageKey]) continue;
+        seenPassages[passageKey] = true;
         pages.push(cp + 1);
         if (examples.length < 3 && sen.length >= 40) {
           examples.push(sen.length > 220 ? sen.slice(0, 220).replace(/\s+\S*$/, '') + '...' : sen);
@@ -6971,6 +7086,15 @@ function voSentenceAround(text, needle) {
   var se = seg.indexOf('. ', rel + key.length);
   var from = sb === -1 ? Math.max(0, rel - 160) : sb + 2;
   var to = se === -1 ? Math.min(seg.length, rel + key.length + 160) : se;
+  // Fixed fallback windows can land inside a word. Expand to the actual word
+  // boundaries rather than printing fragments such as "tial investment" or
+  // ending at "tran" as if either were verbatim evidence.
+  if (from > 0 && /[A-Za-zÀ-ɏ]/.test(seg.charAt(from - 1)) && /[A-Za-zÀ-ɏ]/.test(seg.charAt(from))) {
+    while (from > 0 && /[A-Za-zÀ-ɏ]/.test(seg.charAt(from - 1))) from--;
+  }
+  if (to < seg.length && /[A-Za-zÀ-ɏ]/.test(seg.charAt(to - 1)) && /[A-Za-zÀ-ɏ]/.test(seg.charAt(to))) {
+    while (to < seg.length && /[A-Za-zÀ-ɏ]/.test(seg.charAt(to))) to++;
+  }
   return seg.slice(from, to);
 }
 
@@ -7099,24 +7223,28 @@ function voDatedAfterReference(textBlocks, referenceTime, firstPages) {
 
 function voDateSortKey(str) {
   var s = String(str == null ? '' : str).toLowerCase().trim(), m;
-  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return (+m[1]) * 10000 + (+m[2]) * 100 + (+m[3]);
-  if ((m = s.match(/^(\d{1,2})\s+([a-z]{3,})\.?,?\s+(\d{4})$/))) { var mo = VO_MON[m[2].slice(0, 3)]; if (mo) return (+m[3]) * 10000 + mo * 100 + (+m[1]); }
-  if ((m = s.match(/^([a-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})$/))) { var mo2 = VO_MON[m[1].slice(0, 3)]; if (mo2) return (+m[3]) * 10000 + mo2 * 100 + (+m[2]); }
+  // No date is better than an impossible one. A dropped range dash turned
+  // "3–7 Mar 2025" into "37 Mar 2025" in the Greensky ledger; month-name
+  // dates previously bypassed even the day/month bounds applied to numeric dates.
+  function validKey(y, mo, d) {
+    y = +y; mo = +mo; d = +d;
+    if (y < 1000 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    var chk = new Date(Date.UTC(y, mo - 1, d));
+    if (chk.getUTCFullYear() !== y || chk.getUTCMonth() + 1 !== mo || chk.getUTCDate() !== d) return null;
+    return y * 10000 + mo * 100 + d;
+  }
+  if ((m = s.match(/^(\d{4})-(\d{2})-(\d{2})$/))) return validKey(m[1], m[2], m[3]);
+  if ((m = s.match(/^(\d{1,2})\s+([a-z]{3,})\.?,?\s+(\d{4})$/))) { var mo = VO_MON[m[2].slice(0, 3)]; if (mo) return validKey(m[3], mo, m[1]); }
+  if ((m = s.match(/^([a-z]{3,})\.?\s+(\d{1,2}),?\s+(\d{4})$/))) { var mo2 = VO_MON[m[1].slice(0, 3)]; if (mo2) return validKey(m[3], mo2, m[2]); }
   // Slash/dash numeric dates may carry 2-digit years (15/11/17). DOTTED triples
   // with a short final part ("1.1.10") are far more often CLAUSE NUMBERS than
   // dates in legal text — the AllFuels bundle put "clause 1.1.10" into the
   // story digest as "On 1.1.10" — so the dotted form requires a 4-digit year.
-  // Both numeric forms also bounds-check day/month; a failed read returns null
-  // (no date is better than a wrong one).
   if ((m = s.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})$/))) {
     var y = +m[3]; if (y < 100) y += 2000;
-    if (+m[2] > 12 || +m[1] > 31 || +m[1] < 1 || +m[2] < 1) return null;
-    return y * 10000 + (+m[2]) * 100 + (+m[1]);
+    return validKey(y, m[2], m[1]);
   }
-  if ((m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/))) {
-    if (+m[2] > 12 || +m[1] > 31 || +m[1] < 1 || +m[2] < 1) return null;
-    return (+m[3]) * 10000 + (+m[2]) * 100 + (+m[1]);
-  }
+  if ((m = s.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/))) return validKey(m[3], m[2], m[1]);
   return null;
 }
 
@@ -7142,6 +7270,49 @@ var VO_CONDUCT_AMOUNT_RE = /\bR\s?-?\d{1,3}(?:(?:[,\s]\d{3})+|\d{3,})(?:[.,]\d{2
 // A reference only when the record labels it ("invoice no: INV98185") and the
 // token carries a digit — never guessed.
 var VO_CONDUCT_REF_RE = /\b(?:invoice|inv|receipt|remittance|statement|ref(?:erence)?)\s*(?:no|number|nr|#)\s*[:.]?\s*([A-Za-z]{0,6}[0-9][A-Za-z0-9\/-]{1,}|\d{3,})/i;
+// An invoice, a demand and receipt OF A NOTICE record claims or communication,
+// not money movement. CT59 may use only affirmative completed-payment conduct.
+var VO_CONDUCT_DOCUMENT_RECEIPT_RE = /\breceipt\s+of\s+(?:this|the|your|our|any)?\s*(?:notice|letter|demand|document|email|correspondence|application|summons|claim)\b/i;
+var VO_CONDUCT_DEMAND_RE = /\b(?:demand\w*|called\s+upon\s+to\s+pay|payment\s+(?:is|was|remains)?\s*(?:due|owing|payable|overdue)|outstanding|arrears|unpaid|settlement\s+demand|notice\s+of)\b/i;
+var VO_CONDUCT_PAID_RES = [
+  /\b(?:payment|deposit|remittance|eft|electronic\s+transfer)\b(?:[^.;]|\d\.\d){0,70}\b(?:received|made|paid|transferred|remitted|cleared)\b/gi,
+  /\b(?:rental|rent)\b(?:[^.;]|\d\.\d){0,35}\b(?:received|paid)\b/gi,
+  /\b(?:paid|deposited|transferred|remitted)\b[^.;]{0,60}(?:\bR\s?\d|\bpayment\b|\bdeposi?t\b)/gi,
+  /\bproof\s+of\s+payment\b/gi
+];
+var VO_CONDUCT_PAYMENT_NEGATED_RE = /\b(?:not|never|no)\b/i;
+var VO_CONDUCT_PAYMENT_FUTURE_RE = /\b(?:(?:to|will|shall|must|should|would|could|may)\s+be|(?:is|are|was|were)\s+(?:yet\s+)?to\s+be)\s+(?:made|paid|received|transferred|remitted|cleared)\b/i;
+function voConductPaymentProved(win) {
+  for (var i = 0; i < VO_CONDUCT_PAID_RES.length; i++) {
+    var re = VO_CONDUCT_PAID_RES[i]; re.lastIndex = 0;
+    var m;
+    while ((m = re.exec(win)) !== null) {
+      var phrase = m[0];
+      if (voNegatedBefore(win, m.index) ||
+          VO_CONDUCT_PAYMENT_NEGATED_RE.test(phrase) ||
+          VO_CONDUCT_PAYMENT_FUTURE_RE.test(phrase)) continue;
+      return true;
+    }
+  }
+  return false;
+}
+// Record a payee only when the page itself states the receiving direction.
+// Unknown stays null; it is never inferred from a party name elsewhere in the window.
+var VO_CONDUCT_PAYEE_RE = /\bto\s+([A-Z][A-Za-z'’&-]*(?:\s+(?!(?:received|for|on|ref|reference)\b)[A-Z][A-Za-z'’&-]*){0,4})/;
+function voConductPayee(win) {
+  var s = String(win || ''), m;
+  var re = /\b(?:payment|deposit|remittance|transfer|paid)\b(?:[^.;:]|\d\.\d){0,60}?\bto\s+/gi;
+  while ((m = re.exec(s)) !== null) {
+    var pm = VO_CONDUCT_PAYEE_RE.exec(s.slice(m.index));
+    if (pm) return pm[1].trim();
+  }
+  return null;
+}
+function voSameConductPayee(a, b) {
+  var norm = function (x) { return String(x || '').toLowerCase().replace(/[^a-z0-9]/g, ''); };
+  var aa = norm(a), bb = norm(b);
+  return !!aa && !!bb && (aa === bb || aa.indexOf(bb) !== -1 || bb.indexOf(aa) !== -1);
+}
 
 // "173,396.20" and "173 396,20" are one number: with two separator kinds the
 // rightmost is the decimal; one separator kind is decimal when its tail is
@@ -7192,6 +7363,11 @@ function voExtractConductLedger(textBlocks) {
       for (var kI = 0; kI < VO_CONDUCT_KIND_RES.length; kI++) {
         if (VO_CONDUCT_KIND_RES[kI].re.test(win)) { kind = VO_CONDUCT_KIND_RES[kI].kind; break; }
       }
+      var provesPayment = voConductPaymentProved(win);
+      if (provesPayment && (!kind || kind === 'invoice' || kind === 'rental' || kind === 'entry')) kind = 'payment';
+      if (!provesPayment && (kind === 'payment' || kind === 'receipt')) {
+        kind = VO_CONDUCT_DEMAND_RE.test(win) || VO_CONDUCT_DOCUMENT_RECEIPT_RE.test(win) ? 'demand' : 'entry';
+      }
       VO_CONDUCT_AMOUNT_RE.lastIndex = 0;
       var am = VO_CONDUCT_AMOUNT_RE.exec(win);
       // A bare date is not conduct: the window must name a money instrument
@@ -7206,9 +7382,12 @@ function voExtractConductLedger(textBlocks) {
         if (snippet.length > 200) snippet = snippet.slice(0, 197) + '...';
       }
       // One real-world event cited on two pages (the invoice and the covering
-      // letter) is one event: merge by date + kind + amount, keeping every
-      // page it appears on.
-      var ekey = key + '|' + (kind || '-') + '|' + (am ? am[0].replace(/\s+/g, '') : '-');
+      // letter) is one event: merge by date + kind + amount + stated payee,
+      // keeping every page it appears on. Same-day payments of the same value
+      // to different recipients are separate conduct and must never collapse.
+      var payee = voConductPayee(win);
+      var payeeKey = String(payee || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+      var ekey = key + '|' + (kind || '-') + '|' + (am ? am[0].replace(/\s+/g, '') : '-') + '|' + (payeeKey || '-');
       if (byEvent[ekey]) {
         var ex = byEvent[ekey];
         if (ex.source_page !== i + 1 && ex.also_on_pages.indexOf(i + 1) === -1) ex.also_on_pages.push(i + 1);
@@ -7222,10 +7401,11 @@ function voExtractConductLedger(textBlocks) {
         amount: am ? voParseAmountSa(am[0]) : null,
         amount_text: am ? am[0].replace(/\s+/g, ' ').trim() : null,
         reference: refM ? refM[1] : null,
-        // Payer/payee are NOT guessed from a snippet: the engine records what
-        // the page shows and leaves attribution to the documents that state it.
+        // Payer/payee are NOT guessed from a snippet: payee is recorded only
+        // where the text expressly states the receiving direction.
         payer: null,
-        payee: null,
+        payee: payee,
+        proves_payment: provesPayment,
         source_page: i + 1,
         also_on_pages: [],
         snippet: snippet
@@ -7392,6 +7572,9 @@ function voNamesDisjoint(a, b) {
 
 function voClassifyFinding(f) {
   if (!f || f.type === 'SERIAL') return null;
+  // One party's admission is evidence, not two opposing propositions. Meeting
+  // request/refusal accounts likewise need same-meeting and timeline review.
+  if (f.conductAdmission || f.meetingDispute) return 'TENSION';
   return VO_FINDING_CLASS[f.type] || 'TENSION';
 }
 

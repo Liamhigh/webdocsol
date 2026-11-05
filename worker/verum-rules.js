@@ -2260,7 +2260,7 @@ var VERIFY_LAW_BUDGET_MS = 45e3;
 var VERIFY_LAW_SYSTEM = 'You are a legal-citation verifier inside a forensic platform. You check CITATIONS, not people: for each candidate statute say whether the statute exists, whether it is in force in the stated jurisdiction, and whether it covers conduct of the stated shape. You never decide whether any person committed an offence; guilt, intent and verdicts belong to a court. Use only neutral citation language in every note (name the statute, its jurisdiction, what it covers). Never use words that characterise a person or conduct as criminal. A candidate may be UNCODIFIED law \u2014 a common-law crime or principle (e.g. common-law fraud, common-law forgery and uttering) or a doctrine named without a statute number. For those, CONFIRMS means the jurisdiction recognises it as law; never reject a common-law candidate merely for having no Act or section number. If you do not know a statute, REJECT it \u2014 never guess a confirmation. Reply ONLY compact JSON: {"verdicts":[{"statute":"<exact name given>","verdict":"CONFIRMS|REJECTS","note":"<=25 words"}]} with one verdict per candidate, in order.';
 var LAW_DISCLAIMER = "These citations are pointers for a qualified legal professional, not legal advice. Contact a lawyer before acting on them.";
 var LAW_DISPUTED_DIRECTION = "The engine's legal lanes did not agree. Do not rely on any legal reference in this report \u2014 contact a qualified lawyer.";
-var LAW_UNVERIFIED_DIRECTION = "Fewer than two independent legal lanes ran. Do not rely on any legal reference in this report \u2014 contact a qualified lawyer.";
+var LAW_UNVERIFIED_DIRECTION = "At least one legal reference did not reach two-lane agreement. Unconfirmed references are excluded \u2014 contact a qualified lawyer before relying on any legal reference.";
 async function callExternalLane(base, key, model, system, user, timeoutMs) {
   const url = String(base).replace(/\/+$/, "") + "/chat/completions";
   const ctrl = new AbortController();
@@ -2420,18 +2420,27 @@ async function handleAiVerifyLaw(request, env2) {
     });
     const ran = laneOut.filter((x) => x.verdict !== "NOT_RUN");
     const confirms = ran.filter((x) => x.verdict === "CONFIRMS").length;
-    const quorum = confirms >= 2;
-    const status = quorum ? "VERIFIED" : ran.length >= 2 ? "DISPUTED" : "UNVERIFIED";
+    const rejects = ran.filter((x) => x.verdict === "REJECTS").length;
+    // Disagreement is never silently out-voted: two confirmations cannot
+    // certify a citation that another answering lane expressly rejected.
+    const quorum = confirms >= 2 && rejects === 0;
+    const status = rejects > 0 && ran.length >= 2 ? "DISPUTED" : quorum ? "VERIFIED" : ran.length >= 2 ? "DISPUTED" : "UNVERIFIED";
     return { statute: c.statute, section: c.section, lanes: laneOut, quorum, lanesRun: ran.length, status };
   });
   const anyExcluded = results.some((r) => r.status !== "VERIFIED");
-  const maxLanes = Math.max.apply(null, results.map((r) => r.lanesRun).concat([0]));
+  const verifiedCount = results.filter((r) => r.status === "VERIFIED").length;
+  // Per-candidate status is authoritative. A lane answering (or even rejecting)
+  // is not a confirmation, and one candidate's quorum cannot certify another's.
+  const confirmingLanes = !anyExcluded && results.length ? Math.min.apply(null, results.map((r) => r.lanes.filter((x) => x.verdict === "CONFIRMS").length)) : 0;
+  const declaration = !anyExcluded && results.length
+    ? confirmingLanes >= 3 ? "Law citations verified by 3 independent lanes (quorum 2/3)." : "Law citations verified by 2 independent lanes (quorum 2/2)."
+    : verifiedCount + " of " + results.length + " candidate citations reached a two-lane quorum; unconfirmed citations are excluded from findings.";
   return json({
     ok: true,
     jurisdiction,
     contextHash: contextHash || null,
     lanesConfigured: lanes.filter(Boolean).map((l) => l.lane),
-    declaration: maxLanes >= 3 ? "Law citations verified by 3 independent lanes (quorum 2/3)." : maxLanes === 2 ? "Law citations verified by 2 independent lanes (quorum 2/2)." : "Law verification ran with " + maxLanes + " lane(s) only \u2014 citations are UNVERIFIED and excluded from findings.",
+    declaration,
     disclaimer: LAW_DISCLAIMER,
     direction: anyExcluded ? results.some((r) => r.status === "DISPUTED") ? LAW_DISPUTED_DIRECTION : LAW_UNVERIFIED_DIRECTION : null,
     results

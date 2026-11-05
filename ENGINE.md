@@ -5,11 +5,12 @@
 > engine is correct** and the other surface is the one to fix. Every hard lesson from real
 > evidence bundles is encoded here and locked by tests.
 
-**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.3.5-web'`
-**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.3.5-web'`, report builder v1.3.1.
-**Findings JSON:** v1.9.0, built by `buildFindingsJson` in `seal-document.html`, not by either
-script (1.9.0 adds `cross_document_observations` with a byte-faithful `quote_verbatim`; 1.8.0 added
-`candidate_law`; 1.7.0 added `display_name`, `brain`, `triple_verification` and `ai_review_note`)
+**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.1-web'`
+**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.1-web'`, report builder v1.3.1.
+**Findings JSON:** v1.11.0, built by `buildFindingsJson` in `seal-document.html`, not by either
+script (1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
+the well-formedness gate and serial-stage trace; 1.9.0 added `cross_document_observations` with a
+byte-faithful `quote_verbatim`; 1.8.0 added `candidate_law`)
 **Host page:** `seal-document.html` (the engine, the report and three helper scripts are
 inlined — see [§9 Inlining](#9-inlining))
 **Governing law:** Constitution v6.1 (engine operating instrument, seal `VO-9E51D3F507E6`);
@@ -36,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   40 suites, 2853 assertions (§10); many exist solely to stop the regressions in §4 and §12.
+   50 suites, 3355 assertions (§10); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -261,9 +262,11 @@ CT27 "appears on multiple pages" findings), CT04, CT08, CT27, CT31 and CT36 find
 severity 2 are lowered to 2 and tagged `[bundle context: …]`. They are grouped at the end of each table, and the plain-language lead states
 they are **not, by themselves, signs of tampering**.
 
-### 4.9 `voDateSortKey` — clause numbers are not dates
+### 4.9 `voDateSortKey` — clause numbers and impossible days are not dates
 `clause 1.1.10` was being read as a date ("On 1.1.10 …"). **Guard:** dotted dates require a
-4-digit year, plus day ≤ 31 / month ≤ 12 bounds.
+4-digit year. Every accepted numeric or month-name date now passes real `Date.UTC` calendar
+validation, including month lengths and leap years. A dropped range dash in `3–7 Mar 2025` can
+never become `2025-03-37`; an impossible date returns `null`, never a guessed correction.
 
 ### 4.10 AI candidates are never findings, and the AI review never removes one
 An AI-raised item is **candidate tier**. It is excluded from the engine count, the fact box,
@@ -289,9 +292,11 @@ completed / finalised / finalized / executed, **within 80 characters, with no fu
 shipment / order / export / contract / agreement / payment / transfer), a first-person subject
 (`VO_SELF_RE`: i / we / me / my / our / us), and **not** boilerplate (`VO_BOILER_RE`: shall /
 hereby / whereas / herein / the parties agree). The quote starts at the causal marker when the
-cut is more than 30 characters in. One count per page; the same account on several pages is one
-finding listing them.
-**Tests:** `greensky-regression.test.js`.
+cut is more than 30 characters in. The same normalised sentence repeated through an email thread
+is counted once. Explicit and conduct admissions are **TENSION** evidence leads, not two opposing
+propositions, and are excluded from the dishonesty matrix. A prediction that another person may
+later think "I was wrong" is not that person's admission.
+**Tests:** `greensky-regression.test.js` · `batch7b-greensky-corrections.test.mjs`.
 
 ### 4.12 `secSealedFindings` — SEALED FINDINGS lists only what is established AND anchored
 Section 5 once printed 21 findings while the executive summary counted 20, and one entry
@@ -371,6 +376,45 @@ only inside candidate-law lines; both are locked by tests on the AllFuels fixtur
 exception is open: the serial pattern SP16 is named "Perjury Documentation Chain", and a
 corroborated match prints that name in the engine's evidence and the report's serial sections.
 **Tests:** `allfuels-regression.test.js`.
+
+### 4.19 Greensky output review — event semantics and source quality (engine v5.7.1-web)
+
+The sealed Greensky output was preserved unchanged as a historical draft; the correction was made
+in the engine for a future scan. `tests/batch7b-greensky-corrections.test.mjs` pins both silence on
+the false positives and positive controls for genuine findings:
+
+- **CT59 measures completed payment only.** Invoices, demands, shipment, receipt-of-notice,
+  negated payment wording and future payment obligations are not payment performance. This
+  includes "payment was not received", "payment was never made" and "payment to be made". A
+  named payee must match the event's express receiving direction; payments to another person stay
+  silent, and same-day same-value payments to different payees remain separate ledger events.
+  Payments cannot prove that an agreement existed or disprove a denial that a present balance is
+  due. Six completed payments to the denied payee still fire, including natural wording with a
+  decimal amount between the payment noun and verb, as does the genuine long-span rental control.
+- **A contradiction needs two direct positions.** Reported denials and reported admissions are not
+  paired as one actor's self-contradiction. Negated theft wording is not an allegation, and one
+  sentence cannot be split into theft and scam positions. Meeting request/refusal accounts are a
+  **TENSION** requiring same-meeting, private/group and timeframe review.
+- **Communications and legal acts are not physical assets.** Messages, calls, correspondence,
+  resignations, decisions and demands cannot found a CT06 ownership conflict; the genuine camera
+  ownership control remains.
+- **Boilerplate is not coordinated drafting.** D09A removes standard email confidentiality and
+  transmission-error language before its strict near-duplicate comparison. Substantively identical
+  letters under different closing hands still fire CT55.
+- **Behavioural language needs direct attribution and distinct passages.** Ordinary legal advice
+  is not coercion, but mentioning legal advice cannot suppress an independent coercive cue in the
+  same sentence. Complainant-side case theories and second-hand narrative attribution are not
+  opposing-party reality denial or blame reversal; direct "that is not what was said" wording is
+  not misclassified as second-hand attribution. Identical email-thread passages count once;
+  direct threat, reality-denial and reverse-victim controls remain detectable.
+- **Quotes snap to whole words.** Fixed fallback windows expand to their actual word boundaries
+  rather than print fragments as verbatim evidence.
+- **Legal verification is per candidate.** A lane answering is not a lane confirming; one
+  citation's quorum cannot certify another. A three-lane 2-confirms/1-rejects split is DISPUTED,
+  never a verified "quorum 2/2": disagreement excludes the citation and preserves the rejecting
+  lane for lawyer review. Any unverified or disputed candidate suppresses the blanket-success
+  declaration, and the report renderer independently replaces a stale positive declaration when
+  its exclusion list is non-empty.
 
 ---
 
@@ -749,18 +793,18 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**40 suites · 2853 assertions** (counted 2026-10-09, with the photo-intake, Louw v Naidoo and cross-document changes, §12.18-§12.23; recount after any test change).
+**50 suites · 3355 assertions** (counted 2026-11-06 after the Batch 7b Greensky corrections, §4.19; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
 |---|---|---|
-| `forensic-engine.test.js` | 328 | Core engine behaviour, extraction quality and OCR regressions |
+| `forensic-engine.test.js` | 489 | Core engine behaviour, extraction quality and OCR regressions |
 | `legal-analysis.test.js` | 216 | Party extraction, legal subjects, **PD16 language**, the §15.2 narrative gate, sentence splitting, page anchors, executive summary and SEALED FINDINGS integrity, OCR provenance (PD6) |
-| `page-boot.test.mjs` | 101 | The seal page still boots when a library is missing |
+| `page-boot.test.mjs` | 102 | The seal page still boots when a library is missing |
 | `detector-recall.test.mjs` | 110 | Recall + the §4 false-positive guards, pinned to real bundle strings (incl. the CT11 negation gate, §12.23) |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
-| `worker.test.mjs` | 388 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, consent follows the sealing mode — no tick box, and the copy says the audio leaves the device), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget), **the four-pillars gate** (a pillar claim is held to the elements-table types in every section; knowledge and inducement only as INSUFFICIENT; pillar headings recognised in any dress; findings held at reduced weight evidence no pillar), **the court-recognition ban** (paraphrases of court acceptance dropped, a statute's "admissible" kept), **the template quoting engine findings only**, **the overclaim rule** in the Worker gate and at render time (only an [F#] establishes; a contradiction only with its [F#]; no offence outside candidate law; reported speech and founding dates kept) and **the tamper-evident wording of every AI prompt** (§12.16) |
-| `human-report.test.mjs` | 81 | **The court-ready narrative** (§13): one section contract in three artefacts, part of "Seal document with forensic report" with no separate switch (since 2026-09-07) and a disclosure that says what leaves the device, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery, and **the four-pillars map** pinned equal to the elements table (`HUMAN_PILLAR_TYPES` in the Worker = `OFFENCE_ELEMENTS` in the report; knowledge and inducement have no types) |
+| `worker.test.mjs` | 401 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, consent follows the sealing mode — no tick box, and the copy says the audio leaves the device), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget), **the four-pillars gate** (a pillar claim is held to the elements-table types in every section; knowledge and inducement only as INSUFFICIENT; pillar headings recognised in any dress; findings held at reduced weight evidence no pillar), **the court-recognition ban** (paraphrases of court acceptance dropped, a statute's "admissible" kept), **the template quoting engine findings only**, **the overclaim rule** in the Worker gate and at render time (only an [F#] establishes; a contradiction only with its [F#]; no offence outside candidate law; reported speech and founding dates kept) and **the tamper-evident wording of every AI prompt** (§12.16) |
+| `human-report.test.mjs` | 90 | **The court-ready narrative** (§13): one section contract in three artefacts, part of "Seal document with forensic report" with no separate switch (since 2026-09-07) and a disclosure that says what leaves the device, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery, and **the four-pillars map** pinned equal to the elements table (`HUMAN_PILLAR_TYPES` in the Worker = `OFFENCE_ELEMENTS` in the report; knowledge and inducement have no types) |
 | `site-serving.test.mjs` | 56 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
 | `pages-bridge.test.mjs` | 16 | **The www bridge** (DEPLOYMENT.md "The bridge"), a dormant fallback since 2026-09-27 when the www zone route took over: the Pages Function hands every request to the Worker at the same path and query with method, headers and body; redirects pass through; a request marked `X-VO-Chain` is served from static files (no loop); an unreachable Worker falls back to static with an honest header; `functions/` never ships as a Worker asset |
 | `zip-intake.test.mjs` | 25 | **WhatsApp chat exports unpacked on-device** (§12.6a): the page's ZIP reader against real archives (stored, deflated, data-descriptor, folder, macOS cruft, encrypted, garbage), expansion into typed Files, only evidence types admitted, documents inside a voice-note export named for a separate seal, the panel note, the .zip picker entry, the 25-note batch, the home-page copy and locally served photos |
@@ -780,15 +824,26 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, transcription consent (follows the sealing mode since 2026-09-07), ordering and honesty |
 | `inline-scripts.test.mjs` | 25 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.js` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
-| `digital-forensics.test.mjs` / `narrate-excerpt.test.mjs` | 16 each | PDF structure · AI excerpt building |
+| `digital-forensics.test.mjs` | 19 | PDF structure and digital-forensics measurements |
+| `narrate-excerpt.test.mjs` | 16 | AI excerpt building |
 | `findings-json.test.mjs` | 29 | JSON contract v1.9.0 (`cross_document_observations` w/ byte-faithful `quote_verbatim`); 1.8.0 `candidate_law`; 1.7.0: `display_name`, `brain`, `triple_verification`, `ai_review_note`; an AI candidate carries `INSUFFICIENT`, never a band |
-| `franchise-lease.test.mjs` | 15 | D38/D39 (CT44/CT45) |
+| `franchise-lease.test.mjs` | 20 | D38/D39 (CT44/CT45) |
 | `wrangler-config.test.mjs` | 34 | **Deploy config drift**: the top level and `[env.production]` carry the same KV, AI, vars, observability, assets block (`./`, `ASSETS`, `/api/*` Worker-first) and trainer cron (weekly, Monday 03:00 UTC, `AUTO_CURATE = "on"`); exactly two zone routes, `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, in both environments, zone named, no `custom_domain` |
 | `role-capacity.test.mjs` | 13 | D40/CT46, no hardcoded parties |
 | `ai-assess-batch.test.mjs` | 19 | Client batching under the worker's body limit; **the AI review never removes or changes a finding** (notes only, original evidence returned, an unreviewed batch adds nothing; §12.16) |
 | `encrypt-detect.test.mjs` / `rule-classify.test.mjs` | 9 each | Encryption detection · deterministic classify fallback |
 | `find-seal.test.mjs` / `pdf-encrypt.test.mjs` | 8 each | Seal discovery · real password protection |
 | `voice-crypto.test.mjs` | 7 | `.voice` cross-page encryption |
+| `forensic-narrative.test.mjs` | 26 | Deterministic and AI narrative routing, provenance and overclaim controls |
+| `event-date-conflict.test.mjs` | 16 | Event/date binding and cross-page conflict controls |
+| `term-arithmetic.test.mjs` | 12 | Term arithmetic and date-period reconciliation |
+| `batch3-detectors.test.mjs` | 16 | Invoice identity, payment-proof mismatch and document-predates-content detectors |
+| `batch4-detectors.test.mjs` | 24 | Theft/scam, direct denial/admission, meeting-account and ownership-attribution controls |
+| `batch5-detectors.test.mjs` | 65 | Billing, role, authority, coordination and process-noun detectors with positive controls |
+| `batch5f-gate-trace.test.mjs` | 32 | Well-formedness gate, serial-stage trace and engine version contract |
+| `batch6-finding-classes.test.mjs` | 34 | Finding classes, demotion gates, clause anchors and OCR reconciliation |
+| `batch7-conduct-ledger.test.mjs` | 43 | Conduct-ledger extraction, CT59/60/61 dispatch, thresholds and structured payloads |
+| `batch7b-greensky-corrections.test.mjs` | 42 | Greensky output corrections (§4.19): calendar validity, completed-payment/payee semantics, direct-source discipline, tensions, boilerplate, behavioural deduplication, quotation boundaries and per-candidate legal-lane declarations |
 | `engine-perf.test.mjs` | 5 | Per-page extraction does not re-parse the whole PDF |
 
 ---

@@ -111,13 +111,13 @@ t.ok(L.events.every(e => e.payer === null && e.payee === null),
 {
   const blocks = ['The respondent pleads that no rental was ever paid for the premises.'].concat(LEDGER_PAGES.slice(0, 8));
   const out = D61(blocks);
-  t.ok(out.length === 1 && out[0].type === 'CT59', 'D61 fires once on the denial against the sustained ledger');
-  t.ok(out[0].severity === 5 && out[0].conduct_vs_pleading.confidence === 'HIGH',
-    'both thresholds met (8 events, 37 months): CRITICAL severity 5, confidence HIGH');
+  t.ok(out.length === 1 && out[0].type === 'CT59', 'D61 fires once on the denial against the sustained completed-payment ledger');
+  t.ok(out[0].severity === 4 && out[0].conduct_vs_pleading.confidence === 'MODERATE',
+    'the long-span threshold is met by three actual payments; unpaid invoices and payment labels without receipt do not count as performance');
   const cvp = out[0].conduct_vs_pleading;
-  t.ok(cvp.proposition_page === 1 && cvp.conduct_type === 'rental' && cvp.event_count === 8 && cvp.span_months === 37 &&
-    Array.isArray(cvp.conduct_pages) && cvp.conduct_pages.length === 8 && cvp.asserting_party === 'respondent',
-    'conduct_vs_pleading carries asserting_party, proposition(+page), conduct_type, conduct_pages, span_months, event_count, confidence');
+  t.ok(cvp.proposition_page === 1 && cvp.conduct_type === 'rental' && cvp.event_count === 3 && cvp.span_months === 28 &&
+    Array.isArray(cvp.conduct_pages) && cvp.conduct_pages.length === 3 && cvp.asserting_party === 'respondent',
+    'conduct_vs_pleading carries asserting_party, proposition(+page), conduct_type, completed-payment pages, span_months, event_count, confidence');
   t.ok(/^Page 1 vs Pages /.test(out[0].location) && out[0].evidence.indexOf('cannot both stand') !== -1,
     'the finding anchors the pleading page against the ledger pages');
   // ascending page order for the bundle reader
