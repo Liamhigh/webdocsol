@@ -513,7 +513,8 @@
     <div class="hash-row"><label>SHA-256 (OpenTimestamps)</label><div class="hash-display" id="sha256Display"></div></div>
     <div class="hash-row"><label>SHA-512 (Verum Fingerprint)</label><div class="hash-display" id="sha512Display"></div></div>
     <div class="hash-row"><label>Seal ID</label><div class="hash-display" id="sealIdDisplay" style="color:#D4A843;"></div></div>
-    <div class="hash-row" id="sealedHashRow" style="display:none;"><label>Sealed File SHA-512 (VO-SEAL2 self-integrity)</label><div class="hash-display" id="sealedHashDisplay" style="font-size:11px;"></div></div>
+    <div class="hash-row" id="deliveredHashRow" style="display:none;"><label>Delivered File SHA-512 (the exact file you downloaded — checkable with any SHA-512 tool, e.g. sha512sum)</label><div class="hash-display" id="deliveredHashDisplay" style="font-size:11px;"></div></div>
+    <div class="hash-row" id="sealedHashRow" style="display:none;"><label>VO-SEAL2 self-integrity fingerprint (verified by verify.html — by design this does NOT equal sha512sum of the file)</label><div class="hash-display" id="sealedHashDisplay" style="font-size:11px;"></div></div>
     <div class="hash-row" id="sizeRow" style="display:none;"><label>File size</label><div class="hash-display" id="sizeDisplay" style="font-size:12px;"></div></div>
     <div class="hash-row" id="chainRow" style="display:none;"><label>Chain of Custody</label><div class="hash-display" id="chainDisplay" style="color:#4A7EC7;font-size:12px;"></div></div>
     <a href="/verify.html" class="verify-link" id="verifyLink">&#128269; Verify on verumglobal.foundation</a>
@@ -14739,14 +14740,25 @@ function voWellFormedness(o) {
       : 'the record averages only ' + avgChars + ' machine-readable characters per page — effectively no text layer; zero findings here means the content was not examined'
   });
 
-  // WF2 — page coverage: every page readable after OCR rescue.
+  // WF2 — page coverage: every page readable after OCR rescue. The
+  // image-only list holds BOTH the pages OCR recovered and the pages it
+  // could not (the rescue loop marks both), so the gate may only fail on
+  // the UNEXAMINED remainder. Greensky (5 Nov 2026): 30 image-only pages
+  // were reported as "not examined" while 22 of them had been OCR-recovered
+  // and examined — only 8 were truly unreadable.
   var io = o.imageOnlyPages || [];
+  var rescued = o.ocrPages || [];
+  var unexamined = [];
+  for (var wfi = 0; wfi < io.length; wfi++) if (rescued.indexOf(io[wfi]) === -1) unexamined.push(io[wfi]);
   checks.push({
     id: 'WF2', name: 'Every page carries readable text',
-    pass: io.length === 0,
-    note: io.length === 0
-      ? ((o.ocrRan && (o.ocrPages || []).length) ? 'yes — ' + o.ocrPages.length + ' image page(s) were recovered by OCR rescue' : 'yes — no image-only pages')
-      : io.length + ' page(s) carry no machine-readable text (p. ' + capList(io) + '); those pages were not examined'
+    pass: unexamined.length === 0,
+    note: unexamined.length === 0
+      ? (rescued.length
+        ? 'yes — ' + rescued.length + ' image page(s) had no text layer and were recovered by OCR rescue and examined'
+        : 'yes — no image-only pages')
+      : unexamined.length + ' page(s) carry no machine-readable text (p. ' + capList(unexamined) + '); those pages were not examined' +
+        (rescued.length ? ' — a further ' + rescued.length + ' image page(s) were recovered by OCR rescue and examined' : '')
   });
 
   // WF3 — the record is the record, not an analysis of it. Identified
@@ -22284,6 +22296,11 @@ async function runSealingPipeline() {
   var otsResult = null, qrDataURL = null;
   var password = null, senderEmail = '';
   var sealedBytes = null, encryptedBytes = null, meta = null;
+  // Never inherit a previous run's seal state in the same tab: a stale
+  // _voSealedAsIs would show the "sealed as-is" warning for a file this run
+  // actually stamped.
+  window._voSealedAsIs = false;
+  window._voDeliveredFileHash = null;
 
   // Password protection is validated UP FRONT — before any analysis — so a
   // mismatch, a too-short password, or an empty box fails fast with a clear
@@ -22400,6 +22417,33 @@ async function runSealingPipeline() {
     }
   }
   updateStep(6, 'complete');
+
+  // Delivered-file fingerprint: the SHA-512 of the exact bytes the user
+  // downloads (the password-protected copy when one was made) — the number
+  // sha512sum prints, so a court, an expert or the recipient can check the
+  // file with any tool. Computed ONCE here and shared by the results page
+  // and the anchor certificate, so page, certificate and file can never
+  // disagree. (Annexure EB, 5 Nov 2026: the results page showed only the
+  // VO-SEAL2 self-integrity hash — a placeholder-based self-check that by
+  // design never equals sha512sum — and a reviewer running sha512sum read
+  // the difference as tampering.)
+  window._voDeliveredFileHash = null;
+  try {
+    var _deliveredBytes = (password && encryptedBytes) ? encryptedBytes : sealedBytes;
+    if (_deliveredBytes) window._voDeliveredFileHash = await computeSHA512(_deliveredBytes);
+  } catch (eDh) { console.warn('Delivered-file hash failed (display/certificate only):', eDh && eDh.message); }
+
+  // Retract the selection-time "password-protected" warning when the file
+  // was in fact loaded and stamped. The selection detector is a byte-pattern
+  // scan (/Encrypt <n> <n> R) that can fire on a stale trailer left behind
+  // by an incremental save after a password was removed; pdf-lib loading and
+  // stamping the file is the ground truth. (Annexure EB, 5 Nov 2026: the
+  // warning showed for a file that was stamped on all 528 pages.)
+  if (!window._voSealedAsIs) {
+    window._voSelectedIsProtected = false;
+    var pnEl = document.getElementById('protectedNote');
+    if (pnEl) pnEl.style.display = 'none';
+  }
 
   // Step 7: Finalize
   updateStep(7, 'processing'); await sleep(200); updateStep(7, 'complete');
@@ -22613,7 +22657,9 @@ async function runSealingPipeline() {
           // password-protected copy when one was made. The VO-SEAL2 value in
           // the seal metadata is a self-check over the bytes with a placeholder
           // and never equals sha512sum of the file (verification of this run).
-          sealedSha512: (password && encryptedBytes) ? await computeSHA512(encryptedBytes) : (sealedBytes ? await computeSHA512(sealedBytes) : null),
+          // Computed once after step 6 and shared with the results page; the
+          // inline recompute below is the fallback if that step was skipped.
+          sealedSha512: window._voDeliveredFileHash || ((password && encryptedBytes) ? await computeSHA512(encryptedBytes) : (sealedBytes ? await computeSHA512(sealedBytes) : null)),
           deliveredProtected: !!(password && encryptedBytes),
           sealId: sealId,
           otsDigest: otsDigestHex,
@@ -23251,6 +23297,18 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     asIsNoteEl.style.display = window._voSealedAsIs ? 'block' : 'none';
   }
 
+  // The checkable fingerprint comes FIRST: the SHA-512 of the exact file the
+  // user downloaded — the number sha512sum prints, so anyone can reproduce it
+  // with any tool. The VO-SEAL2 value below it is the self-integrity
+  // fingerprint that verify.html checks by placeholder restoration; it never
+  // equals sha512sum of the file, by design (annexure EB, 5 Nov 2026: showing
+  // only the VO-SEAL2 value read as tampering to a reviewer with sha512sum).
+  var deliveredHashRow = document.getElementById('deliveredHashRow');
+  if (window._voDeliveredFileHash && deliveredHashRow) {
+    document.getElementById('deliveredHashDisplay').textContent = window._voDeliveredFileHash;
+    deliveredHashRow.style.display = 'block';
+  } else if (deliveredHashRow) { deliveredHashRow.style.display = 'none'; }
+
   // VO-SEAL2: show the sealed-file self-integrity hash when the new scheme
   // was applied (hidden for legacy-fallback seals — no such hash exists).
   var sealedHashRow = document.getElementById('sealedHashRow');
@@ -23739,6 +23797,9 @@ function resetSealing() {
   window._voSealedFileHash = null;
   var sealedHashRowR = document.getElementById('sealedHashRow');
   if (sealedHashRowR) sealedHashRowR.style.display = 'none';
+  window._voDeliveredFileHash = null;
+  var deliveredHashRowR = document.getElementById('deliveredHashRow');
+  if (deliveredHashRowR) deliveredHashRowR.style.display = 'none';
   window._voSealCert = null;
   window._voSealCertPrivate = null;
   window._voSealCertPrivateFailed = false;
