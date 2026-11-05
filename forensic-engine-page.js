@@ -1,10 +1,10 @@
-// ============== FORENSIC CONTRADICTION ENGINE v5.5.0-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.6.0-web ================
 // 58 Contradiction Types | 60 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.5.0-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.6.0-web
 // 58 Contradiction Types | 60 Detectors | 17 Serial Patterns
 // + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
@@ -26,7 +26,7 @@
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.5.0-web';
+var VO_ENGINE_VERSION = '5.6.0-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
@@ -2145,7 +2145,7 @@ var DETECTORS = {
   // say those pages went unchecked, so the reader knows the record was only
   // partially examined. This is a limit of the examination, never a defect
   // found in the record.
-  D08A_DETECT_SCAN_ONLY_PAGE: function(textBlocks) {
+  D08A_DETECT_SCAN_ONLY_PAGE: function(textBlocks, ocrInfo) {
     var findings = [];
     var blocks = textBlocks || [];
     if (!blocks.length) return findings;
@@ -2159,8 +2159,11 @@ var DETECTORS = {
       // Sourcery review (PR #266): this must run before any page-count gate —
       // a wholly unreadable one- or two-page filing is exactly the case.
       findings.push({ type: 'CT54', severity: 2,
-        evidence: 'No page of this document carries machine-readable text: it is an image-only scan, or extraction failed. Nothing in it could be checked. OCR the pages and re-run before this record is treated as examined.',
-        location: 'Entire document' });
+        evidence: (ocrInfo && ocrInfo.ocrRan)
+          ? 'No page of this document carries machine-readable text, and OCR rescue was run over the image pages without recovering legible text from them. Nothing in it could be checked; a person must read the page images before this record is treated as examined.'
+          : 'No page of this document carries machine-readable text: it is an image-only scan, or extraction failed. Nothing in it could be checked. OCR the pages and re-run before this record is treated as examined.',
+        location: 'Entire document',
+        ocrAttempted: !!(ocrInfo && ocrInfo.ocrRan) });
       return findings;
     }
     // A mixed short document stays silent: with fewer than three pages a
@@ -2168,10 +2171,16 @@ var DETECTORS = {
     if (blocks.length < 3) return findings;
     var median = nonzero[Math.floor(nonzero.length / 2)];
     if (median < 400) return findings; // a short document: thin pages are not anomalous
+    // Batch 6 (evidence-bundle-6 review, 5 November 2026): a thin page the OCR
+    // pass rendered carries the "[OCR] " prefix. Such a page did NOT "go
+    // unchecked" — OCR was attempted and too little legible text came back —
+    // and WF2 already counts it as examined. Runs are split on that
+    // provenance so the finding says which of the two limits it records.
     var runs = [], cur = null;
     for (var p = 0; p < lens.length; p++) {
       if (lens[p] < 40) {
-        if (!cur) cur = { from: p + 1, to: p + 1 };
+        var _oc = /^\s*\[OCR\]/.test(String(blocks[p] || '')) || !!(ocrInfo && ocrInfo.ocrPages && ocrInfo.ocrPages.indexOf(p + 1) !== -1);
+        if (!cur || cur.ocr !== _oc) { if (cur) runs.push(cur); cur = { from: p + 1, to: p + 1, ocr: _oc }; }
         else cur.to = p + 1;
       } else if (cur) { runs.push(cur); cur = null; }
     }
@@ -2179,11 +2188,21 @@ var DETECTORS = {
     var wholeDoc = runs.length === 1 && runs[0].from === 1 && runs[0].to === lens.length;
     for (var r = 0; r < runs.length && findings.length < 4; r++) {
       var run = runs[r];
+      var _pg = run.from === run.to ? 'Page ' + run.from : 'Pages ' + run.from + '–' + run.to;
+      var _ev;
+      if (wholeDoc && !run.ocr) {
+        _ev = (ocrInfo && ocrInfo.ocrRan)
+          ? 'No page of this document carries machine-readable text, and OCR rescue was run over the image pages without recovering legible text from them. Nothing in it could be checked; a person must read the page images before this record is treated as examined.'
+          : 'No page of this document carries machine-readable text: it is an image-only scan, or extraction failed. Nothing in it could be checked. OCR the pages and re-run before this record is treated as examined.';
+      } else if (run.ocr) {
+        _ev = _pg + ' ' + (run.from === run.to ? 'was' : 'were') + ' recovered by OCR rescue, but fewer than 40 legible characters could be read from ' + (run.from === run.to ? 'it' : 'them') + ' — the scan quality did not allow machine reading. A person must read the page image before ' + (run.from === run.to ? 'this page is' : 'these pages are') + ' treated as examined. This is a limit of the examination, not a defect found in the record.';
+      } else {
+        _ev = _pg + ' ' + (run.from === run.to ? 'carries' : 'carry') + ' no machine-readable text while the surrounding record is text-bearing — an image-only scan or an extraction gap. ' + (run.from === run.to ? 'This page went' : 'These pages went') + ' unchecked; OCR and re-run before treating ' + (run.from === run.to ? 'it' : 'them') + ' as examined. This is a limit of the examination, not a defect found in the record.';
+      }
       findings.push({ type: 'CT54', severity: 2,
-        evidence: wholeDoc
-          ? 'No page of this document carries machine-readable text: it is an image-only scan, or extraction failed. Nothing in it could be checked. OCR the pages and re-run before this record is treated as examined.'
-          : (run.from === run.to ? 'Page ' + run.from : 'Pages ' + run.from + '–' + run.to) + ' ' + (run.from === run.to ? 'carries' : 'carry') + ' no machine-readable text while the surrounding record is text-bearing — an image-only scan or an extraction gap. ' + (run.from === run.to ? 'This page went' : 'These pages went') + ' unchecked; OCR and re-run before treating ' + (run.from === run.to ? 'it' : 'them') + ' as examined. This is a limit of the examination, not a defect found in the record.',
-        location: wholeDoc ? 'Entire document' : (run.from === run.to ? 'Page ' + run.from : 'Pages ' + run.from + '–' + run.to) });
+        evidence: _ev,
+        location: wholeDoc ? 'Entire document' : _pg,
+        ocrAttempted: !!run.ocr || (wholeDoc && !!(ocrInfo && ocrInfo.ocrRan)) });
     }
     return findings;
   },
@@ -4427,6 +4446,12 @@ var DETECTORS = {
         // agreement", not the trailing clause the regex also captured.
         var src = m2.slice(0, dn.index + dn[0].length).trim();
         if (src.length < 8) continue;
+        // Batch 6 (evidence-bundle-6 review): an internal self-reference —
+        // "the terms of this Contract", "the provisions of this Contract" —
+        // cites the document itself, not a missing external source. Two of
+        // that run's four CT32 findings were exactly this boilerplate.
+        if (/^(?:the\s+)?(?:terms|provisions|conditions|clauses?)\s+of\s+(?:this|the|that|said)\b/i.test(src)) continue;
+        if (/\bthis\s+(?:agreement|contract|lease|document|affidavit|application|deed|notice|order)\b/i.test(src)) continue;
         var key = src.toLowerCase();
         if (seen[key]) continue;
         // Occurrences across the record. One occurrence = this citation only.
@@ -6842,6 +6867,174 @@ function voStatement(f) {
 // Bind each surviving finding to who/where/quote/when/law. Evidence prose (which
 // the detectors curated) is the primary source; the cited page text is a
 // fallback for context that the evidence string did not carry.
+
+// Numbered paragraph / clause references — "clause 1.1.50", "paragraph 227",
+// "AD PARAGRAPH 227" — the document's OWN internal numbering, which is how a
+// reviewer finds the passage in a pleading or agreement (batch 6, founder
+// requirement, 5 November 2026: the clause numbers are important in the
+// evidence). Statutes and Acts stay with voExtractCitations.
+function voExtractClauseRefs(text) {
+  var s = String(text == null ? '' : text), out = [], seen = {}, m;
+  var pats = [
+    /\bAD\s+PARAGRAPH\s+\d+(?:\.\d+)*/gi,
+    /\b(?:sub-?)?clause\s+\d+(?:\.\d+)*(?:\([a-z0-9]+\))?/gi,
+    /\bparagraph\s+\d+(?:\.\d+)*(?:\([a-z0-9]+\))?/gi,
+    /\bpara\.?\s+\d+(?:\.\d+)+/gi,
+    /\bcl\.?\s+\d+(?:\.\d+)*(?:\([a-z0-9]+\))*/gi
+  ];
+  for (var p = 0; p < pats.length; p++) {
+    pats[p].lastIndex = 0;
+    while ((m = pats[p].exec(s)) !== null) {
+      var c = m[0].replace(/\s+/g, ' ').trim(), k = c.toLowerCase();
+      if (!seen[k]) { seen[k] = true; out.push(c); }
+    }
+  }
+  // Drop a match wholly contained in a longer one: "PARAGRAPH 227" is not a
+  // second reference beside "AD PARAGRAPH 227".
+  return out.filter(function (c) {
+    return !out.some(function (other) {
+      return other !== c && other.toLowerCase().indexOf(c.toLowerCase()) !== -1;
+    });
+  });
+}
+
+// The numbered paragraph a quoted passage sits UNDER: scan backwards from the
+// quote for the nearest "AD PARAGRAPH 227" / "paragraph 227" / "clause 1.1.50"
+// marker on the same page — the way a deponent's answer is found in an
+// affidavit. Whitespace-normalised search: anchor quotes arrive collapsed.
+var VO_CLAUSE_HEAD_RE = /(?:AD\s+PARAGRAPH|PARAGRAPH|PARA\.?|(?:SUB-?)?CLAUSE|CL\.?)\s+\d+(?:\.\d+)*/gi;
+function voClauseContextOf(pageText, quote) {
+  var norm = String(pageText || '').replace(/\s+/g, ' ');
+  var q = String(quote || '').replace(/\s+/g, ' ').trim();
+  if (!norm || q.length < 6) return null;
+  var idx = norm.indexOf(q.slice(0, 60));
+  if (idx === -1) idx = norm.indexOf(q.slice(0, 24));
+  if (idx === -1) return null;
+  var win = norm.slice(Math.max(0, idx - 800), idx);
+  VO_CLAUSE_HEAD_RE.lastIndex = 0;
+  var m, last = null;
+  while ((m = VO_CLAUSE_HEAD_RE.exec(win)) !== null) last = m[0];
+  return last ? last.replace(/\s+/g, ' ').trim() : null;
+}
+
+// ===================== FINDING CLASSES (batch 6) =====================
+// The evidence-bundle-6 review (5 November 2026) graded the engine's
+// detection well but its labelling harshly: a missing annexure, a page OCR
+// could not read and a self-conflicting date are not the same kind of
+// statement, and a report that prints them as one count overclaims. Every
+// finding now carries an epistemic CLASS — what kind of statement the engine
+// can honestly make about it:
+//   CONTRADICTION     two anchored propositions that cannot both stand
+//   TENSION           an indicator that weakens consistency, for review
+//   COMPLETENESS      something the record references is missing or unfollowable
+//   EXAMINATION_LIMIT the engine could not examine — not a defect found
+//   BEHAVIORAL        conduct language (threat, reality-denial, blame-reversal)
+var VO_FINDING_CLASS = {
+  CT01: 'CONTRADICTION', CT02: 'CONTRADICTION', CT03: 'CONTRADICTION', CT04: 'CONTRADICTION',
+  CT05: 'CONTRADICTION', CT06: 'CONTRADICTION', CT08: 'CONTRADICTION', CT09: 'CONTRADICTION',
+  CT10: 'CONTRADICTION', CT11: 'CONTRADICTION', CT13: 'CONTRADICTION', CT14: 'CONTRADICTION',
+  CT15: 'CONTRADICTION', CT16: 'CONTRADICTION', CT17: 'CONTRADICTION', CT18: 'CONTRADICTION',
+  CT19: 'CONTRADICTION', CT20: 'CONTRADICTION', CT21: 'CONTRADICTION', CT22: 'CONTRADICTION',
+  CT24: 'CONTRADICTION', CT29: 'CONTRADICTION', CT36: 'CONTRADICTION', CT37: 'CONTRADICTION',
+  CT39: 'CONTRADICTION', CT40: 'CONTRADICTION', CT42: 'CONTRADICTION', CT44: 'CONTRADICTION',
+  CT45: 'CONTRADICTION', CT46: 'CONTRADICTION', CT51: 'CONTRADICTION',
+  CT07: 'TENSION', CT12: 'TENSION', CT23: 'TENSION', CT25: 'TENSION', CT26: 'TENSION',
+  CT27: 'TENSION', CT28: 'TENSION', CT30: 'TENSION', CT34: 'TENSION', CT35: 'TENSION',
+  CT38: 'TENSION', CT41: 'TENSION', CT43: 'TENSION', CT52: 'TENSION', CT55: 'TENSION',
+  CT56: 'TENSION', CT57: 'TENSION', CT58: 'TENSION',
+  CT31: 'COMPLETENESS', CT32: 'COMPLETENESS', CT33: 'COMPLETENESS', CT53: 'COMPLETENESS',
+  CT54: 'EXAMINATION_LIMIT',
+  CT47: 'BEHAVIORAL', CT48: 'BEHAVIORAL', CT49: 'BEHAVIORAL', CT50: 'BEHAVIORAL'
+};
+
+// A contradiction needs two anchored sides. Two quoted passages, two distinct
+// cited pages, or the detector's own "X vs Y" framing count; a single quoted
+// passage does not (the evidence-bundle-6 "Conduct Admission" finding whose
+// counter-proposition was empty).
+function voFindingTwoSides(f) {
+  // A quoted fragment under twelve characters is not a proposition: the
+  // evidence-bundle-6 "Conduct Admission" paired a full passage with the
+  // seven-character fragment "i admit" and sealed it as a contradiction.
+  var q = ((f.anchor && f.anchor.quote) || []).filter(function (x) { return String(x || '').length >= 12; });
+  if (q.length >= 2) return true;
+  var w = (f.anchor && f.anchor.where) || [];
+  if (w.length >= 2) return true;
+  return /\s(?:vs\.?|versus)\s/i.test(String(f.evidence || ''));
+}
+
+// Same-actor types assert ONE party cannot square its own record with itself.
+// When the two quoted sides name different parties that is a dispute, not an
+// impossibility (the review's example: a CT06 "Logical Impossibility" whose
+// two sides were the Learned Judge and Crompton Motors).
+var VO_SAME_ACTOR_TYPES = { CT05: 1, CT06: 1, CT10: 1, CT11: 1, CT46: 1 };
+function voQuoteParties(q) {
+  var ps = voExtractParties(String(q || '')) || [], out = [];
+  for (var i = 0; i < ps.length; i++) {
+    var n = String((ps[i] && ps[i].name) || '').toLowerCase().trim();
+    if (n) out.push(n);
+  }
+  return out;
+}
+function voNamesDisjoint(a, b) {
+  var STOP = { the: 1, and: 1, of: 1, ltd: 1, pty: 1, cc: 1, mr: 1, mrs: 1, ms: 1, dr: 1 };
+  var tokA = {}, t;
+  for (var i = 0; i < a.length; i++) {
+    var ws = a[i].split(/\s+/);
+    for (var j = 0; j < ws.length; j++) { t = ws[j]; if (t.length >= 3 && !STOP[t]) tokA[t] = true; }
+  }
+  for (var x = 0; x < b.length; x++) {
+    var w2 = b[x].split(/\s+/);
+    for (var y = 0; y < w2.length; y++) { t = w2[y]; if (t.length >= 3 && !STOP[t] && tokA[t]) return false; }
+  }
+  return true;
+}
+
+function voClassifyFinding(f) {
+  if (!f || f.type === 'SERIAL') return null;
+  return VO_FINDING_CLASS[f.type] || 'TENSION';
+}
+
+// Assigns f.findingClass to every non-serial finding, with two demotion gates
+// (a gate can only move CONTRADICTION down to TENSION — never up, and no
+// finding is removed: the measurement stands, its label is made honest).
+// Runs after voAnchorEnrich because both gates read the anchors.
+function voApplyFindingClasses(findings) {
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i];
+    var cls = voClassifyFinding(f);
+    if (!cls) continue;
+    if (cls === 'CONTRADICTION') {
+      var scope = null;
+      for (var ck in CONTRADICTION_TYPES) {
+        if (CONTRADICTION_TYPES[ck].id === f.type) { scope = CONTRADICTION_TYPES[ck].scope || []; break; }
+      }
+      // Gate 1 — empty counter-proposition: a pair-scoped detector whose
+      // finding could anchor only one side has not demonstrated a conflict.
+      if (scope && scope.indexOf('pair') !== -1 && !voFindingTwoSides(f)) {
+        f.findingClass = 'TENSION';
+        f.classNote = 'Only one side of the claimed conflict could be anchored to quoted text or a second page, so it is recorded as a tension for review, not a demonstrated contradiction.';
+        continue;
+      }
+      // Gate 2 — actor mismatch, same-actor types only: two passages that name
+      // different parties are a dispute between them, not an impossibility.
+      if (VO_SAME_ACTOR_TYPES[f.type]) {
+        var qs = (f.anchor && f.anchor.quote) || [];
+        if (qs.length >= 2) {
+          var pa = voQuoteParties(qs[0]), pb = voQuoteParties(qs[1]);
+          if (pa.length && pb.length && voNamesDisjoint(pa, pb)) {
+            f.findingClass = 'TENSION';
+            f.actorMismatch = true;
+            f.classNote = 'The two quoted passages name different parties (' + pa[0] + ' vs ' + pb[0] + '): one party’s statement cannot by itself make another party’s statement impossible, so this is recorded as a tension for review, not a demonstrated contradiction.';
+            continue;
+          }
+        }
+      }
+    }
+    f.findingClass = cls;
+  }
+  return findings;
+}
+
 function voAnchorEnrich(findings, textBlocks, secondaryPages) {
   var blocks = textBlocks || [];
   // Built once per document, then reused for every finding (see voBuildNameRoster).
@@ -6886,6 +7079,20 @@ function voAnchorEnrich(findings, textBlocks, secondaryPages) {
         for (var lci = 0; lci < lc.length; lci++) if (!lawSeen[lc[lci]]) { lawSeen[lc[lci]] = true; law.push(lc[lci]); }
       }
     }
+    // CLAUSES (batch 6): the numbered paragraph or clause the finding's own
+    // words cite; failing that, the numbered paragraph the quoted passage sits
+    // under on its cited page ("AD PARAGRAPH 227" above the quote). This is
+    // how a reviewer finds the passage in the record.
+    var clauses = voExtractClauseRefs(ev);
+    var clSeen = {};
+    for (var cl0 = 0; cl0 < clauses.length; cl0++) clSeen[clauses[cl0].toLowerCase()] = true;
+    if (pages.length) {
+      var clQs = voExtractQuotes(ev);
+      for (var cq = 0; cq < clQs.length && clauses.length < 3; cq++) {
+        var clHead = voClauseContextOf(blocks[pages[0] - 1], clQs[cq]);
+        if (clHead && !clSeen[clHead.toLowerCase()]) { clSeen[clHead.toLowerCase()] = true; clauses.push(clHead); }
+      }
+    }
     // Parties: the evidence snippet first (tightest link to the contradiction),
     // then the people the CITED PAGE names via email headers / signature lines.
     // The old form was `ev.length > 20 ? ev : ctx`, and detector evidence is
@@ -6916,7 +7123,8 @@ function voAnchorEnrich(findings, textBlocks, secondaryPages) {
       where: pages.length ? pages : null,
       quote: voExtractQuotes(ev),
       when: dates,
-      law: law // cite-or-stay-silent: [] means the engine asserts no provision
+      law: law, // cite-or-stay-silent: [] means the engine asserts no provision
+      clauses: clauses // the record's own numbering: [] means none identified
     };
     f.statement = voStatement(f);
   }
@@ -8189,6 +8397,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
         detectorFindings = detectors[d](pdfDoc);
       } else if (detectors[d] === DETECTORS.D16_DETECT_FONT_ANOMALY) {
         detectorFindings = detectors[d](textBlocks, pdfDoc);
+      } else if (detectors[d] === DETECTORS.D08A_DETECT_SCAN_ONLY_PAGE) {
+        // Batch 6: the scan-only detector reconciles with the OCR rescue —
+        // a page OCR rendered but could not read is an OCR-attempted limit,
+        // not a page that "went unchecked" (WF2 counts it as examined).
+        detectorFindings = detectors[d](textBlocks, { ocrRan: _ocrRan, ocrPages: _ocrPages });
       } else {
         detectorFindings = detectors[d](textBlocks);
       }
@@ -8443,6 +8656,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // every finding names WHO, WHERE, WHAT and — where the document itself cites
   // one — WHICH provision. Runs on the kept, page-anchored findings only.
   voAnchorEnrich(allFindings, textBlocks, _secondaryAllPages);
+
+  // Batch 6: bind each finding's epistemic class (CONTRADICTION / TENSION /
+  // COMPLETENESS / EXAMINATION_LIMIT / BEHAVIORAL). Runs here because both
+  // demotion gates read the anchors voAnchorEnrich just bound.
+  voApplyFindingClasses(allFindings);
 
   // Oath-context tagging: where a finding's anchor page carries the language
   // of a sworn instrument, record that FACT on the finding. The tag drives a
@@ -9151,6 +9369,11 @@ if (typeof module !== 'undefined' && module.exports) {
     voDateSortKey: voDateSortKey,
     voStatement: voStatement,
     voAnchorEnrich: voAnchorEnrich,
+    voClassifyFinding: voClassifyFinding,
+    voApplyFindingClasses: voApplyFindingClasses,
+    VO_FINDING_CLASS: VO_FINDING_CLASS,
+    voExtractClauseRefs: voExtractClauseRefs,
+    voClauseContextOf: voClauseContextOf,
     voBuildTimeline: voBuildTimeline,
     voClassifyPage: voClassifyPage,
     voExtractPageFacts: voExtractPageFacts,

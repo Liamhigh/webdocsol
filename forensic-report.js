@@ -67,7 +67,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.5.0-web';
+var ENGINE_VERSION = '5.6.0-web';
 var CONSTITUTION_VERSION = '6.1';
 // Counts mirror the live registry and run-list in forensic-engine-page.js.
 // The report recomputes from the registry at runtime when the engine is
@@ -534,6 +534,62 @@ function detectJurisdictions(data) {
 var VO_ARITHMETIC_TYPES = { CT15: 1, CT22: 1 };
 // Format checks implicate nobody: a date, a number or a VAT shape.
 var VO_FORMAT_CHECK_TYPES = { CT03: 1, CT17: 1, CT19: 1, CT20: 1, CT21: 1, CT33: 1 };
+
+// Finding classes (batch 6, evidence-bundle-6 review): every engine finding
+// carries an epistemic class — what kind of statement the engine can honestly
+// make. The engine stamps findingClass on each finding it produces; this
+// fallback classifies only findings from older sealed runs that predate the
+// stamp. The batch-6 regression test pins this map identical to the engine's
+// VO_FINDING_CLASS.
+var VO_FINDING_CLASS_FALLBACK = {
+  CT01: 'CONTRADICTION', CT02: 'CONTRADICTION', CT03: 'CONTRADICTION', CT04: 'CONTRADICTION',
+  CT05: 'CONTRADICTION', CT06: 'CONTRADICTION', CT08: 'CONTRADICTION', CT09: 'CONTRADICTION',
+  CT10: 'CONTRADICTION', CT11: 'CONTRADICTION', CT13: 'CONTRADICTION', CT14: 'CONTRADICTION',
+  CT15: 'CONTRADICTION', CT16: 'CONTRADICTION', CT17: 'CONTRADICTION', CT18: 'CONTRADICTION',
+  CT19: 'CONTRADICTION', CT20: 'CONTRADICTION', CT21: 'CONTRADICTION', CT22: 'CONTRADICTION',
+  CT24: 'CONTRADICTION', CT29: 'CONTRADICTION', CT36: 'CONTRADICTION', CT37: 'CONTRADICTION',
+  CT39: 'CONTRADICTION', CT40: 'CONTRADICTION', CT42: 'CONTRADICTION', CT44: 'CONTRADICTION',
+  CT45: 'CONTRADICTION', CT46: 'CONTRADICTION', CT51: 'CONTRADICTION',
+  CT07: 'TENSION', CT12: 'TENSION', CT23: 'TENSION', CT25: 'TENSION', CT26: 'TENSION',
+  CT27: 'TENSION', CT28: 'TENSION', CT30: 'TENSION', CT34: 'TENSION', CT35: 'TENSION',
+  CT38: 'TENSION', CT41: 'TENSION', CT43: 'TENSION', CT52: 'TENSION', CT55: 'TENSION',
+  CT56: 'TENSION', CT57: 'TENSION', CT58: 'TENSION',
+  CT31: 'COMPLETENESS', CT32: 'COMPLETENESS', CT33: 'COMPLETENESS', CT53: 'COMPLETENESS',
+  CT54: 'EXAMINATION_LIMIT',
+  CT47: 'BEHAVIORAL', CT48: 'BEHAVIORAL', CT49: 'BEHAVIORAL', CT50: 'BEHAVIORAL'
+};
+var VO_CLASS_ORDER = ['CONTRADICTION', 'TENSION', 'COMPLETENESS', 'EXAMINATION_LIMIT', 'BEHAVIORAL'];
+var VO_CLASS_LABEL = { CONTRADICTION: 'contradiction', TENSION: 'tension', COMPLETENESS: 'completeness issue', EXAMINATION_LIMIT: 'examination limit', BEHAVIORAL: 'behavioural indicator' };
+var VO_CLASS_PLURAL = { CONTRADICTION: 'contradictions', TENSION: 'tensions', COMPLETENESS: 'completeness issues', EXAMINATION_LIMIT: 'examination limits', BEHAVIORAL: 'behavioural indicators' };
+var VO_CLASS_EXPLAIN = {
+  CONTRADICTION: 'two anchored propositions that cannot both stand',
+  TENSION: 'an indicator that weakens consistency, for review',
+  COMPLETENESS: 'something the record references is missing or cannot be followed up',
+  EXAMINATION_LIMIT: 'the engine could not examine this — a limit of the examination, not a defect found in the record',
+  BEHAVIORAL: 'conduct language surfaced for human review, never a determination'
+};
+function voFindingClassOf(f) {
+  if (!f || f.type === 'SERIAL' || f.source === 'ai') return null;
+  return f.findingClass || VO_FINDING_CLASS_FALLBACK[f.type] || 'TENSION';
+}
+function voClassBreakdownSentence(list) {
+  var counts = {}, total = 0;
+  for (var i = 0; i < list.length; i++) {
+    var c = voFindingClassOf(list[i]);
+    if (!c) continue;
+    counts[c] = (counts[c] || 0) + 1;
+    total++;
+  }
+  if (!total) return '';
+  var parts = [];
+  for (var k = 0; k < VO_CLASS_ORDER.length; k++) {
+    var key = VO_CLASS_ORDER[k];
+    if (!counts[key]) continue;
+    parts.push(counts[key] + ' ' + (counts[key] === 1 ? VO_CLASS_LABEL[key] : VO_CLASS_PLURAL[key]));
+  }
+  if (!parts.length) return '';
+  return 'By class: ' + listPhrase(parts) + '.';
+}
 var VO_NOT_FOR_ARITHMETIC_RE = /Organised Crime|Financial Intelligence|Corrupt Activities|Money Laundering|Commercial Fraud/i;
 // A registration-number finding (CT20: a format check, or an identity number
 // in a shared field) and any Low finding name no corruption, consumer or
@@ -926,6 +982,7 @@ function voSealedCountIntro(fr, subst, data) {
   return 'The record contains ' + voCountPhrase(subst, !!(data && data.aiReview && data.aiReview.applied === true), data && data.ocrPages) + '.' +
     (noPage > 0 ? ' A further ' + noPage + ' finding' + (noPage === 1 ? ' lives' : 's live') + ' at file level (PDF metadata or structure, with no page to cite) and ' + (noPage === 1 ? 'is' : 'are') + ' set out in the Findings & Contradiction Matrix.' : '') +
     (unrender > 0 ? ' ' + unrender + ' finding' + (unrender === 1 ? '' : 's') + ' with no renderable passage ' + (unrender === 1 ? 'is' : 'are') + ' listed in the matrix only.' : '') +
+    (voClassBreakdownSentence(subst) ? ' ' + voClassBreakdownSentence(subst) : '') +
     ' The following are established, each anchored to its page:';
 }
 // When NOTHING is page-anchored but engine findings exist (a clean document
@@ -1934,7 +1991,7 @@ function secMatrix(ctx, data) {
   if (aiList && aiList.length > 0) {
     aiList.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
     ctx.subHeading(ctx.sectionNo + '.' + (subNo + 1) + ' AI-Identified Candidates  (' + aiList.length + ' candidate' + (aiList.length === 1 ? '' : 's') + ')', { toc: true });
-    ctx.para('Generated by the candidate-generation layer (optional AI review, Cloudflare Workers AI): its job is to surface leads the deterministic rules do not cover, for human verification. Candidate tier — pending engine or human verification; never presented as an engine finding. To verify a candidate, locate its quote on the cited page and confirm the inconsistency it describes against the surrounding record; verified, it stands as evidence like any anchored finding. A candidate marked "unanchored" has no quote in the sealed text: it is a question for the document\'s author or for counsel, not a lead to a page.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+    ctx.para('Generated by the candidate-generation layer (optional AI review, Cloudflare Workers AI): its job is to surface leads the deterministic rules do not cover, for human verification. Candidate tier — pending engine or human verification; never presented as an engine finding. To verify a candidate, locate its quote on the cited page and confirm the inconsistency it describes against the surrounding record; verified, it stands as evidence like any anchored finding. Since engine v5.6.0 a candidate the review could not anchor to a quote in the sealed text is not recorded at all — an unanchored claim is a question, not a lead.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
     var aiRows = [];
     for (var ar = 0; ar < aiList.length; ar++) {
       var af = aiList[ar];
@@ -2974,6 +3031,11 @@ function secFindingDetails(ctx, data) {
       'Location: ' + fmtLocation(f.location),
       'Legal subject: ' + (LEGAL_SUBJECT_LABEL[subj] || subj) + (CT_DETECTOR[f.type] ? '    |    Detector: ' + CT_DETECTOR[f.type] : '')
     ];
+    // Batch 6: the finding's class — what kind of statement the engine can
+    // honestly make about it — printed where the reader looks first.
+    var _fcls = voFindingClassOf(f);
+    if (_fcls) factLines.push('Class: ' + VO_CLASS_LABEL[_fcls].charAt(0).toUpperCase() + VO_CLASS_LABEL[_fcls].slice(1) + ' — ' + VO_CLASS_EXPLAIN[_fcls] + '.');
+    if (f.classNote) factLines.push('Class note: ' + f.classNote);
     // Oath context is a FACT of the record (oath language on the cited page),
     // not a classification of any statement as sworn testimony. A finding
     // anchored inside an affidavit is materially different from one in
@@ -2993,6 +3055,11 @@ function secFindingDetails(ctx, data) {
     // page, quoted, not an applicable law the engine inferred.
     var docLaw = (f.anchor && f.anchor.law) || [];
     if (docLaw.length) ctx.para('Provision cited in the document: ' + docLaw.join(', '), { size: 9, color: NAVY2, after: 1 });
+    // Batch 6: the record's own numbering — the clause or numbered paragraph
+    // the passage sits under ("AD PARAGRAPH 227"), so a reviewer can turn
+    // straight to it.
+    var docClauses = (f.anchor && f.anchor.clauses) || [];
+    if (docClauses.length) ctx.para('Numbered paragraph/clause: ' + docClauses.join(', ') + ' (the passage\'s own numbering in the record)', { size: 9, color: NAVY2, after: 1 });
     ctx.gap(3);
     ctx.para('What it means: ' + withPeriod(narrativeMeaning(f)), { size: 10, after: 4 });
     if (f.source === 'ai' && f.rationale) ctx.para('AI rationale: ' + san(f.rationale), { size: 9.5, after: 4 });
@@ -3664,7 +3731,12 @@ function secNarrative(ctx, data, opts) {
     groupOf[gk].push(gf);
   }
 
-  var lead = 'Reading the ' + (docCount === 1 ? 'document' : 'documents together') + ', ' + subst.length + ' substantive contradiction' + (subst.length === 1 ? '' : 's') + ' stand' + (subst.length === 1 ? 's' : '') + ' out';
+  // Batch 6: not every finding is a contradiction — the lead says what kind
+  // of statement each is (the evidence-bundle-6 review: one flat
+  // "contradictions" count overclaimed).
+  var lead = 'Reading the ' + (docCount === 1 ? 'document' : 'documents together') + ', ' + subst.length + ' substantive finding' + (subst.length === 1 ? '' : 's') + ' stand' + (subst.length === 1 ? 's' : '') + ' out';
+  var _bd = voClassBreakdownSentence(subst);
+  if (_bd) lead += ' (' + _bd.replace(/^By class: /, '').replace(/\.$/, '') + ')';
   lead += groups.length < subst.length ? ', following ' + groups.length + ' distinct pattern' + (groups.length === 1 ? '' : 's') + '.' : '.';
   if (aiCands.length) lead += ' A further ' + aiCands.length + ' AI-raised candidate item' + (aiCands.length === 1 ? '' : 's') + ' ' + (aiCands.length === 1 ? 'is' : 'are') + ' advisory only and ' + (aiCands.length === 1 ? 'is' : 'are') + ' set out in the AI-Identified Candidates section, not counted here.';
   ctx.para(lead, { size: 10.5, after: 4 });
@@ -4867,6 +4939,7 @@ function aiReviewTrailer(ar) {
   if ((ar.noted | 0) > 0) parts += '; it noted ' + (ar.noted | 0) + ' as unsupported (advisory notes, printed under AI Review Notes on Engine Findings in the Findings & Contradiction Matrix)';
   if ((ar.added | 0) > 0) parts += '; it raised ' + (ar.added | 0) + ' candidate' + ((ar.added | 0) === 1 ? '' : 's') + ' the engine did not report';
   if ((ar.duplicates | 0) > 0) parts += '; ' + (ar.duplicates | 0) + ' further item' + ((ar.duplicates | 0) === 1 ? '' : 's') + ' it raised restated an engine finding (the same words on the same page, or the same kind of finding) and ' + ((ar.duplicates | 0) === 1 ? 'is' : 'are') + ' not listed as candidates';
+  if ((ar.droppedUnanchored | 0) > 0) parts += '; it raised ' + (ar.droppedUnanchored | 0) + ' further item' + ((ar.droppedUnanchored | 0) === 1 ? '' : 's') + ' it could not anchor to a quote in the sealed text, which ' + ((ar.droppedUnanchored | 0) === 1 ? 'is' : 'are') + ' not recorded';
   return parts + '.';
 }
 
@@ -6086,7 +6159,8 @@ var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buil
   _splitSentences: splitSentences, _samePartyName: samePartyName, _isEngineFinding: isEngineFinding, _humanNumberable: humanNumberable, _speakerOf: speakerOf, _partyStronglyNamed: partyStronglyNamed, _capText: capText, _aiSectionName: aiSectionName, _findingName: findingName, _hasTwoSidedFinding: hasTwoSidedFinding, _isReducedWeight: isReducedWeight, _isCappedWeight: isCappedWeight, _voCountPhrase: voCountPhrase, _statutesForFinding: statutesForFinding, _engineNotes: engineNotes,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _lawExclusionsOf: lawExclusionsOf, _lawDisclaimer: LAW_DISCLAIMER_TEXT, _gpsLine: gpsLine,
-  _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney };
+  _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney,
+  _voFindingClassOf: voFindingClassOf, _voClassBreakdownSentence: voClassBreakdownSentence, _VO_FINDING_CLASS_FALLBACK: VO_FINDING_CLASS_FALLBACK };
 global.VerumReport = api;
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
