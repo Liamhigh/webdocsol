@@ -5,8 +5,8 @@
 > engine is correct** and the other surface is the one to fix. Every hard lesson from real
 > evidence bundles is encoded here and locked by tests.
 
-**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.1-web'`
-**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.1-web'`, report builder v1.3.1.
+**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.2-web'`
+**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.2-web'`, report builder v1.3.1.
 **Findings JSON:** v1.11.0, built by `buildFindingsJson` in `seal-document.html`, not by either
 script (1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
 the well-formedness gate and serial-stage trace; 1.9.0 added `cross_document_observations` with a
@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   50 suites, 3355 assertions (§10); many exist solely to stop the regressions in §4 and §12.
+   51 suites, 3393 assertions (§10); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -416,6 +416,40 @@ the false positives and positive controls for genuine findings:
   declaration, and the report renderer independently replaces a stale positive declaration when
   its exclusion list is non-empty.
 
+### 4.20 Court-bundle output review — proposition, source and field discipline (engine v5.7.2-web)
+
+The uploaded 347-page court scan used `5.7.0-web`; its sealed artifacts remain unchanged historical
+drafts. `tests/batch7c-court-corrections.test.mjs` reproduces the remaining defects under the
+corrected engine and pins the general fixes beside positive controls:
+
+- **Dates require a plausible documentary year.** The year horizon applies to convention detection
+  as well as impossible-date reporting. The tail of `Application: E/2024/02/28/0001` cannot establish
+  a month/day/year convention. The genuine 28 February 2018 versus 28 February 2019 event-date
+  conflict remains unchanged.
+- **Legal positions are not assets, and occupation is not billing.** Claims and submissions join the
+  non-asset legal-act nouns; an occupation period cannot masquerade as an invoice or monetary charge.
+  Genuine camera ownership and post-termination rental controls still fire.
+- **A factive denial must deny the committed proposition.** Certificate headings are not factive
+  verbs, and numbered or semicolon-separated clauses cannot borrow negation from one another. A
+  direct denial of the same proposition remains detectable.
+- **Approbate/reprobate requires an existing burden.** Procedural "taken" wording is not possession,
+  and refusing to renew, extend or enter a contract is not denying an existing payment/performance
+  obligation. Occupation while denying existing rental liability still fires.
+- **Status and registration fields are read literally.** Registered ownership is not company-status
+  registration; a future deregistration warning is not a present status. CIPC numbers tolerate spaces
+  around slashes without consuming adjacent numbers. A natural person's identity number under a
+  registration label is a context-only field/labelling note, never a fake-registration contradiction;
+  the genuine seven-digit-middle-group CIPC discrepancy remains a Low verification finding.
+- **Behavioural indicators require conduct.** Statutory prohibitions, ordinary contractual duties,
+  legal/regulatory recourse and second-hand attribution are not coercion. Direct ultimatums and
+  concrete threats remain visible.
+- **Prior analyses are not primary evidence, and ownership wording needs context.** A
+  `VERUM OMNIS — FORENSIC ANALYSIS` masthead and its analytical continuation pages are excluded on
+  the same basis as a prior forensic report. Conditional ownership language and "address of the
+  owner" notices do not record an acquisition. The source-verified rescan accordingly retains no
+  substantive CT44 finding: the distant ownership statement names no party role and remains only a
+  context-only verification note. Both CT45 findings are preserved, not suppressed.
+
 ---
 
 ## 5. The anchor rule
@@ -793,7 +827,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**50 suites · 3355 assertions** (counted 2026-11-06 after the Batch 7b Greensky corrections, §4.19; recount after any test change).
+**51 suites · 3393 assertions** (counted 2026-11-06 after the Batch 7c court corrections, §4.20; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -844,6 +878,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `batch6-finding-classes.test.mjs` | 34 | Finding classes, demotion gates, clause anchors and OCR reconciliation |
 | `batch7-conduct-ledger.test.mjs` | 43 | Conduct-ledger extraction, CT59/60/61 dispatch, thresholds and structured payloads |
 | `batch7b-greensky-corrections.test.mjs` | 42 | Greensky output corrections (§4.19): calendar validity, completed-payment/payee semantics, direct-source discipline, tensions, boilerplate, behavioural deduplication, quotation boundaries and per-candidate legal-lane declarations |
+| `batch7c-court-corrections.test.mjs` | 38 | Court-bundle corrections (§4.20): whole-word admissions, date/reference discipline, legal-act nouns, actual billing, factive denial scope, existing burdens, entity status, registry fields, prior-analysis exclusion, behavioural source quality and ownership context |
 | `engine-perf.test.mjs` | 5 | Per-page extraction does not re-parse the whole PDF |
 
 ---

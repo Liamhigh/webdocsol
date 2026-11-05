@@ -792,7 +792,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.7.1-web';
+var ENGINE_VERSION = '5.7.2-web';
 var CONSTITUTION_VERSION = '6.1';
 // Counts mirror the live registry and run-list in forensic-engine-page.js.
 // The report recomputes from the registry at runtime when the engine is
@@ -6925,13 +6925,13 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 </script>
 <script>
 /* VO-INLINE:forensic-engine-page.js:START */
-// ============== FORENSIC CONTRADICTION ENGINE v5.7.1-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.7.2-web ================
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.1-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.2-web
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
@@ -6953,7 +6953,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.7.1-web';
+var VO_ENGINE_VERSION = '5.7.2-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
@@ -7641,7 +7641,7 @@ function voDetectSwornPages(textBlocks) {
 // does not establish independent opposing-party conduct.
 function voBehaviouralSecondhand(sen) {
   var s = String(sen || '');
-  var attributed = /\b(?:wrote|claimed|alleged|narrative|submits?|argues?|according\s+to)\b/i.test(s);
+  var attributed = /\b(?:wrote|claimed|alleged|narrative|submit(?:s|ted|ting)?|argu(?:e|es|ed|ing)|according\s+to)\b/i.test(s);
   if (!attributed) {
     // Passive wording inside the denial itself ("that is not what was said")
     // is direct language, not a narrator attributing a position to someone else.
@@ -7890,7 +7890,7 @@ var DETECTORS = {
             admPages.push(ap + 1);
             if (!admQuote) {
               admCue = admissionCues[ac];
-              admQuote = textBlocks[ap].substring(Math.max(0, atA - 40), atA + admissionCues[ac].length + 120).replace(/\s+/g, ' ').trim();
+              admQuote = voSnapWindow(textBlocks[ap], atA - 40, atA + admissionCues[ac].length + 120);
             }
             admCounted = true; // one count per page
             break;
@@ -8317,6 +8317,10 @@ var DETECTORS = {
       // the record, so not an impossible date; the OCR provenance names the
       // page for a person to read.
       if (a === 0 || b === 0) continue;
+      // The year horizon applies to EVERY date reading, not only impossible
+      // dates. "Application: E/2024/02/28/0001" is a reference number; its
+      // 0001 tail must never establish a month/day/year convention.
+      if (year < 1200 || year > 2200) continue;
       // A date followed by a clock time in the company of a seal footer's
       // other words (hash, seal id, zone name, page marker) is the stamp. An
       // email header's or a till slip's own timestamp is the record's and
@@ -8921,7 +8925,8 @@ var DETECTORS = {
       // resignation" with a company-secretary narrative as two asset owners.
       message: 1, call: 1, text: 1, sms: 1, voicemail: 1, conversation: 1, correspondence: 1,
       resignation: 1, decision: 1, dismissal: 1, termination: 1, appointment: 1,
-      demand: 1, instruction: 1, confirmation: 1, approval: 1 };
+      demand: 1, instruction: 1, confirmation: 1, approval: 1,
+      claim: 1, submission: 1 };
     // A possessable asset is a concrete noun: not an -ing form, not a plural.
     function isAsset(a) { return !STOPN[a] && !/ing$/.test(a) && !/s$/.test(a); }
     var MY_G = /\bmy\s+([a-z][a-z-]{2,20})\b/g;
@@ -8974,7 +8979,9 @@ var DETECTORS = {
     var blocks = textBlocks || [];
     var MONTHS = { january: 1, february: 2, march: 3, april: 4, may: 5, june: 6, july: 7, august: 8, september: 9, october: 10, november: 11, december: 12 };
     var END_G = /\b(?:lease|tenancy|agreement|contract|occupation|employment|mandate|engagement|appointment|supply|membership)\b[^.\n]{0,200}?\b(?:terminated|came to an end|ended|expired|lapsed|cancelled|canceled|ceased)\b[^.\n]{0,120}?(\d{1,2})\s+(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/gi;
-    var CHARGE_G = /\b(?:rent|rental|invoice|damages|occupation|levy|instalment|installment|fee|charge)s?\b[^.\n]{0,80}?\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/gi;
+    // Occupation is a possession period, not itself a monetary charge. Only
+    // an actual billing/charge noun can found a post-termination billing lead.
+    var CHARGE_G = /\b(?:rent|rental|invoice|damages|levy|instalment|installment|fee|charge)s?\b[^.\n]{0,80}?\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{4})/gi;
     // Distinguishing tokens only: party, site and instrument names. The
     // generic vocabulary of ends and charges (agreement, invoice, payment…)
     // is shared by EVERY matter in a bundle, so it cannot pair them.
@@ -9389,7 +9396,8 @@ var DETECTORS = {
     // case generally.
     var findings = [];
     var blocks = textBlocks || [];
-    var FACT_G = /\b(confirm\w+|admit\w+|acknowledg\w+|certif\w+|declar(?:e|es|ed|ing|ation|ations))\s+(?:that\s+)?([^.!?]{10,140})/gi;
+    // Certificate/certification headings are documents, not factive verbs.
+    var FACT_G = /\b(confirm\w+|admit\w+|acknowledg\w+|certif(?:y|ies|ied|ying)|declar(?:e|es|ed|ing|ation|ations))\s+(?:that\s+)?([^.!?]{10,140})/gi;
     var NEG_G = /\b(not|never|no\s+longer|deny|denies|denied|denial|false|falsely|incorrect|untrue|retract\w*|withdraw(?:s|n|ing|al|als)?\b(?!\s+from\b)|repudiat\w*|disput\w+)\b/i;
     var STOP = { that:1, this:1, with:1, from:1, have:1, has:1, had:1, been:1, were:1, was:1, are:1, and:1, the:1, for:1, which:1, shall:1, will:1, would:1, could:1, should:1, must:1, into:1, upon:1, under:1, over:1, such:1, any:1, all:1, each:1, other:1, than:1, then:1, them:1, they:1, their:1, there:1, these:1, those:1, when:1, where:1, what:1, who:1, whom:1, whose:1, how:1, but:1, not:1, nor:1, its:1, his:1, her:1, our:1, your:1, out:1, off:1, per:1, via:1, within:1, without:1, between:1, against:1, about:1, above:1, below:1, after:1, before:1, during:1, until:1, since:1, while:1, applicant:1, applicants:1, respondent:1, respondents:1, plaintiff:1, plaintiffs:1, defendant:1, defendants:1, appellant:1, appellants:1 };
     // A recital of authority is not a party commitment: "confirmed by the
@@ -9433,7 +9441,9 @@ var DETECTORS = {
     var seen = {};
     for (var b2 = 0; b2 < blocks.length && findings.length < 3; b2++) {
       var t2 = voStripSealFurniture(String(blocks[b2] || ''));
-      var sents = t2.split(/[.!?]+\s/);
+      // Keep numbered clauses and semicolon-separated propositions apart. A
+      // "not limited" clause must not swallow the next affirmative definition.
+      var sents = t2.split(/[.!?]+\s|;\s*|(?=\b\d+(?:\.\d+)+\s+)/);
       for (var si = 0; si < sents.length && findings.length < 3; si++) {
         var s = sents[si];
         // A parenthetical aside denies the clause it glosses, not the
@@ -9646,16 +9656,26 @@ var DETECTORS = {
     // Possessive verbs near any instrument word, either order ("occupied the
     // premises", "the deposit was retained"). Accept/receive count only with
     // money in hand — "received the agreement" is post, not a benefit.
-    var VERB_POS = '(?:took|taken|enjoy\\w*|retain\\w*|kept|collect\\w*|pocket\\w*|occup(?:y|ies|ied|ying)|possession\\s+of|trad(?:e|es|ed|ing)\\s+(?:from|at|under))';
+    // "Taken" is procedural as often as possessive ("issues ... taken to the
+    // High Court"), so it cannot establish a benefit under an instrument.
+    var VERB_POS = '(?:enjoy\\w*|retain\\w*|kept|collect\\w*|pocket\\w*|occup(?:y|ies|ied|ying)|possession\\s+of|trad(?:e|es|ed|ing)\\s+(?:from|at|under))';
     var MONEY = '(?:rental|rent|deposit|payment|proceeds|stock|assets?|goodwill)';
-    var BENEFIT_RE = new RegExp('\\b' + VERB_POS + '\\b[^.;]{0,90}?\\b' + INSTR + '\\b|\\b' + INSTR + '\\b[^.;]{0,90}?\\b' + VERB_POS + '\\b|\\b(?:accept\\w*|receiv\\w*)\\b[^.;]{0,60}?\\b' + MONEY + '\\b', 'gi');
-    var DENIAL_RE = new RegExp('\\b(?:den(?:y|ies|ied|ying)|refus\\w+|reject\\w+|repudiat\\w+|not\\s+(?:liable|bound|obliged|obligated|responsible)|no\\s+(?:obligation|liability|duty))\\b[^.;]{0,110}?\\b(?:pay\\w*|rental|rent|arrears|obligation\\w*|liabilit\\w+|terms?|lease|agreement|contract|debt|perform\\w*)\\b|\\b(?:rental|rent|arrears|obligation\\w*|liabilit\\w+|debt)\\b[^.;]{0,60}?\\b(?:denied|refused|rejected|repudiated)\\b', 'gi');
+    // Only completed receipt counts as money in hand. "Will accept payment"
+    // defines a payment method; it does not record a benefit received.
+    var BENEFIT_RE = new RegExp('\\b' + VERB_POS + '\\b[^.;]{0,90}?\\b' + INSTR + '\\b|\\b' + INSTR + '\\b[^.;]{0,90}?\\b' + VERB_POS + '\\b|\\breceived\\b[^.;]{0,60}?\\b' + MONEY + '\\b', 'gi');
+    // The burden denied must be an EXISTING payment/performance obligation.
+    // Refusing to renew, extend or enter an agreement is not a denial of its
+    // existing burden and cannot establish approbate-and-reprobate asymmetry.
+    var DENIAL_RE = new RegExp('\\b(?:den(?:y|ies|ied|ying)|reject\\w+|repudiat\\w+|not\\s+(?:liable|bound|obliged|obligated|responsible)|no\\s+(?:obligation|liability|duty))\\b[^.;]{0,110}?\\b(?:pay\\w*|rental|rent|arrears|obligation\\w*|liabilit\\w+|debt|perform\\w*)\\b|\\brefus\\w+\\b[^.;]{0,110}?\\b(?:pay\\w*|rental|rent|arrears|obligation\\w*|liabilit\\w+|debt|perform\\w*)\\b|\\b(?:rental|rent|arrears|obligation\\w*|liabilit\\w+|debt)\\b[^.;]{0,60}?\\b(?:denied|refused|rejected|repudiated)\\b|\\brepudiat\\w+\\s+(?:the\\s+|this\\s+|that\\s+|its\\s+)?(?:existing\\s+|current\\s+)?(?:lease|agreement|contract|terms?)\\b', 'gi');
     var ROLE_RE = /\b(?:applicant|respondent|plaintiff|defendant|lessor|lessee|landlord|tenant|franchisor|franchisee|seller|purchaser)\b/i;
     var benefits = [], denials = [];
     var collect = function (list, re, pageText, pageNo) {
       re.lastIndex = 0;
       var m;
       while ((m = re.exec(pageText)) !== null) {
+        // "Never repudiated the lease" and "did not repudiate the lease"
+        // negate the denial; they do not establish one.
+        if (list === denials && /\b(?:never|not)\s+$/.test(pageText.slice(Math.max(0, m.index - 16), m.index))) continue;
         var quote = voSentenceAround(pageText, m[0]) || m[0];
         quote = quote.replace(/\s+/g, ' ').trim();
         if (quote.length > 220) quote = quote.slice(0, 217) + '...';
@@ -10275,13 +10295,13 @@ var DETECTORS = {
     // Delivery-method uses may carry intervening words ("registered RECORDED
     // DELIVERY letters" in the Greensky MOA notices clause slipped a strict
     // "registered mail|letter" list and produced a CRITICAL false positive).
-    var NOT_STATUS_REGISTERED = /\bregistered\s+(?:[a-z]+\s+){0,2}?(?:mail|post|letters?|office|address|owner|deliver(?:y|ies))\b|\bto\s+be\s+registered\b|\bregistered\s+in\s+whose\s+name\b|\bregistered\s+against\b|\bis\s+to\s+be\s+registered\b/i;
+    var NOT_STATUS_REGISTERED = /\bregistered\s+(?:[a-z]+\s+){0,2}?(?:mail|post|letters?|office|address|owners?|deliver(?:y|ies))\b|\bto\s+be\s+registered\b|\bregistered\s+in\s+whose\s+name\b|\bregistered\s+against\b|\bis\s+to\s+be\s+registered\b/i;
     // A status word inside a PROVISION ("shall be dissolved", "in the event of
     // liquidation", "upon winding-up") describes a hypothetical, not the
     // entity's current status — an MOA's dissolution clause is not a claim
     // that the company IS dissolved.
     var NOT_STATUS_PROVISION_BEFORE = /\b(?:shall|may|must|will|would|can|could|to)\s+be\s+(?:[a-z]+\s+){0,2}?$/i;
-    var NOT_STATUS_PROVISION_NEAR = /\bin\s+the\s+event\s+(?:of|that)\b|\bupon\s+(?:the\s+)?(?:dissolution|liquidation|winding[\s-]?up|deregistration)\b|\bon\s+(?:dissolution|liquidation|winding[\s-]?up)\b/i;
+    var NOT_STATUS_PROVISION_NEAR = /\bin\s+the\s+event\s+(?:of|that)\b|\bupon\s+(?:the\s+)?(?:dissolution|liquidation|winding[\s-]?up|deregistration)\b|\bon\s+(?:dissolution|liquidation|winding[\s-]?up)\b|\b(?:will|would|may|might|can|could|shall)\b[^.!?]{0,90}\b(?:deregist(?:er|ered|ration)|dissolv(?:e|ed|ution)|liquidat(?:e|ed|ion)|wind\s+up|wound\s+up)\b/i;
     // Two more clause shapes seen in real franchise agreements (PD16 makes a
     // false status "fact" the worst possible output, so these stay strict):
     // (a) a conditional within the same sentence — "if/should/until the
@@ -10471,7 +10491,18 @@ var DETECTORS = {
         if (voLooksGarbled(after)) continue; // unreadable OCR around the cue: nothing to validate
         var afterFull = block.slice(cm.index + cm[0].length, cm.index + cm[0].length + 70);
         // "CK 91/25755/23" is written with a space after the prefix.
-        var tok = afterFull.match(/[A-Z]{0,2}\s?\d[\d\/]{5,19}/);
+        // PDF table extraction may print "2016 / 392549 / 07" or an identity
+        // number as "510209 5091 004". Read the whole spaced token before
+        // validating it; never truncate it to its first digit run.
+        var tok = afterFull.match(/\b[A-Z]{0,2}\s?\d(?:\d|\s*\/\s*){5,35}/);
+        // More than two slashes means the broad malformed-token reader has
+        // consumed a neighbouring reference; retain only the registration.
+        if (tok && (tok[0].match(/\//g) || []).length > 2) {
+          tok = afterFull.match(/\b[A-Z]{0,2}\s?\d+(?:\s*\/\s*\d+){0,2}/);
+        }
+        var spacedIdentity = afterFull.match(/\d[\d ]{9,16}\d/);
+        if (tok && spacedIdentity && spacedIdentity.index === tok.index + tok[0].search(/\d/) &&
+            tok[0].indexOf('/') === -1 && spacedIdentity[0].replace(/\D/g, '').length >= 12) tok = spacedIdentity;
         if (!tok || tok.index >= 40) continue;
         // A bare "CIPC" names the registry, not a number: the number must sit
         // right after it ("CIPC: 2016/392549/07"). Forty characters on, the
@@ -10566,8 +10597,11 @@ var DETECTORS = {
           evidence: 'An identity number in a person\'s ID/registration field is that person\'s identity number, not a company registration; not a finding: "' + bad[v].quote + '"',
           location: 'Page ' + bad[v].pages.join(', ') });
       } else if (bad[v].idShaped) {
-        findings.push({ type: 'CT20', severity: 2,
-          evidence: 'A number labelled as a registration is shaped like a natural person\'s identity number (13 digits led by a date of birth), not a company registration — confirm which the record means: "' + bad[v].quote + '"',
+        // A sole proprietor's identity number under a registration label is a
+        // drafting/field-classification anomaly, not a "fake registration"
+        // contradiction. Preserve it as a verification note only.
+        findings.push({ type: 'CT20', severity: 0, contextOnly: true,
+          evidence: 'A natural person\'s identity number appears under a registration label; this is a field/labelling anomaly to verify, not a fake-company-registration finding: "' + bad[v].quote + '"',
           location: 'Page ' + bad[v].pages.join(', ') });
       } else if (bad[v].near) {
         findings.push({ type: 'CT20', severity: 2,
@@ -11839,11 +11873,20 @@ var DETECTORS = {
         while ((m = g.exec(lower)) !== null) {
           // "is NOT the owner" is the lessee clause itself, not an ownership record.
           if (/\bnot\s+(?:the\s+)?$/.test(lower.slice(Math.max(0, m.index - 12), m.index))) continue;
+          // A notification instruction ("address of the owner", "notify the
+          // owner") refers to whoever owns the property; it records no acquisition.
+          var genericOwner = /^(?:the\s+owner|registered\s+owner|is\s+(?:the\s+)?owner)$/.test(m[0]);
+          if (objectCheck && genericOwner && /\b(?:address|notify|notification|notice|contact|details)\b[^.;:]{0,80}$/.test(lower.slice(Math.max(0, m.index - 100), m.index))) continue;
           // A condition is not a record: "In the event that the Franchisee is
           // the owner of the Premises and at any time during the Term …" is a
           // clause of the agreement providing for a case, not a statement
           // that the case occurred (Combine 06 April 2026, p. 327).
-          if (objectCheck && /\b(?:if|in the event (?:that|of)|in the case (?:that|where|of)|should|whether|unless|provided that|on condition that|to the extent that)\b[^.;:]{0,60}$/.test(lower.slice(Math.max(0, m.index - 80), m.index))) continue;
+          if (objectCheck && /\b(?:if|in the event (?:that|of)|in the case (?:that|where|of)|should|whether|unless|provided that|on condition that|to the extent that)\b[^.;:]{0,80}$/.test(lower.slice(Math.max(0, m.index - 80), m.index))) continue;
+          // "Where X owns the premises or holds them by lease" states an
+          // alternative condition. A factual relative clause ("the premises,
+          // where X is the owner") remains an ownership statement.
+          if (objectCheck && /\bwhere\b[^.;:]{0,80}$/.test(lower.slice(Math.max(0, m.index - 80), m.index)) &&
+              /\bor\b[^.;:]{0,100}\b(?:holds?|leases?|lessee|occup(?:y|ies|ied|ying))\b/.test(lower.slice(m.index + m[0].length, m.index + m[0].length + 120))) continue;
           if (objectCheck && !ownerObjectOk(m[0], lower.slice(m.index + m[0].length, m.index + m[0].length + 120))) continue;
           var q = voSnapWindow(raw, m.index - 10, m.index + m[0].length + 40);
           out.push({ page: i + 1, quote: q, side: sideNear(raw, m.index, m[0].length) });
@@ -11853,7 +11896,9 @@ var DETECTORS = {
       return out;
     }
     var lesseeHits = allPagesOf(/not the owner[^.]{0,60}lessee|lessee[^.]{0,60}head lease|head lease[^.]{0,80}(terminat|expir)/);
-    var ownerHits = allPagesOf(/(became|is|registered|the)\s+(the\s+)?owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/, true);
+    // Generic "the owner" wording can record ownership in a narrative, but
+    // notification and conditional uses are excluded by allPagesOf above.
+    var ownerHits = allPagesOf(/became(\s+[a-z]+){0,4}\s+owner\b|is\s+(the\s+)?owner\b|registered\s+owner\b|the\s+owner\b|purchased the property|acquired the property|took transfer|bought the site|owns the (premises|property)|ownership of the premises/, true);
     // Whose ownership the half records. A half on the clause's own side
     // ("THE FRANCHISOR/OWNER … is the owner of the immovable property") pairs
     // with the clause wherever it sits in the record: the proof that the
@@ -12185,7 +12230,7 @@ var DETECTORS = {
       /\bfailing which\b/i,
       /\bshould you (?:fail|refuse|not)\b/i,
       /\bif you (?:fail|do not|refuse)\b[^.]{0,120}\b(?:will|shall)\b/i,
-      /\b(?:will|shall) be (?:forced|obliged|left with no (?:option|choice|alternative))(?: to| but)?\b/i,
+      /\b(?:will|shall) be (?:forced|left with no (?:option|choice|alternative))(?: to| but)?\b/i,
       /\bno (?:option|choice|alternative) but to\b/i
     ];
     var VO_COERCE_CONCRETE_CUES = [
@@ -12196,20 +12241,28 @@ var DETECTORS = {
     ];
     var VO_COERCE_CUES = VO_COERCE_ADVICE_SHAPED_CUES.concat(VO_COERCE_CONCRETE_CUES);
     var VO_COERCE_BOILER = /\b(?:shall|hereby|notwithstanding|entitled to|in terms of|pursuant to|herein|thereof)\b/i;
-    var VO_COERCE_ADVICE = /\b(?:seek|obtain|take|get)\s+(?:legal\s+|professional\s+)?(?:advice|counsel)\b|\blegal\s+advice\b|\bconsult(?:ing)?\s+(?:our|my)\s+(?:attorneys?|lawyers?)\b/i;
+    var VO_COERCE_ADVICE = /\b(?:seek|obtain|take|get)\s+(?:legal\s+|professional\s+)?(?:advice|counsel)\b|\blegal\s+advice\b|\bconsult(?:ing)?\s+(?:our|my)\s+(?:attorneys?|lawyers?)\b|\bseek\s+(?:redress|relief)\s+(?:through|from|in)\b|\bapproach\s+(?:the\s+)?court\b/i;
+    var VO_COERCE_CONTRACT_CONSENT = /\b(?:consent|signature)\b[^.]{0,100}\brequired\s+by\s+(?:any\s+)?competent\s+authority\b[^.]{0,100}\bobliged\s+to\s+furnish\b/i;
+    var VO_COERCE_STATUTORY_CITATION = /\bsection\s+\d+\s+of\s+the\s+(?:CPA|consumer\s+protection\s+act)\b/i;
+    // Clause numbers ("59.1") contain dots; test citation and prohibition
+    // independently instead of letting a sentence-boundary class split them.
+    var VO_COERCE_STATUTORY_PROHIBITION = /\b(?:must|shall)\s+not\b[\s\S]{0,100}\b(?:coerc\w*|undue\s+influence|pressure|unfair\s+tactics)\b/i;
     var pages = [], examples = [], seenPassages = {};
     for (var cp = 0; cp < textBlocks.length; cp++) {
       var sents = String(textBlocks[cp] || '').split(/[.!?]+\s+/);
       for (var si = 0; si < sents.length; si++) {
         var sen = sents[si].replace(/\s+/g, ' ').trim();
         if (sen.length < 25 || sen.length > 400) continue;
-        if (VO_COERCE_BOILER.test(sen)) continue;
+        // A quoted statutory prohibition records the law, not a party's conduct.
+        if (VO_COERCE_STATUTORY_CITATION.test(sen) && VO_COERCE_STATUTORY_PROHIBITION.test(sen)) continue;
+        if (VO_COERCE_BOILER.test(sen) || voBehaviouralSecondhand(sen)) continue;
         var hit = false;
         for (var ci = 0; ci < VO_COERCE_CUES.length; ci++) { if (VO_COERCE_CUES[ci].test(sen)) { hit = true; break; } }
         if (!hit) continue;
-        if (VO_COERCE_ADVICE.test(sen)) {
-          // Ordinary recourse to lawyers is not coercion. A concrete threat in
-          // the same sentence remains visible on its own evidentiary footing.
+        if (VO_COERCE_ADVICE.test(sen) || VO_COERCE_CONTRACT_CONSENT.test(sen)) {
+          // Ordinary recourse to lawyers/regulators and administrative consent
+          // clauses are not coercion. A concrete threat in the same sentence
+          // remains visible on its own evidentiary footing.
           var independentCue = false;
           for (var ac = 0; ac < VO_COERCE_CONCRETE_CUES.length; ac++) {
             if (VO_COERCE_CONCRETE_CUES[ac].test(sen)) { independentCue = true; break; }
@@ -12905,13 +12958,24 @@ var VO_SECONDARY_REPORT_REF_RE = /Report\s+Reference\s*:\s*VO-/i;
 // case. The 27 Sep 2026 evidence-bundle-2-docs run excluded its first 38
 // pages (an email chain, statements, an affidavit) on those footers alone and
 // then reported that every page had been read.
-var VO_SECONDARY_REPORT_MASTHEAD_RE = /V\s?E\s?R\s?U\s?M\s+O\s?M\s?N\s?I\s?S[\s|\-–—:]{1,40}(?:FORENSIC\s+(?:EVIDENCE\s+)?REPORT|COURT-?\s?READY\s+NARRATIVE|NARRATIVE\s+REPORT)/i;
+var VO_SECONDARY_REPORT_MASTHEAD_RE = /V\s?E\s?R\s?U\s?M\s+O\s?M\s?N\s?I\s?S[\s|\-–—:]{1,40}(?:FORENSIC\s+(?:EVIDENCE\s+)?REPORT|FORENSIC\s+ANALYSIS|COURT-?\s?READY\s+NARRATIVE|NARRATIVE\s+REPORT)/i;
 var VO_SECONDARY_REPORT_TITLE_RE = /\b((?:supplementary|forensic|final|interim|preliminary|investigation)\s+report\s*:\s*[^\n]{10,160})/i; // page text is space-joined, so the title is read from the cue, not from a line start
 var VO_SECONDARY_REPORT_PLACEHOLDER = new Array(11).join('prior verum omnis report page excluded. ');
 function voIsSecondaryReportPage(text) {
   var t = String(text || '');
   if (VO_SECONDARY_REPORT_REF_RE.test(t)) return true;
   return VO_SECONDARY_REPORT_MASTHEAD_RE.test(t);
+}
+function voIsSecondaryAnalysisContinuation(text) {
+  var t = String(text || '');
+  if (/\bDocuments\s+Analysed\b/i.test(t)) return true;
+  // An analytical D1/D2/D3 source key is the continuation of the analysis,
+  // not fresh primary evidence. Exhibit labels alone are common in primary
+  // court pages: require three DISTINCT keys and analytical attribution.
+  var keys = t.match(/\bD[1-9]\d*\b/g) || [], distinct = [];
+  for (var k = 0; k < keys.length; k++) { if (distinct.indexOf(keys[k]) < 0) distinct.push(keys[k]); }
+  if (distinct.length < 3) return false;
+  return /\bD[1-9]\d*\b[^.]{0,80}\b(?:records?|describes?|adds?|concedes?|discloses?|asserts?|bears?|presents?)\b/i.test(t);
 }
 function voExcludeSecondaryReportPages(textBlocks) {
   if (!textBlocks || textBlocks.length < 2) return null;
@@ -12932,6 +12996,15 @@ function voExcludeSecondaryReportPages(textBlocks) {
       var flat = String(textBlocks[i] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       for (var t = 0; t < titles.length; t++) { if (flat.indexOf(titles[t]) >= 0) { isReport[i] = true; break; } }
     }
+  }
+  // A masthead or recognised running title opens an analytical run. Continue
+  // through pages carrying its analytical source key, and stop at the first page that
+  // does not: primary exhibits sealed behind the analysis remain evidence.
+  var analysisOpen = false;
+  for (i = 0; i < textBlocks.length; i++) {
+    if (isReport[i]) { analysisOpen = true; continue; }
+    if (analysisOpen && voIsSecondaryAnalysisContinuation(textBlocks[i])) { isReport[i] = true; continue; }
+    analysisOpen = false;
   }
   // Close one- or two-page gaps inside a run of report pages (an OCR miss on the running title).
   var lastHit = -1;
