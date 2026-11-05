@@ -46,7 +46,7 @@ const json = buildFindingsJson(result, 'bundle.pdf', 'a'.repeat(128), 100, { cas
 
 ok(buildFindingsJson(Object.assign({}, result, { referenceTime: '2026-10-02T20:11:36.233Z' }), 'bundle.pdf', 'a'.repeat(128), 100, {}).analysis_reference_utc === '2026-10-02T20:11:36.233Z' && json.analysis_reference_utc === null,
   'analysis_reference_utc records the instant the engine was given (null when none), so the dated-after note is reproducible');
-ok(json.findings_json_version === '1.10.0', 'contract version bumped to 1.10.0 (wellformedness gate + serial_trace; 1.9.0 cross_document_observations w/ byte-faithful quote_verbatim; 1.8.0 candidate_law; 1.7.0 added brain, display_name, triple_verification, ai_review_note; candidates carry INSUFFICIENT, not a band; 1.6.0 added analysis_reference_utc; 1.5.0 ocr_held; 1.4.0 secondary_capped / ocr_anchored; 1.3.0 review_status / ocr_provenance / ocr_confidence / severity_capped_for_ocr)');
+ok(json.findings_json_version === '1.11.0', 'contract version bumped to 1.11.0 (batch 7a: conduct_ledger sealed in-band + conduct_vs_pleading / benefit_burden / horns structured payloads; 1.10.0 wellformedness gate + serial_trace; 1.9.0 cross_document_observations w/ byte-faithful quote_verbatim; 1.8.0 candidate_law; 1.7.0 added brain, display_name, triple_verification, ai_review_note; candidates carry INSUFFICIENT, not a band; 1.6.0 added analysis_reference_utc; 1.5.0 ocr_held; 1.4.0 secondary_capped / ocr_anchored; 1.3.0 review_status / ocr_provenance / ocr_confidence / severity_capped_for_ocr)');
 
 // v1.9.0 (Sourcery #5, 10 October 2026): cross-document observations are exported
 // to the JSON, each carrying BOTH the display quote and the byte-faithful passage
