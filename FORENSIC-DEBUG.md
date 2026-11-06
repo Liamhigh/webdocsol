@@ -165,14 +165,14 @@ rows above).
 | 1 | Read the file, GPS, device | `voReadFileBytes`, `captureGPS` (15 s hard deadline), `captureDevice` | GPS + Device | GPS never blocks ("GPS declined") |
 | 2 | Engine | `voEnsureForensicScripts`, `voLoadRulePackage` (bounded wait), `runForensicEngine(bytes, pdfDoc, onProgress, { referenceTime })` with on-device OCR through `window.voOcrRescuePages`, then `applyBundleMode`; `aiClassifyDocument` → `/api/v1/ai/classify` runs beside it | Forensic Scan | forensic mode only; a throw becomes `scanFailed`, no text layer `unreadable` |
 | 3 | Hashes, previous seals, commercial check | `computeSHA256` / `computeSHA512`, `detectExistingSeal`, `detectCommercialDocument` | SHA-256, then passing lines on "OpenTimestamps" and "A4 Watermark" | a commercial document stops at the payment gate |
-| 4 | Seal the document | `runSealingPipeline`: `submitToOTS`, QR, `buildSealedPDF` (pages extended, footer), optional password | OpenTimestamps, Clean QR Code, Seal Footer, Finalize, SHA-512 | a calendar failure is recorded; the seal still completes |
+| 4 | Seal the document | `runSealingPipeline`: QR, `buildSealedPDF` (pages extended, footer), optional password/encryption, then `voSubmitDeliveredFileOTS` → `submitToOTS` over SHA-256 of the exact delivered bytes | OpenTimestamps, Clean QR Code, Seal Footer, Finalize, SHA-512 | a calendar failure is recorded; the seal still completes |
 | 5 | AI review | `aiAssessFindings` → `/api/v1/ai/assess` | Finalize (reopens after SHA-512) | forensic mode, scan not failed, at least one engine finding |
 | 6 | Brain 9 sweep | `aiBrain9Sweep` → `/api/v1/ai/sweep` | Finalize | as 5, and page text exists; output stays out of `reportFraudResult` |
 | 7 | Report narrative | `aiNarrateReport` → `/api/v1/ai/narrate`, else `buildLocalNarrative` | Finalize | as 5 |
 | 8 | Certificates | `buildSealCertificate` (Seal document only), `buildAnchorCertificate` (both modes, when a calendar accepted the digest) | Finalize | a failure is logged; the seal is unaffected |
-| 9 | Technical report | `VerumReport.build` → `submitToOTS` → `VerumReport.seal` → `window._voReportPack` | Finalize: "Building forensic report..." | forensic mode only; a throw logs `[VO-REPORT-DEBUG] Report generation failed:` |
+| 9 | Technical report | `VerumReport.build` → `VerumReport.seal` → `voSubmitDeliveredFileOTS` over the sealed report bytes → `window._voReportPack` | Finalize: "Building forensic report..." | forensic mode only; a throw logs `[VO-REPORT-DEBUG] Report generation failed:` |
 | 10 | Findings JSON | `buildFindingsJson` → `window._voFindingsJson` | none | inside stage 9's `try`: no technical report, no JSON |
-| 11 | Court-ready narrative | `aiHumanReport` → `/api/v1/ai/human-report`, `VerumReport.buildHumanReport`, `VerumReport.seal` (tag NARRATIVE REPORT) → `window._voHumanReportPack` | Finalize: "Court-ready narrative: section i of n" | as 5, and stage 9 built |
+| 11 | Court-ready narrative | `aiHumanReport` → `/api/v1/ai/human-report`, `VerumReport.buildHumanReport`, `VerumReport.seal` (tag NARRATIVE REPORT) → `voSubmitDeliveredFileOTS` over its sealed bytes → `window._voHumanReportPack` | Finalize: "Court-ready narrative: section i of n" | as 5, and stage 9 built |
 | 12 | Results and feedback | `showResults`, `voRenderBrain9Recommendations`, `shareAnonymousPatterns` | results panel | feedback is forensic mode only and carries no text |
 
 ### Stage 2 in detail: the engine — `runForensicEngine` (forensic-engine-page.js; the inlined copy runs)

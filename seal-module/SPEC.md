@@ -11,7 +11,8 @@
 > pages (see the end of §10). Version strings in the code do not agree with each other: QR
 > metadata `v: "1.2"`; sealed PDF and sealed report Producer `Verum Omnis Document Sealing
 > Service v1.3.0`; Seal Certificate Producer `v1.2.9`; Anchor Certificate Producer `v1.3.0`;
-> verify page footer `VO-DSS v1.2.7`.
+> verify page footer `VO-DSS v1.2.7`. The delivered-file OpenTimestamps contract below was
+> re-checked against the root pages on 6 November 2026 (ENGINE.md §12.25).
 
 ---
 
@@ -24,17 +25,22 @@ The page lists eight numbered steps plus a Forensic Scan step, which runs only i
 |------|----------|--------------------|
 | 1 | GPS + Device | Reads the file; captures GPS (if the browser allows it) and device info |
 | — | Forensic Scan | Forensic-report mode only: runs the engine on the original bytes, before step 2 |
-| 2 | SHA-256 | Computes the SHA-256 and SHA-512 of the original upload, the seal ID (`VO-` + first 12 hex of the SHA-512, upper case) and the OTS digest (SHA-256 of the 128-character lowercase SHA-512 hex text) |
-| 3 | OpenTimestamps | Commercial-content check, then submits the OTS digest to a.pool.opentimestamps.org, b.pool.opentimestamps.org and a.pool.eternitywall.com in turn (15 s each); the first calendar that accepts is the only one used |
+| 2 | SHA-256 | Computes the SHA-256 and SHA-512 of the original upload and the seal ID (`VO-` + first 12 hex of the SHA-512, upper case) |
+| 3 | OpenTimestamps | Performs the commercial-content check here. The actual calendar submission waits until the final delivered bytes exist after step 6 |
 | 4 | A4 Watermark | Reports the seal-chain check (previous seals read from the Subject); the watermark itself is drawn in step 6 |
-| 5 | Clean QR Code | Builds the verify URL and the QR; identity, GPS and device stay out unless the sealer opts in |
-| 6 | Seal Footer | Restores cropped pages, extends each page with a header band (QR) and a footer band, draws the watermark, writes the Subject, applies any password |
+| 5 | Clean QR Code | Builds the verify URL and the QR with `otsDigestScheme:"delivered-file-sha256"`; identity, GPS and device stay out unless the sealer opts in |
+| 6 | Seal Footer | Restores cropped pages, extends each page with a header band (QR) and a footer band, draws the watermark, writes the Subject with `OTS:DELIVERED-FILE-SHA256`, and applies any password. It then computes SHA-256 of the exact delivered bytes and submits that digest to a.pool.opentimestamps.org, b.pool.opentimestamps.org and a.pool.eternitywall.com in turn (15 s each); the first calendar that accepts is the only one used |
 | 7 | Finalize | Marks the sealed PDF ready. After step 8 the same step reports the optional AI review (forensic mode) and the Seal Certificate (Seal document mode); the Anchor Certificate (when a calendar accepted), the forensic report and the narrative (forensic mode) follow |
 | 8 | SHA-512 | Shows the first 16 hex of the original upload's SHA-512 |
 
+The visible step numbers are a user-interface contract, not permission to timestamp bytes that do
+not yet exist. Execution order is original-upload hashing → QR/sealing → optional encryption →
+delivered-file SHA-256 → calendar submission. For password-protected delivery, the digest covers
+the encrypted bytes actually delivered, not the sender's unprotected copy.
+
 ## 2. SHA-512 as Final Verification
 
-SHA-512 of the original upload, before the seal is applied, is computed in step 2. The footer prefix, the QR payload, the seal ID, the Subject's `ORIG:` field and the OTS digest all derive from it. Step 8 shows it again. It is not the hash of the sealed file: see §8 for the sealed-file hash, and §10 for the delivered file's real SHA-512.
+SHA-512 of the original upload, before the seal is applied, is computed in step 2. The footer prefix, the QR payload, the seal ID and the Subject's `ORIG:` field derive from it. Step 8 shows it again. It is not the hash of the sealed file: see §8 for the sealed-file self-hash, and §10 for the delivered file's real SHA-512. The new OTS digest does **not** derive from this value; it is SHA-256 of the exact delivered file bytes. Legacy seals instead used SHA-256 of the 128-character lowercase original SHA-512 hex text, and verify.html retains that derivation for those seals.
 
 ## 3. Watermark Application
 
@@ -111,8 +117,8 @@ When a previously sealed PDF is re-sealed (e.g., after merging with other docume
 
 ### Chain Storage Format
 ```
-Subject: VO-SEAL2|<SEALED_FILE_SHA512>|<SEAL_ID>|ORIG:<ORIGINAL_SHA512>[|CHAIN:VO-OLD1,VO-OLD2]
-Legacy fallback: VO-SEAL|<ORIGINAL_SHA512>|<SEAL_ID>[|CHAIN:VO-OLD1,VO-OLD2]
+Subject: VO-SEAL2|<SEALED_FILE_SHA512>|<SEAL_ID>|ORIG:<ORIGINAL_SHA512>[|CHAIN:VO-OLD1,VO-OLD2]|OTS:DELIVERED-FILE-SHA256
+Legacy-format fallback for a new seal: VO-SEAL|<ORIGINAL_SHA512>|<SEAL_ID>[|CHAIN:VO-OLD1,VO-OLD2]|OTS:DELIVERED-FILE-SHA256
 ```
 
 | Field | Description |
@@ -120,8 +126,9 @@ Legacy fallback: VO-SEAL|<ORIGINAL_SHA512>|<SEAL_ID>[|CHAIN:VO-OLD1,VO-OLD2]
 | `VO-SEAL2` | Current scheme (sealed-file self-integrity). `VO-SEAL` is the legacy fallback |
 | `SEALED_FILE_SHA512` | SHA-512 of the sealed file computed with this field set to 128 zeros. It never equals `sha512sum` of the delivered file |
 | `SEAL_ID` | `VO-` + first 12 hex of the original SHA-512, upper case |
-| `ORIG:` | Full SHA-512 of the original upload (the value the footer, QR and OTS digest use) |
+| `ORIG:` | Full SHA-512 of the original upload (the value the footer and QR use) |
 | `CHAIN:` | Comma-separated earlier seal IDs, omitted when there are none |
+| `OTS:DELIVERED-FILE-SHA256` | Marker on newly created seals: recompute SHA-256 from the exact delivered bytes. Its absence selects the legacy receipt-resolution rules |
 
 How VO-SEAL2 is made: the Subject is written with a 128-zero placeholder (pdf-lib stores it as UTF-16BE hex), the file is saved with `useObjectStreams: false`, the saved bytes are hashed, and the placeholder is patched in place (same length, so every xref offset stays valid). If the placeholder is not found exactly once, the legacy `VO-SEAL` Subject is written instead. verify.html patches the zeros back and recomputes: a match means the file is byte-identical to what the sealer produced; a file re-saved by another tool gets "Seal Present — Check Not Applicable" (the hash cannot be recomputed), not a tamper verdict. Open with the founder (ENGINE.md §12.14, "Open, with the founder" (a)): the check is self-referential, so an altered copy re-sealed with its own hash also matches; the fix touches the verify contract. The real SHA-512 of the delivered file is printed on the Anchor Certificate (§10).
 
@@ -134,7 +141,7 @@ VERUM OMNIS SEALED ORIGINAL  |  Seal: VO-A1C825E8F00D  |  SHA-512: a1c825e8f00d3
 The label reads `COMMERCIAL SEAL — <CLIENT>` for a commercial seal. `Chain: N prev` appears only when there are earlier seals. The time is the sealing device's local clock with its IANA zone, not UTC. The hash is the first 16 hex of the original upload's SHA-512. The values above are illustrative.
 
 ### Investigation Timeline
-Each re-seal submits its own OTS digest (SHA-256 of that run's input SHA-512 hex) to OpenTimestamps. Each is pending until a Bitcoin block confirms it; once confirmed, it proves that fingerprint existed no later than that block's time (not the sealing device's clock). Together they form a tamper-evident sequence (illustrative block numbers):
+Each new re-seal submits SHA-256 of its own exact delivered file bytes to OpenTimestamps. Each is pending until a Bitcoin block confirms it; once confirmed, it proves that delivered file existed no later than that block's time (not the sealing device's clock). Legacy re-seals instead timestamped SHA-256 of that run's input SHA-512 hex text; those receipts remain valid for their original digest. Together the seals form a tamper-evident sequence (illustrative block numbers):
 
 | Day | Action | Bitcoin block (illustrative) |
 |-----|--------|---------------|
@@ -148,10 +155,10 @@ verify.html shows a "Chain" row ("Chained seal — chains to previous seal VO-OL
 
 Any implementation (web, Android, Firewall) must produce PDFs with:
 1. Seal ID = `VO-` + first 12 hex of the original upload's SHA-512, upper case
-2. Subject `VO-SEAL2|…|ORIG:…[|CHAIN:…]` (or legacy `VO-SEAL|<original SHA-512>|<seal ID>[|CHAIN:…]`) as in §8
+2. Subject `VO-SEAL2|…|ORIG:…[|CHAIN:…]|OTS:DELIVERED-FILE-SHA256` for new seals (or the legacy-format fallback with the same OTS marker) as in §8. Historical Subjects without the marker remain accepted
 3. A footer on every page with the seal ID and the first 16 hex of the original SHA-512 (the full hash is in the Subject and the QR payload)
-4. A QR linking to `https://verumglobal.foundation/verify.html?h=<first 32 hex>&m=<encodeURIComponent(base64(UTF-8 JSON))>`, payload `{v:"1.2", t:<ms since epoch>, type:"private"|"commercial", sha512, otsDigest, otsStatus, sealId, chain?:[ids]}`. `id{n,id,a,e}`, `gps`, `acc` and `dev` appear only on the sealer's opt-in, and parsers must accept any field being absent
-5. OTS digest = SHA-256 of the 128-character lowercase SHA-512 hex text (not of the file). The `.ots` receipt is a detached proof over that digest; to run `ots verify` yourself, use a file whose bytes are exactly that hex text, with no newline
+4. A QR linking to `https://verumglobal.foundation/verify.html?h=<first 32 hex>&m=<encodeURIComponent(base64(UTF-8 JSON))>`, payload `{v:"1.2", t:<ms since epoch>, type:"private"|"commercial", sha512, otsDigestScheme:"delivered-file-sha256", sealId, chain?:[ids]}` for new seals. The QR is built before calendar submission, so it cannot carry the final delivered-file digest or status. Parsers must also accept legacy `otsDigest` and `otsStatus`; `id{n,id,a,e}`, `gps`, `acc` and `dev` appear only on the sealer's opt-in, and parsers must accept any field being absent
+5. New OTS digest = SHA-256 of the exact delivered file bytes, calculated after sealing and optional encryption. The detached `.ots` receipt is a proof over that digest, so the delivered PDF (or encrypted delivery) and receipt can be uploaded directly to opentimestamps.org. A final file cannot contain its own final raw-file hash; the digest belongs in the detached receipt and anchor certificate and is recomputed by the verifier. For legacy seals only, the digest was SHA-256 of the 128-character lowercase SHA-512 hex text; to verify those receipts manually, use a file whose bytes are exactly that hex text, with no newline
 6. The watermark at 20% opacity (or platform-equivalent)
 7. Seal chains detected and kept when re-sealing (v1.2+)
 
@@ -159,10 +166,10 @@ Last checked through the GitHub API on 3 October 2026: the Android app (`Liamhig
 
 ## 10. What else a seal produces, and what verify.html reads
 
-- **Seal Certificate** (Seal document mode only): one page, Subject `SEAL-CERT|<original SHA-512>|<seal ID>`, file `<name>-seal-certificate.pdf`; it carries no personal details. The PRIVATE variant (`<name>-seal-certificate-PRIVATE-do-not-share.pdf`) adds identity, address, GPS and device. It is built whenever any of them was recorded; the page always records device data, so in practice it is built on every Seal document run.
-- **Anchor Certificate** (both modes, only when a calendar accepted the digest): Subject `ANCHOR-CERT|<OTS digest>|<seal ID>`, saved without object streams, file `<name>-<seal ID>-anchor-certificate.pdf`. It labels the original upload SHA-512 ("BEFORE THE SEAL WAS APPLIED"), the delivered file's real SHA-512 (the protected copy when one was sent) and the OTS digest ("SHA-256 OF THE ORIGINAL SHA-512 HEX TEXT"). It says the Bitcoin confirmation was pending, and that a confirmed block proves existence no later than that block's time.
-- **.ots receipt** (`<name>-<seal ID>.ots`): offered only when the submission succeeded; it is the calendar's pending proof over the OTS digest (`ots-proof.js`, `buildFileFromFragment`).
-- **Sealed forensic report and court-ready narrative** (forensic mode): `VO-SEAL2|…|<seal ID>|ORIG:<pre-seal report SHA-512>`, with their own QR panel and footer layout (`VerumReport.seal`; `web/watermark-spec.md`, "Other layouts").
+- **Seal Certificate** (Seal document mode only): one page, Subject `SEAL-CERT|<original SHA-512>|<seal ID>|OTS:<OTS digest>` for new seals, file `<name>-seal-certificate.pdf`; it carries no personal details. The certificate is detached, so recording the explicit digest creates no self-reference and prevents a legacy hash-of-hash guess. Historical three-field certificates remain accepted and use legacy resolution. Raw-media certificates likewise carry their actual raw-byte digest. The PRIVATE variant (`<name>-seal-certificate-PRIVATE-do-not-share.pdf`) adds identity, address, GPS and device. It is built whenever any of them was recorded; the page always records device data, so in practice it is built on every Seal document run.
+- **Anchor Certificate** (both modes, only when a calendar accepted the digest): Subject `ANCHOR-CERT|<OTS digest>|<seal ID>`, saved without object streams, file `<name>-<seal ID>-anchor-certificate.pdf`. It labels the original upload SHA-512 ("BEFORE THE SEAL WAS APPLIED"), the delivered file's real SHA-512 (the protected copy when one was sent) and, for new seals, the OTS digest ("SHA-256 OF THE EXACT DELIVERED FILE BYTES"). It says the Bitcoin confirmation was pending, and that a confirmed block proves existence no later than that block's time. Existing legacy certificates retain their original hash-of-hash label and are not rewritten.
+- **.ots receipt** (`<name>-<seal ID>.ots`): offered only when the submission succeeded; it is the calendar's pending proof over the OTS digest (`ots-proof.js`, `buildFileFromFragment`). For new seals, upload the exact delivered file and this receipt together at opentimestamps.org; the original pre-seal upload is not needed.
+- **Sealed forensic report and court-ready narrative** (forensic mode): `VO-SEAL2|…|<seal ID>|ORIG:<pre-seal report SHA-512>|OTS:DELIVERED-FILE-SHA256`, with their own QR panel and footer layout (`VerumReport.seal`; `web/watermark-spec.md`, "Other layouts"). Each report is sealed before its exact sealed bytes are submitted to OpenTimestamps.
 - **Protected input**: a PDF that is already encrypted is sealed as-is (no overlay, no Subject); the certificates carry the seal record.
 - **verify.html** recognises `VO-SEAL2`, `VO-SEAL`, `SEAL-CERT`, `ANCHOR-CERT`, the older appended-comment block (`%%VO_SEAL_START`) and an OTS-format footer (shown as "Seal Present", never "verified"). A certificate Subject never overrides a seal the raw scan found in the same bytes.
 - **Seal Guard** (`seal-guard.js`) refuses to release any PDF without a seal marker. No forensic overlay is ever drawn on the original (the pristine seal doctrine in `buildSealedPDF`).

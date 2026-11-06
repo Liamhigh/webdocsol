@@ -87,25 +87,27 @@ User chooses a PDF (or voice notes / a WhatsApp chat export .zip)
        |    deterministic engine on this device (CT01-CT46, D01-D40, signed rule package),
        |    with the AI classification running beside it
        v
-[Hash] SHA-512 of the file (Verum fingerprint); seal ID = VO- + first 12 hex
-       OTS digest = SHA-256 of the SHA-512 hex string (a voice note: SHA-256 of its bytes)
+[Hash] SHA-512 of the original upload (Verum fingerprint); seal ID = VO- + first 12 hex
        |
        +--> previous-seal detection (Subject VO-SEAL2|... / VO-SEAL|... -> CHAIN)
        +--> commercial keyword check (payment gate, see below)
        v
-[OTS]  submit the digest to OpenTimestamps calendars (pending until a Bitcoin block confirms)
-       |
-       v
 [PDF]  QR -> verify.html?h=<first 32 hex of SHA-512>&m=<base64 JSON>
+       QR and Subject name otsDigestScheme = delivered-file-sha256, not the final digest
        each page extended: navy header band (QR top right, verify hint) and footer band
        (VERUM OMNIS SEALED ORIGINAL | Seal | SHA-512 prefix | device time | n/total | Chain)
        watermark over the page at 20% opacity; original content keeps its coordinates
        Pristine Seal Doctrine: no verdict, fraud or analysis overlays on the original
        optional password: cover page + standard PDF encryption
        |
+       v
+[OTS]  SHA-256 of the exact delivered bytes (encrypted bytes when protected), submitted
+       after sealing/encryption; pending until a Bitcoin block confirms
+       |
        +--> forensic mode only: AI review through the Worker (assess, Brain 9 sweep,
        |    court-ready narrative), then the sealed technical report, the sealed
-       |    court-ready narrative and findings JSON 1.9.0
+       |    court-ready narrative and findings JSON 1.9.0; each report's OTS digest
+       |    is likewise computed after its own sealing
        v
 [Out]  both modes: sealed PDF, .ots receipt, anchor certificate (if a calendar accepted)
        Seal document only: Seal Certificate (+ PRIVATE certificate)
@@ -143,19 +145,25 @@ the Android app (`Liamhigh/1verum`) and the fraud firewall (`Liamhigh/firebase`)
   "t": 1720934400000,
   "type": "private",
   "sha512": "128-char SHA-512 of the file as uploaded",
-  "otsDigest": "64-char SHA-256 of that SHA-512 hex",
-  "otsStatus": true,
+  "otsDigestScheme": "delivered-file-sha256",
   "sealId": "VO-XXXXXXXXXXXX",
   "chain": ["VO-PREVIOUS1"]
 }
 ```
 
-This is the public payload (`buildQrPayload`), unchanged since the available history begins
-(2026-08-21): anyone holding the sealed document can read it. Only with the opt-in `Include
-identity + GPS in the public QR code` (default off) are `id` {n, id, a, e}, `gps`, `acc` and
-`dev` added. Otherwise they appear only on the PRIVATE Seal Certificate (since #171, 2026-08-22,
-which took them off the shareable certificate). `lock`, `org` and the old `fraud*` fields are never in the QR. Parsers must tolerate
-missing and unknown keys.
+This is the public payload (`buildQrPayload`): anyone holding the sealed document can read it.
+For new PDF seals the QR is written before the final file exists, so it carries the scheme marker
+but deliberately no final OTS digest or submission status; the verifier recomputes SHA-256 from
+the delivered bytes. For a standard encrypted PDF, the verifier cannot inspect the locked seal
+metadata or receipt scheme without the password; it says so explicitly and tries the new exact-encrypted-byte
+digest as a candidate. An older encrypted delivery may require the explicit legacy digest on its
+anchor certificate. Legacy PDF payloads instead carry `otsDigest` (SHA-256 of the original
+SHA-512 hex text) and `otsStatus`, and remain verifiable. Voice notes are delivered unchanged and
+still carry their raw-byte `otsDigest` directly. Only with the opt-in `Include identity + GPS in
+the public QR code` (default off) are `id` {n, id, a, e}, `gps`, `acc` and `dev` added. Otherwise
+they appear only on the PRIVATE Seal Certificate (since #171, 2026-08-22, which took them off the
+shareable certificate). `lock`, `org` and the old `fraud*` fields are never in the QR. Parsers must
+tolerate missing and unknown keys.
 
 | Field | Type | Required | Description |
 |-------|------|----------|-------------|
@@ -163,8 +171,9 @@ missing and unknown keys.
 | `t` | number | Yes | Seal time from the device clock, Unix ms — what the device said, not a proof; once a Bitcoin block confirms the OpenTimestamps submission, that block proves the file existed no later than its time |
 | `type` | string | Yes | `private` or `commercial` |
 | `sha512` | string | When available | SHA-512 of the file as uploaded (128 hex) |
-| `otsDigest` | string | When available | SHA-256 of the `sha512` hex string — the digest submitted to OpenTimestamps (a voice note's is the SHA-256 of its bytes) |
-| `otsStatus` | boolean | When available | Whether an OpenTimestamps calendar accepted the digest |
+| `otsDigest` | string | Legacy PDFs and voice notes | Legacy PDF: SHA-256 of the original `sha512` hex text. Voice note: SHA-256 of its unchanged bytes. New PDF QRs omit this self-referential final digest; the anchor certificate and detached receipt carry it, and the verifier recomputes it |
+| `otsDigestScheme` | string | New PDF seals | `delivered-file-sha256`: the receipt digest is SHA-256 of the exact delivered bytes, including encryption when used. The PDF Subject also carries `OTS:DELIVERED-FILE-SHA256`, so verification still works if the QR was omitted |
+| `otsStatus` | boolean | Legacy PDFs and voice notes | Whether an OpenTimestamps calendar accepted the digest. New PDF QRs are sealed before submission, so their runtime status belongs to the receipt/certificate instead |
 | `sealId` | string | When available | `VO-` + first 12 hex of `sha512`, upper case |
 | `chain` | string[] | No | Previous seal IDs, when the input was already sealed |
 | `id.n` | string | No — opt-in only (default off) | Sender full name |
@@ -176,7 +185,10 @@ missing and unknown keys.
 | `dev` | string | No — opt-in only (default off) | Platform\|Cores\|Timezone |
 
 There is no fraud score in any field (PD1). The sealed file's own SHA-512 is not in the QR: it is in
-the PDF's `VO-SEAL2` Subject (see Seal Chain of Custody).
+the PDF's `VO-SEAL2` Subject (see Seal Chain of Custody). Likewise, a new delivered-file OTS digest
+is not embedded in the bytes it hashes; upload the exact delivered PDF and its `.ots` receipt
+together to an OpenTimestamps verifier. Existing legacy hash-of-hash receipts remain supported and
+must not be rewritten.
 
 ---
 
@@ -247,7 +259,7 @@ Day 5:  Merge + add evidence         -> VO-B (CHAIN:VO-A)
 Day 12: Add witness statements       -> VO-C (CHAIN:VO-A,VO-B)
 ```
 
-Each seal makes its own OpenTimestamps submission, which stays pending until a Bitcoin block confirms it; once confirmed, that anchor proves the version existed no later than the block. The new seal records the earlier seal IDs in its Subject (`VO-SEAL2|<sealed-file SHA-512>|<seal ID>|ORIG:<original SHA-512>|CHAIN:VO-A,VO-B`), its footer (`Chain: n prev`) and its QR (`chain`), and the verify page names them as text (they are not links). Each earlier version is verified by opening its own file there. The chain is tamper-evident, not immutable; what weight it carries is for the court.
+Each seal makes its own OpenTimestamps submission, which stays pending until a Bitcoin block confirms it; once confirmed, that anchor proves the version existed no later than the block. The new seal records the earlier seal IDs in its Subject (`VO-SEAL2|<sealed-file SHA-512>|<seal ID>|ORIG:<original SHA-512>|CHAIN:VO-A,VO-B|OTS:DELIVERED-FILE-SHA256`), its footer (`Chain: n prev`) and its QR (`chain`), and the verify page names them as text (they are not links). Each earlier version is verified by opening its own file there. The chain is tamper-evident, not immutable; what weight it carries is for the court.
 
 `seal-module/SPEC.md` §8 has the full chain format: the current `VO-SEAL2|<sealed-file SHA-512>|<seal ID>|ORIG:<original SHA-512>[|CHAIN:…]` Subject and the legacy `VO-SEAL|<original SHA-512>|<seal ID>[|CHAIN:…]`, now written only when the VO-SEAL2 hash cannot be patched in (`verify.html` `parseSealSubject` reads both).
 

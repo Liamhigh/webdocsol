@@ -827,7 +827,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**51 suites · 3393 assertions** (counted 2026-11-06 after the Batch 7c court corrections, §4.20; recount after any test change).
+**52 suites · 3424 assertions** (counted 2026-11-06 after the Batch 7d delivered-file OpenTimestamps correction, §12.25; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -879,6 +879,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `batch7-conduct-ledger.test.mjs` | 43 | Conduct-ledger extraction, CT59/60/61 dispatch, thresholds and structured payloads |
 | `batch7b-greensky-corrections.test.mjs` | 42 | Greensky output corrections (§4.19): calendar validity, completed-payment/payee semantics, direct-source discipline, tensions, boilerplate, behavioural deduplication, quotation boundaries and per-candidate legal-lane declarations |
 | `batch7c-court-corrections.test.mjs` | 38 | Court-bundle corrections (§4.20): whole-word admissions, date/reference discipline, legal-act nouns, actual billing, factive denial scope, existing burdens, entity status, registry fields, prior-analysis exclusion, behavioural source quality and ownership context |
+| `batch7d-ots-delivered-bytes.test.mjs` | 31 | Delivered-file OpenTimestamps receipts (§12.25): real detached-receipt digest bytes, post-seal/encrypted ordering, QR and Subject scheme markers, direct PDF+receipt compatibility, and legacy QR/metadata/ORIG resolution |
 | `engine-perf.test.mjs` | 5 | Per-page extraction does not re-parse the whole PDF |
 
 ---
@@ -1974,7 +1975,8 @@ finding would be a secondary-source lead (item 6).
     forged", labelled the original upload's hash "DOCUMENT SHA-512" and said it was "computed from
     these exact bytes", and sent the reader to a trust-free check against the blockchain. It now
     labels each fingerprint by the bytes it belongs to (original upload; the sealed file as
-    delivered, newly printed; the OTS digest as SHA-256 of the original SHA-512 hex text), says the
+    delivered, newly printed; the then-current legacy OTS digest as SHA-256 of the original
+    SHA-512 hex text — superseded for new seals by §12.25's delivered-file digest), says the
     Bitcoin block proves existence no later than its time and not the device clock, and says which
     file to upload for which check — the sealed PDF (the unprotected copy, opened with its password
     first, when a protected copy was sent) for the integrity check, the certificate itself for the
@@ -2631,6 +2633,53 @@ fixed test-first (the #2 case was pinned red, then made green):
 The test runner (`tests/run-all.js`) now prints its OWN authoritative PASS/FAIL per
 suite from the process exit code (and signal), so a suite's self-printed banner is
 never what pass/fail is read from.
+
+### 12.25 Delivered-file OpenTimestamps receipts (2026-11-06)
+
+**The interoperability defect.** Legacy PDF seals submitted
+`SHA-256(UTF-8(original SHA-512 lowercase hex text))`. The detached receipt was
+internally consistent with that formula, but opentimestamps.org quite correctly
+reported `File does not match original` when given the sealed PDF: direct
+OpenTimestamps verification expects `SHA-256(exact uploaded file bytes)`. This
+was a verification-method mismatch, not evidence that the historical PDF had
+changed. Existing sealed PDFs, certificates and receipts remain immutable and
+legacy verification remains supported.
+
+**The forward correction.** New document and report seals call
+`voSubmitDeliveredFileOTS` only after their final bytes exist. For the main
+document that means after VO-SEAL2 and after optional encryption, using the
+encrypted bytes when those are what the user receives. The technical report,
+court-ready narrative and standalone forensic narrative follow the same rule
+after their own sealing. A final PDF cannot contain its own final raw-file
+hash, so its pre-seal QR carries `otsDigestScheme: delivered-file-sha256` and
+its Subject carries `OTS:DELIVERED-FILE-SHA256`, not the digest. The digest is
+computed afterwards, recorded in the anchor certificate and receipt, and
+recomputed by `verify.html` from the uploaded delivered bytes. For `.voice`,
+seal inspection uses the decrypted PDF while OTS verification hashes the
+original encrypted container. A standard encrypted PDF cannot expose its seal
+Subject without the password; the verifier requires pdf.js to confirm that a
+password is needed, reports that seal inspection is locked rather than claiming
+no seal or tampering, and tries the new raw-encrypted-byte digest only as a
+candidate. Older encrypted deliveries may require the explicit legacy digest on
+their anchor certificate. The anchor certificate labels the digest
+`SHA-256 OF THE EXACT DELIVERED FILE BYTES`; a new PDF plus its `.ots` receipt
+can therefore be uploaded directly to opentimestamps.org.
+
+**Compatibility boundary.** The explicit new marker takes precedence and never
+silently falls back to the legacy formula when delivered bytes are unavailable.
+Without that marker, matching-QR and embedded legacy digests retain precedence,
+then the old ORIG/embedded SHA-512 derivation runs exactly as before. Anchor
+certificates remain detached records carrying their explicit digest, which takes
+precedence over any matching document QR. New Seal Certificates also carry the
+actual submitted digest in an optional `OTS:` Subject field; historical three-field
+certificates retain legacy resolution. A calendar 404 is presented as no confirmed
+proof found—pending or not submitted—rather than proof of submission, so an
+unprotected sender copy cannot create a false perpetual-pending claim. Voice
+notes were already timestamped as unchanged raw bytes and are unchanged by this
+correction. The older `seal-module/web/` pages are non-live snapshots and were
+not rewritten. `tests/batch7d-ots-delivered-bytes.test.mjs` pins real receipt
+bytes, all four post-seal pipelines, password delivery, both metadata markers,
+and every legacy resolution path.
 
 ## 13. The court-ready narrative (the "human report")
 

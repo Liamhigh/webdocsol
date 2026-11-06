@@ -58,7 +58,7 @@ The website is the centre of gravity: **all document verification happens at the
 - **User** state is durable in exactly three places:
   1. **the sealed PDF itself**: self-describing (SHA-512 footer, verification QR, embedded metadata);
   2. **the Bitcoin blockchain**, through the OpenTimestamps anchor. Once a block confirms, it
-     proves the fingerprint of the original upload existed no later than that block's time.
+     proves the exact fingerprint committed by the receipt existed no later than that block's time.
      Until then the public calendars hold a pending commitment and the sealer holds a pending
      receipt;
   3. **the user's own device**: the Android encrypted vault (`1verum`). On the website the
@@ -73,9 +73,13 @@ The website is the centre of gravity: **all document verification happens at the
   this repo). It runs in the reader's browser, and no Verum Omnis server holds a record of any seal.
 - It makes two checks. **Integrity:** for a VO-SEAL2 seal it restores the hash placeholder and
   recomputes SHA-512 over the sealed file. A match means the file has not changed since that seal
-  was written. **Time:** it takes the OpenTimestamps digest of the original upload (the SHA-256 of
-  its SHA-512 hex text) and asks the three public calendars, which are third-party servers, for
-  the upgraded proof. It shows "confirmed" only on a parsed Bitcoin block attestation, which
+  was written. **Time:** for a new seal it recomputes SHA-256 over the exact delivered bytes; for
+  a legacy seal it keeps the old digest derivation (SHA-256 of the original upload's SHA-512 hex
+  text). It asks the three public calendars, which are third-party servers, for the upgraded proof.
+  A standard encrypted PDF's seal metadata and receipt scheme are locked, so the page says
+  inspection is locked—not that no seal exists. It tries the new raw-encrypted-byte digest as a
+  candidate; older encrypted deliveries may require the explicit digest on their anchor certificate.
+  It shows "confirmed" only on a parsed Bitcoin block attestation, which
   proves the fingerprint existed no later than that block's time. A check that relies on no
   calendar needs an OpenTimestamps client run against a Bitcoin node.
 - **The limit, open with the founder** (`ENGINE.md` §12.14, "Open, with the founder" (a)): the
@@ -92,11 +96,12 @@ The website is the centre of gravity: **all document verification happens at the
   carries five inlined scripts (engine, reports, seal guard, OpenTimestamps, PDF encryption) and
   makes the hashes, the forensic scan, the reports and the seal on the device. `verify.html`
   checks seals on the device.
-- **OpenTimestamps.** The seal page posts the digest (the SHA-256 of the original upload's
-  SHA-512 hex; for a voice note, the SHA-256 of its bytes) straight to three public calendars:
-  `a.pool.opentimestamps.org`, `b.pool.opentimestamps.org` and `a.pool.eternitywall.com`. The
-  Worker is not in that path. `verify.html` later asks the same calendars for the
-  Bitcoin-upgraded proof.
+- **OpenTimestamps.** After sealing and optional encryption, the seal page posts SHA-256 of the
+  exact delivered PDF bytes straight to three public calendars: `a.pool.opentimestamps.org`,
+  `b.pool.opentimestamps.org` and `a.pool.eternitywall.com`. Reports follow the same post-seal
+  rule. Legacy PDF receipts used SHA-256 of the original upload's SHA-512 hex and remain
+  verifiable; voice notes still use SHA-256 of their unchanged bytes. The Worker is not in that
+  path. `verify.html` later asks the same calendars for the Bitcoin-upgraded proof.
 - **The Worker `webdocsol`** (`wrangler.toml`: `main = "worker/verum-rules.js"`) serves the
   website from Workers Static Assets. If an asset is missing, it falls back to the `main` branch
   on `raw.githubusercontent.com` and then to the legacy Pages origin (`worker/static-proxy.js`);

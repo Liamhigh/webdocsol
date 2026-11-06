@@ -30,7 +30,7 @@ The app's own build files are the authority; these versions can drift. There is 
 
 ## Seal format (must match the website)
 
-Seal ID `VO-` + first 12 hex of the original SHA-512, upper case. Subject per `../SPEC.md` §8. OTS digest = SHA-256 of the 128-character lowercase SHA-512 hex text. As last checked (3 Oct 2026, fc613de), the app writes the legacy `VO-SEAL|SHA512|SEAL_ID[|CHAIN:…]` Subject and scales content to 88%; the website writes `VO-SEAL2` and no longer scales. verify.html reads both.
+Seal ID `VO-` + first 12 hex of the original SHA-512, upper case. Subject per `../SPEC.md` §8. New seals must use `OTS:DELIVERED-FILE-SHA256` and submit SHA-256 of the exact delivered file bytes after sealing and any encryption. Legacy OTS digests were SHA-256 of the 128-character lowercase SHA-512 hex text and remain verifiable; do not rewrite their receipts. As last checked (3 Oct 2026, fc613de), the app writes the legacy `VO-SEAL|SHA512|SEAL_ID[|CHAIN:…]` Subject and scales content to 88%; the website writes `VO-SEAL2` and no longer scales. verify.html reads both.
 
 ## Chunked Extraction (Memory Management)
 

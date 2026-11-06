@@ -2463,11 +2463,11 @@ function secMethodology(ctx, data) {
 
   ctx.subHeading('OpenTimestamps status');
   if (data.ots && data.ots.submitted) {
-    ctx.bullet('Source document digest: submitted to OpenTimestamps calendar (' + (data.ots.calendar || 'public calendar') + ') — Bitcoin confirmation PENDING. Not yet anchored.', { size: 9.5 });
+    ctx.bullet('Source document delivered-file digest: submitted to OpenTimestamps calendar (' + (data.ots.calendar || 'public calendar') + ') — Bitcoin confirmation PENDING. Not yet anchored.', { size: 9.5 });
   } else {
-    ctx.bullet('Source document digest: OpenTimestamps submission OFFLINE — calendar unreachable; the SHA-256 digest was recorded for retry.', { size: 9.5 });
+    ctx.bullet('Source document delivered-file digest: OpenTimestamps submission OFFLINE — calendar unreachable; the SHA-256 digest was recorded for retry.', { size: 9.5 });
   }
-  ctx.bullet('This report is itself sealed under VO-DSS after generation: per-page seal footer, verification QR, and PDF Subject metadata VO-SEAL2|SEALED-FILE-SHA-512|SEAL_ID|ORIG:REPORT-SHA-512 (the sealed-file hash covers the final bytes of this PDF; ORIG preserves the pre-seal report fingerprint). The fingerprint printed in the page footer below is that pre-seal (ORIG) fingerprint; the sealed-file fingerprint is in the PDF\'s seal metadata.', { size: 9.5 });
+  ctx.bullet('This report is itself sealed under VO-DSS after generation: per-page seal footer, verification QR, and PDF Subject metadata VO-SEAL2|SEALED-FILE-SHA-512|SEAL_ID|ORIG:REPORT-SHA-512|OTS:DELIVERED-FILE-SHA256 (the VO-SEAL2 hash covers the final bytes with its placeholder restored; ORIG preserves the pre-seal report fingerprint). The fingerprint printed in the page footer below is that pre-seal (ORIG) fingerprint. After sealing, the report\'s OpenTimestamps digest is computed as SHA-256 of the exact sealed PDF bytes, so a detached .ots receipt carrying that digest verifies directly with the delivered PDF.', { size: 9.5 });
   ctx.gap(6);
 
   ctx.para('Verum Omnis  |  verumglobal.foundation  |  Verify this report at verumglobal.foundation/verify.html', { size: 8.5, color: GRAY });
@@ -5125,7 +5125,9 @@ async function build(opts) {
 // are compressed/pixel data), so they keep carrying the report's pre-seal
 // hash; only the Subject carries the sealed-file hash. Documented split:
 //   Subject   -> integrity of the sealed file (VO-SEAL2, self-verifiable)
-//   QR/footer -> integrity + time of the report content (OTS-anchored)
+//   QR/footer -> original report fingerprint + delivered-file OTS scheme
+// The caller submits OTS only after these final bytes exist; the receipt's
+// SHA-256 therefore verifies directly against the delivered sealed PDF.
 var VO_SEAL2_PREFIX = 'VO-SEAL2|';
 var VO_HASH_PLACEHOLDER = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
 
@@ -5252,8 +5254,10 @@ async function seal(reportBytes, sealOpts) {
   try { pdf.setTitle((sealOpts.sourceName || 'document') + (sealOpts.titleSuffix || ' — Sealed Forensic Report')); } catch (e) {}
   try { pdf.setAuthor('Verum Omnis'); } catch (e) {}
   // VO-SEAL2: placeholder sealed-file hash first (patched post-save); ORIG:
-  // preserves the report's pre-seal hash (the OTS-anchored fingerprint).
-  try { pdf.setSubject(VO_SEAL2_PREFIX + VO_HASH_PLACEHOLDER + '|' + sealId + '|ORIG:' + sha512); } catch (e) {}
+  // preserves the report's pre-seal hash. The explicit marker selects OTS over
+  // the final delivered bytes rather than the legacy original-hash hex text.
+  var otsSubjectTag = sealOpts.otsDigestScheme === 'delivered-file-sha256' ? '|OTS:DELIVERED-FILE-SHA256' : '';
+  try { pdf.setSubject(VO_SEAL2_PREFIX + VO_HASH_PLACEHOLDER + '|' + sealId + '|ORIG:' + sha512 + otsSubjectTag); } catch (e) {}
   try { pdf.setKeywords(['verum', 'seal', 'forensic-report', 'v2', sha512.substring(0, 16)]); } catch (e) {}
   try { pdf.setProducer('Verum Omnis Document Sealing Service v1.3.0'); } catch (e) {}
   try { pdf.setCreationDate(now); } catch (e) {}
@@ -5270,8 +5274,9 @@ async function seal(reportBytes, sealOpts) {
   } catch (eV2) {
     console.warn('VerumReport.seal: VO-SEAL2 save failed, falling back to legacy format:', eV2 && eV2.message ? eV2.message : eV2);
   }
-  // Legacy fallback (pre-v1.3 format): Subject hash covers the pre-seal report.
-  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId); } catch (e) {}
+  // Legacy fallback (pre-v1.3 format): Subject hash covers the pre-seal report;
+  // an explicit marker still selects the new delivered-file receipt scheme.
+  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + otsSubjectTag); } catch (e) {}
   try { pdf.setKeywords(['verum', 'seal', 'forensic-report', sha512.substring(0, 16)]); } catch (e) {}
   return await pdf.save();
 }

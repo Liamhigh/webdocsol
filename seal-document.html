@@ -481,9 +481,9 @@
   <div class="pipeline" id="pipeline">
     <h3>Sealing Pipeline</h3>
     <div class="step" id="step1"><div class="status pending">&#9675;</div><div class="label"><strong>GPS + Device</strong> — Capturing location &amp; device fingerprint</div><div class="detail" id="detail1"></div></div>
-    <div class="step" id="step2"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-256</strong> — Computing hash for OpenTimestamps</div><div class="detail" id="detail2"></div></div>
+    <div class="step" id="step2"><div class="status pending">&#9675;</div><div class="label"><strong>SHA-256</strong> — Computing original-upload hash</div><div class="detail" id="detail2"></div></div>
     <div class="step" id="stepFraud"><div class="status pending">&#9675;</div><div class="label"><strong>Forensic Scan</strong> — Detecting contradictions in the document</div><div class="detail" id="detailFraud"></div></div>
-    <div class="step" id="step3"><div class="status pending">&#9675;</div><div class="label"><strong>OpenTimestamps</strong> — Submitting to calendar servers</div><div class="detail" id="detail3"></div></div>
+    <div class="step" id="step3"><div class="status pending">&#9675;</div><div class="label"><strong>OpenTimestamps</strong> — Submitting delivered-file digest</div><div class="detail" id="detail3"></div></div>
     <div class="step" id="step4"><div class="status pending">&#9675;</div><div class="label"><strong>A4 Watermark</strong> — Full-page background at 20% opacity</div><div class="detail" id="detail4"></div></div>
     <div class="step" id="step5"><div class="status pending">&#9675;</div><div class="label"><strong>Clean QR Code</strong> — Encoding hash + seal metadata (identity stays private)</div><div class="detail" id="detail5"></div></div>
     <div class="step" id="step6"><div class="status pending">&#9675;</div><div class="label"><strong>Seal Footer</strong> — Hash + timestamp on every page</div><div class="detail" id="detail6"></div></div>
@@ -510,7 +510,7 @@
       <canvas id="qrPreview" width="220" height="220" style="background:white; padding:16px; border-radius:12px;"></canvas>
       <p id="qrPreviewNote">Clean QR — no border, no interfering box. Scans instantly.</p>
     </div>
-    <div class="hash-row"><label>SHA-256 (OpenTimestamps)</label><div class="hash-display" id="sha256Display"></div></div>
+    <div class="hash-row"><label>SHA-256 (original upload)</label><div class="hash-display" id="sha256Display"></div></div>
     <div class="hash-row"><label>SHA-512 (Verum Fingerprint)</label><div class="hash-display" id="sha512Display"></div></div>
     <div class="hash-row"><label>Seal ID</label><div class="hash-display" id="sealIdDisplay" style="color:#D4A843;"></div></div>
     <div class="hash-row" id="deliveredHashRow" style="display:none;"><label>Delivered File SHA-512 (the exact file you downloaded — checkable with any SHA-512 tool, e.g. sha512sum)</label><div class="hash-display" id="deliveredHashDisplay" style="font-size:11px;"></div></div>
@@ -533,7 +533,7 @@
     <div class="grid">
       <div class="item"><h4>&#128220; A4 Watermark Background</h4><p>The full-page Verum Omnis watermark is applied at 20% opacity behind your content. Your original document text is preserved exactly — the QR code sits in the natural page margin.</p></div>
       <div class="item"><h4>&#128241; Clean QR Code</h4><p>QR sits in the top-right margin with white background panel — never covers document text. Original document layout is fully preserved. Scans instantly with any phone.</p></div>
-      <div class="item"><h4>&#128274; Dual Hash</h4><p>SHA-256 for OpenTimestamps blockchain anchoring. SHA-512 as the Verum forensic fingerprint. Two independent hashes, zero trust required.</p></div>
+      <div class="item"><h4>&#128274; Dual Hash</h4><p>SHA-256 fingerprints the original upload and the exact delivered file for OpenTimestamps. SHA-512 is the Verum forensic fingerprint. Two independent hashes, zero trust required.</p></div>
       <div class="item"><h4>&#9939; Bitcoin Blockchain</h4><p>OpenTimestamps anchors the SHA-256 hash into Bitcoin. Once confirmed (~1-2 hours), the timestamp is permanently and independently verifiable.</p></div>
       <div class="item"><h4>&#128100; Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) is written into your private Seal Certificate for affidavit pre-fill and chain of custody — never into the public QR code unless you explicitly opt in.</p></div>
       <div class="item"><h4>&#128205; GPS + Device</h4><p>Automatic geolocation and device fingerprint capture. Proves where and from what device the seal was applied.</p></div>
@@ -3188,11 +3188,11 @@ function secMethodology(ctx, data) {
 
   ctx.subHeading('OpenTimestamps status');
   if (data.ots && data.ots.submitted) {
-    ctx.bullet('Source document digest: submitted to OpenTimestamps calendar (' + (data.ots.calendar || 'public calendar') + ') — Bitcoin confirmation PENDING. Not yet anchored.', { size: 9.5 });
+    ctx.bullet('Source document delivered-file digest: submitted to OpenTimestamps calendar (' + (data.ots.calendar || 'public calendar') + ') — Bitcoin confirmation PENDING. Not yet anchored.', { size: 9.5 });
   } else {
-    ctx.bullet('Source document digest: OpenTimestamps submission OFFLINE — calendar unreachable; the SHA-256 digest was recorded for retry.', { size: 9.5 });
+    ctx.bullet('Source document delivered-file digest: OpenTimestamps submission OFFLINE — calendar unreachable; the SHA-256 digest was recorded for retry.', { size: 9.5 });
   }
-  ctx.bullet('This report is itself sealed under VO-DSS after generation: per-page seal footer, verification QR, and PDF Subject metadata VO-SEAL2|SEALED-FILE-SHA-512|SEAL_ID|ORIG:REPORT-SHA-512 (the sealed-file hash covers the final bytes of this PDF; ORIG preserves the pre-seal report fingerprint). The fingerprint printed in the page footer below is that pre-seal (ORIG) fingerprint; the sealed-file fingerprint is in the PDF\'s seal metadata.', { size: 9.5 });
+  ctx.bullet('This report is itself sealed under VO-DSS after generation: per-page seal footer, verification QR, and PDF Subject metadata VO-SEAL2|SEALED-FILE-SHA-512|SEAL_ID|ORIG:REPORT-SHA-512|OTS:DELIVERED-FILE-SHA256 (the VO-SEAL2 hash covers the final bytes with its placeholder restored; ORIG preserves the pre-seal report fingerprint). The fingerprint printed in the page footer below is that pre-seal (ORIG) fingerprint. After sealing, the report\'s OpenTimestamps digest is computed as SHA-256 of the exact sealed PDF bytes, so a detached .ots receipt carrying that digest verifies directly with the delivered PDF.', { size: 9.5 });
   ctx.gap(6);
 
   ctx.para('Verum Omnis  |  verumglobal.foundation  |  Verify this report at verumglobal.foundation/verify.html', { size: 8.5, color: GRAY });
@@ -5850,7 +5850,9 @@ async function build(opts) {
 // are compressed/pixel data), so they keep carrying the report's pre-seal
 // hash; only the Subject carries the sealed-file hash. Documented split:
 //   Subject   -> integrity of the sealed file (VO-SEAL2, self-verifiable)
-//   QR/footer -> integrity + time of the report content (OTS-anchored)
+//   QR/footer -> original report fingerprint + delivered-file OTS scheme
+// The caller submits OTS only after these final bytes exist; the receipt's
+// SHA-256 therefore verifies directly against the delivered sealed PDF.
 var VO_SEAL2_PREFIX = 'VO-SEAL2|';
 var VO_HASH_PLACEHOLDER = '00000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000';
 
@@ -5977,8 +5979,10 @@ async function seal(reportBytes, sealOpts) {
   try { pdf.setTitle((sealOpts.sourceName || 'document') + (sealOpts.titleSuffix || ' — Sealed Forensic Report')); } catch (e) {}
   try { pdf.setAuthor('Verum Omnis'); } catch (e) {}
   // VO-SEAL2: placeholder sealed-file hash first (patched post-save); ORIG:
-  // preserves the report's pre-seal hash (the OTS-anchored fingerprint).
-  try { pdf.setSubject(VO_SEAL2_PREFIX + VO_HASH_PLACEHOLDER + '|' + sealId + '|ORIG:' + sha512); } catch (e) {}
+  // preserves the report's pre-seal hash. The explicit marker selects OTS over
+  // the final delivered bytes rather than the legacy original-hash hex text.
+  var otsSubjectTag = sealOpts.otsDigestScheme === 'delivered-file-sha256' ? '|OTS:DELIVERED-FILE-SHA256' : '';
+  try { pdf.setSubject(VO_SEAL2_PREFIX + VO_HASH_PLACEHOLDER + '|' + sealId + '|ORIG:' + sha512 + otsSubjectTag); } catch (e) {}
   try { pdf.setKeywords(['verum', 'seal', 'forensic-report', 'v2', sha512.substring(0, 16)]); } catch (e) {}
   try { pdf.setProducer('Verum Omnis Document Sealing Service v1.3.0'); } catch (e) {}
   try { pdf.setCreationDate(now); } catch (e) {}
@@ -5995,8 +5999,9 @@ async function seal(reportBytes, sealOpts) {
   } catch (eV2) {
     console.warn('VerumReport.seal: VO-SEAL2 save failed, falling back to legacy format:', eV2 && eV2.message ? eV2.message : eV2);
   }
-  // Legacy fallback (pre-v1.3 format): Subject hash covers the pre-seal report.
-  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId); } catch (e) {}
+  // Legacy fallback (pre-v1.3 format): Subject hash covers the pre-seal report;
+  // an explicit marker still selects the new delivered-file receipt scheme.
+  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + otsSubjectTag); } catch (e) {}
   try { pdf.setKeywords(['verum', 'seal', 'forensic-report', sha512.substring(0, 16)]); } catch (e) {}
   return await pdf.save();
 }
@@ -18022,17 +18027,28 @@ function collectSealMetadata() {
 // ==================== QR PAYLOAD PRIVACY BOUNDARY ====================
 // The QR / verify-URL payload is PUBLIC: anyone holding the sealed document
 // can scan and base64-decode it. It therefore carries ONLY seal-integrity
-// data: {v, t, type, sha512, otsDigest, otsStatus, sealId} plus chain-of-
-// custody ids when present. Sender identity (id{n,id,a,e}), GPS (gps/acc) and
-// device fingerprint (dev) are NEVER included by default — they live only in
-// the private Seal Certificate PDF the user keeps. An explicit opt-in
-// (#includeIdentityInQr, default OFF, with a warning) re-adds them for legacy
-// workflows. Parsers (verify page, Android app): fields may be absent --
+// data: {v, t, type, sha512, otsDigest, otsDigestScheme, otsStatus, sealId}
+// plus chain-of-custody ids when present. Sender identity (id{n,id,a,e}), GPS
+// (gps/acc) and device fingerprint (dev) are NEVER included by default — they
+// live only in the private Seal Certificate PDF the user keeps. An explicit
+// opt-in (#includeIdentityInQr, default OFF, with a warning) re-adds them for
+// legacy workflows. Parsers (verify page, Android app): fields may be absent --
 // tolerate unknown/missing keys.
+var VO_OTS_DELIVERED_FILE_SCHEME = 'delivered-file-sha256';
+// New receipts commit to the exact bytes delivered. This helper is called only
+// after sealing and optional encryption: a final file cannot contain its own
+// final raw-file hash, so its QR carries the scheme marker, not the digest.
+async function voSubmitDeliveredFileOTS(deliveredBytes) {
+  if (!deliveredBytes) throw new Error('Cannot timestamp an empty delivered file.');
+  var digestHex = await computeSHA256(deliveredBytes);
+  var result = await submitToOTS(digestHex);
+  return { digestHex: digestHex, result: result, scheme: VO_OTS_DELIVERED_FILE_SCHEME };
+}
 function buildQrPayload(meta, chainIds) {
   var p = { v: meta.v, t: meta.t, type: meta.type };
   if (meta.sha512) p.sha512 = meta.sha512;
   if (meta.otsDigest) p.otsDigest = meta.otsDigest;
+  if (meta.otsDigestScheme) p.otsDigestScheme = meta.otsDigestScheme;
   if (meta.otsStatus !== undefined && meta.otsStatus !== null) p.otsStatus = meta.otsStatus;
   if (meta.sealId) p.sealId = meta.sealId;
   if (chainIds && chainIds.length) p.chain = chainIds.slice();
@@ -19099,7 +19115,6 @@ let _pipelineSealId = '';
 // zip. Every run now stamps its outputs with its own sequence number and
 // showResults assembles the bundle from its own run's slot only.
 let _pipelineRunSeq = 0;
-let _pipelineOtsDigestHex = '';
 let _pipelineChain = [];
 let _pipelineDetection = null;
 let _pipelineFraudResult = null;
@@ -19379,12 +19394,16 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
 
   var chainIds = chain.map(c => c.sealId).filter(id => id && id !== sealId);
   var chainStr = chainIds.length > 0 ? '|CHAIN:' + chainIds.join(',') : '';
+  // The final OTS digest cannot be embedded in the bytes it hashes. This marker
+  // tells the verifier to recompute SHA-256 from the delivered file instead of
+  // using the legacy SHA-256(original SHA-512 hex text) formula.
+  var otsSubjectTag = '|OTS:DELIVERED-FILE-SHA256';
 
   try { pdf.setTitle(selectedFile ? selectedFile.name : 'Sealed Document'); } catch(e) {}
   try { pdf.setAuthor('Verum Omnis'); } catch(e) {}
   // VO-SEAL2: placeholder sealed-file hash first (patched post-save); ORIG:
-  // preserves the original content hash (the OTS-anchored pre-seal fingerprint).
-  try { pdf.setSubject(VO_SEAL2_PREFIX + VO_HASH_PLACEHOLDER + '|' + sealId + '|ORIG:' + sha512 + chainStr); } catch(e) {}
+  // preserves the original content hash. OTS covers the final delivered bytes.
+  try { pdf.setSubject(VO_SEAL2_PREFIX + VO_HASH_PLACEHOLDER + '|' + sealId + '|ORIG:' + sha512 + chainStr + otsSubjectTag); } catch(e) {}
   try { pdf.setKeywords(['verum', 'seal', 'v2', sha512.substring(0,16), sealType]); } catch(e) { console.warn('Keywords set failed:', e.message); }
   try { pdf.setProducer('Verum Omnis Document Sealing Service v1.3.0'); } catch(e) {}
   try { pdf.setCreationDate(new Date()); } catch(e) {}
@@ -19401,8 +19420,9 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
   } catch (eV2) {
     console.warn('VO-SEAL2 save failed, falling back to legacy format:', eV2 && eV2.message ? eV2.message : eV2);
   }
-  // Legacy fallback (pre-v1.3 format): Subject hash covers the pre-seal original.
-  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + chainStr); } catch(e) {}
+  // Legacy fallback (pre-v1.3 format): Subject hash covers the pre-seal original;
+  // the explicit OTS marker still selects the new delivered-file receipt scheme.
+  try { pdf.setSubject('VO-SEAL|' + sha512 + '|' + sealId + chainStr + otsSubjectTag); } catch(e) {}
   try { pdf.setKeywords(['verum', 'seal', sha512.substring(0,16), sealType]); } catch(e) {}
   return await pdf.save();
 }
@@ -19557,7 +19577,7 @@ async function buildSealCertificate(opts) {
   row('PAGES', [String(opts.pageCount || 'n/a')], helv, 10);
   var otsLines = opts.otsSubmitted
     ? wrap('SUBMITTED — digest accepted by OpenTimestamps calendar' + (opts.otsCalendar ? ' (' + opts.otsCalendar.replace(/^https?:\/\//, '').replace(/\/.*$/, '') + ')' : '') + '. Bitcoin blockchain confirmation pending (typically 1-2 hours).', helv, 8.5, rowMaxW)
-    : wrap('PENDING — calendar servers were unreachable at sealing time. The SHA-256 digest is recorded in the seal and can be submitted later; the seal itself is complete and valid without the blockchain anchor.', helv, 8.5, rowMaxW);
+    : wrap('PENDING — calendar servers were unreachable at sealing time. The SHA-256 digest is recorded in this certificate and can be submitted later; the seal itself is complete and valid without the blockchain anchor.', helv, 8.5, rowMaxW);
   row('OPENTIMESTAMPS STATUS', otsLines, helv, 8.5);
 
   // Canonical statement box
@@ -19578,7 +19598,12 @@ async function buildSealCertificate(opts) {
 
   try { certDoc.setTitle('Verum Omnis Seal Certificate — ' + (opts.sealId || '')); } catch (e) {}
   try { certDoc.setAuthor('Verum Omnis'); } catch (e) {}
-  try { certDoc.setSubject('SEAL-CERT|' + (opts.sha512 || '') + '|' + (opts.sealId || '')); } catch (e) {}
+  // A certificate is detached from the sealed file, so it can carry the actual
+  // receipt/retry digest without any self-reference. Older three-field certificates
+  // remain valid; the optional OTS field prevents legacy hash-of-hash guessing
+  // for new PDF seals and raw-byte audio/video seals.
+  var certOtsDigest = /^[0-9a-fA-F]{64}$/.test(String(opts.otsDigest || '')) ? String(opts.otsDigest).toLowerCase() : null;
+  try { certDoc.setSubject('SEAL-CERT|' + (opts.sha512 || '') + '|' + (opts.sealId || '') + (certOtsDigest ? '|OTS:' + certOtsDigest : '')); } catch (e) {}
   try { certDoc.setProducer('Verum Omnis Document Sealing Service v1.2.9'); } catch (e) {}
   try { certDoc.setCreationDate(new Date()); } catch (e) {}
   return await certDoc.save();
@@ -19686,13 +19711,13 @@ async function buildAnchorCertificate(opts) {
   }
   row('SEAL ID', [opts.sealId || 'n/a'], courier, 11);
   var h = String(opts.sha512 || '');
-  // Every fingerprint says which bytes it belongs to: the one anchored is the
-  // ORIGINAL upload's, and the OTS digest is the SHA-256 of its hex text — an
-  // expert running an OpenTimestamps client needs both facts.
+  // Every fingerprint says which bytes it belongs to. New OTS receipts commit
+  // to the exact delivered file (including encryption when used), so the PDF
+  // and .ots receipt can be uploaded directly to an OpenTimestamps verifier.
   row('ORIGINAL UPLOAD SHA-512 (BEFORE THE SEAL WAS APPLIED)', h ? [h.substring(0, 64), h.substring(64)] : ['n/a'], courier, 7.5, 6);
   var hs = String(opts.sealedSha512 || '');
   if (hs) row(opts.deliveredProtected ? 'DELIVERED FILE SHA-512 (THE PASSWORD-PROTECTED COPY SENT)' : 'DELIVERED FILE SHA-512 (THE SEALED FILE AS DELIVERED)', [hs.substring(0, 64), hs.substring(64)], courier, 7.5, 6);
-  row('OTS DIGEST (SHA-256 OF THE ORIGINAL SHA-512 HEX TEXT)', [opts.otsDigest || 'n/a'], courier, 7.5, 6);
+  row('OTS DIGEST (SHA-256 OF THE EXACT DELIVERED FILE BYTES)', [opts.otsDigest || 'n/a'], courier, 7.5, 6);
   var calLines = (Array.isArray(opts.calendars) && opts.calendars.length > 0)
     ? opts.calendars.map(function(c) { return String(c).replace(/^https?:\/\//, ''); })
     : ['n/a'];
@@ -19722,7 +19747,7 @@ async function buildAnchorCertificate(opts) {
      (opts.deliveredProtected
        ? 'For the integrity check, upload the unprotected sealed copy to verumglobal.foundation/verify.html (the password-protected copy must be opened with its password first). '
        : 'For the integrity check, upload the sealed PDF to verumglobal.foundation/verify.html. ') +
-     'Upload this certificate there to check the anchor status of its digest: the page asks the OpenTimestamps calendars for the confirmed proof. To check the Bitcoin block yourself, run an OpenTimestamps client (ots verify) against a Bitcoin node.']
+     'Upload this certificate there to check the anchor status of its digest: the page asks the OpenTimestamps calendars for the confirmed proof. For direct receipt verification, upload the exact delivered file and its .ots receipt together at opentimestamps.org; the original pre-seal upload is not needed. To check the Bitcoin block yourself, run an OpenTimestamps client (ots verify) against a Bitcoin node.']
   ];
   for (var ei = 0; ei < explain.length; ei++) {
     page.drawText(safe('•  ' + explain[ei][0]), { x: lx, y: y, size: 8.5, font: helvBold, color: LIGHT });
@@ -20039,7 +20064,7 @@ async function voSealAudioBatch() {
       var qrDataURL = await generateQRDataURL(qrContent, 400);
       var certBase = { fileName: f.name, sha512: sha512, sealId: sealId,
         timestampISO: new Date(meta.t).toISOString(), pageCount: null,
-        otsSubmitted: !!otsResult.success, otsCalendar: otsResult.calendar || null, qrDataURL: qrDataURL };
+        otsSubmitted: !!otsResult.success, otsCalendar: otsResult.calendar || null, otsDigest: otsDigestHex, qrDataURL: qrDataURL };
       var certBytes = await buildSealCertificate(Object.assign({}, certBase, {
         identity: meta.id || null, gps: meta.gps || null, dev: meta.dev || null }));
       var baseName = f.name.replace(/\.[^.]+$/, '');
@@ -20271,7 +20296,7 @@ async function startSealing() {
   otsProof = null; gpsCoords = null; deviceInfo = null;
 
   // ALL variable declarations in outer scope — NO TDZ error on mobile
-  var sha256 = '', sha512 = '', sealId = '', otsDigestHex = '';
+  var sha256 = '', sha512 = '', sealId = '';
   var chain = [];
   var fileBytes = null;
   var detection = null;
@@ -20375,7 +20400,6 @@ async function startSealing() {
     sha256 = await computeSHA256(fileBytes);
     sha512 = await computeSHA512(fileBytes);
     sealId = 'VO-' + sha512.substring(0, 12).toUpperCase();
-    otsDigestHex = await computeSHA256(new TextEncoder().encode(sha512));
     updateStep(2, 'complete', sha256.substring(0, 16) + '...');
 
     // Detect existing seals
@@ -20395,7 +20419,6 @@ async function startSealing() {
     _pipelineSealId = sealId;
     _pipelineRunSeq = (window._voRunSeq || 0) + 1;
     window._voRunSeq = _pipelineRunSeq;
-    _pipelineOtsDigestHex = otsDigestHex;
     _pipelineChain = chain;
     _pipelineDetection = detection;
     _pipelineFraudResult = forensicResult;
@@ -23313,7 +23336,7 @@ async function runSealingPipeline() {
     reportPack: null, findingsJson: null, humanReportPack: null, forensicNarrativePack: null, forensicNarrativeStatus: null
   };
   var sealId = _pipelineSealId;
-  var otsDigestHex = _pipelineOtsDigestHex;
+  var otsDigestHex = '';
   var chain = _pipelineChain;
   var fraudResult = _pipelineFraudResult;
 
@@ -23344,10 +23367,9 @@ async function runSealingPipeline() {
     password = _pw1;
   }
 
-  // Step 3: OpenTimestamps
-  updateStep(3, 'processing', 'Contacting a.pool.opentimestamps.org...');
-  otsResult = await submitToOTS(otsDigestHex);
-  updateStep(3, otsResult.success ? 'complete' : 'error', otsResult.success ? 'Submitted' : otsResult.error);
+  // Step 3: OpenTimestamps runs AFTER step 6. The receipt must commit to the
+  // exact sealed/encrypted bytes delivered, which do not exist yet.
+  updateStep(3, 'pending', 'Timestamping after the delivered file is final');
 
   // Step 4: Watermark
   updateStep(4, 'complete', chain.length > 0 ? 'Chain: ' + chain.length + ' prev' : 'No chain');
@@ -23355,11 +23377,11 @@ async function runSealingPipeline() {
   // Step 5: QR — encode full forensic data for verify page
   updateStep(5, 'processing');
   meta = collectSealMetadata();
-  // Embed full SHA-512 + OTS digest into QR metadata
-  // This allows verify page to: display full hash, query blockchain, confirm seal
-  meta.sha512 = sha512;              // Full 128-char SHA-512 fingerprint
-  meta.otsDigest = otsDigestHex;     // 64-char OTS SHA-256 digest for blockchain lookup
-  meta.otsStatus = otsResult.success; // Whether OTS calendar accepted the digest
+  // The QR names the original upload and the new OTS scheme. The final raw-file
+  // digest is deliberately absent: it can be computed only after these QR bytes
+  // have been sealed, and is recomputed by the verifier from the delivered file.
+  meta.sha512 = sha512;              // Full 128-char original-upload fingerprint
+  meta.otsDigestScheme = VO_OTS_DELIVERED_FILE_SCHEME;
   meta.sealId = sealId;              // VO-XXXXXXXXXXXX seal identifier
   // PRIVACY: public QR payload excludes identity/GPS/device (buildQrPayload);
   // those stay in the private Seal Certificate only.
@@ -23393,7 +23415,7 @@ async function runSealingPipeline() {
   if (qrOmitted) {
     updateStep(5, 'complete', 'QR omitted (generation failed) — hash + footer remain the authoritative seal');
     var qrNoteEl = document.getElementById('qrPreviewNote');
-    if (qrNoteEl) qrNoteEl.textContent = 'QR code omitted for this seal (generation failed). The SHA-512 fingerprint and the seal footer on every page remain the authoritative proof of integrity and time.';
+    if (qrNoteEl) qrNoteEl.textContent = 'QR code omitted for this seal (generation failed). The original SHA-512 fingerprint and seal footer remain; the PDF Subject carries the delivered-file OTS scheme, and the detached receipt carries the timestamp proof.';
   } else {
     updateStep(5, 'complete');
   }
@@ -23456,6 +23478,19 @@ async function runSealingPipeline() {
     var _deliveredBytes = (password && encryptedBytes) ? encryptedBytes : sealedBytes;
     if (_deliveredBytes) window._voDeliveredFileHash = await computeSHA512(_deliveredBytes);
   } catch (eDh) { console.warn('Delivered-file hash failed (display/certificate only):', eDh && eDh.message); }
+
+  // Step 3 (completed after step 6): timestamp the exact delivered bytes. The
+  // digest and calendar status live in the receipt and anchor certificate; they
+  // were not embedded in the already-sealed QR. Password-protected deliveries
+  // timestamp the encrypted bytes the recipient actually receives.
+  updateStep(3, 'processing', 'Contacting a.pool.opentimestamps.org...');
+  var otsSubmission = await voSubmitDeliveredFileOTS(_deliveredBytes);
+  otsDigestHex = otsSubmission.digestHex;
+  otsResult = otsSubmission.result;
+  meta.otsDigest = otsDigestHex;
+  meta.otsStatus = !!otsResult.success;
+  meta.otsDigestScheme = VO_OTS_DELIVERED_FILE_SCHEME;
+  updateStep(3, otsResult.success ? 'complete' : 'error', otsResult.success ? 'Submitted delivered-file digest' : otsResult.error);
 
   // Retract the selection-time "password-protected" warning when the file
   // was in fact loaded and stamped. The selection detector is a byte-pattern
@@ -23625,6 +23660,7 @@ async function runSealingPipeline() {
         pageCount: _pipelinePageCount || null,
         otsSubmitted: !!(otsResult && otsResult.success),
         otsCalendar: otsResult && otsResult.calendar ? otsResult.calendar : null,
+        otsDigest: otsDigestHex,
         qrDataURL: qrDataURL
       };
       var certBytes = await buildSealCertificate(Object.assign({}, certBase, {
@@ -23688,6 +23724,7 @@ async function runSealingPipeline() {
           deliveredProtected: !!(password && encryptedBytes),
           sealId: sealId,
           otsDigest: otsDigestHex,
+          otsDigestScheme: VO_OTS_DELIVERED_FILE_SCHEME,
           calendars: [window.VoOts ? VoOts.normalizeCalendarUrl(otsResult.calendar) : otsResult.calendar],
           timestampISO: new Date(meta.t || Date.now()).toISOString(),
           qrDataURL: qrDataURL
@@ -23786,12 +23823,9 @@ async function runSealingPipeline() {
 
       var rSha512 = await computeSHA512(reportBytes);
       var rSealId = 'VO-' + rSha512.substring(0, 12).toUpperCase();
-      var rOtsDigestHex = await computeSHA256(new TextEncoder().encode(rSha512));
-      var rOts = await submitToOTS(rOtsDigestHex);
       var rMeta = collectSealMetadata();
       rMeta.sha512 = rSha512;
-      rMeta.otsDigest = rOtsDigestHex;
-      rMeta.otsStatus = rOts.success;
+      rMeta.otsDigestScheme = VO_OTS_DELIVERED_FILE_SCHEME;
       rMeta.sealId = rSealId;
       rMeta.report = true;
       var rQrContent = 'https://verumglobal.foundation/verify.html?h=' + rSha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(rMeta, null))));
@@ -23806,15 +23840,21 @@ async function runSealingPipeline() {
         sealId: rSealId,
         sha512: rSha512,
         qrDataURL: rQr,
-        sourceName: selectedFile.name
+        sourceName: selectedFile.name,
+        otsDigestScheme: VO_OTS_DELIVERED_FILE_SCHEME
       });
+      var rSubmission = await voSubmitDeliveredFileOTS(rSealedBytes);
+      var rOtsDigestHex = rSubmission.digestHex;
+      var rOts = rSubmission.result;
+      rMeta.otsDigest = rOtsDigestHex;
+      rMeta.otsStatus = !!rOts.success;
 
       console.log('[VO-REPORT-DEBUG] Report sealed successfully', {
         sealed_size_kb: (rSealedBytes?.length / 1024).toFixed(2),
         size_increase_bytes: (rSealedBytes?.length - reportBytes?.length)
       });
 
-      reportPack = { bytes: rSealedBytes, sealId: rSealId, sha512: rSha512, ots: rOts };
+      reportPack = { bytes: rSealedBytes, sealId: rSealId, sha512: rSha512, ots: rOts, otsDigest: rOtsDigestHex, otsDigestScheme: VO_OTS_DELIVERED_FILE_SCHEME };
       window._voReportPack = reportPack;
       runPacks.reportPack = reportPack;
 
@@ -23915,14 +23955,16 @@ async function runSealingPipeline() {
           });
           var hSha512 = await computeSHA512(hBytes);
           var hSealId = 'VO-' + hSha512.substring(0, 12).toUpperCase();
-          var hDigestHex = await computeSHA256(new TextEncoder().encode(hSha512));
-          var hOts = await submitToOTS(hDigestHex);
           var hMeta = collectSealMetadata();
-          hMeta.sha512 = hSha512; hMeta.otsDigest = hDigestHex; hMeta.otsStatus = hOts.success; hMeta.sealId = hSealId; hMeta.report = true;
+          hMeta.sha512 = hSha512; hMeta.otsDigestScheme = VO_OTS_DELIVERED_FILE_SCHEME; hMeta.sealId = hSealId; hMeta.report = true;
           var hQrContent = 'https://verumglobal.foundation/verify.html?h=' + hSha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(hMeta, null))));
           var hQr = await generateQRDataURL(hQrContent, 400);
-          var hSealedBytes = await window.VerumReport.seal(hBytes, { sealId: hSealId, sha512: hSha512, qrDataURL: hQr, sourceName: selectedFile.name, tag: 'NARRATIVE REPORT', titleSuffix: ' — Sealed Court-Ready Narrative' });
-          window._voHumanReportPack = { bytes: hSealedBytes, sealId: hSealId, sha512: hSha512, ots: hOts, generated: hr.generated, writerSections: hr.writerSections, model: hr.model };
+          var hSealedBytes = await window.VerumReport.seal(hBytes, { sealId: hSealId, sha512: hSha512, qrDataURL: hQr, sourceName: selectedFile.name, tag: 'NARRATIVE REPORT', titleSuffix: ' — Sealed Court-Ready Narrative', otsDigestScheme: VO_OTS_DELIVERED_FILE_SCHEME });
+          var hSubmission = await voSubmitDeliveredFileOTS(hSealedBytes);
+          var hDigestHex = hSubmission.digestHex;
+          var hOts = hSubmission.result;
+          hMeta.otsDigest = hDigestHex; hMeta.otsStatus = !!hOts.success;
+          window._voHumanReportPack = { bytes: hSealedBytes, sealId: hSealId, sha512: hSha512, ots: hOts, otsDigest: hDigestHex, otsDigestScheme: VO_OTS_DELIVERED_FILE_SCHEME, generated: hr.generated, writerSections: hr.writerSections, model: hr.model };
           runPacks.humanReportPack = window._voHumanReportPack;
           updateStep(7, 'processing', 'Court-ready narrative sealed (' + hr.generated + ' of ' + hr.writerSections + ' sections AI-written)');
         }
@@ -23977,10 +24019,8 @@ async function runSealingPipeline() {
             } else {
               var fnSha512 = await computeSHA512(narrativeDocument.bytes);
               var fnSealId = 'VO-' + fnSha512.substring(0, 12).toUpperCase();
-              var fnDigestHex = await computeSHA256(new TextEncoder().encode(fnSha512));
-              var fnOts = await submitToOTS(fnDigestHex);
               var fnMeta = collectSealMetadata();
-              fnMeta.sha512 = fnSha512; fnMeta.otsDigest = fnDigestHex; fnMeta.otsStatus = !!(fnOts && fnOts.success); fnMeta.sealId = fnSealId; fnMeta.report = true;
+              fnMeta.sha512 = fnSha512; fnMeta.otsDigestScheme = VO_OTS_DELIVERED_FILE_SCHEME; fnMeta.sealId = fnSealId; fnMeta.report = true;
               var fnQr = null;
               try {
                 var fnQrContent = 'https://verumglobal.foundation/verify.html?h=' + fnSha512.substring(0, 32) + '&m=' + encodeURIComponent(utf8ToBase64(JSON.stringify(buildQrPayload(fnMeta, null))));
@@ -23988,10 +24028,15 @@ async function runSealingPipeline() {
               } catch (fnQrErr) { console.warn('Forensic narrative QR generation failed; sealing continues without a QR.', fnQrErr); }
               var fnSealed = await window.VerumReport.seal(narrativeDocument.bytes, {
                 sealId: fnSealId, sha512: fnSha512, qrDataURL: fnQr, sourceName: runPacks.forensicNarrativeInput.documentName,
-                tag: 'FORENSIC NARRATIVE', titleSuffix: ' — Sealed Forensic Narrative'
+                tag: 'FORENSIC NARRATIVE', titleSuffix: ' — Sealed Forensic Narrative', otsDigestScheme: VO_OTS_DELIVERED_FILE_SCHEME
               });
+              var fnSubmission = await voSubmitDeliveredFileOTS(fnSealed);
+              var fnDigestHex = fnSubmission.digestHex;
+              var fnOts = fnSubmission.result;
+              fnMeta.otsDigest = fnDigestHex; fnMeta.otsStatus = !!(fnOts && fnOts.success);
               runPacks.forensicNarrativePack = {
                 bytes: fnSealed, sealId: fnSealId, sha512: fnSha512, ots: fnOts,
+                otsDigest: fnDigestHex, otsDigestScheme: VO_OTS_DELIVERED_FILE_SCHEME,
                 passingParts: narrativeDocument.passingParts, totalParts: narrativeDocument.totalParts
               };
               window._voForensicNarrativePack = runPacks.forensicNarrativePack;
