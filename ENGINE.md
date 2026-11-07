@@ -827,7 +827,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**52 suites · 3424 assertions** (counted 2026-11-06 after the Batch 7d delivered-file OpenTimestamps correction, §12.25; recount after any test change).
+**52 suites · 3437 assertions** (counted 2026-11-08 after the standalone-narrative deterministic-fallback correction, §12.26; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -868,7 +868,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `encrypt-detect.test.mjs` / `rule-classify.test.mjs` | 9 each | Encryption detection · deterministic classify fallback |
 | `find-seal.test.mjs` / `pdf-encrypt.test.mjs` | 8 each | Seal discovery · real password protection |
 | `voice-crypto.test.mjs` | 7 | `.voice` cross-page encryption |
-| `forensic-narrative.test.mjs` | 26 | Deterministic and AI narrative routing, provenance and overclaim controls |
+| `forensic-narrative.test.mjs` | 39 | Deterministic and AI narrative routing, source-verified standalone fallback, per-part backfill, provenance and overclaim controls |
 | `event-date-conflict.test.mjs` | 16 | Event/date binding and cross-page conflict controls |
 | `term-arithmetic.test.mjs` | 12 | Term arithmetic and date-period reconciliation |
 | `batch3-detectors.test.mjs` | 16 | Invoice identity, payment-proof mismatch and document-predates-content detectors |
@@ -2680,6 +2680,34 @@ correction. The older `seal-module/web/` pages are non-live snapshots and were
 not rewritten. `tests/batch7d-ots-delivered-bytes.test.mjs` pins real receipt
 bytes, all four post-seal pipelines, password delivery, both metadata markers,
 and every legacy resolution path.
+
+### 12.26 Standalone narrative deterministic fallback (2026-11-08)
+
+**The missing output.** The 7 November Greensky seal set contained the technical report and
+court-ready narrative but no `forensic-narrative-sealed.pdf`. Its technical report recorded 22
+findings and dated events; its court-ready provenance recorded that no AI-written section passed
+the gates. The standalone builder accepted only AI-provenance parts, so when no compliant
+standalone AI part was available it returned no bytes. Several causes—no dates, no eligible
+findings, narrator failure, gate rejection and rendering—collapsed into one generic status.
+
+**The correction.** `voDeterministicForensicNarrativeParts` gives the standalone product the same
+deterministic safety net already required for narratives by `DEPLOYMENT.md`. Document chronology
+entries must verify verbatim, after whitespace normalisation, against the current run's sealed
+page text. Dated findings must pass the same `humanNumberable` eligibility predicate and use
+their own `anchor.where` page. AI candidates and Brain 9 recommendations are excluded. Each
+fallback part is marked `provenance: 'engine'`; `buildForensicNarrative` applies the unchanged
+render-time §15.2 and overclaim gate to it just as to an AI part. If no part passes, no PDF is
+produced. The renderer returns failed part indexes so a render-rejected AI part is backfilled
+individually without discarding compliant AI siblings. The cover and certification distinguish
+deterministic, AI and mixed output, and the results panel discloses fallback use. Empty dates,
+missing findings, narrator gate failure,
+unavailability, timeout, rendering, sealing and timestamping now have distinct diagnoses.
+
+**Boundaries.** This does not rewrite the historical Greensky seal set and does not make a
+semantic finding true by sealing it. A corrected report requires a fresh run and fresh seals.
+`tests/forensic-narrative.test.mjs` reproduces the gate-failure shape, checks exact source-text
+verification, excludes AI-only material, pins multi-page date anchors, and proves that an
+engine-provenance overclaim still fails the gate.
 
 ## 13. The court-ready narrative (the "human report")
 

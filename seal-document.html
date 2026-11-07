@@ -6730,10 +6730,11 @@ async function buildForensicNarrative(opts) {
   var parts = Array.isArray(opts.narrativeParts) ? opts.narrativeParts : [];
   var passing = [];
   var dropped = 0;
+  var droppedPartIndexes = [];
   var droppedSentences = 0;
   for (var i = 0; i < parts.length; i++) {
     var part = parts[i] || {};
-    if (part.provenance !== 'ai' || typeof part.text !== 'string' || !part.text.trim()) { dropped++; continue; }
+    if ((part.provenance !== 'ai' && part.provenance !== 'engine') || typeof part.text !== 'string' || !part.text.trim()) { dropped++; droppedPartIndexes.push(i); continue; }
     var rawBlocks = part.text.split(/\n{2,}/);
     var prose = [];
     var tabular = false;
@@ -6744,18 +6745,19 @@ async function buildForensicNarrative(opts) {
       if (/^\s*(?:\||[-*•]\s|\d+[.)]\s)/m.test(block)) { tabular = true; break; }
       prose.push(block);
     }
-    if (tabular) { dropped++; continue; }
+    if (tabular) { dropped++; droppedPartIndexes.push(i); continue; }
     var scrub = scrubNarrative(prose.join('\n\n'), voSectionPageContradictions(part));
     droppedSentences += scrub.dropped;
-    if (!voGatePasses(scrub)) { dropped++; continue; }
+    if (!voGatePasses(scrub)) { dropped++; droppedPartIndexes.push(i); continue; }
     passing.push({
       index: Math.max(1, parseInt(part.index, 10) || i + 1),
       startDate: String(part.startDate || ''),
       endDate: String(part.endDate || ''),
+      provenance: part.provenance,
       text: scrub.text
     });
   }
-  if (!passing.length) return { bytes: null, passingParts: 0, totalParts: parts.length, droppedParts: dropped };
+  if (!passing.length) return { bytes: null, passingParts: 0, totalParts: parts.length, droppedParts: dropped, droppedPartIndexes: droppedPartIndexes };
 
   var docs = opts.documents && opts.documents.length ? opts.documents : [{ name: 'document.pdf' }];
   var identity = opts.identity || {};
@@ -6794,12 +6796,19 @@ async function buildForensicNarrative(opts) {
     cover.drawText(subtitleLines[sl], { x: centerX(subtitleLines[sl], fonts.timesItalic, 13), y: PH * 0.46 - 30 - sl * 18, size: 13, font: fonts.timesItalic, color: COVER_SUB });
   }
   var sourceDoc = docs[0] || {};
+  var aiParts = passing.filter(function (part) { return part.provenance === 'ai'; }).length;
+  var deterministicParts = passing.filter(function (part) { return part.provenance === 'engine'; }).length;
+  var preparationLine = deterministicParts && !aiParts
+    ? 'Prepared by Verum Omnis — deterministic forensic chronology over the sealed record'
+    : (deterministicParts
+      ? 'Prepared by Verum Omnis — gated AI narrative and deterministic sealed-record chronology'
+      : 'Prepared by Verum Omnis — AI forensic narrator over the sealed record');
   var coverDetails = [
     'Source document: ' + String(sourceDoc.name || 'document') + ' (' + (sourceDoc.pageCount || 'n/a') + ' pages)',
     'Source SHA-512: ' + truncHash(sourceDoc.sha512, 24, 12),
     'Source seal: ' + String(sourceDoc.sealId || 'n/a'),
     'Generated: ' + String(opts.generatedAt || 'n/a'),
-    'Prepared by Verum Omnis — AI forensic narrator over the sealed record',
+    preparationLine,
     'Advisory — the findings and their anchors are the evidence; the verdict belongs to the court.'
   ];
   var coverY = PH * 0.46 - 30 - subtitleLines.length * 18 - 10;
@@ -6864,6 +6873,7 @@ async function buildForensicNarrative(opts) {
     totalParts: parts.length,
     droppedParts: dropped,
     droppedSentences: droppedSentences,
+    deterministicParts: deterministicParts,
     workerDroppedSentences: workerGateStatsAvailable ? workerDroppedSentences : null
   };
   newPage();
@@ -6875,9 +6885,12 @@ async function buildForensicNarrative(opts) {
   }
   y -= 18;
   bodyPage.drawLine({ start: { x: left, y: y + 9 }, end: { x: PW - right, y: y + 9 }, thickness: 0.8, color: GOLD });
+  var narratorLine = deterministicParts && !aiParts
+    ? 'Narrator source: deterministic, page-anchored engine chronology; no AI-generated prose is printed. Contract: deterministic-forensic-narrative-v1. '
+    : 'Narrator model: ' + String(opts.model || 'unavailable') + '. Contract: human-v1; section: forensic_narrative. ' +
+      (deterministicParts ? deterministicParts + (deterministicParts === 1 ? ' part uses' : ' parts use') + ' the deterministic, page-anchored engine chronology. ' : '');
   var provenanceParagraphs = [
-    'Narrator model: ' + String(opts.model || 'unavailable') + '. Contract: human-v1; section: forensic_narrative. ' +
-      gateStats.passingParts + ' of ' + gateStats.totalParts + ' parts passed the render-time gates; ' +
+    narratorLine + gateStats.passingParts + ' of ' + gateStats.totalParts + ' parts passed the render-time gates; ' +
       gateStats.droppedSentences + (gateStats.droppedSentences === 1 ? ' sentence was' : ' sentences were') + ' removed by those gates.',
     (workerGateStatsAvailable ? 'The worker gates removed ' + workerDroppedSentences +
       (workerDroppedSentences === 1 ? ' sentence. ' : ' sentences. ') : '') +
@@ -6901,7 +6914,7 @@ async function buildForensicNarrative(opts) {
   try { doc.setAuthor('Verum Omnis'); } catch (e) {}
   try { doc.setProducer('Verum Omnis Forensic Narrative Builder (pdf-lib)'); } catch (e) {}
   if (opts.generatedAt) { try { doc.setCreationDate(new Date(opts.generatedAt)); } catch (e) {} }
-  return { bytes: await doc.save(), passingParts: passing.length, totalParts: parts.length, droppedParts: dropped, gateStats: gateStats };
+  return { bytes: await doc.save(), passingParts: passing.length, totalParts: parts.length, droppedParts: dropped, droppedPartIndexes: droppedPartIndexes, gateStats: gateStats };
 }
 
 // ================= exports =================
@@ -21824,7 +21837,11 @@ function voForensicNarrativePartPlan(fraudResult) {
   }
   var findings = fraudResult && Array.isArray(fraudResult.findings) ? fraudResult.findings : [];
   for (var f = 0; f < findings.length; f++) {
-    var finding = findings[f] || {}, when = finding.anchor && Array.isArray(finding.anchor.when) ? finding.anchor.when : [];
+    var finding = findings[f] || {};
+    // Candidate dates never create a part or its heading endpoints. They stay
+    // advisory and cannot bound a deterministic engine chronology either.
+    if (finding.source === 'ai' || finding.type === 'SERIAL') continue;
+    var when = finding.anchor && Array.isArray(finding.anchor.when) ? finding.anchor.when : [];
     for (var w = 0; w < when.length; w++) add(when[w], finding.page || (finding.anchor.where && finding.anchor.where[0]), finding.evidence);
     if (finding.date) add(finding.date, finding.page, finding.evidence);
   }
@@ -22303,14 +22320,14 @@ async function aiHumanForensicNarrative(findings, ctxIn, plan) {
   ctxIn = ctxIn || {};
   plan = Array.isArray(plan) ? plan.slice(0, 3) : [];
   if (!plan.length || !ctxIn.technicalSealId || !ctxIn.technicalSha512) {
-    return { parts: [], calls: 0, model: null };
+    return { parts: [], calls: 0, model: null, reason: !plan.length ? 'no_dates' : 'seal_required' };
   }
   var runInput = ctxIn.runInput || {};
   var textBlocks = Array.isArray(runInput.textBlocks) ? runInput.textBlocks : null;
   var ids = voHumanFindingList(findings);
   var fp = ids.findings.map(voHumanPayloadFinding);
   var cp = ids.candidates.map(voHumanPayloadFinding);
-  if (!fp.length) return { parts: [], calls: 0, model: null };
+  if (!fp.length) return { parts: [], calls: 0, model: null, reason: 'no_findings' };
   var caseInfo = runInput.caseContext || {};
   var timeline = (ctxIn.timeline && Array.isArray(ctxIn.timeline.events))
     ? ctxIn.timeline.events.slice(0, 40).map(function (e) {
@@ -22387,6 +22404,120 @@ async function aiHumanForensicNarrative(findings, ctxIn, plan) {
     }
   }
   return { parts: output, calls: calls, model: model };
+}
+
+// The standalone narrative has the same deterministic safety net as the
+// court-ready narrative. It is not an AI draft and never becomes a finding:
+// document entries must verify against this run's sealed page text, and dated
+// findings must be in the same eligible engine-finding list used by the reports.
+function voDeterministicForensicNarrativeParts(fraudResult, ctxIn, plan) {
+  plan = Array.isArray(plan) ? plan.slice(0, 3) : [];
+  if (!plan.length) return [];
+  var ids = voHumanFindingList(fraudResult && fraudResult.findings);
+  if (!ids.findings.length) return [];
+  var runInput = ctxIn && ctxIn.runInput || {};
+  var textBlocks = Array.isArray(runInput.textBlocks) ? runInput.textBlocks : [];
+  function norm(value) { return String(value || '').replace(/\s+/g, ' ').trim(); }
+  function findingKey(type, page, evidence) {
+    return String(type || '') + '|' + (parseInt(page, 10) || 0) + '|' + norm(evidence);
+  }
+  function findingAnchorPage(f) {
+    var anchorPage = f && f.anchor && Array.isArray(f.anchor.where) ? parseInt(f.anchor.where[0], 10) : 0;
+    return anchorPage || voHumanFirstPage(f);
+  }
+  var eligible = {};
+  for (var i = 0; i < ids.findings.length; i++) {
+    var item = ids.findings[i], f = item.f;
+    eligible[findingKey(f.type, findingAnchorPage(f), f.evidence)] = item;
+  }
+  var events = [], seen = {};
+  function add(date, page, evidence, item, documentQuote) {
+    var parsed = voForensicNarrativeDate(date), pg = parseInt(page, 10) || 0;
+    var text = norm(evidence);
+    if (!parsed || pg < 1 || !text) return;
+    var key = parsed.key + '|' + pg + '|' + text + '|' + (item ? item.id : 'document');
+    if (seen[key]) return;
+    if (documentQuote) {
+      var pageText = norm(textBlocks[pg - 1]);
+      var probe = text.replace(/…$/, '').trim();
+      // No source text, no deterministic quotation. The AI path remains free
+      // to use its separately gated record context, but this fallback cannot.
+      if (!probe || !pageText || pageText.indexOf(probe) < 0) return;
+    }
+    seen[key] = true;
+    events.push({ key: parsed.key, day: parsed.day, date: parsed.label, page: pg,
+      evidence: text, item: item || null, documentQuote: documentQuote === true });
+  }
+  var timeline = fraudResult && fraudResult.timeline && Array.isArray(fraudResult.timeline.events)
+    ? fraudResult.timeline.events : [];
+  for (var t = 0; t < timeline.length; t++) {
+    var ev = timeline[t] || {};
+    if (ev.source === 'finding') {
+      var match = eligible[findingKey(ev.type, ev.page, ev.evidence)];
+      if (match) add(ev.date, ev.page, ev.evidence, match, false);
+    } else if (ev.source === 'document') {
+      add(ev.date, ev.page, ev.evidence, null, true);
+    }
+  }
+  // Findings are also read directly so a missing or truncated timeline cannot
+  // erase a dated engine finding from the fallback chronology.
+  for (var n = 0; n < ids.findings.length; n++) {
+    var entry = ids.findings[n], finding = entry.f;
+    var when = finding.anchor && Array.isArray(finding.anchor.when) ? finding.anchor.when : [];
+    var pages = voHumanPages(finding);
+    var page = findingAnchorPage(finding) || pages[0];
+    for (var w = 0; w < when.length; w++) add(when[w], page, finding.evidence, entry, false);
+    if (finding.date) add(finding.date, page, finding.evidence, entry, false);
+  }
+  events.sort(function (a, b) { return (a.key - b.key) || (a.page - b.page) || String(a.evidence).localeCompare(String(b.evidence)); });
+  function safe(text) {
+    var scrub = window.VerumReport && window.VerumReport._scrubNarrative
+      ? window.VerumReport._scrubNarrative(text) : null;
+    return scrub && scrub.kept > 0 && scrub.dropped === 0 ? scrub.text : '';
+  }
+  var output = [];
+  for (var p = 0; p < plan.length; p++) {
+    var part = plan[p], first = voForensicNarrativeDate(part.startDate), last = voForensicNarrativeDate(part.endDate);
+    if (!first || !last) { output.push(null); continue; }
+    var selected = events.filter(function (event) { return event.key >= first.key && event.key <= last.key; });
+    if (!selected.length) { output.push(null); continue; }
+    var a = selected[0], z = selected[selected.length - 1];
+    var paragraphs = [safe('This part records the sealed entries from ' + a.date + ' on p. ' + a.page +
+      ' through ' + z.date + ' on p. ' + z.page + '. A date shows where the record places an entry; ' +
+      'it does not by itself establish the event described (p. ' + a.page + ').')].filter(Boolean);
+    for (var e = 0; e < selected.length; e++) {
+      var event = selected[e], lines = [];
+      if (event.item) {
+        lines.push('The sealed engine finding [' + event.item.id + '] is anchored to the date ' + event.date + ' on p. ' + event.page + '.');
+        lines.push('The finding records: ' + event.evidence + ' [' + event.item.id + '] (p. ' + event.page + ').');
+      } else {
+        lines.push('The sealed record carries the date ' + event.date + ' on p. ' + event.page + '.');
+        lines.push('The dated entry states: “' + event.evidence + '” (p. ' + event.page + ').');
+      }
+      for (var l = 0; l < lines.length; l++) {
+        var kept = safe(lines[l]);
+        if (kept) paragraphs.push(kept);
+      }
+    }
+    if (paragraphs.join('\n\n').trim()) {
+      output.push(Object.assign({}, part, { provenance: 'engine', text: paragraphs.join('\n\n'), model: null, pageContradictions: [] }));
+    } else output.push(null);
+  }
+  return output;
+}
+
+function voForensicNarrativeFailureStatus(parts, earlyReason) {
+  if (earlyReason === 'no_findings') return 'The forensic narrative could not be written because no eligible sealed engine findings were available this run';
+  var list = Array.isArray(parts) ? parts : [], reasons = {};
+  for (var i = 0; i < list.length; i++) {
+    var reason = list[i] && list[i].reason;
+    if (reason) reasons[reason] = (reasons[reason] || 0) + 1;
+  }
+  if (reasons.gate_failed) return 'The AI narrator\'s drafts did not pass the anchor and language gates, and no compliant deterministic chronology could be produced this run';
+  if (reasons.timeout || reasons.time_budget) return 'The AI narrator did not answer within the time allowed, and no compliant deterministic chronology could be produced this run';
+  if (reasons.no_api_at_this_address || reasons.network || reasons.ai_unavailable) return 'The AI narrator was unavailable, and no compliant deterministic chronology could be produced this run';
+  if (reasons.no_json) return 'The AI narrator did not answer in the agreed format, and no compliant deterministic chronology could be produced this run';
+  return 'The forensic narrative could not be written within the Constitution\'s rules this run';
 }
 
 // B7 triple legal verification (founder ruling 2026-10-11): the candidate
@@ -23975,6 +24106,7 @@ async function runSealingPipeline() {
       window._voForensicNarrativePack = null;
       runPacks.forensicNarrativeStatus = null;
       runPacks.forensicNarrativeInput = forensicNarrativeInput;
+      var forensicNarrativeStage = 'generation';
       try {
         if (isAiReviewEnabled() && reportFraudResult && !reportFraudResult.scanFailed &&
             Array.isArray(reportFraudResult.findings) &&
@@ -23982,7 +24114,7 @@ async function runSealingPipeline() {
             typeof window.VerumReport.buildForensicNarrative === 'function') {
           var narrativePlan = voForensicNarrativePartPlan(reportFraudResult);
           if (!narrativePlan.length) {
-            runPacks.forensicNarrativeStatus = 'The forensic narrative could not be written within the Constitution\'s rules this run';
+            runPacks.forensicNarrativeStatus = 'The forensic narrative could not be written because no valid dated events were anchored in this run';
           } else {
             var forensicDraft = await aiHumanForensicNarrative(reportFraudResult.findings, {
               timeline: reportFraudResult.timeline || null,
@@ -24000,8 +24132,18 @@ async function runSealingPipeline() {
                 forensicFindingsJsonSha512 = await computeSHA512(new TextEncoder().encode(JSON.stringify(runPacks.findingsJson, null, 2)));
               }
             } catch (fnFjErr) {}
-            var narrativeDocument = await window.VerumReport.buildForensicNarrative({
-              narrativeParts: forensicDraft.parts,
+            var forensicFallbackParts = voDeterministicForensicNarrativeParts(reportFraudResult, {
+              runInput: runPacks.forensicNarrativeInput
+            }, narrativePlan);
+            var forensicParts = narrativePlan.map(function (part, index) {
+              var draftPart = forensicDraft.parts[index] || Object.assign({}, part, {
+                provenance: 'none', reason: forensicDraft.reason || 'not_generated'
+              });
+              return draftPart.provenance === 'ai' ? draftPart : (forensicFallbackParts[index] || draftPart);
+            });
+            forensicNarrativeStage = 'rendering';
+            var narrativeOptions = {
+              narrativeParts: forensicParts,
               documents: [{ name: runPacks.forensicNarrativeInput.documentName, pageCount: runPacks.forensicNarrativeInput.pageCount || null, sha512: sha512, sealId: sealId }],
               generatedAt: new Date().toISOString(),
               technicalSealId: runPacks.reportPack.sealId,
@@ -24013,10 +24155,30 @@ async function runSealingPipeline() {
                 caseName: runPacks.forensicNarrativeInput.caseContext.caseName || undefined,
                 caseRefs: runPacks.forensicNarrativeInput.caseContext.caseRefs || undefined
               }
+            };
+            var narrativeDocument = await window.VerumReport.buildForensicNarrative(narrativeOptions);
+            // A worker-passed draft can still fail the independent render gate.
+            // Backfill exactly those failed indexes, even when sibling AI parts
+            // passed. Every substitute traverses the same render gate.
+            var renderDropped = narrativeDocument && Array.isArray(narrativeDocument.droppedPartIndexes)
+              ? narrativeDocument.droppedPartIndexes : narrativePlan.map(function (part, index) { return index; });
+            var canBackfill = renderDropped.some(function (index) {
+              return forensicParts[index] && forensicParts[index].provenance === 'ai' && !!forensicFallbackParts[index];
             });
+            if (canBackfill) {
+              forensicParts = forensicParts.map(function (part, index) {
+                return renderDropped.indexOf(index) >= 0 && part && part.provenance === 'ai' && forensicFallbackParts[index]
+                  ? forensicFallbackParts[index] : part;
+              });
+              narrativeOptions.narrativeParts = forensicParts;
+              narrativeDocument = await window.VerumReport.buildForensicNarrative(narrativeOptions);
+            }
+            var forensicDeterministicParts = narrativeDocument && narrativeDocument.gateStats
+              ? (narrativeDocument.gateStats.deterministicParts || 0) : 0;
             if (!narrativeDocument || !narrativeDocument.bytes || !narrativeDocument.passingParts) {
-              runPacks.forensicNarrativeStatus = 'The forensic narrative could not be written within the Constitution\'s rules this run';
+              runPacks.forensicNarrativeStatus = voForensicNarrativeFailureStatus(forensicDraft.parts, forensicDraft.reason);
             } else {
+              forensicNarrativeStage = 'sealing';
               var fnSha512 = await computeSHA512(narrativeDocument.bytes);
               var fnSealId = 'VO-' + fnSha512.substring(0, 12).toUpperCase();
               var fnMeta = collectSealMetadata();
@@ -24030,6 +24192,7 @@ async function runSealingPipeline() {
                 sealId: fnSealId, sha512: fnSha512, qrDataURL: fnQr, sourceName: runPacks.forensicNarrativeInput.documentName,
                 tag: 'FORENSIC NARRATIVE', titleSuffix: ' — Sealed Forensic Narrative', otsDigestScheme: VO_OTS_DELIVERED_FILE_SCHEME
               });
+              forensicNarrativeStage = 'timestamping';
               var fnSubmission = await voSubmitDeliveredFileOTS(fnSealed);
               var fnDigestHex = fnSubmission.digestHex;
               var fnOts = fnSubmission.result;
@@ -24037,11 +24200,18 @@ async function runSealingPipeline() {
               runPacks.forensicNarrativePack = {
                 bytes: fnSealed, sealId: fnSealId, sha512: fnSha512, ots: fnOts,
                 otsDigest: fnDigestHex, otsDigestScheme: VO_OTS_DELIVERED_FILE_SCHEME,
-                passingParts: narrativeDocument.passingParts, totalParts: narrativeDocument.totalParts
+                passingParts: narrativeDocument.passingParts, totalParts: narrativeDocument.totalParts,
+                deterministicParts: forensicDeterministicParts
               };
               window._voForensicNarrativePack = runPacks.forensicNarrativePack;
+              if (forensicDeterministicParts) {
+                runPacks.forensicNarrativeStatus = 'Forensic narrative: ' + forensicDeterministicParts +
+                  (forensicDeterministicParts === 1 ? ' part uses' : ' parts use') +
+                  ' the deterministic, page-anchored engine chronology where the AI narrator did not supply a compliant draft.';
+              }
               if (narrativeDocument.passingParts < narrativeDocument.totalParts) {
-                runPacks.forensicNarrativeStatus = 'Forensic narrative: ' + narrativeDocument.passingParts + ' of ' + narrativeDocument.totalParts + ' parts passed the Constitution\'s gates; the other parts were withheld.';
+                runPacks.forensicNarrativeStatus = (runPacks.forensicNarrativeStatus ? runPacks.forensicNarrativeStatus + ' ' : '') +
+                  narrativeDocument.passingParts + ' of ' + narrativeDocument.totalParts + ' parts passed the Constitution\'s gates; the other parts were withheld.';
               }
               updateStep(7, 'processing', 'Standalone forensic narrative sealed.');
             }
@@ -24050,7 +24220,7 @@ async function runSealingPipeline() {
       } catch (fnErr) {
         console.warn('Standalone forensic narrative generation failed (other sealed outputs unaffected):', fnErr);
         runPacks.forensicNarrativePack = null;
-        runPacks.forensicNarrativeStatus = 'The forensic narrative could not be sealed this run';
+        runPacks.forensicNarrativeStatus = 'The forensic narrative could not be completed during ' + forensicNarrativeStage + ' this run; the other sealed outputs are unaffected';
       }
       if (isAiReviewEnabled() && reportFraudResult && !reportFraudResult.scanFailed &&
           Array.isArray(reportFraudResult.findings) && !runPacks.forensicNarrativePack &&

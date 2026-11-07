@@ -6005,10 +6005,11 @@ async function buildForensicNarrative(opts) {
   var parts = Array.isArray(opts.narrativeParts) ? opts.narrativeParts : [];
   var passing = [];
   var dropped = 0;
+  var droppedPartIndexes = [];
   var droppedSentences = 0;
   for (var i = 0; i < parts.length; i++) {
     var part = parts[i] || {};
-    if (part.provenance !== 'ai' || typeof part.text !== 'string' || !part.text.trim()) { dropped++; continue; }
+    if ((part.provenance !== 'ai' && part.provenance !== 'engine') || typeof part.text !== 'string' || !part.text.trim()) { dropped++; droppedPartIndexes.push(i); continue; }
     var rawBlocks = part.text.split(/\n{2,}/);
     var prose = [];
     var tabular = false;
@@ -6019,18 +6020,19 @@ async function buildForensicNarrative(opts) {
       if (/^\s*(?:\||[-*•]\s|\d+[.)]\s)/m.test(block)) { tabular = true; break; }
       prose.push(block);
     }
-    if (tabular) { dropped++; continue; }
+    if (tabular) { dropped++; droppedPartIndexes.push(i); continue; }
     var scrub = scrubNarrative(prose.join('\n\n'), voSectionPageContradictions(part));
     droppedSentences += scrub.dropped;
-    if (!voGatePasses(scrub)) { dropped++; continue; }
+    if (!voGatePasses(scrub)) { dropped++; droppedPartIndexes.push(i); continue; }
     passing.push({
       index: Math.max(1, parseInt(part.index, 10) || i + 1),
       startDate: String(part.startDate || ''),
       endDate: String(part.endDate || ''),
+      provenance: part.provenance,
       text: scrub.text
     });
   }
-  if (!passing.length) return { bytes: null, passingParts: 0, totalParts: parts.length, droppedParts: dropped };
+  if (!passing.length) return { bytes: null, passingParts: 0, totalParts: parts.length, droppedParts: dropped, droppedPartIndexes: droppedPartIndexes };
 
   var docs = opts.documents && opts.documents.length ? opts.documents : [{ name: 'document.pdf' }];
   var identity = opts.identity || {};
@@ -6069,12 +6071,19 @@ async function buildForensicNarrative(opts) {
     cover.drawText(subtitleLines[sl], { x: centerX(subtitleLines[sl], fonts.timesItalic, 13), y: PH * 0.46 - 30 - sl * 18, size: 13, font: fonts.timesItalic, color: COVER_SUB });
   }
   var sourceDoc = docs[0] || {};
+  var aiParts = passing.filter(function (part) { return part.provenance === 'ai'; }).length;
+  var deterministicParts = passing.filter(function (part) { return part.provenance === 'engine'; }).length;
+  var preparationLine = deterministicParts && !aiParts
+    ? 'Prepared by Verum Omnis — deterministic forensic chronology over the sealed record'
+    : (deterministicParts
+      ? 'Prepared by Verum Omnis — gated AI narrative and deterministic sealed-record chronology'
+      : 'Prepared by Verum Omnis — AI forensic narrator over the sealed record');
   var coverDetails = [
     'Source document: ' + String(sourceDoc.name || 'document') + ' (' + (sourceDoc.pageCount || 'n/a') + ' pages)',
     'Source SHA-512: ' + truncHash(sourceDoc.sha512, 24, 12),
     'Source seal: ' + String(sourceDoc.sealId || 'n/a'),
     'Generated: ' + String(opts.generatedAt || 'n/a'),
-    'Prepared by Verum Omnis — AI forensic narrator over the sealed record',
+    preparationLine,
     'Advisory — the findings and their anchors are the evidence; the verdict belongs to the court.'
   ];
   var coverY = PH * 0.46 - 30 - subtitleLines.length * 18 - 10;
@@ -6139,6 +6148,7 @@ async function buildForensicNarrative(opts) {
     totalParts: parts.length,
     droppedParts: dropped,
     droppedSentences: droppedSentences,
+    deterministicParts: deterministicParts,
     workerDroppedSentences: workerGateStatsAvailable ? workerDroppedSentences : null
   };
   newPage();
@@ -6150,9 +6160,12 @@ async function buildForensicNarrative(opts) {
   }
   y -= 18;
   bodyPage.drawLine({ start: { x: left, y: y + 9 }, end: { x: PW - right, y: y + 9 }, thickness: 0.8, color: GOLD });
+  var narratorLine = deterministicParts && !aiParts
+    ? 'Narrator source: deterministic, page-anchored engine chronology; no AI-generated prose is printed. Contract: deterministic-forensic-narrative-v1. '
+    : 'Narrator model: ' + String(opts.model || 'unavailable') + '. Contract: human-v1; section: forensic_narrative. ' +
+      (deterministicParts ? deterministicParts + (deterministicParts === 1 ? ' part uses' : ' parts use') + ' the deterministic, page-anchored engine chronology. ' : '');
   var provenanceParagraphs = [
-    'Narrator model: ' + String(opts.model || 'unavailable') + '. Contract: human-v1; section: forensic_narrative. ' +
-      gateStats.passingParts + ' of ' + gateStats.totalParts + ' parts passed the render-time gates; ' +
+    narratorLine + gateStats.passingParts + ' of ' + gateStats.totalParts + ' parts passed the render-time gates; ' +
       gateStats.droppedSentences + (gateStats.droppedSentences === 1 ? ' sentence was' : ' sentences were') + ' removed by those gates.',
     (workerGateStatsAvailable ? 'The worker gates removed ' + workerDroppedSentences +
       (workerDroppedSentences === 1 ? ' sentence. ' : ' sentences. ') : '') +
@@ -6176,7 +6189,7 @@ async function buildForensicNarrative(opts) {
   try { doc.setAuthor('Verum Omnis'); } catch (e) {}
   try { doc.setProducer('Verum Omnis Forensic Narrative Builder (pdf-lib)'); } catch (e) {}
   if (opts.generatedAt) { try { doc.setCreationDate(new Date(opts.generatedAt)); } catch (e) {} }
-  return { bytes: await doc.save(), passingParts: passing.length, totalParts: parts.length, droppedParts: dropped, gateStats: gateStats };
+  return { bytes: await doc.save(), passingParts: passing.length, totalParts: parts.length, droppedParts: dropped, droppedPartIndexes: droppedPartIndexes, gateStats: gateStats };
 }
 
 // ================= exports =================

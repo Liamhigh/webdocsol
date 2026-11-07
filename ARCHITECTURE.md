@@ -277,7 +277,11 @@ report's narrative and, one section at a time, the court-ready narrative (`HUMAN
 default Llama 4 Scout; `ENGINE.md` §13). They transcribe voice notes (Whisper). Every AI sentence
 passes the §15.2 language gate and the anchor gate, and none adds a sealed finding. When no AI
 section passes, the narrative's cover and certification say it is the deterministic record. The
-on-device hybrid models belong to `1verum`, not to this repository.
+standalone forensic narrative follows the same rule: when no AI part is compliant, it renders a
+page-anchored chronology from the current run's sealed text and eligible engine findings, labels
+it deterministic, and still applies the render-time gate. AI candidates and Brain 9
+recommendations never supply that chronology. The on-device hybrid models belong to `1verum`,
+not to this repository.
 
 An AI-raised item is **candidate tier and never a finding**: it is excluded from the engine
 count, the fact box and the plain-language lead, and disclosed on its own advisory line. Mixing the
