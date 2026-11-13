@@ -2409,6 +2409,9 @@ function secMethodology(ctx, data) {
   ctx.bullet('Detectors run: ' + DETECTOR_COUNT + ' deterministic detectors across ' + CT_COUNT + ' contradiction types, plus ' + SP_COUNT + ' serial-pattern definitions.', { size: 9.5 });
   ctx.bullet('Mode: deterministic — keyword, pattern, numeric and structural heuristics over extracted page text. No generative AI was used to produce findings.', { size: 9.5 });
   ctx.bullet('AI review (Llama 3.3 70B on Cloudflare Workers AI, 8B fallback; single model, advisory): ' + (data.aiReview && data.aiReview.applied ? 'applied (advisory) — see the ' + aiSectionName(data) + ' section.' : (data.aiReview && data.aiReview.applied === false ? 'NOT RUN (' + (data.aiReview.reason || 'service unavailable') + ') — findings are engine output, unreviewed.' : 'NOT RUN (no review was requested, or the engine reported nothing to review) — findings are engine output, unreviewed.')), { size: 9.5 });
+  if (data.aiNarrativeError && data.aiNarrativeError.detail) {
+    ctx.bullet(san(String(data.aiNarrativeError.detail)) + ' (class: ' + san(String(data.aiNarrativeError.error || 'model_error')) + '). The deterministic narrative fallback was used; no AI authorship is claimed for it.', { size: 9.5 });
+  }
   ctx.bullet(rulePackageLine(data), { size: 9.5 });
   ctx.bullet(brain9SweepLine(data), { size: 9.5 });
   ctx.bullet('Text extraction: ' + (data.extractionNotes || 'per-page PDF content-stream decoding with ToUnicode CMaps.'), { size: 9.5 });
@@ -4214,6 +4217,35 @@ function voSectionPageContradictions(sec) {
   return out;
 }
 
+function voAnchorToleranceDisclosure(count, pages) {
+  count = Number(count) || 0;
+  if (!count) return '';
+  var pageList = Array.isArray(pages) ? pages.filter(function (n) { return Number(n) > 0; }).map(Number) : [];
+  pageList.sort(function (a, b) { return a - b; });
+  return 'Anchor matching on OCR-rescued pages used normalised text comparison for ' + count + ' sentence' + (count === 1 ? '' : 's') + '; all printed quotations remain verbatim from the sealed record.' + (pageList.length ? ' Sealed-record pages: ' + pageList.join(', ') + '.' : '');
+}
+
+// Worker counters describe the gated draft. The report face is narrower: count
+// only the exact rescued sentences that survived the independent render gate.
+function voPrintedAnchorTolerance(gate, printedText) {
+  var out = { count: 0, pages: [] };
+  var list = gate && Array.isArray(gate.anchorTolerantSentences) ? gate.anchorTolerantSentences : [];
+  var text = String(printedText || '');
+  for (var i = 0; i < list.length; i++) {
+    var entry = list[i] || {};
+    var sentence = String(entry.text || '');
+    if (!sentence || text.indexOf(sentence) < 0) continue;
+    out.count++;
+    var pages = Array.isArray(entry.pages) ? entry.pages : [];
+    for (var p = 0; p < pages.length; p++) {
+      var page = Number(pages[p]);
+      if (page > 0 && out.pages.indexOf(page) < 0) out.pages.push(page);
+    }
+  }
+  out.pages.sort(function (a, b) { return a - b; });
+  return out;
+}
+
 
 // Two spellings of the same party? Prefix match ("Marius Nortj" /
 // "Marius Nortje"), or the same surname with agreeing first initial
@@ -5044,6 +5076,7 @@ async function build(opts) {
     aiReview: opts.aiReview || null,
     aiNarrative: opts.aiNarrative || null,
     aiNarrativeSource: opts.aiNarrativeSource || null,
+    aiNarrativeError: opts.aiNarrativeError || null,
     classification: opts.classification || null,
     serialLabels: opts.serialLabels || null,
     unreadPages: opts.unreadPages || null,
@@ -5335,6 +5368,7 @@ async function buildNarrative(opts) {
     aiReview: opts.aiReview || null,
     aiNarrative: opts.aiNarrative || null,
     aiNarrativeSource: opts.aiNarrativeSource || null,
+    aiNarrativeError: opts.aiNarrativeError || null,
     classification: opts.classification || null,
     serialLabels: opts.serialLabels || null,
     unreadPages: opts.unreadPages || null,
@@ -5459,6 +5493,19 @@ function lawExclusionsOf(lawCheck) {
   return out;
 }
 
+function voHumanNarratorSuppression(sections) {
+  var hs = sections || {};
+  var drafted = 0, passing = 0;
+  for (var k in hs) {
+    var x = hs[k];
+    if (!x || x.provenance !== 'ai' || !x.text) continue;
+    drafted++;
+    var sc = (k === 'counter_narratives') ? scrubRebuttals(x.text, voSectionPageContradictions(x)) : scrubNarrative(x.text, voSectionPageContradictions(x));
+    if (voGatePasses(sc) || (sc.dropped === 0 && String(x.text).trim().length < 200)) passing++;
+  }
+  return { drafted: drafted, passing: passing, suppressed: drafted >= 2 && passing * 2 < drafted };
+}
+
 async function buildHumanReport(opts) {
   opts = opts || {};
   var fr = opts.findings || { clean: true, overallScore: 0, totalFindings: 0, findings: [], summary: '' };
@@ -5485,18 +5532,8 @@ async function buildHumanReport(opts) {
   // fix 4): "drafted by an AI narrator" may not print when one section of
   // nine is machine-written.
   var VO_WRITER_SECTIONS = ['executive_summary', 'chronology', 'four_pillars', 'critical_evidence', 'counter_narratives', 'sworn_statements', 'coercive_conduct', 'legal_framework', 'recommendations'];
-  var aiCounts = (function () {
-    var drafted = 0, passing = 0;
-    for (var k in hs) {
-      var x = hs[k];
-      if (!x || x.provenance !== 'ai' || !x.text) continue;
-      drafted++;
-      var sc = (k === 'counter_narratives') ? scrubRebuttals(x.text, voSectionPageContradictions(x)) : scrubNarrative(x.text, voSectionPageContradictions(x));
-      if (voGatePasses(sc) || (sc.dropped === 0 && String(x.text).trim().length < 200)) passing++;
-    }
-    return { drafted: drafted, passing: passing };
-  })();
-  var aiPrintable = aiCounts.passing > 0 && !(aiCounts.drafted >= 2 && aiCounts.passing * 2 < aiCounts.drafted);
+  var aiCounts = voHumanNarratorSuppression(hs);
+  var aiPrintable = aiCounts.passing > 0 && !aiCounts.suppressed;
   var humanFindings = Array.isArray(opts.humanFindings) ? opts.humanFindings : [];
 
   var PDFDocument = PDFLibRef.PDFDocument, StandardFonts = PDFLibRef.StandardFonts;
@@ -5573,6 +5610,7 @@ async function buildHumanReport(opts) {
   var jur = detectJurisdictions(data);
 
   var sectionsAi = 0, sectionsAll = 0, gateDroppedClient = 0, gateDroppedServer = 0, gateOrphaned = 0, draftsDiscarded = 0;
+  var anchorTolerant = 0, anchorTolerantPages = [];
 
 
   function provisionsText(f) {
@@ -5606,16 +5644,8 @@ async function buildHumanReport(opts) {
   // Pre-pass: when fewer than half of the narrator's drafted sections pass
   // the gates, the narrative edition is not printed piecemeal — a summary
   // that refers to a section the reader cannot find is worse than none.
-  var aiDrafted = 0, aiPassing = 0;
-  for (var hk in hs) {
-    var hsec = hs[hk];
-    if (!hsec || hsec.provenance !== 'ai' || !hsec.text) continue;
-    aiDrafted++;
-    var hsc = (hk === 'counter_narratives') ? scrubRebuttals(hsec.text, voSectionPageContradictions(hsec)) : scrubNarrative(hsec.text, voSectionPageContradictions(hsec));
-    // A sanctioned one-line answer ("None identified.") is short and gate-clean.
-    if (voGatePasses(hsc) || (hsc.dropped === 0 && String(hsec.text).trim().length < 200)) aiPassing++;
-  }
-  var narratorSuppressed = aiDrafted >= 2 && aiPassing * 2 < aiDrafted, suppressionNoted = false;
+  var aiDrafted = aiCounts.drafted, aiPassing = aiCounts.passing;
+  var narratorSuppressed = aiCounts.suppressed, suppressionNoted = false;
   function aiBlock(id, fallback) {
     sectionsAll++;
     var sec = hs[id];
@@ -5645,6 +5675,14 @@ async function buildHumanReport(opts) {
         renderBlocks(scrub.text);
         gateDroppedClient += scrub.dropped;
         gateOrphaned += scrub.orphaned || 0;
+        // Only rescued sentences that actually printed contribute provenance.
+        var printedTolerance = voPrintedAnchorTolerance(sec.gate, scrub.text);
+        anchorTolerant += printedTolerance.count;
+        for (var tp = 0; tp < printedTolerance.pages.length; tp++) {
+          var tolerantPage = printedTolerance.pages[tp];
+          if (anchorTolerantPages.indexOf(tolerantPage) < 0) anchorTolerantPages.push(tolerantPage);
+        }
+        anchorTolerantPages.sort(function (a, b) { return a - b; });
         // A page-only sentence reports what that page states; only an [F#]
         // is a finding (evidence-bundle-7-docs: the author's own email was
         // narrated as "the core pattern the record establishes").
@@ -5975,6 +6013,7 @@ async function buildHumanReport(opts) {
       : 'not run'))) + '  |  contract ' + san(String(prov.contract || 'human-v1')) + '  |  temperature 0' + (prov.modelAttempts ? '  |  model drafts attempted: ' + prov.modelAttempts : ''),
     narratorContextLine,
     'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the server\'s anchor and language gate: ' + gateDroppedServer + '  |  by the render-time §15.2 gate: ' + gateDroppedClient + (draftsDiscarded ? '  |  drafts discarded before printing: ' + draftsDiscarded : '') + (gateOrphaned ? '  |  rebuttal sentences dropped with a removed claim: ' + gateOrphaned : ''),
+    anchorTolerant ? voAnchorToleranceDisclosure(anchorTolerant, anchorTolerantPages) : null,
     'Engine: Forensic Contradiction Engine v' + ENGINE_VERSION + ' — deterministic mode',
     rulePackageLine(data),
     brain9SweepLine(data),
@@ -6029,6 +6068,7 @@ async function buildForensicNarrative(opts) {
       startDate: String(part.startDate || ''),
       endDate: String(part.endDate || ''),
       provenance: part.provenance,
+      gate: part.gate || null,
       text: scrub.text
     });
   }
@@ -6136,6 +6176,7 @@ async function buildForensicNarrative(opts) {
   }
   var workerGateStats = Array.isArray(opts.gateStats) ? opts.gateStats : [];
   var workerDroppedSentences = 0, workerGateStatsAvailable = false;
+  var anchorTolerant = 0, anchorTolerantPages = [];
   for (var wgs = 0; wgs < workerGateStats.length; wgs++) {
     var workerStats = workerGateStats[wgs];
     if (workerStats && isFinite(Number(workerStats.dropped))) {
@@ -6143,13 +6184,27 @@ async function buildForensicNarrative(opts) {
       workerGateStatsAvailable = true;
     }
   }
+  // Deterministic fallbacks and sentences withheld at render time never contribute.
+  for (var ap = 0; ap < passing.length; ap++) {
+    var printedPart = passing[ap];
+    if (printedPart.provenance !== 'ai' || !printedPart.gate) continue;
+    var printedTolerance = voPrintedAnchorTolerance(printedPart.gate, printedPart.text);
+    anchorTolerant += printedTolerance.count;
+    for (var app = 0; app < printedTolerance.pages.length; app++) {
+      var printedPage = printedTolerance.pages[app];
+      if (anchorTolerantPages.indexOf(printedPage) < 0) anchorTolerantPages.push(printedPage);
+    }
+  }
+  anchorTolerantPages.sort(function (a, b) { return a - b; });
   var gateStats = {
     passingParts: passing.length,
     totalParts: parts.length,
     droppedParts: dropped,
     droppedSentences: droppedSentences,
     deterministicParts: deterministicParts,
-    workerDroppedSentences: workerGateStatsAvailable ? workerDroppedSentences : null
+    workerDroppedSentences: workerGateStatsAvailable ? workerDroppedSentences : null,
+    anchorTolerant: anchorTolerant,
+    anchorTolerantPages: anchorTolerantPages
   };
   newPage();
   var provenanceTitle = 'PROVENANCE & CERTIFICATION';
@@ -6170,6 +6225,7 @@ async function buildForensicNarrative(opts) {
     (workerGateStatsAvailable ? 'The worker gates removed ' + workerDroppedSentences +
       (workerDroppedSentences === 1 ? ' sentence. ' : ' sentences. ') : '') +
       'Parts withheld by the render-time gates: ' + gateStats.droppedParts + '.',
+    anchorTolerant ? voAnchorToleranceDisclosure(anchorTolerant, anchorTolerantPages) : '',
     'Source document SHA-512: ' + truncHash(sourceDoc.sha512, 24, 12) + '; seal id: ' + String(sourceDoc.sealId || 'n/a') + '.',
     'Sealed technical report SHA-512: ' + truncHash(opts.technicalSha512, 24, 12) + '; seal id: ' + String(opts.technicalSealId || 'n/a') + '.',
     'Findings JSON SHA-512: ' + (opts.findingsJsonSha512 ? truncHash(opts.findingsJsonSha512, 24, 12) : 'unavailable') + '.',
@@ -6177,6 +6233,7 @@ async function buildForensicNarrative(opts) {
     'Verify free at https://verumglobal.foundation/verify.html'
   ];
   for (var pp = 0; pp < provenanceParagraphs.length; pp++) {
+    if (!provenanceParagraphs[pp]) continue;
     var provenanceLines = wrapText(provenanceParagraphs[pp], fonts.times, size, PW - left - right - 16);
     for (var pl = 0; pl < provenanceLines.length; pl++) {
       if (y - leading < bottom) newPage();
@@ -6206,6 +6263,9 @@ var api = { build: build, buildNarrative: buildNarrative, buildHumanReport: buil
   _documentParties: documentParties, _effectiveParties: effectiveParties,
   _effectivePartiesWithRoles: effectivePartiesWithRoles,
   _splitSentences: splitSentences, _samePartyName: samePartyName, _isEngineFinding: isEngineFinding, _humanNumberable: humanNumberable, _speakerOf: speakerOf, _partyStronglyNamed: partyStronglyNamed, _capText: capText, _aiSectionName: aiSectionName, _findingName: findingName, _hasTwoSidedFinding: hasTwoSidedFinding, _isReducedWeight: isReducedWeight, _isCappedWeight: isCappedWeight, _voCountPhrase: voCountPhrase, _statutesForFinding: statutesForFinding, _engineNotes: engineNotes,
+  _voAnchorToleranceDisclosure: voAnchorToleranceDisclosure,
+  _voPrintedAnchorTolerance: voPrintedAnchorTolerance,
+  _voHumanNarratorSuppression: voHumanNarratorSuppression,
   _detectJurisdictions: detectJurisdictions, _statutesForSubject: statutesForSubject,
   _lawExclusionsOf: lawExclusionsOf, _lawDisclaimer: LAW_DISCLAIMER_TEXT, _gpsLine: gpsLine,
   _subjectOf: subjectOf, _attributeParty: attributeParty, _extractMoney: extractMoney,

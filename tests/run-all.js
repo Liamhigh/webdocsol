@@ -56,6 +56,8 @@ const suites = [
   'batch7b-greensky-corrections.test.mjs',
   'batch7c-court-corrections.test.mjs',
   'batch7d-ots-delivered-bytes.test.mjs',
+  'batch7d-anchor-tolerance.test.mjs',
+  'batch7d-pipeline-reliability.test.mjs',
   'timeline-dates.test.mjs',
   'doc-fact-index.test.mjs',
   'cross-doc-conflicts.test.mjs',
