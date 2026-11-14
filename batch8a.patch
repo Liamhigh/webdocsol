@@ -1,0 +1,55 @@
+From e0c2d1e53d335750ee5f9879f976916d7111c458 Mon Sep 17 00:00:00 2001
+From: agent <agent@example.com>
+Date: Sat, 14 Nov 2026 08:25:38 +0800
+Subject: [PATCH] Batch 8a: global legal citation index + D64 citation-identity
+ conflict (CT33)
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+The engine's only legal-reference check was D22's 'section number above 500' —
+it never read the citations themselves. The app runs in every jurisdiction, so
+this batch builds the citation layer jurisdiction-neutral:
+
+- voExtractCitationIndex: every statute and case the record cites, verbatim,
+  with page and character span — Commonwealth 'Act N of YYYY', UK 'Act YYYY',
+  U.S.C./C.F.R., US national + regional reporters, EU instruments and CJEU
+  numbers, Indian AIR/SCC, SA law reports and CCT numbers, and the bracketed
+  neutral citation used across UK/SA/AU/CA/NZ/SG/HK/IE. Unknown court codes
+  are indexed and marked 'unknown', never dropped. Sealed inside the findings
+  JSON (v1.12.0) like the Batch 7a conduct ledger.
+- D64 (CT33): fires only where one instrument name carries two different
+  statutory identifiers (number+year = a unique pair). Deliberate-version
+  guard ('the repealed Companies Act 61 of 1973') silences records discussing
+  two versions; case citations never conflict (parallel citation is normal);
+  bare-year UK-style acts are index-only (two real Acts share one name).
+- D22 narrowed by the sealed index: the ContractNLI precision probe (61 clean
+  Stanford NDAs) caught it firing on 'Section 1159 of the Companies Act 2006'
+  — a real provision. Bare-year long-form Acts no longer hit the >500 floor;
+  the Commonwealth numbered form keeps it; no index = original behaviour.
+
+Boundaries: the index never asserts a citation exists in the real world;
+bare 'the Act' references stay with the advisory layer.
+
+benchmarks/contractnli.mjs (dev tool): precision probe + citation yield over
+the ContractNLI dev split (dataset not committed). Baseline: CT33 1 -> 0 on
+clean NDAs; remaining CT23/CT57/CT53 hits logged as FP-review candidates.
+
+Engine v5.8.0-web; 62 detectors; 55 suites, 3531 assertions green; npm run
+check clean; inline copies re-spliced byte-exact.
+---
+ ENGINE.md                             |  11 +-
+ benchmarks/contractnli.mjs            |  77 ++++++
+ forensic-engine-page.js               | 353 ++++++++++++++++++++++++-
+ forensic-report.js                    |   4 +-
+ seal-document.html                    | 366 +++++++++++++++++++++++++-
+ tests/annexure-eb-regression.test.mjs |   2 +-
+ tests/batch5f-gate-trace.test.mjs     |   2 +-
+ tests/batch7-conduct-ledger.test.mjs  |   4 +-
+ tests/batch8-citations.test.mjs       | 198 ++++++++++++++
+ tests/findings-json.test.mjs          |   3 +-
+ tests/run-all.js                      |   1 +
+ 11 files changed, 996 insertions(+), 25 deletions(-)
+ create mode 100644 benchmarks/contractnli.mjs
+ create mode 100644 tests/batch8-citations.test.mjs
+
