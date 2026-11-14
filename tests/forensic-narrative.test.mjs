@@ -65,6 +65,30 @@ ok(fromFindings.length === 1 && fromFindings[0].startDate === '4 March 2024',
   'the plan falls back to dates anchored on findings');
 ok(sandbox.plan({ timeline: { events: [{ date: '31 February 2024' }] }, findings: [] }).length === 0,
   'impossible dates do not enter the narrative plan');
+ok(sandbox.plan({ timeline: { events: [] }, findings: [
+  { source: 'ai', type: 'CT02', evidence: 'candidate only', page: 3, anchor: { when: ['3 January 2020'], where: [3] } }
+] }).length === 0,
+  'an AI candidate date cannot create or bound a narrative part');
+
+// Greensky, 7 November 2026: dated events and 22 eligible findings existed,
+// but no compliant standalone AI part was emitted; the companion court-ready
+// report recorded every narrator draft gated out. The standalone product was
+// the only narrative without the deterministic fallback required by DEPLOYMENT.
+const fallbackStart = html.indexOf('function voDeterministicForensicNarrativeParts(');
+const fallbackEnd = fallbackStart >= 0 ? html.indexOf('\nfunction ', fallbackStart + 10) : -1;
+const fallbackSource = fallbackStart >= 0 && fallbackEnd > fallbackStart ? html.slice(fallbackStart, fallbackEnd) : '';
+ok(fallbackStart >= 0 && /provenance:\s*'engine'/.test(fallbackSource),
+  'an AI gate failure has a deterministic standalone-narrative fallback');
+ok(/voDeterministicForensicNarrativeParts\(reportFraudResult/.test(html) &&
+  /deterministic, page-anchored engine chronology/.test(html),
+  'the pipeline uses and plainly discloses the deterministic fallback');
+ok(/no valid dated events were anchored/.test(html) && /gate_failed/.test(html),
+  'empty-date and narrator-gate failures receive distinct visible diagnoses');
+ok(/droppedPartIndexes/.test(builder) && /renderDropped\.indexOf\(index\)/.test(html),
+  'a render-gate failure is backfilled per part, not only when the whole build fails');
+ok(/narrativeDocument\.gateStats\.deterministicParts/.test(html) &&
+  /where the AI narrator did not supply a compliant draft/.test(html),
+  'the UI counts printed deterministic parts and describes mixed output precisely');
 
 const callStart = html.indexOf('async function aiHumanForensicNarrative(');
 const callEnd = html.indexOf('// B7 triple legal verification', callStart);
@@ -124,11 +148,82 @@ globalThis.PDFLib = {
   PDFDocument: { create: async () => fakePdf }
 };
 await import(new URL('../forensic-report.js', import.meta.url));
+
+const helperStart = html.indexOf('function voHumanFirstPage(');
+const helperEnd = html.indexOf('function voHumanPayloadFinding(', helperStart);
+const fallbackSandbox = { window: { VerumReport: globalThis.VerumReport }, Date, String, Array, Object, Math, isFinite, parseInt };
+vm.createContext(fallbackSandbox);
+vm.runInContext(datePlanSource + '\n' + html.slice(helperStart, helperEnd) + '\n' + fallbackSource +
+  '\nthis.makeFallback = voDeterministicForensicNarrativeParts;', fallbackSandbox);
+const fallbackInput = {
+  findings: [
+    { type: 'CT02', evidence: 'The agreement carries two different dates', location: 'Page 2', page: 2,
+      anchor: { when: ['2 January 2020'], where: [2] } },
+    { type: 'CT02', source: 'ai', evidence: 'AI-ONLY CANDIDATE TEXT', location: 'Page 3', page: 3,
+      anchor: { when: ['3 January 2020'], where: [3] } }
+  ],
+  timeline: { events: [
+    { source: 'document', date: '1 January 2020', page: 1, evidence: 'Agreement signed on 1 January 2020 by Acme.' },
+    { source: 'finding', type: 'CT02', date: '2 January 2020', page: 2, evidence: 'The agreement carries two different dates' },
+    { source: 'finding', type: 'CT02', date: '3 January 2020', page: 3, evidence: 'AI-ONLY CANDIDATE TEXT' }
+  ] }
+};
+const fallbackRun = { runInput: { textBlocks: [
+  'Agreement signed on 1 January 2020 by Acme.',
+  'The second agreement date is recorded here.',
+  'AI-ONLY CANDIDATE TEXT'
+] } };
+const fallbackPlan = [{ index: 1, count: 1, startDate: '1 January 2020', endDate: '3 January 2020' }];
+const fallbackParts = fallbackSandbox.makeFallback(fallbackInput, fallbackRun, fallbackPlan);
+ok(fallbackParts.length === 1 && fallbackParts[0].provenance === 'engine' &&
+  fallbackParts[0].text.includes('Agreement signed on 1 January 2020 by Acme.') &&
+  fallbackParts[0].text.includes('[F1]') && !fallbackParts[0].text.includes('AI-ONLY'),
+  'the fallback uses verified page text and engine findings, never AI candidates');
+const tamperedFallback = fallbackSandbox.makeFallback(fallbackInput, {
+  runInput: { textBlocks: ['A different page', 'The second agreement date is recorded here.', 'AI-ONLY CANDIDATE TEXT'] }
+}, fallbackPlan);
+ok(!tamperedFallback[0].text.includes('Agreement signed'),
+  'a document quotation that no longer verifies against the sealed page is omitted');
+const anchorPageFallback = fallbackSandbox.makeFallback({
+  findings: [{ type: 'CT02', evidence: 'The dates differ', location: 'Pages 8-9',
+    anchor: { when: ['2 January 2020'], where: [9] } }], timeline: { events: [] }
+}, fallbackRun, [{ index: 1, count: 1, startDate: '2 January 2020', endDate: '2 January 2020' }]);
+ok(anchorPageFallback[0].text.includes('2 January 2020 on p. 9') &&
+  !anchorPageFallback[0].text.includes('2 January 2020 on p. 8'),
+  'a multi-page finding uses its own date anchor rather than the first display-location page');
+const timelineAnchorFallback = fallbackSandbox.makeFallback({
+  findings: [{ type: 'CT02', evidence: 'The dates differ', location: 'Page 8', page: 8,
+    anchor: { when: [], where: [9] } }],
+  timeline: { events: [{ source: 'finding', type: 'CT02', evidence: 'The dates differ', date: '2 January 2020', page: 9 }] }
+}, fallbackRun, [{ index: 1, count: 1, startDate: '2 January 2020', endDate: '2 January 2020' }]);
+ok(timelineAnchorFallback[0] && timelineAnchorFallback[0].text.includes('2 January 2020 on p. 9'),
+  'timeline matching and direct finding output use the same anchor-page key');
+ok(fallbackSandbox.makeFallback({ findings: [{ source: 'ai', type: 'CT02', evidence: 'candidate', page: 1 }],
+  timeline: fallbackInput.timeline }, fallbackRun, fallbackPlan).length === 0,
+  'AI-only material cannot manufacture a deterministic standalone report');
+const deterministicBuild = await globalThis.VerumReport.buildForensicNarrative({
+  images: { logo: new Uint8Array([1]) },
+  documents: [{ name: 'record.pdf', pageCount: 3, sha512: 'd'.repeat(128), sealId: 'VO-SOURCE' }],
+  narrativeParts: fallbackParts,
+  gateStats: [{ kept: 1, dropped: 8 }]
+});
+const deterministicText = drawnText.join(' ').replace(/\s+/g, ' ');
+ok(deterministicBuild.bytes instanceof Uint8Array && deterministicBuild.gateStats.deterministicParts === 1 &&
+  deterministicText.includes('Prepared by Verum Omnis — deterministic forensic chronology over the sealed record') &&
+  deterministicText.includes('no AI-generated prose is printed'),
+  'the Greensky failure shape now renders a standalone PDF with honest deterministic provenance');
+const failedEngineBuild = await globalThis.VerumReport.buildForensicNarrative({
+  narrativeParts: [{ index: 1, count: 1, provenance: 'engine', text: 'This proves the respondent committed fraud.' }]
+});
+ok(failedEngineBuild.bytes === null && failedEngineBuild.passingParts === 0,
+  'deterministic provenance does not bypass the existing render-time language gate');
+
 const failedBuild = await globalThis.VerumReport.buildForensicNarrative({
   narrativeParts: [{ index: 1, count: 1, provenance: 'ai', text: 'This is a single sentence.' }]
 });
 ok(failedBuild.bytes === null && failedBuild.passingParts === 0,
   'a gate-failed part creates no PDF bytes');
+const pageCountBeforeBuilt = pages.length;
 const built = await globalThis.VerumReport.buildForensicNarrative({
   images: { logo: new Uint8Array([1]) },
   documents: [{ name: 'record.pdf', pageCount: 12, sha512: 'a'.repeat(128), sealId: 'VO-SOURCE' }],
@@ -144,12 +239,13 @@ const built = await globalThis.VerumReport.buildForensicNarrative({
     { index: 2, count: 2, provenance: 'none', reason: 'gate_failed' }
   ]
 });
-ok(built.bytes instanceof Uint8Array && built.passingParts === 1 && built.totalParts === 2 && built.droppedParts === 1,
-  'only the gated part is included in a standalone PDF');
+ok(built.bytes instanceof Uint8Array && built.passingParts === 1 && built.totalParts === 2 && built.droppedParts === 1 &&
+  built.droppedPartIndexes.length === 1 && built.droppedPartIndexes[0] === 1,
+  'only the gated part is included and its exact index is returned for fallback substitution');
 ok(built.gateStats.droppedSentences === 1 && built.gateStats.workerDroppedSentences === 2,
   'the renderer returns render-time and worker gate statistics');
 const renderedText = drawnText.join(' ').replace(/\s+/g, ' ');
-ok(pages.length === 3 && drawnText.includes('FORENSIC NARRATIVE') &&
+ok(pages.length - pageCountBeforeBuilt === 3 && drawnText.includes('FORENSIC NARRATIVE') &&
   drawnText.some((text) => text.indexOf('PART I — WHAT THE DOCUMENTS SHOWED') === 0) &&
   drawnText.some((text) => text.indexOf('The document records a payment') === 0) &&
   renderedText.includes('Source document: record.pdf (12 pages)') &&

@@ -76,7 +76,7 @@ t.ok(D01B(['The buyer was conned by a fake proof of payment; it was a courier sc
 
 // ---- D01C: denial then admission ----
 const deny = [
-  'You told me there were no sales and that the order fell through. I believed you at the time.',
+  'There were no sales and the order did not happen. Nothing was invoiced for this transaction.',
   'Filler page. '.repeat(40),
   'Because you refused to communicate with us, Kevin proceeded with the deal, since the client was already his.',
 ];

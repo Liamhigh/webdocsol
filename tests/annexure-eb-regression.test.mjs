@@ -96,12 +96,14 @@ ok(ct20(['RONNIE MOIR TRAVEL CC (Registration NO. CK2000/071982/23) t/a Port Edw
   'CT20 silent: CK2000/071982/23 is a valid close-corporation registration (F009)');
 {
   // A person's field ("of complainant") holding an identity number is what the field asks
-  // for: an engine note since 5 October 2026 (Combine 06 April 2026); a company's
-  // registration label holding an identity-shaped number stays the Low check (F005).
+  // for: an engine note since 5 October 2026 (Combine 06 April 2026). The court
+  // bundle review confirmed the same discipline for a sole proprietor's number:
+  // a field/labelling anomaly is a verification note, not a fake registration.
   const f = ct20(['Registration number of complainant 510209 5091 08 (a natural person) under the Consumer Protection Act.']).filter(x => !x.contextOnly);
-  const fc = ct20(['Company registration number 8001015009087 of the supplier, as printed on the invoice.']);
-  ok(f.length === 0 && fc.length === 1 && fc[0].severity === 2 && /identity number/.test(fc[0].evidence),
-    'CT20: an identity number in a person\'s field is a note; an identity-shaped number under a company registration label is the Low check (F005)');
+  const fcAll = ct20(['Company registration number 8001015009087 of the supplier, as printed on the invoice.']);
+  const fc = fcAll.filter(x => !x.contextOnly), fcNote = fcAll.find(x => x.contextOnly);
+  ok(f.length === 0 && fc.length === 0 && fcNote && fcNote.severity === 0 && /identity number/.test(fcNote.evidence),
+    'CT20: an identity number in a person\'s field or under a registration label is a note, not a fake-registration contradiction');
 }
 {
   const f = ct20(['Registration Number 1911/0001154/07 (Transferor), a company duly incorporated']);
@@ -1218,7 +1220,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   ok(/merged\.discarded \+= disc;/.test(pageSrc), 'a critical-evidence batch the server\'s gate discarded is counted');
   const certSrc = pageSrc.slice(pageSrc.indexOf('async function buildAnchorCertificate('), pageSrc.indexOf('async function buildAnchorCertificate(') + 12000);
   ok(!/no one can edit or delete|not even Verum Omnis|is anchored to the Bitcoin blockchain|cannot be forged|unique signature|investigator’s assessment|no need to trust Verum Omnis/.test(certSrc), 'the anchor certificate claims no permanent record, no forgery-proof signature and no trust-free check while its header says PENDING');
-  ok(/ORIGINAL UPLOAD SHA-512 \(BEFORE THE SEAL WAS APPLIED\)/.test(certSrc) && /DELIVERED FILE SHA-512 \(THE SEALED FILE AS DELIVERED\)/.test(certSrc) && /DELIVERED FILE SHA-512 \(THE PASSWORD-PROTECTED COPY SENT\)/.test(certSrc) && /OTS DIGEST \(SHA-256 OF THE ORIGINAL SHA-512 HEX TEXT\)/.test(certSrc)
+  ok(/ORIGINAL UPLOAD SHA-512 \(BEFORE THE SEAL WAS APPLIED\)/.test(certSrc) && /DELIVERED FILE SHA-512 \(THE SEALED FILE AS DELIVERED\)/.test(certSrc) && /DELIVERED FILE SHA-512 \(THE PASSWORD-PROTECTED COPY SENT\)/.test(certSrc) && /OTS DIGEST \(SHA-256 OF THE EXACT DELIVERED FILE BYTES\)/.test(certSrc)
     && /sealedSha512: window\._voDeliveredFileHash \|\| \(\(password && encryptedBytes\) \? await computeSHA512\(encryptedBytes\) : \(sealedBytes \? await computeSHA512\(sealedBytes\) : null\)\)/.test(pageSrc) && !/sealedSha512: window\._voSealedFileHash/.test(pageSrc)
     && /var _deliveredBytes = \(password && encryptedBytes\) \? encryptedBytes : sealedBytes;/.test(pageSrc) && /window\._voDeliveredFileHash = await computeSHA512\(_deliveredBytes\)/.test(pageSrc),
     'the certificate says which bytes each fingerprint belongs to, and prints the delivered file\'s real SHA-512 (as sha512sum computes it; the password-protected copy when one was sent), never the VO-SEAL2 self-check value — computed once from the delivered bytes and shared with the results page');

@@ -182,9 +182,11 @@ wiped**. Everything that leaves any platform must be sealed.
 
 **Sealing/verification/forensics split (binding on every surface):**
 1. **Sealing parity** — every repository ships the SAME document sealing as
-   `webdocsol` (SHA-512 → OpenTimestamps → OTS receipt → QR → per-page seal footer,
-   byte-identical seal format `VO-SEAL2`). A document sealed on any surface verifies
-   on any other.
+   `webdocsol` (original SHA-512 → QR + per-page seal footer → optional encryption →
+   SHA-256 of the exact delivered bytes → OpenTimestamps → detached OTS receipt,
+   byte-identical seal format `VO-SEAL2` with `OTS:DELIVERED-FILE-SHA256`). Legacy
+   hash-of-SHA-512-hex receipts remain verifiable and are never rewritten. A document
+   sealed on any surface verifies on any other.
 2. **Verification happens at the website, only.** Apps do NOT re-implement
    verification UI. The verify action / QR on every surface opens **the Verification
    Hub** (defined in the header). This is what keeps the system stateless: the seal +

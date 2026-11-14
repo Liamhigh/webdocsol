@@ -148,7 +148,7 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor 
 // ===== 6b. A person's field and a company's field are kept apart (D11) =====
 {
   const r = DET.D11_DETECT_REGISTRATION_FAKE(['Company registration number: 7801015009087 of the supplier.', 'Registration number of complainant: 7801015009087']);
-  ok(r.some(f => !f.contextOnly && f.severity === 2 && f.location === 'Page 1') && r.some(f => f.contextOnly && f.location === 'Page 2'), 'one person\'s number in a complainant\'s field never silences the same number under a company\'s registration label (' + JSON.stringify(r.map(f => [f.severity, !!f.contextOnly, f.location])) + ')');
+  ok(!r.some(f => !f.contextOnly) && r.some(f => f.contextOnly && f.location === 'Page 1') && r.some(f => f.contextOnly && f.location === 'Page 2'), 'a person\'s number in either field is a page-specific verification note, never a fake-registration contradiction (' + JSON.stringify(r.map(f => [f.severity, !!f.contextOnly, f.location])) + ')');
 }
 
 // ===== 7. Definitions: two sites, one definition read twice, a longer term ==
