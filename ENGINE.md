@@ -163,7 +163,7 @@ page); D15 and D20 take the pdf-lib document, D16 takes `(textBlocks, pdfDoc)`, 
 | D14 `DETECT_AMOUNT_ROUNDING_ANOMALY` | CT15 | Amount discrepancies |
 | D15 `DETECT_METADATA_FRAUD` | CT24, CT29 | Metadata / timestamp manipulation |
 | D16 `DETECT_FONT_ANOMALY` | CT25 | Line-length variance on a page (unsound, and unreachable on production blocks, which carry no line breaks; open with the founder, §12.14 (d): do not revive it by restoring newlines) |
-| D17 `DETECT_FORMAT_ANOMALY` | CT26 | Near-empty pages among full ones |
+| D17 `DETECT_FORMAT_ANOMALY` | CT54 | Near-empty pages among full ones: examination-coverage limits |
 | D18 `DETECT_PAGE_MANIPULATION` | CT27 | Layout / page-number manipulation |
 | D19 `DETECT_EVIDENCE_TAMPERING` | CT41 | Explicit tampering indicators in text |
 | D20 `DETECT_DIGITAL_FOOTPRINT_MISMATCH` | CT42 | Digital traces inconsistent with claimed origin |
@@ -249,10 +249,10 @@ numeric annexure label; lowercase OCR word-splits are rejected.
 Naming two jurisdictions in a cross-border matter is normal. **Guard:** emitted as an
 **unscored `contextOnly` note**, never a scored finding.
 
-### 4.7 D17 / CT26 — near-empty pages are a question, not a verdict
+### 4.7 D17 / CT54 — near-empty pages are examination limits, not a verdict
 A page with no machine-readable text is most often an **image-only page OCR did not capture**,
-not a removed page. **Guard:** the finding says exactly that and tells the reader to establish
-which from the original; it never asserts insertion or removal.
+not a removed page. **Guard:** the CT54 extraction limit says exactly that and tells the reader to
+establish which from the original; it never asserts insertion, removal, alteration or an offence.
 
 ### 4.8 Bundle context — structural notes are demoted, not counted as wrongdoing
 Compiled bundles repeat page numbers and cross-references. The seal page applies this, not the
@@ -827,7 +827,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**52 suites · 3437 assertions** (counted 2026-11-08 after the standalone-narrative deterministic-fallback correction, §12.26; recount after any test change).
+**55 suites · 3508 assertions** (counted 2026-11-14 after the 368-page scan and narrator corrections, §12.27; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -838,7 +838,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `detector-recall.test.mjs` | 110 | Recall + the §4 false-positive guards, pinned to real bundle strings (incl. the CT11 negation gate, §12.23) |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
 | `worker.test.mjs` | 401 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, consent follows the sealing mode — no tick box, and the copy says the audio leaves the device), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget), **the four-pillars gate** (a pillar claim is held to the elements-table types in every section; knowledge and inducement only as INSUFFICIENT; pillar headings recognised in any dress; findings held at reduced weight evidence no pillar), **the court-recognition ban** (paraphrases of court acceptance dropped, a statute's "admissible" kept), **the template quoting engine findings only**, **the overclaim rule** in the Worker gate and at render time (only an [F#] establishes; a contradiction only with its [F#]; no offence outside candidate law; reported speech and founding dates kept) and **the tamper-evident wording of every AI prompt** (§12.16) |
-| `human-report.test.mjs` | 90 | **The court-ready narrative** (§13): one section contract in three artefacts, part of "Seal document with forensic report" with no separate switch (since 2026-09-07) and a disclosure that says what leaves the device, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery, and **the four-pillars map** pinned equal to the elements table (`HUMAN_PILLAR_TYPES` in the Worker = `OFFENCE_ELEMENTS` in the report; knowledge and inducement have no types) |
+| `human-report.test.mjs` | 93 | **The court-ready narrative** (§13): one section contract in three artefacts, part of "Seal document with forensic report" with no separate switch (since 2026-09-07) and a disclosure that says what leaves the device, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery, and **the four-pillars map** pinned equal to the elements table (`HUMAN_PILLAR_TYPES` in the Worker = `OFFENCE_ELEMENTS` in the report; knowledge and inducement have no types) |
 | `site-serving.test.mjs` | 56 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
 | `pages-bridge.test.mjs` | 16 | **The www bridge** (DEPLOYMENT.md "The bridge"), a dormant fallback since 2026-09-27 when the www zone route took over: the Pages Function hands every request to the Worker at the same path and query with method, headers and body; redirects pass through; a request marked `X-VO-Chain` is served from static files (no loop); an unreachable Worker falls back to static with an honest header; `functions/` never ships as a Worker asset |
 | `zip-intake.test.mjs` | 25 | **WhatsApp chat exports unpacked on-device** (§12.6a): the page's ZIP reader against real archives (stored, deflated, data-descriptor, folder, macOS cruft, encrypted, garbage), expansion into typed Files, only evidence types admitted, documents inside a voice-note export named for a separate seal, the panel note, the .zip picker entry, the 25-note batch, the home-page copy and locally served photos |
@@ -848,12 +848,13 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
 | `annexure-eb-regression.test.mjs` | 497 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run, the evidence-bundle-4-docs run and the Public Protector submission run** (§12.10–§12.14): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans; and the Public Protector submission (§18, §18i, §18j): a status word inside its own negation (CT14), two government-suffix domains never a lookalike (CT37), a category plural is not one instrument and quotes are whole words (CT23), titles/addresses/headings are not parties, nesting-aware quotes with WHEN and LAW from the quote's own sentence, a party's submission citing other Verum seals read as secondary up to the first page that opens a new record, the dated-after-analysis note, attribution only to declared parties named whole or by initial and surname, the unsigned-agreement contract shape, the template's own Nine-Brain headers with a Finding line, and the technical report, court-ready narrative, Worker template, anchor certificate and verify.html read back, each confirmed defect of the verification pass pinned with the reviewer's reproduction |
-| `evidence-bundle-7-regression.test.mjs` | 47 | **The evidence-bundle-7-docs run** (§12.16), on a synthetic bundle of the same shape built from the bundle's own strings: the CIPC K-form and a bare "CIPC" cue (CT20), a reference to a document that records the custody (CT39), set-aside pages are not near-empty (CT26), a document ends at its stated last page, header words and possessives are not names, the count-only summary sentence, a Verum Omnis analysis's running title is secondary, the lookalike domain still fires end to end, and the technical report read back: template first, no explainer page, no "verified", severity or score words, the Thesis / Antithesis / Synthesis table, every finding under a brain; and §8, the review round: unnumbered runs keyed per run (D30, D04), a report page does not turn the evidence sealed with it into analysis, narrowed D11/D27 skips with positive controls, a clean report keeps sections 1-7, measured Finding lines, the AI-note table, the on-device summary |
+| `evidence-bundle-7-regression.test.mjs` | 47 | **The evidence-bundle-7-docs run** (§12.16), on a synthetic bundle of the same shape built from the bundle's own strings: the CIPC K-form and a bare "CIPC" cue (CT20), a reference to a document that records the custody (CT39), set-aside pages are not near-empty (CT54), a document ends at its stated last page, header words and possessives are not names, the count-only summary sentence, a Verum Omnis analysis's running title is secondary, the lookalike domain still fires end to end, and the technical report read back: template first, no explainer page, no "verified", severity or score words, the Thesis / Antithesis / Synthesis table, every finding under a brain; and §8, the review round: unnumbered runs keyed per run (D30, D04), a report page does not turn the evidence sealed with it into analysis, narrowed D11/D27 skips with positive controls, a clean report keeps sections 1-7, measured Finding lines, the AI-note table, the on-device summary |
 | `cross-doc-conflicts.test.mjs` | 41 | **Cross-document conflict detection** (§12.22, stage B; wording signed off): same previous owner transferring one vessel to two different people — type A (same date, both new owners named inline) and type B (different dates, chain-of-title gap), both sides quoted and paged; a same-party check (R. Louw ≈ Ritzema Louw) that avoids false conflicts; a legitimate A→B→C chain raises nothing; an analysis/secondary page can never raise one; a labelled-channel forbidden-words guard that filters engine prose only, leaving a verbatim quote (even one containing "valid title") intact; plus the shared negation gate and transfer-local date (§12.23) |
+| `scan11-findings-repair.test.mjs` | 24 | **The 368-page scan review** (§12.27): same-matter event pairs, authority versus ownership, genuine goodwill claim/counter-claim pairs, pre-expiry-sale and currency-boundary exclusions, contract-form and annexure context, complaint-summary independence, CT54 extraction limits without candidate offences, and OCR-date quarantine, each beside a positive control |
 | `doc-fact-index.test.mjs` | 27 | **Document fact index** (§12.21, cross-doc stage A): page classification (ownership-notice/sale/swap/lease/permit/certificate/correspondence/analysis-secondary) and page-anchored fact extraction (vessel, parties + owner direction, date, amount, right, company reg) with a verbatim quote; descriptive only; secondary/analysis pages excluded from the record set |
 | `timeline-dates.test.mjs` | 17 | **Timeline date extraction** (§12.20): dates in the page text (text layer and OCR) become ordered, page-anchored events, not only dates a finding carries; impossible dates are excluded and never guessed; a finding date and the same calendar date in the text on one page are one event; finding-only when no page text is passed |
 | `louw-naidoo-regression.test.mjs` | 14 | **The Louw v Naidoo run** (§12.19): D06/CT09 identifier-type classification (an SA ID typed solid and spaced is one id; a fishing right `LF…`, a vessel `DTD…` and a company registration are not identities; a `said` pair fires only for the same resolved person) and D25/CT37 cluster de-duplication (one finding per lookalike cluster; a two-domain cluster keeps the original wording), each beside a positive control |
-| `combine-06-april-regression.test.mjs` | 30 | **The Combine 06 April 2026 run** (§12.17): the late secondary-source pass (lead only when every page is secondary; a record page keeps full weight), OCR pages from the `[OCR]` prefix, rule (a) page by page, per-instrument dates and one-document comparisons (D03, D04), scanned pages OCR could barely read (CT26 hand-over), person and company registration fields (D11), two properties, OCR re-reads and longer terms (D30), conditional ownership (D38), one agreement per trap (D39), each beside a positive control |
+| `combine-06-april-regression.test.mjs` | 31 | **The Combine 06 April 2026 run** (§12.17): the late secondary-source pass (lead only when every page is secondary; a record page keeps full weight), OCR pages from the `[OCR]` prefix, rule (a) page by page, per-instrument dates and one-document comparisons (D03, D04), scanned pages OCR could barely read (D17 CT54 hand-over, with D08A CT54 preserved), person and company registration fields (D11), two properties, OCR re-reads and longer terms (D30), conditional ownership (D38), one agreement per trap (D39), each beside a positive control |
 | `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, transcription consent (follows the sealing mode since 2026-09-07), ordering and honesty |
 | `inline-scripts.test.mjs` | 25 | Inline copies byte-identical to source |
@@ -861,8 +862,8 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `digital-forensics.test.mjs` | 19 | PDF structure and digital-forensics measurements |
 | `narrate-excerpt.test.mjs` | 16 | AI excerpt building |
 | `findings-json.test.mjs` | 29 | JSON contract v1.9.0 (`cross_document_observations` w/ byte-faithful `quote_verbatim`); 1.8.0 `candidate_law`; 1.7.0: `display_name`, `brain`, `triple_verification`, `ai_review_note`; an AI candidate carries `INSUFFICIENT`, never a band |
-| `franchise-lease.test.mjs` | 20 | D38/D39 (CT44/CT45) |
-| `wrangler-config.test.mjs` | 34 | **Deploy config drift**: the top level and `[env.production]` carry the same KV, AI, vars, observability, assets block (`./`, `ASSETS`, `/api/*` Worker-first) and trainer cron (weekly, Monday 03:00 UTC, `AUTO_CURATE = "on"`); exactly two zone routes, `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, in both environments, zone named, no `custom_domain` |
+| `franchise-lease.test.mjs` | 17 | D38/D39 (CT44/CT45) |
+| `wrangler-config.test.mjs` | 36 | **Deploy config drift**: the top level and `[env.production]` carry the same KV, AI, vars, observability, assets block (`./`, `ASSETS`, `/api/*` Worker-first) and trainer cron (weekly, Monday 03:00 UTC, `AUTO_CURATE = "on"`); exactly two zone routes, `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, in both environments, zone named, no `custom_domain` |
 | `role-capacity.test.mjs` | 13 | D40/CT46, no hardcoded parties |
 | `ai-assess-batch.test.mjs` | 19 | Client batching under the worker's body limit; **the AI review never removes or changes a finding** (notes only, original evidence returned, an unreviewed batch adds nothing; §12.16) |
 | `encrypt-detect.test.mjs` / `rule-classify.test.mjs` | 9 each | Encryption detection · deterministic classify fallback |
@@ -2709,6 +2710,46 @@ semantic finding true by sealing it. A corrected report requires a fresh run and
 verification, excludes AI-only material, pins multi-page date anchors, and proves that an
 engine-provenance overclaim still fails the gate.
 
+### 12.27 The 368-page scan review — genuine pairs, annexure context and extraction limits (2026-11-14)
+
+**The review boundary.** The uploaded sealed evidence bundle, reports, narratives, certificate and
+receipt are immutable historical records. Their seals establish byte integrity, not that every
+semantic finding was correct. This correction changes future engine and narrator runs only; it
+does not rewrite or reseal those artifacts.
+
+**Claim/counter-claim discipline.** D03B now pairs event-date statements only inside one stated
+document or one local unnumbered run, so one matter's franchise expiry cannot be compared with
+another matter's expiry. The genuine same-event 2018/2019 pair remains. D06B excludes authority,
+capacity and mandate from ownable assets. D10B requires an express denial/repudiation or direct
+finite-verb negation, raises proposition overlap to 75%, and deduplicates by the committed
+proposition rather than emitting one finding for every repeated denial. Conditional confidentiality
+clauses are not their own counter-claims.
+
+**Contract form and annexure context.** D09A excludes standard-form numbered contract wording and
+requires 80% shared eight-word-shingle containment in addition to vocabulary overlap and different
+closing blocks. Near-identical substantive letters under different hands remain reviewable, but the
+output says direct human comparison is required and similarity alone does not establish coordinated
+drafting or collusion. D21 resolves Annexure I/1 where the record expressly identifies the Base
+Schedule as Annexure 1 and substantive fee/rate content is present. It also resolves an
+initial-director Annexure A reference when the next page carries `INITIAL DIRECTOR DETAILS` and
+`Full Name`; genuinely unresolved references remain findings.
+
+**Goodwill and independence.** D39 no longer treats structural-improvement compensation plus a
+property purchase right as goodwill recognition and denial. A sale of the remaining term before
+expiry is compatible with goodwill ending at expiry; Path C is confined to pricing after extinction
+or beyond the term. Express goodwill recognition/denial and genuine post-extinction pricing controls
+remain. D41 does not treat a complaint's abstract coercion allegation and an institution's summary of
+that complaint as independent coercive-conduct evidence; direct coercion and ultimatum language stay
+available.
+
+**OCR and unreadable pages.** Documentary chronology years use fixed deterministic bounds (1900
+through 2200), and garbled local date context is quarantined from `voBuildTimeline`. Thus OCR debris such as
+`2/2/1313` cannot become a historical event. D17 near-empty output is CT54, severity 2, classified
+as `EXTRACTION`: an examination-coverage limit, never automatic insertion, removal, alteration,
+forgery, perjury, tampering or fraud evidence. The legal renderer maps CT54 to no candidate offence
+statutes. `tests/scan11-findings-repair.test.mjs` pins every negative and positive control; the older
+D17/D39 expectations that had pinned the reviewed false readings were corrected with their reasons.
+
 ## 13. The court-ready narrative (the "human report")
 
 **What it is.** A sealed companion PDF written by an AI narrator *from* the sealed technical
@@ -2798,20 +2839,26 @@ follow the reference document's depth: the executive summary (350–650 words) o
 core pattern, then KEY FINDINGS one paragraph per finding, then WHAT THE RECORD ESTABLISHES;
 Critical Evidence gives each finding a heading line and three to six anchored sentences.
 
-**Model.** Keyless Workers AI: `HUMAN_REPORT_MODEL` (default
-`@cf/meta/llama-4-scout-17b-16e-instruct`, 131k-token context) with the fast 8B model as
-fallback; temperature 0 (PD4); 30 s per section on the primary and 15 s on the fallback,
-which also gets a shorter excerpt for its smaller window (the client waits 52 s per call and
-stops asking after five minutes in total, marking the rest `time_budget`); Constitution v6.1
-prepended server-side to every call. Sections nothing in the record engages (no sworn
-finding, no coercive statement) are not requested at all (`not_applicable`). An operator may instead point the narrator at any
-OpenAI-compatible chat-completions provider with three secrets — `LLM_API_BASE`,
-`LLM_API_KEY`, `LLM_MODEL` (`wrangler secret put`, never in the repo); the reply then names the
-model as `external:<model>`; that provider gets the whole 45 s (`HUMAN_EXTERNAL_TIMEOUT_MS`) and
-no fallback. The seal page's mode card and disclosure box name only Cloudflare Workers AI as the
-destination (the "or the AI provider configured for this site" clause left with the tick boxes
-in #200), so setting the `LLM_*` secrets without changing that copy would make the disclosure
-untrue. Nothing is stored server-side.
+**Model.** Keyless Workers AI defaults to
+`@cf/meta/llama-3.3-70b-instruct-fp8-fast`; `wrangler.toml` deliberately carries no
+`HUMAN_REPORT_MODEL` override, because the former Scout override reintroduced the model already
+known to fail the anchor/language gates. The fast 8B model remains the fallback; temperature is
+0 (PD4). The primary timeout is 28 s and the fallback timeout is 15 s, with a shorter excerpt for
+its smaller window. One optional external OpenAI-compatible provider attempt receives at most
+14 s, then falls through to Workers AI. Every external, primary, fallback and repair call is
+bounded by one 48 s endpoint deadline; neither fallback nor repair starts with less than 8 s
+left. The client waits 52 s per call and stops asking after five minutes in total, marking the
+rest `time_budget`. Constitution v6.1 is prepended server-side to every call. Sections nothing in
+the record engages (no sworn finding, no coercive statement) are not requested at all
+(`not_applicable`). An operator may point the narrator at an OpenAI-compatible
+chat-completions provider with three secrets — `LLM_API_BASE`, `LLM_API_KEY`, `LLM_MODEL`
+(`wrangler secret put`, never in the repo); a successful reply names the model as
+`external:<model>`. The seal page's mode card and disclosure box name only Cloudflare Workers AI
+as the destination (the "or the AI provider configured for this site" clause left with the tick
+boxes in #200), so setting the `LLM_*` secrets without changing that copy would make the
+disclosure untrue. Nothing is stored server-side. `tests/human-report.test.mjs`,
+`tests/worker.test.mjs` and `tests/wrangler-config.test.mjs` pin the timing and model drift locks;
+large-bundle live acceptance remains a deployment check, not a claim made by unit tests.
 
 **Consent (2026-09-07, two modes).** There is no separate switch: the narrative is part of
 "Seal document with forensic report" and is produced with the technical report whenever that

@@ -132,10 +132,18 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor 
   // D17 itself still measures the page (a native file keeps the check):
   const blanks = DET.D17_DETECT_FORMAT_ANOMALY(['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)]);
   ok(blanks.length === 1, 'positive control: D17 still measures an isolated near-empty page');
-  // The engine hands a near-empty finding on scanned image pages to the notes.
-  const io = E.voImageOnlyCt26ToNotes([{ type: 'CT26', severity: 2, location: 'Page 676', evidence: 'Page 676 is nearly empty (9 chars)' }, { type: 'CT26', severity: 2, location: 'Page 12', evidence: 'Page 12 is nearly empty' }, { type: 'CT01', severity: 4, location: 'Page 676', evidence: 'x' }], [664, 676]);
-  ok(io.kept.length === 2 && !io.kept.some(f => f.type === 'CT26' && /676/.test(f.location)) && io.kept.some(f => /Page 12/.test(f.location)) && io.notes.length === 1 && /Page 676 has no text layer of its own and was rendered for OCR/.test(io.notes[0].text),
-    'a near-empty finding on a scanned page with no text layer is an engine note (p. 676); one on a text page stays a finding; other kinds are untouched');
+  // Feed D17's actual CT54 output: only its scanned-image near-empty page
+  // becomes a note. D08A's separate CT54 examination limit stays a finding.
+  const d17Pages = Array.from({ length: 676 }, () => 'x'.repeat(1200));
+  d17Pages[11] = '';
+  d17Pages[675] = '';
+  const d17Actual = DET.D17_DETECT_FORMAT_ANOMALY(d17Pages);
+  const d08aActual = DET.D08A_DETECT_SCAN_ONLY_PAGE([''], { ocrRan: true });
+  ok(d17Actual.length === 2 && d17Actual.every(f => f.type === 'CT54') && d08aActual.length === 1 && d08aActual[0].type === 'CT54',
+    'positive control: actual D17 and D08A outputs both use CT54 for their distinct examination limits');
+  const io = E.voImageOnlyCt26ToNotes([...d17Actual, ...d08aActual, { type: 'CT01', severity: 4, location: 'Page 676', evidence: 'x' }], [664, 676]);
+  ok(io.kept.length === 3 && !io.kept.some(f => /Page 676/.test(f.location) && f.type === 'CT54') && io.kept.some(f => /Page 12/.test(f.location) && f.type === 'CT54') && io.kept.includes(d08aActual[0]) && io.notes.length === 1 && io.notes[0].type === 'CT54' && /Page 676 has no text layer of its own and was rendered for OCR/.test(io.notes[0].text),
+    'D17 CT54 on a scanned page becomes a CT54 engine note; its text-page counterpart, D08A CT54 and other kinds stay findings');
   const src = fs.readFileSync(path.join(process.cwd(), 'forensic-engine-page.js'), 'utf8');
   ok(/if \(_ocrRan && _imageOnlyPages\.length\) \{\s*var _io = voImageOnlyCt26ToNotes\(allFindings, _imageOnlyPages\);/.test(src), 'the engine applies it only when an OCR pass ran over the file');
   // The review: only a page the OCR pass rendered counts — a page returned
@@ -178,8 +186,11 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor 
   const near = pad.slice(); near[0] = noComp; near[4] = acq;
   ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, far, 'CT45').length === 0, 'a no-compensation clause and a purchase right in two different stated agreements are not one agreement\'s trap (p. 246 vs p. 422)');
   const longOne = pad.slice(); longOne[0] = noComp; longOne[25] = acq;
-  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, longOne, 'CT45').length === 1, 'positive control (the review): a file that states no boundaries is one agreement, however long');
-  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, near, 'CT45').length === 1, 'positive control: the two halves within one passage still fire');
+  // Review correction (14 Nov 2026): structural-improvement compensation and
+  // purchase of the property itself never recognise/deny goodwill, irrespective
+  // of page distance. Genuine goodwill pairs remain covered elsewhere.
+  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, longOne, 'CT45').length === 0, 'an unnumbered record does not turn structural-improvement risk allocation into a goodwill contradiction');
+  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, near, 'CT45').length === 0, 'adjacent structural-improvement and property-purchase clauses still do not form a goodwill pair');
 }
 
 console.log(`\n[combine-06-april] PASS=${pass} FAIL=${fail}`);

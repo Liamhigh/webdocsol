@@ -68,15 +68,15 @@ console.log('======================================================\n');
   ok(of(DET.D27_DETECT_CUSTODY_GAP, ['The chain of custody of the exhibits is recorded below. Item 1 received by Sgt Mokoena.'], 'CT39').length === 1, 'positive control: a document claiming its own custody record with missing steps still fires');
 }
 
-// ===== 3. Set-aside pages are not "near-empty" (D17 / CT26) ==================
+// ===== 3. Set-aside pages are not "near-empty" (D17 / CT54) ==================
 {
   const prose = 'The franchisee operated the site for thirteen years under a written agreement, paid every invoice when due, and the parties exchanged correspondence about renewal, goodwill, rental escalation, licensing and the transfer of the business to a new operator before the termination letter arrived. Afterwards counsel reviewed municipal zoning approvals, insurance schedules, payroll ledgers, inventory valuations, banking mandates, supplier rebates, environmental permits, wholesale pricing, delivery logistics and customer complaints recorded during each quarter.';
   const ph = 'prior verum omnis report page excluded. '.repeat(10);
   const P = n => prose + ' Page note ' + n + '.';
   const blocks = [P(1), P(2), P(3), P(4), ph, ph, ph, ph, ph, P(5), P(6), P(7), P(8)];
-  ok(of(DET.D17_DETECT_FORMAT_ANOMALY, blocks, 'CT26').length === 0, 'pages the engine set aside as a prior Verum Omnis report are not "near-empty pages … OCR did not capture" (it once sealed "35 near-empty pages (9-55)")');
+  ok(of(DET.D17_DETECT_FORMAT_ANOMALY, blocks, 'CT54').length === 0, 'pages the engine set aside as a prior Verum Omnis report are not "near-empty pages … OCR did not capture" (it once sealed "35 near-empty pages (9-55)")');
   const real = [P(1), P(2), P(3), P(4), ' ', ' ', P(5), P(6), P(7), P(8)];
-  ok(of(DET.D17_DETECT_FORMAT_ANOMALY, real, 'CT26').length === 1, 'positive control: a real run of near-empty pages is still disclosed');
+  ok(of(DET.D17_DETECT_FORMAT_ANOMALY, real, 'CT54').length === 1, 'positive control: a real run of near-empty pages is still disclosed as an examination limit');
 }
 
 // ===== 3b. A document ends at its own last page ==============================

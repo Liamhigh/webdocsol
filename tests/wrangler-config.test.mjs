@@ -72,6 +72,15 @@ ok(topVars && envVars, 'both vars sections exist');
 for (const key of ['ENVIRONMENT', 'SERVICE_VERSION', 'HUMAN_REPORT_MODEL']) {
   ok(kv(envVars, key) === kv(topVars, key), `${key} identical in both environments`);
 }
+// PR #233 changed the code default to 70B because Scout lost every section at
+// the anchor/language gate, but these deployment overrides restored Scout.
+// Inherit the code default so configuration cannot reintroduce that failure.
+ok(kv(topVars, 'HUMAN_REPORT_MODEL') === null && kv(envVars, 'HUMAN_REPORT_MODEL') === null,
+  'neither deployment environment overrides the narrator model');
+const workerSource = readFileSync('worker/verum-rules.js', 'utf8');
+ok(/var AI_MODEL_HUMAN = "@cf\/meta\/llama-3\.3-70b-instruct-fp8-fast";/.test(workerSource) &&
+  !/HUMAN_REPORT_MODEL\s*=\s*"@cf\/meta\/llama-4-scout/.test(toml),
+  'the gate-compliant 70B narrator default cannot be replaced by a Scout config override');
 
 const topObs = section('observability');
 const envObs = section('env.production.observability');
