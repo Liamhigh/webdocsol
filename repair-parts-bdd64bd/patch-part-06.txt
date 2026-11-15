@@ -45,7 +45,7 @@
  }
 @@ -7294,6 +7347,14 @@ function voDatedAfterReference(textBlocks, referenceTime, firstPages) {
    });
-}
+ }
  
 +// Historical records are supported, but medieval/far-future years in OCR text
 +// are debris, not chronology events. Fixed bounds keep repeat scans deterministic
