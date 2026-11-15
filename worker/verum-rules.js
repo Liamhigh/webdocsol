@@ -297,8 +297,8 @@ async function handleImageKv(env2, kvKey, contentType) {
   return new Response(bytes, {
     status: 200,
     headers: corsHeaders({
-      "Content-Type": contentType,
-      "Content-Length": String(bytes.length),
+      "Content-Type": "application/pdf",
+      "Content-Disposition": 'inline; filename="' + filename + '"',
       "Cache-Control": "public, max-age=86400"
     })
   });
