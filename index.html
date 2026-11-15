@@ -701,3 +701,669 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
     </div>
   </div>
 </section>
+
+<!-- ============ 3.8 TRIPLEVERIFICATION ============ -->
+<section class="section bg-1" id="verification">
+  <div class="container">
+    <div class="sec-head reveal-item">
+      <p class="eyebrow">Methodology</p>
+      <h2 class="sec-title">Triple Verification</h2>
+      <p class="sec-intro">Every forensic finding undergoes Triple Verification: Thesis, Antithesis, and Synthesis. No claim is accepted without surviving rigorous adversarial testing.</p>
+      <!-- Methodology-defence wording (PD16): findings stated as fact; verdicts are the court's -->
+      <p class="sec-intro" style="margin-top:.9rem">Verified findings are stated as fact, anchored to the record. The one determination the engine never makes is the verdict on a person — that rests with the court.</p>
+    </div>
+    <div class="tv-grid" data-stagger>
+      <div class="tv-col reveal-item">
+        <div class="ghost" aria-hidden="true">01</div>
+        <svg class="icon tv-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4M9.5 12h5M9.5 15.5h5"/></svg>
+        <h3 class="tv-title">Thesis</h3>
+        <p class="tv-desc">What the evidence appears to state. Claims and facts are extracted directly from evidence with precise anchors to page numbers. No interpretation beyond direct support.</p>
+        <span class="tv-arrow" aria-hidden="true">→</span>
+      </div>
+      <div class="tv-col reveal-item">
+        <div class="ghost" aria-hidden="true">02</div>
+        <svg class="icon tv-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="11" cy="11" r="6"/><path d="M15.5 15.5L20 20M9 9l4 4M13 9l-4 4"/></svg>
+        <h3 class="tv-title">Antithesis</h3>
+        <p class="tv-desc">Active search for contradictions across timestamps, documents, versions, metadata, and statements. Alternative explanations are listed and flagged for human review.</p>
+        <span class="tv-arrow" aria-hidden="true">→</span>
+      </div>
+      <div class="tv-col reveal-item">
+        <div class="ghost" aria-hidden="true">03</div>
+        <svg class="icon tv-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+        <h3 class="tv-title">Synthesis</h3>
+        <p class="tv-desc">Only conclusions surviving contradiction checks are accepted. If synthesis cannot be made safely, the output states INSUFFICIENT. The system would rather say I don't know.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3.9 CRYPTOGRAPHICSEALING ============ -->
+<section class="section bg-2" id="sealing">
+  <div class="container">
+    <div class="split split-55">
+      <div>
+        <div class="reveal-item">
+          <p class="eyebrow">Cryptographic Integrity</p>
+          <h2 class="sec-title">Mathematically Verifiable. Legally Defensible.</h2>
+        </div>
+        <div class="reveal-item">
+          <p class="lead">Every document, analysis, and report is cryptographically sealed using SHA-512 hashing and anchored to the Bitcoin blockchain via OpenTimestamps. Any alteration — even a single character — produces a completely different hash, making tampering immediately detectable.</p>
+          <p class="lead">The platform organises, indexes, cross-references and preserves documents cryptographically; the seal proves two things only — integrity and time.</p>
+          <p class="lead"><strong>Voice notes count too.</strong> Seal a WhatsApp voice note exactly as it is — the original bytes, fingerprinted and anchored, never altered — or upload a whole chat export (the <em>.zip</em> WhatsApp makes from Export chat → Include media; it is unpacked on your device and never uploaded), and every recording, image and the chat text seal together. The Voice-Note Evidence Report ties each note to its sender and time in WhatsApp's own words, records the date carried in the recording's own file name, keeps your screen grab of the note beside it as corroboration, and adds a machine transcript only if you ask for one. The sealed audio is the evidence; a transcript never is.</p>
+        </div>
+        <div class="chips reveal-item">
+          <span class="chip">Daubert Standard</span>
+          <span class="chip">ISO 27037:2012</span>
+          <span class="chip">ECT Act 25 of 2002</span>
+          <span class="chip">WhatsApp voice notes &amp; chat exports</span>
+        </div>
+      </div>
+      <div>
+        <div class="hash-chain" id="hashChain">
+          <div class="hash-block" style="--i:0">a3f7c2e8...9b1d</div>
+          <div class="hash-arrow" aria-hidden="true">↓</div>
+          <div class="hash-block" style="--i:1">7e4d9a1f...c5e2</div>
+          <div class="hash-arrow" aria-hidden="true">↓</div>
+          <div class="hash-block" style="--i:2">b8c1f3a6...2d7e</div>
+          <div class="hash-arrow" aria-hidden="true">↓</div>
+          <div class="hash-block" style="--i:3">5f2e8b4c...a1d9</div>
+          <div class="hash-arrow" aria-hidden="true">↓</div>
+          <div class="hash-block" style="--i:4">d9a7c3e1...4f8b</div>
+        </div>
+        <p class="hash-caption">Anchored to Bitcoin Blockchain via OpenTimestamps</p>
+      </div>
+    </div>
+  </div>
+</section>
+<!-- ============ 3.10 STANDARDS ============ -->
+<section class="section bg-1" id="standards">
+  <div class="container">
+    <div class="sec-head reveal-item">
+      <p class="eyebrow">Compliance &amp; Recognition</p>
+      <h2 class="sec-title">Institutions That Govern the Seal</h2>
+      <!-- Softened: was "they are the foundations of court-admissible evidence." -->
+      <p class="sec-intro">Verum Omnis does not operate in a vacuum. Every seal, every hash, every report is built on internationally recognized standards and legally binding frameworks. These are not optional certifications — they are the standards against which evidence is prepared for court admissibility review.</p>
+    </div>
+    <div class="std-grid" data-stagger>
+      <article class="card reveal-item">
+        <p class="std-cat">International Standard</p>
+        <h3 class="std-name">ISO/IEC 27037:2012</h3>
+        <p class="std-desc">The international standard for digital evidence collection, preservation, and processing. Verum Omnis complies at every stage — from ingestion (acquisition) to preservation to analysis. This is the gold standard for handling digital evidence across jurisdictions.</p>
+        <div class="std-app">
+          <h4>Verum Omnis Application</h4>
+          <p>Verum Omnis complies at all four Daubert criteria: testability, peer review, known error rates, and general acceptance. The Nine-Brain Architecture provides continuous internal peer review through voting quorums, ensuring replicable, court-admissible results.</p>
+        </div>
+      </article>
+      <article class="card reveal-item">
+        <p class="std-cat">South African Law</p>
+        <h3 class="std-name">Electronic Communications &amp; Transactions Act 25 of 2002</h3>
+        <p class="std-desc">Sections 11-15 of the ECT Act grant cryptographically secured electronic records a strong presumption of data integrity and legal admissibility. Electronic records that are cryptographically secured carry the same weight as paper originals.</p>
+        <div class="std-app">
+          <h4>Verum Omnis Application</h4>
+          <!-- Softened: was "Confirmed by Port Shepstone Magistrate's Court in H208/25 — ... fully admissible ... Any court rejecting sealed evidence rejects the law itself." -->
+          <p>Verum Omnis seals are designed to fall within these provisions, so that cryptographically sealed digital documents can be presented as original electronic evidence under the Act. Admissibility remains a matter for the presiding court.</p>
+        </div>
+      </article>
+      <article class="card reveal-item">
+        <p class="std-cat">US Federal Evidence Standard</p>
+        <h3 class="std-name">Daubert Standard</h3>
+        <p class="std-desc">The legal standard used by US federal courts to evaluate scientific and technical evidence. It requires testability, peer review, known error rates, and general acceptance within the relevant scientific community.</p>
+        <div class="std-app">
+          <h4>Verum Omnis Application</h4>
+          <p>Verum Omnis satisfies all four Daubert criteria through deterministic hashing (testability), Nine-Brain consensus (peer review), quantifiable confidence levels (known error rates), and ISO/IEC 27037 compliance (general acceptance).</p>
+        </div>
+      </article>
+      <article class="card reveal-item">
+        <p class="std-cat">Decentralized Proof Anchoring</p>
+        <h3 class="std-name">OpenTimestamps (Bitcoin Blockchain)</h3>
+        <p class="std-desc">OpenTimestamps is an open standard for creating cryptographic timestamp proofs on the Bitcoin blockchain — a public, immutable, decentralized ledger maintained by thousands of nodes worldwide. Once a hash is anchored, the timestamp is permanent and publicly verifiable — entirely independent of any state or corporate authority.</p>
+        <div class="std-app">
+          <h4>Verum Omnis Application</h4>
+          <p>The triple-hash seal (content hash + metadata hash + constitutional HMAC) is anchored to Bitcoin via OpenTimestamps. This creates permanent, decentralized, time-stamped proof of a document's exact state — no institution can alter or delete it.</p>
+        </div>
+      </article>
+      <article class="card reveal-item">
+        <p class="std-cat">Archival Standard</p>
+        <h3 class="std-name">PDF/A-3B Archival Standard (ISO 19005)</h3>
+        <p class="std-desc">The international standard for long-term preservation of electronic documents. PDF/A-3B files are self-contained, self-authenticating, and guarantee that the document will render identically decades from now.</p>
+        <div class="std-app">
+          <h4>Verum Omnis Application</h4>
+          <p>Every Verum Omnis report is exported as PDF/A-3B with embedded metadata, visible watermarks, and a QR code containing the full verifiable hash string. Any independent third party can recalculate the hashes to confirm integrity.</p>
+        </div>
+      </article>
+      <article class="card reveal-item">
+        <p class="std-cat">Mathematical Proof Engine</p>
+        <h3 class="std-name">SHA-512 Cryptographic Algorithm</h3>
+        <p class="std-desc">SHA-512 operates on a 512-bit state size, meaning the probability of a hash collision is 2^-256 — effectively zero. Any modification of a single bit within a file instantly changes the output hash, rendering tampering immediately detectable.</p>
+        <div class="std-app">
+          <h4>Verum Omnis Application</h4>
+          <p>This is not a claim. This is mathematics. Changing a single comma, a single pixel, or even a single bit produces an entirely different 128-character hash. The mathematics cannot be argued with in court.</p>
+        </div>
+      </article>
+    </div>
+    <div class="quote-panel reveal-item">
+      <p>&ldquo;For centuries, the authenticity of documents has relied on trust — trust in the person who created them, trust in the system that processed them. Verum Omnis replaces trust with mathematical certainty. When you scan that QR code and see the SHA-512 hash, you are witnessing something that has never been possible before in legal history: a document that proves its own authenticity. With mathematics. Not with a signature. Not with a stamp. Not with a witness.&rdquo;</p>
+      <span class="attrib">— Verum Omnis Cryptographic Sealing Guide, v1.0</span>
+    </div>
+    <div class="pill-row reveal-item">
+      <span>ISO/IEC 27037:2012</span>
+      <span>ECT Act 25 of 2002</span>
+      <span>Daubert Standard</span>
+      <span>ISO 19005 (PDF/A-3B)</span>
+      <span>SHA-512</span>
+      <span>OpenTimestamps (Bitcoin)</span>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3.11 GUARDIANFIREWALL ============ -->
+<section class="section bg-2" id="firewall">
+  <div class="container">
+    <div class="sec-head reveal-item">
+      <p class="eyebrow">Guardian Fraud Firewall</p>
+      <h2 class="sec-title">Truth That Cannot Be Erased</h2>
+      <p class="sec-intro">Unlike traditional network firewalls, the Verum Omnis Guardian Firewall operates at the behavioral, legal, and AI interaction level. It prevents tampering, silencing, or alteration of forensic truth — even if institutions or users try to suppress it. Embedded in every Verum-enabled device, part of the Windows enterprise application.</p>
+    </div>
+    <div class="fw-list" data-stagger>
+      <div class="card fw-row reveal-item">
+        <div class="fw-meta"><span class="fw-ghost" aria-hidden="true">01</span>
+          <svg class="icon fw-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><path d="M12 4v2M12 18v2M4 12h2M18 12h2"/><circle cx="12" cy="12" r="1.5"/></svg>
+        </div>
+        <div>
+          <h3 class="fw-title">Forensic Input Scan</h3>
+          <p class="fw-desc">All files uploaded — documents, images, audio, emails — are fingerprinted and scanned for contradictions, timeline breaches, metadata tampering, and falsified declarations. No AI system may ignore these signals.</p>
+        </div>
+      </div>
+      <div class="card fw-row reveal-item">
+        <div class="fw-meta"><span class="fw-ghost" aria-hidden="true">02</span>
+          <svg class="icon fw-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+        </div>
+        <div>
+          <h3 class="fw-title">AI Routing Lockdown</h3>
+          <p class="fw-desc">Only pre-approved AI endpoints may process forensic input. Behavioral override, prompt tampering, or unauthorized LLM swapping are flagged or blocked. The system cannot be gamed.</p>
+        </div>
+      </div>
+      <div class="card fw-row reveal-item">
+        <div class="fw-meta"><span class="fw-ghost" aria-hidden="true">03</span>
+          <svg class="icon fw-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M13.5 4.5l6 6-2 2-6-6z"/><path d="M12 12L5 19M3 21h9"/></svg>
+        </div>
+        <div>
+          <h3 class="fw-title">Legal Behavior Enforcer</h3>
+          <p class="fw-desc">Monitors for ethical violations, contradictions in AI output, manipulation, and bias. If triggered, findings are automatically logged, included in every report, and never deletable or suppressible — by any user or institution.</p>
+        </div>
+      </div>
+      <div class="card fw-row reveal-item">
+        <div class="fw-meta"><span class="fw-ghost" aria-hidden="true">04</span>
+          <svg class="icon fw-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h12a1 1 0 011 1v16a1 1 0 01-1 1H6a2 2 0 01-2-2V5a2 2 0 012-2z"/><path d="M8 8h8M8 12h8M8 16h5"/></svg>
+        </div>
+        <div>
+          <h3 class="fw-title">Escalation Layer — The Silence Ledger</h3>
+          <p class="fw-desc">If a forensic flag is ignored or dismissed, the system generates a Silence Ledger entry — logging the time, source, and flag summary. Future reports permanently mark this event as unacted risk. Truth cannot be erased.</p>
+        </div>
+      </div>
+    </div>
+    <div class="banner-green reveal-item">
+      <h4>Stateless. Autonomous. Immutable.</h4>
+      <p>The Guardian Firewall operates as a stateless, autonomous legal perimeter embedded in the Verum Omnis Constitution v6.0 Final template and above. It ensures that forensic integrity is maintained across all Verum sessions — even when the institutions charged with protecting justice are the ones obstructing it.</p>
+    </div>
+  </div>
+</section>
+<!-- ============ 3.12 VERIFIER ============ -->
+<section class="section bg-0" id="verify">
+  <div class="container narrow">
+    <div class="reveal-item" style="text-align:center">
+      <span class="verify-badge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l7 3v5c0 4.5-3 8-7 9-4-1-7-4.5-7-9V6l7-3z"/><path d="M9 12l2 2 4-4"/></svg>
+        Client-Side — Nothing Leaves Your Device
+      </span>
+      <p class="eyebrow">Document Verifier</p>
+      <h2 class="sec-title">Verify a sealed document</h2>
+      <p class="sec-intro" style="margin:0 auto">Open the Document Verifier to check any sealed PDF — it decompresses the file, finds the seal, and checks for tampering (green tick if genuine, red tick if altered). Runs entirely in your browser; nothing leaves your device.</p>
+    </div>
+
+    <div class="reveal-item" style="text-align:center;margin-top:2rem">
+      <a class="btn-gold btn-verify-open" href="verify.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+        Open the Document Verifier
+      </a>
+      <div class="v-features" style="margin-top:2.5rem">
+        <div class="v-feat">
+          <h4>Metadata Check</h4>
+          <p>Extracts Creator, Producer, dates, and flags suspicious origins.</p>
+        </div>
+        <div class="v-feat">
+          <h4>Seal Verify</h4>
+          <p>Decompresses PDF streams to find and verify the VERUM OMNIS SEAL (green tick / red tick).</p>
+        </div>
+        <div class="v-feat">
+          <h4>Tamper Detect</h4>
+          <p>Hash mismatch = tampered. No seal = unverified. Blockchain = anchored.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3.13 COMINGSOON ============ -->
+<section class="section bg-0" id="coming-soon">
+  <div class="container medium" style="text-align:center">
+    <div class="reveal-item">
+      <span class="pill-gold-big">Get the Apps</span>
+      <h2 class="sec-title">The Full Experience Lives in the Apps</h2>
+      <p class="sec-intro" style="margin:0 auto">Everything on this website is free for everyone — scan, seal, and verify with no download. But the website's reports are the deterministic engine only. The apps carry the <strong>hybrid on-device AI</strong>: richer narrative reports, role-and-capacity reasoning, a never-wiped evidence vault, and the legal chat. When they release, download the one that suits you — right here.</p>
+    </div>
+    <div class="platform-grid three" data-stagger style="text-align:left">
+      <article class="platform-card reveal-item">
+        <svg class="platform-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="8" y="9" width="8" height="7" rx="1"/><path d="M8 11L5.5 8.5M16 11l2.5-2.5M10.5 12h.01M13.5 12h.01"/><path d="M9.5 16.5v2.5M14.5 16.5v2.5M10 21h4"/></svg>
+        <h3 class="platform-name">Android</h3>
+        <span class="platform-status">Coming Soon — Free</span>
+        <p class="platform-desc">Justice in your pocket. Evidence capture with GPS, the hybrid forensic engine on-device, sealed court-ready reports, your own evidence vault, and the legal chat. Free forever for private citizens and law enforcement.</p>
+        <button class="btn-notify" type="button" data-notify>Notify Me</button>
+      </article>
+      <article class="platform-card reveal-item">
+        <svg class="platform-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="4" y="5" width="16" height="14" rx="1"/><path d="M12 5v14M4 12h16"/></svg>
+        <h3 class="platform-name">Windows Lite</h3>
+        <span class="platform-status">Coming Soon — Free</span>
+        <p class="platform-desc">The Android experience on your desktop: the same hybrid AI engine, evidence vault, document sealing, and legal chat — with small AI models <strong>built to run on old, low-spec laptops and computers</strong>, because justice must not require new hardware. No Apple version yet — it is planned; Windows Lite is the desktop option in the meantime. Free for private citizens.</p>
+        <button class="btn-notify" type="button" data-notify>Notify Me</button>
+      </article>
+      <article class="platform-card reveal-item">
+        <svg class="platform-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 3l8 4v5c0 5-3.5 8.5-8 9-4.5-.5-8-4-8-9V7l8-4z"/><path d="M8.5 12l2.5 2.5L15.5 10"/></svg>
+        <h3 class="platform-name">Fraud Firewall</h3>
+        <span class="platform-status">Coming Soon — Institutions</span>
+        <p class="platform-desc">For banks, insurers, and regulators: real-time transaction monitoring, stream analysis, and sealed prevention reports that stop fraud before the money moves. Self-serve download — no sales calls, no onboarding queue.</p>
+        <button class="btn-notify" type="button" data-notify>Notify Me</button>
+      </article>
+    </div>
+    <div class="apps-note reveal-item">
+      <p><strong>Release:</strong> upon conclusion of the Constitutional Court matter, the apps will be released for download on this page — free for all private citizens and law enforcement agencies globally.</p>
+      <p><strong>Institutions:</strong> the Fraud Firewall download is free and self-serve. Commercial use is governed by the <a href="/constitution.html" style="color:var(--gold)">Constitution's revenue statutes</a> (§7), agreed at installation — no procurement process required on our side, because the terms are the same for everyone and cannot be negotiated away.</p>
+      <p><strong>No download needed</strong> to scan, seal, or verify a document — that stays free on this website, forever.</p>
+      <p><strong>For law enforcement and attorneys:</strong> a five-page briefing explains what the sealing service does, how investigators and legal practitioners use it, the security architecture behind it, and — just as plainly — what a seal does <em>not</em> prove. <a href="/Verum-Omnis-Briefing.pdf" style="color:var(--gold)" download>Download the briefing (PDF)</a>.</p>
+      <p><strong>Take a sealed report to any AI you like.</strong> The report is ordinary, page-anchored text, so you can hand it to any AI assistant and ask it to walk you through the findings in your own words. What you get back is <em>explanation</em> — the findings themselves remain the engine's, each one quoted and bound to a page you can turn to and check for yourself. That is the point of anchoring every sentence: anyone reading the report, human or machine, can be held to the source. Two limits worth knowing. An AI cannot verify a seal — that always happens <a href="verify.html" style="color:var(--gold)">here</a>, by recomputing the hash. And uploading a document to an AI service sends it to that company: the seal proves a record has not been altered, it does not keep it private, so think carefully before doing that with confidential or privileged evidence.</p>
+    </div>
+  </div>
+</section>
+</main>
+<!-- ============ 3.14 FOOTER ============ -->
+<footer class="footer">
+  <div class="container">
+    <img class="footer-logo reveal-item" src="/images/logo-full.png" alt="Verum Omnis" width="877" height="368" loading="lazy">
+    <div class="footer-grid">
+      <div>
+        <h4>Contact</h4>
+        <a class="fl-link" href="mailto:liam@verumglobal.foundation">liam@verumglobal.foundation</a>
+        <a class="fl-link" href="https://www.verumglobal.foundation" target="_blank" rel="noopener">www.verumglobal.foundation</a>
+      </div>
+      <div>
+        <a class="f-anchor" href="#mission">Mission</a>
+        <a class="f-anchor" href="#engine">The Engine</a>
+        <a class="f-anchor" href="#impact">Impact</a>
+        <a class="f-anchor" href="#coming-soon">Coming Soon</a>
+        <a class="fl-link" href="/constitution.html">Constitution v8.0 Final</a>
+      </div>
+      <div>
+        <h4>Resources</h4>
+        <span class="f-plain">Mission Report</span>
+        <span class="f-plain">White Paper</span>
+        <span class="f-plain">Codex Access to Justice</span>
+        <span class="f-plain">Legal Expert Report</span>
+      </div>
+    </div>
+    <div class="footer-divider">
+      <p>© 2026 Verum Omnis. All rights reserved.</p>
+      <p class="tagline">Justice should not have a price tag. Truth can be computationally verified.</p>
+      <p class="sealed">Sealed under Constitution v6.0 Final</p>
+    </div>
+  </div>
+</footer>
+
+<!-- ============ NOTIFY MODAL ============ -->
+<div class="modal-overlay" id="notifyModal" aria-hidden="true">
+  <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="modalTitle">
+    <button class="modal-close" id="modalClose" aria-label="Close dialog">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+    <svg class="bell-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M18 9a6 6 0 10-12 0c0 5-2 6-2 6h16s-2-1-2-6"/><path d="M10.3 19a2 2 0 003.4 0"/></svg>
+    <h3 id="modalTitle">Coming Soon</h3>
+    <p class="modal-text">The Verum Omnis app will be released upon conclusion of the Constitutional Court matter. Leave your email to be notified when it's available.</p>
+    <form class="modal-form" id="notifyForm" novalidate>
+      <input class="modal-input" id="notifyEmail" type="email" placeholder="your@email.com" aria-label="Email address">
+      <button class="btn-gold modal-submit" type="submit">Notify Me</button>
+    </form>
+  </div>
+</div>
+<script>
+(function(){
+'use strict';
+var REDUCED=false;
+try{ REDUCED=window.matchMedia('(prefers-reduced-motion: reduce)').matches; }catch(e){}
+function $(id){ return document.getElementById(id); }
+function ready(fn){ if(document.readyState!=='loading'){ fn(); } else { document.addEventListener('DOMContentLoaded',fn); } }
+
+/* ---------- Nav: scroll-aware bg, scroll-spy, hamburger, smooth anchors ---------- */
+function initNav(){
+  var nav=$('nav');
+  var burger=$('hamburger');
+  var menu=$('mobileMenu');
+  var closeBtn=$('mobileClose');
+  var logo=$('navLogo');
+  var SPY_IDS=['origin','mission','crossborder','engine','impact','evidence','verification','sealing','standards','firewall','verify','coming-soon'];
+  var links={};
+  document.querySelectorAll('[data-spy]').forEach(function(a){ links[a.getAttribute('data-spy')]=a; });
+
+  function onScroll(){
+    if(nav){ nav.classList.toggle('scrolled',window.scrollY>20); }
+    if(window.scrollY<100){ setActive(null); return; }
+    var current=null;
+    for(var i=0;i<SPY_IDS.length;i++){
+      var sec=$(SPY_IDS[i]);
+      if(sec && sec.getBoundingClientRect().top<=120){ current=SPY_IDS[i]; }
+    }
+    setActive(current);
+  }
+  var activeId=null;
+  function setActive(id){
+    if(id===activeId) return;
+    activeId=id;
+    Object.keys(links).forEach(function(k){
+      var on=(k===id);
+      links[k].classList.toggle('active',on);
+      if(on){ links[k].setAttribute('aria-current','true'); } else { links[k].removeAttribute('aria-current'); }
+    });
+  }
+  var ticking=false;
+  window.addEventListener('scroll',function(){
+    if(!ticking){ ticking=true; window.requestAnimationFrame(function(){ onScroll(); ticking=false; }); }
+  },{passive:true});
+  onScroll();
+
+  function openMenu(){
+    if(!menu) return;
+    menu.classList.add('open');
+    menu.setAttribute('aria-hidden','false');
+    if(burger) burger.setAttribute('aria-expanded','true');
+    document.body.style.overflow='hidden';
+  }
+  function closeMenu(){
+    if(!menu || !menu.classList.contains('open')) return;
+    menu.classList.remove('open');
+    menu.setAttribute('aria-hidden','true');
+    if(burger) burger.setAttribute('aria-expanded','false');
+    document.body.style.overflow='';
+  }
+  if(burger) burger.addEventListener('click',openMenu);
+  if(closeBtn) closeBtn.addEventListener('click',closeMenu);
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') closeMenu(); });
+
+  document.querySelectorAll('a[href^="#"]').forEach(function(a){
+    a.addEventListener('click',function(e){
+      var href=a.getAttribute('href');
+      if(!href || href.length<2) return;
+      var target=$(href.slice(1));
+      if(!target) return;
+      e.preventDefault();
+      closeMenu();
+      target.scrollIntoView({behavior:REDUCED?'auto':'smooth'});
+    });
+  });
+  if(logo) logo.addEventListener('click',function(){ window.scrollTo({top:0,behavior:REDUCED?'auto':'smooth'}); });
+  var cta=$('ctaVerify');
+  if(cta) cta.addEventListener('click',function(){ window.location.href='verify.html'; });
+  var chev=$('chevron');
+  if(chev) chev.addEventListener('click',function(){ var t=$('mission'); if(t) t.scrollIntoView({behavior:REDUCED?'auto':'smooth'}); });
+}
+
+/* ---------- Particle network canvas (hero) ---------- */
+function initParticles(){
+  var canvas=$('particles');
+  if(!canvas) return;
+  var hero=canvas.parentElement;
+  if(REDUCED){
+    canvas.style.display='none';
+    if(hero) hero.classList.add('no-motion');
+    return;
+  }
+  var ctx=canvas.getContext('2d');
+  if(!ctx) return;
+  var W=0,H=0,parts=[],raf=null,start=performance.now();
+  var mouse={x:-10000,y:-10000};
+
+  function build(){
+    var count=(W<=768)?40:80;
+    parts=[];
+    for(var i=0;i<count;i++){
+      parts.push({
+        x:Math.random()*W, y:Math.random()*H,
+        vx:(Math.random()-.5)*.6, vy:(Math.random()-.5)*.6,
+        r:1.5+Math.random()*1.5,
+        a:.4+Math.random()*.3,
+        fade:0,
+        fadeDelay:Math.random()*1500
+      });
+    }
+  }
+  function resize(){
+    if(!hero) return;
+    var rect=hero.getBoundingClientRect();
+    W=rect.width; H=rect.height;
+    var dpr=Math.min(window.devicePixelRatio||1,2);
+    canvas.width=Math.max(1,Math.round(W*dpr));
+    canvas.height=Math.max(1,Math.round(H*dpr));
+    ctx.setTransform(dpr,0,0,dpr,0,0);
+    build();
+  }
+  function tick(now){
+    ctx.clearRect(0,0,W,H);
+    var t=now-start,i,j,p;
+    for(i=0;i<parts.length;i++){
+      p=parts[i];
+      if(t>p.fadeDelay && p.fade<1) p.fade=Math.min(1,p.fade+.02);
+      var dx=p.x-mouse.x, dy=p.y-mouse.y, d2=dx*dx+dy*dy;
+      if(d2<14400){
+        var d=Math.sqrt(d2)||1;
+        var f=2.5*(1-d/120);
+        p.vx+=(dx/d)*f*.05;
+        p.vy+=(dy/d)*f*.05;
+      }
+      p.vx*=.98; p.vy*=.98;
+      var sp=Math.sqrt(p.vx*p.vx+p.vy*p.vy);
+      if(sp>.3){ p.vx=p.vx/sp*.3; p.vy=p.vy/sp*.3; }
+      if(sp<.04){ p.vx+=(Math.random()-.5)*.03; p.vy+=(Math.random()-.5)*.03; }
+      p.x+=p.vx; p.y+=p.vy;
+      if(p.x<0) p.x+=W; if(p.x>W) p.x-=W;
+      if(p.y<0) p.y+=H; if(p.y>H) p.y-=H;
+    }
+    for(i=0;i<parts.length;i++){
+      for(j=i+1;j<parts.length;j++){
+        var a=parts[i], b=parts[j];
+        var ddx=a.x-b.x, ddy=a.y-b.y;
+        var dd=Math.sqrt(ddx*ddx+ddy*ddy);
+        if(dd<150){
+          var alpha=(1-dd/150)*.25;
+          var ma=Math.sqrt((a.x-mouse.x)*(a.x-mouse.x)+(a.y-mouse.y)*(a.y-mouse.y));
+          var mb=Math.sqrt((b.x-mouse.x)*(b.x-mouse.x)+(b.y-mouse.y)*(b.y-mouse.y));
+          if(ma<120 || mb<120){
+            ctx.strokeStyle='rgba(212,168,67,'+alpha.toFixed(3)+')';
+            ctx.lineWidth=2;
+            ctx.shadowBlur=8;
+            ctx.shadowColor='rgba(212,168,67,0.8)';
+          } else {
+            ctx.strokeStyle='rgba(74,126,199,'+alpha.toFixed(3)+')';
+            ctx.lineWidth=1;
+            ctx.shadowBlur=0;
+          }
+          ctx.beginPath();
+          ctx.moveTo(a.x,a.y);
+          ctx.lineTo(b.x,b.y);
+          ctx.stroke();
+        }
+      }
+    }
+    ctx.shadowBlur=0;
+    for(i=0;i<parts.length;i++){
+      p=parts[i];
+      ctx.fillStyle='rgba(248,249,250,'+(p.a*p.fade).toFixed(3)+')';
+      ctx.beginPath();
+      ctx.arc(p.x,p.y,p.r,0,Math.PI*2);
+      ctx.fill();
+    }
+    raf=window.requestAnimationFrame(tick);
+  }
+  if(hero){
+    hero.addEventListener('mousemove',function(e){
+      var rect=hero.getBoundingClientRect();
+      mouse.x=e.clientX-rect.left;
+      mouse.y=e.clientY-rect.top;
+    });
+    hero.addEventListener('mouseleave',function(){ mouse.x=-10000; mouse.y=-10000; });
+  }
+  var resizeTimer=null;
+  window.addEventListener('resize',function(){
+    if(resizeTimer) clearTimeout(resizeTimer);
+    resizeTimer=setTimeout(resize,150);
+  });
+  if('IntersectionObserver' in window && hero){
+    var io=new IntersectionObserver(function(entries){
+      entries.forEach(function(en){
+        if(en.isIntersecting){ if(raf===null) raf=window.requestAnimationFrame(tick); }
+        else if(raf!==null){ window.cancelAnimationFrame(raf); raf=null; }
+      });
+    },{threshold:0});
+    io.observe(hero);
+  }
+  resize();
+  raf=window.requestAnimationFrame(tick);
+}
+
+/* ---------- Hero typewriter ---------- */
+function initTypewriter(){
+  var el=$('typeText');
+  if(!el) return;
+  var text='Truth for All';
+  if(REDUCED){ el.textContent=text; return; }
+  var i=0;
+  setTimeout(function(){
+    var iv=setInterval(function(){
+      i++;
+      el.textContent=text.slice(0,i);
+      if(i>=text.length) clearInterval(iv);
+    },60);
+  },1200);
+}
+
+/* ---------- Scroll reveals + special triggers ---------- */
+function initReveals(){
+  document.querySelectorAll('[data-stagger]').forEach(function(g){
+    var kids=g.querySelectorAll('.reveal-item');
+    for(var i=0;i<kids.length;i++){
+      kids[i].style.setProperty('--d',(i*0.12).toFixed(2)+'s');
+    }
+  });
+  var targets=[];
+  document.querySelectorAll('.reveal-item,.clip-reveal').forEach(function(n){ targets.push(n); });
+  ['hashChain','tlGrid','impactQuote'].forEach(function(id){
+    var n=$(id);
+    if(n) targets.push(n);
+  });
+  if(REDUCED || !('IntersectionObserver' in window)){
+    targets.forEach(function(n){ n.classList.add('is-visible'); });
+    return;
+  }
+  /* threshold must be 0: a fully clip-path'd target (mission image wipe) has
+     intersectionRatio 0 until revealed, so threshold >0 would never fire */
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(en.isIntersecting){
+        en.target.classList.add('is-visible');
+        io.unobserve(en.target);
+      }
+    });
+  },{threshold:0,rootMargin:'0px 0px -18% 0px'});
+  targets.forEach(function(n){ io.observe(n); });
+}
+
+/* ---------- Animated stat counters ---------- */
+function initCounters(){
+  var nums=document.querySelectorAll('[data-count]');
+  if(!nums.length) return;
+  function animate(el){
+    var target=parseFloat(el.getAttribute('data-count'))||0;
+    var suffix=el.getAttribute('data-suffix')||'';
+    if(REDUCED){ el.textContent=target+suffix; return; }
+    var dur=1400,t0=null;
+    function step(ts){
+      if(!t0) t0=ts;
+      var p=Math.min(1,(ts-t0)/dur);
+      var e=1-Math.pow(1-p,3);
+      el.textContent=Math.round(target*e)+suffix;
+      if(p<1) window.requestAnimationFrame(step);
+    }
+    window.requestAnimationFrame(step);
+  }
+  if(!('IntersectionObserver' in window)){
+    nums.forEach(function(el){ animate(el); });
+    return;
+  }
+  var io=new IntersectionObserver(function(entries){
+    entries.forEach(function(en){
+      if(en.isIntersecting){ animate(en.target); io.unobserve(en.target); }
+    });
+  },{threshold:.4});
+  nums.forEach(function(el){ io.observe(el); });
+}
+
+/* ---------- Impact quote word-by-word ---------- */
+function initQuote(){
+  var q=$('iqText');
+  if(!q) return;
+  var words=q.textContent.trim().split(/\s+/);
+  q.textContent='';
+  words.forEach(function(w,idx){
+    var s=document.createElement('span');
+    s.className='w';
+    s.textContent=w;
+    s.style.setProperty('--d',(idx*0.03).toFixed(2)+'s');
+    q.appendChild(s);
+    q.appendChild(document.createTextNode(' '));
+  });
+}
+
+/* ---------- Notify modal ---------- */
+function initModal(){
+  var modal=$('notifyModal');
+  if(!modal) return;
+  var closer=$('modalClose');
+  var form=$('notifyForm');
+  var email=$('notifyEmail');
+  function open(){
+    modal.classList.add('open');
+    modal.setAttribute('aria-hidden','false');
+    document.body.style.overflow='hidden';
+    if(email) setTimeout(function(){ try{ email.focus(); }catch(e){} },60);
+  }
+  function close(){
+    if(!modal.classList.contains('open')) return;
+    modal.classList.remove('open');
+    modal.setAttribute('aria-hidden','true');
+    document.body.style.overflow='';
+  }
+  document.querySelectorAll('[data-notify]').forEach(function(b){ b.addEventListener('click',open); });
+  if(closer) closer.addEventListener('click',close);
+  modal.addEventListener('click',function(e){ if(e.target===modal) close(); });
+  document.addEventListener('keydown',function(e){ if(e.key==='Escape') close(); });
+  if(form) form.addEventListener('submit',function(e){ e.preventDefault(); });
+}
+ready(function(){
+  initNav();
+  initParticles();
+  initTypewriter();
+  initQuote();
+  initReveals();
+  initCounters();
+  initModal();
+});
+})();
+</script>
+</body>
+</html>
