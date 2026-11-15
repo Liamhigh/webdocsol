@@ -67,8 +67,8 @@
  }
 @@ -14299,6 +14356,14 @@ function voDatedAfterReference(textBlocks, referenceTime, firstPages) {
    });
- }
-
+}
+ 
 +// Historical records are supported, but medieval/far-future years in OCR text
 +// are debris, not chronology events. Fixed bounds keep repeat scans deterministic
 +// while still admitting future expiry, hearing and commencement dates.
@@ -101,4 +101,3 @@
          if (snip.length > 160) snip = snip.slice(0, 157) + '…';
 +        // OCR debris around a date is an extraction limit, not a historical
 +        // event. Keep it out of the chronology until a person reads the image.
-
