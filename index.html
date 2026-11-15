@@ -1,1 +1,703 @@
-<!-- @CURSOR_PLACEHOLDER:index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<link rel="canonical" href="https://verumglobal.foundation/index.html">
+<title>Verum Omnis - AI Forensics for Truth</title>
+<meta name="description" content="Verum Omnis — a constitutional forensic AI platform built to democratize justice. Free for every citizen. Coming soon to Android and Windows.">
+<link rel="icon" type="image/png" sizes="96x96" href="/images/favicon.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:ital,wght@0,300;0,400;0,600;1,300;1,400&family=JetBrains+Mono:wght@400;500&family=Source+Sans+3:ital,wght@0,300;0,400;0,600;0,700;1,300;1,400&display=swap" rel="stylesheet">
+<style>
+/* ============ Design tokens (from extract §5) ============ */
+:root{
+  --navy-0:#040D1B; --navy-1:#0A1628; --navy-2:#0F1F3A;
+  --card:rgba(26,46,82,0.4); --card-hover:rgba(26,46,82,0.6);
+  --border:#1A2E52; --border-dim:#2A4A82;
+  --blue:#4A7EC7; --gold:#D4A843; --gold-hover:#E8C567;
+  --offwhite:#F8F9FA; --body:#D5D8DD; --green:#2D9C5E; --red:#DC2626;
+  --serif:'Cormorant Garamond',Georgia,serif;
+  --mono:'JetBrains Mono',ui-monospace,SFMono-Regular,monospace;
+  --sans:'Source Sans 3',-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--navy-0);color:var(--body);font-family:var(--sans);-webkit-font-smoothing:antialiased;line-height:1.6;overflow-x:hidden}
+img{display:block;max-width:100%;height:auto}
+a{text-decoration:none;color:var(--blue)}
+button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
+::selection{background:var(--gold);color:var(--navy-0)}
+.container{max-width:1200px;margin:0 auto;padding:0 clamp(1.5rem,5vw,4rem)}
+.container.narrow{max-width:800px}
+.container.medium{max-width:1000px}
+.section{padding:120px 0}
+.bg-0{background:var(--navy-0)}
+.bg-1{background:var(--navy-1)}
+.bg-2{background:var(--navy-2)}
+.bg-evidence{background:linear-gradient(to bottom,#0F1F3A 0%,#0A1628 100%)}
+.eyebrow{font-family:var(--mono);font-size:.75rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:1rem}
+.sec-title{font-family:var(--serif);font-weight:300;font-size:clamp(2rem,5vw,3.5rem);letter-spacing:-.03em;color:var(--offwhite);line-height:1.12;margin-bottom:1.25rem}
+.sec-h3{font-family:var(--serif);font-weight:400;font-size:clamp(1.4rem,3vw,1.75rem);color:var(--offwhite);margin:3.5rem 0 .5rem}
+.sec-intro{color:var(--body);font-size:1.0625rem;line-height:1.7;max-width:640px}
+.sec-head{max-width:760px;margin-bottom:1rem}
+.sec-head.center{text-align:center;margin-left:auto;margin-right:auto}
+.sec-head.center .sec-intro{margin-left:auto;margin-right:auto}
+.lead{font-size:1.125rem;line-height:1.7;color:var(--body)}
+.lead+.lead{margin-top:1.25rem}
+.footnote{font-size:.75rem;color:var(--border-dim);margin-top:1.5rem;line-height:1.6}
+/* Scroll reveal (IntersectionObserver adds .is-visible; stagger via --d) */
+.reveal-item{opacity:0;transform:translateY(20px);transition:opacity .7s ease,transform .7s ease;transition-delay:var(--d,0s)}
+.reveal-item.is-visible{opacity:1;transform:none}
+/* ============ Nav (fixed, scroll-aware) ============ */
+.nav{position:fixed;top:0;left:0;right:0;z-index:50;height:64px;background:rgba(4,13,27,0.6);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);border-bottom:1px solid rgba(26,46,82,0.5);transition:background .3s ease;animation:navIn .5s ease both}
+.nav.scrolled{background:rgba(4,13,27,0.85)}
+@keyframes navIn{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+.nav-inner{max-width:1400px;margin:0 auto;height:64px;display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:0 clamp(1rem,3vw,2rem)}
+.nav-logo{display:flex;align-items:center;padding:0}
+.nav-logo img{height:40px;width:auto}
+.nav-links{display:none;align-items:center;gap:clamp(.8rem,1.4vw,1.4rem)}
+.nav-links a{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--blue);transition:color .2s;white-space:nowrap}
+.nav-links a:hover{color:var(--offwhite)}
+.nav-links a.active{color:var(--gold)}
+.nav-cta{display:none;align-items:center;gap:.8rem}
+.nav-cta .link-constitution{font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;color:var(--blue);transition:color .2s;white-space:nowrap}
+.nav-cta .link-constitution:hover{color:var(--offwhite)}
+.btn-outline{display:inline-block;font-family:var(--mono);font-size:.7rem;text-transform:uppercase;letter-spacing:.1em;padding:.55rem 1.05rem;border:1px solid var(--blue);color:var(--blue);border-radius:.375rem;transition:border-color .25s,color .25s;white-space:nowrap}
+.btn-outline:hover{border-color:var(--gold);color:var(--gold)}
+.btn-outline.active{border-color:var(--gold);color:var(--gold)}
+.hamburger{display:flex;align-items:center;justify-content:center;width:42px;height:42px;color:var(--offwhite)}
+.hamburger svg,.mobile-close svg{width:26px;height:26px}
+@media(min-width:1100px){
+  .nav-links{display:flex}
+  .nav-cta{display:flex}
+  .hamburger{display:none}
+}
+/* Mobile full-screen menu */
+.mobile-menu{position:fixed;inset:0;z-index:60;background:var(--navy-0);display:none;flex-direction:column;padding:1.25rem clamp(1.5rem,5vw,4rem) 2.5rem;overflow-y:auto}
+.mobile-menu.open{display:flex;animation:slideInRight .3s ease both}
+@keyframes slideInRight{from{transform:translateX(100%);opacity:.4}to{transform:none;opacity:1}}
+.mobile-menu-top{display:flex;justify-content:flex-end;align-items:center;height:44px;margin-bottom:1.5rem}
+.mobile-close{display:flex;align-items:center;justify-content:center;width:42px;height:42px;color:var(--offwhite)}
+.mobile-menu a.m-link{display:block;font-family:var(--mono);font-size:.95rem;text-transform:uppercase;letter-spacing:.12em;color:var(--body);padding:.85rem 0;border-bottom:1px solid rgba(26,46,82,.5);transition:color .2s}
+.mobile-menu a.m-link:hover{color:var(--offwhite)}
+.mobile-menu a.m-link.m-constitution{color:var(--blue)}
+.mobile-cta{margin-top:2rem;display:flex;flex-direction:column;gap:1rem}
+.btn-gold-fill{display:block;text-align:center;background:var(--gold);color:var(--navy-0);font-family:var(--mono);font-size:.8rem;text-transform:uppercase;letter-spacing:.1em;padding:.95rem 1.5rem;border-radius:.5rem;transition:background .25s,box-shadow .25s}
+.btn-gold-fill:hover{background:var(--gold-hover);box-shadow:0 0 24px rgba(212,168,67,0.35)}
+/* ============ Hero ============ */
+.hero{position:relative;min-height:max(100vh,600px);display:flex;align-items:center;justify-content:center;text-align:center;background:var(--navy-0);overflow:hidden}
+.hero.no-motion{background:linear-gradient(135deg,#0A1628 0%,#0F1F3A 50%,#040D1B 100%)}
+#particles{position:absolute;inset:0;width:100%;height:100%}
+.hero-overlay{position:absolute;inset:0;background:linear-gradient(to bottom,rgba(4,13,27,0.3) 0%,rgba(4,13,27,0.85) 100%);pointer-events:none}
+.hero-content{position:relative;z-index:1;max-width:840px;padding:7rem 1.5rem 6rem}
+.hero-logo{width:min(420px,70vw);margin:0 auto 2rem;filter:drop-shadow(0 0 40px rgba(74,126,199,0.2))}
+.hero-eyebrow{font-family:var(--mono);font-size:.8rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:1.25rem}
+.hero h1{font-family:var(--serif);font-weight:300;font-size:clamp(2.5rem,8vw,5rem);color:var(--offwhite);letter-spacing:-.03em;line-height:1.05;min-height:1.15em;margin-bottom:1.5rem}
+.cursor{display:inline-block;width:3px;height:.85em;background:var(--gold);margin-left:6px;vertical-align:-.06em;animation:blink 1s step-end infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:0}}
+.hero-sub{font-size:1.125rem;color:var(--body);max-width:640px;margin:0 auto 2.5rem;line-height:1.7}
+.hero-ctas{display:flex;gap:1rem;justify-content:center;flex-wrap:wrap}
+.btn-gold{display:inline-flex;align-items:center;gap:.55rem;background:var(--gold);color:var(--navy-0);font-family:var(--mono);font-size:.8rem;font-weight:500;text-transform:uppercase;letter-spacing:.1em;padding:.9rem 1.75rem;border-radius:.5rem;transition:background .25s,box-shadow .25s}
+.btn-gold:hover{background:var(--gold-hover);box-shadow:0 0 24px rgba(212,168,67,0.35)}
+.btn-gold svg{width:16px;height:16px}
+.hero-chevron{position:absolute;bottom:2rem;left:0;right:0;z-index:1;display:flex;justify-content:center;color:var(--blue)}
+.hero-chevron svg{width:30px;height:30px;animation:bounce 2s ease-in-out infinite}
+@keyframes bounce{0%,100%{transform:translateY(0)}50%{transform:translateY(-12px)}}
+/* Hero entrance timeline (mirrors extract GSAP delays) */
+.hero-fade{animation:heroFade .8s ease both}
+.hf-logo{animation-delay:.2s}
+.hf-eyebrow{animation-delay:.9s}
+.hf-h1{animation-delay:1.1s}
+.hf-sub{animation-delay:2.2s}
+.hf-ctas{animation-delay:2.7s}
+.hf-chevron{animation-delay:3.2s}
+@keyframes heroFade{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:none}}
+</style>
+<style>
+/* ============ Origin ============ */
+.stats-row{display:flex;flex-wrap:wrap;gap:2.5rem;margin:2.75rem 0}
+.stat .num{font-family:var(--serif);font-weight:300;font-size:1.875rem;color:var(--gold);line-height:1.1}
+.stat .lbl{font-family:var(--mono);font-size:11px;color:var(--blue);text-transform:uppercase;letter-spacing:.1em;margin-top:.3rem}
+.quote-block{background:rgba(26,46,82,0.4);border-left:4px solid var(--gold);border-radius:0 .5rem .5rem 0;padding:2rem clamp(1.5rem,4vw,3rem);margin:3rem 0}
+.quote-block p{font-family:var(--serif);font-style:italic;font-size:clamp(1.25rem,3vw,1.75rem);color:var(--offwhite);line-height:1.5;margin-bottom:1rem}
+.quote-attrib{color:var(--blue);font-size:.875rem}
+.table-wrap{overflow-x:auto;border:1px solid var(--border);border-radius:.5rem;margin-top:1.75rem}
+.charges{width:100%;border-collapse:collapse;min-width:760px}
+.charges th{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--gold);text-align:left;padding:1rem 1.25rem;border-bottom:1px solid var(--border);background:rgba(4,13,27,0.4)}
+.charges td{padding:.9rem 1.25rem;font-size:.9rem;color:var(--body);border-bottom:1px solid rgba(26,46,82,0.5);vertical-align:top;line-height:1.5}
+.charges tbody tr:last-child td{border-bottom:0}
+.charges tbody tr{transition:background .2s}
+.charges tbody tr:hover{background:rgba(26,46,82,0.3)}
+/* ============ Mission ============ */
+.split{display:grid;gap:3.5rem;align-items:center}
+@media(min-width:1024px){
+  .split-45{grid-template-columns:45% 55%;gap:4rem}
+  .split-55{grid-template-columns:55% 45%;gap:4rem}
+}
+.mission-img-wrap{position:relative}
+.clip-reveal{clip-path:inset(0 100% 0 0);transition:clip-path 1.2s cubic-bezier(.645,.045,.355,1)}
+.clip-reveal.is-visible{clip-path:inset(0 0 0 0)}
+.mission-img{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:.5rem}
+.badge-patent{position:absolute;bottom:1rem;left:1rem;display:flex;align-items:center;gap:.55rem;background:rgba(4,13,27,0.9);border:1px solid var(--border);border-radius:999px;padding:.55rem .95rem;font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;color:var(--offwhite)}
+.dot-green{width:8px;height:8px;border-radius:50%;background:var(--green);animation:pulse-glow 2.5s ease-in-out infinite}
+@keyframes pulse-glow{0%,100%{box-shadow:0 0 0 0 rgba(45,156,94,0.5);opacity:1}50%{box-shadow:0 0 0 7px rgba(45,156,94,0);opacity:.65}}
+/* ============ Cards (shared) ============ */
+.card{background:var(--card);border:1px solid var(--border);border-radius:.5rem;padding:2rem;transition:border-color .3s,background .3s,box-shadow .3s,transform .3s}
+.card:hover{border-color:var(--blue);background:var(--card-hover);box-shadow:0 4px 24px rgba(74,126,199,0.1)}
+/* ============ CrossBorder ============ */
+.cb-grid{display:grid;gap:1.5rem;margin-top:4rem}
+@media(min-width:768px){.cb-grid{grid-template-columns:1fr 1fr}}
+.cb-top{display:flex;align-items:center;gap:.75rem;margin-bottom:.35rem}
+.cb-flag{font-size:1.5rem;line-height:1}
+.cb-country{font-family:var(--serif);font-weight:400;font-size:1.25rem;color:var(--offwhite)}
+.cb-court{font-family:var(--mono);font-size:11px;color:var(--blue);text-transform:uppercase;letter-spacing:.08em;margin-bottom:.9rem}
+.pill{display:inline-block;font-family:var(--mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);border:1px solid rgba(212,168,67,0.4);border-radius:999px;padding:.32rem .75rem;margin-bottom:.9rem}
+.cb-case{font-family:var(--mono);font-size:.75rem;color:var(--gold);margin-bottom:.6rem}
+.cb-outcome{color:var(--body);font-size:.9rem;line-height:1.55}
+.banner-gold{background:rgba(212,168,67,0.08);border:1px solid rgba(212,168,67,0.3);border-radius:.5rem;padding:1.75rem;margin-top:3rem;text-align:center}
+.verdict{display:flex;align-items:center;justify-content:center;gap:1.1rem;flex-wrap:wrap;font-family:var(--serif);font-size:1.6rem;margin-bottom:1rem}
+.verdict .strike{color:var(--border-dim);text-decoration:line-through}
+.verdict .arrow{color:var(--gold);font-family:var(--sans)}
+.verdict .criminal{color:var(--gold)}
+.banner-gold p{color:var(--body);font-size:.95rem;line-height:1.65;max-width:840px;margin:0 auto}
+.banner-gold strong{color:var(--gold)}
+/* ============ EngineGrid ============ */
+.engine-grid{display:grid;gap:1.5rem;margin-top:4rem}
+@media(min-width:640px){.engine-grid{grid-template-columns:1fr 1fr}}
+@media(min-width:1024px){.engine-grid{grid-template-columns:1fr 1fr 1fr}}
+.icon{width:40px;height:40px;stroke:currentColor;fill:none;stroke-width:1.5;stroke-linecap:round;stroke-linejoin:round}
+.brain-icon{color:var(--blue);margin-bottom:1.1rem}
+.brain-name{font-family:var(--serif);font-weight:400;font-size:1.2rem;color:var(--offwhite);margin-bottom:.55rem}
+.brain-name .bnum{font-family:var(--mono);font-size:.8rem;color:var(--gold);letter-spacing:.08em;margin-right:.4rem}
+.brain-desc{font-size:.875rem;color:var(--body);line-height:1.55}
+/* ============ ImpactTimeline ============ */
+.impact-quote{position:relative;max-width:920px;margin:0 auto 5rem;text-align:center}
+.giant-quote{font-family:var(--serif);font-size:6rem;color:rgba(212,168,67,0.3);line-height:.6;margin-bottom:1.5rem;display:block}
+.iq-text{font-family:var(--serif);font-style:italic;font-weight:300;font-size:clamp(1.5rem,4vw,2.5rem);color:var(--offwhite);line-height:1.35}
+.iq-text .w{display:inline-block;opacity:0;transform:translateY(10px);transition:opacity .5s ease,transform .5s ease;transition-delay:var(--d,0s)}
+.impact-quote.is-visible .iq-text .w{opacity:1;transform:none}
+.iq-attrib{margin-top:1.75rem;font-size:.875rem;color:var(--blue)}
+.tl-grid{position:relative;display:grid;gap:2.5rem;margin-top:4rem}
+.tl-item{position:relative;padding-left:2.25rem}
+.tl-item::before{content:'';position:absolute;left:5px;top:16px;bottom:-2.75rem;width:2px;background:var(--border);transform:scaleY(0);transform-origin:top;transition:transform 1s ease;transition-delay:var(--d,0s)}
+.tl-item:last-child::before{display:none}
+.tl-dot{position:absolute;left:0;top:4px;width:12px;height:12px;border-radius:50%;border:2px solid var(--blue);background:var(--navy-0);transform:scale(0);transition:transform .5s cubic-bezier(.34,1.56,.64,1);transition-delay:var(--d,0s)}
+.tl-grid.is-visible .tl-item::before{transform:scaleY(1)}
+.tl-grid.is-visible .tl-dot{transform:scale(1)}
+.tl-date{font-family:var(--mono);font-size:.72rem;color:var(--gold);letter-spacing:.1em;text-transform:uppercase;margin-bottom:.45rem}
+.tl-text{font-size:.9rem;color:var(--body);line-height:1.55}
+@media(min-width:1024px){
+  .tl-grid{grid-template-columns:repeat(5,1fr);gap:3rem 1.5rem}
+  .tl-item{padding-left:0;padding-top:2rem}
+  .tl-dot{left:50%;top:0;transform:translateX(-50%) scale(0)}
+  .tl-grid.is-visible .tl-dot{transform:translateX(-50%) scale(1)}
+  .tl-item::before{left:0;right:0;top:5px;bottom:auto;width:auto;height:2px;transform:scaleX(0);transform-origin:left}
+  .tl-grid.is-visible .tl-item::before{transform:scaleX(1)}
+  .tl-item:nth-child(5n+1)::before{left:50%}
+  .tl-item:nth-child(5n)::before{right:50%}
+}
+.court-img{width:100%;aspect-ratio:21/9;max-height:400px;object-fit:cover;object-position:center 60%;border-radius:.75rem;margin-top:5rem}
+/* ============ EvidenceStats ============ */
+.stats-grid{display:grid;gap:1.5rem;margin-top:4rem}
+@media(min-width:640px){.stats-grid{grid-template-columns:1fr 1fr}}
+@media(min-width:1024px){.stats-grid{grid-template-columns:1fr 1fr 1fr}}
+.stat-card{background:var(--navy-2);border:1px solid var(--border);border-radius:.75rem;padding:2.5rem;transition:transform .3s,border-color .3s,box-shadow .3s}
+.stat-card:hover{transform:translateY(-4px);border-color:var(--blue);box-shadow:0 12px 32px rgba(0,0,0,0.35)}
+.stat-num{font-family:var(--serif);font-weight:300;font-size:clamp(2.5rem,6vw,4rem);color:var(--gold);line-height:1}
+.stat-lbl{font-family:var(--mono);font-size:.72rem;letter-spacing:.12em;color:var(--blue);text-transform:uppercase;margin:.85rem 0 .6rem}
+.stat-desc{font-size:.875rem;color:var(--body);line-height:1.55}
+</style>
+<style>
+/* ============ TripleVerification ============ */
+.tv-grid{display:grid;gap:3rem;margin-top:4rem}
+@media(min-width:1024px){.tv-grid{grid-template-columns:1fr 1fr 1fr;gap:2.5rem}}
+.tv-col{position:relative}
+.tv-col .ghost{font-family:var(--serif);font-weight:300;font-size:4rem;color:var(--border);line-height:1}
+.tv-icon{color:var(--blue);width:48px;height:48px;margin:1.25rem 0}
+.tv-title{font-family:var(--serif);font-weight:400;font-size:1.5rem;color:var(--offwhite);margin-bottom:.75rem}
+.tv-desc{font-size:.9375rem;color:var(--body);line-height:1.6}
+.tv-arrow{display:none}
+@media(min-width:1024px){
+  .tv-arrow{display:flex;position:absolute;top:2rem;right:-1.9rem;color:var(--border-dim);font-size:1.4rem;z-index:1}
+}
+/* ============ CryptographicSealing ============ */
+.chips{display:flex;flex-wrap:wrap;gap:.75rem;margin-top:2.25rem}
+.chip{background:var(--border);border:1px solid var(--border-dim);color:var(--blue);font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;padding:.55rem .95rem;border-radius:999px;transition:border-color .25s,color .25s}
+.chip:hover{border-color:var(--blue);color:var(--offwhite)}
+.hash-chain{display:flex;flex-direction:column;align-items:center;gap:.45rem;padding-top:1rem}
+.hash-block{background:var(--border);border:1px solid var(--blue);border-radius:.5rem;padding:.95rem 1.6rem;font-family:var(--mono);font-size:10px;color:var(--blue);letter-spacing:.05em;opacity:0;transform:scale(.9);transition:opacity .5s ease,transform .5s ease;transition-delay:calc(var(--i)*.15s);animation:hash-glow 1.5s ease-in-out infinite alternate;animation-delay:calc(var(--i)*.3s)}
+.hash-chain.is-visible .hash-block{opacity:1;transform:scale(1)}
+@keyframes hash-glow{from{box-shadow:0 0 8px rgba(74,126,199,0.2)}to{box-shadow:0 0 16px rgba(74,126,199,0.4)}}
+.hash-arrow{color:var(--border-dim);font-size:.95rem;line-height:1}
+.hash-caption{margin-top:1.5rem;font-family:var(--mono);font-size:11px;color:var(--gold);letter-spacing:.1em;text-transform:uppercase;text-align:center}
+/* ============ Standards ============ */
+.std-grid{display:grid;gap:1.5rem;margin-top:4rem}
+@media(min-width:768px){.std-grid{grid-template-columns:1fr 1fr}}
+.std-cat{font-family:var(--mono);font-size:11px;color:var(--gold);letter-spacing:.12em;text-transform:uppercase;margin-bottom:.55rem}
+.std-name{font-family:var(--serif);font-weight:400;font-size:1.25rem;color:var(--offwhite);margin-bottom:.75rem}
+.std-desc{font-size:.875rem;color:var(--body);line-height:1.55;margin-bottom:1.25rem}
+.std-app{border-left:2px solid var(--green);background:rgba(4,13,27,0.5);padding:1rem 1.25rem;border-radius:0 .375rem .375rem 0}
+.std-app h4{font-family:var(--mono);font-weight:500;font-size:10px;letter-spacing:.12em;color:var(--green);text-transform:uppercase;margin-bottom:.5rem}
+.std-app p{font-size:.85rem;color:var(--body);line-height:1.55}
+.quote-panel{background:rgba(26,46,82,0.3);border:1px solid var(--border);border-radius:.75rem;padding:clamp(1.75rem,4vw,3rem);margin-top:4rem}
+.quote-panel p{font-family:var(--serif);font-style:italic;font-weight:300;font-size:clamp(1.25rem,3vw,1.75rem);color:var(--offwhite);line-height:1.5}
+.quote-panel .attrib{font-family:var(--mono);font-style:normal;font-size:.72rem;color:var(--blue);letter-spacing:.1em;margin-top:1.5rem;display:block}
+.pill-row{display:flex;flex-wrap:wrap;gap:.6rem;justify-content:center;margin-top:3rem}
+.pill-row span{font-family:var(--mono);font-size:.66rem;letter-spacing:.1em;color:var(--blue);border:1px solid var(--border-dim);border-radius:999px;padding:.45rem .9rem}
+/* ============ GuardianFirewall ============ */
+.fw-list{display:flex;flex-direction:column;gap:1.5rem;margin-top:4rem}
+.fw-row{display:flex;gap:1.5rem;align-items:flex-start}
+.fw-meta{display:flex;flex-direction:column;align-items:center;gap:.6rem;min-width:3.25rem}
+.fw-ghost{font-family:var(--serif);font-weight:300;font-size:1.875rem;color:var(--border);line-height:1}
+.fw-icon{color:var(--blue);width:40px;height:40px}
+.fw-title{font-family:var(--serif);font-weight:400;font-size:1.25rem;color:var(--offwhite);margin-bottom:.55rem}
+.fw-desc{font-size:.9375rem;color:var(--body);line-height:1.6}
+.banner-green{background:rgba(45,156,94,0.08);border:1px solid rgba(45,156,94,0.3);border-radius:.5rem;padding:1.75rem;margin-top:3rem}
+.banner-green h4{font-family:var(--mono);font-weight:500;font-size:.75rem;letter-spacing:.15em;color:var(--green);margin-bottom:.75rem}
+.banner-green p{color:var(--body);font-size:.95rem;line-height:1.65}
+/* ============ Verifier ============ */
+.verify-badge{display:inline-flex;align-items:center;gap:.5rem;border:1px solid var(--green);color:var(--green);font-family:var(--mono);font-size:.66rem;letter-spacing:.12em;text-transform:uppercase;border-radius:999px;padding:.5rem 1rem;margin-bottom:1.5rem}
+.verify-badge svg{width:14px;height:14px}
+.btn-verify-open{display:inline-flex;align-items:center;gap:8px;text-decoration:none}
+.btn-verify-open svg{width:18px;height:18px}
+.v-features{display:grid;gap:1rem;margin-top:2rem}
+@media(min-width:640px){.v-features{grid-template-columns:repeat(3,1fr)}}
+.v-feat{background:rgba(26,46,82,0.3);border:1px solid var(--border);border-radius:.5rem;padding:1.25rem}
+.v-feat h4{font-family:var(--serif);font-weight:400;font-size:1.05rem;color:var(--offwhite);margin-bottom:.4rem}
+.v-feat p{font-size:.8rem;color:var(--body);line-height:1.5}
+</style>
+<style>
+/* ============ ComingSoon ============ */
+.pill-gold-big{display:inline-block;font-family:var(--mono);font-size:.72rem;letter-spacing:.15em;color:var(--gold);border:1px solid rgba(212,168,67,0.4);border-radius:999px;padding:.5rem 1.15rem;text-transform:uppercase;margin-bottom:1.5rem}
+.platform-grid{display:grid;gap:2rem;margin-top:4rem}
+@media(min-width:768px){.platform-grid{grid-template-columns:1fr 1fr}}
+@media(min-width:1024px){.platform-grid.three{grid-template-columns:repeat(3,1fr)}}
+.platform-status{display:inline-block;font-family:var(--mono);font-size:.62rem;letter-spacing:.12em;text-transform:uppercase;color:var(--gold);border:1px solid rgba(212,168,67,0.4);border-radius:999px;padding:.3rem .8rem;margin-bottom:1rem}
+.apps-note{max-width:860px;margin:3rem auto 0;border:1px solid var(--border);border-radius:.75rem;padding:1.5rem 1.75rem;background:rgba(26,46,82,0.3);text-align:left}
+.apps-note p{color:var(--body);font-size:.9rem;line-height:1.65;margin:0 0 .6rem}
+.apps-note p:last-child{margin-bottom:0}
+.platform-card{background:var(--navy-2);border:1px solid var(--border);border-radius:.75rem;padding:3rem;transition:border-color .3s,box-shadow .3s}
+.platform-card:hover{border-color:rgba(74,126,199,0.5);box-shadow:0 0 40px rgba(74,126,199,0.08)}
+.platform-icon{width:64px;height:64px;color:var(--blue);margin-bottom:1.5rem}
+.platform-name{font-family:var(--serif);font-weight:300;font-size:1.75rem;color:var(--offwhite);margin-bottom:1rem}
+.platform-desc{color:var(--body);font-size:.95rem;line-height:1.6;margin-bottom:2rem}
+.btn-notify{display:inline-block;border:1px solid var(--border-dim);color:var(--blue);background:transparent;font-family:var(--mono);font-size:.72rem;letter-spacing:.1em;text-transform:uppercase;padding:.75rem 1.6rem;border-radius:.5rem;transition:border-color .25s,color .25s}
+.btn-notify:hover{border-color:var(--blue);color:var(--offwhite)}
+/* ============ Notify modal ============ */
+.modal-overlay{position:fixed;inset:0;z-index:80;background:rgba(4,13,27,0.9);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);display:flex;align-items:center;justify-content:center;padding:1.5rem;opacity:0;visibility:hidden;transition:opacity .3s,visibility 0s .3s}
+.modal-overlay.open{opacity:1;visibility:visible;transition:opacity .3s}
+.modal-card{position:relative;background:var(--navy-2);border:1px solid var(--border);border-radius:.75rem;max-width:480px;width:100%;padding:2.5rem;text-align:center;transform:translateY(12px);transition:transform .3s}
+.modal-overlay.open .modal-card{transform:none}
+.bell-icon{width:40px;height:40px;color:var(--gold);margin:0 auto 1.25rem}
+.modal-card h3{font-family:var(--serif);font-weight:300;font-size:2rem;color:var(--offwhite);margin-bottom:1rem}
+.modal-card .modal-text{color:var(--body);font-size:.95rem;line-height:1.6;margin-bottom:1.75rem}
+.modal-form{display:flex;flex-direction:column;gap:.9rem}
+.modal-input{background:var(--navy-1);border:1px solid var(--border);border-radius:.5rem;padding:.85rem 1rem;color:var(--offwhite);font-family:var(--sans);font-size:.95rem;transition:border-color .25s}
+.modal-input::placeholder{color:var(--border-dim)}
+.modal-input:focus{outline:none;border-color:var(--blue)}
+.modal-submit{border:0;justify-content:center}
+.modal-close{position:absolute;top:.9rem;right:.9rem;color:var(--blue);width:38px;height:38px;display:flex;align-items:center;justify-content:center;transition:color .2s}
+.modal-close:hover{color:var(--offwhite)}
+.modal-close svg{width:20px;height:20px}
+/* ============ Footer ============ */
+.footer{background:var(--navy-0);border-top:1px solid var(--border);padding:60px 0}
+.footer-logo{max-width:280px;margin:0 auto 3rem;opacity:.9}
+.footer-grid{display:grid;gap:2.5rem;text-align:center;margin-bottom:3rem}
+@media(min-width:768px){.footer-grid{grid-template-columns:repeat(3,1fr);text-align:left}}
+.footer h4{font-family:var(--mono);font-weight:500;font-size:.72rem;letter-spacing:.15em;text-transform:uppercase;color:var(--gold);margin-bottom:1.1rem}
+.footer a.fl-link{display:block;color:var(--blue);font-size:.9rem;margin-bottom:.55rem;transition:color .2s;width:fit-content}
+.footer a.fl-link:hover{color:var(--offwhite)}
+.footer a.f-anchor{display:block;color:var(--body);font-size:.9rem;margin-bottom:.55rem;transition:color .2s;width:fit-content}
+.footer a.f-anchor:hover{color:var(--offwhite)}
+@media(max-width:767px){.footer a.fl-link,.footer a.f-anchor{margin-left:auto;margin-right:auto}}
+.footer .f-plain{color:var(--border-dim);font-size:.9rem;display:block;margin-bottom:.55rem;cursor:default}
+.footer-divider{border-top:1px solid var(--border);padding-top:2rem;display:flex;flex-direction:column;gap:.6rem;align-items:center;text-align:center}
+@media(min-width:1024px){.footer-divider{flex-direction:row;justify-content:space-between;text-align:left}}
+.footer-divider p{color:var(--border-dim);font-size:.85rem}
+.footer-divider .tagline{font-style:italic}
+.footer-divider .sealed{font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase}
+/* ============ Documents & Resources page ============ */
+.docs-main{padding:160px 0 120px;min-height:70vh}
+.docs-h1{font-family:var(--serif);font-weight:300;font-size:clamp(2rem,5vw,3rem);color:var(--offwhite);letter-spacing:-.02em;text-align:center;margin-bottom:3.5rem}
+.docs-grid{display:grid;gap:1.5rem;max-width:900px;margin:0 auto}
+@media(min-width:768px){.docs-grid{grid-template-columns:1fr 1fr}}
+.doc-card{display:block;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:1.75rem;transition:border-color .3s}
+.doc-card:hover{border-color:var(--gold)}
+.doc-card h3{font-family:var(--serif);font-weight:400;font-size:20px;color:var(--gold);margin-bottom:.6rem}
+.doc-card h3 a{color:inherit}
+.doc-card h3 a:hover{color:var(--gold-hover)}
+.doc-card p{font-size:14px;color:#94a3b8;line-height:1.6}
+.doc-card .doc-action{margin-top:1.25rem}
+.btn-gold-sm{display:inline-block;background:var(--gold);color:var(--navy-0);font-family:var(--mono);font-size:.7rem;font-weight:500;text-transform:uppercase;letter-spacing:.1em;padding:.65rem 1.2rem;border-radius:.45rem;transition:background .25s,box-shadow .25s}
+.btn-gold-sm:hover{background:var(--gold-hover);box-shadow:0 0 18px rgba(212,168,67,0.3)}
+.docs-foot{margin-top:4rem;text-align:center}
+.docs-foot p{font-family:var(--mono);font-size:11px;color:var(--blue);text-transform:uppercase;letter-spacing:.1em;margin-bottom:.4rem}
+/* ============ Reduced motion ============ */
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.01ms !important;animation-iteration-count:1 !important;transition-duration:.01ms !important;transition-delay:0s !important}
+  .reveal-item,.iq-text .w{opacity:1;transform:none}
+  .clip-reveal{clip-path:inset(0 0 0 0)}
+  .tl-dot{transform:scale(1)}
+  .tl-item::before{transform:none}
+  .hash-block{opacity:1;transform:none}
+  .cursor{animation:none}
+}
+</style>
+</head>
+<body>
+<!-- ============ NAV ============ -->
+<nav class="nav" id="nav" aria-label="Primary navigation">
+  <div class="nav-inner">
+    <button class="nav-logo" id="navLogo" aria-label="Verum Omnis — scroll to top">
+      <img src="/images/logo-full.png" alt="Verum Omnis" width="877" height="368">
+    </button>
+    <div class="nav-links" id="navLinks">
+      <a href="#origin" data-spy="origin">Origin</a>
+      <a href="#mission" data-spy="mission">Mission</a>
+      <a href="#crossborder" data-spy="crossborder">Cross-Border</a>
+      <a href="#engine" data-spy="engine">The Engine</a>
+      <a href="#impact" data-spy="impact">Impact</a>
+      <a href="#standards" data-spy="standards">Standards</a>
+      <a href="#firewall" data-spy="firewall">Firewall</a>
+      <a href="verify.html" data-spy="verify">Verify</a>
+      <a href="#coming-soon" data-spy="coming-soon">Get the Apps</a>
+    </div>
+    <div class="nav-cta">
+      <!-- Mandated addition: Constitution link between VERIFY anchor group and DOCUMENTS CTA -->
+      <a class="link-constitution" href="/constitution.html">Constitution</a>
+      <a class="btn-outline" href="/seal-document.html">Seal Document</a>
+      <a class="btn-outline" href="preview-documents.html">Documents</a>
+    </div>
+    <button class="hamburger" id="hamburger" aria-expanded="false" aria-controls="mobileMenu" aria-label="Open menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+    </button>
+  </div>
+</nav>
+<div class="mobile-menu" id="mobileMenu" aria-hidden="true">
+  <div class="mobile-menu-top">
+    <button class="mobile-close" id="mobileClose" aria-label="Close menu">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><path d="M6 6l12 12M18 6L6 18"/></svg>
+    </button>
+  </div>
+  <a class="m-link" href="#origin">Origin</a>
+  <a class="m-link" href="#mission">Mission</a>
+  <a class="m-link" href="#crossborder">Cross-Border</a>
+  <a class="m-link" href="#engine">The Engine</a>
+  <a class="m-link" href="#impact">Impact</a>
+  <a class="m-link" href="#standards">Standards</a>
+  <a class="m-link" href="#firewall">Firewall</a>
+  <a class="m-link" href="verify.html">Verify</a>
+  <a class="m-link" href="#coming-soon">Get the Apps</a>
+  <a class="m-link m-constitution" href="/constitution.html">Constitution</a>
+  <div class="mobile-cta">
+    <a class="btn-gold-fill" href="/seal-document.html">Seal Document</a>
+    <a class="btn-outline" href="preview-documents.html" style="text-align:center">Documents</a>
+  </div>
+</div>
+
+<!-- ============ HERO ============ -->
+<header class="hero" id="top">
+  <canvas id="particles" aria-hidden="true"></canvas>
+  <div class="hero-overlay" aria-hidden="true"></div>
+  <div class="hero-content">
+    <img class="hero-logo hero-fade hf-logo" src="/images/logo-full.png" alt="Verum Omnis - AI Forensics for Truth" width="877" height="368">
+    <p class="hero-eyebrow hero-fade hf-eyebrow">AI Forensics for Truth</p>
+    <h1 class="hero-fade hf-h1"><span id="typeText" aria-label="Truth for All"></span><span class="cursor" id="typeCursor" aria-hidden="true"></span></h1>
+    <p class="hero-sub hero-fade hf-sub">A constitutional forensic AI platform built to democratize justice. Free for every citizen. Coming soon to Android and Windows.</p>
+    <div class="hero-ctas hero-fade hf-ctas">
+      <button class="btn-gold" id="ctaVerify" type="button">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M8 12.5l2.5 2.5L16 9.5"/></svg>
+        Verify Document
+      </button>
+      <a class="btn-gold" href="/seal-document.html">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="1"/><path d="M8 11V8a4 4 0 018 0v3"/></svg>
+        Seal Document
+      </a>
+    </div>
+  </div>
+  <button class="hero-chevron hero-fade hf-chevron" id="chevron" aria-label="Scroll to Mission section">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 9l6 6 6-6"/></svg>
+  </button>
+</header>
+
+<main>
+<!-- ============ 3.2 ORIGIN ============ -->
+<section class="section bg-2" id="origin">
+  <div class="container">
+    <div class="sec-head reveal-item">
+      <p class="eyebrow">The Origin</p>
+      <h2 class="sec-title">Born From Necessity. Built on a Phone.</h2>
+    </div>
+    <div class="reveal-item">
+      <p class="lead">Verum Omnis was not created in a lab or funded by venture capital. It was born in the aftermath of a devastating cross-border fraud that stripped its founder of everything. When Liam Highcock lost his shareholding in Greensky Ornamentals FZ-LLC to systematic fraud, he was left with nothing but his phone and a determination to prove the truth.</p>
+      <p class="lead">Business partners diverted funds, fabricated a $28,000 liability, concealed transactions, and even attempted to breach his Gmail account. A law firm initially classified the matter as a commercial dispute. But when Liam pushed back with a 370-page forensic case file compiled entirely on his mobile phone, the evidence spoke for itself. The firm agreed: this was criminal, not commercial.</p>
+    </div>
+    <div class="stats-row" data-stagger>
+      <div class="stat reveal-item"><div class="num" data-count="370">370</div><div class="lbl">Page Forensic File Built on Phone</div></div>
+      <div class="stat reveal-item"><div class="num" data-count="2">2</div><div class="lbl">Countries — UAE &amp; South Africa</div></div>
+      <div class="stat reveal-item"><div class="num">0</div><div class="lbl">Rand Spent on Attorneys — Self-Represented Throughout</div></div>
+    </div>
+    <blockquote class="quote-block reveal-item">
+      <p>&ldquo;A law firm told me this was a commercial dispute. I told them to look again. The evidence was criminal — fraud, breach of trust, cybercrime, conspiracy. When they saw the 370-page file, they agreed. That file was built on my phone, at zero cost, by a man who had lost everything.&rdquo;</p>
+      <footer class="quote-attrib">— Liam Highcock, Founder, Verum Omnis</footer>
+    </blockquote>
+    <h3 class="sec-h3 reveal-item">Cross-Border Legal Mapping — Verified Charges</h3>
+    <div class="table-wrap reveal-item">
+      <table class="charges">
+        <thead>
+          <tr><th scope="col">Offense</th><th scope="col">UAE Law</th><th scope="col">South African Law</th><th scope="col">Evidence</th></tr>
+        </thead>
+        <!-- TODO: Offense/Evidence columns identical in source — confirm intended text -->
+        <tbody>
+          <tr><td>Concealment of deal execution after denial</td><td>UAE Penal Code Art. 399</td><td>Common Law Fraud</td><td>Concealment of deal execution after denial</td></tr>
+          <tr><td>Failure to report diversion of revenue</td><td>Art. 404</td><td>Breach of Fiduciary Duty</td><td>Failure to report diversion of revenue</td></tr>
+          <tr><td>Fabricated $28K demand as intimidation</td><td>Arts. 216, 217 &amp; 452</td><td>Cybercrimes Act</td><td>Fabricated $28K demand as intimidation</td></tr>
+          <tr><td>Gmail breach attempt by device &quot;SCAQUACULTURE&quot;</td><td>UAE Law 34/2021, Arts. 2 &amp; 6</td><td>SA Cybercrimes Act 19/2020</td><td>Gmail breach attempt by device &quot;SCAQUACULTURE&quot;</td></tr>
+          <tr><td>Coordinated bypassing of contract and invoicing</td><td>Penal Code Art. 44</td><td>Common Law Conspiracy</td><td>Coordinated bypassing of contract and invoicing</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="footnote reveal-item">Verified through AI-assisted forensic analysis, human-audited, and time-sequenced. All statutes matched to relevant actions and evidence. SAPS Case CAS 126/4/2025.</p>
+  </div>
+</section>
+<!-- ============ 3.3 MISSION ============ -->
+<section class="section bg-1" id="mission">
+  <div class="container">
+    <div class="split split-45">
+      <div class="mission-img-wrap">
+        <div class="clip-reveal">
+          <img class="mission-img" src="/images/mission-hands.jpg" alt="Hands holding a smartphone with data visualization" width="1344" height="768" loading="lazy">
+        </div>
+        <div class="badge-patent"><span class="dot-green" aria-hidden="true"></span>PATENT PENDING</div>
+      </div>
+      <div>
+        <div class="reveal-item">
+          <p class="eyebrow">Our Mission</p>
+          <h2 class="sec-title">Zero Cost. Maximum Impact. Justice for All.</h2>
+        </div>
+        <div class="reveal-item">
+          <p class="lead">After losing everything to cross-border fraud, Liam Highcock built a constitutional forensic AI platform entirely on his mobile phone — at zero cost — to fight for justice. What started as one man's fight against impossible odds became a proof of concept that justice need not be the preserve of the wealthy.</p>
+          <p class="lead">On 23 June 2026, the first-ever AI-assisted Constitutional Court application was filed in South African legal history — 528 pages of cryptographically sealed evidence, 111 documented contradictions, and a mission to set justice free. The entire process cost nothing. No attorneys. No legal fees. No servers. A self-represented litigant before the Constitutional Court — every filing from a phone. Just a phone and the truth.</p>
+        </div>
+        <div class="stats-row" data-stagger>
+          <div class="stat reveal-item"><div class="num">2.62B</div><div class="lbl">Extrapolated Loss Exposed</div></div>
+          <div class="stat reveal-item"><div class="num" data-count="7">7</div><div class="lbl">Victims Represented</div></div>
+          <div class="stat reveal-item"><div class="num">R0</div><div class="lbl">Cost to Litigant</div></div>
+        </div>
+        <p class="footnote reveal-item">Verum Omnis is patent pending. Constitution v6.0 Final. Sealed under SHA-512 with OpenTimestamps (Bitcoin blockchain) anchoring.</p>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3.4 CROSSBORDER ============ -->
+<section class="section bg-1" id="crossborder">
+  <div class="container">
+    <div class="sec-head reveal-item">
+      <p class="eyebrow">Institutional Recognition</p>
+      <h2 class="sec-title">Nine Institutions. One Truth.</h2>
+      <p class="sec-intro">What began as a single man with a phone has grown into a multi-institutional investigation spanning criminal dockets, the Hawks, the Public Protector, the Legal Practice Council, the High Court, and South Africa's highest court.</p>
+    </div>
+    <div class="cb-grid" data-stagger>
+      <article class="card reveal-item">
+        <div class="cb-top"><span class="cb-flag" aria-hidden="true">🇿🇦</span><h3 class="cb-country">South Africa</h3></div>
+        <p class="cb-court">SAPS Margate Station</p>
+        <span class="pill">Criminal Docket Opened</span>
+        <p class="cb-case">Case: CAS 126/4/2025</p>
+        <!-- Softened: "370-page forensic bundle accepted as prima facie evidence" -> "submitted in support of the complaint" -->
+        <p class="cb-outcome">Criminal case opened based on sealed evidence. 370-page forensic bundle submitted in support of the complaint. Under active investigation.</p>
+      </article>
+      <article class="card reveal-item">
+        <div class="cb-top"><span class="cb-flag" aria-hidden="true">🇿🇦</span><h3 class="cb-country">South Africa</h3></div>
+        <p class="cb-court">SAPS Port Edward Station</p>
+        <span class="pill">Second Docket Opened</span>
+        <p class="cb-case">Case: CAS 96/6/2026</p>
+        <p class="cb-outcome">Second criminal docket opened. WO NG Nobanda assigned as investigating officer. Escalation of fraud and corruption-related offenses.</p>
+      </article>
+      <article class="card reveal-item">
+        <div class="cb-top"><span class="cb-flag" aria-hidden="true">🇿🇦</span><h3 class="cb-country">South Africa</h3></div>
+        <p class="cb-court">SAPS DPCI — Hawks Risk &amp; Integrity Management</p>
+        <span class="pill">Hawks Complaint</span>
+        <p class="cb-case">Case: RIM 4/14/2/3 (703)</p>
+        <p class="cb-outcome">Service complaint registered at DPCI head office by Col. RP Baloyi, Section Commander, Complaints Management &amp; Investigation. It concerns a failure to investigate fraud the complainant estimates at over R231 million across seven affected operators. The complaint is to be investigated. No finding has been made.</p>
+      </article>
+      <article class="card reveal-item">
+        <div class="cb-top"><span class="cb-flag" aria-hidden="true">🇿🇦</span><h3 class="cb-country">South Africa</h3></div>
+        <p class="cb-court">Office of the Public Protector</p>
+        <span class="pill">Public Protector</span>
+        <p class="cb-case">Cases: CMS-88494/2026 &amp; CMS-88490/2026</p>
+        <p class="cb-outcome">Two complaints acknowledged June 2026. Referral notices issued 30 September 2026: CMS-88494/2026 referred to the National Director of Public Prosecutions; CMS-88490/2026 referred to the Director-General of the Department of Mineral and Petroleum Resources. Public Protector files closed.</p>
+      </article>
+      <article class="card reveal-item">
+        <div class="cb-top"><span class="cb-flag" aria-hidden="true">🇿🇦</span><h3 class="cb-country">South Africa</h3></div>
+        <p class="cb-court">Legal Practice Council — Eastern Cape</p>
+        <span class="pill">LPC Complaint</span>
+        <p class="cb-case">Case: LPC Ref: Pending</p>
+        <p class="cb-outcome">Formal misconduct complaint filed 24 March 2026 against TDP Legal for failure to act on Hawks-ready evidence, and issuing cease-and-desist to the whistleblower. Conditional withdrawal offer issued 23 May 2026.</p>
+      </article>
+      <article class="card reveal-item">
+        <div class="cb-top"><span class="cb-flag" aria-hidden="true">🇿🇦</span><h3 class="cb-country">South Africa</h3></div>
+        <p class="cb-court">Port Shepstone Magistrate's Court</p>
+        <!-- Softened: pill was "JUDICIALLY RECOGNIZED"; body claimed file "accepted into court record" and "recognized as admissible" -->
+        <span class="pill">Magistrate's Court</span>
+        <p class="cb-case">Case: H208/25</p>
+        <p class="cb-outcome">370-page cryptographically sealed forensic file lodged with the court. Protection order application dismissed. Sealed digital evidence presented for admission under ECT Act 25 of 2002.</p>
+      </article>
+      <article class="card reveal-item">
+        <div class="cb-top"><span class="cb-flag" aria-hidden="true">🇦🇪</span><h3 class="cb-country">UAE (RAKEZ)</h3></div>
+        <p class="cb-court">RAKEZ Authority</p>
+        <!-- Softened: pill was "CROSS-BORDER VALIDATED"; body claimed file "accepted as formal proof of cyber forgery" -->
+        <span class="pill">Cross-Border Submission</span>
+        <p class="cb-case">Case: #1295911</p>
+        <p class="cb-outcome">Formal submission in a shareholder dispute. 332-page sealed file submitted, mapping the conduct alleged to UAE and South African statute. The classification is disputed: instructed counsel concluded the matter was commercial; the complainant maintains in writing that it is criminal. Both positions stand on the record.</p>
+      </article>
+      <article class="card reveal-item">
+        <div class="cb-top"><span class="cb-flag" aria-hidden="true">🇿🇦</span><h3 class="cb-country">South Africa</h3></div>
+        <p class="cb-court">KwaZulu-Natal High Court</p>
+        <span class="pill">High Court</span>
+        <p class="cb-case">Case: 2026-179949</p>
+        <p class="cb-outcome">Defamation action and Part E counterclaim (R4,850,000) proceeding. Rule 28 amendments proposed. Conducted in person — self-represented throughout, no attorney's fees, from a mobile phone.</p>
+      </article>
+      <article class="card reveal-item">
+        <div class="cb-top"><span class="cb-flag" aria-hidden="true">🇿🇦</span><h3 class="cb-country">South Africa</h3></div>
+        <p class="cb-court">Constitutional Court of South Africa</p>
+        <span class="pill">Constitutional First</span>
+        <p class="cb-case">Case: CCT237/20 &amp; CCT19/20</p>
+        <p class="cb-outcome">Application filed by the applicant in person — self-represented, without instructed counsel — prepared with the Verum Omnis engine entirely on a mobile phone. 528 pages of cryptographically sealed evidence submitted. Receipt acknowledged by the Registrar's office. Rescission application dismissed on procedural grounds (standing); no costs awarded; the evidence was not ruled on. No ruling on the merits.</p>
+      </article>
+    </div>
+    <div class="banner-gold reveal-item">
+      <div class="verdict"><span class="criminal">Criminal complaints filed</span></div>
+      <p>The complaints map the conduct alleged to Fraud (UAE Penal Code Art. 399 / SA common law), Breach of Trust (Art. 404), Cybercrime (UAE Law 34/2021 / SA Cybercrimes Act 19/2020), Forgery and Extortion (Arts. 216, 217 &amp; 452) and Conspiracy (Art. 44). These are the offences alleged by the complainant and mapped to statute — <strong>no charge has been laid and no court or prosecutor has ruled on any of them</strong>. The complainant estimates the loss across seven affected operators at over <strong>R231 million</strong>, on industry-standard goodwill valuation. Quantum is for determination on expert evidence.</p>
+    </div>
+  </div>
+</section>
+<!-- ============ 3.5 ENGINEGRID ============ -->
+<section class="section bg-2" id="engine">
+  <div class="container">
+    <div class="sec-head reveal-item">
+      <p class="eyebrow">The Engine</p>
+      <h2 class="sec-title">Nine Brains. One Truth.</h2>
+      <p class="sec-intro">Verum Omnis employs a Nine-Brain Consensus Engine where nine specialized AI modules analyze evidence simultaneously. No single model's output is accepted without corroboration. This eliminates hallucination and ensures every finding is supported by multiple independent analytical perspectives.</p>
+    </div>
+    <div class="engine-grid" data-stagger>
+      <article class="card brain-card reveal-item">
+        <svg class="icon brain-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7H7l3-3m-3 3l3 3M4 17h13l-3-3m3 3l-3 3"/></svg>
+        <h3 class="brain-name"><span class="bnum">B1</span> — Contradiction Brain</h3>
+        <p class="brain-desc">Detects direct, implied, and contextual contradictions across documents and statements. Flags fraud by silence and negative evidence.</p>
+      </article>
+      <article class="card brain-card reveal-item">
+        <svg class="icon brain-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M7 3h7l4 4v14H7z"/><path d="M14 3v4h4"/><circle cx="11" cy="13" r="2.5"/><path d="M13 15l2.2 2.2"/></svg>
+        <h3 class="brain-name"><span class="bnum">B2</span> — Document Forensics</h3>
+        <p class="brain-desc">Analyzes PDF metadata, EXIF data, pixel-level manipulation, cropped screenshots, and composite images.</p>
+      </article>
+      <article class="card brain-card reveal-item">
+        <svg class="icon brain-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v10H9l-5 4V5z"/><path d="M8 10h.01M12 10h.01M16 10h.01"/></svg>
+        <h3 class="brain-name"><span class="bnum">B3</span> — Communications</h3>
+        <p class="brain-desc">Validates email headers, WhatsApp logs, timestamp sequencing, and deletion patterns. Detects spoofing.</p>
+      </article>
+      <article class="card brain-card reveal-item">
+        <svg class="icon brain-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M5 6h14M5 10h14M5 14h8"/><path d="M15.5 18.5l5-5M20.5 18.5l-5-5"/></svg>
+        <h3 class="brain-name"><span class="bnum">B4</span> — Linguistics &amp; Deception</h3>
+        <p class="brain-desc">Identifies evasion patterns, gaslighting, DARVO tactics, and semantic drift. Calculates truth scarcity.</p>
+      </article>
+      <article class="card brain-card reveal-item">
+        <svg class="icon brain-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3.5 2"/></svg>
+        <h3 class="brain-name"><span class="bnum">B5</span> — Timeline &amp; Geolocation</h3>
+        <p class="brain-desc">Reconstructs chronological sequences, aligns device clocks, checks travel plausibility, exposes fabricated alibis.</p>
+      </article>
+      <article class="card brain-card reveal-item">
+        <svg class="icon brain-icon" viewBox="0 0 24 24" aria-hidden="true"><rect x="3" y="7" width="18" height="10" rx="1"/><circle cx="12" cy="12" r="2.5"/><path d="M6 9.8v4.4M18 9.8v4.4"/></svg>
+        <h3 class="brain-name"><span class="bnum">B6</span> — Financial Brain</h3>
+        <p class="brain-desc">Extracts amounts, traces money flows, identifies shell-hop patterns, duplicate invoices, and unlawful extractions.</p>
+      </article>
+      <article class="card brain-card reveal-item">
+        <svg class="icon brain-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 4v13M8 20h8M5 7h14"/><path d="M5 7l-2.5 5a2.75 2.75 0 005 0L5 7zM19 7l-2.5 5a2.75 2.75 0 005 0L19 7z"/></svg>
+        <h3 class="brain-name"><span class="bnum">B7</span> — Legal Mapping</h3>
+        <p class="brain-desc">Maps proven facts to specific statutes and case law. Produces offence matrices with applicable law and confidence levels.</p>
+      </article>
+      <article class="card brain-card reveal-item">
+        <svg class="icon brain-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M4 10v4M8 7v10M12 4v16M16 8v8M20 11v2"/></svg>
+        <h3 class="brain-name"><span class="bnum">B8</span> — Audio &amp; Voice</h3>
+        <p class="brain-desc">Detects deepfake audio, splices, environmental mismatches, and speaker continuity. Authenticates recordings.</p>
+      </article>
+      <article class="card brain-card reveal-item">
+        <svg class="icon brain-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 00-3.5 10.9c.8.6 1.5 1.3 1.5 2.1h4c0-.8.7-1.5 1.5-2.1A6 6 0 0012 3z"/></svg>
+        <h3 class="brain-name"><span class="bnum">B9</span> — R&amp;D Advisory</h3>
+        <p class="brain-desc">Generates hypotheses and test vectors. Provides next-step recommendations without influencing consensus.</p>
+      </article>
+    </div>
+  </div>
+</section>
+
+<!-- ============ 3.6 IMPACTTIMELINE ============ -->
+<section class="section bg-0" id="impact">
+  <div class="container">
+    <blockquote class="impact-quote" id="impactQuote">
+      <span class="giant-quote" aria-hidden="true">&ldquo;</span>
+      <p class="iq-text" id="iqText">Never before has a self-represented litigant, acting without legal counsel and relying on AI-generated cryptographically sealed evidence, filed an application in the Constitutional Court of South Africa.</p>
+      <footer class="iq-attrib">— Constitutional Court Application CCT237/20 &amp; CCT19/20, 23 June 2026</footer>
+    </blockquote>
+    <div class="tl-grid" id="tlGrid">
+      <div class="tl-item" style="--d:.0s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Mar 2025</p><p class="tl-text">Lost everything to cross-border fraud. Left with nothing but a phone and a determination to prove the truth.</p></div>
+      <div class="tl-item" style="--d:.1s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Apr 2025</p><p class="tl-text">SAPS Margate — CAS 126/4/2025 opened. 370-page forensic file compiled entirely on mobile phone submitted in support of the criminal complaint.</p></div>
+      <div class="tl-item" style="--d:.2s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">May 2025</p><p class="tl-text">Cross-border legal review with a UAE law firm. Conduct alleged mapped to both UAE and SA statute. Classification disputed: counsel concluded commercial, the complainant maintains criminal.</p></div>
+      <div class="tl-item" style="--d:.3s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Aug 2025</p><p class="tl-text">Port Shepstone Magistrate's Court — H208/25. Protection order dismissed. Forensic evidence lodged with the court.</p></div>
+      <div class="tl-item" style="--d:.4s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Oct 2025</p><p class="tl-text">370-page cryptographically sealed forensic bundle filed with the court in the matter before Magistrate Moleele.</p></div>
+      <div class="tl-item" style="--d:.5s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Jun 2026</p><p class="tl-text">Public Protector South Africa — CMS-88494/2026 acknowledged. Complaint under assessment for jurisdiction to investigate systemic fraud.</p></div>
+      <div class="tl-item" style="--d:.6s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Jun 2026</p><p class="tl-text">SAPS Hawks DPCI — RIM 4/14/2/3 (703). Service complaint registered concerning a failure to investigate fraud the complainant estimates at over R231 million. The complaint is to be investigated. No finding has been made.</p></div>
+      <div class="tl-item" style="--d:.7s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Jun 2026</p><p class="tl-text">SAPS Port Edward — CAS 96/6/2026 opened. WO NG Nobanda assigned as investigating officer.</p></div>
+      <div class="tl-item" style="--d:.8s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Jun 2026</p><p class="tl-text">528-page sealed evidence bundle completed with 111 documented contradictions. Constitutional Court application prepared.</p></div>
+      <div class="tl-item" style="--d:.9s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Jun 2026</p><p class="tl-text">Constitutional Court — CCT237/20 &amp; CCT19/20. Application filed by the applicant in person, without instructed counsel. Receipt acknowledged; no ruling on the merits.</p></div>
+      <div class="tl-item" style="--d:1s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Sep 2026</p><p class="tl-text">Constitutional Court — rescission application dismissed on procedural grounds: standing. No costs awarded. The evidence itself was not ruled on.</p></div>
+      <div class="tl-item" style="--d:1.1s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Sep 2026</p><p class="tl-text">Public Protector — two referral notices issued 30 September 2026: CMS-88494/2026 to the National Director of Public Prosecutions; CMS-88490/2026 to the Director-General of Mineral Resources and Petroleum. Files closed.</p></div>
+      <div class="tl-item" style="--d:1.2s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Nov 2026</p><p class="tl-text">NDPP submission completed — 14 November 2026. Constitutional Court supplementary record, contractual evidence and CIPC registry records transmitted. Fourteen attachments.</p></div>
+      <div class="tl-item" style="--d:1.3s"><span class="tl-dot" aria-hidden="true"></span><p class="tl-date">Nov 2026</p><p class="tl-text">High Court — case 2026-179949. Defamation action and Part E counterclaim (R4,850,000) proceeding. Rule 28 amendments proposed. Every step in person, self-represented, from a mobile phone.</p></div>
+    </div>
+    <img class="court-img reveal-item" src="/images/court-exterior.jpg" alt="Constitutional Court of South Africa at dusk" width="1344" height="768" loading="lazy">
+  </div>
+</section>
+<!-- ============ 3.7 EVIDENCESTATS ============ -->
+<section class="section bg-evidence" id="evidence">
+  <div class="container">
+    <div class="sec-head center reveal-item">
+      <p class="eyebrow">The Evidence</p>
+      <h2 class="sec-title">Numbers That Speak</h2>
+    </div>
+    <div class="stats-grid" data-stagger>
+      <article class="stat-card reveal-item">
+        <div class="stat-num" data-count="528">528</div>
+        <p class="stat-lbl">Pages</p>
+        <p class="stat-desc">Cryptographically sealed evidence bundle, SHA-512 verified, anchored via OpenTimestamps (Bitcoin blockchain)</p>
+      </article>
+      <article class="stat-card reveal-item">
+        <div class="stat-num" data-count="111">111</div>
+        <p class="stat-lbl">Contradictions</p>
+        <p class="stat-desc">Documented contradictions found in the Respondent's own communications and admissions</p>
+      </article>
+      <article class="stat-card reveal-item">
+        <div class="stat-num" data-count="9">9</div>
+        <p class="stat-lbl">Forensic Brains</p>
+        <p class="stat-desc">Independent AI modules in consensus engine, eliminating hallucination and bias</p>
+      </article>
+      <article class="stat-card reveal-item">
+        <div class="stat-num" data-count="9">9</div>
+        <p class="stat-lbl">Institutions</p>
+        <p class="stat-desc">SAPS, Hawks DPCI, Public Protector, NDPP, Magistrate Court, High Court, RAKEZ UAE, Constitutional Court, and LPC</p>
+      </article>
+      <article class="stat-card reveal-item">
+        <div class="stat-num" data-count="231" data-suffix="M+">231M+</div>
+        <p class="stat-lbl">Rand Exposed</p>
+        <p class="stat-desc">Systemic fraud value under investigation across multiple criminal dockets</p>
+      </article>
+      <article class="stat-card reveal-item">
+        <div class="stat-num">R0</div>
+        <p class="stat-lbl">Attorneys' Fees — Self-Represented</p>
+        <p class="stat-desc">No attorneys, no legal fees, at any stage. A self-represented litigant in the Constitutional Court — every filing prepared and submitted from a mobile phone.</p>
+      </article>
+    </div>
+  </div>
+</section>
