@@ -23,8 +23,8 @@ index c3657a4..c4960e6 100644
 --- a/tests/combine-06-april-regression.test.mjs
 +++ b/tests/combine-06-april-regression.test.mjs
 @@ -132,10 +132,18 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor
-   // D17 itself still measures the page (a native file keeps the check):
-   const blanks = DET.D17_DETECT_FORMAT_ANOMALY(['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)]);
+  // D17 itself still measures the page (a native file keeps the check):
+  const blanks = DET.D17_DETECT_FORMAT_ANOMALY(['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)]);
   ok(blanks.length === 1, 'positive control: D17 still measures an isolated near-empty page');
 -  // The engine hands a near-empty finding on scanned image pages to the notes.
 -  const io = E.voImageOnlyCt26ToNotes([{ type: 'CT26', severity: 2, location: 'Page 676', evidence: 'Page 676 is nearly empty (9 chars)' }, { type: 'CT26', severity: 2, location: 'Page 12', evidence: 'Page 12 is nearly empty' }, { type: 'CT01', severity: 4, location: 'Page 676', evidence: 'x' }], [664, 676]);
@@ -46,9 +46,9 @@ index c3657a4..c4960e6 100644
   ok(/if \(_ocrRan && _imageOnlyPages\.length\) \{\s*var _io = voImageOnlyCt26ToNotes\(allFindings, _imageOnlyPages\);/.test(src), 'the engine applies it only when an OCR pass ran over the file');
   // The review: only a page the OCR pass rendered counts — a page returned
 @@ -178,8 +186,11 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor
-   const near = pad.slice(); near[0] = noComp; near[4] = acq;
-   ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, far, 'CT45').length === 0, 'a no-compensation clause and a purchase right in two different stated agreements are not one agreement\'s trap (p. 246 vs p. 422)');
-   const longOne = pad.slice(); longOne[0] = noComp; longOne[25] = acq;
+  const near = pad.slice(); near[0] = noComp; near[4] = acq;
+  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, far, 'CT45').length === 0, 'a no-compensation clause and a purchase right in two different stated agreements are not one agreement\'s trap (p. 246 vs p. 422)');
+  const longOne = pad.slice(); longOne[0] = noComp; longOne[25] = acq;
 -  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, longOne, 'CT45').length === 1, 'positive control (the review): a file that states no boundaries is one agreement, however long');
 -  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, near, 'CT45').length === 1, 'positive control: the two halves within one passage still fire');
 +  // Review correction (14 Nov 2026): structural-improvement compensation and
@@ -56,7 +56,7 @@ index c3657a4..c4960e6 100644
 +  // of page distance. Genuine goodwill pairs remain covered elsewhere.
 +  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, longOne, 'CT45').length === 0, 'an unnumbered record does not turn structural-improvement risk allocation into a goodwill contradiction');
 +  ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, near, 'CT45').length === 0, 'adjacent structural-improvement and property-purchase clauses still do not form a goodwill pair');
- }
+}
  
  console.log(`\n[combine-06-april] PASS=${pass} FAIL=${fail}`);
 diff --git a/tests/detector-recall.test.mjs b/tests/detector-recall.test.mjs
@@ -64,31 +64,31 @@ index da47a0d..dd7dcf5 100644
 --- a/tests/detector-recall.test.mjs
 +++ b/tests/detector-recall.test.mjs
 @@ -253,20 +253,20 @@ ok(SERIAL([
-   ]).length > 0,
-   'serial patterns still fire on distinctive multi-word phrases (advance-fee 419)');
+  ]).length > 0,
+  'serial patterns still fire on distinctive multi-word phrases (advance-fee 419)');
  
 -// CT26 (D17): a RUN of blank pages collapses to ONE image-only/OCR note
 -// (the run produced 7 "possibly inserted/removed" findings on OCR-blank pages).
 +// CT54 (D17): blank or unreadable pages are examination-coverage limits.
 +// The 368-page scan review (14 Nov 2026) rejected automatic insertion/removal
 +// or tampering inferences for both runs and isolated near-empty pages.
- {
-   const pages = ['x'.repeat(1200), 'y'.repeat(1200), '', '', '', '', 'z'.repeat(1200)];
+{
+  const pages = ['x'.repeat(1200), 'y'.repeat(1200), '', '', '', '', 'z'.repeat(1200)];
   const f = DET.D17_DETECT_FORMAT_ANOMALY(pages);
 -  ok(f.length === 1 && /image-only|OCR/i.test(f[0].evidence),
 -    'CT26 collapses a run of blank pages to one OCR-gap note (not N insertions)');
 +  ok(f.length === 1 && f[0].type === 'CT54' && /image-only|OCR/i.test(f[0].evidence),
 +    'CT54 collapses a run of blank pages to one examination-limit note');
- }
+}
 -// CT26: a single isolated blank between full pages keeps the insertion reading.
- {
-   const pages = ['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)];
-   const f = DET.D17_DETECT_FORMAT_ANOMALY(pages);
+{
+  const pages = ['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)];
+  const f = DET.D17_DETECT_FORMAT_ANOMALY(pages);
 -  ok(f.length === 1 && /inserted or removed/.test(f[0].evidence),
 -    'CT26 still flags a single isolated blank as possible insertion');
 +  ok(f.length === 1 && f[0].type === 'CT54' && /examination-coverage limit/i.test(f[0].evidence) && !/possibly inserted|possible inserted|inserted or removed/.test(f[0].evidence),
 +    'an isolated near-empty page is an examination limit, not insertion evidence');
- }
+}
  
  // CT11 (D08): bounded match — a local "signed by X on behalf of" fires, but a
 diff --git a/tests/evidence-bundle-7-regression.test.mjs b/tests/evidence-bundle-7-regression.test.mjs
@@ -97,8 +97,8 @@ index 32968a5..e9b8c0f 100644
 +++ b/tests/evidence-bundle-7-regression.test.mjs
 @@ -68,15 +68,15 @@ console.log('======================================================\n');
   ok(of(DET.D27_DETECT_CUSTODY_GAP, ['The chain of custody of the exhibits is recorded below. Item 1 received by Sgt Mokoena.'], 'CT39').length === 1, 'positive control: a document claiming its own custody record with missing steps still fires');
- }
+}
  
 -// ===== 3. Set-aside pages are not "near-empty" (D17 / CT26) ==================
 +// ===== 3. Set-aside pages are not "near-empty" (D17 / CT54) ==================
- {
+{
