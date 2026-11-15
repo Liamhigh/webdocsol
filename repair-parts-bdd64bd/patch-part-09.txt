@@ -1,0 +1,97 @@
++    // examination-coverage limit only: the original image must be read before
++    // anyone can say why it is empty. It is never insertion/removal evidence.
+     // Content mass, not raw length: seal-footer layers on a re-sealed scan
+     // otherwise make an image-only page look like a text page (see voContentMass).
+     // A page the engine itself set aside (a prior Verum Omnis report, the
+@@ -11012,25 +11051,24 @@ var DETECTORS = {
+         for (var i = 0; i < lens.length; i++) {
+           if (lens[i] < VO_NEAR_EMPTY_CHARS && lens[i] < avg * 0.1) blanks.push(pageOf[i]);
+         }
+-        // A RUN of near-empty pages (or many of them) is the signature of an
+-        // image-only / scanned section that OCR could not read — NOT surgical
+-        // insertion. Flagging each as "possibly inserted/removed" produced false
+-        // positives on exactly those pages. Collapse that case to one honest,
+-        // low-severity note. Only a SINGLE near-empty page sitting between two
+-        // full pages keeps the "possible inserted/removed" reading.
++        // A RUN of near-empty pages (or many of them) commonly marks an
++        // image-only / scanned section that OCR could not read. Collapse that
++        // case to one honest, low-severity examination limit. An isolated blank
++        // is treated the same way: page layout alone cannot establish insertion,
++        // removal, alteration or an offence.
+         var consecutive = blanks.length > 1 && blanks.every(function (p, k) { return k === 0 || p === blanks[k-1] + 1; });
+         if (blanks.length > 3 || consecutive) {
+           var span = (blanks[0]+1) + (blanks.length > 1 ? '-' + (blanks[blanks.length-1]+1) : '');
+-          findings.push({ type: 'CT26', severity: 1,
+-            evidence: blanks.length + ' near-empty pages (' + span + ') among pages averaging ' + Math.round(avg) + ' chars — pages with no machine-readable text: image-only pages OCR did not capture, or intentional dividers. Establish which from the original; re-scan with OCR enabled to read them',
++          findings.push({ type: 'CT54', severity: 2,
++            evidence: blanks.length + ' near-empty pages (' + span + ') among pages averaging ' + Math.round(avg) + ' chars — pages with no machine-readable text: image-only pages OCR did not capture, or intentional dividers. This is an examination-coverage limit, not evidence of insertion, removal, alteration or any offence. Establish which from the original; re-scan with OCR enabled to read them',
+             location: 'Pages ' + span });
+         } else {
+           for (var b = 0; b < blanks.length; b++) {
+             var pi = blanks[b];
+             var isolated = (pi > 0 && pi < lensAll.length - 1 && !setAside[pi-1] && !setAside[pi+1] && lensAll[pi-1] >= avg * 0.5 && lensAll[pi+1] >= avg * 0.5);
+-            findings.push({ type: 'CT26', severity: 2,
++            findings.push({ type: 'CT54', severity: 2,
+               evidence: 'Page ' + (pi+1) + ' is nearly empty (' + lensAll[pi] + ' chars) among pages averaging ' + Math.round(avg) +
+-                (isolated ? ' — an isolated blank between two full pages. Whether a page was inserted or removed there is for the investigator to establish against the original' : ' — the page yielded almost no machine-readable text: either an image-only page OCR could not read, or a genuinely blank page. Establish which from the original'),
++                (isolated ? ' — an isolated blank between two full pages. This is an examination-coverage limit, not evidence of insertion or removal; read the original page image' : ' — the page yielded almost no machine-readable text: either an image-only page OCR could not read, or a genuinely blank page. This is an examination-coverage limit, not a defect found in the record. Establish which from the original'),
+               location: 'Page ' + (pi+1) });
+           }
+         }
+@@ -11146,7 +11184,22 @@ var DETECTORS = {
+       var occurrences = (fullText.match(headingRe) || []).length;
+       // >=2 occurrences means the label appears somewhere beyond the reference
+       // itself (i.e. it resolves). Only 1 occurrence => referenced but absent.
+-      if (occurrences < 2) {
++      var resolved = occurrences >= 2;
++      var refText = String(textBlocks[appendixRefs[j].page] || '');
++      // Roman I and Arabic 1 are the same schedule number. Where the contract
++      // expressly says "Base Schedule, being Annexure 1", substantive schedule
++      // content resolves Annexure I even when the schedule page has no heading.
++      if (!resolved && /^(?:annexures?|annex)\s+(?:i|1)$/.test(appendixRefs[j].ref) &&
++          /base\s+schedule\s*,?\s*being\s+annexure\s*1\b/i.test(fullText) &&
++          /applicable\s+advertising\s+fund\s+contribution\s+rates?|franchise\s+fees?|royalty\s+rates?/i.test(fullText)) resolved = true;
++      // CIPC incorporation forms put Annexure A's content on the following
++      // CoR 14.1A page without repeating the words "Annexure A". Resolve the
++      // reference only when both the reference and next page name that content.
++      if (!resolved && /^(?:annexures?|annex)\s+a$/.test(appendixRefs[j].ref) &&
++          /initial\s+directors?/i.test(refText) && appendixRefs[j].page + 1 < textBlocks.length &&
++          /initial\s+director\s+details/i.test(String(textBlocks[appendixRefs[j].page + 1] || '')) &&
++          /full\s+name/i.test(String(textBlocks[appendixRefs[j].page + 1] || ''))) resolved = true;
++      if (!resolved) {
+         findings.push({ type: 'CT31', severity: 3,
+           evidence: 'Referenced "' + appendixRefs[j].ref + '" not found in document',
+           location: 'Page ' + (appendixRefs[j].page + 1) });
+@@ -12098,15 +12151,9 @@ var DETECTORS = {
+         evidence: 'A schedule states "Goodwill: N/A": "' + naDeny.quote + '" — while the agreement itself defines goodwill as an asset: "' + defRecog.quote + '". The definition and the N/A declaration cannot both hold. Its legal characterisation is for the court.',
+         location: loc(defRecog, naDeny) });
+     }
+-    // Path B — the Caltex/AllFuels clause-11 trap: the franchisee gets NO
+-    // compensation for its OWN improvements to the premises, while the
+-    // franchisor is entitled to acquire the property itself at (fair market)
+-    // value. Value denied to the party who built it, realised by the other —
+-    // the same recognised-then-denied principle in one clause. Requires BOTH
+-    // halves, so an ordinary no-compensation-for-improvements clause stays
+-    // silent (that clause alone is not a contradiction).
+-    var noComp = pageOf(/not\s+(?:be\s+)?entitled\s+to\s+(?:any\s+)?(?:compensation|repayment)[^.]{0,140}(?:structural|addition|alteration|improvement)/);
+-    var acquires = pageOf(/entitled[^.]{0,60}(?:purchase|acquire|buy)[^.]{0,70}(?:property|premises|site)[^.]{0,70}(?:fair market value|market value|value)/);
++    // A no-compensation clause for structural improvements beside a right to
++    // buy the property at market value allocates contractual risk; it does not
++    // recognise and then deny the same asset. It is not a CT45 contradiction.
+     // Both halves must belong to one agreement: one stated document, or —
+     // where no boundaries can be read — one passage of the record (twenty
+     // pages, as D38). A no-compensation clause on p. 246 and a purchase
+@@ -12120,23 +12167,21 @@ var DETECTORS = {
+       if (ka !== kc) return false;
+       return ka.charAt(0) === 'd' || Math.abs(a.page - c.page) <= 20;
+     };
+-    if (noComp && acquires && d39OneAgreement(noComp, acquires)) {
+-      findings.push({ type: 'CT45', severity: 5,
+-        evidence: 'The franchisee is denied any compensation for its own improvements to the premises: "' + noComp.quote + '" — while the franchisor is entitled to acquire the property itself at value: "' + acquires.quote + '". Value denied to the party who built it, yet realised by the other. Its legal characterisation is for the court.',
+-        location: loc(noComp, acquires) });
+-    }
+-    // Path C — extinguished yet priced. Evidence-bundle-3 (Timol, paras
+-    // 261 vs 274): goodwill "terminates and can never be argued to remain on
+-    // the locality" while the SAME affidavit treats the remaining tenure of
+-    // that franchise as a saleable R16.5 million asset the purchaser "would
+-    // not recover his investment" in — an asset that can never remain cannot
