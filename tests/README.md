@@ -1,14 +1,15 @@
 # Tests
 
-Zero-dependency test suite for the WebDocSol production code. It runs on plain Node: Node
-built-ins, plus the browser libraries already vendored in `vendor/` (pdf-lib, pdf.js, Tesseract,
-qrcode). `package.json` declares no dependencies, so no `npm install` is needed. The repository
-pins no Node version; last verified green on Node v22.22.2 (3 October 2026).
+The Node test suite for WebDocSol uses Node built-ins plus the browser libraries vendored in
+`vendor/` (pdf-lib, pdf.js, Tesseract, qrcode). There are no production dependencies. CI pins
+Node 22 LTS and installs the development-only Playwright browser dependency with `npm ci`.
 
 ```bash
 # from the repository root
-node tests/run-all.js   # every suite (npm test runs the same file)
-npm run check           # node --check on the eight shipped source files
+npm ci                  # development-only browser tooling; no production dependencies
+npm test                # every registered Node suite
+npm run check           # node --check on the ten shipped source files
+npm run test:browser    # Chromium, Firefox and WebKit gates
 node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 ```
 
@@ -35,24 +36,22 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
   `worker/static-proxy.js` and `worker/site-assets.js`. It does not cover `functions/[[path]].js`
   or the page-native scripts inside the HTML pages; `page-boot` evaluates the inline script of
   `seal-document.html` instead.
-- Ten suites have an npm alias: `test:forensic`, `test:ots`, `test:worker`, `test:page-boot`,
+- Eleven suites have an npm alias: `test:forensic`, `test:ots`, `test:worker`, `test:page-boot`,
   `test:engine-perf`, `test:voice-crypto`, `test:pdf-encrypt`, `test:find-seal`,
-  `test:seal-guard`, `test:inline-scripts`. Run any other suite with `node tests/<file>`.
+  `test:seal-guard`, `test:inline-scripts`, `test:browser`. Run any other suite with `node tests/<file>`.
 - Expected noise in a green run: `pdf-encrypt` prints pdf.js warnings (`DOMMatrix`, `Path2D`,
   fake worker, standard font data), and `pages-bridge` prints Node's `MODULE_TYPELESS_PACKAGE_JSON`
   warning for `functions/[[path]].js`. Do not add `"type": "module"` to `package.json` to silence
   it: `run-all.js` and the five `.js` suites are CommonJS.
-- Nothing in this repository runs the suite for you. The only GitHub workflow,
-  `.github/workflows/live-site-probe.yml`, is a hand-run probe of the live site
-  (`workflow_dispatch` only), and the Workers Builds build command is set in the Cloudflare
-  dashboard, not here. Run the suite and `npm run check` yourself before every push: merge to
-  `main` is the deploy.
+- `.github/workflows/test.yml` runs syntax and Node suites on pull requests and pushes to
+  `main`, then runs Playwright in Chromium, Firefox and WebKit. The separate
+  `.github/workflows/live-site-probe.yml` remains a manual outside probe and does not replace CI.
+  Run the suite and `npm run check` yourself before every push: merge to `main` is the deploy.
 
 ## What is covered
 
-**40 suites, 2853 assertions**, all green (counted 9 October 2026, with photos sealed as
-documents (`ENGINE.md` §12.18), the Louw v Naidoo precision fixes (§12.19) and the
-cross-document conflict detection (§12.21-§12.22)). `run-all.js` is the
+**57 registered suites**: the 55-suite audited baseline of 15 November 2026, plus
+`analysis-contracts.test.mjs` and `documentation-consistency.test.mjs`. `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file
 there. What each suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
@@ -89,13 +88,18 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 26 | `pages-bridge` | `pages-bridge.test.mjs` | 16 | `functions/[[path]].js`, the www bridge |
 | 27 | `zip-intake` | `zip-intake.test.mjs` | 25 | The page's ZIP reader for WhatsApp chat exports |
 | 28 | `rule-package` | `rule-package.test.mjs` | 129 | Signed rule packages on the website |
-| 29 | `inline-scripts` | `inline-scripts.test.mjs` | 25 | The five inline copies in `seal-document.html` are byte-identical to their sources |
+| 29 | `inline-scripts` | `inline-scripts.test.mjs` | 25+ | The seven inline copies in `seal-document.html` are byte-identical to their sources |
 | 30 | `legal-analysis` | `legal-analysis.test.js` | 216 | `forensic-report.js`: parties and jurisdiction, legal subjects, **PD16 language** (no scores, no bands, no hedging), the §15.2 narrative gate, sentence splitting, page anchors, SEALED FINDINGS integrity |
 | 31 | `greensky-regression` | `greensky-regression.test.js` | 98 | The Greensky run of 7 August 2026, and its re-run of 3 October 2026 (§9; `ENGINE.md` §12.15) |
 | 32 | `allfuels-regression` | `allfuels-regression.test.js` | 59 | The AllFuels run of 14 August 2026 |
 | 33 | `annexure-eb` | `annexure-eb-regression.test.mjs` | 497 | The annexure EB run and every run after it up to the Public Protector submission (`ENGINE.md` §12.10–§12.14) |
 | 34 | `evidence-bundle-7` | `evidence-bundle-7-regression.test.mjs` | 47 | The evidence-bundle-7-docs run of 5 October 2026, the founder's rulings and the review round (`ENGINE.md` §12.16) |
 | 35 | `combine-06-april` | `combine-06-april-regression.test.mjs` | 30 | The Combine 06 April 2026 run and its review (`ENGINE.md` §12.17) |
+| 56 | `analysis-contracts` | `analysis-contracts.test.mjs` | — | Deterministic envelopes, UTF-16/structural/OCR/pair anchors, stable ordering/IDs, disabled flags, old/new readers and fresh-process/time-zone replay |
+| 57 | `documentation-consistency` | `documentation-consistency.test.mjs` | — | Current engine/taxonomy/detector/findings values and source-derived UI counts |
+
+Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
+`run-all.js` is always the authoritative complete registry.
 
 **Writing a regression test:** use the **exact text from the real document** that caused the
 failure, not a paraphrase. Every guard in `ENGINE.md` §4 has one, and that is why they have
@@ -125,8 +129,9 @@ survived reviewers asking for them to be "simplified".
 
 ## Notes
 
-- `seal-document.html` carries `forensic-engine-page.js`, `forensic-report.js`, `seal-guard.js`,
-  `ots-proof.js` and `pdf-encrypt.js` inline, between `VO-INLINE` markers. It fetches
+- `seal-document.html` carries `analysis-contracts.js`, `analysis-config.js`,
+  `forensic-engine-page.js`, `forensic-report.js`, `seal-guard.js`, `ots-proof.js` and
+  `pdf-encrypt.js` inline, between `VO-INLINE` markers. It fetches
   `/forensic-engine-page.js`, `/forensic-report.js` or `/ots-proof.js` only if the inline copy
   did not define its global (`voEnsureForensicScripts`). The tests load the root files;
   `inline-scripts` proves the inline copies match them. Edit the source file, then re-splice the
@@ -138,8 +143,8 @@ survived reviewers asking for them to be "simplified".
   bytes. The only PDF fixture a suite reads from disk is `forensic_test_document.pdf` at the
   repository root (`engine-perf`). `.assetsignore` keeps it, and `greensky-ocr-verify.pdf`, off
   the site.
-- There is no browser test in this repository. `page-boot` runs the page's inline script in
-  Node's `vm`, with pdf-lib absent, to catch the frozen-page regression. Any real-browser check
-  happens outside the suite (`page-boot.test.mjs` records a headless run on 6 September 2026).
-  A headless check must read the results panel, not just whether `showResults` was reached
-  (`AGENTS.md`, PR #205).
+- `page-boot` still runs the page's inline script in Node's `vm`, with pdf-lib absent, to catch
+  the frozen-page regression. `tests/browser/` adds real Chromium, Firefox and WebKit boot,
+  synthetic-PDF seal and root-`verify.html` checks. Browser tests read the result state rather
+  than merely reaching `showResults`, block unexpected network egress, and retain only synthetic
+  failure artifacts for three days in CI.

@@ -1,0 +1,30 @@
+{
+  "proposal_version": "0.1.0",
+  "status": "PROPOSED_ONLY_NOT_APPROVED_FOR_PRODUCTION",
+  "base_findings_json_version": "1.11.0",
+  "next_production_version": null,
+  "extension_field": "analysis_extensions",
+  "change": "Add a namespaced object containing deterministic module envelopes. Keep every existing field and its semantics unchanged.",
+  "required_reviews": [
+    "Liamhigh/1verum",
+    "Liamhigh/firebase",
+    "Android reference behavior in cursorfu where relevant"
+  ],
+  "reader_contract": {
+    "old_producer_new_reader": "A reader that understands analysis_extensions may validate and display the deterministic envelope without changing base findings.",
+    "new_producer_old_reader": "An older reader ignores the unknown optional extension and continues to read every 1.11.0 field.",
+    "round_trip": "A reader that rewrites the package preserves unknown extension names and values byte-faithfully after canonical serialization.",
+    "unknown_module": "Unknown module names are preserved and ignored, never treated as a failed package or a sealed finding.",
+    "geometry": "Geometry remains optional; its absence never removes an exact text quote and page anchor.",
+    "duplicates": "Readers do not silently deduplicate findings; canonical sorting is stable and retains equal records."
+  },
+  "forbidden_canonical_fields": [
+    "elapsed_ms",
+    "memory_used",
+    "device_diagnostics",
+    "random_sample",
+    "random_rollout",
+    "wall_clock_timestamp"
+  ],
+  "production_gate": "Do not add analysis_extensions to buildFindingsJson or change findings_json_version until coordinated cross-client approval is recorded."
+}

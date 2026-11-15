@@ -384,7 +384,7 @@ var CONTRADICTION_TYPES = {
   },
 
   // === CATEGORY 11: CONDUCT INDICATORS (47) ===
-  // Coercion is conduct, not a contradiction — the 46 contradiction detectors
+  // Coercion is conduct, not a contradiction — the contradiction detectors
   // are silent on it. CT47 surfaces the passages where threat, ultimatum or
   // pressure language appears, as indicators for human review; it never
   // determines that coercion occurred (a legal conclusion, for the court).
@@ -5326,7 +5326,7 @@ var DETECTORS = {
 
   // ---- Coercive-conduct indicators (CT47) --------------------------------
   // Coercion is conduct, not a contradiction: a party pressing the other with
-  // threats, ultimatums or consequences. The 46 contradiction detectors say
+  // threats, ultimatums or consequences. The contradiction detectors say
   // nothing about it, so a record full of pressure tactics could scan "clean".
   // This detector surfaces the PASSAGES as indicators for human review — it
   // never says conduct WAS coercion (a legal determination, for the court);
@@ -8934,7 +8934,13 @@ function voWellFormedness(o) {
 
 // ===================== MAIN FORENSIC ENGINE =====================
 
+var VOAnalysisConfig = (typeof globalThis !== 'undefined' && globalThis.VOAnalysisConfig)
+  ? globalThis.VOAnalysisConfig
+  : (typeof require === 'function' ? require('./analysis-config.js') : null);
+
 async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
+  if (!VOAnalysisConfig) throw new Error('analysis-config.js must load before the forensic engine');
+  opts = VOAnalysisConfig.withAnalysisDefaults(opts);
   var allFindings = [];
 
   // Extract text blocks (one per page)
@@ -9564,6 +9570,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     // The analysis instant the caller passed (null when none): recorded so the
     // dated-after note is reproducible from the findings JSON.
     referenceTime: (opts && opts.referenceTime) ? String(opts.referenceTime) : null,
+    // Complete replay input. Every enhancement flag defaults to false in Phase 0;
+    // this additive result field does not alter findings or findings JSON 1.11.0.
+    analysisConfiguration: VOAnalysisConfig.selectedConfiguration(opts),
     ocrPages: _ocrPages,
     ocrConfidence: _ocrConfidence,
     footerOnlyPages: _footer.pages,

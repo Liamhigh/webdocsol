@@ -1,0 +1,39 @@
+{
+  "fixture_version": "1.0.0",
+  "description": "Synthetic pairwise finding; both claims and the incompatibility explanation are required.",
+  "finding": {
+    "finding_id": "synthetic-pair-v1",
+    "rule_id": "TEST_PAIR_AMOUNT",
+    "anchors": [
+      {
+        "artifact_sha512": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "document_id": "synthetic-pair-v1",
+        "page": 4,
+        "text_space": "page-text-v1",
+        "char_start": 0,
+        "char_end": 25,
+        "quote": "The amount due is R100.00",
+        "context_before": "",
+        "context_after": ".",
+        "extraction": { "kind": "pdf_text", "extractor": "pdf.js", "extractor_version": "3.11.174", "ocr_page": false },
+        "geometry": null,
+        "structure": null
+      },
+      {
+        "artifact_sha512": "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+        "document_id": "synthetic-pair-v1",
+        "page": 9,
+        "text_space": "page-text-v1",
+        "char_start": 0,
+        "char_end": 25,
+        "quote": "The amount due is R900.00",
+        "context_before": "",
+        "context_after": ".",
+        "extraction": { "kind": "pdf_text", "extractor": "pdf.js", "extractor_version": "3.11.174", "ocr_page": false },
+        "geometry": null,
+        "structure": null
+      }
+    ],
+    "incompatibility_explanation": "The same synthetic obligation is assigned two different amounts on pages 4 and 9."
+  }
+}

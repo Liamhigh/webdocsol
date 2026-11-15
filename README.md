@@ -26,9 +26,9 @@
 
 **Repository:** `Liamhigh/webdocsol`  
 **Sealing standard:** VO-DSS-1.2 ([`seal-module/SPEC.md`](./seal-module/SPEC.md)); QR payload `v: "1.2"`; sealed PDFs carry a `VO-SEAL2|…` Subject (Producer `Verum Omnis Document Sealing Service v1.3.0`); site package version 1.2.5 (`package.json`)  
-**Engine:** `VO_ENGINE_VERSION 5.3.5-web` (report `ENGINE_VERSION` the same) — CT01–CT46, detectors D01–D40; findings JSON 1.9.0  
+**Engine:** `VO_ENGINE_VERSION 5.7.2-web` (report `ENGINE_VERSION` the same; report builder v1.3.1) — CT01–CT61, 63 registered detector entries; findings JSON 1.11.0<br>
 **Constitution:** v8.0 (governance charter, seal `VO-9A4F3C5E825C`); v6.1 (engine operating instrument, seal `VO-9E51D3F507E6`)  
-**Updated:** 2026-10-03 — describes `main` once the Public Protector submission run and the Greensky re-run (`ENGINE.md` §12.14–§12.15) are merged as one pull request (expected #214; until then `main` is at #213). Constitution v8.0 was sealed on 2026-08-05.  
+**Updated:** 2026-11-15 — current-source reconciliation on the audited Phase 0 baseline. Constitution v8.0 was sealed on 2026-08-05.<br>
 **Integrity model:** tamper-evident (SHA-512 + OpenTimestamps) — never "immutable". **Licence:** none in the repository (open with the founder).  
 
 > ## DESIGN LOCK IN EFFECT
@@ -66,7 +66,7 @@ This repository holds the website and the sealing standard that all four surface
 > `seal-document.html` and `verify.html` kept alongside the portable sealing spec. The pages
 > the Worker actually serves are the ones at the **repository root**, and they have moved
 > a long way past those snapshots (the live `seal-document.html` is about 1.1 MB — 1,138,885
-> bytes at 179e45c, 3 October 2026 — because the five forensic scripts are inlined into it; the
+> current source is larger — because the seven forensic/contract scripts are inlined into it; the
 > snapshot is ~136 KB). **Edit the root files.**
 > A change made only in `seal-module/web/` ships nothing.
 
@@ -84,7 +84,7 @@ User chooses a PDF (or voice notes / a WhatsApp chat export .zip)
        |
        +--> "Seal document with forensic report" only: pre-flight of the
        |    forensic service (refuses, nothing sealed, if absent), then the
-       |    deterministic engine on this device (CT01-CT46, D01-D40, signed rule package),
+       |    deterministic engine on this device (CT01-CT61, 63 registered detector entries, signed rule package),
        |    with the AI classification running beside it
        v
 [Hash] SHA-512 of the original upload (Verum fingerprint); seal ID = VO- + first 12 hex
@@ -106,7 +106,7 @@ User chooses a PDF (or voice notes / a WhatsApp chat export .zip)
        |
        +--> forensic mode only: AI review through the Worker (assess, Brain 9 sweep,
        |    court-ready narrative), then the sealed technical report, the sealed
-       |    court-ready narrative and findings JSON 1.9.0; each report's OTS digest
+       |    court-ready narrative and findings JSON 1.11.0; each report's OTS digest
        |    is likewise computed after its own sealing
        v
 [Out]  both modes: sealed PDF, .ots receipt, anchor certificate (if a calendar accepted)
@@ -222,7 +222,7 @@ Sender contact: [sender email from identity pipeline]
 
 ## Forensic analysis (Seal document with forensic report only)
 
-The default **Seal document** seals integrity and time only; the engine does not run. In **Seal document with forensic report**, the deterministic engine (`forensic-engine-page.js`, inlined into the seal page) runs on the device: 46 contradiction types (CT01–CT46) from 40 detectors (D01–D40), 17 serial fraud patterns (SP01–SP17), PDF-metadata checks (D15: an image tool such as Photoshop, GIMP or Canva as producer or creator; a modification date before the creation date), and the signed rule package, applied additively (`ENGINE.md` §12.7). Every finding is anchored to quoted text and a page or dropped (PD2). Findings are ranked by an internal ordinal severity; no score, percentage or confidence band is printed (PD1, §15.2). Before it starts, the page checks that the forensic service answers, and refuses to run if it does not. The AI review runs through the Worker on Cloudflare Workers AI — classification (started beside the engine run), assessment of the findings, the Brain 9 sweep of the sealed text (recommendations only, offered as a separate unsealed file, never sealed findings) and the court-ready narrative behind two gates: the Worker's anchor and language gate (`humanGate`, which includes the four-pillars rule and the court-language ban) and the render-time §15.2 gate in `forensic-report.js` (`ENGINE.md` §13). Detector reference and every false-positive guard: `ENGINE.md` §2–§4.
+The default **Seal document** seals integrity and time only; the engine does not run. In **Seal document with forensic report**, the deterministic engine (`forensic-engine-page.js`, inlined into the seal page) runs on the device: 61 contradiction types (CT01–CT61) from 63 registered detector entries, 17 serial fraud patterns (SP01–SP17), PDF-metadata checks (D15: an image tool such as Photoshop, GIMP or Canva as producer or creator; a modification date before the creation date), and the signed rule package, applied additively (`ENGINE.md` §12.7). Every finding is anchored to quoted text and a page or dropped (PD2). Findings are ranked by an internal ordinal severity; no score, percentage or confidence band is printed (PD1, §15.2). Before it starts, the page checks that the forensic service answers, and refuses to run if it does not. The AI review runs through the Worker on Cloudflare Workers AI — classification (started beside the engine run), assessment of the findings, the Brain 9 sweep of the sealed text (recommendations only, offered as a separate unsealed file, never sealed findings) and the court-ready narrative behind two gates: the Worker's anchor and language gate (`humanGate`, which includes the four-pillars rule and the court-language ban) and the render-time §15.2 gate in `forensic-report.js` (`ENGINE.md` §13). Detector reference and every false-positive guard: `ENGINE.md` §2–§4.
 
 If findings are recorded, the document still seals (preserving evidence integrity and time). Under the **Pristine Seal Doctrine** the original is sealed **pristine**: the watermark, the seal header and footer bands and the verification QR only -- **no verdict, fraud or analysis overlays are drawn on the original**. Findings are forensic indicators, not determinations of fraud. They appear only in the separate sealed forensic report, the sealed court-ready narrative, the standalone forensic narrative, the findings JSON and the results page — never on the original document, and never as a score. If the AI narrator cannot supply a compliant standalone part, the standalone PDF uses a clearly labelled deterministic chronology built from source-verified page dates and eligible engine findings; it never uses Brain 9 recommendations as findings (`ENGINE.md` §12.26).
 
@@ -274,7 +274,8 @@ webdocsol/
 |-- wrangler.toml                      # the Worker: zone routes for both hostnames, assets (/api/* runs the Worker first), RULES_KV, AI, weekly trainer cron
 |-- .assetsignore                      # never served: worker/, tests/, functions/, *.md, brand/, seal-module/, fixtures
 |-- functions/[[path]].js              # the Pages bridge — runs on the legacy Pages project only
-|-- .github/workflows/live-site-probe.yml  # run by hand; sees both hostnames and workers.dev from outside
+|-- .github/workflows/test.yml             # ordinary syntax/unit/browser CI
+|-- .github/workflows/live-site-probe.yml  # manual outside probe; retained alongside CI
 |-- package.json                       # npm test, npm run check (version 1.2.5)
 |-- index.html                         # LIVE homepage
 |-- seal-document.html                 # LIVE main app (engine + report inlined)
@@ -282,10 +283,11 @@ webdocsol/
 |-- verify-data.html, dashboard.html, constitution.html, documents-resources.html
 |                                      #   dashboard.html and verify-data.html read a separate Worker not in this repo
 |-- preview-documents.html             # the Documents page the home navigation links (its logo and navigation link preview-index.html, an alternative home page that index.html does not link)
-|-- forensic-engine-page.js            # the deterministic engine (CT01-CT46, D01-D40)
+|-- forensic-engine-page.js            # the deterministic engine (CT01-CT61, 63 registered detector entries)
+|-- analysis-contracts.js, analysis-config.js  # deterministic contracts and disabled-by-default replay options
 |-- forensic-report.js                 # sealed report generator (build / buildNarrative / buildHumanReport / seal)
 |-- seal-guard.js, ots-proof.js, pdf-encrypt.js
-|                                      #   ^ all five are ALSO inlined into seal-document.html
+|                                      #   ^ all seven are ALSO inlined into seal-document.html
 |-- verum-ui.css                       # the binding design tokens (VERUM_UI_TOKENS.md) as CSS; no page links it
 |-- Verum-Omnis-Briefing.pdf           # public briefing, linked from index.html
 |-- constitution.json, constitution-v8.pdf, llms.txt, robots.txt, sitemap.xml
@@ -295,7 +297,7 @@ webdocsol/
 |   |-- static-proxy.js                # the site-serving chain (assets -> main branch on GitHub -> legacy Pages -> embedded images)
 |   |-- site-assets.js                 # embedded last-resort copies of the logo and watermark
 |   |-- rule-format.md, public-key.der.b64, seed-rules.json
-|-- tests/                             # 40 suites, 2853 assertions (counted 2026-10-09; per suite: ENGINE.md §10) — node tests/run-all.js
+|-- tests/                             # 57 registered suites (55 audited baseline + 2 Phase 0) — node tests/run-all.js
 |   |-- run-all.js                     # the registry — an unregistered file does not run
 |   |-- README.md                      # the short guide to the suites
 |-- vendor/                            # pinned pdf.js, pdf-lib, qrcode, Tesseract (offline-first)
@@ -352,7 +354,7 @@ operating instrument remains v6.1 (seal `VO-9E51D3F507E6`). All implementations 
 - **§1 PD16 — Findings are stated as fact; verdicts belong to the court.** Never softened to
   "might" or "appears to". **PD6:** a failed or partial extraction is stated — what failed, where
   and why — never filled in.
-- **§2 — Nine-Brain architecture.** The 46 contradiction types across 40 detectors *are* that
+- **§2 — Nine-Brain architecture.** The 61 contradiction types across the detector registry *are* that
   architecture (AGENTS.md ruling 3).
 - **§15.2 — Prohibited language.** No hedging, no bands, and **no verdict on a named person** —
   that belongs exclusively to the court.
@@ -364,15 +366,15 @@ operating instrument remains v6.1 (seal `VO-9E51D3F507E6`). All implementations 
 ## Working on this repository
 
 ```
-node tests/run-all.js   # or npm test — 40 suites, 2853 assertions (2026-10-09); every suite green
+node tests/run-all.js   # or npm test — 57 registered suites; every suite green
 npm run check          # node --check on the five inlined scripts and the three worker files
 ```
 
-- The five scripts inlined into `seal-document.html` sit between `/* VO-INLINE:<file>:START/END */`
+- The seven scripts inlined into `seal-document.html` sit between `/* VO-INLINE:<file>:START/END */`
   markers: edit the source file, then re-splice (`ENGINE.md` §9); `tests/inline-scripts.test.mjs`
   byte-compares them.
-- `tests/run-all.js` is the registry — a test file not listed there does not run. No GitHub
-  workflow runs the tests; run them before every push.
+- `tests/run-all.js` is the registry — a test file not listed there does not run. Ordinary CI
+  runs syntax/unit tests on pull requests and pushes to `main`; browser gates run separately.
 - Merge to `main` is the deploy (Cloudflare Workers Builds ships the Worker and the site together).
   The Workers Builds check on a PR branch uploads a version but does not deploy; it has passed on
   every PR head since #210 (27 September 2026), so a red check is a real signal. Confirm a deploy

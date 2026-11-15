@@ -11,7 +11,7 @@
 script (1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
 the well-formedness gate and serial-stage trace; 1.9.0 added `cross_document_observations` with a
 byte-faithful `quote_verbatim`; 1.8.0 added `candidate_law`)
-**Host page:** `seal-document.html` (the engine, the report and three helper scripts are
+**Host page:** `seal-document.html` (the engine, the report, two analysis contracts and three helper scripts are
 inlined — see [§9 Inlining](#9-inlining))
 **Governing law:** Constitution v6.1 (engine operating instrument, seal `VO-9E51D3F507E6`);
 Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   51 suites, 3393 assertions (§10); many exist solely to stop the regressions in §4 and §12.
+   57 registered suites (55 audited baseline + 2 Phase 0 suites); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -67,7 +67,7 @@ PDF bytes + pdf-lib PDFDocument (+ opts.referenceTime from the seal page)
   ├─ voStripSealFurnitureBlocks()    this platform's own seal footers removed before detection
   ├─ voSecondaryPages()              pages of extracts, commentaries and a party's submission about other sealed records
   ├─ voMarkdownAnalysisPages()       pages carrying chat-style markdown (bold runs, ## headings): a rendered AI or chat analysis (§12.15)
-  ├─ DETECTORS D01–D36, D38–D40      each returns findings[] (§3)
+  ├─ main detector run-list           61 registered entries, each returns findings[] (§3)
   ├─ contextOnly split               CT38 / CT43 breadth notes go to the engine notes, never the findings
   ├─ voDatedAfterReference()         a first-page "Date:" later than opts.referenceTime's day becomes an engine note
   ├─ D37 catch-all                   reads the other detectors' findings
@@ -85,7 +85,7 @@ PDF bytes + pdf-lib PDFDocument (+ opts.referenceTime from the seal page)
   ├─ false-clean guard               zero findings at < 200 characters a page over >= 3 pages is UNREADABLE, never clean
   └─ generateSummary()               the count and a read-against-the-page instruction, or the clean sentence (never the score, §12.16)
         ↓
-   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 → buildFindingsJson (v1.9.0)
+   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 → buildFindingsJson (v1.11.0)
           → forensic-report.js build() → seal()
 ```
 
@@ -112,23 +112,24 @@ constitutional breach, not a bug.
 
 ---
 
-## 2. Contradiction types (CT01–CT46)
+## 2. Contradiction types (CT01–CT61)
 
-46 types, grouped by engine category. `CONTRADICTION_TYPES` in the engine is the source of
+61 types, grouped by engine category. `CONTRADICTION_TYPES` in the engine is the source of
 truth; `CT_NAMES` / `CT_CATEGORY` / `NARRATIVE_MEANING` in `forensic-report.js` must stay in
 step, and `worker/rule-format.md` documents the wire format.
 
 | Category | Types |
 |---|---|
-| **STATEMENTAL** | CT01 Direct Statement Contradiction · CT02 Numerical Discrepancy · CT03 Date Inconsistency · CT04 Temporal Sequence Break · CT05 Causal Impossibility · CT06 Logical Impossibility · CT07 Scope Creep Indicator · CT08 Term Definition Contradiction |
-| **IDENTITY** | CT09 Identity Contradiction · CT10 Role Contradiction · CT11 Authority Contradiction · CT12 Name Spelling Variation · CT13 Title Inconsistency · CT14 Entity Status Contradiction · CT46 Role / Capacity Contradiction |
+| **STATEMENTAL** | CT01 Direct Statement Contradiction · CT02 Numerical Discrepancy · CT03 Date Inconsistency · CT04 Temporal Sequence Break · CT05 Causal Impossibility · CT06 Logical Impossibility · CT07 Scope Creep Indicator · CT08 Term Definition Contradiction · CT51 Billing After Claimed End · CT59 Conduct vs Pleading Contradiction |
+| **IDENTITY** | CT09 Identity Contradiction · CT10 Role Contradiction · CT11 Authority Contradiction · CT12 Name Spelling Variation · CT13 Title Inconsistency · CT14 Entity Status Contradiction · CT46 Role / Capacity Contradiction · CT52 Unevidenced Authority Claim |
 | **FINANCIAL** | CT15 Amount Discrepancy · CT16 Currency Mismatch · CT17 Account Number Invalidity · CT18 Bank Detail Mismatch · CT19 VAT Number Invalid · CT20 Registration Number Fake · CT21 Quotation Mismatch · CT22 Financial Calculation Error |
-| **INTEGRITY** | CT23 Signature Mismatch · CT24 Metadata Contradiction · CT25 Font Inconsistency · CT26 Format Anomaly · CT27 Layout Manipulation · CT28 Image Integrity Failure · CT29 Timestamp Manipulation · CT30 Version Control Anomaly |
+| **INTEGRITY** | CT23 Signature Mismatch · CT24 Metadata Contradiction · CT25 Font Inconsistency · CT26 Format Anomaly · CT27 Layout Manipulation · CT28 Image Integrity Failure · CT29 Timestamp Manipulation · CT30 Version Control Anomaly · CT53 Blank Execution Block · CT54 Unreadable Page |
 | **CROSS_REF** | CT31 Cross-Reference Failure · CT32 Source Attribution Failure · CT33 Legal Reference Invalid · CT34 Precedent Violation · CT35 Procedure Breach |
 | **CONTACT** | CT36 Address Contradiction · CT37 Contact Detail Mismatch · CT38 Jurisdictional Impossibility |
-| **EVIDENCE** | CT39 Chain of Custody Break · CT40 Witness Statement Conflict · CT41 Evidence Tampering Indicator |
+| **EVIDENCE** | CT39 Chain of Custody Break · CT40 Witness Statement Conflict · CT41 Evidence Tampering Indicator · CT55 Coordinated Drafting Indicator · CT56 Section 12B Predicate Conflict Indicator · CT57 Factive Commitment vs Denial Indicator · CT58 Same-Statement Polarity Conflict · CT61 Horns-of-Dilemma Indicator |
 | **DIGITAL** | CT42 Digital Footprint Mismatch · CT43 Document Internal Conflict |
-| **FRANCHISE_LEASE** | CT44 Conditional Clause Misinvoked (Lessee/Owner Trap) · CT45 Asset Value Recognised Then Denied (Goodwill) |
+| **FRANCHISE_LEASE** | CT44 Conditional Clause Misinvoked (Lessee/Owner Trap) · CT45 Asset Value Recognised Then Denied (Goodwill) · CT60 Benefit Taken / Burden Denied Indicator |
+| **BEHAVIOUR** | CT47 Coercive Conduct Indicators · CT48 Gaslighting / Reality-Denial Indicators · CT49 Blame-Reversal / DARVO Indicators · CT50 Behavioural Pattern Indicator (Signed Rule) |
 
 No built-in detector emits CT12, CT13, CT17, CT21 or CT34; they are in the taxonomy for signed
 rule packages and AI candidates.
@@ -139,11 +140,13 @@ for one code in a court-facing document is a credibility attack, so renumbering 
 
 ---
 
-## 3. Detector inventory (D01–D40)
+## 3. Detector inventory (63 registered entries)
 
-Each detector is a pure function returning findings[]. Most take `textBlocks` (one string per
-page); D15 and D20 take the pdf-lib document, D16 takes `(textBlocks, pdfDoc)`, and D37 takes
-`(textBlocks, otherFindings)` and runs after the other 39.
+The registry has 46 distinct numeric prefixes (D01–D43 and D61–D63), 45 unsuffixed entries and 18
+auxiliary/suffixed entries. The main run-list contains 61 entries; D37 runs separately as catch-all,
+and D10A is retained/exported but inactive. Each detector is a pure function returning findings[].
+Most take `textBlocks` (one string per page); D15 and D20 take the pdf-lib document, D16 takes
+`(textBlocks, pdfDoc)`, and D37 takes `(textBlocks, otherFindings)` after the main run-list.
 
 | Detector | Emits | What it establishes |
 |---|---|---|
@@ -187,6 +190,14 @@ page); D15 and D20 take the pdf-lib document, D16 takes `(textBlocks, pdfDoc)`, 
 | D38 `DETECT_CONDITIONAL_CLAUSE_MISINVOKED` | CT44 | A right exercised on a condition the record itself contradicts (the "Lessee/Owner trap") |
 | D39 `DETECT_ASSET_VALUE_DENIAL` | CT45 | Value/goodwill recognised in one place and denied in another |
 | D40 `DETECT_ROLE_CAPACITY_CONFLICT` | CT46 | A party acting in a corporate capacity while the instrument is personal, or a stated restriction breached |
+| D41 `DETECT_COERCIVE_CONDUCT` | CT47 | Coercive conduct indicators in the instrument's own words |
+| D42 `DETECT_REALITY_DENIAL` | CT48 | Gaslighting / reality-denial indicators |
+| D43 `DETECT_BLAME_REVERSAL` | CT49 | Blame-reversal / DARVO indicators |
+| D61 `DETECT_CONDUCT_VS_PLEADING` | CT59 | Conduct established by the record but denied in pleading |
+| D62 `DETECT_BENEFIT_BURDEN_ASYMMETRY` | CT60 | A benefit taken while its corresponding burden is denied |
+| D63 `DETECT_HORNS_OF_DILEMMA` | CT61 | Two positions that cannot both be maintained |
+| D02B/D02C/D02D, D03B/D03C, D04B/D04C, D01B/D01C/D01D, D06B, D07A/D07B, D08A, D09A, D10B/D10C | Auxiliary CT02/03/04/01/09/11/53/54/55/57/58/51 checks | Suffixed registry entries retained by their permanent codes; their exact behavior is locked in the detector suites |
+| D10A `DETECT_S12B_LICENCE_PREDICATE_CONFLICT` | CT56 | Retained/exported but not run: CT56 merged into CT61; do not count it as active |
 
 **D38/D39/D40 are generic.** They were derived from the AllFuels/Caltex franchise matter but
 contain **no hardcoded parties, names or account numbers**. Never add any — an engine that
@@ -786,7 +797,7 @@ fs.writeFileSync('seal-document.html', html);
 ```
 Then run `node tests/inline-scripts.test.mjs`. On an unchanged tree the script is idempotent.
 
-The same test also forbids a `<script src="/<file>">` tag for any of the five, and requires the
+The same test also forbids a `<script src="/<file>">` tag for any of the seven, and requires the
 seal page's own CT maps (`CTNAME`, `CTCAT`, `CATLAB`, `CATORD` in `buildLocalNarrative`, outside
 the inline blocks) to equal `CT_NAMES`, `CT_CATEGORY`, `CATEGORY_LABEL` and `CATEGORY_ORDER`.
 Edit those by hand; re-splicing does not touch them.
@@ -803,7 +814,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 1. **Add a regression test first**, using the **exact text from the real document** that
    motivated the change. Every guard in §4 has one; that is why they have survived.
 2. **Run the full suite and the syntax check** — `node tests/run-all.js` green and `npm run check`
-   clean (`node --check` over the eight shipped scripts). Nothing else is acceptable before a push.
+   clean (`node --check` over the ten shipped scripts). Nothing else is acceptable before a push.
 3. **Re-splice the inline copies** after every source edit.
 4. **Never delete a guard to "increase recall."** If you believe a guard is wrong, prove it
    with the original document text in a test, and say so in the commit message.
@@ -819,7 +830,7 @@ Yesterday's extraction quality is the baseline. To protect it:
    inline blocks (`tests/inline-scripts.test.mjs` pins them). Add it to `OFFENCE_ELEMENTS`,
    `VO_ESTABLISHES` and `VO_TWO_STATEMENT_TYPES` where it fits, mirror any `OFFENCE_ELEMENTS`
    change in the Worker's `HUMAN_PILLAR_TYPES` (`tests/human-report.test.mjs` pins them equal),
-   and widen the "CT01-CT46" ranges in the Worker's prompts. Update `worker/rule-format.md` and
+   and widen the "CT01-CT61" ranges in the Worker's prompts. Update `worker/rule-format.md` and
    the taxonomy lock in `tests/constitution-lock.test.mjs`, bump `CT_COUNT` (`forensic-report.js`,
    beside `DETECTOR_COUNT` and `SP_COUNT`; `DETECTOR_COUNT` too for a new detector), and
    re-splice the inline copies (§9).
@@ -827,7 +838,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**55 suites · 3515 assertions** (counted 2026-11-15 after the focused narrator-repair correction, §12.28; recount after any test change).
+**57 registered suites** (55 audited baseline suites green on 2026-11-15, plus the Phase 0 contract and documentation guards; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |

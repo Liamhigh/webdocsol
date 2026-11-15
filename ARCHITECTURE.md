@@ -133,13 +133,13 @@ The website is the centre of gravity: **all document verification happens at the
   (`worker/seed-rules.json`, v1.0.0) has 43 contradiction patterns (CT01–CT43) with detectors
   D01–D37, 12 fraud-keyword groups (FK01–FK12), 10 behavioural markers and 17 serial patterns,
   and v1.1.0 adds two curated co-occurrence groups (FK13, FK14). The package lags the web engine,
-  which defines CT01–CT46 and D01–D40, and is never merged over the engine's taxonomy.
+  which defines CT01–CT61 and 63 registered detector entries, and is never merged over the engine's taxonomy.
   (2) **The findings JSON.** `FINDINGS_JSON_SCHEMA.json` is kept in `1verum` and `firebase` at
   v1.0.0 (`findings_json_version` fixed at "1.0.0"); this repository has no copy. The website
-  builds its file in `seal-document.html` (`buildFindingsJson`) and is at v1.9.0, extended
+  builds its file in `seal-document.html` (`buildFindingsJson`) and is at v1.11.0, extended
   additively: `review_status` (1.3.0), `secondary_capped` and `ocr_anchored` (1.4.0), `ocr_held`
   (1.5.0), `analysis_reference_utc` (1.6.0), `display_name`, `brain`, `triple_verification` and
-  `ai_review_note` (1.7.0), `candidate_law` (1.8.0), `cross_document_observations` with a byte-faithful `quote_verbatim` (1.9.0). A validator that enforces the schema's version constant would refuse
+  `ai_review_note` (1.7.0), `candidate_law` (1.8.0), `cross_document_observations` with a byte-faithful `quote_verbatim` (1.9.0), the well-formedness gate and serial-stage trace (1.10.0), and the sealed conduct ledger and structured conduct-finding payloads (1.11.0). A validator that enforces the schema's version constant would refuse
   the website's file. That drift is open with the founder, and so is the schema's vocabulary: it
   requires `verification_status: "ENGINE-VERIFIED"`, band-word severity and confidence enums, and
   AI candidates inside `contradictions`, which the founder's 5 October 2026 rulings (no
@@ -202,17 +202,19 @@ The website is the centre of gravity: **all document verification happens at the
 
 ## Working in this repo (webdocsol)
 
-- The five forensic scripts are **inlined** into `seal-document.html` between
+- The seven forensic/contract scripts are **inlined** into `seal-document.html` between
   `/* VO-INLINE:<file>:START/END */` markers and **byte-guarded** by
-  `tests/inline-scripts.test.mjs`: `forensic-engine-page.js` (engine), `forensic-report.js`
+  `tests/inline-scripts.test.mjs`: `analysis-contracts.js`, `analysis-config.js`, `forensic-engine-page.js` (engine), `forensic-report.js`
   (reports), `seal-guard.js`, `ots-proof.js` and `pdf-encrypt.js`. **Workflow:** edit the source
   file, then re-splice the inline block (`ENGINE.md` §9). **Do not** "de-duplicate" the inline
   copy into a shared runtime module. Root-level `.js` requests once came back as the home page
   HTML (the old Pages origin answered missing files with its home page), and a dropped script
   means a scan that silently never runs. The site now ships as Workers Static Assets (#186), and
   the rule still stands.
-- Contradiction types are **CT01–CT46**, detectors **D01–D40** (`forensic-report.js`:
-  `CT_COUNT = 46`, `DETECTOR_COUNT = 40`). A new type changes these together:
+- Contradiction types are **CT01–CT61**. The detector registry has **63 entries**: 46 distinct
+  numeric prefixes, 45 unsuffixed entries and 18 auxiliary/suffixed entries. The main run-list has
+  **61 entries** (`DETECTOR_COUNT = 61`); D37 runs separately as catch-all, and D10A is retained
+  but inactive. A new type changes these together:
   `CONTRADICTION_TYPES` in `forensic-engine-page.js` (the source of truth); `CT_NAMES`,
   `CT_CATEGORY`, `NARRATIVE_MEANING`, `CT_DETECTOR` and `LEGAL_SUBJECT_OF` in
   `forensic-report.js`; the seal page's hand-kept copies `CTNAME` / `CTCAT` in
@@ -221,8 +223,8 @@ The website is the centre of gravity: **all document verification happens at the
   `worker/rule-format.md`. Bump `CT_COUNT`, and `DETECTOR_COUNT` for a new detector. Codes are
   permanent: `tests/constitution-lock.test.mjs` fails a renumbering.
 - Run `node tests/run-all.js` (every suite green) and `npm run check` (clean) before any push.
-  Nothing runs them for you: the only GitHub workflow is the hand-run `live-site-probe`, and
-  merge to `main` is the deploy. The engine is deterministic, so there is no
+  Ordinary GitHub Actions CI runs them on pull requests and pushes to `main`; the hand-run
+  `live-site-probe` remains a separate outside check. Merge to `main` is the deploy. The engine is deterministic, so there is no
   `Date.now()`/`Math.random()` in analysis paths (Prime Directive 4). The analysis instant is
   passed in as `opts.referenceTime` and never read from the clock.
 - **Report language is constitutional** (Prime Directive 16): findings stated as fact and anchored;

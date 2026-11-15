@@ -1,0 +1,31 @@
+{
+  "fixture_version": "1.0.0",
+  "description": "Synthetic non-text PDF operator observation; no quotation is permitted or required.",
+  "anchor": {
+    "artifact_sha512": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+    "document_id": "synthetic-structure-v1",
+    "page": 1,
+    "text_space": "page-text-v1",
+    "char_start": null,
+    "char_end": null,
+    "quote": null,
+    "context_before": "",
+    "context_after": "",
+    "extraction": {
+      "kind": "manual_transcription",
+      "extractor": "synthetic-fixture",
+      "extractor_version": "1.0.0",
+      "ocr_page": false
+    },
+    "geometry": null,
+    "structure": {
+      "byte_start": 120,
+      "byte_end": 148,
+      "object": "14 0 obj",
+      "generation": 0,
+      "revision_index": 0,
+      "operator_index": 7,
+      "content_stream": "15 0 R"
+    }
+  }
+}
