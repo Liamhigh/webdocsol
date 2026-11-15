@@ -1,0 +1,103 @@
+-    // carry a sale value. Both halves must sit in one stated document (the
+-    // Path B guard), so two different parties' affidavits are not fused.
++    // Path C — goodwill priced after extinction or beyond the agreement term.
++    // A sale confined to the remaining term before expiry is compatible with
++    // goodwill ending at expiry (368-page scan review, 14 Nov 2026, paras 261
++    // vs 274), so it is expressly excluded. Both halves must sit in one stated
++    // document, so two different parties' affidavits are not fused.
+     var extinct = pageOf(/goodwill[^.]{0,100}(terminates?|ceases?|extinguish(?:es|ed)?|dies\b)[^.]{0,80}(never|remain|survive|exist)|goodwill[^.]{0,100}can\s+never[^.]{0,60}(remain|survive|exist|argued)/);
+-    var priced = pageOf(/(?:sell|sale of|sold)[^.]{0,100}(?:tenure|franchise|business)[^.]{0,90}R\s?[\d]|would not recover (?:his|the|their|its) investment/);
+-    if (extinct && priced && d39OneAgreement(extinct, priced)) {
++    var priced = pageOf(/(?:sell|sale of|sold)[^.]{0,100}(?:tenure|franchise|business)[^.]{0,90}\br\s?\d|would not recover (?:his|the|their|its) investment/);
++    // A sale before expiry — including a sale of the remaining term — is
++    // compatible with goodwill ending at expiry. Require the pricing passage
++    // itself to place the sale after extinction or beyond the term.
++    var remainingTerm = pageOf(/(?:remaining|balance of the)\s+(?:six\s+months|\d+\s+(?:days?|months?|years?)|term|tenure)|six\s+months\s+remaining|months\s+remaining\s+in\s+the\s+(?:franchise\s+)?agreement/);
++    var postExtinction = pageOf(/(?:after|following|once)[^.]{0,80}(?:agreement|franchise|tenure|term)[^.]{0,40}(?:expir\w*|terminat\w*)|(?:sell|sale of|sold)[^.]{0,120}(?:expired|terminated)/);
++    if (extinct && priced && postExtinction && postExtinction.page === priced.page && !(remainingTerm && remainingTerm.page === priced.page) && d39OneAgreement(extinct, priced)) {
+       findings.push({ type: 'CT45', severity: 5,
+-        evidence: 'Goodwill is said to die with the agreement: "' + extinct.quote + '" — yet the same record prices the tenure of that franchise as a saleable asset: "' + priced.quote + '". An asset that can never remain cannot carry a sale value. Its legal characterisation is for the court.',
++        evidence: 'Goodwill is said to die with the agreement: "' + extinct.quote + '" — yet the same record prices that goodwill after extinction or beyond the remaining term: "' + priced.quote + '". Those propositions cannot both stand; a sale confined to the remaining term is not this finding. Its legal characterisation is for the court.',
+         location: loc(extinct, priced) });
+     }
+     // Path D — defined as asset, barred absolutely. The master bundle holds
+@@ -12334,6 +12379,16 @@ var DETECTORS = {
+         // A quoted statutory prohibition records the law, not a party's conduct.
+         if (VO_COERCE_STATUTORY_CITATION.test(sen) && VO_COERCE_STATUTORY_PROHIBITION.test(sen)) continue;
+         if (VO_COERCE_BOILER.test(sen) || voBehaviouralSecondhand(sen)) continue;
++        // An institution's account OF a complaint is never independent
++        // corroboration, even when it repeats direct coercion wording. A direct
++        // statement in the underlying complaint remains available on its own page.
++        var institutionalSummary = /^(?:institutional\s+)?summary\s*:/i.test(sen) ||
++          /\b(?:complainant|complaint|referral)\b[^.]{0,100}\b(?:reports?|alleges?|describes?|summari[sz]es?)\b/i.test(sen);
++        if (institutionalSummary) continue;
++        // Naming "coercion" as a complaint's legal characterisation is not a
++        // passage of coercive conduct either.
++        var complaintFrame = /\b(?:complaint|matter|referral|summary|allegation|charge)\b[^.]{0,160}\b(?:concerns?|reports?|alleges?|describes?|coerc(?:ion|ive))\b/i.test(sen);
++        if (complaintFrame && /\bcoerc(?:ion|ive)\b/i.test(sen) && !/\b(?:coerced|pressur(?:ed|ised)|forced\s+(?:me|us|them)|under\s+duress)\b/i.test(sen)) continue;
+         var hit = false;
+         for (var ci = 0; ci < VO_COERCE_CUES.length; ci++) { if (VO_COERCE_CUES[ci].test(sen)) { hit = true; break; } }
+         if (!hit) continue;
+@@ -13472,18 +13527,20 @@ function voSecondaryWhere(secSegs) {
+   }
+   return parts.length ? ' (' + parts.join('; ') + ')' : '';
+ }
+-// A near-empty-page finding (CT26) every page of which has no text layer of
+-// its own and was rendered for OCR is a reading limit, not a format anomaly:
+-// it becomes an engine note naming the page (Combine 06 April 2026). A thin
+-// page the OCR pass did not render keeps the D17 check.
++// A D17 near-empty-page finding every page of which has no text layer of its
++// own and was rendered for OCR is a reading limit, not a format anomaly: it
++// becomes an engine note naming the page (Combine 06 April 2026). D17 now emits
++// CT54; legacy CT26 input remains supported. D08A's separate unreadable-run CT54
++// stays a finding. A thin page the OCR pass did not render keeps the D17 check.
+ function voImageOnlyCt26ToNotes(findings, imageOnlyPages) {
+   var kept = [], notes = [];
+   for (var i = 0; i < (findings || []).length; i++) {
+     var f = findings[i];
+-    if (!f || f.type !== 'CT26') { kept.push(f); continue; }
++    var d17NearEmpty = f && (f.type === 'CT26' || (f.type === 'CT54' && /near-empty|nearly empty/i.test(String(f.evidence || ''))));
++    if (!d17NearEmpty) { kept.push(f); continue; }
+     var fp = voFindingPages(f);
+     if (!fp.length || !fp.every(function (pg) { return (imageOnlyPages || []).indexOf(pg) !== -1; })) { kept.push(f); continue; }
+-    notes.push({ type: 'CT26', location: f.location || '', text: (fp.length === 1 ? 'Page ' + fp[0] + ' has' : 'Pages ' + fp.join(', ') + ' have') + ' no text layer of its own and was rendered for OCR, which recovered little or no legible text (blank, photographic, or print too poor to read): a reading limit, not a finding. Read the page itself.' });
++    notes.push({ type: f.type, location: f.location || '', text: (fp.length === 1 ? 'Page ' + fp[0] + ' has' : 'Pages ' + fp.join(', ') + ' have') + ' no text layer of its own and was rendered for OCR, which recovered little or no legible text (blank, photographic, or print too poor to read): a reading limit, not a finding. Read the page itself.' });
+   }
+   return { kept: kept, notes: notes };
+ }
+@@ -14299,6 +14356,14 @@ function voDatedAfterReference(textBlocks, referenceTime, firstPages) {
+   });
+ }
+
++// Historical records are supported, but medieval/far-future years in OCR text
++// are debris, not chronology events. Fixed bounds keep repeat scans deterministic
++// while still admitting future expiry, hearing and commencement dates.
++function voDocumentaryYearPlausible(year) {
++  var y = Number(year);
++  return isFinite(y) && y >= 1900 && y <= 2200;
++}
++
+ function voDateSortKey(str) {
+   var s = String(str == null ? '' : str).toLowerCase().trim(), m;
+   // No date is better than an impossible one. A dropped range dash turned
+@@ -14306,7 +14371,7 @@ function voDateSortKey(str) {
+   // dates previously bypassed even the day/month bounds applied to numeric dates.
+   function validKey(y, mo, d) {
+     y = +y; mo = +mo; d = +d;
+-    if (y < 1000 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
++    if (!voDocumentaryYearPlausible(y) || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+     var chk = new Date(Date.UTC(y, mo - 1, d));
+     if (chk.getUTCFullYear() !== y || chk.getUTCMonth() + 1 !== mo || chk.getUTCDate() !== d) return null;
+     return y * 10000 + mo * 100 + d;
+@@ -14846,12 +14911,15 @@ function voBuildTimeline(findings, textBlocks, secondaryPages) {
+         if (dk === null) continue; // impossible / unparseable — not ordered, not guessed
+         var sk = dk + '@' + (p + 1);
+         if (seen[sk]) continue;    // a finding already carries this date on this page
+-        seen[sk] = true;
+         // Quote the line the date sits on, trimmed, so the event is anchored to
+         // the record's own words — never a paraphrase or an inferred fact.
+         var at = raw.indexOf(ds[k]);
+         var snip = raw.slice(Math.max(0, at - 70), at + ds[k].length + 70).replace(/\s+/g, ' ').trim();
+         if (snip.length > 160) snip = snip.slice(0, 157) + '…';
++        // OCR debris around a date is an extraction limit, not a historical
++        // event. Keep it out of the chronology until a person reads the image.
