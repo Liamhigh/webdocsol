@@ -729,6 +729,31 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
       /SEALED BUNDLE TEXT/.test(expandSeen[1].user) && /FINDINGS JSON/.test(expandSeen[1].user) && /TECHNICAL FORENSIC REPORT TEXT/.test(expandSeen[1].user),
       'an expansion retains the full record context and section token budget');
   }
+  // A standalone part takes its length from the dated evidence. A sparse span
+  // must not be sent back for expansion merely to manufacture 600-900 words.
+  {
+    const sparseSeen = [];
+    const sparseText = 'The agreement is dated 3 March 2026 [F1] (p. 2). The same agreement is dated 9 March 2026 [F1] (p. 5).';
+    const sparseEnv = { ...env, AI: { run: async (model, opts) => {
+      sparseSeen.push((opts.messages.find(m => m.role === 'user') || {}).content || '');
+      return { response: JSON.stringify({ text: sparseText }) };
+    } } };
+    const sparseBody = { ...gBase, section: 'forensic_narrative',
+      narrativePart: { index: 1, count: 1, focus: 'the two dated agreement entries' },
+      timeline: [
+        { date: '3 March 2026', what: 'The agreement is dated 3 March 2026.', page: 2 },
+        { date: '9 March 2026', what: 'The same agreement is dated 9 March 2026.', page: 5 }
+      ] };
+    const sj = await (await hPost(sparseBody, sparseEnv)).json();
+    ok(sparseSeen.length === 1 && /No more than 900 words/.test(sparseSeen[0]) && /Never pad or repeat/.test(sparseSeen[0]) && !/600-900 words/.test(sparseSeen[0]),
+      'the standalone narrative prompt makes length evidence-proportionate and forbids padding');
+    ok(sj.generated === true && sj.machineGenerated === true && !sj.repair && sparseSeen.length === 1,
+      'a compliant sparse narrative passes directly without a thin-expansion call');
+    ok(sj.gate && sj.gate.kept === 2 && sj.gate.dropped === 0,
+      'the sparse control passes the unchanged evidence gate with two kept and zero dropped sentences');
+    ok(sj.text === sparseText,
+      'the two accurate sparse-narrative sentences print without manufactured expansion');
+  }
   // FOUR PILLARS: a finding is cited under a pillar only when its type
   // evidences that pillar (Public Protector submission run: "The record
   // evidences inducement or reliance [F2]" for an unsigned-agreement finding
