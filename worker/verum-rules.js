@@ -1980,7 +1980,8 @@ function humanRepairBlock(mode, section, gated, findingCount) {
   const words = humanWordCount(gated && gated.text);
   const floor = humanSectionWordFloor(section, findingCount);
   let why = thin ? "The prior draft passed the evidence gate but is too thin for the requested section (" + words + " words; the floor for repair is " + floor + " words)." : "The prior draft failed the evidence gate: " + humanGateFailureSummary(gated && gated.stats) + ".";
-  return "REPAIR PASS \u2014 rewrite the whole section from scratch.\n" + why + "\nTell the full evidence story the inputs support: actor, act, date where the record gives one, source document and page, the contradiction, and candidate law where supplied.\nFor a contradiction the engine did not list, quote both sides verbatim and anchor them to supplied pages, or cite pages whose quoted statements you have just set out.\nEvery substantive sentence must cite a supplied finding [F#], a supplied page (p. N), a quotation present verbatim in the inputs, or (LEGAL FRAMEWORK only) a verified statute supplied above.\nDo not explain the rewrite. Reply ONLY valid JSON in the agreed shape.\n" + (thin && gated && gated.text ? 'PRIOR GATED DRAFT (safe sentences; expand them, do not merely repeat them):\n"""\n' + sanitizeHumanText(gated.text, 8e3) + '\n"""\n' : "");
+  const concise = thin ? "" : "For this gate repair, accuracy overrides the requested word count. Do not pad. Use short declarative sentences, each directly restating a supplied finding or quoted page fact, with [F#] and (p. N) wherever the finding supplies them. Do not add background, intent, motive, psychology, credibility, legal conclusions, court history, generic advice or a generic closing. Two accurate sentences are sufficient; never repeat a sentence to reach a length.\n";
+  return "REPAIR PASS \u2014 rewrite the whole section from scratch.\n" + why + "\nTell the full evidence story the inputs support: actor, act, date where the record gives one, source document and page, the contradiction, and candidate law where supplied.\nFor a contradiction the engine did not list, quote both sides verbatim and anchor them to supplied pages, or cite pages whose quoted statements you have just set out.\nEvery substantive sentence must cite a supplied finding [F#], a supplied page (p. N), a quotation present verbatim in the inputs, or (LEGAL FRAMEWORK only) a verified statute supplied above.\n" + concise + "Do not explain the rewrite. Reply ONLY valid JSON in the agreed shape.\n" + (thin && gated && gated.text ? 'PRIOR GATED DRAFT (safe sentences; expand them, do not merely repeat them):\n"""\n' + sanitizeHumanText(gated.text, 8e3) + '\n"""\n' : "");
 }
 __name(humanRepairBlock, "humanRepairBlock");
 function humanDraftBetter(next, cur, section, findingCount) {
@@ -2249,10 +2250,14 @@ async function handleAiHumanReport(request, env2) {
     const retryMs = Math.min(HUMAN_REPAIR_TIMEOUT_MS, HUMAN_ENDPOINT_BUDGET_MS - elapsed);
     if (retryMs >= 8e3) {
       const block = humanRepairBlock(repair === "gate" ? "gate" : "expand", section, chosen.gated, findings.length);
-      const repairUser = makeUser(excerpt, block);
+      // A gate rewrite needs the focused evidence, not a second copy of the
+      // whole bundle. Keeping the large record here starved the repair of time
+      // and encouraged the padding that the gate had just rejected. An expansion
+      // keeps the full record so it can add grounded facts outside the excerpt.
+      const repairUser = makeUser(excerpt, block, repair === "expand");
       try {
         attempts++;
-        const rr = await runHumanModel(env2, HUMAN_SYSTEM, repairUser, { timeoutMs: retryMs, allowFallback: false, maxTokens: sectionMaxTokens, deadlineAt });
+        const rr = await runHumanModel(env2, HUMAN_SYSTEM, repairUser, { timeoutMs: retryMs, allowFallback: false, maxTokens: repair === "expand" ? sectionMaxTokens : Math.min(sectionMaxTokens, 1400), deadlineAt });
         const rd = humanDraftFromModelText(rr.text);
         const rg = gateDraft(rd);
         if (rg) {

@@ -827,7 +827,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**55 suites · 3508 assertions** (counted 2026-11-14 after the 368-page scan and narrator corrections, §12.27; recount after any test change).
+**55 suites · 3515 assertions** (counted 2026-11-15 after the focused narrator-repair correction, §12.28; recount after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -837,7 +837,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `page-boot.test.mjs` | 102 | The seal page still boots when a library is missing |
 | `detector-recall.test.mjs` | 110 | Recall + the §4 false-positive guards, pinned to real bundle strings (incl. the CT11 negation gate, §12.23) |
 | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
-| `worker.test.mjs` | 401 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, consent follows the sealing mode — no tick box, and the copy says the audio leaves the device), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget), **the four-pillars gate** (a pillar claim is held to the elements-table types in every section; knowledge and inducement only as INSUFFICIENT; pillar headings recognised in any dress; findings held at reduced weight evidence no pillar), **the court-recognition ban** (paraphrases of court acceptance dropped, a statute's "admissible" kept), **the template quoting engine findings only**, **the overclaim rule** in the Worker gate and at render time (only an [F#] establishes; a contradiction only with its [F#]; no offence outside candidate law; reported speech and founding dates kept) and **the tamper-evident wording of every AI prompt** (§12.16) |
+| `worker.test.mjs` | 408 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, consent follows the sealing mode — no tick box, and the copy says the audio leaves the device), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget), **the four-pillars gate** (a pillar claim is held to the elements-table types in every section; knowledge and inducement only as INSUFFICIENT; pillar headings recognised in any dress; findings held at reduced weight evidence no pillar), **the court-recognition ban** (paraphrases of court acceptance dropped, a statute's "admissible" kept), **the template quoting engine findings only**, **the overclaim rule** in the Worker gate and at render time (only an [F#] establishes; a contradiction only with its [F#]; no offence outside candidate law; reported speech and founding dates kept) and **the tamper-evident wording of every AI prompt** (§12.16) |
 | `human-report.test.mjs` | 93 | **The court-ready narrative** (§13): one section contract in three artefacts, part of "Seal document with forensic report" with no separate switch (since 2026-09-07) and a disclosure that says what leaves the device, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery, and **the four-pillars map** pinned equal to the elements table (`HUMAN_PILLAR_TYPES` in the Worker = `OFFENCE_ELEMENTS` in the report; knowledge and inducement have no types) |
 | `site-serving.test.mjs` | 56 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
 | `pages-bridge.test.mjs` | 16 | **The www bridge** (DEPLOYMENT.md "The bridge"), a dormant fallback since 2026-09-27 when the www zone route took over: the Pages Function hands every request to the Worker at the same path and query with method, headers and body; redirects pass through; a request marked `X-VO-Chain` is served from static files (no loop); an unreachable Worker falls back to static with an honest header; `functions/` never ships as a Worker asset |
@@ -2749,6 +2749,28 @@ as `EXTRACTION`: an examination-coverage limit, never automatic insertion, remov
 forgery, perjury, tampering or fraud evidence. The legal renderer maps CT54 to no candidate offence
 statutes. `tests/scan11-findings-repair.test.mjs` pins every negative and positive control; the older
 D17/D39 expectations that had pinned the reviewed false readings were corrected with their reasons.
+
+### 12.28 Focused narrator repair after live gate rejection (2026-11-15)
+
+The merged §12.27 deployment passed its unit and asset-integrity checks, but a fresh production
+scan still returned `gate_failed` for the AI narrative sections and correctly used the labelled
+deterministic fallback. A bounded 368-page synthetic narrator call with seven supplied pages and
+361 expressly omitted pages passed; a separate all-368-pages-supplied stress call was withheld
+when its draft failed the gate. These are different outcomes and must not be reported as one
+blanket live pass.
+
+The gate-rewrite path repeated the full sealed bundle, findings JSON and technical report and
+retained the original long-form word pressure. On a short record that encouraged padding and gave
+the rewrite another large, slow prompt. A gate repair now receives only the focused excerpt and
+findings, explicitly puts accuracy before length, forbids narrative additions and repetition, and
+uses at most 1,400 output tokens. Expansion repairs retain the full record context and full
+section token budget so they can add grounded facts outside the focused excerpt. The initial call,
+record-coverage disclosure, model, shared deadline, anchor/language/quotation/pillar/overclaim
+gates and deterministic fallback are unchanged. No gate threshold is loosened.
+`tests/worker.test.mjs` pins the smaller gate-repair prompt, exclusion of all three repeated record
+blocks, concise token budget, anti-padding instruction and a compliant rewrite passing the same
+gate. A separate expansion control pins the retained record blocks and section token budget. Live
+acceptance remains a post-deployment check, not a unit-test claim.
 
 ## 13. The court-ready narrative (the "human report")
 
