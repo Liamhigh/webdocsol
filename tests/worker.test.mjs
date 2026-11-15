@@ -719,6 +719,15 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
       'the rewrite forbids padding and prohibited narrative additions');
     ok(seen[1].user.length < seen[0].user.length - 10000,
       'the focused repair prompt is materially smaller than the initial full-record prompt');
+    const expandSeen = [];
+    const expandEnv = { ...env, AI: { run: async (model, opts) => {
+      expandSeen.push({ user: (opts.messages.find(m => m.role === 'user') || {}).content || '', maxTokens: opts.max_tokens });
+      return { response: JSON.stringify({ text: expandSeen.length === 1 ? PAD : PAD.repeat(12) }) };
+    } } };
+    const ej = await (await hPost(body, expandEnv)).json();
+    ok(ej.generated === true && ej.repair === 'expanded' && expandSeen.length === 2 && expandSeen[1].maxTokens === 2048 &&
+      /SEALED BUNDLE TEXT/.test(expandSeen[1].user) && /FINDINGS JSON/.test(expandSeen[1].user) && /TECHNICAL FORENSIC REPORT TEXT/.test(expandSeen[1].user),
+      'an expansion retains the full record context and section token budget');
   }
   // FOUR PILLARS: a finding is cited under a pillar only when its type
   // evidences that pillar (Public Protector submission run: "The record

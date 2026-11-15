@@ -2252,8 +2252,9 @@ async function handleAiHumanReport(request, env2) {
       const block = humanRepairBlock(repair === "gate" ? "gate" : "expand", section, chosen.gated, findings.length);
       // A gate rewrite needs the focused evidence, not a second copy of the
       // whole bundle. Keeping the large record here starved the repair of time
-      // and encouraged the padding that the gate had just rejected.
-      const repairUser = makeUser(excerpt, block, false);
+      // and encouraged the padding that the gate had just rejected. An expansion
+      // keeps the full record so it can add grounded facts outside the excerpt.
+      const repairUser = makeUser(excerpt, block, repair === "expand");
       try {
         attempts++;
         const rr = await runHumanModel(env2, HUMAN_SYSTEM, repairUser, { timeoutMs: retryMs, allowFallback: false, maxTokens: repair === "expand" ? sectionMaxTokens : Math.min(sectionMaxTokens, 1400), deadlineAt });
