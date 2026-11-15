@@ -1,0 +1,92 @@
+From de20007eb28cb1a4e2fa293c293a0f72d91e60da Mon Sep 17 00:00:00 2001
+From: agent <agent@example.com>
+Date: Sun, 15 Nov 2026 13:05:34 +0800
+Subject: [PATCH] Preserve full record for narrator expansions
+
+---
+ ENGINE.md             | 16 +++++++++-------
+ tests/worker.test.mjs |  9 +++++++++
+ worker/verum-rules.js |  5 +++--
+ 3 files changed, 21 insertions(+), 9 deletions(-)
+
+diff --git a/ENGINE.md b/ENGINE.md
+index fc32289..95c6471 100644
+--- a/ENGINE.md
++++ b/ENGINE.md
+@@ -827,7 +827,7 @@ Yesterday's extraction quality is the baseline. To protect it:
+ 
+ ### What the tests guard
+ 
+-**55 suites · 3514 assertions** (counted 2026-11-15 after the focused narrator-repair correction, §12.28; recount after any test change).
++**55 suites · 3515 assertions** (counted 2026-11-15 after the focused narrator-repair correction, §12.28; recount after any test change).
+ `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
+ 
+ | Suite | Checks | Guards |
+@@ -837,7 +837,7 @@ Yesterday's extraction quality is the baseline. To protect it:
+ | `page-boot.test.mjs` | 102 | The seal page still boots when a library is missing |
+ | `detector-recall.test.mjs` | 110 | Recall + the §4 false-positive guards, pinned to real bundle strings (incl. the CT11 negation gate, §12.23) |
+ | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
+-| `worker.test.mjs` | 407 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, consent follows the sealing mode — no tick box, and the copy says the audio leaves the device), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget), **the four-pillars gate** (a pillar claim is held to the elements-table types in every section; knowledge and inducement only as INSUFFICIENT; pillar headings recognised in any dress; findings held at reduced weight evidence no pillar), **the court-recognition ban** (paraphrases of court acceptance dropped, a statute's "admissible" kept), **the template quoting engine findings only**, **the overclaim rule** in the Worker gate and at render time (only an [F#] establishes; a contradiction only with its [F#]; no offence outside candidate law; reported speech and founding dates kept) and **the tamper-evident wording of every AI prompt** (§12.16) |
++| `worker.test.mjs` | 408 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, consent follows the sealing mode — no tick box, and the copy says the audio leaves the device), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget), **the four-pillars gate** (a pillar claim is held to the elements-table types in every section; knowledge and inducement only as INSUFFICIENT; pillar headings recognised in any dress; findings held at reduced weight evidence no pillar), **the court-recognition ban** (paraphrases of court acceptance dropped, a statute's "admissible" kept), **the template quoting engine findings only**, **the overclaim rule** in the Worker gate and at render time (only an [F#] establishes; a contradiction only with its [F#]; no offence outside candidate law; reported speech and founding dates kept) and **the tamper-evident wording of every AI prompt** (§12.16) |
+ | `human-report.test.mjs` | 93 | **The court-ready narrative** (§13): one section contract in three artefacts, part of "Seal document with forensic report" with no separate switch (since 2026-09-07) and a disclosure that says what leaves the device, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery, and **the four-pillars map** pinned equal to the elements table (`HUMAN_PILLAR_TYPES` in the Worker = `OFFENCE_ELEMENTS` in the report; knowledge and inducement have no types) |
+ | `site-serving.test.mjs` | 56 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
+ | `pages-bridge.test.mjs` | 16 | **The www bridge** (DEPLOYMENT.md "The bridge"), a dormant fallback since 2026-09-27 when the www zone route took over: the Pages Function hands every request to the Worker at the same path and query with method, headers and body; redirects pass through; a request marked `X-VO-Chain` is served from static files (no loop); an unreachable Worker falls back to static with an honest header; `functions/` never ships as a Worker asset |
+@@ -2763,12 +2763,14 @@ The gate-rewrite path repeated the full sealed bundle, findings JSON and technic
+ retained the original long-form word pressure. On a short record that encouraged padding and gave
+ the rewrite another large, slow prompt. A gate repair now receives only the focused excerpt and
+ findings, explicitly puts accuracy before length, forbids narrative additions and repetition, and
+-uses at most 1,400 output tokens. Expansion repairs retain the full section token budget. The
+-initial call, record-coverage disclosure, model, shared deadline, anchor/language/quotation/pillar/
+-overclaim gates and deterministic fallback are unchanged. No gate threshold is loosened.
+-`tests/worker.test.mjs` pins the smaller repair prompt, exclusion of all three repeated record
++uses at most 1,400 output tokens. Expansion repairs retain the full record context and full
++section token budget so they can add grounded facts outside the focused excerpt. The initial call,
++record-coverage disclosure, model, shared deadline, anchor/language/quotation/pillar/overclaim
++gates and deterministic fallback are unchanged. No gate threshold is loosened.
++`tests/worker.test.mjs` pins the smaller gate-repair prompt, exclusion of all three repeated record
+ blocks, concise token budget, anti-padding instruction and a compliant rewrite passing the same
+-gate. Live acceptance remains a post-deployment check, not a unit-test claim.
++gate. A separate expansion control pins the retained record blocks and section token budget. Live
++acceptance remains a post-deployment check, not a unit-test claim.
+ 
+ ## 13. The court-ready narrative (the "human report")
+ 
+diff --git a/tests/worker.test.mjs b/tests/worker.test.mjs
+index 5945e88..332604d 100644
+--- a/tests/worker.test.mjs
++++ b/tests/worker.test.mjs
+@@ -719,6 +719,15 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
+       'the rewrite forbids padding and prohibited narrative additions');
+     ok(seen[1].user.length < seen[0].user.length - 10000,
+       'the focused repair prompt is materially smaller than the initial full-record prompt');
++    const expandSeen = [];
++    const expandEnv = { ...env, AI: { run: async (model, opts) => {
++      expandSeen.push({ user: (opts.messages.find(m => m.role === 'user') || {}).content || '', maxTokens: opts.max_tokens });
++      return { response: JSON.stringify({ text: expandSeen.length === 1 ? PAD : PAD.repeat(12) }) };
++    } } };
++    const ej = await (await hPost(body, expandEnv)).json();
++    ok(ej.generated === true && ej.repair === 'expanded' && expandSeen.length === 2 && expandSeen[1].maxTokens === 2048 &&
++      /SEALED BUNDLE TEXT/.test(expandSeen[1].user) && /FINDINGS JSON/.test(expandSeen[1].user) && /TECHNICAL FORENSIC REPORT TEXT/.test(expandSeen[1].user),
++      'an expansion retains the full record context and section token budget');
+   }
+   // FOUR PILLARS: a finding is cited under a pillar only when its type
+   // evidences that pillar (Public Protector submission run: "The record
+diff --git a/worker/verum-rules.js b/worker/verum-rules.js
+index 091639c..775451e 100644
+--- a/worker/verum-rules.js
++++ b/worker/verum-rules.js
+@@ -2252,8 +2252,9 @@ async function handleAiHumanReport(request, env2) {
+       const block = humanRepairBlock(repair === "gate" ? "gate" : "expand", section, chosen.gated, findings.length);
+       // A gate rewrite needs the focused evidence, not a second copy of the
+       // whole bundle. Keeping the large record here starved the repair of time
+-      // and encouraged the padding that the gate had just rejected.
+-      const repairUser = makeUser(excerpt, block, false);
++      // and encouraged the padding that the gate had just rejected. An expansion
++      // keeps the full record so it can add grounded facts outside the excerpt.
++      const repairUser = makeUser(excerpt, block, repair === "expand");
+       try {
+         attempts++;
+         const rr = await runHumanModel(env2, HUMAN_SYSTEM, repairUser, { timeoutMs: retryMs, allowFallback: false, maxTokens: repair === "expand" ? sectionMaxTokens : Math.min(sectionMaxTokens, 1400), deadlineAt });
+-- 
+2.39.5
+
