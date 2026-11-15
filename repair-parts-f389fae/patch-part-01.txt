@@ -1,0 +1,81 @@
++gate. Live acceptance remains a post-deployment check, not a unit-test claim.
++
+ ## 13. The court-ready narrative (the "human report")
+ 
+ **What it is.** A sealed companion PDF written by an AI narrator *from* the sealed technical
+diff --git a/tests/worker.test.mjs b/tests/worker.test.mjs
+index faa4c0d..5945e88 100644
+--- a/tests/worker.test.mjs
++++ b/tests/worker.test.mjs
+@@ -688,6 +688,38 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
+     finally { globalThis.fetch = origFetch; }
+     ok(g.generated === false && g.reason === 'ai_unavailable', 'an aborted external provider falls through to the Workers AI models (none bound here, so ai_unavailable) — the section is never killed by a dead external');
+   }
++  // Gate repair receives the focused evidence, not a second full-bundle prompt.
++  // Accuracy takes priority over padding, while the gate thresholds stay fixed.
++  {
++    const seen = [];
++    const repairEnv = { ...env, AI: { run: async (model, opts) => {
++      const user = (opts.messages.find(m => m.role === 'user') || {}).content || '';
++      seen.push({ user, maxTokens: opts.max_tokens });
++      const text = seen.length === 1
++        ? 'This may be fraud [F1] (p. 2). It seems likely [F2] (p. 7). Confidence 90%.'
++        : PAD;
++      return { response: JSON.stringify({ text }) };
++    } } };
++    const recordText = '[Page 2] ' + 'focused bundle filler '.repeat(800);
++    const body = { ...gBase,
++      sealedRecord: { text: recordText, coverage: { totalPages: 9, suppliedPages: [2], omittedPages: [1, 3, 4, 5, 6, 7, 8, 9], omittedPageCount: 8 } },
++      findingsJson: '{"confirmation":"' + 'x'.repeat(5000) + '"}',
++      technicalReport: { text: 'technical confirmation '.repeat(400), pageCount: 20, suppliedPages: 20, truncated: false, sealId: 'VO-TEST', sha512: 'a'.repeat(128) }
++    };
++    const rr = await hPost(body, repairEnv); const rj = await rr.json();
++    ok(rj.generated === true && rj.machineGenerated === true && rj.repair === 'repaired',
++      'a compliant focused rewrite survives the unchanged gate (' + JSON.stringify(rj.gate) + ')');
++    ok(seen.length === 2 && seen[1].maxTokens === 1400,
++      'the gate rewrite is bounded to a concise response budget');
++    ok(/SEALED BUNDLE TEXT/.test(seen[0].user) && !/SEALED BUNDLE TEXT/.test(seen[1].user),
++      'the initial call has the declared bundle; the gate rewrite uses the focused excerpt');
++    ok(!/FINDINGS JSON/.test(seen[1].user) && !/TECHNICAL FORENSIC REPORT TEXT/.test(seen[1].user),
++      'confirmation records are not repeated into the gate rewrite');
++    ok(/accuracy overrides the requested word count/.test(seen[1].user) && /Two accurate sentences are sufficient/.test(seen[1].user),
++      'the rewrite forbids padding and prohibited narrative additions');
++    ok(seen[1].user.length < seen[0].user.length - 10000,
++      'the focused repair prompt is materially smaller than the initial full-record prompt');
++  }
+   // FOUR PILLARS: a finding is cited under a pillar only when its type
+   // evidences that pillar (Public Protector submission run: "The record
+   // evidences inducement or reliance [F2]" for an unsigned-agreement finding
+diff --git a/worker/verum-rules.js b/worker/verum-rules.js
+index 321a8e2..091639c 100644
+--- a/worker/verum-rules.js
++++ b/worker/verum-rules.js
+@@ -1980,7 +1980,8 @@ function humanRepairBlock(mode, section, gated, findingCount) {
+   const words = humanWordCount(gated && gated.text);
+   const floor = humanSectionWordFloor(section, findingCount);
+   let why = thin ? "The prior draft passed the evidence gate but is too thin for the requested section (" + words + " words; the floor for repair is " + floor + " words)." : "The prior draft failed the evidence gate: " + humanGateFailureSummary(gated && gated.stats) + ".";
+-  return "REPAIR PASS \u2014 rewrite the whole section from scratch.\n" + why + "\nTell the full evidence story the inputs support: actor, act, date where the record gives one, source document and page, the contradiction, and candidate law where supplied.\nFor a contradiction the engine did not list, quote both sides verbatim and anchor them to supplied pages, or cite pages whose quoted statements you have just set out.\nEvery substantive sentence must cite a supplied finding [F#], a supplied page (p. N), a quotation present verbatim in the inputs, or (LEGAL FRAMEWORK only) a verified statute supplied above.\nDo not explain the rewrite. Reply ONLY valid JSON in the agreed shape.\n" + (thin && gated && gated.text ? 'PRIOR GATED DRAFT (safe sentences; expand them, do not merely repeat them):\n"""\n' + sanitizeHumanText(gated.text, 8e3) + '\n"""\n' : "");
++  const concise = thin ? "" : "For this gate repair, accuracy overrides the requested word count. Do not pad. Use short declarative sentences, each directly restating a supplied finding or quoted page fact, with [F#] and (p. N) wherever the finding supplies them. Do not add background, intent, motive, psychology, credibility, legal conclusions, court history, generic advice or a generic closing. Two accurate sentences are sufficient; never repeat a sentence to reach a length.\n";
++  return "REPAIR PASS \u2014 rewrite the whole section from scratch.\n" + why + "\nTell the full evidence story the inputs support: actor, act, date where the record gives one, source document and page, the contradiction, and candidate law where supplied.\nFor a contradiction the engine did not list, quote both sides verbatim and anchor them to supplied pages, or cite pages whose quoted statements you have just set out.\nEvery substantive sentence must cite a supplied finding [F#], a supplied page (p. N), a quotation present verbatim in the inputs, or (LEGAL FRAMEWORK only) a verified statute supplied above.\n" + concise + "Do not explain the rewrite. Reply ONLY valid JSON in the agreed shape.\n" + (thin && gated && gated.text ? 'PRIOR GATED DRAFT (safe sentences; expand them, do not merely repeat them):\n"""\n' + sanitizeHumanText(gated.text, 8e3) + '\n"""\n' : "");
+ }
+ __name(humanRepairBlock, "humanRepairBlock");
+ function humanDraftBetter(next, cur, section, findingCount) {
+@@ -2249,10 +2250,13 @@ async function handleAiHumanReport(request, env2) {
+     const retryMs = Math.min(HUMAN_REPAIR_TIMEOUT_MS, HUMAN_ENDPOINT_BUDGET_MS - elapsed);
+     if (retryMs >= 8e3) {
+       const block = humanRepairBlock(repair === "gate" ? "gate" : "expand", section, chosen.gated, findings.length);
+-      const repairUser = makeUser(excerpt, block);
++      // A gate rewrite needs the focused evidence, not a second copy of the
++      // whole bundle. Keeping the large record here starved the repair of time
++      // and encouraged the padding that the gate had just rejected.
++      const repairUser = makeUser(excerpt, block, false);
+       try {
+         attempts++;
+-        const rr = await runHumanModel(env2, HUMAN_SYSTEM, repairUser, { timeoutMs: retryMs, allowFallback: false, maxTokens: sectionMaxTokens, deadlineAt });
++        const rr = await runHumanModel(env2, HUMAN_SYSTEM, repairUser, { timeoutMs: retryMs, allowFallback: false, maxTokens: repair === "expand" ? sectionMaxTokens : Math.min(sectionMaxTokens, 1400), deadlineAt });
+         const rd = humanDraftFromModelText(rr.text);
+         const rg = gateDraft(rd);
+         if (rg) {
+-- 
+2.39.5
+
