@@ -24,8 +24,8 @@ index c3657a4..c4960e6 100644
 +++ b/tests/combine-06-april-regression.test.mjs
 @@ -132,10 +132,18 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor
    // D17 itself still measures the page (a native file keeps the check):
-   const blanks = DET.D17_DETECT_FORMAT_ANOMALY(['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)]);
-  ok(blanks.length === 1, 'positive control: D17 still measures an isolated near-empty page');
+  const blanks = DET.D17_DETECT_FORMAT_ANOMALY(['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)]);
+   ok(blanks.length === 1, 'positive control: D17 still measures an isolated near-empty page');
 -  // The engine hands a near-empty finding on scanned image pages to the notes.
 -  const io = E.voImageOnlyCt26ToNotes([{ type: 'CT26', severity: 2, location: 'Page 676', evidence: 'Page 676 is nearly empty (9 chars)' }, { type: 'CT26', severity: 2, location: 'Page 12', evidence: 'Page 12 is nearly empty' }, { type: 'CT01', severity: 4, location: 'Page 676', evidence: 'x' }], [664, 676]);
 -  ok(io.kept.length === 2 && !io.kept.some(f => f.type === 'CT26' && /676/.test(f.location)) && io.kept.some(f => /Page 12/.test(f.location)) && io.notes.length === 1 && /Page 676 has no text layer of its own and was rendered for OCR/.test(io.notes[0].text),
@@ -42,8 +42,8 @@ index c3657a4..c4960e6 100644
 +  const io = E.voImageOnlyCt26ToNotes([...d17Actual, ...d08aActual, { type: 'CT01', severity: 4, location: 'Page 676', evidence: 'x' }], [664, 676]);
 +  ok(io.kept.length === 3 && !io.kept.some(f => /Page 676/.test(f.location) && f.type === 'CT54') && io.kept.some(f => /Page 12/.test(f.location) && f.type === 'CT54') && io.kept.includes(d08aActual[0]) && io.notes.length === 1 && io.notes[0].type === 'CT54' && /Page 676 has no text layer of its own and was rendered for OCR/.test(io.notes[0].text),
 +    'D17 CT54 on a scanned page becomes a CT54 engine note; its text-page counterpart, D08A CT54 and other kinds stay findings');
-   const src = fs.readFileSync(path.join(process.cwd(), 'forensic-engine-page.js'), 'utf8');
-  ok(/if \(_ocrRan && _imageOnlyPages\.length\) \{\s*var _io = voImageOnlyCt26ToNotes\(allFindings, _imageOnlyPages\);/.test(src), 'the engine applies it only when an OCR pass ran over the file');
+  const src = fs.readFileSync(path.join(process.cwd(), 'forensic-engine-page.js'), 'utf8');
+   ok(/if \(_ocrRan && _imageOnlyPages\.length\) \{\s*var _io = voImageOnlyCt26ToNotes\(allFindings, _imageOnlyPages\);/.test(src), 'the engine applies it only when an OCR pass ran over the file');
   // The review: only a page the OCR pass rendered counts — a page returned
 @@ -178,8 +186,11 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor
    const near = pad.slice(); near[0] = noComp; near[4] = acq;
@@ -88,7 +88,7 @@ index da47a0d..dd7dcf5 100644
 -    'CT26 still flags a single isolated blank as possible insertion');
 +  ok(f.length === 1 && f[0].type === 'CT54' && /examination-coverage limit/i.test(f[0].evidence) && !/possibly inserted|possible inserted|inserted or removed/.test(f[0].evidence),
 +    'an isolated near-empty page is an examination limit, not insertion evidence');
- }
+}
  
  // CT11 (D08): bounded match — a local "signed by X on behalf of" fires, but a
 diff --git a/tests/evidence-bundle-7-regression.test.mjs b/tests/evidence-bundle-7-regression.test.mjs
@@ -96,7 +96,7 @@ index 32968a5..e9b8c0f 100644
 --- a/tests/evidence-bundle-7-regression.test.mjs
 +++ b/tests/evidence-bundle-7-regression.test.mjs
 @@ -68,15 +68,15 @@ console.log('======================================================\n');
-   ok(of(DET.D27_DETECT_CUSTODY_GAP, ['The chain of custody of the exhibits is recorded below. Item 1 received by Sgt Mokoena.'], 'CT39').length === 1, 'positive control: a document claiming its own custody record with missing steps still fires');
+  ok(of(DET.D27_DETECT_CUSTODY_GAP, ['The chain of custody of the exhibits is recorded below. Item 1 received by Sgt Mokoena.'], 'CT39').length === 1, 'positive control: a document claiming its own custody record with missing steps still fires');
 }
  
 -// ===== 3. Set-aside pages are not "near-empty" (D17 / CT26) ==================
