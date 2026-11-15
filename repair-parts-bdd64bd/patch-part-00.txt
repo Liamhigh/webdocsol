@@ -1,0 +1,74 @@
+From bdd64bda8e5931037e4e753930ca772975b5ccda Mon Sep 17 00:00:00 2001
+From: agent <agent@example.com>
+Date: Sat, 14 Nov 2026 23:34:34 +0800
+Subject: [PATCH] Repair forensic findings and narrator deadlines
+
+---
+ ENGINE.md                                   |  95 +++++++---
+ forensic-engine-page.js                     | 180 +++++++++++++------
+ forensic-report.js                          |  10 +-
+ seal-document.html                          | 190 +++++++++++++-------
+ tests/batch5-detectors.test.mjs             |   4 +-
+ tests/combine-06-april-regression.test.mjs  |  23 ++-
+ tests/detector-recall.test.mjs              |  14 +-
+ tests/evidence-bundle-7-regression.test.mjs |   6 +-
+ tests/forensic-engine.test.js               |   6 +-
+ tests/franchise-lease.test.mjs              |  33 ++--
+ tests/human-report.test.mjs                 |  55 +++++-
+ tests/run-all.js                            |   1 +
+ tests/scan11-findings-repair.test.mjs       | 126 +++++++++++++
+ tests/worker.test.mjs                       |   4 +-
+ tests/wrangler-config.test.mjs              |   9 +
+ worker/verum-rules.js                       |  29 ++-
+ wrangler.toml                               |   9 +-
+ 17 files changed, 590 insertions(+), 204 deletions(-)
+ create mode 100644 tests/scan11-findings-repair.test.mjs
+
+diff --git a/ENGINE.md b/ENGINE.md
+index 497697b..700fe1b 100644
+--- a/ENGINE.md
++++ b/ENGINE.md
+@@ -163,7 +163,7 @@ page); D15 and D20 take the pdf-lib document, D16 takes `(textBlocks, pdfDoc)`,
+ | D14 `DETECT_AMOUNT_ROUNDING_ANOMALY` | CT15 | Amount discrepancies |
+ | D15 `DETECT_METADATA_FRAUD` | CT24, CT29 | Metadata / timestamp manipulation |
+ | D16 `DETECT_FONT_ANOMALY` | CT25 | Line-length variance on a page (unsound, and unreachable on production blocks, which carry no line breaks; open with the founder, §12.14 (d): do not revive it by restoring newlines) |
+-| D17 `DETECT_FORMAT_ANOMALY` | CT26 | Near-empty pages among full ones |
++| D17 `DETECT_FORMAT_ANOMALY` | CT54 | Near-empty pages among full ones: examination-coverage limits |
+ | D18 `DETECT_PAGE_MANIPULATION` | CT27 | Layout / page-number manipulation |
+ | D19 `DETECT_EVIDENCE_TAMPERING` | CT41 | Explicit tampering indicators in text |
+ | D20 `DETECT_DIGITAL_FOOTPRINT_MISMATCH` | CT42 | Digital traces inconsistent with claimed origin |
+@@ -249,10 +249,10 @@ numeric annexure label; lowercase OCR word-splits are rejected.
+ Naming two jurisdictions in a cross-border matter is normal. **Guard:** emitted as an
+ **unscored `contextOnly` note**, never a scored finding.
+ 
+-### 4.7 D17 / CT26 — near-empty pages are a question, not a verdict
++### 4.7 D17 / CT54 — near-empty pages are examination limits, not a verdict
+ A page with no machine-readable text is most often an **image-only page OCR did not capture**,
+-not a removed page. **Guard:** the finding says exactly that and tells the reader to establish
+-which from the original; it never asserts insertion or removal.
++not a removed page. **Guard:** the CT54 extraction limit says exactly that and tells the reader to
++establish which from the original; it never asserts insertion, removal, alteration or an offence.
+ 
+ ### 4.8 Bundle context — structural notes are demoted, not counted as wrongdoing
+ Compiled bundles repeat page numbers and cross-references. The seal page applies this, not the
+@@ -827,7 +827,7 @@ Yesterday's extraction quality is the baseline. To protect it:
+ 
+ ### What the tests guard
+ 
+-**52 suites · 3437 assertions** (counted 2026-11-08 after the standalone-narrative deterministic-fallback correction, §12.26; recount after any test change).
++**55 suites · 3508 assertions** (counted 2026-11-14 after the 368-page scan and narrator corrections, §12.27; recount after any test change).
+ `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
+ 
+ | Suite | Checks | Guards |
+@@ -838,7 +838,7 @@ Yesterday's extraction quality is the baseline. To protect it:
+ | `detector-recall.test.mjs` | 110 | Recall + the §4 false-positive guards, pinned to real bundle strings (incl. the CT11 negation gate, §12.23) |
+ | `finding-anchors.test.mjs` | 87 | WHO/WHERE/WHAT/WHEN anchoring per finding |
+ | `worker.test.mjs` | 401 | Worker endpoints, limits, embedded constitution, **narrator prompt locks** (FORMAT / SYNTHESIS / WHY IT MATTERS), pattern-feedback contract, **the §12 institutional-engagement honesty clause** (no court has validated Verum Omnis — seven assertions), **the transcribe contract** (`machineGenerated:true`, clean failures, consent follows the sealing mode — no tick box, and the copy says the audio leaves the device), **the human-report endpoint** (anchor + §15.2 gate counts, temperature 0, no GPS/device, external-provider adapter) and **its gate hardening** (no anchor no sentence, headings gated, the BANNED list enforced, every anchor and quotation spelling checked, sanctioned one-line answers, the fallback budget), **the four-pillars gate** (a pillar claim is held to the elements-table types in every section; knowledge and inducement only as INSUFFICIENT; pillar headings recognised in any dress; findings held at reduced weight evidence no pillar), **the court-recognition ban** (paraphrases of court acceptance dropped, a statute's "admissible" kept), **the template quoting engine findings only**, **the overclaim rule** in the Worker gate and at render time (only an [F#] establishes; a contradiction only with its [F#]; no offence outside candidate law; reported speech and founding dates kept) and **the tamper-evident wording of every AI prompt** (§12.16) |
+-| `human-report.test.mjs` | 90 | **The court-ready narrative** (§13): one section contract in three artefacts, part of "Seal document with forensic report" with no separate switch (since 2026-09-07) and a disclosure that says what leaves the device, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery, and **the four-pillars map** pinned equal to the elements table (`HUMAN_PILLAR_TYPES` in the Worker = `OFFENCE_ELEMENTS` in the report; knowledge and inducement have no types) |
++| `human-report.test.mjs` | 93 | **The court-ready narrative** (§13): one section contract in three artefacts, part of "Seal document with forensic report" with no separate switch (since 2026-09-07) and a disclosure that says what leaves the device, the render-time §15.2 gate on every AI section, deterministic fallbacks labelled as not machine-written, seal-guarded delivery, and **the four-pillars map** pinned equal to the elements table (`HUMAN_PILLAR_TYPES` in the Worker = `OFFENCE_ELEMENTS` in the report; knowledge and inducement have no types) |
+ | `site-serving.test.mjs` | 56 | **The site-serving chain** (DEPLOYMENT.md): the Worker's deny list mirrors `.assetsignore`; every local reference in every page resolves to a served file; the embedded fallback logo and watermark are real PNGs; the image tiers answer in order (assets → repo → KV → embedded) and name themselves; `/api/v1/site/health` reports the tier truthfully |
+ | `pages-bridge.test.mjs` | 16 | **The www bridge** (DEPLOYMENT.md "The bridge"), a dormant fallback since 2026-09-27 when the www zone route took over: the Pages Function hands every request to the Worker at the same path and query with method, headers and body; redirects pass through; a request marked `X-VO-Chain` is served from static files (no loop); an unreachable Worker falls back to static with an honest header; `functions/` never ships as a Worker asset |
+ | `zip-intake.test.mjs` | 25 | **WhatsApp chat exports unpacked on-device** (§12.6a): the page's ZIP reader against real archives (stored, deflated, data-descriptor, folder, macOS cruft, encrypted, garbage), expansion into typed Files, only evidence types admitted, documents inside a voice-note export named for a separate seal, the panel note, the .zip picker entry, the 25-note batch, the home-page copy and locally served photos |
+@@ -848,12 +848,13 @@ Yesterday's extraction quality is the baseline. To protect it:
+ | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
+ | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
