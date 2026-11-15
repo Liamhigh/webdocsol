@@ -1,0 +1,99 @@
++
++// Standard-form contracts and shared vocabulary are not coordinated drafting.
++const clause = '4.8 The FRANCHISEE acknowledges that neither it nor any employees have any prior knowledge of the Business System or any aspect of the Know-how or the Trade Secrets. 4.9 The FRANCHISEE shall not divulge or permit to be divulged to any person any aspect of the Business System except as required for the operation of the Franchised Business under this Agreement at the Premises.';
++t.ok(D.D09A_DETECT_COORDINATION_NEAR_DUP([
++  'First Agreement. ' + clause + ' Signed for First Franchisor by A. Smith.',
++  'Second Agreement. ' + clause + ' Signed for Second Franchisor by B. Jones.'
++]).length === 0, 'the same standard-form franchise clauses under different parties are not coordination evidence');
++const words = 'the particular equipment delivery schedule inventory price customer supplier premises payment invoice receipt order transport warranty inspection insurance storage installation maintenance commission royalty turnover declaration records statements accounts premises vehicles stock staff training marketing advertising sales service repairs parts products goods'.split(' ');
++const sequenceA = words.join(' ') + ' Further distinct substantive wording makes this a long page of ordinary record text for comparison.';
++const sequenceB = words.slice().reverse().join(' ') + ' A different closing and reordered vocabulary appear on this lengthy comparison page.';
++t.ok(D.D09A_DETECT_COORDINATION_NEAR_DUP([sequenceA, sequenceB]).length === 0,
++  'shared or reordered vocabulary without near-identical word sequences cannot support coordination');
++const letter = 'We refer to the above matter and to your recent correspondence. Our client instructs that the application was duly processed by the office and that any suggestion to the contrary is denied. We are instructed to demand that you withdraw the allegations within twenty one days failing which our client will approach the court for relief including an order declaring you a vexatious litigant and seeking punitive costs on the attorney and client scale together with interest and such further relief as the court deems meet and appropriate in the circumstances of this disputed matter.';
++t.ok(D.D09A_DETECT_COORDINATION_NEAR_DUP([
++  'First Attorneys. ' + letter + ' Yours faithfully, A. Smith.',
++  'Second Attorneys. ' + letter + ' Yours sincerely, B. Jones.'
++]).length === 1, 'near-identical substantive non-boilerplate letters remain detectable');
++
++// A conditional standard-form acknowledgement is not its own denial.
++t.ok(D.D10B_DETECT_FACTIVE_COMMITMENT_DENIAL([clause, clause]).length === 0,
++  'conditional franchise acknowledgements and confidentiality clauses do not manufacture factive denials');
++t.ok(D.D10B_DETECT_FACTIVE_COMMITMENT_DENIAL([
++  'The respondent confirms that it received the signed agreement and retained the original deposit.',
++  'The respondent denies that it received the signed agreement and retained the original deposit.',
++  'The respondent again denies that it received the signed agreement and retained the original deposit.'
++]).length === 1, 'a direct denial remains detectable and repeated copies collapse to one finding');
++
++// Annexure I and Annexure 1 are the same reference; substantive next-page form content resolves Annexure A.
++t.ok(D.D21_DETECT_MISSING_APPENDIX([
++  'The Advertising Fund Contribution is stipulated in Annexure I.',
++  'The Franchise Fee is stipulated in the Base Schedule, being Annexure 1 hereto.',
++  'BASE SCHEDULE. Applicable Advertising Fund Contribution Rates 0.5%.'
++]).length === 0, 'Base Schedule / Annexure 1 resolves a reference to Annexure I');
++t.ok(D.D21_DETECT_MISSING_APPENDIX([
++  'Number of initial directors of the company as listed in Annexure A: 3.',
++  'INITIAL DIRECTOR DETAILS. Full Name: Pat Ahmed; Full Name: Riaz Cachalia; Full Name: Mubeen Kolia.'
++]).length === 0, 'substantive initial-director content on the next page resolves Annexure A');
++t.ok(D.D21_DETECT_MISSING_APPENDIX([
++  'The signed valuation is incomplete; see Annexure Z for the executed copy.',
++  'This unrelated page contains ordinary correspondence and no annexure content.'
++]).length === 1, 'a genuinely unresolved annexure remains detectable');
++
++// A complaint and an institution's summary of it are not independent conduct evidence.
++t.ok(D.D41_DETECT_COERCIVE_CONDUCT([
++  'This complaint concerns fraud, perjury, coercion and the systematic deprivation of goodwill by the respondent.',
++  'Institutional summary: the complainant reports coercion and deprivation of goodwill by the respondent.'
++]).length === 0, 'naming coercion in a complaint or summary is not direct coercive conduct');
++t.ok(D.D41_DETECT_COERCIVE_CONDUCT([
++  'Institutional summary: the complainant reports he was coerced into signing the agreement.'
++]).length === 0, 'an institutional summary repeating direct coercion wording is still not independent corroboration');
++t.ok(D.D41_DETECT_COERCIVE_CONDUCT(['This is my final offer: take it or leave it.']).length === 1,
++  'a direct ultimatum remains detectable');
++
++// Unreadable pages are examination limits, never forgery/perjury leads.
++const nearEmpty = D.D17_DETECT_FORMAT_ANOMALY(['x'.repeat(1200), '', '', '', 'y'.repeat(1200)]);
++t.ok(nearEmpty.length === 1 && nearEmpty[0].type === 'CT54' && nearEmpty[0].severity === 2,
++  'near-empty page runs print only as examination limits');
++const noLaw = R._statutesForFinding(nearEmpty[0], { home: 'ZA', foreign: [], isCrossBorder: false });
++t.ok(Array.isArray(noLaw) && noLaw.length === 0, 'an unreadable-page limit carries no candidate criminal law');
++
++// OCR debris and implausible documentary years never enter a chronology.
++t.ok(E.voDateSortKey('2/2/1313') === null && E.voDateSortKey('25 October 2013') === 20131025,
++  'implausible documentary years are quarantined while a real historical date remains sortable');
++const timeline = E.voBuildTimeline([], [
++  'D 0 0 0 D 8 8 8 ¢ ¦ { } = corrupted OCR debris 2/2/1313',
++  'The company was incorporated on 25 October 2013.'
++]);
++t.ok(timeline.events.length === 1 && timeline.events[0].page === 2 && !/1313/.test(JSON.stringify(timeline)),
++  'the chronology drops OCR garbage and the 1313 date but keeps the genuine 2013 event');
++
++t.done('scan11-findings-repair');
+diff --git a/tests/worker.test.mjs b/tests/worker.test.mjs
+index 7176f84..faa4c0d 100644
+--- a/tests/worker.test.mjs
++++ b/tests/worker.test.mjs
+@@ -673,8 +673,8 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
+   // timeouts: the fallback runs inside the client's wait, on a trimmed prompt
+   {
+     const src = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
+-    ok(/HUMAN_TIMEOUT_MS = (?:28000|28e3)/.test(src) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(src) && /HUMAN_EXTERNAL_TIMEOUT_MS = (?:45000|45e3)/.test(src),
+-      'primary 28 s + repair 18 s fits the 48 s endpoint budget under the client\'s 52 s; the external provider keeps 45 s');
++    ok(/HUMAN_TIMEOUT_MS = (?:28000|28e3)/.test(src) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(src) && /HUMAN_EXTERNAL_TIMEOUT_MS = (?:14000|14e3)/.test(src),
++      'one 14 s external slice plus deadline-bounded Workers AI calls fit the 48 s endpoint budget under the client\'s 52 s');
+     ok(/o\.fallbackTimeoutMs \|\| HUMAN_FALLBACK_TIMEOUT_MS/.test(src) && /o\.fallbackUser \|\| user/.test(src), 'the fallback call uses the short timeout and the trimmed prompt');
+     const seen = [];
+     const big = { ...gBase, excerpt: ('[Page 2] ' + 'x'.repeat(200) + '\n').repeat(120) };
+diff --git a/tests/wrangler-config.test.mjs b/tests/wrangler-config.test.mjs
+index 3b2b22f..135cbb6 100644
+--- a/tests/wrangler-config.test.mjs
++++ b/tests/wrangler-config.test.mjs
+@@ -72,6 +72,15 @@ ok(topVars && envVars, 'both vars sections exist');
+ for (const key of ['ENVIRONMENT', 'SERVICE_VERSION', 'HUMAN_REPORT_MODEL']) {
+   ok(kv(envVars, key) === kv(topVars, key), `${key} identical in both environments`);
+ }
++// PR #233 changed the code default to 70B because Scout lost every section at
++// the anchor/language gate, but these deployment overrides restored Scout.
++// Inherit the code default so configuration cannot reintroduce that failure.
++ok(kv(topVars, 'HUMAN_REPORT_MODEL') === null && kv(envVars, 'HUMAN_REPORT_MODEL') === null,
++  'neither deployment environment overrides the narrator model');
