@@ -15,20 +15,20 @@ index af04e8e..0122dca 100644
 --- a/tests/forensic-engine.test.js
 +++ b/tests/forensic-engine.test.js
 @@ -148,13 +148,13 @@ t.ok(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(
-  'D01 still fires when paid and not paid are in the same passage');
-
+   'D01 still fires when paid and not paid are in the same passage');
+ 
  // D17 must not flag normal page-length variation (title page vs dense page).
 -// Only a near-blank page among full ones is a real signal.
 +// A near-blank page is disclosed only as an examination-coverage limit (CT54).
  t.ok(DETECTORS.D17_DETECT_FORMAT_ANOMALY(
-  ['A sparse cover page with a title and a few lines of text.'.repeat(5), 'x'.repeat(2000), 'y'.repeat(1500), 'z'.repeat(2500)]).length === 0,
-  'D17 no false-positive on ordinary page-length variation');
+   ['A sparse cover page with a title and a few lines of text.'.repeat(5), 'x'.repeat(2000), 'y'.repeat(1500), 'z'.repeat(2500)]).length === 0,
+   'D17 no false-positive on ordinary page-length variation');
  t.ok(DETECTORS.D17_DETECT_FORMAT_ANOMALY(
 -  ['x'.repeat(2000), 'y'.repeat(1800), '', 'z'.repeat(2200)]).some(f => f.type === 'CT26'),
 -  'D17 flags a near-blank page among full ones');
 +  ['x'.repeat(2000), 'y'.repeat(1800), '', 'z'.repeat(2200)]).some(f => f.type === 'CT54'),
 +  'D17 discloses a near-blank page among full ones as an examination limit');
-
+ 
  // An itemised invoice is not a contradiction. D02 used to compare every amount
  // against every other, so ordinary line items produced a finding per pair --
 diff --git a/tests/franchise-lease.test.mjs b/tests/franchise-lease.test.mjs
@@ -37,8 +37,8 @@ index 3a152db..95bb653 100644
 +++ b/tests/franchise-lease.test.mjs
 @@ -75,33 +75,29 @@ ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
  ok(g[0] && /Page \d/.test(g[0].location) && g[0].location.indexOf('later submission') === -1,
-  'CT45 anchors to a real page (Page 1 vs Page 2), not a pseudo-location');
-
+   'CT45 anchors to a real page (Page 1 vs Page 2), not a pseudo-location');
+ 
 -// ===== The Des / Caltex clause-11 trap the engine was missing =====
 -// Clause 11.1.3 (franchisee "shall not be entitled to any compensation or
 -// repayment ... in respect of any structural additions, alterations or
@@ -51,8 +51,8 @@ index 3a152db..95bb653 100644
 +// concerns purchase of the property and products. Neither recognises goodwill,
 +// so together they are not a goodwill recognition/denial pair.
  const clause11 = [
-  'The FRANCHISEE acknowledges that it shall not be entitled to any compensation or repayment of any manner in respect of any structural additions, alterations or improvements to the Premises, whether necessary, luxurious or otherwise.',
-  'The FRANCHISOR shall be entitled to purchase the property itself at fair market value and the products at cost.',
+   'The FRANCHISEE acknowledges that it shall not be entitled to any compensation or repayment of any manner in respect of any structural additions, alterations or improvements to the Premises, whether necessary, luxurious or otherwise.',
+   'The FRANCHISOR shall be entitled to purchase the property itself at fair market value and the products at cost.',
  ];
  const c11 = DET.D39_DETECT_ASSET_VALUE_DENIAL(clause11);
 -ok(c11.some(x => x.type === 'CT45'), 'CT45 now catches the Caltex clause-11 trap (no compensation for improvements + franchisor buys the property at value)');
@@ -61,10 +61,10 @@ index 3a152db..95bb653 100644
 +ok(c11.length === 0, 'structural-improvement compensation plus a property purchase right is not a CT45 goodwill contradiction');
  // The franchisor-buys-at-value clause ALONE is not a contradiction — needs the paired denial.
  ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
-  'The FRANCHISOR shall be entitled to purchase the property itself at fair market value.'
+   'The FRANCHISOR shall be entitled to purchase the property itself at fair market value.'
  ]).length === 0,
-  'CT45 stays silent on a lone purchase-at-value clause (needs the paired no-compensation clause)');
-
+   'CT45 stays silent on a lone purchase-at-value clause (needs the paired no-compensation clause)');
+ 
 -// ===== Path C: goodwill extinguished yet priced (the Timol 261-vs-274 trap) =====
 -// Evidence-bundle-3 external review (22 Oct 2026): the Timol affidavit says
 -// goodwill "terminates and can never be argued to remain on the locality",
@@ -79,10 +79,10 @@ index 3a152db..95bb653 100644
 +// A genuine post-extinction/beyond-term pricing control lives in
 +// scan11-findings-repair.test.mjs.
  const timol = [
-  'Filler page one. '.repeat(40),
-  '261. The goodwill of the franchise terminates upon expiry of the agreement and can never be argued to remain on the locality, since it dies with the tenure itself.',
+   'Filler page one. '.repeat(40),
+   '261. The goodwill of the franchise terminates upon expiry of the agreement and can never be argued to remain on the locality, since it dies with the tenure itself.',
 @@ -109,10 +105,7 @@ const timol = [
-  '274. The applicant sought to sell the remaining six months of tenure of the franchise for the value of R16.5 million, failing which he would not recover his investment in the business.',
+   '274. The applicant sought to sell the remaining six months of tenure of the franchise for the value of R16.5 million, failing which he would not recover his investment in the business.',
  ];
  const pc = DET.D39_DETECT_ASSET_VALUE_DENIAL(timol);
 -ok(pc.some(x => x.type === 'CT45' && x.severity === 5),
@@ -92,14 +92,14 @@ index 3a152db..95bb653 100644
 +ok(pc.length === 0, 'CT45 Path C does not equate a remaining-term sale with goodwill surviving expiry');
  // An extinguish clause ALONE is a lawful no-goodwill clause, not a contradiction.
  ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
-  'The goodwill of the franchise terminates upon expiry of the agreement and can never be argued to remain on the locality.'
+   'The goodwill of the franchise terminates upon expiry of the agreement and can never be argued to remain on the locality.'
 diff --git a/tests/human-report.test.mjs b/tests/human-report.test.mjs
 index 25e71b9..02bfc45 100644
 --- a/tests/human-report.test.mjs
 +++ b/tests/human-report.test.mjs
 @@ -130,8 +130,59 @@ ok(/return sw\.length \? sw : null;/.test(html) && /return co\.length \? co : nu
-  ok(iLoop > 0 && iEnd > iLoop && /try \{ r = await callSection\(section, batch\); \}/.test(html.slice(iLoop, iEnd)),
-  'a failed critical-evidence batch never discards the batches already written');
+   ok(iLoop > 0 && iEnd > iLoop && /try \{ r = await callSection\(section, batch\); \}/.test(html.slice(iLoop, iEnd)),
+     'a failed critical-evidence batch never discards the batches already written');
  }
 -ok(/VO_HUMAN_CALL_TIMEOUT_MS = 52000/.test(html) && /HUMAN_TIMEOUT_MS = (?:28000|28e3)/.test(worker) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(worker),
 -  'primary + fallback model timeouts fit inside the client wait');
