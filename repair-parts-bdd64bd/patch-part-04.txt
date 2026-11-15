@@ -1,0 +1,114 @@
++      for (var i = 0; i < toks.length; i++) {
++        var tk = toks[i];
++        if (tk.length < 3) continue;
++        seq.push(tk);
++        if (STOP[tk]) continue;
++        if (!set[tk]) { set[tk] = 1; n++; }
++      }
++      // Vocabulary overlap ignores word order and therefore treats two unlike
++      // legal pages as near-duplicates. Require shared eight-word sequences as
++      // well. Standard numbered contract wording is a form, not two hands
++      // coordinating a letter, and is excluded even when the sequence matches.
++      var shingles = {};
++      for (var sh = 0; sh + 8 <= seq.length; sh++) shingles[seq.slice(sh, sh + 8).join(' ')] = 1;
++      var clauseMarks = T.match(/\b\d+(?:\.\d+)+\s+/g) || [];
++      var standardForm = clauseMarks.length >= 2 && /\b(?:shall|agreement|contract|franchisee|franchisor|lessor|lessee)\b/i.test(T);
+       var tailRaw = T.slice(-160);
+       if (T.length > 160) {
+         // The window cut can land mid-word; a leading fragment ("oller" from
+@@ -2358,7 +2382,7 @@ var DETECTORS = {
+       var tail = tailRaw.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/);
+       var tset = {};
+       for (var j = 0; j < tail.length; j++) { var u = tail[j]; if (u.length >= 3 && !STOP[u]) tset[u] = 1; }
+-      return { set: set, n: n, tail: tset };
++      return { set: set, n: n, tail: tset, shingles: shingles, shingleCount: Math.max(0, seq.length - 7), standardForm: standardForm };
+     }
+     var profs = [];
+     for (var b = 0; b < blocks.length; b++) {
+@@ -2376,6 +2400,12 @@ var DETECTORS = {
+         for (var t in small) if (Object.prototype.hasOwnProperty.call(small, t) && big[t]) inter++;
+         var jac = inter / (A.n + B.n - inter);
+         if (jac < 0.85) continue;
++        if (A.standardForm && B.standardForm) continue;
++        var shSmall = A.shingleCount <= B.shingleCount ? A.shingles : B.shingles;
++        var shBig = A.shingleCount <= B.shingleCount ? B.shingles : A.shingles;
++        var shInter = 0;
++        for (var shKey in shSmall) if (Object.prototype.hasOwnProperty.call(shSmall, shKey) && shBig[shKey]) shInter++;
++        if (!A.shingleCount || !B.shingleCount || shInter / Math.min(A.shingleCount, B.shingleCount) < 0.8) continue;
+         // The closing blocks must differ — same words, different hand.
+         // Identical duplicates (a page scanned twice) stay silent.
+         var diff = 0;
+@@ -2388,7 +2418,7 @@ var DETECTORS = {
+     pairs.sort(function(x, y) { return y.sim - x.sim; });
+     for (var k = 0; k < pairs.length && findings.length < 5; k++) {
+       findings.push({ type: 'CT55', severity: 3,
+-        evidence: 'Pages ' + pairs[k].a + ' and ' + pairs[k].b + ' are near-identical texts (' + pairs[k].sim + '% shared vocabulary) under different closing blocks. Form letters explain some overlap; near-total identity under two hands is the signature of coordinated drafting. This is an indicator for human review, not a determination of collusion.',
++        evidence: 'Pages ' + pairs[k].a + ' and ' + pairs[k].b + ' share near-identical substantive word sequences (' + pairs[k].sim + '% shared vocabulary) under different closing blocks. Standard-form contract wording is excluded. The similarity is an indicator for direct human comparison; it does not by itself establish coordinated drafting or collusion.',
+         location: 'Page ' + pairs[k].a + ' vs Page ' + pairs[k].b });
+     }
+     return findings;
+@@ -2525,6 +2555,12 @@ var DETECTORS = {
+         var sNoAsides = s.replace(/\([^()]*\)|\[[^\[\]]*\]/g, ' ');
+         NEG_G.lastIndex = 0;
+         if (!NEG_G.test(sNoAsides)) continue;
++        // A standard clause's incidental prohibition ("will not divulge",
++        // "not limited") is not a denial of another proposition. Require an
++        // express denial/repudiation or a direct finite-verb negation.
++        var expressDenial = /\b(?:deny|denies|denied|denial|disput\w+|retract\w+|repudiat\w+|withdraw(?:s|n|ing|al|als)?)\b/i.test(sNoAsides);
++        var directNegation = /\b(?:never|did\s+not|does\s+not|do\s+not|was\s+not|were\s+not|is\s+not|are\s+not)\b/i.test(sNoAsides);
++        if (!expressDenial && !directNegation) continue;
+         // A sentence carrying BOTH a standalone negator and a denial verb
+         // has ambiguous negation scope ("bear no merit ... nowhere does it
+         // dispute X's ownership" AFFIRMS ownership, b3/b4) — skip it rather
+@@ -2536,9 +2572,9 @@ var DETECTORS = {
+         for (var ci = 0; ci < commits.length; ci++) {
+           var c = commits[ci];
+           var ov = overlap(c.lm, dl);
+-          if (ov < 4 || ov < 0.6 * size(c.lm)) continue;
++          if (ov < 4 || ov < 0.75 * Math.min(size(c.lm), size(dl))) continue;
+           if (c.page === b2 + 1 && s.indexOf(c.prop.slice(0, 40)) !== -1) continue; // the commitment sentence itself
+-          var key = c.page + ':' + Object.keys(c.lm).sort().join(',').slice(0, 60) + ':' + (b2 + 1);
++          var key = Object.keys(c.lm).sort().join(',').slice(0, 160);
+           if (seen[key]) continue;
+           seen[key] = 1;
+           findings.push({ type: 'CT57', severity: 3,
+@@ -3980,10 +4016,9 @@ var DETECTORS = {
+     var findings = [];
+     // Generic page-length variance is NOT a forensic indicator -- title pages,
+     // dense pages and sparse pages are all normal, and flagging every one of
+-    // them produced a "red cross on every page" report. The only version of
+-    // this with real signal is a NEAR-BLANK page sitting among full ones, which
+-    // can mark an inserted or removed page. Only that is flagged, at low
+-    // severity.
++    // them produced a "red cross on every page" report. A near-empty page is an
++    // examination-coverage limit only: the original image must be read before
++    // anyone can say why it is empty. It is never insertion/removal evidence.
+     // Content mass, not raw length: seal-footer layers on a re-sealed scan
+     // otherwise make an image-only page look like a text page (see voContentMass).
+     // A page the engine itself set aside (a prior Verum Omnis report, the
+@@ -4007,25 +4042,24 @@ var DETECTORS = {
+         for (var i = 0; i < lens.length; i++) {
+           if (lens[i] < VO_NEAR_EMPTY_CHARS && lens[i] < avg * 0.1) blanks.push(pageOf[i]);
+         }
+-        // A RUN of near-empty pages (or many of them) is the signature of an
+-        // image-only / scanned section that OCR could not read — NOT surgical
+-        // insertion. Flagging each as "possibly inserted/removed" produced false
+-        // positives on exactly those pages. Collapse that case to one honest,
+-        // low-severity note. Only a SINGLE near-empty page sitting between two
+-        // full pages keeps the "possible inserted/removed" reading.
++        // A RUN of near-empty pages (or many of them) commonly marks an
++        // image-only / scanned section that OCR could not read. Collapse that
++        // case to one honest, low-severity examination limit. An isolated blank
++        // is treated the same way: page layout alone cannot establish insertion,
++        // removal, alteration or an offence.
+         var consecutive = blanks.length > 1 && blanks.every(function (p, k) { return k === 0 || p === blanks[k-1] + 1; });
+         if (blanks.length > 3 || consecutive) {
+           var span = (blanks[0]+1) + (blanks.length > 1 ? '-' + (blanks[blanks.length-1]+1) : '');
+-          findings.push({ type: 'CT26', severity: 1,
+-            evidence: blanks.length + ' near-empty pages (' + span + ') among pages averaging ' + Math.round(avg) + ' chars — pages with no machine-readable text: image-only pages OCR did not capture, or intentional dividers. Establish which from the original; re-scan with OCR enabled to read them',
++          findings.push({ type: 'CT54', severity: 2,
++            evidence: blanks.length + ' near-empty pages (' + span + ') among pages averaging ' + Math.round(avg) + ' chars — pages with no machine-readable text: image-only pages OCR did not capture, or intentional dividers. This is an examination-coverage limit, not evidence of insertion, removal, alteration or any offence. Establish which from the original; re-scan with OCR enabled to read them',
+             location: 'Pages ' + span });
+         } else {
+           for (var b = 0; b < blanks.length; b++) {
+             var pi = blanks[b];
