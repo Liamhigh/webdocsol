@@ -233,11 +233,12 @@ var LEGAL_SUBJECT_OF = {
   CT01: 'CONTRADICTION', CT02: 'CONTRADICTION', CT03: 'CONTRADICTION', CT04: 'CONTRADICTION', CT05: 'CONTRADICTION', CT06: 'CONTRADICTION', CT07: 'CONTRADICTION', CT08: 'CONTRADICTION', CT43: 'CONTRADICTION',
   CT23: 'TAMPERING', CT24: 'TAMPERING', CT25: 'TAMPERING', CT26: 'TAMPERING', CT27: 'TAMPERING', CT28: 'TAMPERING', CT29: 'TAMPERING', CT30: 'TAMPERING', CT41: 'TAMPERING', CT42: 'TAMPERING',
   CT31: 'PROCEDURAL', CT32: 'PROCEDURAL', CT33: 'PROCEDURAL', CT34: 'PROCEDURAL', CT35: 'PROCEDURAL',
+  CT54: 'EXTRACTION',
   CT36: 'LOCATION', CT37: 'LOCATION', CT38: 'LOCATION',
   CT39: 'WITNESS', CT40: 'WITNESS',
   CT46: 'MISREP'
 };
-var LEGAL_SUBJECT_ORDER = ['CONTRADICTION', 'FINANCIAL', 'MISREP', 'TAMPERING', 'WITNESS', 'PROCEDURAL', 'LOCATION'];
+var LEGAL_SUBJECT_ORDER = ['CONTRADICTION', 'FINANCIAL', 'MISREP', 'TAMPERING', 'WITNESS', 'PROCEDURAL', 'LOCATION', 'EXTRACTION'];
 var LEGAL_SUBJECT_LABEL = {
   CONTRADICTION: 'Contradictory Statements & Figures',
   FINANCIAL: 'Financial Irregularities',
@@ -246,7 +247,8 @@ var LEGAL_SUBJECT_LABEL = {
   WITNESS: 'Evidence Handling & Witnesses',
   PROCEDURAL: 'Procedural & Legal-Reference Gaps',
   LOCATION: 'Location & Contact Conflicts',
-  CONTRACT: 'Contract, Lease & Franchise'
+  CONTRACT: 'Contract, Lease & Franchise',
+  EXTRACTION: 'Examination Coverage & Extraction Limits'
 };
 var LEGAL_SUBJECT_KEYPOINTS = {
   CONTRACT: 'A clause is invoked on a precondition the record shows never occurred, or an asset is recognised in one place and denied in another - the pattern of a lease, franchise or goodwill dispute.',
@@ -256,7 +258,8 @@ var LEGAL_SUBJECT_KEYPOINTS = {
   TAMPERING: 'The file\'s structure (signatures, versions, layout, timestamps) shows irregularities consistent with alteration of an original.',
   WITNESS: 'Witness statements conflict or the chain of custody shows a gap - directly relevant to the weight evidence can carry.',
   PROCEDURAL: 'Referenced annexures, sources, precedents or required procedures do not resolve when checked.',
-  LOCATION: 'Addresses or contact details conflict, or place a party where they could not consistently be.'
+  LOCATION: 'Addresses or contact details conflict, or place a party where they could not consistently be.',
+  EXTRACTION: 'Pages could not be read or extracted completely; these are limits of the examination, not defects or offences found in the record.'
 };
 
 // The template's five "Dishonesty Detection" red-flag lenses. Each CT maps to
@@ -341,6 +344,7 @@ var STATUTES = {
     ZA: ['Evidentiary - corroborate against independent records (no specific statute asserted)'],
     AE: ['Evidentiary - corroborate against independent records (no specific statute asserted)']
   },
+  EXTRACTION: { ZA: [], AE: [] },
   CONTRACT: {
     // The Rental Housing Act governs residential tenancies and a petrol-station
     // lease is not one; a "pattern of racketeering" is a serial-pattern

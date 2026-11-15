@@ -108,9 +108,10 @@ binding = "AI"
 [vars]
 ENVIRONMENT = "production"
 SERVICE_VERSION = "1.7.2-20261011-page-verified-contradictions"
-# Court-ready narrative (human report) model — keyless Workers AI. Optional external
-# OpenAI-compatible provider via secrets (never here): LLM_API_BASE, LLM_API_KEY, LLM_MODEL.
-HUMAN_REPORT_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
+# Court-ready narrative (human report) uses the gate-compliant 70B default in
+# worker/verum-rules.js. Do not override it with Scout here: Scout failed the
+# anchor/language gates. Optional external OpenAI-compatible provider via secrets
+# (never here): LLM_API_BASE, LLM_API_KEY, LLM_MODEL.
 # The trainer run (auto-curation of signed rule packages from anonymous
 # signals; worker/verum-rules.js runAutoCuration). "off" disables it; the
 # schedule is [triggers] below. Needs RULE_PRIVATE_KEY on the Worker.
@@ -166,7 +167,7 @@ binding = "AI"
 [env.production.vars]
 ENVIRONMENT = "production"
 SERVICE_VERSION = "1.7.2-20261011-page-verified-contradictions"
-HUMAN_REPORT_MODEL = "@cf/meta/llama-4-scout-17b-16e-instruct"
+# HUMAN_REPORT_MODEL deliberately inherits the gate-compliant worker default.
 AUTO_CURATE = "on"
 
 [env.production.observability]

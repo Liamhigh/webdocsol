@@ -130,8 +130,59 @@ ok(/return sw\.length \? sw : null;/.test(html) && /return co\.length \? co : nu
   ok(iLoop > 0 && iEnd > iLoop && /try \{ r = await callSection\(section, batch\); \}/.test(html.slice(iLoop, iEnd)),
     'a failed critical-evidence batch never discards the batches already written');
 }
-ok(/VO_HUMAN_CALL_TIMEOUT_MS = 52000/.test(html) && /HUMAN_TIMEOUT_MS = (?:28000|28e3)/.test(worker) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(worker),
-  'primary + fallback model timeouts fit inside the client wait');
+ok(/VO_HUMAN_CALL_TIMEOUT_MS = 52000/.test(html) && /HUMAN_TIMEOUT_MS = (?:28000|28e3)/.test(worker) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(worker) && /HUMAN_EXTERNAL_TIMEOUT_MS = 14e3/.test(worker) && /const externalMs = boundedTimeout\(HUMAN_EXTERNAL_TIMEOUT_MS\)/.test(worker),
+  'every external call keeps a 14-second slice; primary and fallback timeouts fit the client wait');
+ok(/const deadlineAt = startedAt \+ HUMAN_ENDPOINT_BUDGET_MS/.test(worker) && /if \(fallbackMs < 8e3\) throw e/.test(worker),
+  'the endpoint passes one deadline through primary, fallback and repair');
+
+// ---- one external provider slice; no repair inside a dying time envelope ----
+{
+  const workerApp = (await import(path.join(__dirname, '..', 'worker', 'verum-rules.js'))).default;
+  const request = new Request('https://example.test/api/v1/ai/human-report', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      section: 'executive_summary', documentName: 'scan.pdf', pageCount: 2,
+      findings: [{ id: 'F1', type: 'CT02', name: 'Date inconsistency', severity: 4, page: 2, pages: [2], evidence: 'dated 3 March 2026', quote: 'dated 3 March 2026' }],
+      excerpt: '[Page 2] The agreement is dated 3 March 2026.'
+    })
+  });
+  const realNow = Date.now;
+  let calls = 0;
+  Date.now = () => 1000 + (calls ? 41001 : 0); // 6,999 ms remains: below the repair floor
+  try {
+    const env = { AI: { run: async () => {
+      calls++;
+      return { response: JSON.stringify({ text: 'This may be fraud [F1] (p. 2).' }) };
+    } } };
+    const response = await workerApp.fetch(request, env, {});
+    const body = await response.json();
+    ok(calls === 1 && body.generated === false && body.reason === 'gate_failed' && body.attempts === 1 && body.repair === 'repair_skipped_time_budget',
+      'no repair call is made when less than eight seconds remain');
+  } finally { Date.now = realNow; }
+}
+// A primary failure after the external slice must not launch a fallback that
+// the 52-second client abort will kill before its response can be read.
+{
+  const workerApp = (await import(path.join(__dirname, '..', 'worker', 'verum-rules.js'))).default;
+  const request = new Request('https://example.test/api/v1/ai/human-report', {
+    method: 'POST', headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({
+      section: 'executive_summary', pageCount: 2,
+      findings: [{ id: 'F1', type: 'CT02', name: 'Date inconsistency', severity: 4, page: 2, pages: [2], evidence: 'dated 3 March 2026', quote: 'dated 3 March 2026' }],
+      excerpt: '[Page 2] The agreement is dated 3 March 2026.'
+    })
+  });
+  const realNow = Date.now;
+  let calls = 0;
+  Date.now = () => 5000 + (calls ? 41001 : 0); // 6,999 ms remains for fallback
+  try {
+    const env = { AI: { run: async () => { calls++; throw new Error('primary unavailable'); } } };
+    const response = await workerApp.fetch(request, env, {});
+    const body = await response.json();
+    ok(calls === 1 && body.generated === false && body.reason === 'ai_unavailable',
+      'no fallback call starts with less than eight seconds left in the endpoint envelope');
+  } finally { Date.now = realNow; }
+}
 
 // ---- the render-time gate: headings are gated, dates are not hedges --------
 ok(/function voHeadingBanned\(s\) \{\s*return VO_BANNED_SENTENCE_RE\.test\(/.test(report) && /if \(voHeadingBanned\(trimmed\)\) \{ dropped\+\+; continue; \}/.test(report),

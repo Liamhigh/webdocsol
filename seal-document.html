@@ -958,11 +958,12 @@ var LEGAL_SUBJECT_OF = {
   CT01: 'CONTRADICTION', CT02: 'CONTRADICTION', CT03: 'CONTRADICTION', CT04: 'CONTRADICTION', CT05: 'CONTRADICTION', CT06: 'CONTRADICTION', CT07: 'CONTRADICTION', CT08: 'CONTRADICTION', CT43: 'CONTRADICTION',
   CT23: 'TAMPERING', CT24: 'TAMPERING', CT25: 'TAMPERING', CT26: 'TAMPERING', CT27: 'TAMPERING', CT28: 'TAMPERING', CT29: 'TAMPERING', CT30: 'TAMPERING', CT41: 'TAMPERING', CT42: 'TAMPERING',
   CT31: 'PROCEDURAL', CT32: 'PROCEDURAL', CT33: 'PROCEDURAL', CT34: 'PROCEDURAL', CT35: 'PROCEDURAL',
+  CT54: 'EXTRACTION',
   CT36: 'LOCATION', CT37: 'LOCATION', CT38: 'LOCATION',
   CT39: 'WITNESS', CT40: 'WITNESS',
   CT46: 'MISREP'
 };
-var LEGAL_SUBJECT_ORDER = ['CONTRADICTION', 'FINANCIAL', 'MISREP', 'TAMPERING', 'WITNESS', 'PROCEDURAL', 'LOCATION'];
+var LEGAL_SUBJECT_ORDER = ['CONTRADICTION', 'FINANCIAL', 'MISREP', 'TAMPERING', 'WITNESS', 'PROCEDURAL', 'LOCATION', 'EXTRACTION'];
 var LEGAL_SUBJECT_LABEL = {
   CONTRADICTION: 'Contradictory Statements & Figures',
   FINANCIAL: 'Financial Irregularities',
@@ -971,7 +972,8 @@ var LEGAL_SUBJECT_LABEL = {
   WITNESS: 'Evidence Handling & Witnesses',
   PROCEDURAL: 'Procedural & Legal-Reference Gaps',
   LOCATION: 'Location & Contact Conflicts',
-  CONTRACT: 'Contract, Lease & Franchise'
+  CONTRACT: 'Contract, Lease & Franchise',
+  EXTRACTION: 'Examination Coverage & Extraction Limits'
 };
 var LEGAL_SUBJECT_KEYPOINTS = {
   CONTRACT: 'A clause is invoked on a precondition the record shows never occurred, or an asset is recognised in one place and denied in another - the pattern of a lease, franchise or goodwill dispute.',
@@ -981,7 +983,8 @@ var LEGAL_SUBJECT_KEYPOINTS = {
   TAMPERING: 'The file\'s structure (signatures, versions, layout, timestamps) shows irregularities consistent with alteration of an original.',
   WITNESS: 'Witness statements conflict or the chain of custody shows a gap - directly relevant to the weight evidence can carry.',
   PROCEDURAL: 'Referenced annexures, sources, precedents or required procedures do not resolve when checked.',
-  LOCATION: 'Addresses or contact details conflict, or place a party where they could not consistently be.'
+  LOCATION: 'Addresses or contact details conflict, or place a party where they could not consistently be.',
+  EXTRACTION: 'Pages could not be read or extracted completely; these are limits of the examination, not defects or offences found in the record.'
 };
 
 // The template's five "Dishonesty Detection" red-flag lenses. Each CT maps to
@@ -1066,6 +1069,7 @@ var STATUTES = {
     ZA: ['Evidentiary - corroborate against independent records (no specific statute asserted)'],
     AE: ['Evidentiary - corroborate against independent records (no specific statute asserted)']
   },
+  EXTRACTION: { ZA: [], AE: [] },
   CONTRACT: {
     // The Rental Housing Act governs residential tenancies and a petrol-station
     // lease is not one; a "pattern of racketeering" is a serial-pattern
@@ -8398,7 +8402,7 @@ var DETECTORS = {
       // The year horizon applies to EVERY date reading, not only impossible
       // dates. "Application: E/2024/02/28/0001" is a reference number; its
       // 0001 tail must never establish a month/day/year convention.
-      if (year < 1200 || year > 2200) continue;
+      if (!voDocumentaryYearPlausible(year)) continue;
       // A date followed by a clock time in the company of a seal footer's
       // other words (hash, seal id, zone name, page marker) is the stamp. An
       // email header's or a till slip's own timestamp is the record's and
@@ -8416,7 +8420,7 @@ var DETECTORS = {
         // documentary horizon); an impossible day/month WITH a plausible year
         // (31/02/2021, 15.20.2025) keeps firing - that is the signature of a
         // fabricated or mistyped date, not of a part number.
-        if (year < 1200 || year > 2200) continue;
+        if (!voDocumentaryYearPlausible(year)) continue;
         var why = (a === 2 || b === 2) ? 'February cannot have that many days' : 'not a real calendar date';
         var impKey = dates[d].raw + '|' + why;
         if (!voImpByRaw[impKey]) { voImpByRaw[impKey] = { raw: dates[d].raw, why: why, pages: [] }; voImpRaw.push(impKey); }
@@ -8470,7 +8474,7 @@ var DETECTORS = {
       if (m[1]) { day = +m[1]; mon = MONTHS[m[2].slice(0, 3).toLowerCase()]; year = +m[3]; }
       else if (m[4]) { mon = MONTHS[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
       else { year = +m[7]; mon = +m[8]; day = +m[9]; }
-      if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
+      if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31 || !voDocumentaryYearPlausible(year)) return null;
       return { key: year * 10000 + mon * 100 + day, raw: m[0] };
     }
     var byDateLabel = {};
@@ -8567,12 +8571,21 @@ var DETECTORS = {
       if (m[1]) { day = +m[1]; mon = MONTHS2[m[2].slice(0, 3).toLowerCase()]; year = +m[3]; }
       else if (m[4]) { mon = MONTHS2[m[4].slice(0, 3).toLowerCase()]; day = +m[5]; year = +m[6]; }
       else { year = +m[7]; mon = +m[8]; day = +m[9]; }
-      if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31) return null;
+      if (!mon || mon < 1 || mon > 12 || day < 1 || day > 31 || !voDocumentaryYearPlausible(year)) return null;
       var stamp = Date.UTC(year, mon - 1, day), chk = new Date(stamp);
       if (chk.getUTCFullYear() !== year || chk.getUTCMonth() + 1 !== mon || chk.getUTCDate() !== day) return null;
       return { key: year * 10000 + mon * 100 + day, raw: m[0], day: day };
     }
     var STOP = { the: 1, and: 1, that: 1, this: 1, with: 1, from: 1, which: 1, have: 1, has: 1, had: 1, was: 1, were: 1, are: 1, not: 1, but: 1, for: 1, said: 1, been: 1, being: 1, into: 1, upon: 1, shall: 1, will: 1, would: 1, could: 1, should: 1, must: 1, any: 1, all: 1, its: 1, his: 1, her: 1, their: 1, there: 1, here: 1, then: 1, than: 1, thus: 1, also: 1, such: 1, same: 1, more: 1, most: 1, other: 1, between: 1, under: 1, over: 1, after: 1, before: 1, each: 1, both: 1, about: 1, above: 1, against: 1, within: 1, without: 1, through: 1, during: 1, these: 1, those: 1, them: 1, they: 1, what: 1, when: 1, where: 1, while: 1, whom: 1, whose: 1, case: 1, court: 1, page: 1, paragraph: 1, annexure: 1, supra: 1, infra: 1, honourable: 1, respectfully: 1, applicant: 1, respondent: 1, deponent: 1, affidavit: 1, matter: 1, terms: 1, regard: 1, refer: 1, referred: 1, refers: 1, contents: 1, record: 1, records: 1, document: 1, documents: 1, dated: 1, date: 1, does: 1, done: 1, made: 1, make: 1, take: 1, taken: 1, give: 1, given: 1, state: 1, states: 1, stated: 1 };
+    // Shared legal vocabulary does not make two matters one event. Within a
+    // stated document the pair may span the document; across unnumbered runs,
+    // use the same twenty-page locality guard as D03 rather than comparing an
+    // early agreement with a different case hundreds of pages later.
+    var d03bSegs = voDetectDocuments(blocks) || [];
+    var d03bKey = voDocKeyOf(d03bSegs, blocks.length);
+    var d03bSameDocument = function (pa, pb) {
+      return pa === pb || (d03bKey(pa) === d03bKey(pb) && (d03bKey(pa).charAt(0) === 'd' || Math.abs(pa - pb) <= 20));
+    };
     var sents = [];
     for (var b = 0; b < blocks.length; b++) {
       var raw = String(blocks[b] || '');
@@ -8637,6 +8650,7 @@ var DETECTORS = {
       for (var a = 0; a < group.length; a++) {
         for (var c = a + 1; c < group.length; c++) {
           var A = sents[group[a]], C = sents[group[c]];
+          if (!d03bSameDocument(A.page - 1, C.page - 1)) continue;
           var inter = 0;
           for (var tok in A.set) if (Object.prototype.hasOwnProperty.call(A.set, tok) && C.set[tok]) inter++;
           var union = A.n + C.n - inter;
@@ -8993,7 +9007,7 @@ var DETECTORS = {
   D06B_DETECT_OWNERSHIP_ATTRIBUTION_CONFLICT: function(textBlocks) {
     var findings = [];
     var blocks = textBlocks || [];
-    var STOPN = { name: 1, account: 1, email: 1, emails: 1, phone: 1, signature: 1, opinion: 1, understanding: 1, recollection: 1, statement: 1, affidavit: 1, client: 1, attorney: 1, attorneys: 1, lawyer: 1, wife: 1, girlfriend: 1, husband: 1, partner: 1, brother: 1, sister: 1, mother: 1, father: 1, son: 1, daughter: 1, friend: 1, colleague: 1, time: 1, life: 1, mind: 1, view: 1, position: 1, case: 1, matter: 1, side: 1, word: 1, words: 1, hands: 1, way: 1, part: 1, share: 1, shares: 1, exit: 1, salary: 1, drawing: 1, drawings: 1, dad: 1, attention: 1, knowledge: 1, behalf: 1, own: 1, response: 1, reply: 1, input: 1, request: 1, company: 1, business: 1, complaint: 1, contentions: 1, submissions: 1, papers: 1, pleadings: 1, version: 1, application: 1, opposition: 1, evidence: 1, defence: 1, defense: 1, argument: 1, story: 1,
+    var STOPN = { name: 1, account: 1, email: 1, emails: 1, phone: 1, signature: 1, opinion: 1, understanding: 1, recollection: 1, statement: 1, affidavit: 1, client: 1, attorney: 1, attorneys: 1, lawyer: 1, wife: 1, girlfriend: 1, husband: 1, partner: 1, brother: 1, sister: 1, mother: 1, father: 1, son: 1, daughter: 1, friend: 1, colleague: 1, time: 1, life: 1, mind: 1, view: 1, position: 1, case: 1, matter: 1, side: 1, word: 1, words: 1, hands: 1, way: 1, part: 1, share: 1, shares: 1, exit: 1, salary: 1, drawing: 1, drawings: 1, dad: 1, attention: 1, knowledge: 1, behalf: 1, own: 1, response: 1, reply: 1, input: 1, request: 1, company: 1, business: 1, complaint: 1, contentions: 1, submissions: 1, papers: 1, pleadings: 1, version: 1, application: 1, opposition: 1, evidence: 1, defence: 1, defense: 1, argument: 1, story: 1, authority: 1, capacity: 1, mandate: 1,
       // Court-process and document nouns can never be possessable ASSETS —
       // "my rescission" vs "the Constitutional Court rescission" is not two
       // owners of one asset (LPC complaint bundle, 31 Oct 2026 live run).
@@ -9351,8 +9365,22 @@ var DETECTORS = {
       // pp. 61/129: "stamps" vs "tamps" was one footer cut at two offsets).
       var T = stripEmailBoilerplate(voStripSealFurniture(String(W || '')));
       var toks = T.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/);
-      var set = {}, n = 0;
-      for (var i = 0; i < toks.length; i++) { var tk = toks[i]; if (tk.length < 3 || STOP[tk]) continue; if (!set[tk]) { set[tk] = 1; n++; } }
+      var set = {}, n = 0, seq = [];
+      for (var i = 0; i < toks.length; i++) {
+        var tk = toks[i];
+        if (tk.length < 3) continue;
+        seq.push(tk);
+        if (STOP[tk]) continue;
+        if (!set[tk]) { set[tk] = 1; n++; }
+      }
+      // Vocabulary overlap ignores word order and therefore treats two unlike
+      // legal pages as near-duplicates. Require shared eight-word sequences as
+      // well. Standard numbered contract wording is a form, not two hands
+      // coordinating a letter, and is excluded even when the sequence matches.
+      var shingles = {};
+      for (var sh = 0; sh + 8 <= seq.length; sh++) shingles[seq.slice(sh, sh + 8).join(' ')] = 1;
+      var clauseMarks = T.match(/\b\d+(?:\.\d+)+\s+/g) || [];
+      var standardForm = clauseMarks.length >= 2 && /\b(?:shall|agreement|contract|franchisee|franchisor|lessor|lessee)\b/i.test(T);
       var tailRaw = T.slice(-160);
       if (T.length > 160) {
         // The window cut can land mid-word; a leading fragment ("oller" from
@@ -9363,7 +9391,7 @@ var DETECTORS = {
       var tail = tailRaw.toLowerCase().replace(/[^a-z\s]/g, ' ').split(/\s+/);
       var tset = {};
       for (var j = 0; j < tail.length; j++) { var u = tail[j]; if (u.length >= 3 && !STOP[u]) tset[u] = 1; }
-      return { set: set, n: n, tail: tset };
+      return { set: set, n: n, tail: tset, shingles: shingles, shingleCount: Math.max(0, seq.length - 7), standardForm: standardForm };
     }
     var profs = [];
     for (var b = 0; b < blocks.length; b++) {
@@ -9381,6 +9409,12 @@ var DETECTORS = {
         for (var t in small) if (Object.prototype.hasOwnProperty.call(small, t) && big[t]) inter++;
         var jac = inter / (A.n + B.n - inter);
         if (jac < 0.85) continue;
+        if (A.standardForm && B.standardForm) continue;
+        var shSmall = A.shingleCount <= B.shingleCount ? A.shingles : B.shingles;
+        var shBig = A.shingleCount <= B.shingleCount ? B.shingles : A.shingles;
+        var shInter = 0;
+        for (var shKey in shSmall) if (Object.prototype.hasOwnProperty.call(shSmall, shKey) && shBig[shKey]) shInter++;
+        if (!A.shingleCount || !B.shingleCount || shInter / Math.min(A.shingleCount, B.shingleCount) < 0.8) continue;
         // The closing blocks must differ — same words, different hand.
         // Identical duplicates (a page scanned twice) stay silent.
         var diff = 0;
@@ -9393,7 +9427,7 @@ var DETECTORS = {
     pairs.sort(function(x, y) { return y.sim - x.sim; });
     for (var k = 0; k < pairs.length && findings.length < 5; k++) {
       findings.push({ type: 'CT55', severity: 3,
-        evidence: 'Pages ' + pairs[k].a + ' and ' + pairs[k].b + ' are near-identical texts (' + pairs[k].sim + '% shared vocabulary) under different closing blocks. Form letters explain some overlap; near-total identity under two hands is the signature of coordinated drafting. This is an indicator for human review, not a determination of collusion.',
+        evidence: 'Pages ' + pairs[k].a + ' and ' + pairs[k].b + ' share near-identical substantive word sequences (' + pairs[k].sim + '% shared vocabulary) under different closing blocks. Standard-form contract wording is excluded. The similarity is an indicator for direct human comparison; it does not by itself establish coordinated drafting or collusion.',
         location: 'Page ' + pairs[k].a + ' vs Page ' + pairs[k].b });
     }
     return findings;
@@ -9530,6 +9564,12 @@ var DETECTORS = {
         var sNoAsides = s.replace(/\([^()]*\)|\[[^\[\]]*\]/g, ' ');
         NEG_G.lastIndex = 0;
         if (!NEG_G.test(sNoAsides)) continue;
+        // A standard clause's incidental prohibition ("will not divulge",
+        // "not limited") is not a denial of another proposition. Require an
+        // express denial/repudiation or a direct finite-verb negation.
+        var expressDenial = /\b(?:deny|denies|denied|denial|disput\w+|retract\w+|repudiat\w+|withdraw(?:s|n|ing|al|als)?)\b/i.test(sNoAsides);
+        var directNegation = /\b(?:never|did\s+not|does\s+not|do\s+not|was\s+not|were\s+not|is\s+not|are\s+not)\b/i.test(sNoAsides);
+        if (!expressDenial && !directNegation) continue;
         // A sentence carrying BOTH a standalone negator and a denial verb
         // has ambiguous negation scope ("bear no merit ... nowhere does it
         // dispute X's ownership" AFFIRMS ownership, b3/b4) — skip it rather
@@ -9541,9 +9581,9 @@ var DETECTORS = {
         for (var ci = 0; ci < commits.length; ci++) {
           var c = commits[ci];
           var ov = overlap(c.lm, dl);
-          if (ov < 4 || ov < 0.6 * size(c.lm)) continue;
+          if (ov < 4 || ov < 0.75 * Math.min(size(c.lm), size(dl))) continue;
           if (c.page === b2 + 1 && s.indexOf(c.prop.slice(0, 40)) !== -1) continue; // the commitment sentence itself
-          var key = c.page + ':' + Object.keys(c.lm).sort().join(',').slice(0, 60) + ':' + (b2 + 1);
+          var key = Object.keys(c.lm).sort().join(',').slice(0, 160);
           if (seen[key]) continue;
           seen[key] = 1;
           findings.push({ type: 'CT57', severity: 3,
@@ -10985,10 +11025,9 @@ var DETECTORS = {
     var findings = [];
     // Generic page-length variance is NOT a forensic indicator -- title pages,
     // dense pages and sparse pages are all normal, and flagging every one of
-    // them produced a "red cross on every page" report. The only version of
-    // this with real signal is a NEAR-BLANK page sitting among full ones, which
-    // can mark an inserted or removed page. Only that is flagged, at low
-    // severity.
+    // them produced a "red cross on every page" report. A near-empty page is an
+    // examination-coverage limit only: the original image must be read before
+    // anyone can say why it is empty. It is never insertion/removal evidence.
     // Content mass, not raw length: seal-footer layers on a re-sealed scan
     // otherwise make an image-only page look like a text page (see voContentMass).
     // A page the engine itself set aside (a prior Verum Omnis report, the
@@ -11012,25 +11051,24 @@ var DETECTORS = {
         for (var i = 0; i < lens.length; i++) {
           if (lens[i] < VO_NEAR_EMPTY_CHARS && lens[i] < avg * 0.1) blanks.push(pageOf[i]);
         }
-        // A RUN of near-empty pages (or many of them) is the signature of an
-        // image-only / scanned section that OCR could not read — NOT surgical
-        // insertion. Flagging each as "possibly inserted/removed" produced false
-        // positives on exactly those pages. Collapse that case to one honest,
-        // low-severity note. Only a SINGLE near-empty page sitting between two
-        // full pages keeps the "possible inserted/removed" reading.
+        // A RUN of near-empty pages (or many of them) commonly marks an
+        // image-only / scanned section that OCR could not read. Collapse that
+        // case to one honest, low-severity examination limit. An isolated blank
+        // is treated the same way: page layout alone cannot establish insertion,
+        // removal, alteration or an offence.
         var consecutive = blanks.length > 1 && blanks.every(function (p, k) { return k === 0 || p === blanks[k-1] + 1; });
         if (blanks.length > 3 || consecutive) {
           var span = (blanks[0]+1) + (blanks.length > 1 ? '-' + (blanks[blanks.length-1]+1) : '');
-          findings.push({ type: 'CT26', severity: 1,
-            evidence: blanks.length + ' near-empty pages (' + span + ') among pages averaging ' + Math.round(avg) + ' chars — pages with no machine-readable text: image-only pages OCR did not capture, or intentional dividers. Establish which from the original; re-scan with OCR enabled to read them',
+          findings.push({ type: 'CT54', severity: 2,
+            evidence: blanks.length + ' near-empty pages (' + span + ') among pages averaging ' + Math.round(avg) + ' chars — pages with no machine-readable text: image-only pages OCR did not capture, or intentional dividers. This is an examination-coverage limit, not evidence of insertion, removal, alteration or any offence. Establish which from the original; re-scan with OCR enabled to read them',
             location: 'Pages ' + span });
         } else {
           for (var b = 0; b < blanks.length; b++) {
             var pi = blanks[b];
             var isolated = (pi > 0 && pi < lensAll.length - 1 && !setAside[pi-1] && !setAside[pi+1] && lensAll[pi-1] >= avg * 0.5 && lensAll[pi+1] >= avg * 0.5);
-            findings.push({ type: 'CT26', severity: 2,
+            findings.push({ type: 'CT54', severity: 2,
               evidence: 'Page ' + (pi+1) + ' is nearly empty (' + lensAll[pi] + ' chars) among pages averaging ' + Math.round(avg) +
-                (isolated ? ' — an isolated blank between two full pages. Whether a page was inserted or removed there is for the investigator to establish against the original' : ' — the page yielded almost no machine-readable text: either an image-only page OCR could not read, or a genuinely blank page. Establish which from the original'),
+                (isolated ? ' — an isolated blank between two full pages. This is an examination-coverage limit, not evidence of insertion or removal; read the original page image' : ' — the page yielded almost no machine-readable text: either an image-only page OCR could not read, or a genuinely blank page. This is an examination-coverage limit, not a defect found in the record. Establish which from the original'),
               location: 'Page ' + (pi+1) });
           }
         }
@@ -11146,7 +11184,22 @@ var DETECTORS = {
       var occurrences = (fullText.match(headingRe) || []).length;
       // >=2 occurrences means the label appears somewhere beyond the reference
       // itself (i.e. it resolves). Only 1 occurrence => referenced but absent.
-      if (occurrences < 2) {
+      var resolved = occurrences >= 2;
+      var refText = String(textBlocks[appendixRefs[j].page] || '');
+      // Roman I and Arabic 1 are the same schedule number. Where the contract
+      // expressly says "Base Schedule, being Annexure 1", substantive schedule
+      // content resolves Annexure I even when the schedule page has no heading.
+      if (!resolved && /^(?:annexures?|annex)\s+(?:i|1)$/.test(appendixRefs[j].ref) &&
+          /base\s+schedule\s*,?\s*being\s+annexure\s*1\b/i.test(fullText) &&
+          /applicable\s+advertising\s+fund\s+contribution\s+rates?|franchise\s+fees?|royalty\s+rates?/i.test(fullText)) resolved = true;
+      // CIPC incorporation forms put Annexure A's content on the following
+      // CoR 14.1A page without repeating the words "Annexure A". Resolve the
+      // reference only when both the reference and next page name that content.
+      if (!resolved && /^(?:annexures?|annex)\s+a$/.test(appendixRefs[j].ref) &&
+          /initial\s+directors?/i.test(refText) && appendixRefs[j].page + 1 < textBlocks.length &&
+          /initial\s+director\s+details/i.test(String(textBlocks[appendixRefs[j].page + 1] || '')) &&
+          /full\s+name/i.test(String(textBlocks[appendixRefs[j].page + 1] || ''))) resolved = true;
+      if (!resolved) {
         findings.push({ type: 'CT31', severity: 3,
           evidence: 'Referenced "' + appendixRefs[j].ref + '" not found in document',
           location: 'Page ' + (appendixRefs[j].page + 1) });
@@ -12098,15 +12151,9 @@ var DETECTORS = {
         evidence: 'A schedule states "Goodwill: N/A": "' + naDeny.quote + '" — while the agreement itself defines goodwill as an asset: "' + defRecog.quote + '". The definition and the N/A declaration cannot both hold. Its legal characterisation is for the court.',
         location: loc(defRecog, naDeny) });
     }
-    // Path B — the Caltex/AllFuels clause-11 trap: the franchisee gets NO
-    // compensation for its OWN improvements to the premises, while the
-    // franchisor is entitled to acquire the property itself at (fair market)
-    // value. Value denied to the party who built it, realised by the other —
-    // the same recognised-then-denied principle in one clause. Requires BOTH
-    // halves, so an ordinary no-compensation-for-improvements clause stays
-    // silent (that clause alone is not a contradiction).
-    var noComp = pageOf(/not\s+(?:be\s+)?entitled\s+to\s+(?:any\s+)?(?:compensation|repayment)[^.]{0,140}(?:structural|addition|alteration|improvement)/);
-    var acquires = pageOf(/entitled[^.]{0,60}(?:purchase|acquire|buy)[^.]{0,70}(?:property|premises|site)[^.]{0,70}(?:fair market value|market value|value)/);
+    // A no-compensation clause for structural improvements beside a right to
+    // buy the property at market value allocates contractual risk; it does not
+    // recognise and then deny the same asset. It is not a CT45 contradiction.
     // Both halves must belong to one agreement: one stated document, or —
     // where no boundaries can be read — one passage of the record (twenty
     // pages, as D38). A no-compensation clause on p. 246 and a purchase
@@ -12120,23 +12167,21 @@ var DETECTORS = {
       if (ka !== kc) return false;
       return ka.charAt(0) === 'd' || Math.abs(a.page - c.page) <= 20;
     };
-    if (noComp && acquires && d39OneAgreement(noComp, acquires)) {
-      findings.push({ type: 'CT45', severity: 5,
-        evidence: 'The franchisee is denied any compensation for its own improvements to the premises: "' + noComp.quote + '" — while the franchisor is entitled to acquire the property itself at value: "' + acquires.quote + '". Value denied to the party who built it, yet realised by the other. Its legal characterisation is for the court.',
-        location: loc(noComp, acquires) });
-    }
-    // Path C — extinguished yet priced. Evidence-bundle-3 (Timol, paras
-    // 261 vs 274): goodwill "terminates and can never be argued to remain on
-    // the locality" while the SAME affidavit treats the remaining tenure of
-    // that franchise as a saleable R16.5 million asset the purchaser "would
-    // not recover his investment" in — an asset that can never remain cannot
-    // carry a sale value. Both halves must sit in one stated document (the
-    // Path B guard), so two different parties' affidavits are not fused.
+    // Path C — goodwill priced after extinction or beyond the agreement term.
+    // A sale confined to the remaining term before expiry is compatible with
+    // goodwill ending at expiry (368-page scan review, 14 Nov 2026, paras 261
+    // vs 274), so it is expressly excluded. Both halves must sit in one stated
+    // document, so two different parties' affidavits are not fused.
     var extinct = pageOf(/goodwill[^.]{0,100}(terminates?|ceases?|extinguish(?:es|ed)?|dies\b)[^.]{0,80}(never|remain|survive|exist)|goodwill[^.]{0,100}can\s+never[^.]{0,60}(remain|survive|exist|argued)/);
-    var priced = pageOf(/(?:sell|sale of|sold)[^.]{0,100}(?:tenure|franchise|business)[^.]{0,90}R\s?[\d]|would not recover (?:his|the|their|its) investment/);
-    if (extinct && priced && d39OneAgreement(extinct, priced)) {
+    var priced = pageOf(/(?:sell|sale of|sold)[^.]{0,100}(?:tenure|franchise|business)[^.]{0,90}\br\s?\d|would not recover (?:his|the|their|its) investment/);
+    // A sale before expiry — including a sale of the remaining term — is
+    // compatible with goodwill ending at expiry. Require the pricing passage
+    // itself to place the sale after extinction or beyond the term.
+    var remainingTerm = pageOf(/(?:remaining|balance of the)\s+(?:six\s+months|\d+\s+(?:days?|months?|years?)|term|tenure)|six\s+months\s+remaining|months\s+remaining\s+in\s+the\s+(?:franchise\s+)?agreement/);
+    var postExtinction = pageOf(/(?:after|following|once)[^.]{0,80}(?:agreement|franchise|tenure|term)[^.]{0,40}(?:expir\w*|terminat\w*)|(?:sell|sale of|sold)[^.]{0,120}(?:expired|terminated)/);
+    if (extinct && priced && postExtinction && postExtinction.page === priced.page && !(remainingTerm && remainingTerm.page === priced.page) && d39OneAgreement(extinct, priced)) {
       findings.push({ type: 'CT45', severity: 5,
-        evidence: 'Goodwill is said to die with the agreement: "' + extinct.quote + '" — yet the same record prices the tenure of that franchise as a saleable asset: "' + priced.quote + '". An asset that can never remain cannot carry a sale value. Its legal characterisation is for the court.',
+        evidence: 'Goodwill is said to die with the agreement: "' + extinct.quote + '" — yet the same record prices that goodwill after extinction or beyond the remaining term: "' + priced.quote + '". Those propositions cannot both stand; a sale confined to the remaining term is not this finding. Its legal characterisation is for the court.',
         location: loc(extinct, priced) });
     }
     // Path D — defined as asset, barred absolutely. The master bundle holds
@@ -12334,6 +12379,16 @@ var DETECTORS = {
         // A quoted statutory prohibition records the law, not a party's conduct.
         if (VO_COERCE_STATUTORY_CITATION.test(sen) && VO_COERCE_STATUTORY_PROHIBITION.test(sen)) continue;
         if (VO_COERCE_BOILER.test(sen) || voBehaviouralSecondhand(sen)) continue;
+        // An institution's account OF a complaint is never independent
+        // corroboration, even when it repeats direct coercion wording. A direct
+        // statement in the underlying complaint remains available on its own page.
+        var institutionalSummary = /^(?:institutional\s+)?summary\s*:/i.test(sen) ||
+          /\b(?:complainant|complaint|referral)\b[^.]{0,100}\b(?:reports?|alleges?|describes?|summari[sz]es?)\b/i.test(sen);
+        if (institutionalSummary) continue;
+        // Naming "coercion" as a complaint's legal characterisation is not a
+        // passage of coercive conduct either.
+        var complaintFrame = /\b(?:complaint|matter|referral|summary|allegation|charge)\b[^.]{0,160}\b(?:concerns?|reports?|alleges?|describes?|coerc(?:ion|ive))\b/i.test(sen);
+        if (complaintFrame && /\bcoerc(?:ion|ive)\b/i.test(sen) && !/\b(?:coerced|pressur(?:ed|ised)|forced\s+(?:me|us|them)|under\s+duress)\b/i.test(sen)) continue;
         var hit = false;
         for (var ci = 0; ci < VO_COERCE_CUES.length; ci++) { if (VO_COERCE_CUES[ci].test(sen)) { hit = true; break; } }
         if (!hit) continue;
@@ -13472,18 +13527,20 @@ function voSecondaryWhere(secSegs) {
   }
   return parts.length ? ' (' + parts.join('; ') + ')' : '';
 }
-// A near-empty-page finding (CT26) every page of which has no text layer of
-// its own and was rendered for OCR is a reading limit, not a format anomaly:
-// it becomes an engine note naming the page (Combine 06 April 2026). A thin
-// page the OCR pass did not render keeps the D17 check.
+// A D17 near-empty-page finding every page of which has no text layer of its
+// own and was rendered for OCR is a reading limit, not a format anomaly: it
+// becomes an engine note naming the page (Combine 06 April 2026). D17 now emits
+// CT54; legacy CT26 input remains supported. D08A's separate unreadable-run CT54
+// stays a finding. A thin page the OCR pass did not render keeps the D17 check.
 function voImageOnlyCt26ToNotes(findings, imageOnlyPages) {
   var kept = [], notes = [];
   for (var i = 0; i < (findings || []).length; i++) {
     var f = findings[i];
-    if (!f || f.type !== 'CT26') { kept.push(f); continue; }
+    var d17NearEmpty = f && (f.type === 'CT26' || (f.type === 'CT54' && /near-empty|nearly empty/i.test(String(f.evidence || ''))));
+    if (!d17NearEmpty) { kept.push(f); continue; }
     var fp = voFindingPages(f);
     if (!fp.length || !fp.every(function (pg) { return (imageOnlyPages || []).indexOf(pg) !== -1; })) { kept.push(f); continue; }
-    notes.push({ type: 'CT26', location: f.location || '', text: (fp.length === 1 ? 'Page ' + fp[0] + ' has' : 'Pages ' + fp.join(', ') + ' have') + ' no text layer of its own and was rendered for OCR, which recovered little or no legible text (blank, photographic, or print too poor to read): a reading limit, not a finding. Read the page itself.' });
+    notes.push({ type: f.type, location: f.location || '', text: (fp.length === 1 ? 'Page ' + fp[0] + ' has' : 'Pages ' + fp.join(', ') + ' have') + ' no text layer of its own and was rendered for OCR, which recovered little or no legible text (blank, photographic, or print too poor to read): a reading limit, not a finding. Read the page itself.' });
   }
   return { kept: kept, notes: notes };
 }
@@ -14299,6 +14356,14 @@ function voDatedAfterReference(textBlocks, referenceTime, firstPages) {
   });
 }
 
+// Historical records are supported, but medieval/far-future years in OCR text
+// are debris, not chronology events. Fixed bounds keep repeat scans deterministic
+// while still admitting future expiry, hearing and commencement dates.
+function voDocumentaryYearPlausible(year) {
+  var y = Number(year);
+  return isFinite(y) && y >= 1900 && y <= 2200;
+}
+
 function voDateSortKey(str) {
   var s = String(str == null ? '' : str).toLowerCase().trim(), m;
   // No date is better than an impossible one. A dropped range dash turned
@@ -14306,7 +14371,7 @@ function voDateSortKey(str) {
   // dates previously bypassed even the day/month bounds applied to numeric dates.
   function validKey(y, mo, d) {
     y = +y; mo = +mo; d = +d;
-    if (y < 1000 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    if (!voDocumentaryYearPlausible(y) || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
     var chk = new Date(Date.UTC(y, mo - 1, d));
     if (chk.getUTCFullYear() !== y || chk.getUTCMonth() + 1 !== mo || chk.getUTCDate() !== d) return null;
     return y * 10000 + mo * 100 + d;
@@ -14846,12 +14911,15 @@ function voBuildTimeline(findings, textBlocks, secondaryPages) {
         if (dk === null) continue; // impossible / unparseable — not ordered, not guessed
         var sk = dk + '@' + (p + 1);
         if (seen[sk]) continue;    // a finding already carries this date on this page
-        seen[sk] = true;
         // Quote the line the date sits on, trimmed, so the event is anchored to
         // the record's own words — never a paraphrase or an inferred fact.
         var at = raw.indexOf(ds[k]);
         var snip = raw.slice(Math.max(0, at - 70), at + ds[k].length + 70).replace(/\s+/g, ' ').trim();
         if (snip.length > 160) snip = snip.slice(0, 157) + '…';
+        // OCR debris around a date is an extraction limit, not a historical
+        // event. Keep it out of the chronology until a person reads the image.
+        if (voLooksGarbled(snip)) continue;
+        seen[sk] = true;
         events.push({ key: dk, date: ds[k], type: 'DATE', source: 'document', page: p + 1, who: [], evidence: snip });
         added++;
       }

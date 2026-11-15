@@ -75,33 +75,29 @@ ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
 ok(g[0] && /Page \d/.test(g[0].location) && g[0].location.indexOf('later submission') === -1,
   'CT45 anchors to a real page (Page 1 vs Page 2), not a pseudo-location');
 
-// ===== The Des / Caltex clause-11 trap the engine was missing =====
-// Clause 11.1.3 (franchisee "shall not be entitled to any compensation or
-// repayment ... in respect of any structural additions, alterations or
-// improvements") sits with clause 11.2 (franchisor "entitled to purchase the
-// property itself at fair market value"). Value denied to the party who built
-// it, realised by the other — caught only when BOTH halves are present.
+// ===== Caltex clause 11 allocates structural-improvement risk =====
+// The 368-page scan review (14 Nov 2026) read the actual clauses: clause 11.1.3
+// concerns structural additions/alterations/improvements, while clause 11.2
+// concerns purchase of the property and products. Neither recognises goodwill,
+// so together they are not a goodwill recognition/denial pair.
 const clause11 = [
   'The FRANCHISEE acknowledges that it shall not be entitled to any compensation or repayment of any manner in respect of any structural additions, alterations or improvements to the Premises, whether necessary, luxurious or otherwise.',
   'The FRANCHISOR shall be entitled to purchase the property itself at fair market value and the products at cost.',
 ];
 const c11 = DET.D39_DETECT_ASSET_VALUE_DENIAL(clause11);
-ok(c11.some(x => x.type === 'CT45'), 'CT45 now catches the Caltex clause-11 trap (no compensation for improvements + franchisor buys the property at value)');
-ok(c11.some(x => x.type === 'CT45' && /Page 1 vs Page 2/.test(x.location)), 'the clause-11 CT45 anchors to the two clause pages');
-ok(c11.some(x => x.type === 'CT45' && /improvements/.test(x.evidence) && /fair market value/.test(x.evidence)), 'the clause-11 CT45 quotes both halves of the trap');
+ok(c11.length === 0, 'structural-improvement compensation plus a property purchase right is not a CT45 goodwill contradiction');
 // The franchisor-buys-at-value clause ALONE is not a contradiction — needs the paired denial.
 ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
   'The FRANCHISOR shall be entitled to purchase the property itself at fair market value.'
 ]).length === 0,
   'CT45 stays silent on a lone purchase-at-value clause (needs the paired no-compensation clause)');
 
-// ===== Path C: goodwill extinguished yet priced (the Timol 261-vs-274 trap) =====
-// Evidence-bundle-3 external review (22 Oct 2026): the Timol affidavit says
-// goodwill "terminates and can never be argued to remain on the locality",
-// then prices the remaining six months of that same tenure at R16.5 million.
-// An asset that can never remain cannot carry a sale value — this internal
-// contradiction was missed because the older paths needed a denial verb, not
-// extinguish language.
+// ===== Path C: a remaining-term sale is compatible with expiry =====
+// The 368-page scan review (14 Nov 2026) read paragraphs 261 and 274 together:
+// goodwill ends at expiry, while the proposed R16.5 million sale concerns the
+// six months still remaining before expiry. Those propositions can both hold.
+// A genuine post-extinction/beyond-term pricing control lives in
+// scan11-findings-repair.test.mjs.
 const timol = [
   'Filler page one. '.repeat(40),
   '261. The goodwill of the franchise terminates upon expiry of the agreement and can never be argued to remain on the locality, since it dies with the tenure itself.',
@@ -109,10 +105,7 @@ const timol = [
   '274. The applicant sought to sell the remaining six months of tenure of the franchise for the value of R16.5 million, failing which he would not recover his investment in the business.',
 ];
 const pc = DET.D39_DETECT_ASSET_VALUE_DENIAL(timol);
-ok(pc.some(x => x.type === 'CT45' && x.severity === 5),
-  'CT45 Path C catches goodwill extinguished-yet-priced (Timol 261 vs 274)');
-ok(pc.some(x => x.type === 'CT45' && /Page 2/.test(x.location) && /Page 4/.test(x.location)),
-  'the Path C CT45 anchors both pages (no anchor, no sentence)');
+ok(pc.length === 0, 'CT45 Path C does not equate a remaining-term sale with goodwill surviving expiry');
 // An extinguish clause ALONE is a lawful no-goodwill clause, not a contradiction.
 ok(DET.D39_DETECT_ASSET_VALUE_DENIAL([
   'The goodwill of the franchise terminates upon expiry of the agreement and can never be argued to remain on the locality.'

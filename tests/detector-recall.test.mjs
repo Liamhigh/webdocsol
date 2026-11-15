@@ -253,20 +253,20 @@ ok(SERIAL([
   ]).length > 0,
   'serial patterns still fire on distinctive multi-word phrases (advance-fee 419)');
 
-// CT26 (D17): a RUN of blank pages collapses to ONE image-only/OCR note
-// (the run produced 7 "possibly inserted/removed" findings on OCR-blank pages).
+// CT54 (D17): blank or unreadable pages are examination-coverage limits.
+// The 368-page scan review (14 Nov 2026) rejected automatic insertion/removal
+// or tampering inferences for both runs and isolated near-empty pages.
 {
   const pages = ['x'.repeat(1200), 'y'.repeat(1200), '', '', '', '', 'z'.repeat(1200)];
   const f = DET.D17_DETECT_FORMAT_ANOMALY(pages);
-  ok(f.length === 1 && /image-only|OCR/i.test(f[0].evidence),
-    'CT26 collapses a run of blank pages to one OCR-gap note (not N insertions)');
+  ok(f.length === 1 && f[0].type === 'CT54' && /image-only|OCR/i.test(f[0].evidence),
+    'CT54 collapses a run of blank pages to one examination-limit note');
 }
-// CT26: a single isolated blank between full pages keeps the insertion reading.
 {
   const pages = ['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)];
   const f = DET.D17_DETECT_FORMAT_ANOMALY(pages);
-  ok(f.length === 1 && /inserted or removed/.test(f[0].evidence),
-    'CT26 still flags a single isolated blank as possible insertion');
+  ok(f.length === 1 && f[0].type === 'CT54' && /examination-coverage limit/i.test(f[0].evidence) && !/possibly inserted|possible inserted|inserted or removed/.test(f[0].evidence),
+    'an isolated near-empty page is an examination limit, not insertion evidence');
 }
 
 // CT11 (D08): bounded match — a local "signed by X on behalf of" fires, but a

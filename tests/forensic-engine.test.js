@@ -148,13 +148,13 @@ t.ok(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(
   'D01 still fires when paid and not paid are in the same passage');
 
 // D17 must not flag normal page-length variation (title page vs dense page).
-// Only a near-blank page among full ones is a real signal.
+// A near-blank page is disclosed only as an examination-coverage limit (CT54).
 t.ok(DETECTORS.D17_DETECT_FORMAT_ANOMALY(
   ['A sparse cover page with a title and a few lines of text.'.repeat(5), 'x'.repeat(2000), 'y'.repeat(1500), 'z'.repeat(2500)]).length === 0,
   'D17 no false-positive on ordinary page-length variation');
 t.ok(DETECTORS.D17_DETECT_FORMAT_ANOMALY(
-  ['x'.repeat(2000), 'y'.repeat(1800), '', 'z'.repeat(2200)]).some(f => f.type === 'CT26'),
-  'D17 flags a near-blank page among full ones');
+  ['x'.repeat(2000), 'y'.repeat(1800), '', 'z'.repeat(2200)]).some(f => f.type === 'CT54'),
+  'D17 discloses a near-blank page among full ones as an examination limit');
 
 // An itemised invoice is not a contradiction. D02 used to compare every amount
 // against every other, so ordinary line items produced a finding per pair --
