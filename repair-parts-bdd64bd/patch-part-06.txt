@@ -1,0 +1,120 @@
+     // Path D — defined as asset, barred absolutely. The master bundle holds
+@@ -5329,6 +5370,16 @@ var DETECTORS = {
+         // A quoted statutory prohibition records the law, not a party's conduct.
+         if (VO_COERCE_STATUTORY_CITATION.test(sen) && VO_COERCE_STATUTORY_PROHIBITION.test(sen)) continue;
+         if (VO_COERCE_BOILER.test(sen) || voBehaviouralSecondhand(sen)) continue;
++        // An institution's account OF a complaint is never independent
++        // corroboration, even when it repeats direct coercion wording. A direct
++        // statement in the underlying complaint remains available on its own page.
++        var institutionalSummary = /^(?:institutional\s+)?summary\s*:/i.test(sen) ||
++          /\b(?:complainant|complaint|referral)\b[^.]{0,100}\b(?:reports?|alleges?|describes?|summari[sz]es?)\b/i.test(sen);
++        if (institutionalSummary) continue;
++        // Naming "coercion" as a complaint's legal characterisation is not a
++        // passage of coercive conduct either.
++        var complaintFrame = /\b(?:complaint|matter|referral|summary|allegation|charge)\b[^.]{0,160}\b(?:concerns?|reports?|alleges?|describes?|coerc(?:ion|ive))\b/i.test(sen);
++        if (complaintFrame && /\bcoerc(?:ion|ive)\b/i.test(sen) && !/\b(?:coerced|pressur(?:ed|ised)|forced\s+(?:me|us|them)|under\s+duress)\b/i.test(sen)) continue;
+         var hit = false;
+         for (var ci = 0; ci < VO_COERCE_CUES.length; ci++) { if (VO_COERCE_CUES[ci].test(sen)) { hit = true; break; } }
+         if (!hit) continue;
+@@ -6467,18 +6518,20 @@ function voSecondaryWhere(secSegs) {
+   }
+   return parts.length ? ' (' + parts.join('; ') + ')' : '';
+ }
+-// A near-empty-page finding (CT26) every page of which has no text layer of
+-// its own and was rendered for OCR is a reading limit, not a format anomaly:
+-// it becomes an engine note naming the page (Combine 06 April 2026). A thin
+-// page the OCR pass did not render keeps the D17 check.
++// A D17 near-empty-page finding every page of which has no text layer of its
++// own and was rendered for OCR is a reading limit, not a format anomaly: it
++// becomes an engine note naming the page (Combine 06 April 2026). D17 now emits
++// CT54; legacy CT26 input remains supported. D08A's separate unreadable-run CT54
++// stays a finding. A thin page the OCR pass did not render keeps the D17 check.
+ function voImageOnlyCt26ToNotes(findings, imageOnlyPages) {
+   var kept = [], notes = [];
+   for (var i = 0; i < (findings || []).length; i++) {
+     var f = findings[i];
+-    if (!f || f.type !== 'CT26') { kept.push(f); continue; }
++    var d17NearEmpty = f && (f.type === 'CT26' || (f.type === 'CT54' && /near-empty|nearly empty/i.test(String(f.evidence || ''))));
++    if (!d17NearEmpty) { kept.push(f); continue; }
+     var fp = voFindingPages(f);
+     if (!fp.length || !fp.every(function (pg) { return (imageOnlyPages || []).indexOf(pg) !== -1; })) { kept.push(f); continue; }
+-    notes.push({ type: 'CT26', location: f.location || '', text: (fp.length === 1 ? 'Page ' + fp[0] + ' has' : 'Pages ' + fp.join(', ') + ' have') + ' no text layer of its own and was rendered for OCR, which recovered little or no legible text (blank, photographic, or print too poor to read): a reading limit, not a finding. Read the page itself.' });
++    notes.push({ type: f.type, location: f.location || '', text: (fp.length === 1 ? 'Page ' + fp[0] + ' has' : 'Pages ' + fp.join(', ') + ' have') + ' no text layer of its own and was rendered for OCR, which recovered little or no legible text (blank, photographic, or print too poor to read): a reading limit, not a finding. Read the page itself.' });
+   }
+   return { kept: kept, notes: notes };
+ }
+@@ -7294,6 +7347,14 @@ function voDatedAfterReference(textBlocks, referenceTime, firstPages) {
+   });
+}
+ 
++// Historical records are supported, but medieval/far-future years in OCR text
++// are debris, not chronology events. Fixed bounds keep repeat scans deterministic
++// while still admitting future expiry, hearing and commencement dates.
++function voDocumentaryYearPlausible(year) {
++  var y = Number(year);
++  return isFinite(y) && y >= 1900 && y <= 2200;
++}
++
+ function voDateSortKey(str) {
+   var s = String(str == null ? '' : str).toLowerCase().trim(), m;
+   // No date is better than an impossible one. A dropped range dash turned
+@@ -7301,7 +7362,7 @@ function voDateSortKey(str) {
+   // dates previously bypassed even the day/month bounds applied to numeric dates.
+   function validKey(y, mo, d) {
+     y = +y; mo = +mo; d = +d;
+-    if (y < 1000 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
++    if (!voDocumentaryYearPlausible(y) || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+     var chk = new Date(Date.UTC(y, mo - 1, d));
+     if (chk.getUTCFullYear() !== y || chk.getUTCMonth() + 1 !== mo || chk.getUTCDate() !== d) return null;
+     return y * 10000 + mo * 100 + d;
+@@ -7841,12 +7902,15 @@ function voBuildTimeline(findings, textBlocks, secondaryPages) {
+         if (dk === null) continue; // impossible / unparseable — not ordered, not guessed
+         var sk = dk + '@' + (p + 1);
+         if (seen[sk]) continue;    // a finding already carries this date on this page
+-        seen[sk] = true;
+         // Quote the line the date sits on, trimmed, so the event is anchored to
+         // the record's own words — never a paraphrase or an inferred fact.
+         var at = raw.indexOf(ds[k]);
+         var snip = raw.slice(Math.max(0, at - 70), at + ds[k].length + 70).replace(/\s+/g, ' ').trim();
+         if (snip.length > 160) snip = snip.slice(0, 157) + '…';
++        // OCR debris around a date is an extraction limit, not a historical
++        // event. Keep it out of the chronology until a person reads the image.
++        if (voLooksGarbled(snip)) continue;
++        seen[sk] = true;
+         events.push({ key: dk, date: ds[k], type: 'DATE', source: 'document', page: p + 1, who: [], evidence: snip });
+         added++;
+       }
+diff --git a/forensic-report.js b/forensic-report.js
+index c685157..783c411 100644
+--- a/forensic-report.js
++++ b/forensic-report.js
+@@ -233,11 +233,12 @@ var LEGAL_SUBJECT_OF = {
+   CT01: 'CONTRADICTION', CT02: 'CONTRADICTION', CT03: 'CONTRADICTION', CT04: 'CONTRADICTION', CT05: 'CONTRADICTION', CT06: 'CONTRADICTION', CT07: 'CONTRADICTION', CT08: 'CONTRADICTION', CT43: 'CONTRADICTION',
+   CT23: 'TAMPERING', CT24: 'TAMPERING', CT25: 'TAMPERING', CT26: 'TAMPERING', CT27: 'TAMPERING', CT28: 'TAMPERING', CT29: 'TAMPERING', CT30: 'TAMPERING', CT41: 'TAMPERING', CT42: 'TAMPERING',
+   CT31: 'PROCEDURAL', CT32: 'PROCEDURAL', CT33: 'PROCEDURAL', CT34: 'PROCEDURAL', CT35: 'PROCEDURAL',
++  CT54: 'EXTRACTION',
+   CT36: 'LOCATION', CT37: 'LOCATION', CT38: 'LOCATION',
+   CT39: 'WITNESS', CT40: 'WITNESS',
+   CT46: 'MISREP'
+ };
+-var LEGAL_SUBJECT_ORDER = ['CONTRADICTION', 'FINANCIAL', 'MISREP', 'TAMPERING', 'WITNESS', 'PROCEDURAL', 'LOCATION'];
++var LEGAL_SUBJECT_ORDER = ['CONTRADICTION', 'FINANCIAL', 'MISREP', 'TAMPERING', 'WITNESS', 'PROCEDURAL', 'LOCATION', 'EXTRACTION'];
+ var LEGAL_SUBJECT_LABEL = {
+   CONTRADICTION: 'Contradictory Statements & Figures',
+   FINANCIAL: 'Financial Irregularities',
+@@ -246,7 +247,8 @@ var LEGAL_SUBJECT_LABEL = {
+   WITNESS: 'Evidence Handling & Witnesses',
+   PROCEDURAL: 'Procedural & Legal-Reference Gaps',
+   LOCATION: 'Location & Contact Conflicts',
+-  CONTRACT: 'Contract, Lease & Franchise'
++  CONTRACT: 'Contract, Lease & Franchise',
++  EXTRACTION: 'Examination Coverage & Extraction Limits'
+ };
+ var LEGAL_SUBJECT_KEYPOINTS = {
+   CONTRACT: 'A clause is invoked on a precondition the record shows never occurred, or an asset is recognised in one place and denied in another - the pattern of a lease, franchise or goodwill dispute.',
+@@ -256,7 +258,8 @@ var LEGAL_SUBJECT_KEYPOINTS = {
+   TAMPERING: 'The file\'s structure (signatures, versions, layout, timestamps) shows irregularities consistent with alteration of an original.',
+   WITNESS: 'Witness statements conflict or the chain of custody shows a gap - directly relevant to the weight evidence can carry.',
+   PROCEDURAL: 'Referenced annexures, sources, precedents or required procedures do not resolve when checked.',
+-  LOCATION: 'Addresses or contact details conflict, or place a party where they could not consistently be.'
++  LOCATION: 'Addresses or contact details conflict, or place a party where they could not consistently be.',
