@@ -101,3 +101,4 @@
          if (snip.length > 160) snip = snip.slice(0, 157) + '…';
 +        // OCR debris around a date is an extraction limit, not a historical
 +        // event. Keep it out of the chronology until a person reads the image.
+
