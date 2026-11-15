@@ -9,7 +9,7 @@ index c8b9874..dccc38e 100644
 +++ b/tests/batch5-detectors.test.mjs
 @@ -170,8 +170,8 @@ const outDup = D09A([letterA, 'Filler page of unrelated record text. '.repeat(30
  t.ok(outDup.length === 1 && outDup[0].type === 'CT55' && outDup[0].severity === 3,
-  'D09A fires once on near-identical texts under different closing blocks');
+   'D09A fires once on near-identical texts under different closing blocks');
  t.ok(/Page 1 vs Page 3/.test(outDup[0].location), 'D09A anchors both pages');
 -t.ok(/not a determination of collusion/i.test(outDup[0].evidence),
 -  'D09A is worded as an indicator, never a determination');
