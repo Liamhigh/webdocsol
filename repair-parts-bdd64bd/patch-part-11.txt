@@ -9,7 +9,7 @@ index c8b9874..dccc38e 100644
 +++ b/tests/batch5-detectors.test.mjs
 @@ -170,8 +170,8 @@ const outDup = D09A([letterA, 'Filler page of unrelated record text. '.repeat(30
  t.ok(outDup.length === 1 && outDup[0].type === 'CT55' && outDup[0].severity === 3,
-  'D09A fires once on near-identical texts under different closing blocks');
+   'D09A fires once on near-identical texts under different closing blocks');
  t.ok(/Page 1 vs Page 3/.test(outDup[0].location), 'D09A anchors both pages');
 -t.ok(/not a determination of collusion/i.test(outDup[0].evidence),
 -  'D09A is worded as an indicator, never a determination');
@@ -23,8 +23,8 @@ index c3657a4..c4960e6 100644
 --- a/tests/combine-06-april-regression.test.mjs
 +++ b/tests/combine-06-april-regression.test.mjs
 @@ -132,10 +132,18 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor
-  // D17 itself still measures the page (a native file keeps the check):
-  const blanks = DET.D17_DETECT_FORMAT_ANOMALY(['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)]);
+   // D17 itself still measures the page (a native file keeps the check):
+   const blanks = DET.D17_DETECT_FORMAT_ANOMALY(['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)]);
   ok(blanks.length === 1, 'positive control: D17 still measures an isolated near-empty page');
 -  // The engine hands a near-empty finding on scanned image pages to the notes.
 -  const io = E.voImageOnlyCt26ToNotes([{ type: 'CT26', severity: 2, location: 'Page 676', evidence: 'Page 676 is nearly empty (9 chars)' }, { type: 'CT26', severity: 2, location: 'Page 12', evidence: 'Page 12 is nearly empty' }, { type: 'CT01', severity: 4, location: 'Page 676', evidence: 'x' }], [664, 676]);
