@@ -1,0 +1,129 @@
++ok(/VO_HUMAN_CALL_TIMEOUT_MS = 52000/.test(html) && /HUMAN_TIMEOUT_MS = (?:28000|28e3)/.test(worker) && /HUMAN_FALLBACK_TIMEOUT_MS = (?:15000|15e3)/.test(worker) && /HUMAN_EXTERNAL_TIMEOUT_MS = 14e3/.test(worker) && /const externalMs = boundedTimeout\(HUMAN_EXTERNAL_TIMEOUT_MS\)/.test(worker),
++  'every external call keeps a 14-second slice; primary and fallback timeouts fit the client wait');
++ok(/const deadlineAt = startedAt \+ HUMAN_ENDPOINT_BUDGET_MS/.test(worker) && /if \(fallbackMs < 8e3\) throw e/.test(worker),
++  'the endpoint passes one deadline through primary, fallback and repair');
++
++// ---- one external provider slice; no repair inside a dying time envelope ----
++{
++  const workerApp = (await import(path.join(__dirname, '..', 'worker', 'verum-rules.js'))).default;
++  const request = new Request('https://example.test/api/v1/ai/human-report', {
++    method: 'POST', headers: { 'content-type': 'application/json' },
++    body: JSON.stringify({
++      section: 'executive_summary', documentName: 'scan.pdf', pageCount: 2,
++      findings: [{ id: 'F1', type: 'CT02', name: 'Date inconsistency', severity: 4, page: 2, pages: [2], evidence: 'dated 3 March 2026', quote: 'dated 3 March 2026' }],
++      excerpt: '[Page 2] The agreement is dated 3 March 2026.'
++    })
++  });
++  const realNow = Date.now;
++  let calls = 0;
++  Date.now = () => 1000 + (calls ? 41001 : 0); // 6,999 ms remains: below the repair floor
++  try {
++    const env = { AI: { run: async () => {
++      calls++;
++      return { response: JSON.stringify({ text: 'This may be fraud [F1] (p. 2).' }) };
++    } } };
++    const response = await workerApp.fetch(request, env, {});
++    const body = await response.json();
++    ok(calls === 1 && body.generated === false && body.reason === 'gate_failed' && body.attempts === 1 && body.repair === 'repair_skipped_time_budget',
++      'no repair call is made when less than eight seconds remain');
++  } finally { Date.now = realNow; }
++}
++// A primary failure after the external slice must not launch a fallback that
++// the 52-second client abort will kill before its response can be read.
++{
++  const workerApp = (await import(path.join(__dirname, '..', 'worker', 'verum-rules.js'))).default;
++  const request = new Request('https://example.test/api/v1/ai/human-report', {
++    method: 'POST', headers: { 'content-type': 'application/json' },
++    body: JSON.stringify({
++      section: 'executive_summary', pageCount: 2,
++      findings: [{ id: 'F1', type: 'CT02', name: 'Date inconsistency', severity: 4, page: 2, pages: [2], evidence: 'dated 3 March 2026', quote: 'dated 3 March 2026' }],
++      excerpt: '[Page 2] The agreement is dated 3 March 2026.'
++    })
++  });
++  const realNow = Date.now;
++  let calls = 0;
++  Date.now = () => 5000 + (calls ? 41001 : 0); // 6,999 ms remains for fallback
++  try {
++    const env = { AI: { run: async () => { calls++; throw new Error('primary unavailable'); } } };
++    const response = await workerApp.fetch(request, env, {});
++    const body = await response.json();
++    ok(calls === 1 && body.generated === false && body.reason === 'ai_unavailable',
++      'no fallback call starts with less than eight seconds left in the endpoint envelope');
++  } finally { Date.now = realNow; }
++}
+ 
+ // ---- the render-time gate: headings are gated, dates are not hedges --------
+ ok(/function voHeadingBanned\(s\) \{\s*return VO_BANNED_SENTENCE_RE\.test\(/.test(report) && /if \(voHeadingBanned\(trimmed\)\) \{ dropped\+\+; continue; \}/.test(report),
+diff --git a/tests/run-all.js b/tests/run-all.js
+index fbd948a..e043772 100644
+--- a/tests/run-all.js
++++ b/tests/run-all.js
+@@ -61,6 +61,7 @@ const suites = [
+   'timeline-dates.test.mjs',
+   'doc-fact-index.test.mjs',
+   'cross-doc-conflicts.test.mjs',
++  'scan11-findings-repair.test.mjs',
+ ];
+ 
+ // A suite PASSES only if its own process exits 0. The runner prints its OWN
+diff --git a/tests/scan11-findings-repair.test.mjs b/tests/scan11-findings-repair.test.mjs
+new file mode 100644
+index 0000000..434e6d2
+--- /dev/null
++++ b/tests/scan11-findings-repair.test.mjs
+@@ -0,0 +1,126 @@
++// Regression controls for the 368-page scan reviewed on 14 November 2026.
++// Sealed artifacts remain immutable; these synthetic passages pin the engine repairs.
++import { createRequire } from 'node:module';
++import { fileURLToPath } from 'node:url';
++const require = createRequire(import.meta.url);
++const __dirname = fileURLToPath(new URL('.', import.meta.url));
++const path = require('node:path');
++const E = require(path.join(__dirname, '..', 'forensic-engine-page.js'));
++const R = require(path.join(__dirname, '..', 'forensic-report.js'));
++const t = require('./_assert');
++const D = E.DETECTORS;
++
++// One event in one matter; an unrelated agreement's expiry is not counter-evidence.
++const datePages = ['The franchise for the Alpha service station expires by the effluxion of time on 31 July 2016, as the covering letter records.'];
++for (let i = 0; i < 23; i++) datePages.push('Unrelated filler page ' + i + '.');
++datePages.push('It is common cause that the Beta franchise agreement terminated by the effluxion of time on 28 February 2018, as recorded in this affidavit.');
++datePages.push('Moreover, the Beta franchise agreement terminated by the effluxion of time on 28 February 2019, which is the other stated date.');
++const dates = D.D03B_DETECT_EVENT_DATE_CONFLICT(datePages);
++t.ok(dates.length === 1 && /Page 25/.test(dates[0].location) && /Page 26/.test(dates[0].location) && !/Page 1/.test(dates[0].location),
++  'cross-matter expiry dates stay apart while the genuine same-event 2018/2019 conflict remains');
++
++// Authority to litigate and capacity to depose are not ownable assets.
++t.ok(D.D06B_DETECT_OWNERSHIP_ATTRIBUTION_CONFLICT([
++  'The respondent disputes my authority to act on behalf of the applicant in this application.',
++  'I apply in my personal capacity and the authority of another deponent is disputed.'
++]).length === 0, 'authority and capacity disputes are not ownership contradictions');
++t.ok(D.D06B_DETECT_OWNERSHIP_ATTRIBUTION_CONFLICT([
++  'This is my camera, valued at R7,000.',
++  'The Greensky Ornamentals camera appears on the company invoice.'
++]).length === 1, 'genuine camera ownership remains detectable');
++
++// Compensation language for structural work is not recognition of goodwill.
++t.ok(D.D39_DETECT_ASSET_VALUE_DENIAL([
++  'The franchisee shall not be entitled to any compensation or repayment in respect of any structural additions, alterations or improvements to the premises. The franchisor shall be entitled to purchase the property itself at fair market value and the products at cost.'
++]).length === 0, 'structural-improvement compensation and a purchase right are not a goodwill contradiction');
++t.ok(D.D39_DETECT_ASSET_VALUE_DENIAL([
++  'The goodwill shall inure to the benefit of the franchisee as a quantifiable asset.',
++  'The respondent submitted that goodwill has no compensable value.'
++]).length === 1, 'express goodwill recognition followed by denial remains detectable');
++t.ok(D.D39_DETECT_ASSET_VALUE_DENIAL([
++  'On termination of the franchise agreement goodwill terminates and can never be argued to remain on the locality.',
++  'The operator sought to sell the remaining six months of tenure in the franchise agreement for R16.5 million.'
++]).length === 0, 'selling the remaining term before expiry is compatible with goodwill ending at expiry');
++t.ok(D.D39_DETECT_ASSET_VALUE_DENIAL([
++  'On termination of the franchise agreement goodwill terminates and can never be argued to remain on the locality.',
++  'Before the agreement expired, the operator sold the franchise business for R16.5 million.'
++]).length === 0, 'an ordinary pre-expiry business sale is compatible with goodwill ending at expiry');
++t.ok(D.D39_DETECT_ASSET_VALUE_DENIAL([
++  'On termination of the franchise agreement goodwill terminates and can never be argued to remain on the locality.',
++  'After the agreement expired, the operator sold the goodwill of the terminated franchise for over 2 million.'
++]).length === 0, 'the word over is not a Rand currency marker');
++t.ok(D.D39_DETECT_ASSET_VALUE_DENIAL([
++  'On termination of the franchise agreement goodwill terminates and can never be argued to remain on the locality.',
++  'After the agreement expired, the operator sold the goodwill of the terminated franchise for R16.5 million.'
++]).length === 1, 'pricing goodwill after its claimed extinction remains detectable');
