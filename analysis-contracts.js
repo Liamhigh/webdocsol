@@ -21,7 +21,23 @@
     'pdf_text', 'ocr', 'native_vision', 'native_mlkit', 'manual_transcription'
   ]);
   var SHA512_RE = /^[0-9a-f]{128}$/;
-  var ISO_INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+  var ISO_INSTANT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|([+-])(\d{2}):(\d{2}))$/;
+
+  function isValidIsoInstant(value) {
+    if (typeof value !== 'string') return false;
+    var match = ISO_INSTANT_RE.exec(value);
+    if (!match) return false;
+    var year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+    var hour = Number(match[4]), minute = Number(match[5]), second = Number(match[6]);
+    var days = [31, (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 29 : 28,
+      31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (month < 1 || month > 12 || day < 1 || day > days[month - 1] || hour > 23 || minute > 59 || second > 59) return false;
+    if (match[7] !== 'Z') {
+      var offsetHour = Number(match[9]), offsetMinute = Number(match[10]);
+      if (offsetHour > 14 || offsetMinute > 59 || (offsetHour === 14 && offsetMinute !== 0)) return false;
+    }
+    return Number.isFinite(Date.parse(value));
+  }
 
   function isRecord(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -84,14 +100,114 @@
     return JSON.parse(stableStringify(value));
   }
 
-  function deepFreeze(value) {
-    if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+  function deepFreeze(value, seen) {
+    if (!value || typeof value !== 'object') return value;
+    seen = seen || [];
+    if (seen.indexOf(value) !== -1) return value;
+    seen.push(value);
     var keys = Object.keys(value);
-    for (var i = 0; i < keys.length; i++) deepFreeze(value[keys[i]]);
+    for (var i = 0; i < keys.length; i++) deepFreeze(value[keys[i]], seen);
     return Object.freeze(value);
   }
 
-  /* Length-prefixed canonical concatenation avoids delimiter ambiguity. */
+  var SHA512_MASK = (1n << 64n) - 1n;
+  var SHA512_INITIAL = [
+    0x6a09e667f3bcc908n, 0xbb67ae8584caa73bn, 0x3c6ef372fe94f82bn, 0xa54ff53a5f1d36f1n,
+    0x510e527fade682d1n, 0x9b05688c2b3e6c1fn, 0x1f83d9abfb41bd6bn, 0x5be0cd19137e2179n
+  ];
+  var SHA512_K = [
+    0x428a2f98d728ae22n, 0x7137449123ef65cdn, 0xb5c0fbcfec4d3b2fn, 0xe9b5dba58189dbbcn,
+    0x3956c25bf348b538n, 0x59f111f1b605d019n, 0x923f82a4af194f9bn, 0xab1c5ed5da6d8118n,
+    0xd807aa98a3030242n, 0x12835b0145706fben, 0x243185be4ee4b28cn, 0x550c7dc3d5ffb4e2n,
+    0x72be5d74f27b896fn, 0x80deb1fe3b1696b1n, 0x9bdc06a725c71235n, 0xc19bf174cf692694n,
+    0xe49b69c19ef14ad2n, 0xefbe4786384f25e3n, 0x0fc19dc68b8cd5b5n, 0x240ca1cc77ac9c65n,
+    0x2de92c6f592b0275n, 0x4a7484aa6ea6e483n, 0x5cb0a9dcbd41fbd4n, 0x76f988da831153b5n,
+    0x983e5152ee66dfabn, 0xa831c66d2db43210n, 0xb00327c898fb213fn, 0xbf597fc7beef0ee4n,
+    0xc6e00bf33da88fc2n, 0xd5a79147930aa725n, 0x06ca6351e003826fn, 0x142929670a0e6e70n,
+    0x27b70a8546d22ffcn, 0x2e1b21385c26c926n, 0x4d2c6dfc5ac42aedn, 0x53380d139d95b3dfn,
+    0x650a73548baf63den, 0x766a0abb3c77b2a8n, 0x81c2c92e47edaee6n, 0x92722c851482353bn,
+    0xa2bfe8a14cf10364n, 0xa81a664bbc423001n, 0xc24b8b70d0f89791n, 0xc76c51a30654be30n,
+    0xd192e819d6ef5218n, 0xd69906245565a910n, 0xf40e35855771202an, 0x106aa07032bbd1b8n,
+    0x19a4c116b8d2d0c8n, 0x1e376c085141ab53n, 0x2748774cdf8eeb99n, 0x34b0bcb5e19b48a8n,
+    0x391c0cb3c5c95a63n, 0x4ed8aa4ae3418acbn, 0x5b9cca4f7763e373n, 0x682e6ff3d6b2b8a3n,
+    0x748f82ee5defb2fcn, 0x78a5636f43172f60n, 0x84c87814a1f0ab72n, 0x8cc702081a6439ecn,
+    0x90befffa23631e28n, 0xa4506cebde82bde9n, 0xbef9a3f7b2c67915n, 0xc67178f2e372532bn,
+    0xca273eceea26619cn, 0xd186b8c721c0c207n, 0xeada7dd6cde0eb1en, 0xf57d4f7fee6ed178n,
+    0x06f067aa72176fban, 0x0a637dc5a2c898a6n, 0x113f9804bef90daen, 0x1b710b35131c471bn,
+    0x28db77f523047d84n, 0x32caab7b40c72493n, 0x3c9ebe0a15c9bebcn, 0x431d67c49c100d4cn,
+    0x4cc5d4becb3e42b6n, 0x597f299cfc657e2an, 0x5fcb6fab3ad6faecn, 0x6c44198c4a475817n
+  ];
+
+  function utf8Bytes(value) {
+    var bytes = [];
+    for (var i = 0; i < value.length; i++) {
+      var code = value.charCodeAt(i);
+      if (code >= 0xd800 && code <= 0xdbff && i + 1 < value.length) {
+        var low = value.charCodeAt(i + 1);
+        if (low >= 0xdc00 && low <= 0xdfff) {
+          code = 0x10000 + ((code - 0xd800) << 10) + (low - 0xdc00);
+          i++;
+        }
+      }
+      if (code >= 0xd800 && code <= 0xdfff) code = 0xfffd;
+      if (code <= 0x7f) bytes.push(code);
+      else if (code <= 0x7ff) bytes.push(0xc0 | (code >> 6), 0x80 | (code & 63));
+      else if (code <= 0xffff) bytes.push(0xe0 | (code >> 12), 0x80 | ((code >> 6) & 63), 0x80 | (code & 63));
+      else bytes.push(0xf0 | (code >> 18), 0x80 | ((code >> 12) & 63), 0x80 | ((code >> 6) & 63), 0x80 | (code & 63));
+    }
+    return bytes;
+  }
+
+  function rotateRight64(value, bits) {
+    return ((value >> bits) | (value << (64n - bits))) & SHA512_MASK;
+  }
+
+  /* Synchronous, dependency-free SHA-512 keeps IDs opaque in Node and browsers. */
+  function sha512Hex(value) {
+    var bytes = utf8Bytes(value);
+    var paddedLength = Math.ceil((bytes.length + 17) / 128) * 128;
+    var padded = new Uint8Array(paddedLength);
+    padded.set(bytes);
+    padded[bytes.length] = 0x80;
+    var bitLength = BigInt(bytes.length) * 8n;
+    for (var n = 0; n < 8; n++) {
+      padded[paddedLength - 1 - n] = Number((bitLength >> BigInt(n * 8)) & 0xffn);
+    }
+    var hash = SHA512_INITIAL.slice();
+    var words = new Array(80);
+    for (var offset = 0; offset < paddedLength; offset += 128) {
+      for (var w = 0; w < 16; w++) {
+        var word = 0n;
+        for (var b = 0; b < 8; b++) word = (word << 8n) | BigInt(padded[offset + w * 8 + b]);
+        words[w] = word;
+      }
+      for (var t = 16; t < 80; t++) {
+        var x = words[t - 15], y = words[t - 2];
+        var s0 = rotateRight64(x, 1n) ^ rotateRight64(x, 8n) ^ (x >> 7n);
+        var s1 = rotateRight64(y, 19n) ^ rotateRight64(y, 61n) ^ (y >> 6n);
+        words[t] = (words[t - 16] + s0 + words[t - 7] + s1) & SHA512_MASK;
+      }
+      var a = hash[0], bb = hash[1], c = hash[2], d = hash[3];
+      var e = hash[4], f = hash[5], g = hash[6], h = hash[7];
+      for (var round = 0; round < 80; round++) {
+        var sum1 = rotateRight64(e, 14n) ^ rotateRight64(e, 18n) ^ rotateRight64(e, 41n);
+        var choose = (e & f) ^ (~e & g);
+        var temp1 = (h + sum1 + choose + SHA512_K[round] + words[round]) & SHA512_MASK;
+        var sum0 = rotateRight64(a, 28n) ^ rotateRight64(a, 34n) ^ rotateRight64(a, 39n);
+        var majority = (a & bb) ^ (a & c) ^ (bb & c);
+        var temp2 = (sum0 + majority) & SHA512_MASK;
+        h = g; g = f; f = e; e = (d + temp1) & SHA512_MASK;
+        d = c; c = bb; bb = a; a = (temp1 + temp2) & SHA512_MASK;
+      }
+      hash[0] = (hash[0] + a) & SHA512_MASK; hash[1] = (hash[1] + bb) & SHA512_MASK;
+      hash[2] = (hash[2] + c) & SHA512_MASK; hash[3] = (hash[3] + d) & SHA512_MASK;
+      hash[4] = (hash[4] + e) & SHA512_MASK; hash[5] = (hash[5] + f) & SHA512_MASK;
+      hash[6] = (hash[6] + g) & SHA512_MASK; hash[7] = (hash[7] + h) & SHA512_MASK;
+    }
+    return hash.map(function (word) { return word.toString(16).padStart(16, '0'); }).join('');
+  }
+
+  /* Hash length-prefixed canonical parts: unambiguous without exposing quotes. */
   function deterministicId(moduleId, inputSha512, ruleId, anchors) {
     var parts = [moduleId, inputSha512, ruleId, stableStringify(anchors || [])];
     for (var i = 0; i < parts.length; i++) {
@@ -99,7 +215,7 @@
     }
     var encoded = [];
     for (var p = 0; p < parts.length; p++) encoded.push(parts[p].length + ':' + parts[p]);
-    return 'vo1|' + encoded.join('|');
+    return 'vo1|' + sha512Hex(encoded.join('|'));
   }
 
   function firstAnchor(finding) {
@@ -108,10 +224,12 @@
   }
 
   function firstOffset(anchor) {
-    if (isNonNegativeInteger(anchor.char_start)) return anchor.char_start;
-    if (isNonNegativeInteger(anchor.byte_start)) return anchor.byte_start;
-    if (anchor.structure && isNonNegativeInteger(anchor.structure.byte_start)) return anchor.structure.byte_start;
-    return null;
+    if (isNonNegativeInteger(anchor.char_start)) return { system: 'utf16', value: anchor.char_start };
+    if (isNonNegativeInteger(anchor.byte_start)) return { system: 'bytes', value: anchor.byte_start };
+    if (anchor.structure && isNonNegativeInteger(anchor.structure.byte_start)) {
+      return { system: 'bytes', value: anchor.structure.byte_start };
+    }
+    return { system: 'none', value: null };
   }
 
   function compareNullableNumbers(a, b) {
@@ -131,11 +249,23 @@
       isNonNegativeInteger(bb.page) ? bb.page : null
     );
     if (order) return order;
-    order = compareNullableNumbers(firstOffset(aa), firstOffset(bb));
+    var aOffset = firstOffset(aa), bOffset = firstOffset(bb);
+    order = compareStrings(aOffset.system, bOffset.system);
+    if (order) return order;
+    order = compareNullableNumbers(aOffset.value, bOffset.value);
     if (order) return order;
     order = compareStrings(a && (a.rule_id || a.ruleId) || '', b && (b.rule_id || b.ruleId) || '');
     if (order) return order;
-    return compareStrings(a && (a.finding_id || a.id) || '', b && (b.finding_id || b.id) || '');
+    order = compareStrings(a && (a.finding_id || a.id) || '', b && (b.finding_id || b.id) || '');
+    if (order) return order;
+    order = compareStrings(stableStringify(aa), stableStringify(bb));
+    if (order) return order;
+    order = compareStrings(
+      stableStringify(a && Array.isArray(a.anchors) ? a.anchors.slice(1) : []),
+      stableStringify(b && Array.isArray(b.anchors) ? b.anchors.slice(1) : [])
+    );
+    if (order) return order;
+    return compareStrings(stableStringify(a), stableStringify(b));
   }
 
   function sortFindings(findings) {
@@ -208,8 +338,8 @@
       errors.push('input_sha512 must be 128 lowercase hexadecimal characters');
     }
     if (MODULE_STATUSES.indexOf(envelope.status) === -1) errors.push('status is not contracted');
-    if (envelope.reference_time !== null && (typeof envelope.reference_time !== 'string' || !ISO_INSTANT_RE.test(envelope.reference_time))) {
-      errors.push('reference_time must be null or an ISO instant with an offset');
+    if (envelope.reference_time !== null && !isValidIsoInstant(envelope.reference_time)) {
+      errors.push('reference_time must be null or a valid ISO instant with an offset');
     }
     if (!isRecord(envelope.configuration)) errors.push('configuration must be an object');
     if (!Array.isArray(envelope.dependencies)) errors.push('dependencies must be an array');
@@ -227,8 +357,17 @@
     if (envelope.status === 'completed_with_failures' && (!envelope.coverage || !Array.isArray(envelope.coverage.units_failed) || !envelope.coverage.units_failed.length)) {
       errors.push('completed_with_failures requires every failed unit to be enumerated');
     }
+    if (envelope.status === 'completed' && envelope.failure !== null) {
+      errors.push('completed cannot carry a failure object');
+    }
     if (envelope.status === 'completed' && envelope.coverage && Array.isArray(envelope.coverage.units_failed) && envelope.coverage.units_failed.length) {
       errors.push('completed cannot conceal failed units');
+    }
+    if (envelope.status === 'completed' && isRecord(envelope.coverage) &&
+      isNonNegativeInteger(envelope.coverage.units_total) && isNonNegativeInteger(envelope.coverage.units_processed) &&
+      Array.isArray(envelope.coverage.units_skipped) && Array.isArray(envelope.coverage.units_failed) &&
+      envelope.coverage.units_total !== envelope.coverage.units_processed + envelope.coverage.units_skipped.length + envelope.coverage.units_failed.length) {
+      errors.push('completed must account for every unit as processed, skipped or failed');
     }
     return { valid: errors.length === 0, errors: errors };
   }
@@ -237,8 +376,8 @@
     if (!isRecord(structure)) return false;
     var byteRange = isNonNegativeInteger(structure.byte_start) && isNonNegativeInteger(structure.byte_end) && structure.byte_end >= structure.byte_start;
     var objectId = typeof structure.object === 'string' && structure.object.length > 0 && isNonNegativeInteger(structure.generation);
-    var operator = isNonNegativeInteger(structure.revision_index) || isNonNegativeInteger(structure.operator_index);
-    return byteRange || objectId || operator;
+    /* An operator/revision index supplements a locatable range or PDF object. */
+    return byteRange || objectId;
   }
 
   function validateEvidenceAnchor(anchor) {
@@ -277,9 +416,14 @@
     if (!Array.isArray(finding.anchors) || finding.anchors.length !== 2) {
       errors.push('pair findings require exactly two anchors');
     } else {
+      var anchorsValid = true;
       for (var i = 0; i < finding.anchors.length; i++) {
         var result = validateEvidenceAnchor(finding.anchors[i]);
+        if (!result.valid) anchorsValid = false;
         for (var e = 0; e < result.errors.length; e++) errors.push('anchors[' + i + ']: ' + result.errors[e]);
+      }
+      if (anchorsValid && stableStringify(finding.anchors[0]) === stableStringify(finding.anchors[1])) {
+        errors.push('pair findings require two distinct evidence anchors');
       }
     }
     if (typeof finding.incompatibility_explanation !== 'string' || !finding.incompatibility_explanation.trim()) {
@@ -297,6 +441,7 @@
     stableStringify: stableStringify,
     canonicalClone: canonicalClone,
     deepFreeze: deepFreeze,
+    isValidIsoInstant: isValidIsoInstant,
     deterministicId: deterministicId,
     createFailure: createFailure,
     createModuleEnvelope: createModuleEnvelope,

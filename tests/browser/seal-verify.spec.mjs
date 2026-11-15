@@ -5,6 +5,20 @@ const SYNTHETIC_TEXT = 'Synthetic sealing record total R250.00 dated 2 January 2
 
 test('synthetic PDF seals with QR and manifest metadata, then verifies at root verify.html', async ({ page, browserName }) => {
   const external = await installOfflineGuard(page);
+  // Exercise one real, guarded digest submission. Stop calendar fallback and
+  // upgrade polling before they become additional browser requests; this test
+  // covers sealing/verification, not the remote timestamp calendar workflow.
+  await page.addInitScript(() => {
+    const nativeFetch = window.fetch.bind(window);
+    window.fetch = (input, init) => {
+      const url = typeof input === 'string' ? input : input.url;
+      if (/^https:\/\/[a-z]\.pool\.(?:opentimestamps\.org|eternitywall\.com)\//.test(url) &&
+          url !== 'https://a.pool.opentimestamps.org/digest') {
+        return Promise.reject(new TypeError('Offline test: timestamp fallback and polling disabled'));
+      }
+      return nativeFetch(input, init);
+    };
+  });
   const errors = [];
   page.on('pageerror', (error) => errors.push(error.stack || error.message));
   await page.goto('/seal-document.html');

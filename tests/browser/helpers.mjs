@@ -1,18 +1,49 @@
-export async function installOfflineGuard(page) {
+export async function installOfflineGuard(page, allowedOrigin = 'http://127.0.0.1:4173') {
   const external = [];
+  const expectedOrigin = new URL(allowedOrigin).origin;
   await page.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    if (url.hostname === '127.0.0.1' || url.hostname === 'localhost') return route.continue();
-    external.push({ method: request.method(), url: request.url(), body: request.postData() || '' });
+    if (url.origin === expectedOrigin) return route.continue();
+    const body = request.postData() || '';
+    const bodyBuffer = request.postDataBuffer();
+    const staticAsset = request.method() === 'GET' && !body && (
+      (url.protocol === 'https:' && url.hostname === 'fonts.googleapis.com' && /^\/css2?$/.test(url.pathname)) ||
+      (url.protocol === 'https:' && url.hostname === 'fonts.gstatic.com' && url.pathname.startsWith('/s/'))
+    );
+    const timestampDigest = request.method() === 'POST' && url.protocol === 'https:' &&
+      /^[a-z]\.pool\.opentimestamps\.org$/.test(url.hostname) && url.pathname === '/digest' &&
+      bodyBuffer !== null && bodyBuffer.length === 32;
+    external.push({
+      method: request.method(),
+      url: request.url(),
+      headers: await request.allHeaders(),
+      body,
+      bodyBase64: bodyBuffer ? bodyBuffer.toString('base64') : '',
+      staticAsset,
+      timestampDigest
+    });
     return route.abort('failed');
   });
   return external;
 }
 
 export function expectNoDocumentEgress(expect, external, syntheticText) {
-  expect(external.every((request) => !request.body.includes(syntheticText))).toBeTruthy();
-  expect(external.every((request) => !/\/api\/v1\/ai\/|\/api\/v1\/feedback\//.test(request.url))).toBeTruthy();
+  const fragments = [syntheticText, ...syntheticText.split(/\s+/).filter((word) => word.length >= 6)];
+  const variants = new Set();
+  for (const fragment of fragments) {
+    variants.add(fragment.toLowerCase());
+    variants.add(encodeURIComponent(fragment).toLowerCase());
+    variants.add(Buffer.from(fragment, 'utf8').toString('base64').toLowerCase());
+  }
+  for (const request of external) {
+    const allRequestData = JSON.stringify(request).toLowerCase();
+    for (const variant of variants) {
+      expect(allRequestData.includes(variant), `document fragment reached a blocked destination: ${variant}`).toBeFalsy();
+    }
+  }
+  const unexpected = external.filter((request) => !request.staticAsset && !request.timestampDigest);
+  expect(unexpected, `only the test origin, static fonts and exact 32-byte OTS digest submissions are permitted: ${JSON.stringify(unexpected)}`).toEqual([]);
 }
 
 export async function makeSyntheticPdf(page, text) {

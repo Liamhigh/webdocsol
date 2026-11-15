@@ -11,7 +11,23 @@
     'c2pa',
     'spatialOcr'
   ]);
-  var ISO_INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+  var ISO_INSTANT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|([+-])(\d{2}):(\d{2}))$/;
+
+  function isValidIsoInstant(value) {
+    if (typeof value !== 'string') return false;
+    var match = ISO_INSTANT_RE.exec(value);
+    if (!match) return false;
+    var year = Number(match[1]), month = Number(match[2]), day = Number(match[3]);
+    var hour = Number(match[4]), minute = Number(match[5]), second = Number(match[6]);
+    var days = [31, (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0 ? 29 : 28,
+      31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+    if (month < 1 || month > 12 || day < 1 || day > days[month - 1] || hour > 23 || minute > 59 || second > 59) return false;
+    if (match[7] !== 'Z') {
+      var offsetHour = Number(match[9]), offsetMinute = Number(match[10]);
+      if (offsetHour > 14 || offsetMinute > 59 || (offsetHour === 14 && offsetMinute !== 0)) return false;
+    }
+    return Number.isFinite(Date.parse(value));
+  }
 
   function isRecord(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
@@ -21,9 +37,12 @@
     return a < b ? -1 : (a > b ? 1 : 0);
   }
 
-  function deepFreeze(value) {
-    if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
-    Object.keys(value).forEach(function (key) { deepFreeze(value[key]); });
+  function deepFreeze(value, seen) {
+    if (!value || typeof value !== 'object') return value;
+    seen = seen || [];
+    if (seen.indexOf(value) !== -1) return value;
+    seen.push(value);
+    Object.keys(value).forEach(function (key) { deepFreeze(value[key], seen); });
     return Object.freeze(value);
   }
 
@@ -38,6 +57,7 @@
     Object.keys(input).forEach(function (name) {
       if (MODULE_NAMES.indexOf(name) === -1) throw new TypeError('Unknown analysis module flag: ' + name);
       if (typeof input[name] !== 'boolean') throw new TypeError('Analysis module flags must be boolean: ' + name);
+      if (input[name]) throw new Error('Analysis module is not implemented; keep its Phase 0 flag false: ' + name);
     });
     var normalized = {};
     MODULE_NAMES.forEach(function (name) { normalized[name] = input[name] === true; });
@@ -61,8 +81,8 @@
 
   function normalizeReferenceTime(input) {
     if (input === null || typeof input === 'undefined' || input === '') return null;
-    if (typeof input !== 'string' || !ISO_INSTANT_RE.test(input)) {
-      throw new TypeError('opts.referenceTime must be a caller-supplied ISO instant with an offset');
+    if (!isValidIsoInstant(input)) {
+      throw new TypeError('opts.referenceTime must be a valid caller-supplied ISO instant with an offset');
     }
     return input;
   }
@@ -93,6 +113,7 @@
     DEFAULT_MODULES: DEFAULT_MODULES,
     normalizeModules: normalizeModules,
     normalizeJurisdictionPacks: normalizeJurisdictionPacks,
+    isValidIsoInstant: isValidIsoInstant,
     selectedConfiguration: selectedConfiguration,
     withAnalysisDefaults: withAnalysisDefaults
   };

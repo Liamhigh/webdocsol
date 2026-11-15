@@ -1,6 +1,7 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import { spawnSync } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -40,6 +41,13 @@ ok(!C.validateEvidenceAnchor(badText).valid, 'offset/quote length mismatch is re
 const badStructural = C.canonicalClone(fixture('structural-anchor-v1.json').anchor);
 badStructural.structure = null;
 ok(!C.validateEvidenceAnchor(badStructural).valid, 'null quote without structural evidence is rejected');
+const unlocatableStructural = C.canonicalClone(fixture('structural-anchor-v1.json').anchor);
+unlocatableStructural.structure = { revision_index: 0, operator_index: 7, content_stream: '15 0 R' };
+ok(!C.validateEvidenceAnchor(unlocatableStructural).valid, 'operator and revision indices cannot substitute for a locatable range or object');
+const objectStructural = C.canonicalClone(fixture('structural-anchor-v1.json').anchor);
+objectStructural.page = null;
+objectStructural.structure = { object: '14 0 obj', generation: 0, operator_index: 7 };
+ok(C.validateEvidenceAnchor(objectStructural).valid, 'a PDF object and generation locate file-level structural evidence');
 
 const pair = fixture('pair-finding-v1.json').finding;
 ok(C.validatePairFinding(pair).valid, 'pair fixture validates with both anchors and incompatibility explanation');
@@ -49,6 +57,9 @@ ok(!C.validatePairFinding(orphan).valid, 'orphan pair member is rejected');
 const unexplained = C.canonicalClone(pair);
 delete unexplained.incompatibility_explanation;
 ok(!C.validatePairFinding(unexplained).valid, 'pair without incompatibility explanation is rejected');
+const duplicatedPair = C.canonicalClone(pair);
+duplicatedPair.anchors[1] = C.canonicalClone(duplicatedPair.anchors[0]);
+ok(!C.validatePairFinding(duplicatedPair).valid, 'the same evidence location cannot satisfy both sides of a pair');
 
 const sha = 'a'.repeat(128);
 const envelopeSpec = {
@@ -74,6 +85,9 @@ ok(!C.createModuleEnvelope({ ...envelopeSpec, status: 'not_applicable', referenc
 ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, status: 'unknown' })), 'unknown module status is rejected');
 ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, status: 'failed' })), 'failed status without failure is rejected');
 ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, status: 'completed_with_failures' })), 'partial completion without enumerated failed units is rejected');
+ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, coverage: { units_total: 2, units_processed: 1, units_skipped: [], units_failed: [] } })), 'completed work cannot leave units unaccounted');
+ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, failure: C.createFailure('SYNTHETIC', 'Synthetic failure') })), 'completed work cannot carry a failure object');
+ok(C.createModuleEnvelope({ ...envelopeSpec, coverage: { units_total: 2, units_processed: 1, units_skipped: [2], units_failed: [] } }).status === 'completed', 'completed work explicitly accounts for processed and skipped units');
 
 const unsorted = [
   { rule_id: 'B', finding_id: '2', anchors: [{ ...text.anchor, page: 8 }] },
@@ -83,9 +97,27 @@ const unsorted = [
 const sorted = C.sortFindings(unsorted);
 ok(sorted[0] === unsorted[1] && sorted[1] === unsorted[2] && sorted[2] === unsorted[0], 'finding comparator sorts artifact/page/offset/rule/id without locale collation');
 ok(sorted.length === 3 && sorted[0] !== sorted[1] && C.stableStringify(sorted[0]) === C.stableStringify(sorted[1]), 'canonical sorting retains duplicate records deterministically');
+const pairOrderA = { rule_id: 'PAIR', anchors: [pair.anchors[0], { ...pair.anchors[1], page: 2 }] };
+const pairOrderB = { rule_id: 'PAIR', anchors: [pair.anchors[0], { ...pair.anchors[1], page: 3 }] };
+ok(C.stableStringify(C.sortFindings([pairOrderB, pairOrderA])) === C.stableStringify(C.sortFindings([pairOrderA, pairOrderB])) && C.sortFindings([pairOrderB, pairOrderA])[0] === pairOrderA, 'remaining pair anchors determine canonical order when earlier keys tie');
+const structural = fixture('structural-anchor-v1.json').anchor;
+const mixedTextFinding = { rule_id: 'MIXED', anchors: [{ ...text.anchor, page: 1, char_start: 1000, char_end: 1000 + text.anchor.quote.length }] };
+const mixedByteFinding = { rule_id: 'MIXED', anchors: [{ ...structural, page: 1, structure: { ...structural.structure, byte_start: 20, byte_end: 40 } }] };
+ok(C.stableStringify(C.sortFindings([mixedTextFinding, mixedByteFinding])) === C.stableStringify(C.sortFindings([mixedByteFinding, mixedTextFinding])), 'UTF-16 and byte offsets have separate deterministic coordinate-system ordering');
+const shallowFrozen = Object.freeze({ nested: { value: 1 } });
+C.deepFreeze(shallowFrozen);
+ok(Object.isFrozen(shallowFrozen.nested), 'deepFreeze traverses children of an already-frozen parent');
+const cyclic = { nested: {} };
+cyclic.nested.parent = cyclic;
+C.deepFreeze(cyclic);
+ok(Object.isFrozen(cyclic) && Object.isFrozen(cyclic.nested), 'deepFreeze handles cyclic containers without skipping children');
 const id1 = C.deterministicId('pdf.redaction', sha, 'R1', [text.anchor]);
 const id2 = C.deterministicId('pdf.redaction', sha, 'R1', [C.canonicalClone(text.anchor)]);
-ok(id1 === id2 && id1.startsWith('vo1|'), 'deterministic ID is independent of object key insertion order');
+ok(id1 === id2 && /^vo1\|[0-9a-f]{128}$/.test(id1), 'deterministic ID is an opaque SHA-512 digest independent of object key insertion order');
+const idParts = ['pdf.redaction', sha, 'R1', C.stableStringify([text.anchor])];
+const expectedId = 'vo1|' + createHash('sha512').update(idParts.map((part) => part.length + ':' + part).join('|')).digest('hex');
+ok(id1 === expectedId, 'opaque ID matches an independent SHA-512 implementation including Unicode anchor text');
+ok(!id1.includes(text.anchor.quote) && !id1.includes('Synthetic'), 'finding ID exposes no evidence quotation or context');
 ok(id1 !== C.deterministicId('pdf.redaction', sha, 'R2', [text.anchor]), 'rule ID changes deterministic finding ID');
 ok(throws(() => C.stableStringify({ bad: undefined })), 'canonical JSON rejects undefined instead of silently dropping evidence');
 ok(throws(() => C.stableStringify({ bad: new Date('2026-11-15T00:00:00Z') })) && throws(() => C.stableStringify({ bad: new Map() })), 'canonical JSON rejects non-plain objects instead of serializing them as empty evidence');
@@ -98,6 +130,16 @@ ok(defaults.jurisdictionPacks.join(',') === 'za' && defaults.reference_time === 
 ok(defaults.referenceTime === null && Object.isFrozen(defaults.modules), 'reference time defaults to null and configuration is frozen');
 ok(throws(() => Config.selectedConfiguration({ modules: { unknown: true } })), 'unknown module flag fails closed');
 ok(throws(() => Config.selectedConfiguration({ modules: { redaction: 1 } })), 'non-boolean module flag fails closed');
+for (const name of Config.MODULE_NAMES) {
+  ok(throws(() => Config.selectedConfiguration({ modules: { [name]: true } })), 'unimplemented module fails closed instead of being silently ignored: ' + name);
+}
+for (const value of ['2026-02-29T00:00:00Z', '2026-11-31T00:00:00Z', '2026-13-01T00:00:00Z', '2026-11-15T24:00:00Z', '2026-11-15T00:00:60Z', '2026-11-15T00:00:00+14:01', '2026-11-15T00:00:00+15:00', '2026-11-15T00:00:00+01:60']) {
+  ok(!Config.isValidIsoInstant(value) && !C.isValidIsoInstant(value) && throws(() => Config.selectedConfiguration({ referenceTime: value })), 'invalid calendar instant fails closed: ' + value);
+}
+for (const value of ['2024-02-29T23:59:59.999999999Z', '2026-11-15T00:00:00+14:00', '2026-11-15T00:00:00-14:00']) {
+  ok(Config.isValidIsoInstant(value) && C.isValidIsoInstant(value) && Config.selectedConfiguration({ referenceTime: value }).referenceTime === value, 'valid calendar instant is preserved: ' + value);
+}
+ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, reference_time: '2026-02-29T00:00:00Z' })), 'module envelope rejects an impossible reference date');
 ok(throws(() => Config.selectedConfiguration({ referenceTime: undefined, jurisdictionPacks: ['ZA'] })), 'non-normalized jurisdiction pack fails closed');
 const normalized = Config.withAnalysisDefaults({ modules: { redaction: false }, jurisdictionPacks: ['us', 'za', 'us'], referenceTime: '2026-11-15T00:00:00Z', other: 7 });
 ok(normalized.other === 7 && normalized.jurisdictionPacks.join(',') === 'us,za', 'option normalization preserves unrelated options and deterministically deduplicates packs');
@@ -127,6 +169,14 @@ async function runSynthetic(options) {
     else globalThis.extractPdfText = previous;
   }
 }
+
+let enabledModuleRejected = false;
+try {
+  await runSynthetic({ modules: { citations: true } });
+} catch (error) {
+  enabledModuleRejected = /not implemented/.test(error.message);
+}
+ok(enabledModuleRejected, 'the engine rejects an enabled unimplemented module before reporting results');
 
 const replayOptions = { referenceTime: '2026-11-15T00:00:00.000Z', modules: Config.DEFAULT_MODULES, jurisdictionPacks: ['za'] };
 const first = await runSynthetic(replayOptions);
