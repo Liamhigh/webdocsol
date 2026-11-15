@@ -688,6 +688,38 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     finally { globalThis.fetch = origFetch; }
     ok(g.generated === false && g.reason === 'ai_unavailable', 'an aborted external provider falls through to the Workers AI models (none bound here, so ai_unavailable) — the section is never killed by a dead external');
   }
+  // Gate repair receives the focused evidence, not a second full-bundle prompt.
+  // Accuracy takes priority over padding, while the gate thresholds stay fixed.
+  {
+    const seen = [];
+    const repairEnv = { ...env, AI: { run: async (model, opts) => {
+      const user = (opts.messages.find(m => m.role === 'user') || {}).content || '';
+      seen.push({ user, maxTokens: opts.max_tokens });
+      const text = seen.length === 1
+        ? 'This may be fraud [F1] (p. 2). It seems likely [F2] (p. 7). Confidence 90%.'
+        : PAD;
+      return { response: JSON.stringify({ text }) };
+    } } };
+    const recordText = '[Page 2] ' + 'focused bundle filler '.repeat(800);
+    const body = { ...gBase,
+      sealedRecord: { text: recordText, coverage: { totalPages: 9, suppliedPages: [2], omittedPages: [1, 3, 4, 5, 6, 7, 8, 9], omittedPageCount: 8 } },
+      findingsJson: '{"confirmation":"' + 'x'.repeat(5000) + '"}',
+      technicalReport: { text: 'technical confirmation '.repeat(400), pageCount: 20, suppliedPages: 20, truncated: false, sealId: 'VO-TEST', sha512: 'a'.repeat(128) }
+    };
+    const rr = await hPost(body, repairEnv); const rj = await rr.json();
+    ok(rj.generated === true && rj.machineGenerated === true && rj.repair === 'repaired',
+      'a compliant focused rewrite survives the unchanged gate (' + JSON.stringify(rj.gate) + ')');
+    ok(seen.length === 2 && seen[1].maxTokens === 1400,
+      'the gate rewrite is bounded to a concise response budget');
+    ok(/SEALED BUNDLE TEXT/.test(seen[0].user) && !/SEALED BUNDLE TEXT/.test(seen[1].user),
+      'the initial call has the declared bundle; the gate rewrite uses the focused excerpt');
+    ok(!/FINDINGS JSON/.test(seen[1].user) && !/TECHNICAL FORENSIC REPORT TEXT/.test(seen[1].user),
+      'confirmation records are not repeated into the gate rewrite');
+    ok(/accuracy overrides the requested word count/.test(seen[1].user) && /Two accurate sentences are sufficient/.test(seen[1].user),
+      'the rewrite forbids padding and prohibited narrative additions');
+    ok(seen[1].user.length < seen[0].user.length - 10000,
+      'the focused repair prompt is materially smaller than the initial full-record prompt');
+  }
   // FOUR PILLARS: a finding is cited under a pillar only when its type
   // evidences that pillar (Public Protector submission run: "The record
   // evidences inducement or reliance [F2]" for an unsigned-agreement finding
