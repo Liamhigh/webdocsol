@@ -25,7 +25,7 @@ index c3657a4..c4960e6 100644
 @@ -132,10 +132,18 @@ const MD = 'Page 72 (franchise agreement):** signed by franchisee. **Franchisor
    // D17 itself still measures the page (a native file keeps the check):
    const blanks = DET.D17_DETECT_FORMAT_ANOMALY(['x'.repeat(1200), '', 'y'.repeat(1200), 'z'.repeat(1200), 'w'.repeat(1200)]);
-  ok(blanks.length === 1, 'positive control: D17 still measures an isolated near-empty page');
+   ok(blanks.length === 1, 'positive control: D17 still measures an isolated near-empty page');
 -  // The engine hands a near-empty finding on scanned image pages to the notes.
 -  const io = E.voImageOnlyCt26ToNotes([{ type: 'CT26', severity: 2, location: 'Page 676', evidence: 'Page 676 is nearly empty (9 chars)' }, { type: 'CT26', severity: 2, location: 'Page 12', evidence: 'Page 12 is nearly empty' }, { type: 'CT01', severity: 4, location: 'Page 676', evidence: 'x' }], [664, 676]);
 -  ok(io.kept.length === 2 && !io.kept.some(f => f.type === 'CT26' && /676/.test(f.location)) && io.kept.some(f => /Page 12/.test(f.location)) && io.notes.length === 1 && /Page 676 has no text layer of its own and was rendered for OCR/.test(io.notes[0].text),
@@ -97,7 +97,7 @@ index 32968a5..e9b8c0f 100644
 +++ b/tests/evidence-bundle-7-regression.test.mjs
 @@ -68,15 +68,15 @@ console.log('======================================================\n');
    ok(of(DET.D27_DETECT_CUSTODY_GAP, ['The chain of custody of the exhibits is recorded below. Item 1 received by Sgt Mokoena.'], 'CT39').length === 1, 'positive control: a document claiming its own custody record with missing steps still fires');
- }
+}
  
 -// ===== 3. Set-aside pages are not "near-empty" (D17 / CT26) ==================
 +// ===== 3. Set-aside pages are not "near-empty" (D17 / CT54) ==================
