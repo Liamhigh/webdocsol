@@ -7087,13 +7087,23 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
       var out;
       if (Array.isArray(item)) {
         var elements = [];
-        for (var i = 0; i < item.length; i++) elements.push(visit(item[i], true));
+        for (var i = 0; i < item.length; i++) {
+          var elementDescriptor = Object.getOwnPropertyDescriptor(item, i);
+          if (!elementDescriptor || !('value' in elementDescriptor)) {
+            throw new TypeError('Canonical JSON requires data properties in arrays');
+          }
+          elements.push(visit(elementDescriptor.value, true));
+        }
         out = '[' + elements.join(',') + ']';
       } else if (isPlainRecord(item)) {
         var keys = Object.keys(item).sort(compareStrings);
         var properties = [];
         for (var k = 0; k < keys.length; k++) {
-          properties.push(JSON.stringify(keys[k]) + ':' + visit(item[keys[k]], false));
+          var descriptor = Object.getOwnPropertyDescriptor(item, keys[k]);
+          if (!descriptor || !('value' in descriptor)) {
+            throw new TypeError('Canonical JSON requires data properties, not accessors: ' + keys[k]);
+          }
+          properties.push(JSON.stringify(keys[k]) + ':' + visit(descriptor.value, false));
         }
         out = '{' + properties.join(',') + '}';
       } else {
@@ -7218,6 +7228,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
   /* Hash length-prefixed canonical parts: unambiguous without exposing quotes. */
   function deterministicId(moduleId, inputSha512, ruleId, anchors) {
+    if (typeof inputSha512 !== 'string' || !SHA512_RE.test(inputSha512)) {
+      throw new TypeError('Deterministic IDs require a 128-character lowercase SHA-512 input digest');
+    }
     var parts = [moduleId, inputSha512, ruleId, stableStringify(anchors || [])];
     for (var i = 0; i < parts.length; i++) {
       if (typeof parts[i] !== 'string' || !parts[i]) throw new TypeError('Deterministic ID parts must be non-empty strings');
@@ -7335,6 +7348,25 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (isNonNegativeInteger(coverage.units_total) && isNonNegativeInteger(coverage.units_processed) && coverage.units_processed > coverage.units_total) {
       errors.push('coverage.units_processed cannot exceed units_total');
     }
+    if (Array.isArray(coverage.units_skipped) && Array.isArray(coverage.units_failed)) {
+      var seenUnits = {};
+      ['units_skipped', 'units_failed'].forEach(function (key) {
+        coverage[key].forEach(function (unit) {
+          var valid = (typeof unit === 'string' && unit.length > 0) || (typeof unit === 'number' && Number.isSafeInteger(unit) && unit >= 0);
+          if (!valid) { errors.push('coverage.' + key + ' entries must be non-empty strings or non-negative integers'); return; }
+          var id = typeof unit + ':' + unit;
+          if (seenUnits[id]) errors.push('coverage unit identifiers must be unique: ' + unit);
+          seenUnits[id] = true;
+        });
+      });
+    }
+  }
+
+  function coverageAccounts(coverage) {
+    return isRecord(coverage) &&
+      isNonNegativeInteger(coverage.units_total) && isNonNegativeInteger(coverage.units_processed) &&
+      Array.isArray(coverage.units_skipped) && Array.isArray(coverage.units_failed) &&
+      coverage.units_total === coverage.units_processed + coverage.units_skipped.length + coverage.units_failed.length;
   }
 
   function validateModuleEnvelope(envelope) {
@@ -7372,24 +7404,35 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (envelope.status === 'completed' && envelope.coverage && Array.isArray(envelope.coverage.units_failed) && envelope.coverage.units_failed.length) {
       errors.push('completed cannot conceal failed units');
     }
-    if (envelope.status === 'completed' && isRecord(envelope.coverage) &&
-      isNonNegativeInteger(envelope.coverage.units_total) && isNonNegativeInteger(envelope.coverage.units_processed) &&
+    if ((envelope.status === 'completed' || envelope.status === 'completed_with_failures') && isRecord(envelope.coverage) &&
       Array.isArray(envelope.coverage.units_skipped) && Array.isArray(envelope.coverage.units_failed) &&
-      envelope.coverage.units_total !== envelope.coverage.units_processed + envelope.coverage.units_skipped.length + envelope.coverage.units_failed.length) {
-      errors.push('completed must account for every unit as processed, skipped or failed');
+      isNonNegativeInteger(envelope.coverage.units_total) && isNonNegativeInteger(envelope.coverage.units_processed) &&
+      !coverageAccounts(envelope.coverage)) {
+      errors.push(envelope.status + ' must account for every unit as processed, skipped or failed');
+    }
+    if ((envelope.status === 'unsupported' || envelope.status === 'not_applicable')) {
+      if (Array.isArray(envelope.findings) && envelope.findings.length) errors.push(envelope.status + ' cannot report findings');
+      if (isRecord(envelope.coverage) && envelope.coverage.units_processed !== 0) errors.push(envelope.status + ' cannot report processed units');
     }
     return { valid: errors.length === 0, errors: errors };
   }
 
   function hasCompleteStructure(structure) {
     if (!isRecord(structure)) return false;
-    var byteRange = isNonNegativeInteger(structure.byte_start) && isNonNegativeInteger(structure.byte_end) && structure.byte_end >= structure.byte_start;
+    var byteRange = isNonNegativeInteger(structure.byte_start) && isNonNegativeInteger(structure.byte_end) && structure.byte_end > structure.byte_start;
     var objectId = typeof structure.object === 'string' && structure.object.length > 0 && isNonNegativeInteger(structure.generation);
     /* An operator/revision index supplements a locatable range or PDF object. */
     return byteRange || objectId;
   }
 
-  function validateEvidenceAnchor(anchor) {
+  function sourcePageText(source, anchor) {
+    if (typeof source === 'function') return source(anchor);
+    if (isRecord(source) && Object.prototype.hasOwnProperty.call(source, String(anchor.page))) return source[String(anchor.page)];
+    return undefined;
+  }
+
+  /* options.pageText: function(anchor) or map of page number to page-text-v1 text. */
+  function validateEvidenceAnchor(anchor, options) {
     var errors = [];
     if (!isRecord(anchor)) return { valid: false, errors: ['anchor must be an object'] };
     if (typeof anchor.artifact_sha512 !== 'string' || !SHA512_RE.test(anchor.artifact_sha512)) {
@@ -7408,6 +7451,21 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
         if (anchor.char_end < anchor.char_start) errors.push('char_end cannot precede char_start');
         if (anchor.char_end - anchor.char_start !== anchor.quote.length) errors.push('UTF-16 offsets must equal quote.length');
       }
+      if (!anchor.quote.length) errors.push('text anchors require a non-empty quote');
+      if (options && options.pageText && anchor.page !== null && isNonNegativeInteger(anchor.char_start) && isNonNegativeInteger(anchor.char_end)) {
+        var text = sourcePageText(options.pageText, anchor);
+        if (typeof text !== 'string') {
+          errors.push('source text for the anchored page is unavailable');
+        } else {
+          if (text.slice(anchor.char_start, anchor.char_end) !== anchor.quote) errors.push('quote does not match the source text at its offsets');
+          if (typeof anchor.context_before === 'string' && text.slice(Math.max(0, anchor.char_start - anchor.context_before.length), anchor.char_start) !== anchor.context_before) {
+            errors.push('context_before does not match the source text');
+          }
+          if (typeof anchor.context_after === 'string' && text.slice(anchor.char_end, anchor.char_end + anchor.context_after.length) !== anchor.context_after) {
+            errors.push('context_after does not match the source text');
+          }
+        }
+      }
       if (anchor.page === null) errors.push('text anchors require a page');
     } else if (!hasCompleteStructure(anchor.structure)) {
       errors.push('a null quote requires complete non-text structural evidence');
@@ -7419,7 +7477,19 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     return { valid: errors.length === 0, errors: errors };
   }
 
-  function validatePairFinding(finding) {
+  function evidenceLocationKey(anchor) {
+    var structure = isRecord(anchor.structure) ? anchor.structure : null;
+    return stableStringify([
+      anchor.artifact_sha512, anchor.page,
+      typeof anchor.quote === 'string' ? [anchor.char_start, anchor.char_end] : null,
+      structure ? [structure.byte_start === undefined ? null : structure.byte_start,
+        structure.byte_end === undefined ? null : structure.byte_end,
+        structure.object === undefined ? null : structure.object,
+        structure.generation === undefined ? null : structure.generation] : null
+    ]);
+  }
+
+  function validatePairFinding(finding, options) {
     var errors = [];
     if (!isRecord(finding)) return { valid: false, errors: ['pair finding must be an object'] };
     if (!Array.isArray(finding.anchors) || finding.anchors.length !== 2) {
@@ -7427,11 +7497,11 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     } else {
       var anchorsValid = true;
       for (var i = 0; i < finding.anchors.length; i++) {
-        var result = validateEvidenceAnchor(finding.anchors[i]);
+        var result = validateEvidenceAnchor(finding.anchors[i], options);
         if (!result.valid) anchorsValid = false;
         for (var e = 0; e < result.errors.length; e++) errors.push('anchors[' + i + ']: ' + result.errors[e]);
       }
-      if (anchorsValid && stableStringify(finding.anchors[0]) === stableStringify(finding.anchors[1])) {
+      if (anchorsValid && evidenceLocationKey(finding.anchors[0]) === evidenceLocationKey(finding.anchors[1])) {
         errors.push('pair findings require two distinct evidence anchors');
       }
     }
@@ -7523,13 +7593,15 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
   function normalizeModules(input) {
     if (typeof input === 'undefined' || input === null) input = {};
     if (!isRecord(input)) throw new TypeError('opts.modules must be an object');
+    var prototype = Object.getPrototypeOf(input);
+    if (prototype !== Object.prototype && prototype !== null) throw new TypeError('opts.modules must be a plain object');
     Object.keys(input).forEach(function (name) {
       if (MODULE_NAMES.indexOf(name) === -1) throw new TypeError('Unknown analysis module flag: ' + name);
       if (typeof input[name] !== 'boolean') throw new TypeError('Analysis module flags must be boolean: ' + name);
       if (input[name]) throw new Error('Analysis module is not implemented; keep its Phase 0 flag false: ' + name);
     });
     var normalized = {};
-    MODULE_NAMES.forEach(function (name) { normalized[name] = input[name] === true; });
+    MODULE_NAMES.forEach(function (name) { normalized[name] = Object.prototype.hasOwnProperty.call(input, name) && input[name] === true; });
     return deepFreeze(normalized);
   }
 
@@ -21090,14 +21162,14 @@ async function startSealing() {
         await voEnsureForensicScripts(function(msg){ updateStep('Fraud','processing',msg); });
         var pdfDocForForensics = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
         _pipelinePageCount = pdfDocForForensics.getPageCount();
-        updateStep('Fraud', 'processing', 'Scanning ' + _pipelinePageCount + ' page(s) - 40 contradiction detectors running...');
+        updateStep('Fraud', 'processing', 'Scanning ' + _pipelinePageCount + ' page(s) - contradiction detectors running...');
         // The signed rule package (engine-update loop) is decided BEFORE the scan so
         // the report names exactly what applied; bounded wait, never blocks the seal.
         try {
           await Promise.race([voLoadRulePackage(), new Promise(function (r) { setTimeout(r, VO_RULES_FETCH_TIMEOUT_MS + 500); })]);
         } catch (eRP) {}
         forensicResult = await runForensicEngine(fileBytes, pdfDocForForensics, function (done, total) {
-          updateStep('Fraud', 'processing', 'Scanning page ' + done + ' of ' + total + ' - 40 contradiction detectors running...');
+          updateStep('Fraud', 'processing', 'Scanning page ' + done + ' of ' + total + ' - contradiction detectors running...');
         }, { referenceTime: new Date().toISOString() }); // the analysis instant is an input, never read by the engine (determinism): it dates the "dated after its analysis" note
         // Keep the per-page text for the finding-anchored narrator excerpt.
         try { _pipelineTextBlocks = (forensicResult && Array.isArray(forensicResult.pageTexts)) ? forensicResult.pageTexts : null; } catch (ePT) { _pipelineTextBlocks = null; }

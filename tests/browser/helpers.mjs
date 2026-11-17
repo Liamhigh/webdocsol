@@ -4,7 +4,9 @@ export async function installOfflineGuard(page, allowedOrigin = 'http://127.0.0.
   await page.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    if (url.origin === expectedOrigin) return route.continue();
+    const contractedManifest = request.method() === 'GET' && url.pathname === '/api/v1/rules/manifest';
+    if (url.origin === expectedOrigin && !url.pathname.startsWith('/api/')) return route.continue();
+    if (url.origin === expectedOrigin && contractedManifest) return route.continue();
     const body = request.postData() || '';
     const bodyBuffer = request.postDataBuffer();
     const staticAsset = request.method() === 'GET' && !body && (
@@ -21,14 +23,15 @@ export async function installOfflineGuard(page, allowedOrigin = 'http://127.0.0.
       body,
       bodyBase64: bodyBuffer ? bodyBuffer.toString('base64') : '',
       staticAsset,
-      timestampDigest
+      timestampDigest,
+      sameOriginApi: url.origin === expectedOrigin
     });
     return route.abort('failed');
   });
   return external;
 }
 
-export function expectNoDocumentEgress(expect, external, syntheticText) {
+export function expectNoDocumentEgress(expect, external, syntheticText, options = {}) {
   const fragments = [syntheticText, ...syntheticText.split(/\s+/).filter((word) => word.length >= 6)];
   const variants = new Set();
   for (const fragment of fragments) {
@@ -42,8 +45,10 @@ export function expectNoDocumentEgress(expect, external, syntheticText) {
       expect(allRequestData.includes(variant), `document fragment reached a blocked destination: ${variant}`).toBeFalsy();
     }
   }
-  const unexpected = external.filter((request) => !request.staticAsset && !request.timestampDigest);
-  expect(unexpected, `only the test origin, static fonts and exact 32-byte OTS digest submissions are permitted: ${JSON.stringify(unexpected)}`).toEqual([]);
+  const expectedDigest = options.otsSha256Hex ? Buffer.from(options.otsSha256Hex, 'hex').toString('base64') : null;
+  const unexpected = external.filter((request) => !request.staticAsset &&
+    !(request.timestampDigest && expectedDigest !== null && request.bodyBase64 === expectedDigest));
+  expect(unexpected, `only static fonts, the contracted rules manifest and the exact SHA-256 OTS digest of the delivered file are permitted outside static test-origin files: ${JSON.stringify(unexpected)}`).toEqual([]);
 }
 
 export async function makeSyntheticPdf(page, text) {

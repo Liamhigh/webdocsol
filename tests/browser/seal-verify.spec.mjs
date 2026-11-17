@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { test, expect } from '@playwright/test';
 import { installOfflineGuard, expectNoDocumentEgress, makeSyntheticPdf } from './helpers.mjs';
 
@@ -12,6 +13,11 @@ test('synthetic PDF seals with QR and manifest metadata, then verifies at root v
     const nativeFetch = window.fetch.bind(window);
     window.fetch = (input, init) => {
       const url = typeof input === 'string' ? input : input.url;
+      // verify.html's separate custody timestamp is a different workflow from the
+      // delivered-file digest asserted below; keep it out of this seal-flow gate.
+      if (location.pathname === '/verify.html' && /opentimestamps\.org|eternitywall\.com/.test(url)) {
+        return Promise.reject(new TypeError('Offline test: verification custody timestamp disabled'));
+      }
       if (/^https:\/\/[a-z]\.pool\.(?:opentimestamps\.org|eternitywall\.com)\//.test(url) &&
           url !== 'https://a.pool.opentimestamps.org/digest') {
         return Promise.reject(new TypeError('Offline test: timestamp fallback and polling disabled'));
@@ -77,5 +83,5 @@ test('synthetic PDF seals with QR and manifest metadata, then verifies at root v
     return true;
   });
   expect(unexpectedErrors).toEqual([]);
-  expectNoDocumentEgress(expect, external, SYNTHETIC_TEXT);
+  expectNoDocumentEgress(expect, external, SYNTHETIC_TEXT, { otsSha256Hex: createHash('sha256').update(sealedPdf).digest('hex') });
 });

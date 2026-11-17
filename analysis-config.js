@@ -54,13 +54,15 @@
   function normalizeModules(input) {
     if (typeof input === 'undefined' || input === null) input = {};
     if (!isRecord(input)) throw new TypeError('opts.modules must be an object');
+    var prototype = Object.getPrototypeOf(input);
+    if (prototype !== Object.prototype && prototype !== null) throw new TypeError('opts.modules must be a plain object');
     Object.keys(input).forEach(function (name) {
       if (MODULE_NAMES.indexOf(name) === -1) throw new TypeError('Unknown analysis module flag: ' + name);
       if (typeof input[name] !== 'boolean') throw new TypeError('Analysis module flags must be boolean: ' + name);
       if (input[name]) throw new Error('Analysis module is not implemented; keep its Phase 0 flag false: ' + name);
     });
     var normalized = {};
-    MODULE_NAMES.forEach(function (name) { normalized[name] = input[name] === true; });
+    MODULE_NAMES.forEach(function (name) { normalized[name] = Object.prototype.hasOwnProperty.call(input, name) && input[name] === true; });
     return deepFreeze(normalized);
   }
 
