@@ -6,7 +6,9 @@ module.exports = defineConfig({
   workers: 1,
   timeout: 120000,
   expect: { timeout: 20000 },
-  reporter: [['list']],
+  reporter: process.env.GITHUB_ACTIONS
+    ? [['list'], ['./tests/browser/github-annotations-reporter.mjs']]
+    : [['list']],
   use: {
     baseURL: 'http://127.0.0.1:4173',
     headless: true,
