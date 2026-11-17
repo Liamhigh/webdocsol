@@ -7,10 +7,6 @@ function annotationData(value) {
 
 /** Keep detailed synthetic-browser failures visible in public CI annotations. */
 export default class GitHubAnnotationsReporter {
-  onBegin() {
-    console.log('::notice title=Playwright diagnostic reporter::Browser failure annotations enabled');
-  }
-
   onError(error) {
     console.log(`::error title=Playwright runner error::${annotationData(error.message)}`);
   }
