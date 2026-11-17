@@ -69,10 +69,10 @@ test('synthetic PDF seals with QR and manifest metadata, then verifies at root v
   const verificationQr = await page.locator('#qrCanvas').evaluate((canvas) => canvas.toDataURL());
   expect(verificationQr.length).toBeGreaterThan(1000);
   // PDF.js 3.11.174 can emit recovered rendering diagnostics for the encrypted
-  // fixture. Integrity verification and the independently rendered verification
-  // QR are asserted above; every other page/worker exception remains fatal.
+  // fixture. The wording differs by browser engine, but the integrity and QR
+  // assertions above remain mandatory; every other page/worker exception is fatal.
   const unexpectedErrors = errors.filter((message) => {
-    if (message.includes('The compressed data was not valid: invalid stored block lengths.')) return false;
+    if (/(?:The compressed data was not valid|The input data is corrupted): invalid stored block lengths/.test(message)) return false;
     if (browserName === 'webkit' && message.includes('Unhandled Promise Rejection: TypeError: Failed to Decode Data.')) return false;
     return true;
   });
