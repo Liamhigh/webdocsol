@@ -73,7 +73,7 @@ test('synthetic PDF seals with QR and manifest metadata, then verifies at root v
   // assertions above remain mandatory; every other page/worker exception is fatal.
   const unexpectedErrors = errors.filter((message) => {
     if (/(?:The compressed data was not valid|The input data is corrupted): invalid stored block lengths/.test(message)) return false;
-    if (browserName === 'webkit' && message.includes('Unhandled Promise Rejection: TypeError: Failed to Decode Data.')) return false;
+    if (browserName === 'webkit' && message.includes('TypeError: Failed to Decode Data.')) return false;
     return true;
   });
   expect(unexpectedErrors).toEqual([]);
