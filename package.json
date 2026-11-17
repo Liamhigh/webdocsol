@@ -19,6 +19,7 @@
     "check": "node --check analysis-contracts.js && node --check analysis-config.js && node --check seal-guard.js && node --check forensic-engine-page.js && node --check forensic-report.js && node --check ots-proof.js && node --check pdf-encrypt.js && node --check worker/verum-rules.js && node --check worker/static-proxy.js && node --check worker/site-assets.js"
   },
   "devDependencies": {
-    "@playwright/test": "1.56.1"
+    "@playwright/test": "1.56.1",
+    "pdf-lib": "1.17.1"
   }
 }
