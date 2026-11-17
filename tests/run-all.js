@@ -62,6 +62,8 @@ const suites = [
   'doc-fact-index.test.mjs',
   'cross-doc-conflicts.test.mjs',
   'scan11-findings-repair.test.mjs',
+  'analysis-contracts.test.mjs',
+  'documentation-consistency.test.mjs',
 ];
 
 // A suite PASSES only if its own process exits 0. The runner prints its OWN

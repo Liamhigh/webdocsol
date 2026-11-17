@@ -15,6 +15,11 @@
     "test:find-seal": "node tests/find-seal.test.mjs",
     "test:seal-guard": "node tests/seal-guard.test.mjs",
     "test:inline-scripts": "node tests/inline-scripts.test.mjs",
-    "check": "node --check seal-guard.js && node --check forensic-engine-page.js && node --check forensic-report.js && node --check ots-proof.js && node --check pdf-encrypt.js && node --check worker/verum-rules.js && node --check worker/static-proxy.js && node --check worker/site-assets.js"
+    "test:browser": "playwright test",
+    "check": "node --check analysis-contracts.js && node --check analysis-config.js && node --check seal-guard.js && node --check forensic-engine-page.js && node --check forensic-report.js && node --check ots-proof.js && node --check pdf-encrypt.js && node --check worker/verum-rules.js && node --check worker/static-proxy.js && node --check worker/site-assets.js"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.65.1",
+    "pdf-lib": "1.17.1"
   }
 }

@@ -2593,7 +2593,7 @@ function secDishonestyMatrix(ctx, data) {
 }
 
 // ---- §15.4 section 3: Nine-Brain Extraction Findings --------------------
-// v8.0 §2: the 46 contradiction types across 40 detectors ARE the nine
+// v8.0 §2: the 61 contradiction types across the detector registry ARE the nine
 // brains — "each detector belonging to exactly one brain." Every finding
 // renders under the brain whose instrument produced it (evidence-bundle-7-docs
 // review, 5 October 2026: three of four findings were listed as "not rendered
