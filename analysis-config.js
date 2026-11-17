@@ -1,102 +1,90 @@
-/* Explicit, deterministic analysis options. No rollout, IP inference or clock. */
+/* Verum Omnis forensic analysis — Phase 0 replay configuration (fail-closed).
+ * All module flags remain false until a contracted implementation and fixtures land.
+ * This file is also inlined byte-exactly into seal-document.html.
+ */
 (function (root) {
   'use strict';
 
-  var MODULE_NAMES = Object.freeze([
-    'citations',
-    'redaction',
-    'revisions',
-    'temporalAlgebra',
-    'imageMetadata',
-    'c2pa',
-    'spatialOcr'
-  ]);
-  var ISO_INSTANT_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
+  var MODULE_NAMES = [
+    'citations', 'redaction', 'revisions', 'temporalAlgebra',
+    'imageMetadata', 'c2pa', 'spatialOcr'
+  ];
 
   function isRecord(value) {
     return value !== null && typeof value === 'object' && !Array.isArray(value);
   }
 
-  function compareStrings(a, b) {
-    return a < b ? -1 : (a > b ? 1 : 0);
+  function isPlainRecord(value) {
+    if (!isRecord(value)) return false;
+    var prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
   }
 
   function deepFreeze(value) {
-    if (!value || typeof value !== 'object' || Object.isFrozen(value)) return value;
+    if (!isRecord(value) || Object.isFrozen(value)) return value;
     Object.keys(value).forEach(function (key) { deepFreeze(value[key]); });
     return Object.freeze(value);
   }
 
-  var DEFAULT_MODULES = deepFreeze(MODULE_NAMES.reduce(function (modules, name) {
-    modules[name] = false;
-    return modules;
-  }, {}));
+  function normalizeReferenceTime(value) {
+    if (value === undefined || value === null || value === '') return null;
+    if (typeof value !== 'string') throw new TypeError('referenceTime must be an ISO instant string or null');
+    var parsed = new Date(value);
+    if (!Number.isFinite(parsed.getTime()) || !/(?:Z|[+-]\d\d:\d\d)$/i.test(value)) {
+      throw new TypeError('referenceTime must be a valid ISO instant with an explicit offset');
+    }
+    return parsed.toISOString();
+  }
 
   function normalizeModules(input) {
-    if (typeof input === 'undefined' || input === null) input = {};
-    if (!isRecord(input)) throw new TypeError('opts.modules must be an object');
+    if (input === undefined) input = {};
+    if (!isPlainRecord(input)) throw new TypeError('modules must be a plain record');
     Object.keys(input).forEach(function (name) {
       if (MODULE_NAMES.indexOf(name) === -1) throw new TypeError('Unknown analysis module flag: ' + name);
-      if (typeof input[name] !== 'boolean') throw new TypeError('Analysis module flags must be boolean: ' + name);
+      if (typeof input[name] !== 'boolean') throw new TypeError('Module flag must be boolean: ' + name);
+      if (input[name]) throw new Error('Analysis module is not implemented; keep its Phase 0 flag false: ' + name);
     });
     var normalized = {};
-    MODULE_NAMES.forEach(function (name) { normalized[name] = input[name] === true; });
+    MODULE_NAMES.forEach(function (name) {
+      normalized[name] = Object.prototype.hasOwnProperty.call(input, name) && input[name] === true;
+    });
     return deepFreeze(normalized);
   }
 
-  function normalizeJurisdictionPacks(input) {
-    if (typeof input === 'undefined' || input === null) input = ['za'];
-    if (!Array.isArray(input)) throw new TypeError('opts.jurisdictionPacks must be an array');
-    var seen = {};
-    var packs = [];
-    input.forEach(function (pack) {
-      if (typeof pack !== 'string' || !/^[a-z]{2}$/.test(pack)) {
-        throw new TypeError('Jurisdiction packs must be explicit lowercase ISO-style codes');
-      }
-      if (!seen[pack]) { seen[pack] = true; packs.push(pack); }
+  function normalizeConfig(options) {
+    var opts = options === undefined ? {} : options;
+    if (!isPlainRecord(opts)) throw new TypeError('Analysis configuration must be a plain record');
+    var allowed = { modules: true, referenceTime: true, budgets: true };
+    Object.keys(opts).forEach(function (key) {
+      if (!allowed[key]) throw new TypeError('Unknown analysis configuration key: ' + key);
     });
-    packs.sort(compareStrings);
-    return Object.freeze(packs);
-  }
-
-  function normalizeReferenceTime(input) {
-    if (input === null || typeof input === 'undefined' || input === '') return null;
-    if (typeof input !== 'string' || !ISO_INSTANT_RE.test(input)) {
-      throw new TypeError('opts.referenceTime must be a caller-supplied ISO instant with an offset');
-    }
-    return input;
-  }
-
-  function selectedConfiguration(opts) {
-    opts = opts || {};
-    if (!isRecord(opts)) throw new TypeError('opts must be an object');
+    var budgets = opts.budgets === undefined ? {} : opts.budgets;
+    if (!isPlainRecord(budgets)) throw new TypeError('budgets must be a plain record');
+    var normalizedBudgets = {};
+    Object.keys(budgets).forEach(function (name) {
+      if (MODULE_NAMES.indexOf(name) === -1) throw new TypeError('Unknown module budget: ' + name);
+      var budget = budgets[name];
+      if (!isPlainRecord(budget)) throw new TypeError('Module budget must be a plain record: ' + name);
+      var allowedBudget = { maxUnits: true, maxMilliseconds: true };
+      Object.keys(budget).forEach(function (key) {
+        if (!allowedBudget[key]) throw new TypeError('Unknown module budget key: ' + key);
+        if (!Number.isSafeInteger(budget[key]) || budget[key] < 0) {
+          throw new TypeError('Module budget values must be non-negative safe integers');
+        }
+      });
+      normalizedBudgets[name] = deepFreeze({
+        maxUnits: budget.maxUnits === undefined ? null : budget.maxUnits,
+        maxMilliseconds: budget.maxMilliseconds === undefined ? null : budget.maxMilliseconds
+      });
+    });
     return deepFreeze({
       modules: normalizeModules(opts.modules),
-      jurisdictionPacks: normalizeJurisdictionPacks(opts.jurisdictionPacks),
-      referenceTime: normalizeReferenceTime(opts.referenceTime)
+      referenceTime: normalizeReferenceTime(opts.referenceTime),
+      budgets: normalizedBudgets
     });
   }
 
-  function withAnalysisDefaults(opts) {
-    opts = opts || {};
-    var configuration = selectedConfiguration(opts);
-    var normalized = {};
-    Object.keys(opts).forEach(function (key) { normalized[key] = opts[key]; });
-    normalized.modules = configuration.modules;
-    normalized.jurisdictionPacks = configuration.jurisdictionPacks;
-    normalized.referenceTime = configuration.referenceTime;
-    return normalized;
-  }
-
-  var api = {
-    MODULE_NAMES: MODULE_NAMES,
-    DEFAULT_MODULES: DEFAULT_MODULES,
-    normalizeModules: normalizeModules,
-    normalizeJurisdictionPacks: normalizeJurisdictionPacks,
-    selectedConfiguration: selectedConfiguration,
-    withAnalysisDefaults: withAnalysisDefaults
-  };
-
+  var api = { MODULE_NAMES: MODULE_NAMES.slice(), normalizeConfig: normalizeConfig };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
-  if (root) root.VOAnalysisConfig = api;
+  root.VOAnalysisConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
