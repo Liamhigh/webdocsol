@@ -9,7 +9,9 @@ The versioned fixtures cover:
 - exact PDF text with UTF-16 code-unit offsets, including a surrogate pair and combining character;
 - a non-text structural observation with byte, object, revision, and operator anchors;
 - OCR text with optional geometry absent;
-- a two-anchor finding with an explicit incompatibility explanation.
+- a two-anchor finding with an explicit incompatibility explanation and both complete source pages.
+
+Text anchors validate only against the complete source page text: the exact quote, UTF-16 offsets, and complete preceding and following context must all match. Pair findings require both complete source page texts and two distinct source locations; altered extraction or context metadata cannot make one location count as both sides of a contradiction.
 
 `tests/analysis-contracts.test.mjs` also exercises old-producer/new-reader, new-producer/old-reader, unknown-extension preservation, duplicate retention, stable ordering, fresh-process replay, and time-zone independence. No fixture contains evidence from a real matter.
 

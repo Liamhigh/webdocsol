@@ -20,7 +20,7 @@ console.log('======================================================\n');
 
 for (const name of ['text-anchor-v1.json', 'structural-anchor-v1.json', 'ocr-anchor-v1.json']) {
   const record = fixture(name);
-  const result = C.validateEvidenceAnchor(record.anchor);
+  const result = C.validateEvidenceAnchor(record.anchor, record.page_text);
   ok(result.valid, name + ' validates: ' + result.errors.join('; '));
   ok(JSON.parse(C.stableStringify(record)).anchor.quote === record.anchor.quote, name + ' round-trips exact quotation');
   if (record.page_text) {
@@ -37,7 +37,19 @@ ok(text.anchor.quote.codePointAt(0) === 0x1f600 && text.anchor.quote.charAt(0) !
 ok(text.anchor.quote.includes('e\u0301'), 'fixture genuinely contains a combining character');
 const badText = C.canonicalClone(text.anchor);
 badText.char_end--;
-ok(!C.validateEvidenceAnchor(badText).valid, 'offset/quote length mismatch is rejected');
+ok(!C.validateEvidenceAnchor(badText, text.page_text).valid, 'offset/quote length mismatch is rejected');
+const missingSource = C.canonicalClone(text.anchor);
+ok(!C.validateEvidenceAnchor(missingSource).valid, 'a text anchor cannot validate without its complete source page text');
+const fabricatedQuote = C.canonicalClone(text.anchor);
+fabricatedQuote.quote = '😀 é — Amount R999.00';
+ok(!C.validateEvidenceAnchor(fabricatedQuote, text.page_text).valid, 'a fabricated quote with plausible offsets is rejected against source text');
+const fabricatedContext = C.canonicalClone(text.anchor);
+fabricatedContext.context_before = 'Fabricated ';
+ok(!C.validateEvidenceAnchor(fabricatedContext, text.page_text).valid, 'fabricated preceding context is rejected against source text');
+const emptyText = C.canonicalClone(text.anchor);
+emptyText.quote = '';
+emptyText.char_end = emptyText.char_start;
+ok(!C.validateEvidenceAnchor(emptyText, text.page_text).valid, 'empty text cannot count as evidence');
 const badStructural = C.canonicalClone(fixture('structural-anchor-v1.json').anchor);
 badStructural.structure = null;
 ok(!C.validateEvidenceAnchor(badStructural).valid, 'null quote without structural evidence is rejected');
@@ -48,18 +60,27 @@ const objectStructural = C.canonicalClone(fixture('structural-anchor-v1.json').a
 objectStructural.page = null;
 objectStructural.structure = { object: '14 0 obj', generation: 0, operator_index: 7 };
 ok(C.validateEvidenceAnchor(objectStructural).valid, 'a PDF object and generation locate file-level structural evidence');
+const emptyStructural = C.canonicalClone(fixture('structural-anchor-v1.json').anchor);
+emptyStructural.structure = { byte_start: 120, byte_end: 120 };
+ok(!C.validateEvidenceAnchor(emptyStructural).valid, 'a zero-length byte range without a PDF object cannot count as structural evidence');
 
-const pair = fixture('pair-finding-v1.json').finding;
-ok(C.validatePairFinding(pair).valid, 'pair fixture validates with both anchors and incompatibility explanation');
+const pairFixture = fixture('pair-finding-v1.json');
+const pair = pairFixture.finding;
+ok(C.validatePairFinding(pair, pairFixture.page_texts).valid, 'pair fixture validates both source pages, anchors and incompatibility explanation');
+ok(!C.validatePairFinding(pair).valid, 'a pair cannot validate without both complete source page texts');
 const orphan = C.canonicalClone(pair);
 orphan.anchors.pop();
-ok(!C.validatePairFinding(orphan).valid, 'orphan pair member is rejected');
+ok(!C.validatePairFinding(orphan, pairFixture.page_texts).valid, 'orphan pair member is rejected');
 const unexplained = C.canonicalClone(pair);
 delete unexplained.incompatibility_explanation;
-ok(!C.validatePairFinding(unexplained).valid, 'pair without incompatibility explanation is rejected');
+ok(!C.validatePairFinding(unexplained, pairFixture.page_texts).valid, 'pair without incompatibility explanation is rejected');
 const duplicatedPair = C.canonicalClone(pair);
 duplicatedPair.anchors[1] = C.canonicalClone(duplicatedPair.anchors[0]);
-ok(!C.validatePairFinding(duplicatedPair).valid, 'the same evidence location cannot satisfy both sides of a pair');
+ok(!C.validatePairFinding(duplicatedPair, [pairFixture.page_texts[0], pairFixture.page_texts[0]]).valid, 'the same evidence location cannot satisfy both sides of a pair');
+const relocatedMetadataPair = C.canonicalClone(pair);
+relocatedMetadataPair.anchors[1] = C.canonicalClone(relocatedMetadataPair.anchors[0]);
+relocatedMetadataPair.anchors[1].extraction = { ...relocatedMetadataPair.anchors[1].extraction, extractor_version: 'different-metadata' };
+ok(!C.validatePairFinding(relocatedMetadataPair, [pairFixture.page_texts[0], pairFixture.page_texts[0]]).valid, 'different metadata cannot make one source location count as two');
 
 const sha = 'a'.repeat(128);
 const envelopeSpec = {
@@ -81,11 +102,20 @@ ok(C.stableStringify(envelope) === C.stableStringify(C.canonicalClone(envelope))
 const failure = C.createFailure('BUDGET_OBJECTS', 'Synthetic object budget exhausted', { limit: 10 });
 const failed = C.createFailureEnvelope({ ...envelopeSpec, status: 'budget_exceeded', coverage: { units_total: 12, units_processed: 10, units_skipped: [], units_failed: [11, 12] } }, failure);
 ok(failed.status === 'budget_exceeded' && failed.failure.code === 'BUDGET_OBJECTS', 'failure constructor preserves explicit budget state');
-ok(!C.createModuleEnvelope({ ...envelopeSpec, status: 'not_applicable', reference_time: null, coverage: { units_total: 0, units_processed: 0, units_skipped: [], units_failed: [] } }).reference_time, 'not-applicable envelope supports null reference time');
+const inactiveCoverage = { units_total: 1, units_processed: 0, units_skipped: [1], units_failed: [] };
+ok(C.createModuleEnvelope({ ...envelopeSpec, status: 'not_applicable', reference_time: null, coverage: inactiveCoverage }).reference_time === null, 'not-applicable envelope supports null reference time and zero processed units');
+ok(C.createModuleEnvelope({ ...envelopeSpec, status: 'unsupported', reference_time: null, coverage: inactiveCoverage }).status === 'unsupported', 'unsupported envelope reports no processed work');
+for (const status of ['not_applicable', 'unsupported']) {
+  ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, status, coverage: { units_total: 1, units_processed: 1, units_skipped: [], units_failed: [] } })), status + ' cannot report processed units');
+  ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, status, coverage: inactiveCoverage, findings: [{ synthetic: true }] })), status + ' cannot report findings');
+}
 ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, status: 'unknown' })), 'unknown module status is rejected');
 ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, status: 'failed' })), 'failed status without failure is rejected');
 ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, status: 'completed_with_failures' })), 'partial completion without enumerated failed units is rejected');
 ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, coverage: { units_total: 2, units_processed: 1, units_skipped: [], units_failed: [] } })), 'completed work cannot leave units unaccounted');
+ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, coverage: { units_total: 2, units_processed: 0, units_skipped: [1, 1], units_failed: [] } })), 'duplicate skipped units are rejected');
+ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, status: 'completed_with_failures', coverage: { units_total: 2, units_processed: 0, units_skipped: [1], units_failed: [1] } })), 'one unit cannot appear as both skipped and failed');
+ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, coverage: { units_total: 2, units_processed: 0, units_skipped: [1, null], units_failed: [] } })), 'invalid coverage unit identifiers are rejected');
 ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, failure: C.createFailure('SYNTHETIC', 'Synthetic failure') })), 'completed work cannot carry a failure object');
 ok(C.createModuleEnvelope({ ...envelopeSpec, coverage: { units_total: 2, units_processed: 1, units_skipped: [2], units_failed: [] } }).status === 'completed', 'completed work explicitly accounts for processed and skipped units');
 
@@ -119,39 +149,21 @@ const expectedId = 'vo1|' + createHash('sha512').update(idParts.map((part) => pa
 ok(id1 === expectedId, 'opaque ID matches an independent SHA-512 implementation including Unicode anchor text');
 ok(!id1.includes(text.anchor.quote) && !id1.includes('Synthetic'), 'finding ID exposes no evidence quotation or context');
 ok(id1 !== C.deterministicId('pdf.redaction', sha, 'R2', [text.anchor]), 'rule ID changes deterministic finding ID');
+for (const malformedHash of ['a'.repeat(127), 'A'.repeat(128), 'g'.repeat(128), null, 42]) {
+  ok(throws(() => C.deterministicId('pdf.redaction', malformedHash, 'R1', [text.anchor])), 'malformed deterministic-ID input hash fails closed: ' + String(malformedHash).slice(0, 16));
+}
 ok(throws(() => C.stableStringify({ bad: undefined })), 'canonical JSON rejects undefined instead of silently dropping evidence');
+let accessorReads = 0;
+const accessorRecord = {};
+Object.defineProperty(accessorRecord, 'changing', { enumerable: true, get() { accessorReads++; return accessorReads; } });
+ok(throws(() => C.stableStringify(accessorRecord)) && accessorReads === 0, 'canonical JSON rejects accessors without invoking them');
+const accessorArray = [];
+Object.defineProperty(accessorArray, '0', { enumerable: true, get() { accessorReads++; return accessorReads; } });
+ok(throws(() => C.stableStringify(accessorArray)) && accessorReads === 0, 'canonical JSON rejects array-index accessors without invoking them');
+ok(throws(() => C.stableStringify(new Array(1))), 'canonical JSON rejects sparse array holes instead of reading inherited values');
 ok(throws(() => C.stableStringify({ bad: new Date('2026-11-15T00:00:00Z') })) && throws(() => C.stableStringify({ bad: new Map() })), 'canonical JSON rejects non-plain objects instead of serializing them as empty evidence');
 ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, findings: false })), 'module envelope rejects invalid falsy fields instead of replacing them with defaults');
 ok(C.stableStringify({ z: 1, a: { z: 2, a: 3 } }) === '{"a":{"a":3,"z":2},"z":1}', 'canonical JSON recursively sorts keys');
-
-
-// Review fixes: source-text binding, location identity, coverage, accessors, hashes, flags.
-const textFixture = fixture('text-anchor-v1.json');
-const pageSource = { [text.anchor.page]: textFixture.page_text };
-ok(C.validateEvidenceAnchor(text.anchor, { pageText: pageSource }).valid, 'anchor validates against its own source text');
-ok(!C.validateEvidenceAnchor({ ...text.anchor, quote: 'x'.repeat(text.anchor.quote.length) }, { pageText: pageSource }).valid, 'fabricated quote of the right length is rejected against source text');
-ok(!C.validateEvidenceAnchor({ ...text.anchor, context_after: 'fabricated' }, { pageText: pageSource }).valid, 'fabricated context is rejected against source text');
-ok(!C.validateEvidenceAnchor(text.anchor, { pageText: {} }).valid, 'missing source page text is rejected when source validation is requested');
-ok(!C.validateEvidenceAnchor({ ...text.anchor, quote: '', char_end: text.anchor.char_start }).valid, 'empty text quote is not evidence');
-ok(!C.validateEvidenceAnchor({ ...structural, page: null, structure: { byte_start: 5, byte_end: 5 } }).valid, 'zero-length byte range without an object locator is not evidence');
-const sameLocation = { ...text.anchor, context_before: text.anchor.context_before + '!', extraction: { ...text.anchor.extraction, note: 'different metadata' } };
-ok(!C.validatePairFinding({ ...pair, anchors: [text.anchor, sameLocation] }).valid, 'one location with different metadata is not two evidence anchors');
-const cov = (c, status = 'completed') => ({ ...envelopeSpec, status, coverage: c });
-ok(throws(() => C.createModuleEnvelope(cov({ units_total: 3, units_processed: 1, units_skipped: [2], units_failed: [2] }))), 'duplicate unit identifiers across skipped and failed are rejected');
-ok(throws(() => C.createModuleEnvelope({ ...cov({ units_total: 5, units_processed: 1, units_skipped: [], units_failed: [2] }), status: 'completed_with_failures' })), 'completed_with_failures must reconcile units with units_total');
-ok(C.createModuleEnvelope({ ...cov({ units_total: 2, units_processed: 1, units_skipped: [], units_failed: [2] }), status: 'completed_with_failures' }).status === 'completed_with_failures', 'completed_with_failures accepts fully accounted coverage');
-ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, status: 'unsupported', findings: [pair], coverage: { units_total: 0, units_processed: 0, units_skipped: [], units_failed: [] } })), 'a module that did not run cannot report findings');
-ok(throws(() => C.createModuleEnvelope({ ...envelopeSpec, status: 'not_applicable', coverage: { units_total: 1, units_processed: 1, units_skipped: [], units_failed: [] } })), 'a module that did not run cannot report processed units');
-ok(throws(() => C.deterministicId('pdf.redaction', 'abc', 'R1', [text.anchor])), 'deterministic ID rejects a malformed input digest');
-let reads = 0;
-const accessorRecord = {};
-Object.defineProperty(accessorRecord, 'v', { enumerable: true, get() { reads++; return reads; } });
-ok(throws(() => C.stableStringify(accessorRecord)) && reads === 0, 'canonical JSON rejects accessors without invoking them');
-const accessorArray = [1];
-Object.defineProperty(accessorArray, 0, { enumerable: true, get() { reads++; return 1; } });
-ok(throws(() => C.stableStringify(accessorArray)) && reads === 0, 'canonical JSON rejects array-index accessors without invoking them');
-const inheritedFlags = Object.create({ [Config.MODULE_NAMES[0]]: true });
-ok(throws(() => Config.normalizeModules(inheritedFlags)), 'inherited module flags cannot bypass fail-closed configuration');
 
 const defaults = Config.selectedConfiguration();
 ok(Config.MODULE_NAMES.every((name) => defaults.modules[name] === false), 'every new module flag defaults to false');
@@ -159,6 +171,11 @@ ok(defaults.jurisdictionPacks.join(',') === 'za' && defaults.reference_time === 
 ok(defaults.referenceTime === null && Object.isFrozen(defaults.modules), 'reference time defaults to null and configuration is frozen');
 ok(throws(() => Config.selectedConfiguration({ modules: { unknown: true } })), 'unknown module flag fails closed');
 ok(throws(() => Config.selectedConfiguration({ modules: { redaction: 1 } })), 'non-boolean module flag fails closed');
+const inheritedModules = Object.create({ citations: true });
+ok(throws(() => Config.selectedConfiguration({ modules: inheritedModules })), 'inherited module flags cannot bypass fail-closed normalization');
+const nullPrototypeModules = Object.create(null);
+nullPrototypeModules.citations = false;
+ok(Config.selectedConfiguration({ modules: nullPrototypeModules }).modules.citations === false, 'an own false flag on a null-prototype record remains supported');
 for (const name of Config.MODULE_NAMES) {
   ok(throws(() => Config.selectedConfiguration({ modules: { [name]: true } })), 'unimplemented module fails closed instead of being silently ignored: ' + name);
 }

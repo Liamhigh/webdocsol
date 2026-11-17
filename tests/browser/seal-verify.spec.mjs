@@ -1,22 +1,22 @@
-import { createHash } from 'node:crypto';
 import { test, expect } from '@playwright/test';
+import { createHash } from 'node:crypto';
 import { installOfflineGuard, expectNoDocumentEgress, makeSyntheticPdf } from './helpers.mjs';
 
 const SYNTHETIC_TEXT = 'Synthetic sealing record total R250.00 dated 2 January 2026.';
 
 test('synthetic PDF seals with QR and manifest metadata, then verifies at root verify.html', async ({ page, browserName }) => {
   const external = await installOfflineGuard(page);
-  // Exercise one real, guarded digest submission. Stop calendar fallback and
-  // upgrade polling before they become additional browser requests; this test
-  // covers sealing/verification, not the remote timestamp calendar workflow.
+  // Exercise one real, guarded delivered-file digest submission. Stop calendar
+  // fallback, upgrade polling and verification-custody timestamping before they
+  // become additional browser requests; this test covers sealing/verification,
+  // not either remote calendar workflow.
   await page.addInitScript(() => {
     const nativeFetch = window.fetch.bind(window);
     window.fetch = (input, init) => {
       const url = typeof input === 'string' ? input : input.url;
-      // verify.html's separate custody timestamp is a different workflow from the
-      // delivered-file digest asserted below; keep it out of this seal-flow gate.
-      if (location.pathname === '/verify.html' && /opentimestamps\.org|eternitywall\.com/.test(url)) {
-        return Promise.reject(new TypeError('Offline test: verification custody timestamp disabled'));
+      if (window.location.pathname === '/verify.html' &&
+          /^https:\/\/[a-z]\.pool\.(?:opentimestamps\.org|eternitywall\.com)\/digest$/.test(url)) {
+        return Promise.reject(new TypeError('Offline test: verification-custody timestamp disabled'));
       }
       if (/^https:\/\/[a-z]\.pool\.(?:opentimestamps\.org|eternitywall\.com)\//.test(url) &&
           url !== 'https://a.pool.opentimestamps.org/digest') {
@@ -51,6 +51,10 @@ test('synthetic PDF seals with QR and manifest metadata, then verifies at root v
   for await (const chunk of sealedStream) sealedChunks.push(chunk);
   const sealedPdf = Buffer.concat(sealedChunks);
   expect(sealedPdf.length).toBeGreaterThan(1000);
+  const expectedOtsDigest = createHash('sha256').update(sealedPdf).digest();
+  const timestampRequests = external.filter((request) => request.timestampDigestCandidate);
+  expect(timestampRequests).toHaveLength(1);
+  expect(timestampRequests[0].bodyBase64).toBe(expectedOtsDigest.toString('base64'));
 
   const sealedMetadata = await page.evaluate(async (base64) => {
     const binary = atob(base64);
@@ -83,5 +87,10 @@ test('synthetic PDF seals with QR and manifest metadata, then verifies at root v
     return true;
   });
   expect(unexpectedErrors).toEqual([]);
-  expectNoDocumentEgress(expect, external, SYNTHETIC_TEXT, { otsSha256Hex: createHash('sha256').update(sealedPdf).digest('hex') });
+  const wrongOtsDigest = Buffer.from(expectedOtsDigest);
+  wrongOtsDigest[0] ^= 0xff;
+  let wrongDigestRejected = false;
+  try { expectNoDocumentEgress(expect, external, SYNTHETIC_TEXT, wrongOtsDigest); } catch { wrongDigestRejected = true; }
+  expect(wrongDigestRejected, 'a different 32-byte payload cannot satisfy the OTS digest gate').toBeTruthy();
+  expectNoDocumentEgress(expect, external, SYNTHETIC_TEXT, expectedOtsDigest);
 });

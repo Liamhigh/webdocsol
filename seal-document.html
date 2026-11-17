@@ -7088,9 +7088,10 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
       if (Array.isArray(item)) {
         var elements = [];
         for (var i = 0; i < item.length; i++) {
-          var elementDescriptor = Object.getOwnPropertyDescriptor(item, i);
-          if (!elementDescriptor || !('value' in elementDescriptor)) {
-            throw new TypeError('Canonical JSON requires data properties in arrays');
+          var elementDescriptor = Object.getOwnPropertyDescriptor(item, String(i));
+          if (!elementDescriptor) throw new TypeError('Canonical JSON contains a non-JSON value in an array');
+          if (elementDescriptor.get || elementDescriptor.set) {
+            throw new TypeError('Canonical JSON requires data properties, not accessors');
           }
           elements.push(visit(elementDescriptor.value, true));
         }
@@ -7100,8 +7101,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
         var properties = [];
         for (var k = 0; k < keys.length; k++) {
           var descriptor = Object.getOwnPropertyDescriptor(item, keys[k]);
-          if (!descriptor || !('value' in descriptor)) {
-            throw new TypeError('Canonical JSON requires data properties, not accessors: ' + keys[k]);
+          if (!descriptor || descriptor.get || descriptor.set) {
+            throw new TypeError('Canonical JSON requires data properties, not accessors');
           }
           properties.push(JSON.stringify(keys[k]) + ':' + visit(descriptor.value, false));
         }
@@ -7229,7 +7230,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
   /* Hash length-prefixed canonical parts: unambiguous without exposing quotes. */
   function deterministicId(moduleId, inputSha512, ruleId, anchors) {
     if (typeof inputSha512 !== 'string' || !SHA512_RE.test(inputSha512)) {
-      throw new TypeError('Deterministic IDs require a 128-character lowercase SHA-512 input digest');
+      throw new TypeError('Deterministic ID inputSha512 must be 128 lowercase hexadecimal characters');
     }
     var parts = [moduleId, inputSha512, ruleId, stableStringify(anchors || [])];
     for (var i = 0; i < parts.length; i++) {
@@ -7349,24 +7350,21 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
       errors.push('coverage.units_processed cannot exceed units_total');
     }
     if (Array.isArray(coverage.units_skipped) && Array.isArray(coverage.units_failed)) {
-      var seenUnits = {};
-      ['units_skipped', 'units_failed'].forEach(function (key) {
-        coverage[key].forEach(function (unit) {
-          var valid = (typeof unit === 'string' && unit.length > 0) || (typeof unit === 'number' && Number.isSafeInteger(unit) && unit >= 0);
-          if (!valid) { errors.push('coverage.' + key + ' entries must be non-empty strings or non-negative integers'); return; }
-          var id = typeof unit + ':' + unit;
-          if (seenUnits[id]) errors.push('coverage unit identifiers must be unique: ' + unit);
-          seenUnits[id] = true;
-        });
-      });
+      var seenUnits = [];
+      var unitLists = [coverage.units_skipped, coverage.units_failed];
+      for (var listIndex = 0; listIndex < unitLists.length; listIndex++) {
+        for (var unitIndex = 0; unitIndex < unitLists[listIndex].length; unitIndex++) {
+          var unit = unitLists[listIndex][unitIndex];
+          if ((!isNonNegativeInteger(unit)) && (typeof unit !== 'string' || !unit)) {
+            errors.push('coverage unit identifiers must be non-negative integers or non-empty strings');
+            continue;
+          }
+          var key = typeof unit + ':' + String(unit);
+          if (seenUnits.indexOf(key) !== -1) errors.push('coverage unit identifiers must be unique across skipped and failed units');
+          else seenUnits.push(key);
+        }
+      }
     }
-  }
-
-  function coverageAccounts(coverage) {
-    return isRecord(coverage) &&
-      isNonNegativeInteger(coverage.units_total) && isNonNegativeInteger(coverage.units_processed) &&
-      Array.isArray(coverage.units_skipped) && Array.isArray(coverage.units_failed) &&
-      coverage.units_total === coverage.units_processed + coverage.units_skipped.length + coverage.units_failed.length;
   }
 
   function validateModuleEnvelope(envelope) {
@@ -7405,14 +7403,18 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
       errors.push('completed cannot conceal failed units');
     }
     if ((envelope.status === 'completed' || envelope.status === 'completed_with_failures') && isRecord(envelope.coverage) &&
-      Array.isArray(envelope.coverage.units_skipped) && Array.isArray(envelope.coverage.units_failed) &&
       isNonNegativeInteger(envelope.coverage.units_total) && isNonNegativeInteger(envelope.coverage.units_processed) &&
-      !coverageAccounts(envelope.coverage)) {
+      Array.isArray(envelope.coverage.units_skipped) && Array.isArray(envelope.coverage.units_failed) &&
+      envelope.coverage.units_total !== envelope.coverage.units_processed + envelope.coverage.units_skipped.length + envelope.coverage.units_failed.length) {
       errors.push(envelope.status + ' must account for every unit as processed, skipped or failed');
     }
-    if ((envelope.status === 'unsupported' || envelope.status === 'not_applicable')) {
-      if (Array.isArray(envelope.findings) && envelope.findings.length) errors.push(envelope.status + ' cannot report findings');
-      if (isRecord(envelope.coverage) && envelope.coverage.units_processed !== 0) errors.push(envelope.status + ' cannot report processed units');
+    if (envelope.status === 'unsupported' || envelope.status === 'not_applicable') {
+      if (isRecord(envelope.coverage) && envelope.coverage.units_processed !== 0) {
+        errors.push(envelope.status + ' cannot report processed units');
+      }
+      if (Array.isArray(envelope.findings) && envelope.findings.length) {
+        errors.push(envelope.status + ' cannot report findings');
+      }
     }
     return { valid: errors.length === 0, errors: errors };
   }
@@ -7421,18 +7423,11 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (!isRecord(structure)) return false;
     var byteRange = isNonNegativeInteger(structure.byte_start) && isNonNegativeInteger(structure.byte_end) && structure.byte_end > structure.byte_start;
     var objectId = typeof structure.object === 'string' && structure.object.length > 0 && isNonNegativeInteger(structure.generation);
-    /* An operator/revision index supplements a locatable range or PDF object. */
+    /* An operator/revision index supplements a non-empty range or PDF object. */
     return byteRange || objectId;
   }
 
-  function sourcePageText(source, anchor) {
-    if (typeof source === 'function') return source(anchor);
-    if (isRecord(source) && Object.prototype.hasOwnProperty.call(source, String(anchor.page))) return source[String(anchor.page)];
-    return undefined;
-  }
-
-  /* options.pageText: function(anchor) or map of page number to page-text-v1 text. */
-  function validateEvidenceAnchor(anchor, options) {
+  function validateEvidenceAnchor(anchor, sourceText) {
     var errors = [];
     if (!isRecord(anchor)) return { valid: false, errors: ['anchor must be an object'] };
     if (typeof anchor.artifact_sha512 !== 'string' || !SHA512_RE.test(anchor.artifact_sha512)) {
@@ -7445,25 +7440,19 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     if (EXTRACTION_KINDS.indexOf(anchor.extraction && anchor.extraction.kind) === -1) errors.push('extraction.kind is not contracted');
     if (typeof anchor.quote !== 'string' && anchor.quote !== null) errors.push('quote must be exact text or null for structural evidence');
     if (typeof anchor.quote === 'string') {
+      if (!anchor.quote.length) errors.push('text anchors require non-empty exact source text');
+      if (typeof sourceText !== 'string') {
+        errors.push('text anchors require the complete source page text for verification');
+      }
       if (!isNonNegativeInteger(anchor.char_start) || !isNonNegativeInteger(anchor.char_end)) {
         errors.push('text anchors require UTF-16 char_start and char_end');
       } else {
-        if (anchor.char_end < anchor.char_start) errors.push('char_end cannot precede char_start');
+        if (anchor.char_end <= anchor.char_start) errors.push('char_end must follow char_start');
         if (anchor.char_end - anchor.char_start !== anchor.quote.length) errors.push('UTF-16 offsets must equal quote.length');
-      }
-      if (!anchor.quote.length) errors.push('text anchors require a non-empty quote');
-      if (options && options.pageText && anchor.page !== null && isNonNegativeInteger(anchor.char_start) && isNonNegativeInteger(anchor.char_end)) {
-        var text = sourcePageText(options.pageText, anchor);
-        if (typeof text !== 'string') {
-          errors.push('source text for the anchored page is unavailable');
-        } else {
-          if (text.slice(anchor.char_start, anchor.char_end) !== anchor.quote) errors.push('quote does not match the source text at its offsets');
-          if (typeof anchor.context_before === 'string' && text.slice(Math.max(0, anchor.char_start - anchor.context_before.length), anchor.char_start) !== anchor.context_before) {
-            errors.push('context_before does not match the source text');
-          }
-          if (typeof anchor.context_after === 'string' && text.slice(anchor.char_end, anchor.char_end + anchor.context_after.length) !== anchor.context_after) {
-            errors.push('context_after does not match the source text');
-          }
+        if (typeof sourceText === 'string') {
+          if (sourceText.slice(anchor.char_start, anchor.char_end) !== anchor.quote) errors.push('quote does not match source text at the stated UTF-16 offsets');
+          if (sourceText.slice(0, anchor.char_start) !== anchor.context_before) errors.push('context_before does not match the complete preceding source text');
+          if (sourceText.slice(anchor.char_end) !== anchor.context_after) errors.push('context_after does not match the complete following source text');
         }
       }
       if (anchor.page === null) errors.push('text anchors require a page');
@@ -7477,32 +7466,34 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     return { valid: errors.length === 0, errors: errors };
   }
 
-  function evidenceLocationKey(anchor) {
-    var structure = isRecord(anchor.structure) ? anchor.structure : null;
-    return stableStringify([
-      anchor.artifact_sha512, anchor.page,
-      typeof anchor.quote === 'string' ? [anchor.char_start, anchor.char_end] : null,
-      structure ? [structure.byte_start === undefined ? null : structure.byte_start,
-        structure.byte_end === undefined ? null : structure.byte_end,
-        structure.object === undefined ? null : structure.object,
-        structure.generation === undefined ? null : structure.generation] : null
-    ]);
+  function evidenceLocation(anchor) {
+    if (typeof anchor.quote === 'string') {
+      return ['text', anchor.artifact_sha512, anchor.page, anchor.char_start, anchor.char_end];
+    }
+    var structure = anchor.structure || {};
+    return ['structure', anchor.artifact_sha512, anchor.page, structure.object || null,
+      typeof structure.generation === 'undefined' ? null : structure.generation,
+      typeof structure.byte_start === 'undefined' ? null : structure.byte_start,
+      typeof structure.byte_end === 'undefined' ? null : structure.byte_end];
   }
 
-  function validatePairFinding(finding, options) {
+  function validatePairFinding(finding, sourceTexts) {
     var errors = [];
     if (!isRecord(finding)) return { valid: false, errors: ['pair finding must be an object'] };
     if (!Array.isArray(finding.anchors) || finding.anchors.length !== 2) {
       errors.push('pair findings require exactly two anchors');
     } else {
+      if (!Array.isArray(sourceTexts) || sourceTexts.length !== 2) {
+        errors.push('pair findings require the two complete source page texts');
+      }
       var anchorsValid = true;
       for (var i = 0; i < finding.anchors.length; i++) {
-        var result = validateEvidenceAnchor(finding.anchors[i], options);
+        var result = validateEvidenceAnchor(finding.anchors[i], Array.isArray(sourceTexts) ? sourceTexts[i] : undefined);
         if (!result.valid) anchorsValid = false;
         for (var e = 0; e < result.errors.length; e++) errors.push('anchors[' + i + ']: ' + result.errors[e]);
       }
-      if (anchorsValid && evidenceLocationKey(finding.anchors[0]) === evidenceLocationKey(finding.anchors[1])) {
-        errors.push('pair findings require two distinct evidence anchors');
+      if (anchorsValid && stableStringify(evidenceLocation(finding.anchors[0])) === stableStringify(evidenceLocation(finding.anchors[1]))) {
+        errors.push('pair findings require two distinct source locations');
       }
     }
     if (typeof finding.incompatibility_explanation !== 'string' || !finding.incompatibility_explanation.trim()) {
@@ -7572,6 +7563,12 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     return value !== null && typeof value === 'object' && !Array.isArray(value);
   }
 
+  function isPlainRecord(value) {
+    if (!isRecord(value)) return false;
+    var prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
   function compareStrings(a, b) {
     return a < b ? -1 : (a > b ? 1 : 0);
   }
@@ -7592,16 +7589,16 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
   function normalizeModules(input) {
     if (typeof input === 'undefined' || input === null) input = {};
-    if (!isRecord(input)) throw new TypeError('opts.modules must be an object');
-    var prototype = Object.getPrototypeOf(input);
-    if (prototype !== Object.prototype && prototype !== null) throw new TypeError('opts.modules must be a plain object');
+    if (!isPlainRecord(input)) throw new TypeError('opts.modules must be a plain object');
     Object.keys(input).forEach(function (name) {
       if (MODULE_NAMES.indexOf(name) === -1) throw new TypeError('Unknown analysis module flag: ' + name);
       if (typeof input[name] !== 'boolean') throw new TypeError('Analysis module flags must be boolean: ' + name);
       if (input[name]) throw new Error('Analysis module is not implemented; keep its Phase 0 flag false: ' + name);
     });
     var normalized = {};
-    MODULE_NAMES.forEach(function (name) { normalized[name] = Object.prototype.hasOwnProperty.call(input, name) && input[name] === true; });
+    MODULE_NAMES.forEach(function (name) {
+      normalized[name] = Object.prototype.hasOwnProperty.call(input, name) && input[name] === true;
+    });
     return deepFreeze(normalized);
   }
 
@@ -21162,14 +21159,14 @@ async function startSealing() {
         await voEnsureForensicScripts(function(msg){ updateStep('Fraud','processing',msg); });
         var pdfDocForForensics = await PDFDocument.load(fileBytes, { ignoreEncryption: true });
         _pipelinePageCount = pdfDocForForensics.getPageCount();
-        updateStep('Fraud', 'processing', 'Scanning ' + _pipelinePageCount + ' page(s) - contradiction detectors running...');
+        updateStep('Fraud', 'processing', 'Scanning ' + _pipelinePageCount + ' page(s) - 61 contradiction detectors running...');
         // The signed rule package (engine-update loop) is decided BEFORE the scan so
         // the report names exactly what applied; bounded wait, never blocks the seal.
         try {
           await Promise.race([voLoadRulePackage(), new Promise(function (r) { setTimeout(r, VO_RULES_FETCH_TIMEOUT_MS + 500); })]);
         } catch (eRP) {}
         forensicResult = await runForensicEngine(fileBytes, pdfDocForForensics, function (done, total) {
-          updateStep('Fraud', 'processing', 'Scanning page ' + done + ' of ' + total + ' - contradiction detectors running...');
+          updateStep('Fraud', 'processing', 'Scanning page ' + done + ' of ' + total + ' - 61 contradiction detectors running...');
         }, { referenceTime: new Date().toISOString() }); // the analysis instant is an input, never read by the engine (determinism): it dates the "dated after its analysis" note
         // Keep the per-page text for the finding-anchored narrator excerpt.
         try { _pipelineTextBlocks = (forensicResult && Array.isArray(forensicResult.pageTexts)) ? forensicResult.pageTexts : null; } catch (ePT) { _pipelineTextBlocks = null; }

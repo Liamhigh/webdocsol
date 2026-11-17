@@ -65,6 +65,8 @@ ok(engineDoc.includes('**Findings JSON:** v1.11.0') && engineDoc.includes('repor
 ok(engineDoc.includes('**57 registered suites**'), 'ENGINE test section names the current registry size');
 
 ok(!html.includes("of 46 contradiction types triggered") && !html.includes("'/46 triggered"), 'stale 46-type user-facing totals are gone');
+const detectorProgress = html.match(/\b\d+ contradiction detectors running\.\.\./g) || [];
+ok(!html.includes('40 contradiction detectors running...') && detectorProgress.length === 2 && detectorProgress.every((message) => message === runList.length + ' contradiction detectors running...'), 'both forensic progress messages use the source-derived 61-entry main run-list count');
 const dynamicTotals = html.match(/Object\.keys\(CONTRADICTION_TYPES\)\.length/g) || [];
 ok(dynamicTotals.length >= 2 && html.includes("' of ' + Object.keys(CONTRADICTION_TYPES).length + ' contradiction types triggered'"), 'seal-page result totals derive from the live taxonomy');
 ok(html.includes('/* VO-INLINE:analysis-contracts.js:START */') && html.includes('/* VO-INLINE:analysis-config.js:START */'), 'new shared contracts are inlined into the production seal page');

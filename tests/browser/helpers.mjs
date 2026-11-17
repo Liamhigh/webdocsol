@@ -4,16 +4,19 @@ export async function installOfflineGuard(page, allowedOrigin = 'http://127.0.0.
   await page.route('**/*', async (route) => {
     const request = route.request();
     const url = new URL(request.url());
-    const contractedManifest = request.method() === 'GET' && url.pathname === '/api/v1/rules/manifest';
-    if (url.origin === expectedOrigin && !url.pathname.startsWith('/api/')) return route.continue();
-    if (url.origin === expectedOrigin && contractedManifest) return route.continue();
+    const sameOriginAsset = url.origin === expectedOrigin &&
+      (request.method() === 'GET' || request.method() === 'HEAD') &&
+      !/^\/api(?:\/|$)/.test(url.pathname);
+    if (sameOriginAsset) return route.continue();
     const body = request.postData() || '';
     const bodyBuffer = request.postDataBuffer();
-    const staticAsset = request.method() === 'GET' && !body && (
+    const staticAsset = (request.method() === 'GET' && !body && (
+      (url.origin === expectedOrigin && url.pathname === '/api/v1/rules/manifest' && !url.search) ||
       (url.protocol === 'https:' && url.hostname === 'fonts.googleapis.com' && /^\/css2?$/.test(url.pathname)) ||
       (url.protocol === 'https:' && url.hostname === 'fonts.gstatic.com' && url.pathname.startsWith('/s/'))
-    );
-    const timestampDigest = request.method() === 'POST' && url.protocol === 'https:' &&
+    ));
+    const allowedRuleManifest = staticAsset && url.origin === expectedOrigin && url.pathname === '/api/v1/rules/manifest';
+    const timestampDigestCandidate = request.method() === 'POST' && url.protocol === 'https:' &&
       /^[a-z]\.pool\.opentimestamps\.org$/.test(url.hostname) && url.pathname === '/digest' &&
       bodyBuffer !== null && bodyBuffer.length === 32;
     external.push({
@@ -23,15 +26,14 @@ export async function installOfflineGuard(page, allowedOrigin = 'http://127.0.0.
       body,
       bodyBase64: bodyBuffer ? bodyBuffer.toString('base64') : '',
       staticAsset,
-      timestampDigest,
-      sameOriginApi: url.origin === expectedOrigin
+      timestampDigestCandidate
     });
-    return route.abort('failed');
+    return allowedRuleManifest ? route.continue() : route.abort('failed');
   });
   return external;
 }
 
-export function expectNoDocumentEgress(expect, external, syntheticText, options = {}) {
+export function expectNoDocumentEgress(expect, external, syntheticText, expectedTimestampDigest = null) {
   const fragments = [syntheticText, ...syntheticText.split(/\s+/).filter((word) => word.length >= 6)];
   const variants = new Set();
   for (const fragment of fragments) {
@@ -45,10 +47,18 @@ export function expectNoDocumentEgress(expect, external, syntheticText, options 
       expect(allRequestData.includes(variant), `document fragment reached a blocked destination: ${variant}`).toBeFalsy();
     }
   }
-  const expectedDigest = options.otsSha256Hex ? Buffer.from(options.otsSha256Hex, 'hex').toString('base64') : null;
-  const unexpected = external.filter((request) => !request.staticAsset &&
-    !(request.timestampDigest && expectedDigest !== null && request.bodyBase64 === expectedDigest));
-  expect(unexpected, `only static fonts, the contracted rules manifest and the exact SHA-256 OTS digest of the delivered file are permitted outside static test-origin files: ${JSON.stringify(unexpected)}`).toEqual([]);
+  let expectedDigestBase64 = null;
+  if (expectedTimestampDigest !== null) {
+    const expectedDigest = Buffer.from(expectedTimestampDigest);
+    if (expectedDigest.length !== 32) throw new TypeError('The expected OTS digest must be exactly 32 bytes');
+    expectedDigestBase64 = expectedDigest.toString('base64');
+  }
+  const unexpected = external.filter((request) => {
+    if (request.staticAsset) return false;
+    if (request.timestampDigestCandidate && expectedDigestBase64 !== null && request.bodyBase64 === expectedDigestBase64) return false;
+    return true;
+  });
+  expect(unexpected, `only the test origin, static fonts and the exact expected 32-byte OTS digest submission are permitted: ${JSON.stringify(unexpected)}`).toEqual([]);
 }
 
 export async function makeSyntheticPdf(page, text) {
