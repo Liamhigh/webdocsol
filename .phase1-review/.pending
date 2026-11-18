@@ -1,1 +1,1 @@
-Apply .phase1-review/042249f.patch.gz.b64 as instructed in PR #303; remove transport artifacts before final verification.
+Remove .phase1-review entirely after applying the exact correction; required final tree b2e0b5a70a7eb61679da2216380f990afe154168.
