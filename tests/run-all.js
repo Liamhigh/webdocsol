@@ -66,6 +66,7 @@ const suites = [
   'documentation-consistency.test.mjs',
   'evaluation-metrics.test.mjs',
   'evaluation-contractnli.test.mjs',
+  'evaluation-contradoc.test.mjs',
 ];
 
 // A suite PASSES only if its own process exits 0. The runner prints its OWN
