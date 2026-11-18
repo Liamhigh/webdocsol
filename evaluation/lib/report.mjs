@@ -8,7 +8,7 @@ export function canonicalize(value) {
   }
   if (Array.isArray(value)) return value.map(canonicalize);
   if (!value || Object.getPrototypeOf(value) !== Object.prototype) throw new TypeError('Evaluation JSON supports plain objects only');
-  const output = {};
+  const output = Object.create(null);
   for (const key of Object.keys(value).sort()) {
     if (value[key] !== undefined) output[key] = canonicalize(value[key]);
   }
@@ -44,7 +44,7 @@ function publicCaseResult(result) {
       ...result.scope,
       confusion: result.scope_confusion
     },
-    normalization_transformations: [...new Set(result.matching.matches.flatMap((match) => match.expected.aligned_spans.map((span) => span.transformation)))].sort()
+    normalization_transformations: result.normalization_transformations.slice().sort()
   };
 }
 

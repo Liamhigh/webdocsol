@@ -17,7 +17,7 @@ Without `--output`, the canonical report is written to standard output. Identica
 
 ## Input and reproducibility
 
-`schema.json` is the JSON Schema draft 2020-12 contract for the input. A run contains:
+`schema.json` is the JSON Schema draft 2020-12 contract for the input. The CLI enforces `schema_version`, required fields, types, and forbidden additional properties before evaluation; semantic checks additionally verify stable IDs, exact quotations, boundaries, normalization, and exclusions. A run contains:
 
 - `EvaluationManifest`: dataset ID, pinned dataset revision and SHA-512, redistribution/license terms, evaluator revision, engine commit, ruleset, complete deterministic options, caller-supplied reference time, and code version.
 - `EvaluationCase` records: stable case/document IDs, preserved original source text, expected contradictions, actual findings, and an optional justified exclusion.
@@ -27,6 +27,8 @@ Without `--output`, the canonical report is written to standard output. Identica
 Expected spans and actual anchors carry exact quotations and UTF-16 code-unit offsets. A quotation must equal its addressed source slice exactly; neither gold nor predicted evidence is implicitly trimmed. Page values are positive integers only when a genuine mapping exists, otherwise `null`.
 
 Downloaded datasets and caches belong under `evaluation/.cache/`, which is ignored and is never a production asset. Generated reports belong under `evaluation/reports/`, also ignored. Do not commit confidential documents, extracted evidence, or non-redistributable datasets. Small synthetic source fixtures may be committed outside those ignored directories.
+
+Evaluation is deliberately bounded: at most 16 MiB of input JSON, 2,048 cases, 4,000,000 total original/normalized UTF-16 code units, 1,000,000 code units per original or normalized case text, 128 expected contradictions and 128 actual findings per case, 128 spans per contradiction or anchors per finding, 16,384 same-rule candidate pairs and 131,072 evidence comparisons per case, with corpus-wide candidate and comparison ceilings of 65,536 and 1,048,576. Inputs exceeding these limits fail closed before metric calculation. Output may not overwrite the input dataset. Report files are written to a same-directory temporary file and atomically renamed, so concurrent or interrupted writes do not expose a partial report. Untrusted terminal control characters are escaped in CLI diagnostics.
 
 ## Normalization and alignment
 
@@ -38,15 +40,15 @@ The evaluator maps expected spans through this explicit table before exact compa
 
 The report deliberately keeps these tasks separate:
 
-1. **Document detection**: whether a document has any expected or predicted contradiction.
-2. **Contradiction detection**: deterministic one-to-one matching within the same `rule_id`.
+1. **Document detection**: whether a document has any expected or predicted contradiction, counted once per distinct included `document_id`.
+2. **Contradiction detection**: deterministic one-to-one matching within the same `rule_id`, globally optimized for task-exact and localization quality rather than greedy local pairing.
 3. **Pair detection**:
    - strict ordered exact-span matching;
    - unordered exact-span matching;
    - task matching using each expectation's `pair_mode`;
    - partial pair credit, including unmatched expectations in the denominator;
    - structural pair completeness.
-4. **Evidence localization**: exact-span TP/FP/FN and separate duplicate-sensitive Unicode token-overlap metrics.
+4. **Evidence localization**: exact-span TP/FP/FN and separate duplicate-sensitive Unicode token-overlap metrics. Expected spans and actual anchors are assigned one-to-one; unmatched anchors remain token false positives, and combining marks stay attached to their tokens.
 5. **Page localization**: accuracy only over expected spans with genuine integer page mappings; missing mappings are counted separately.
 6. **Scope classification**: accuracy plus expected/actual scope-confusion records.
 

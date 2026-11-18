@@ -1,10 +1,10 @@
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { spawnSync } from 'node:child_process';
+import { spawn, spawnSync } from 'node:child_process';
 import {
   binaryMetrics,
   evaluateCases,
@@ -284,5 +284,107 @@ for (const productionFile of ['seal-document.html', 'forensic-engine-page.js', '
 }
 ok(validateEvaluationRun(run([excludedCase])).length === 0, 'an explicit, justified exclusion is valid');
 ok(validateEvaluationRun(run([{ ...excludedCase, exclusion: {} }])).some((error) => error.includes('exclusion requires a reason')), 'silent or unexplained exclusion is rejected');
+
+const noSchemaVersion = run([]);
+delete noSchemaVersion.schema_version;
+ok(validateEvaluationRun(noSchemaVersion).some((error) => error.includes('$.schema_version is required')), 'the CLI contract requires schema_version');
+ok(validateEvaluationRun({ ...run([]), schema_version: '2.0.0' }).some((error) => error.includes('$.schema_version must equal')), 'an unsupported schema version fails closed');
+ok(validateEvaluationRun({ ...run([]), unexpected: true }).some((error) => error.includes('unsupported property "unexpected"')), 'properties forbidden by the published schema are rejected');
+
+const globalExpected = [
+  expected('global-e1', 'D20', pairExpected.evidence_spans, 'global', 'unordered'),
+  expected('global-e2', 'D20', pairExpected.evidence_spans, 'global', 'ordered')
+];
+const globalActual = [
+  actual('global-a1', 'D20', [actualAnchor(pairText, 'global-a1-alpha', 'Alpha'), actualAnchor(pairText, 'global-a1-beta', 'Beta')]),
+  actual('global-a2', 'D20', [actualAnchor(pairText, 'global-a2-beta', 'Beta'), actualAnchor(pairText, 'global-a2-alpha', 'Alpha')])
+];
+const globalAssignment = one(evaluationCase('global-assignment', pairText, globalExpected, globalActual));
+ok(globalAssignment.metrics.pair_detection.task.micro.tp === 2, 'global assignment maximizes task-exact matches instead of accepting a greedy local choice');
+const globalReordered = one(evaluationCase('global-assignment-reordered', pairText, globalExpected, globalActual.slice().reverse()));
+ok(globalReordered.metrics.pair_detection.task.micro.tp === 2, 'globally optimal assignment is independent of prediction input order');
+
+const repeatedText = 'Alpha Alpha';
+const repeatedExpected = [
+  expectedSpan(repeatedText, 'repeat-e0', 'Alpha', 1, 0),
+  expectedSpan(repeatedText, 'repeat-e1', 'Alpha', 2, 6)
+];
+const oneAnchor = one(evaluationCase('one-anchor-no-reuse', repeatedText, [expected('repeat-pair', 'D21', repeatedExpected)], [actual('repeat-prediction', 'D21', [actualAnchor(repeatedText, 'repeat-a0', 'Alpha', 1, 0)])]));
+ok(oneAnchor.metrics.evidence_localization.token_overlap.micro.tp === 1 && oneAnchor.metrics.evidence_localization.token_overlap.micro.fn === 1, 'one actual anchor cannot receive token credit for two expected spans');
+ok(oneAnchor.metrics.page_localization.micro.numerator === 1 && oneAnchor.metrics.page_localization.micro.denominator === 2, 'an unmatched expected span remains a page-localization failure');
+const surplusAnchors = one(evaluationCase('surplus-anchors', repeatedText, [expected('surplus-pair', 'D21', [repeatedExpected[0]])], [actual('surplus-prediction', 'D21', [actualAnchor(repeatedText, 'surplus-a0', 'Alpha', 1, 0), actualAnchor(repeatedText, 'surplus-a1', 'Alpha', 2, 6)])]));
+ok(surplusAnchors.metrics.evidence_localization.token_overlap.micro.fp === 1, 'unmatched actual anchors contribute token false positives');
+
+const sharedPositive = evaluationCase('shared-positive', pairText, [pairExpected], [actual('shared-prediction', 'D01', pairExpected.evidence_spans.map((span, index) => ({ ...span, anchor_id: 'shared-a' + index })))]);
+const sharedNegative = evaluationCase('shared-negative', 'No additional contradiction.');
+sharedPositive.document_id = 'shared-document';
+sharedNegative.document_id = 'shared-document';
+const sharedDocuments = evaluateCases([sharedPositive, sharedNegative]);
+ok(sharedDocuments.metrics.document_detection.micro.tp === 1 && sharedDocuments.metrics.document_detection.micro.tn === 0, 'document detection counts a shared document_id only once');
+
+const singleSpan = one(evaluationCase('single-span-completeness', pairText, [expected('single-e', 'D22', [expectedSpan(pairText, 'single-span', 'Alpha', 1)])], [actual('single-a', 'D22', [actualAnchor(pairText, 'single-anchor', 'Alpha', 1)])]));
+ok(singleSpan.metrics.pair_detection.pair_completeness.micro.value === NOT_DEFINED && singleSpan.metrics.pair_detection.pair_completeness.micro.denominator === 0, 'single-span expectations do not enter pair-completeness denominators');
+
+const nulScope = one(evaluationCase('nul-scope', pairText, [expected('nul-e', 'D23', pairExpected.evidence_spans, 'local\u0000gold')], [actual('nul-a', 'D23', pairExpected.evidence_spans.map((span, index) => ({ ...span, anchor_id: 'nul-a' + index })), 'local\u0000actual')]));
+ok(nulScope.metrics.scope_classification.confusion[0].expected === 'local\u0000gold' && nulScope.metrics.scope_classification.confusion[0].actual === 'local\u0000actual', 'scope confusion preserves labels containing NUL characters');
+
+const prototypeInput = JSON.parse('{"__proto__":{"polluted":true},"safe":1}');
+const prototypeCanonical = canonicalJson(prototypeInput);
+ok(prototypeCanonical.includes('"__proto__"') && !({}).polluted, 'canonical JSON preserves an own __proto__ key without prototype mutation');
+const normalizedMiss = evaluationCase('normalized-miss', normalizedCase.source_text, normalizedCase.expected_contradictions, []);
+normalizedMiss.normalization = normalizedCase.normalization;
+const normalizedMissReport = buildEvaluationReport(run([normalizedMiss]), evaluateCases([normalizedMiss]));
+ok(normalizedMissReport.cases[0].normalization_transformations[0] === 'collapse-internal-whitespace', 'normalization provenance survives when every contradiction is missed');
+
+const tokenlessText = '!!!';
+const tokenlessExpected = [expected('tokenless-e', 'D24', [expectedSpan(tokenlessText, 'tokenless-span', '!!!')])];
+const tokenlessActual = [
+  actual('tokenless-z', 'D24', [actualAnchor(tokenlessText, 'tokenless-anchor-z', '!!!')], 'z'),
+  actual('tokenless-a', 'D24', [actualAnchor(tokenlessText, 'tokenless-anchor-a', '!!!')], 'a')
+];
+ok(matchContradictions(tokenlessExpected, tokenlessActual).matches[0].actual.finding_id === 'tokenless-a' && matchContradictions(tokenlessExpected, tokenlessActual.slice().reverse()).matches[0].actual.finding_id === 'tokenless-a', 'tokenless candidate ties reach stable finding-ID ordering');
+ok(unicodeTokens('cafe\u0301').join('|') === 'cafe\u0301' && tokenOverlapCounts('cafe\u0301', 'cafe').tp === 0, 'combining marks remain attached to tokens and affect overlap');
+
+const crowdedExpected = Array.from({ length: 129 }, (_, index) => expected('crowded-e' + index, 'D25', [expectedSpan('A', 'crowded-span' + index, 'A')]));
+const crowdedActual = Array.from({ length: 129 }, (_, index) => actual('crowded-a' + index, 'D25', [actualAnchor('A', 'crowded-anchor' + index, 'A')]));
+const crowdedErrors = validateEvaluationRun(run([evaluationCase('crowded', 'A', crowdedExpected, crowdedActual)]));
+ok(crowdedErrors.some((error) => error.includes('too many same-rule candidate pairs')), 'per-case candidate work is bounded before matching');
+ok(throws(() => createAlignmentTable('a'.repeat(1000001), 'a'.repeat(1000001))), 'alignment allocation rejects text beyond the per-case limit');
+
+const reviewTemp = mkdtempSync(path.join(tmpdir(), 'verum-evaluation-review-'));
+try {
+  const cli = path.join(root, 'evaluation/run-evaluation.mjs');
+  const collisionInput = path.join(reviewTemp, 'collision.json');
+  const originalInput = JSON.stringify(reportRun);
+  writeFileSync(collisionInput, originalInput);
+  const collision = spawnSync(process.execPath, [cli, collisionInput, '--output', collisionInput], { encoding: 'utf8' });
+  ok(collision.status === 1 && collision.stderr.includes('must not overwrite the input dataset'), 'an output/input path collision is rejected');
+  ok(readFileSync(collisionInput, 'utf8') === originalInput, 'a rejected output collision preserves the source dataset byte-for-byte');
+
+  const terminalInput = path.join(reviewTemp, 'terminal.json');
+  const terminalCase = evaluationCase('bad\u001b[2J-id', 'Synthetic.');
+  writeFileSync(terminalInput, JSON.stringify(run([terminalCase, terminalCase])));
+  const terminal = spawnSync(process.execPath, [cli, terminalInput], { encoding: 'utf8' });
+  ok(terminal.status === 1 && !terminal.stderr.includes('\u001b'), 'CLI errors escape terminal control characters from untrusted identifiers');
+
+  const oversizedInput = path.join(reviewTemp, 'oversized.json');
+  writeFileSync(oversizedInput, Buffer.alloc(16 * 1024 * 1024 + 1, 32));
+  const oversized = spawnSync(process.execPath, [cli, oversizedInput], { encoding: 'utf8' });
+  ok(oversized.status === 1 && oversized.stderr.includes('16 MiB corpus limit'), 'oversized input is rejected before JSON parsing');
+
+  const concurrentOutput = path.join(reviewTemp, 'concurrent.json');
+  function runConcurrent() {
+    return new Promise((resolve) => {
+      const child = spawn(process.execPath, [cli, collisionInput, '--output', concurrentOutput], { stdio: 'ignore' });
+      child.on('close', resolve);
+    });
+  }
+  const concurrentStatuses = await Promise.all([runConcurrent(), runConcurrent()]);
+  const concurrentReport = JSON.parse(readFileSync(concurrentOutput, 'utf8'));
+  ok(concurrentStatuses.every((status) => status === 0) && concurrentReport.report_type === 'verum_omnis_developer_evaluation', 'concurrent CLI writers leave one complete canonical report');
+  ok(!readdirSync(reviewTemp).some((name) => name.endsWith('.tmp')), 'atomic report writes leave no temporary files after success');
+} finally {
+  rmSync(reviewTemp, { recursive: true, force: true });
+}
 
 done('evaluation-metrics');
