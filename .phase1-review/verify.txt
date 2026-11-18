@@ -1,1 +1,0 @@
-Verify 042249f.patch.gz.b64 by decoding and gunzipping; require uncompressed SHA-512 687237492d1bd7eb7c6bd04370731316414dbe5d650edd238a4c355c29574be5682e9c6fe9d0a95a78776c34fea51ceb55bb7e5f9e49c15f3be2c6e3428f8f94 before applying.
