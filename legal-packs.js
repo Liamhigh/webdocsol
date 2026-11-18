@@ -12,6 +12,10 @@
   'use strict';
 
   var REGISTRY_VERSION = '1.0.0';
+  var SUPPORTED_KINDS = Object.freeze([
+    'full_case', 'short_case', 'id', 'supra', 'neutral_case', 'reported_case',
+    'docket', 'statute', 'regulation', 'constitutional_provision', 'source_url'
+  ]);
 
   function isPlainRecord(value) {
     if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
@@ -26,10 +30,12 @@
     if (typeof rule.rule_id !== 'string' || !/^[a-z0-9-]+$/.test(rule.rule_id)) {
       throw new TypeError(packId + ': rule_id must be a lowercase kebab-case string');
     }
-    if (typeof rule.kind !== 'string' || !rule.kind) throw new TypeError(packId + '/' + rule.rule_id + ': kind is required');
+    if (SUPPORTED_KINDS.indexOf(rule.kind) === -1) {
+      throw new TypeError(packId + '/' + rule.rule_id + ': unsupported citation kind');
+    }
     if (!(rule.pattern instanceof RegExp)) throw new TypeError(packId + '/' + rule.rule_id + ': pattern must be a RegExp');
-    if (!rule.pattern.global) throw new TypeError(packId + '/' + rule.rule_id + ': pattern must be global');
-    if (rule.pattern.source.indexOf('(?<') !== -1) {
+    if (!rule.pattern.global || rule.pattern.sticky) throw new TypeError(packId + '/' + rule.rule_id + ': pattern must be global and not sticky');
+    if (rule.pattern.source.indexOf('(?<' + '=') !== -1 || rule.pattern.source.indexOf('(?<' + '!') !== -1) {
       throw new TypeError(packId + '/' + rule.rule_id + ': regex lookbehind is not supported (Safari < 16.4 cannot parse it)');
     }
     if (typeof rule.extract !== 'undefined' && typeof rule.extract !== 'function') {
@@ -89,6 +95,7 @@
 
   var api = {
     REGISTRY_VERSION: REGISTRY_VERSION,
+    SUPPORTED_KINDS: SUPPORTED_KINDS,
     validatePack: validatePack,
     register: register,
     has: has,

@@ -13,6 +13,9 @@ const Config = require(path.join(root, 'analysis-config.js'));
 const Packs = require(path.join(root, 'legal-packs.js'));
 const Citations = require(path.join(root, 'legal-citations.js'));
 
+ok(Packs.SUPPORTED_KINDS.join(',') === Citations.KINDS.join(','),
+  'the pack registry and citation core share one supported-kind contract');
+
 // --- pack registry --------------------------------------------------------------
 
 function syntheticRule(ruleId, kind, pattern, extract) {
@@ -40,6 +43,14 @@ throws(() => Packs.register({ id: 'yy', version: '1', rules: [syntheticRule('yy-
 ok(true, 'a non-global pattern is rejected');
 throws(() => Packs.register({ id: 'yy', version: '1', rules: [{ rule_id: 'yy-look', kind: 'id', pattern: new RegExp('(?<=x)y', 'g') }] }));
 ok(true, 'a lookbehind pattern is rejected at registration');
+throws(() => Packs.register({ id: 'yy', version: '1', rules: [syntheticRule('yy-sticky', 'id', /x/gy)] }));
+ok(true, 'a sticky pattern is rejected at registration');
+throws(() => Packs.register({ id: 'yy', version: '1', rules: [syntheticRule('yy-kind', 'unsupported', /x/g)] }));
+ok(true, 'an unsupported citation kind is rejected at registration');
+ok(noThrow(() => Packs.validatePack({
+  id: 'yy', version: '1',
+  rules: [syntheticRule('yy-named', 'id', /(?<number>\d+)/g)]
+})), 'a named-capture group is accepted as distinct from lookbehind');
 throws(() => Packs.get('zz'));
 ok(true, 'an unknown pack id fails closed');
 ok(Packs.resolvePacks(['xx'])[0] === xxPack, 'resolvePacks preserves explicit order');
@@ -118,6 +129,39 @@ ok(Packs.resolvePacks(['xx'])[0] === xxPack, 'resolvePacks preserves explicit or
     'occurrence ids are deterministic vo1 digests');
   throws(() => Citations.runCitationModule(['x'], { packs: [] }));
   ok(true, 'running without explicit packs fails closed');
+  const repeatedPack = Citations.runCitationModule(['100 XXR 200.'], { packs: [xxPack, xxPack] });
+  const singlePack = Citations.runCitationModule(['100 XXR 200.'], { packs: [xxPack] });
+  ok(repeatedPack.observations.length === 1 &&
+     repeatedPack.observations[0].occurrence_id === singlePack.observations[0].occurrence_id,
+    'repeating the same selected pack does not duplicate its occurrences or IDs');
+  const secondPack = {
+    id: 'xy',
+    version: '1.0.0',
+    rules: [syntheticRule('xx-full-case', 'full_case', /\b(\d{3}) (XXR) (\d+)\b/g)]
+  };
+  const distinctPackRun = Citations.runCitationModule(['100 XXR 200.'], { packs: [xxPack, secondPack] });
+  ok(distinctPackRun.observations.length === 2 &&
+     distinctPackRun.observations[0].occurrence_id !== distinctPackRun.observations[1].occurrence_id,
+    'pack identity keeps same-rule, same-span observations addressable');
+  const changedPatternPack = {
+    id: 'xx',
+    version: '1.0.0',
+    rules: xxPack.rules.map((rule) => ({
+      ...rule,
+      pattern: new RegExp(rule.pattern.source + '|999 XXR 888', rule.pattern.flags)
+    }))
+  };
+  const changedImplementation = Citations.runCitationModule(['100 XXR 200.'], { packs: [changedPatternPack] });
+  ok(changedImplementation.implementation_digest !== singlePack.implementation_digest,
+    'the implementation digest changes when a rule pattern changes');
+  const changedExtractorPack = {
+    id: 'xx',
+    version: '1.0.0',
+    rules: xxPack.rules.map((rule, index) => index === 0 ? { ...rule, extract: () => ({}) } : rule)
+  };
+  const changedExtractor = Citations.runCitationModule(['100 XXR 200.'], { packs: [changedExtractorPack] });
+  ok(changedExtractor.implementation_digest !== singlePack.implementation_digest,
+    'the implementation digest changes when an extraction function changes');
 }
 
 // --- engine integration --------------------------------------------------------------
@@ -126,6 +170,8 @@ ok(Packs.resolvePacks(['xx'])[0] === xxPack, 'resolvePacks preserves explicit or
   const Engine = require(path.join(root, 'forensic-engine-page.js'));
   const zaPack = require(path.join(root, 'legal-packs/za.js'));
   const previous = globalThis.extractPdfText;
+  const previousOcr = globalThis.voOcrRescuePages;
+  const previousPdfLib = globalThis.PDFLib;
   globalThis.extractPdfText = async () => ['The court in 2026 (3) SA 112 (SCA) applied CCT 19/20.'];
   const doc = { getPages() { throw new Error('synthetic raw-text fallback'); } };
   const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52]);
@@ -137,6 +183,8 @@ ok(Packs.resolvePacks(['xx'])[0] === xxPack, 'resolvePacks preserves explicit or
     'flag on: the citations envelope is recorded');
   ok(envelope.observations.length === 2 && envelope.observations[0].kind === 'reported_case' && envelope.observations[1].kind === 'docket',
     'engine-page text produces ZA occurrences in document order');
+  ok(envelope.observations.every((o) => o.extraction.kind === 'pdf_text'),
+    'whole-document raw-text fallback is not mislabeled as OCR');
   ok(Contracts.stableStringify(off.findings) === Contracts.stableStringify(on.findings) &&
      off.totalFindings === on.totalFindings,
     'enabling citations changes no finding or count');
@@ -151,9 +199,117 @@ ok(Packs.resolvePacks(['xx'])[0] === xxPack, 'resolvePacks preserves explicit or
      badPack.moduleResults.citations.failure.code === 'citation_module_error',
     'an unregistered pack yields a disclosed module failure, not a crash');
   ok(badPack.findings.length === off.findings.length, 'a module failure never stops or changes detection');
+  globalThis.PDFLib = {
+    PDFName: { of: () => ({}) },
+    PDFArray: function PDFArray() {},
+    PDFRawStream: function PDFRawStream() {}
+  };
+  globalThis.voOcrRescuePages = async (_bytes, blocks) => ({
+    textBlocks: blocks.map((text, index) => index === 1 ? '[OCR] [2026] ZACC 1 was cited in the judgment.' : text),
+    ocrPages: [2],
+    note: 'synthetic OCR provenance'
+  });
+  const twoPageDoc = {
+    getPages() {
+      return [
+        { node: { get: () => null } },
+        { node: { get: () => null } }
+      ];
+    },
+    context: { lookup: () => null }
+  };
+  const ocrRun = await Engine.runForensicEngine(bytes, twoPageDoc, null, {
+    modules: { citations: true }, jurisdictionPacks: ['za']
+  });
+  ok(ocrRun.moduleResults.citations.observations.length === 1 &&
+     ocrRun.moduleResults.citations.observations[0].extraction.kind === 'ocr',
+    'OCR-rescued citation text carries its actual extraction provenance');
+  class FakePDFRawStream {
+    constructor(content) { this.content = content; }
+  }
+  globalThis.PDFLib.PDFName.of = (name) => name;
+  globalThis.PDFLib.PDFRawStream = FakePDFRawStream;
+  globalThis.PDFLib.decodePDFRawStream = (stream) => ({
+    decode: () => new TextEncoder().encode(stream.content)
+  });
+  globalThis.voOcrRescuePages = async (_bytes, blocks) => ({
+    textBlocks: blocks,
+    ocrPages: [],
+    noTextPages: [1],
+    note: 'synthetic OCR with no recovered text'
+  });
+  const nativeTextDoc = {
+    getPages() {
+      return [
+        { node: { get: (name) => name === 'Contents' ? new FakePDFRawStream('(CCT 19/20) Tj') : null } },
+        { node: { get: (name) => name === 'Contents' ? new FakePDFRawStream('(A sufficiently long native text page for a deterministic OCR rescue test.) Tj') : null } }
+      ];
+    },
+    context: { lookup: (value) => value }
+  };
+  const noTextRun = await Engine.runForensicEngine(bytes, nativeTextDoc, null, {
+    modules: { citations: true }, jurisdictionPacks: ['za']
+  });
+  const nativeDocket = noTextRun.moduleResults.citations.observations.find((o) => o.kind === 'docket');
+  ok(nativeDocket && nativeDocket.span.page === 1 && nativeDocket.extraction.kind === 'pdf_text',
+    'a native citation on a page where OCR recovered no text retains pdf_text provenance');
   if (typeof previous === 'undefined') delete globalThis.extractPdfText;
   else globalThis.extractPdfText = previous;
+  if (typeof previousOcr === 'undefined') delete globalThis.voOcrRescuePages;
+  else globalThis.voOcrRescuePages = previousOcr;
+  if (typeof previousPdfLib === 'undefined') delete globalThis.PDFLib;
+  else globalThis.PDFLib = previousPdfLib;
   ok(zaPack.id === 'za', 'the ZA pack module loads for the engine path');
+}
+
+// --- engine dependency failures -----------------------------------------------------
+
+{
+  const Engine = require(path.join(root, 'forensic-engine-page.js'));
+  const Module = require('node:module');
+  const originalLoad = Module._load;
+  const savedGlobals = {
+    contracts: globalThis.VOAnalysisContracts,
+    packs: globalThis.VOLegalPacks,
+    citations: globalThis.VOLegalCitations
+  };
+  const previousText = globalThis.extractPdfText;
+  globalThis.extractPdfText = async () => ['A text block with enough words to reach the citations module safely.'];
+  const doc = { getPages() { throw new Error('synthetic raw-text fallback'); } };
+  const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52]);
+  try {
+    for (const failedRequest of ['./legal-citations.js', './analysis-contracts.js']) {
+      delete globalThis.VOAnalysisContracts;
+      delete globalThis.VOLegalPacks;
+      delete globalThis.VOLegalCitations;
+      Module._load = function (request, parent, isMain) {
+        if (request === failedRequest) throw new Error('synthetic load failure for ' + request);
+        return originalLoad.call(this, request, parent, isMain);
+      };
+      const result = await Engine.runForensicEngine(bytes, doc, null, {
+        modules: { citations: true }, jurisdictionPacks: ['za']
+      });
+      const failure = result.moduleResults && result.moduleResults.citations;
+      ok(failure && failure.status === 'failed' && failure.failure.code === 'citation_module_error',
+        failedRequest + ' load failure is disclosed without aborting the scan');
+      ok(/^[0-9a-f]{128}$/.test(failure.input_sha512) && failure.input_sha512 !== '0'.repeat(128),
+        failedRequest + ' failure envelope identifies the analyzed page text');
+      ok(Contracts.validateModuleEnvelope(failure).valid,
+        failedRequest + ' failure result still satisfies the module-envelope contract');
+      ok(Object.isFrozen(failure) && Object.isFrozen(failure.coverage.units_failed),
+        failedRequest + ' fallback failure envelope remains immutable without the contract dependency');
+    }
+  } finally {
+    Module._load = originalLoad;
+    if (typeof previousText === 'undefined') delete globalThis.extractPdfText;
+    else globalThis.extractPdfText = previousText;
+    if (typeof savedGlobals.contracts === 'undefined') delete globalThis.VOAnalysisContracts;
+    else globalThis.VOAnalysisContracts = savedGlobals.contracts;
+    if (typeof savedGlobals.packs === 'undefined') delete globalThis.VOLegalPacks;
+    else globalThis.VOLegalPacks = savedGlobals.packs;
+    if (typeof savedGlobals.citations === 'undefined') delete globalThis.VOLegalCitations;
+    else globalThis.VOLegalCitations = savedGlobals.citations;
+  }
 }
 
 // --- static guards over the new production sources --------------------------------------

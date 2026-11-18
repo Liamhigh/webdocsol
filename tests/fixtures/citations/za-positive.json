@@ -40,6 +40,11 @@
   {
     "id": "saflii-url",
     "text": "Read the judgment at https://www.saflii.org/za/cases/ZACC/2026/1.html before filing.",
-    "expect": [{ "rule_id": "za-saflii-url", "kind": "source_url", "raw": "https://www.saflii.org/za/cases/ZACC/2026/1.html", "components": { "host": "saflii.org" } }]
+    "expect": [{ "rule_id": "za-saflii-url", "kind": "source_url", "raw": "https://www.saflii.org/za/cases/ZACC/2026/1.html", "components": { "host": "www.saflii.org" } }]
+  },
+  {
+    "id": "saflii-url-dot-za-sentence-period",
+    "text": "The source is https://saflii.org.za/za/cases/ZACC/2026/1.html.",
+    "expect": [{ "rule_id": "za-saflii-url", "kind": "source_url", "raw": "https://saflii.org.za/za/cases/ZACC/2026/1.html", "components": { "host": "saflii.org.za" } }]
   }
 ]

@@ -19,8 +19,8 @@ const negatives = JSON.parse(readFileSync(path.join(root, 'tests/fixtures/citati
 // --- registry and pack shape -----------------------------------------------------------
 
 ok(zaPack.id === 'za' && zaPack.version === '1.0.0', 'the ZA pack carries its id and version');
-ok(zaPack.rules.map((rule) => rule.rule_id).join(',') === 'za-neutral-court,za-reported-sa,za-docket-cct,za-saflii-url',
-  'the ZA pack ships exactly its four narrow rules');
+ok(zaPack.rules.map((rule) => rule.rule_id).join(',') === 'za-neutral-court,za-reported-sa,za-docket-cct,za-id,za-supra,za-saflii-url',
+  'the ZA pack ships its narrow case, docket, short-form and source rules');
 ok(zaPack.rules.every((rule) => rule.pattern.global && !rule.pattern.source.includes('(?<')),
   'every ZA rule is global and lookbehind-free');
 ok(noThrow(() => Citations.validatePack(zaPack)), 'the ZA pack passes core pack validation');
@@ -42,6 +42,10 @@ for (const fixture of positives) {
     for (const key of Object.keys(expected.components)) {
       ok(occurrence.components[key] === expected.components[key],
         fixture.id + ': occurrence ' + index + ' component ' + key + ' is ' + JSON.stringify(expected.components[key]));
+    }
+    if (expected.kind === 'source_url') {
+      ok(occurrence.components.url === occurrence.raw,
+        fixture.id + ': URL component excludes sentence punctuation');
     }
   }
 }
@@ -87,6 +91,22 @@ for (const fixture of negatives) {
   const occurrences = Citations.extractOccurrences(Citations.normalizePages([text]), [zaPack]);
   ok(occurrences.length === 1 && occurrences[0].raw === '2026  (3)  SA  112  (SCA)',
     'wide whitespace matches and the raw quote is preserved byte-for-byte');
+}
+
+// --- South African short-form references ----------------------------------------------
+
+{
+  const text = 'In Foo v Bar, 2026 (3) SA 112 (SCA). Id. at para 12. Foo, supra applies.';
+  const envelope = Citations.runCitationModule([text], { packs: [zaPack] });
+  const id = envelope.observations.find((observation) => observation.kind === 'id');
+  const supra = envelope.observations.find((observation) => observation.kind === 'supra');
+  const caseCitation = envelope.observations.find((observation) => observation.kind === 'reported_case');
+  ok(id && id.raw === 'Id. at para 12' && id.resolution.state === 'resolved' &&
+     id.resolution.antecedent_occurrence_id === caseCitation.occurrence_id,
+    'ZA Id. references are emitted and resolve to the preceding case citation');
+  ok(supra && supra.raw === 'Foo, supra' && supra.resolution.state === 'resolved' &&
+     supra.resolution.antecedent_occurrence_id === caseCitation.occurrence_id,
+    'a ZA named supra reference resolves only to the matching preceding caption');
 }
 
 done('legal-citations-za');
