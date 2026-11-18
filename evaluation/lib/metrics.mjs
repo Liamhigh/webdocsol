@@ -418,7 +418,7 @@ function matchEvidenceSpans(expectedSpans, actualAnchors) {
     const token = scaledTokenF1(span.quote, anchor.quote);
     const distance = Math.abs(span.start - anchor.start) + Math.abs(span.end - anchor.end);
     const tie = BigInt(leftIndex * actual.length + rightIndex);
-    return (exact ? 0n : exactWeight) + (TOKEN_SCALE - token) * tokenWeight + BigInt(maxDistance - distance) * distanceWeight + tie;
+    return (exact ? 0n : exactWeight) + (TOKEN_SCALE - token) * tokenWeight + BigInt(distance) * distanceWeight + tie;
   });
   return pairs.map((pair) => ({
     expected: expected[pair.leftIndex].span,

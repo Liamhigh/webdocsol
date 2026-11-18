@@ -345,6 +345,20 @@ const tokenlessActual = [
 ok(matchContradictions(tokenlessExpected, tokenlessActual).matches[0].actual.finding_id === 'tokenless-a' && matchContradictions(tokenlessExpected, tokenlessActual.slice().reverse()).matches[0].actual.finding_id === 'tokenless-a', 'tokenless candidate ties reach stable finding-ID ordering');
 ok(unicodeTokens('cafe\u0301').join('|') === 'cafe\u0301' && tokenOverlapCounts('cafe\u0301', 'cafe').tp === 0, 'combining marks remain attached to tokens and affect overlap');
 
+const overlapText = ('word'.padEnd(20) + 'word' + ' '.repeat(6) + 'word').padEnd(10000) + 'word';
+const overlappingExpected = [
+  expectedSpan(overlapText, 'overlap-e0', 'word', 1, 0),
+  expectedSpan(overlapText, 'overlap-e1', 'word', 2, 20)
+];
+const overlappingActual = [
+  actualAnchor(overlapText, 'overlap-a0', 'word', 1, 0),
+  actualAnchor(overlapText, 'overlap-a1', 'word', 1, 30),
+  actualAnchor(overlapText, 'overlap-a2', 'word', 2, 10000)
+];
+const overlapAssignment = one(evaluationCase('overlap-priority', overlapText, [expected('overlap-e', 'D26', overlappingExpected)], [actual('overlap-a', 'D26', overlappingActual)]));
+ok(overlapAssignment.metrics.evidence_localization.exact_span.micro.tp === 1 && overlapAssignment.metrics.page_localization.micro.numerator === 1, 'global evidence assignment retains the exact match and then minimizes remaining distance');
+ok(overlapAssignment.metrics.evidence_localization.token_overlap.micro.tp === 2 && overlapAssignment.metrics.evidence_localization.token_overlap.micro.fp === 1 && overlapAssignment.metrics.evidence_localization.token_overlap.micro.fn === 0, 'exact-match priority and distance ordering remain deterministic for overlapping candidates');
+
 const crowdedExpected = Array.from({ length: 129 }, (_, index) => expected('crowded-e' + index, 'D25', [expectedSpan('A', 'crowded-span' + index, 'A')]));
 const crowdedActual = Array.from({ length: 129 }, (_, index) => actual('crowded-a' + index, 'D25', [actualAnchor('A', 'crowded-anchor' + index, 'A')]));
 const crowdedErrors = validateEvaluationRun(run([evaluationCase('crowded', 'A', crowdedExpected, crowdedActual)]));
