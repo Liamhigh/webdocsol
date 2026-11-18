@@ -893,7 +893,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `batch7c-court-corrections.test.mjs` | 38 | Court-bundle corrections (§4.20): whole-word admissions, date/reference discipline, legal-act nouns, actual billing, factive denial scope, existing burdens, entity status, registry fields, prior-analysis exclusion, behavioural source quality and ownership context |
 | `batch7d-ots-delivered-bytes.test.mjs` | 31 | Delivered-file OpenTimestamps receipts (§12.25): real detached-receipt digest bytes, post-seal/encrypted ordering, QR and Subject scheme markers, direct PDF+receipt compatibility, and legacy QR/metadata/ORIG resolution |
 | `engine-perf.test.mjs` | 5 | Per-page extraction does not re-parse the whole PDF |
-| `evaluation-metrics.test.mjs` | 97 | B9 development-only hand-calculated detection/localization metrics, schema/resource limits, globally optimal matching, one-to-one evidence credit, explicit UTF-16 normalization, pair/evidence/page/scope separation, failures/exclusions, canonical and atomic reports, CLI safety and production isolation |
+| `evaluation-metrics.test.mjs` | 109 | B9 development-only hand-calculated detection/localization metrics, full direct-call validation, bounded identifiers and early resource rejection, minimum-cost and scope-aware matching, distinct evidence locations, one-to-one evidence credit, explicit UTF-16 normalization, pair/evidence/page/scope separation, failures/exclusions, canonical and atomic reports, strict UTF-8 and symlink-safe CLI handling, and encoded-path production isolation |
 
 ---
 

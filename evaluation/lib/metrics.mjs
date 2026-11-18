@@ -114,6 +114,7 @@ function validateSchemaValue(value, schema, rootSchema, label, errors) {
   }
   if (typeof value === 'string') {
     if (schema.minLength !== undefined && value.length < schema.minLength) errors.push(label + ' is shorter than minLength');
+    if (schema.maxLength !== undefined && value.length > schema.maxLength) errors.push(label + ' is longer than maxLength');
     if (schema.pattern && !(new RegExp(schema.pattern).test(value))) errors.push(label + ' does not match the required pattern');
   }
   if (typeof value === 'number' && schema.minimum !== undefined && value < schema.minimum) errors.push(label + ' is below minimum');
@@ -189,7 +190,10 @@ function resourceErrors(run) {
   let totalSource = 0;
   let totalCandidates = 0;
   let totalComparisons = 0;
-  if (run.cases.length > EVALUATION_LIMITS.maxCases) errors.push('evaluation exceeds the corpus case limit');
+  if (run.cases.length > EVALUATION_LIMITS.maxCases) {
+    errors.push('evaluation exceeds the corpus case limit');
+    return errors;
+  }
   for (const evaluationCase of run.cases) {
     if (!isObject(evaluationCase)) continue;
     const caseId = nonemptyString(evaluationCase.case_id) ? evaluationCase.case_id : '<missing case_id>';
@@ -199,17 +203,31 @@ function resourceErrors(run) {
     if (sourceLength > EVALUATION_LIMITS.maxSourceCodeUnitsPerCase || normalizedLength > EVALUATION_LIMITS.maxSourceCodeUnitsPerCase) errors.push(caseId + ': text exceeds the per-case UTF-16 code-unit limit');
     const expected = Array.isArray(evaluationCase.expected_contradictions) ? evaluationCase.expected_contradictions : [];
     const actual = Array.isArray(evaluationCase.actual_findings) ? evaluationCase.actual_findings : [];
-    if (expected.length > EVALUATION_LIMITS.maxExpectedContradictionsPerCase) errors.push(caseId + ': too many expected contradictions');
-    if (actual.length > EVALUATION_LIMITS.maxActualFindingsPerCase) errors.push(caseId + ': too many actual findings');
+    let oversized = false;
+    if (expected.length > EVALUATION_LIMITS.maxExpectedContradictionsPerCase) {
+      errors.push(caseId + ': too many expected contradictions');
+      oversized = true;
+    }
+    if (actual.length > EVALUATION_LIMITS.maxActualFindingsPerCase) {
+      errors.push(caseId + ': too many actual findings');
+      oversized = true;
+    }
+    for (const actualRecord of actual) {
+      if (isObject(actualRecord) && Array.isArray(actualRecord.anchors) && actualRecord.anchors.length > EVALUATION_LIMITS.maxAnchorsPerFinding) {
+        errors.push(caseId + ': too many actual anchors');
+        oversized = true;
+      }
+    }
+    if (oversized) continue;
     let candidatePairs = 0;
     let comparisons = 0;
-    for (const actualRecord of actual) {
-      if (isObject(actualRecord) && Array.isArray(actualRecord.anchors) && actualRecord.anchors.length > EVALUATION_LIMITS.maxAnchorsPerFinding) errors.push(caseId + ': too many actual anchors');
-    }
     for (const expectedRecord of expected) {
       if (!isObject(expectedRecord)) continue;
       const spans = Array.isArray(expectedRecord.evidence_spans) ? expectedRecord.evidence_spans : [];
-      if (spans.length > EVALUATION_LIMITS.maxEvidenceSpansPerContradiction) errors.push(caseId + ': too many expected evidence spans');
+      if (spans.length > EVALUATION_LIMITS.maxEvidenceSpansPerContradiction) {
+        errors.push(caseId + ': too many expected evidence spans');
+        continue;
+      }
       for (const actualRecord of actual) {
         if (!isObject(actualRecord) || actualRecord.rule_id !== expectedRecord.rule_id) continue;
         const anchors = Array.isArray(actualRecord.anchors) ? actualRecord.anchors : [];
@@ -228,22 +246,10 @@ function resourceErrors(run) {
   return errors;
 }
 
-export function validateEvaluationRun(run) {
-  const errors = validateEvaluationSchema(run);
-  if (!isObject(run) || !Array.isArray(run.cases)) {
-    if (!errors.length) errors.push('Evaluation input requires a cases array');
-    return errors;
-  }
-  errors.push(...resourceErrors(run));
-  if (!isObject(run.manifest)) errors.push('Evaluation input requires a machine-readable manifest');
-  const requiredManifest = ['dataset_id', 'dataset_revision', 'dataset_sha512', 'dataset_license', 'evaluator_revision', 'engine_commit', 'ruleset', 'reference_time', 'code_version'];
-  for (const key of requiredManifest) {
-    if (!nonemptyString(run.manifest?.[key])) errors.push('manifest.' + key + ' is required');
-  }
-  if (run.manifest && !/^[0-9a-f]{128}$/.test(run.manifest.dataset_sha512 || '')) errors.push('manifest.dataset_sha512 must be lowercase SHA-512');
-  if (!isObject(run.manifest?.options)) errors.push('manifest.options must be an object');
+function validateCases(cases) {
+  const errors = [];
   const caseIds = new Set();
-  for (const evaluationCase of run.cases) {
+  for (const evaluationCase of cases) {
     if (!isObject(evaluationCase)) continue;
     const caseId = nonemptyString(evaluationCase.case_id) ? evaluationCase.case_id : '<missing case_id>';
     if (caseIds.has(caseId)) errors.push('duplicate case_id ' + JSON.stringify(caseId));
@@ -269,7 +275,15 @@ export function validateEvaluationRun(run) {
       uniqueIds(expected.evidence_spans, 'span_id', caseId + ':' + expected.contradiction_id, errors);
       expected.evidence_spans.forEach((span, index) => validateSpan(span, table.normalizedText, caseId + ':' + expected.contradiction_id + ':span[' + index + ']', errors));
       if (expected.evidence_spans.every((span) => isObject(span) && Number.isInteger(span.start) && Number.isInteger(span.end) && span.start < span.end)) {
-        try { expected.evidence_spans.forEach((span) => mapNormalizedSpan(span, table)); } catch (error) { errors.push(caseId + ': ' + error.message); }
+        try {
+          const locations = new Set();
+          for (const span of expected.evidence_spans) {
+            const mapped = mapNormalizedSpan(span, table);
+            const location = mapped.start + ':' + mapped.end;
+            if (locations.has(location)) errors.push(caseId + ': ' + expected.contradiction_id + ' has duplicate expected evidence locations');
+            locations.add(location);
+          }
+        } catch (error) { errors.push(caseId + ': ' + error.message); }
       }
     }
     for (const actual of evaluationCase.actual_findings) {
@@ -284,6 +298,26 @@ export function validateEvaluationRun(run) {
     }
     if (evaluationCase.exclusion !== undefined && (!isObject(evaluationCase.exclusion) || !nonemptyString(evaluationCase.exclusion.reason))) errors.push(caseId + ': exclusion requires a reason');
   }
+  return errors;
+}
+
+export function validateEvaluationRun(run) {
+  if (!isObject(run) || !Array.isArray(run.cases)) {
+    const errors = validateEvaluationSchema(run);
+    if (!errors.length) errors.push('Evaluation input requires a cases array');
+    return errors;
+  }
+  const limitErrors = resourceErrors(run);
+  if (limitErrors.length) return limitErrors;
+  const errors = validateEvaluationSchema(run);
+  if (!isObject(run.manifest)) errors.push('Evaluation input requires a machine-readable manifest');
+  const requiredManifest = ['dataset_id', 'dataset_revision', 'dataset_sha512', 'dataset_license', 'evaluator_revision', 'engine_commit', 'ruleset', 'reference_time', 'code_version'];
+  for (const key of requiredManifest) {
+    if (!nonemptyString(run.manifest?.[key])) errors.push('manifest.' + key + ' is required');
+  }
+  if (run.manifest && !/^[0-9a-f]{128}$/.test(run.manifest.dataset_sha512 || '')) errors.push('manifest.dataset_sha512 must be lowercase SHA-512');
+  if (!isObject(run.manifest?.options)) errors.push('manifest.options must be an object');
+  errors.push(...validateCases(run.cases));
   return errors;
 }
 
@@ -324,7 +358,7 @@ function scaledTokenF1(expectedText, actualText) {
 // Successive shortest augmenting paths give a maximum-cardinality, minimum-cost
 // assignment. Non-negative forward costs plus potentials keep every Dijkstra
 // reduced cost non-negative; BigInt avoids quality-weight rounding.
-function optimalAssignment(left, right, edgeCost) {
+export function optimalAssignment(left, right, edgeCost) {
   if (!left.length || !right.length) return [];
   const source = 0;
   const leftOffset = 1;
@@ -360,7 +394,7 @@ function optimalAssignment(left, right, edgeCost) {
         if (visited[node] || distance[node] === null) continue;
         if (current === -1 || distance[node] < distance[current]) current = node;
       }
-      if (current === -1 || current === sink) break;
+      if (current === -1) break;
       visited[current] = true;
       for (let edgeIndex = 0; edgeIndex < graph[current].length; edgeIndex++) {
         const edge = graph[current][edgeIndex];
@@ -460,8 +494,9 @@ function matchRuleGroup(expectedEntries, actualEntries) {
       + (score.unordered ? 0n : unorderedWeight)
       + BigInt(maxSpans - score.intersection) * intersectionWeight
       + (BigInt(maxSpans) * TOKEN_SCALE - score.tokenTotalScaled) * tokenWeight;
+    const scopeCost = expected[leftIndex].record.scope === actual[rightIndex].record.scope ? 0n : 1n;
     const tie = BigInt(leftIndex * actual.length + rightIndex);
-    return qualityCost * tieBase + tie;
+    return (qualityCost * BigInt(maxMatches + 1) + scopeCost) * tieBase + tie;
   }).map((pair) => ({
     expected: expected[pair.leftIndex].record,
     actual: actual[pair.rightIndex].record,
@@ -586,7 +621,6 @@ function evaluateCase(evaluationCase) {
   ];
   return {
     case_id: evaluationCase.case_id,
-    document: documentCounts(expected.length, actual.length),
     detection,
     exact_pairs: pairCounts(matching, 'ordered'),
     unordered_pairs: pairCounts(matching, 'unordered'),
@@ -618,8 +652,15 @@ function aggregateDocuments(included) {
 }
 
 export function evaluateCases(cases) {
+  if (!Array.isArray(cases)) throw new TypeError('Evaluation cases must be an array');
   const limitErrors = resourceErrors({ cases });
   if (limitErrors.length) throw new RangeError(limitErrors.join('; '));
+  const validationErrors = validateSchemaValue(cases, {
+    type: 'array',
+    items: { $ref: '#/$defs/EvaluationCase' }
+  }, evaluationSchema, '$.cases', []);
+  validationErrors.push(...validateCases(cases));
+  if (validationErrors.length) throw new TypeError('Evaluation case validation failed: ' + validationErrors.join('; '));
   const included = cases.filter((evaluationCase) => !evaluationCase.exclusion);
   const caseResults = included.map(evaluateCase);
   const scopeConfusion = caseResults.flatMap((result) => result.scope_confusion.map((entry) => ({ case_id: result.case_id, ...entry })));

@@ -12,6 +12,12 @@
     "cases": { "type": "array", "items": { "$ref": "#/$defs/EvaluationCase" } }
   },
   "$defs": {
+    "StableIdentifier": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 256,
+      "description": "Bounded UTF-16 identifier or label; accommodates vo1| plus a full SHA-512 digest."
+    },
     "EvaluationManifest": {
       "type": "object",
       "additionalProperties": false,
@@ -34,8 +40,8 @@
       "additionalProperties": false,
       "required": ["case_id", "document_id", "source_text", "expected_contradictions", "actual_findings"],
       "properties": {
-        "case_id": { "type": "string", "minLength": 1 },
-        "document_id": { "type": "string", "minLength": 1 },
+        "case_id": { "$ref": "#/$defs/StableIdentifier" },
+        "document_id": { "$ref": "#/$defs/StableIdentifier" },
         "source_text": { "type": "string", "description": "Original text, preserved exactly. Actual anchor offsets address this string." },
         "normalization": {
           "type": "object",
@@ -68,9 +74,9 @@
       "additionalProperties": false,
       "required": ["contradiction_id", "rule_id", "scope", "evidence_spans"],
       "properties": {
-        "contradiction_id": { "type": "string", "minLength": 1 },
-        "rule_id": { "type": "string", "minLength": 1 },
-        "scope": { "type": "string", "minLength": 1, "description": "Dataset scope label; cross-dataset mappings belong in adapters." },
+        "contradiction_id": { "$ref": "#/$defs/StableIdentifier" },
+        "rule_id": { "$ref": "#/$defs/StableIdentifier" },
+        "scope": { "$ref": "#/$defs/StableIdentifier", "description": "Dataset scope label; cross-dataset mappings belong in adapters." },
         "pair_mode": { "enum": ["ordered", "unordered"], "default": "ordered" },
         "evidence_spans": { "type": "array", "minItems": 1, "items": { "$ref": "#/$defs/ExpectedEvidenceSpan" } }
       }
@@ -80,7 +86,7 @@
       "additionalProperties": false,
       "required": ["span_id", "start", "end", "quote", "page"],
       "properties": {
-        "span_id": { "type": "string", "minLength": 1 },
+        "span_id": { "$ref": "#/$defs/StableIdentifier" },
         "start": { "type": "integer", "minimum": 0 },
         "end": { "type": "integer", "minimum": 1 },
         "quote": { "type": "string", "description": "Exact untrimmed normalized_text.slice(start, end)." },
@@ -92,9 +98,9 @@
       "additionalProperties": false,
       "required": ["finding_id", "rule_id", "scope", "anchors"],
       "properties": {
-        "finding_id": { "type": "string", "minLength": 1 },
-        "rule_id": { "type": "string", "minLength": 1 },
-        "scope": { "type": "string", "minLength": 1 },
+        "finding_id": { "$ref": "#/$defs/StableIdentifier" },
+        "rule_id": { "$ref": "#/$defs/StableIdentifier" },
+        "scope": { "$ref": "#/$defs/StableIdentifier" },
         "anchors": { "type": "array", "items": { "$ref": "#/$defs/ActualEvidenceAnchor" } }
       }
     },
@@ -103,7 +109,7 @@
       "additionalProperties": false,
       "required": ["anchor_id", "start", "end", "quote", "page"],
       "properties": {
-        "anchor_id": { "type": "string", "minLength": 1 },
+        "anchor_id": { "$ref": "#/$defs/StableIdentifier" },
         "start": { "type": "integer", "minimum": 0 },
         "end": { "type": "integer", "minimum": 1 },
         "quote": { "type": "string", "description": "Exact untrimmed source_text.slice(start, end)." },
