@@ -177,7 +177,12 @@ const nullPrototypeModules = Object.create(null);
 nullPrototypeModules.citations = false;
 ok(Config.selectedConfiguration({ modules: nullPrototypeModules }).modules.citations === false, 'an own false flag on a null-prototype record remains supported');
 for (const name of Config.MODULE_NAMES) {
-  ok(throws(() => Config.selectedConfiguration({ modules: { [name]: true } })), 'unimplemented module fails closed instead of being silently ignored: ' + name);
+  if (Config.IMPLEMENTED_MODULES[name]) {
+    ok(Config.selectedConfiguration({ modules: { [name]: true } }).modules[name] === true,
+      'implemented module flag is accepted: ' + name);
+  } else {
+    ok(throws(() => Config.selectedConfiguration({ modules: { [name]: true } })), 'unimplemented module fails closed instead of being silently ignored: ' + name);
+  }
 }
 for (const value of ['2026-02-29T00:00:00Z', '2026-11-31T00:00:00Z', '2026-13-01T00:00:00Z', '2026-11-15T24:00:00Z', '2026-11-15T00:00:60Z', '2026-11-15T00:00:00+14:01', '2026-11-15T00:00:00+15:00', '2026-11-15T00:00:00+01:60']) {
   ok(!Config.isValidIsoInstant(value) && !C.isValidIsoInstant(value) && throws(() => Config.selectedConfiguration({ referenceTime: value })), 'invalid calendar instant fails closed: ' + value);
@@ -218,11 +223,20 @@ async function runSynthetic(options) {
 
 let enabledModuleRejected = false;
 try {
-  await runSynthetic({ modules: { citations: true } });
+  await runSynthetic({ modules: { redaction: true } });
 } catch (error) {
   enabledModuleRejected = /not implemented/.test(error.message);
 }
 ok(enabledModuleRejected, 'the engine rejects an enabled unimplemented module before reporting results');
+
+const citationsRun = await runSynthetic({ modules: { citations: true }, jurisdictionPacks: ['za'] });
+ok(citationsRun.moduleResults && citationsRun.moduleResults.citations && citationsRun.moduleResults.citations.module_id === 'legal-citations',
+  'the implemented citations module records its envelope in the engine result');
+ok(citationsRun.moduleResults.citations.status === 'completed' && citationsRun.moduleResults.citations.findings.length === 0,
+  'citation extraction is an observation: the envelope never carries findings');
+const citationsOff = await runSynthetic({ modules: { citations: false } });
+ok(!('moduleResults' in citationsOff), 'with the flag off the result has no moduleResults field');
+ok(C.stableStringify(citationsOff.findings) === C.stableStringify(citationsRun.findings), 'enabling citations changes no finding');
 
 const replayOptions = { referenceTime: '2026-11-15T00:00:00.000Z', modules: Config.DEFAULT_MODULES, jurisdictionPacks: ['za'] };
 const first = await runSynthetic(replayOptions);

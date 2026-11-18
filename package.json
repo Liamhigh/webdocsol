@@ -2,7 +2,7 @@
   "name": "webdocsol",
   "version": "1.2.5",
   "private": true,
-  "description": "Verum Omnis Document Sealing & Verification Standard — static site, Cloudflare Worker, and forensic engine.",
+  "description": "Verum Omnis Document Sealing & Verification Standard \u2014 static site, Cloudflare Worker, and forensic engine.",
   "scripts": {
     "test": "node tests/run-all.js",
     "test:forensic": "node tests/forensic-engine.test.js",
@@ -16,7 +16,7 @@
     "test:seal-guard": "node tests/seal-guard.test.mjs",
     "test:inline-scripts": "node tests/inline-scripts.test.mjs",
     "test:browser": "playwright test",
-    "check": "node --check analysis-contracts.js && node --check analysis-config.js && node --check seal-guard.js && node --check forensic-engine-page.js && node --check forensic-report.js && node --check ots-proof.js && node --check pdf-encrypt.js && node --check worker/verum-rules.js && node --check worker/static-proxy.js && node --check worker/site-assets.js"
+    "check": "node --check analysis-contracts.js && node --check analysis-config.js && node --check legal-citations.js && node --check legal-packs.js && node --check legal-packs/za.js && node --check seal-guard.js && node --check forensic-engine-page.js && node --check forensic-report.js && node --check ots-proof.js && node --check pdf-encrypt.js && node --check worker/verum-rules.js && node --check worker/static-proxy.js && node --check worker/site-assets.js"
   },
   "devDependencies": {
     "@playwright/test": "1.65.1",

@@ -11,6 +11,10 @@
     'c2pa',
     'spatialOcr'
   ]);
+  // Modules with a shipped implementation. citations is implemented by
+  // legal-citations.js + legal-packs.js + legal-packs/za.js (Phase 2 PR 2.2);
+  // every other flag must stay false until its module ships.
+  var IMPLEMENTED_MODULES = Object.freeze({ citations: true });
   var ISO_INSTANT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|([+-])(\d{2}):(\d{2}))$/;
 
   function isValidIsoInstant(value) {
@@ -63,7 +67,11 @@
     Object.keys(input).forEach(function (name) {
       if (MODULE_NAMES.indexOf(name) === -1) throw new TypeError('Unknown analysis module flag: ' + name);
       if (typeof input[name] !== 'boolean') throw new TypeError('Analysis module flags must be boolean: ' + name);
-      if (input[name]) throw new Error('Analysis module is not implemented; keep its Phase 0 flag false: ' + name);
+      if (input[name]) {
+        if (!IMPLEMENTED_MODULES[name]) {
+          throw new Error('Analysis module is not implemented; keep its flag false: ' + name);
+        }
+      }
     });
     var normalized = {};
     MODULE_NAMES.forEach(function (name) {
@@ -119,6 +127,7 @@
   var api = {
     MODULE_NAMES: MODULE_NAMES,
     DEFAULT_MODULES: DEFAULT_MODULES,
+    IMPLEMENTED_MODULES: IMPLEMENTED_MODULES,
     normalizeModules: normalizeModules,
     normalizeJurisdictionPacks: normalizeJurisdictionPacks,
     isValidIsoInstant: isValidIsoInstant,

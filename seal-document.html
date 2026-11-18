@@ -7511,6 +7511,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     stableStringify: stableStringify,
     canonicalClone: canonicalClone,
     deepFreeze: deepFreeze,
+    sha512Hex: sha512Hex,
     isValidIsoInstant: isValidIsoInstant,
     deterministicId: deterministicId,
     createFailure: createFailure,
@@ -7541,6 +7542,10 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     'c2pa',
     'spatialOcr'
   ]);
+  // Modules with a shipped implementation. citations is implemented by
+  // legal-citations.js + legal-packs.js + legal-packs/za.js (Phase 2 PR 2.2);
+  // every other flag must stay false until its module ships.
+  var IMPLEMENTED_MODULES = Object.freeze({ citations: true });
   var ISO_INSTANT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|([+-])(\d{2}):(\d{2}))$/;
 
   function isValidIsoInstant(value) {
@@ -7593,7 +7598,11 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     Object.keys(input).forEach(function (name) {
       if (MODULE_NAMES.indexOf(name) === -1) throw new TypeError('Unknown analysis module flag: ' + name);
       if (typeof input[name] !== 'boolean') throw new TypeError('Analysis module flags must be boolean: ' + name);
-      if (input[name]) throw new Error('Analysis module is not implemented; keep its Phase 0 flag false: ' + name);
+      if (input[name]) {
+        if (!IMPLEMENTED_MODULES[name]) {
+          throw new Error('Analysis module is not implemented; keep its flag false: ' + name);
+        }
+      }
     });
     var normalized = {};
     MODULE_NAMES.forEach(function (name) {
@@ -7649,6 +7658,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
   var api = {
     MODULE_NAMES: MODULE_NAMES,
     DEFAULT_MODULES: DEFAULT_MODULES,
+    IMPLEMENTED_MODULES: IMPLEMENTED_MODULES,
     normalizeModules: normalizeModules,
     normalizeJurisdictionPacks: normalizeJurisdictionPacks,
     isValidIsoInstant: isValidIsoInstant,
@@ -7660,6 +7670,479 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
   if (root) root.VOAnalysisConfig = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
 /* VO-INLINE:analysis-config.js:END */
+</script>
+<script>
+/* VO-INLINE:legal-packs.js:START */
+/*
+ * Verum Omnis legal-citation jurisdiction pack registry.
+ *
+ * The neutral core (legal-citations.js) owns spans, occurrence identity and
+ * resolution; a jurisdiction pack owns grammar, reporter/court identifiers and
+ * its rules. Packs are explicit (never inferred from IP, device region or
+ * locale), versioned, and registered here. Classic script, no build step:
+ * CommonJS export for Node tests, browser global otherwise. No clock, no
+ * randomness, no network, no regex lookbehind.
+ */
+(function (root) {
+  'use strict';
+
+  var REGISTRY_VERSION = '1.0.0';
+
+  function isPlainRecord(value) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+    var prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  var packs = {};
+
+  function validateRule(packId, rule) {
+    if (!isPlainRecord(rule)) throw new TypeError(packId + ': every rule must be a plain object');
+    if (typeof rule.rule_id !== 'string' || !/^[a-z0-9-]+$/.test(rule.rule_id)) {
+      throw new TypeError(packId + ': rule_id must be a lowercase kebab-case string');
+    }
+    if (typeof rule.kind !== 'string' || !rule.kind) throw new TypeError(packId + '/' + rule.rule_id + ': kind is required');
+    if (!(rule.pattern instanceof RegExp)) throw new TypeError(packId + '/' + rule.rule_id + ': pattern must be a RegExp');
+    if (!rule.pattern.global) throw new TypeError(packId + '/' + rule.rule_id + ': pattern must be global');
+    if (rule.pattern.source.indexOf('(?<') !== -1) {
+      throw new TypeError(packId + '/' + rule.rule_id + ': regex lookbehind is not supported (Safari < 16.4 cannot parse it)');
+    }
+    if (typeof rule.extract !== 'undefined' && typeof rule.extract !== 'function') {
+      throw new TypeError(packId + '/' + rule.rule_id + ': extract must be a function');
+    }
+  }
+
+  function validatePack(pack) {
+    if (!isPlainRecord(pack)) throw new TypeError('A jurisdiction pack must be a plain object');
+    if (typeof pack.id !== 'string' || !/^[a-z]{2}$/.test(pack.id)) {
+      throw new TypeError('A pack id must be an explicit lowercase ISO-style code');
+    }
+    if (typeof pack.version !== 'string' || !pack.version) throw new TypeError(pack.id + ': version is required');
+    if (!Array.isArray(pack.rules) || !pack.rules.length) throw new TypeError(pack.id + ': rules must be a non-empty array');
+    var seen = {};
+    pack.rules.forEach(function (rule) {
+      validateRule(pack.id, rule);
+      if (seen[rule.rule_id]) throw new TypeError(pack.id + ': duplicate rule_id ' + rule.rule_id);
+      seen[rule.rule_id] = true;
+    });
+    return pack;
+  }
+
+  function deepFreeze(value, seen) {
+    if (!value || typeof value !== 'object') return value;
+    seen = seen || [];
+    if (seen.indexOf(value) !== -1) return value;
+    seen.push(value);
+    if (value instanceof RegExp) return value;
+    Object.keys(value).forEach(function (key) { deepFreeze(value[key], seen); });
+    return Object.freeze(value);
+  }
+
+  function register(pack) {
+    validatePack(pack);
+    if (packs[pack.id]) throw new Error('Jurisdiction pack already registered: ' + pack.id);
+    packs[pack.id] = deepFreeze(pack);
+    return packs[pack.id];
+  }
+
+  function has(id) { return Object.prototype.hasOwnProperty.call(packs, id); }
+
+  function get(id) {
+    if (!has(id)) throw new Error('Unknown jurisdiction pack: ' + id + ' (registered: ' + list().join(', ') + ')');
+    return packs[id];
+  }
+
+  function list() {
+    return Object.keys(packs).sort();
+  }
+
+  /* Resolve explicit pack codes to registered pack objects, preserving order. */
+  function resolvePacks(ids) {
+    if (!Array.isArray(ids)) throw new TypeError('jurisdiction pack codes must be an array');
+    return ids.map(function (id) { return get(id); });
+  }
+
+  var api = {
+    REGISTRY_VERSION: REGISTRY_VERSION,
+    validatePack: validatePack,
+    register: register,
+    has: has,
+    get: get,
+    list: list,
+    resolvePacks: resolvePacks
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  if (root) root.VOLegalPacks = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+/* VO-INLINE:legal-packs.js:END */
+</script>
+<script>
+/* VO-INLINE:legal-packs/za.js:START */
+/*
+ * Verum Omnis South African legal-citation pack (first jurisdiction pack).
+ *
+ * Owns the ZA grammar and identifiers only; spans, identity and resolution
+ * live in the neutral core (legal-citations.js). Recognized forms:
+ *   - neutral citations: [2026] ZACC 1 (and the other ZA* court identifiers
+ *     listed below; an unrecognized court identifier simply does not match);
+ *   - reported citations: 2026 (3) SA 112 (SCA) and 2011 (1) SACR 200 (CC),
+ *     with an optional "at para 12" / "at 115" pinpoint immediately following;
+ *     "SALR" is only ever a display name and never replaces the SA token;
+ *   - Constitutional Court dockets: CCT 19/20, CCT237/20;
+ *   - SAFLII source URLs.
+ * Statute/section/Act extraction stays with the legacy voExtractCitations
+ * coverage (forensic-engine-page.js) until parity is demonstrated; this pack
+ * deliberately does not migrate those forms. No clock, no randomness, no
+ * regex lookbehind. Classic script; CommonJS export for Node tests.
+ */
+(function (root) {
+  'use strict';
+
+  var PACK_ID = 'za';
+  var PACK_VERSION = '1.0.0';
+
+  // ZA neutral-citation court identifiers (SAFLII). Fail-closed by design: a
+  // court identifier not listed here is not a neutral citation match.
+  var NEUTRAL_COURTS = [
+    'ZACC', 'ZASCA',
+    'ZAGPJHC', 'ZAGPPHC', 'ZAKZDHC', 'ZAKZPHC', 'ZAWCHC',
+    'ZAECELLC', 'ZAECGHC', 'ZAECMHC', 'ZAECPEHC',
+    'ZAFSHC', 'ZALMPPHC', 'ZANWHC', 'ZANCHC',
+    'ZALCJHB', 'ZALC'
+  ];
+
+  // Court/division codes that appear in parentheses after a SALR/SACR page.
+  var REPORT_COURTS = [
+    'A', 'AD', 'SCA', 'CC',
+    'C', 'N', 'O', 'T', 'W', 'E', 'SE',
+    'CPD', 'ECD', 'NCD', 'NPD', 'TPD', 'WLD', 'SWA', 'GDP', 'GSJ', 'KZD', 'KZP'
+  ];
+
+  var NEUTRAL_RE = new RegExp('\\[(\\d{4})\\]\\s+(' + NEUTRAL_COURTS.join('|') + ')\\s+(\\d+)\\b', 'g');
+  var REPORTED_RE = new RegExp(
+    '\\b(\\d{4})\\s+\\((\\d)\\)\\s+(SA|SACR)\\s+(\\d+)' +
+    '(?:\\s+\\((' + REPORT_COURTS.join('|') + ')\\))?' +
+    '(?:\\s+at\\s+(para(?:graph)?s?\\.?\\s+\\d+(?:\\s*[-\u2013]\\s*\\d+)?|\\d+[A-Z]?(?:\\s*[-\u2013]\\s*\\d+[A-Z])?))?',
+    'g'
+  );
+  var CCT_DOCKET_RE = /\bCCT\s?(\d{1,3})\s?\/\s?(\d{2,4})\b/g;
+  var SAFLII_RE = /\bhttps?:\/\/(?:www\.)?saflii\.org(?:\.za)?\/[^\s)\]"'<>]+/g;
+
+  function orNull(value) {
+    return value === undefined ? null : value;
+  }
+
+  var pack = {
+    id: PACK_ID,
+    version: PACK_VERSION,
+    rules: [
+      {
+        rule_id: 'za-neutral-court',
+        kind: 'neutral_case',
+        pattern: NEUTRAL_RE,
+        extract: function (match, context) {
+          return {
+            year: match[1],
+            court: match[2],
+            ordinal: match[3],
+            caption: context.captureCaption(context.text, match.index)
+          };
+        }
+      },
+      {
+        rule_id: 'za-reported-sa',
+        kind: 'reported_case',
+        pattern: REPORTED_RE,
+        extract: function (match, context) {
+          return {
+            year: match[1],
+            volume: match[2],
+            reporter: match[3],
+            first_page: match[4],
+            court: orNull(match[5]),
+            pinpoint: orNull(match[6]),
+            caption: context.captureCaption(context.text, match.index)
+          };
+        }
+      },
+      {
+        rule_id: 'za-docket-cct',
+        kind: 'docket',
+        pattern: CCT_DOCKET_RE,
+        extract: function (match) {
+          return { court: 'CCT', number: match[1], year_suffix: match[2] };
+        }
+      },
+      {
+        rule_id: 'za-saflii-url',
+        kind: 'source_url',
+        pattern: SAFLII_RE,
+        extract: function (match) {
+          return { url: match[0], host: 'saflii.org' };
+        }
+      }
+    ]
+  };
+
+  if (root && root.VOLegalPacks) root.VOLegalPacks.register(pack);
+  if (typeof module !== 'undefined' && module.exports) module.exports = pack;
+  if (root) root.VOLegalPackZA = pack;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+/* VO-INLINE:legal-packs/za.js:END */
+</script>
+<script>
+/* VO-INLINE:legal-citations.js:START */
+/*
+ * Verum Omnis neutral legal-citation occurrence core (B7, legal mapping).
+ *
+ * Owns source spans, occurrence identity, short-form (id./supra) resolution
+ * and the module envelope. A jurisdiction pack owns grammar and identifiers;
+ * no jurisdiction is inferred from IP, device region or locale — packs are
+ * explicit. Every occurrence keeps its own exact anchor (page + UTF-16
+ * offsets + verbatim raw text); parallel grouping is added only when a pack
+ * supplies pack-specific evidence that two spans name the same authority.
+ * Extraction alone is an observation, never a contradiction: findings stays
+ * empty here. Deterministic: no clock, no randomness, no locale collation, no
+ * regex lookbehind. Classic script; CommonJS export for Node tests.
+ */
+(function (root) {
+  'use strict';
+
+  var Contracts = (root && root.VOAnalysisContracts)
+    ? root.VOAnalysisContracts
+    : (typeof require === 'function' ? require('./analysis-contracts.js') : null);
+  if (!Contracts) throw new Error('legal-citations.js requires analysis-contracts.js to load first');
+
+  var MODULE_ID = 'legal-citations';
+  var MODULE_VERSION = '1.0.0';
+
+  var KINDS = Object.freeze([
+    'full_case', 'short_case', 'id', 'supra', 'neutral_case', 'reported_case',
+    'docket', 'statute', 'regulation', 'constitutional_provision', 'source_url'
+  ]);
+  var CASE_KINDS = Object.freeze(['full_case', 'short_case', 'neutral_case', 'reported_case']);
+
+  function isPlainRecord(value) {
+    if (value === null || typeof value !== 'object' || Array.isArray(value)) return false;
+    var prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+
+  function normalizeExtraction(extraction) {
+    if (typeof extraction === 'undefined' || extraction === null) return { kind: 'pdf_text' };
+    if (!isPlainRecord(extraction) || Contracts.EXTRACTION_KINDS.indexOf(extraction.kind) === -1) {
+      throw new TypeError('page extraction.kind must be one of ' + Contracts.EXTRACTION_KINDS.join(', '));
+    }
+    return { kind: extraction.kind };
+  }
+
+  /* Pages: an array of page texts, or of { text, extraction } records. Page
+   * numbers are 1-based positions; OCR pages keep their provenance. */
+  function normalizePages(pages) {
+    if (!Array.isArray(pages)) throw new TypeError('pages must be an array');
+    return pages.map(function (page, index) {
+      if (typeof page === 'string') {
+        return { page: index + 1, text: page, extraction: { kind: 'pdf_text' } };
+      }
+      if (!isPlainRecord(page) || typeof page.text !== 'string') {
+        throw new TypeError('each page must be a string or a { text, extraction } record');
+      }
+      return { page: index + 1, text: page.text, extraction: normalizeExtraction(page.extraction) };
+    });
+  }
+
+  function validatePack(pack) {
+    if (root && root.VOLegalPacks) return root.VOLegalPacks.validatePack(pack);
+    if (!isPlainRecord(pack) || typeof pack.id !== 'string' || typeof pack.version !== 'string' || !Array.isArray(pack.rules)) {
+      throw new TypeError('a jurisdiction pack needs id, version and rules');
+    }
+    pack.rules.forEach(function (rule) {
+      if (!(rule.pattern instanceof RegExp) || !rule.pattern.global) throw new TypeError(pack.id + '/' + rule.rule_id + ': global RegExp required');
+      if (rule.pattern.source.indexOf('(?<') !== -1) throw new TypeError(pack.id + '/' + rule.rule_id + ': regex lookbehind is not supported');
+    });
+    return pack;
+  }
+
+  var CAPTION_LEAD_INS = Object.freeze(['In', 'The', 'See', 'Between', 'Re', 'Ex', 'Parte', 'Matter', 'Of', 'And', 'As', 'Held', 'Per', 'in', 'see', 'held']);
+  var CAPTION_WINDOW = 160;
+  var CAPTION_WORD = "[A-Za-z0-9'&.,()’-]";
+  var CAPTION_RE = new RegExp('([A-Z]' + CAPTION_WORD + '*(?:\\s+' + CAPTION_WORD + '+){0,8}\\s+v\\.?\\s+[A-Z]' + CAPTION_WORD + '*(?:\\s+' + CAPTION_WORD + '+){0,8})\\s*[,;]?\\s*$');
+
+  /* Best-effort case-name boundary immediately before a citation span. A
+   * descriptive component only — it never extends the citation's own span. */
+  function captureCaption(text, start) {
+    var windowText = text.slice(Math.max(0, start - CAPTION_WINDOW), start);
+    var match = CAPTION_RE.exec(windowText);
+    if (!match) return null;
+    var tokens = match[1].split(/\s+/);
+    while (tokens.length > 1 && CAPTION_LEAD_INS.indexOf(tokens[0]) !== -1) tokens.shift();
+    return tokens.join(' ').replace(/[.,;\s]+$/, '') || null;
+  }
+
+  function normalizeName(value) {
+    return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
+  }
+
+  function extractOccurrences(pages, packs) {
+    var occurrences = [];
+    for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) {
+      var page = pages[pageIndex];
+      for (var packIndex = 0; packIndex < packs.length; packIndex++) {
+        var pack = packs[packIndex];
+        for (var ruleIndex = 0; ruleIndex < pack.rules.length; ruleIndex++) {
+          var rule = pack.rules[ruleIndex];
+          rule.pattern.lastIndex = 0;
+          var match;
+          while ((match = rule.pattern.exec(page.text)) !== null) {
+            if (!match[0].length) throw new Error(pack.id + '/' + rule.rule_id + ' matched empty text; the pattern would loop');
+            var start = match.index;
+            var end = start + match[0].length;
+            var raw = page.text.slice(start, end);
+            if (raw !== match[0]) throw new Error(pack.id + '/' + rule.rule_id + ' produced a span that does not slice its raw text');
+            var context = {
+              page: page.page,
+              text: page.text,
+              extraction: page.extraction,
+              captureCaption: captureCaption
+            };
+            var components = rule.extract ? rule.extract(match, context) : {};
+            if (!isPlainRecord(components)) throw new TypeError(pack.id + '/' + rule.rule_id + ' extract must return a plain object');
+            Contracts.stableStringify(components); // canonical-JSON-safe components only
+            occurrences.push({
+              occurrence_id: '',
+              pack_id: pack.id,
+              pack_version: pack.version,
+              rule_id: rule.rule_id,
+              kind: rule.kind,
+              raw: raw,
+              span: { page: page.page, start: start, end: end },
+              extraction: { kind: page.extraction.kind },
+              components: components,
+              resolution: null
+            });
+          }
+        }
+      }
+    }
+    occurrences.sort(function (a, b) {
+      return (a.span.page - b.span.page) || (a.span.start - b.span.start) || (a.span.end - b.span.end) ||
+        (a.pack_id < b.pack_id ? -1 : a.pack_id > b.pack_id ? 1 : 0) ||
+        (a.rule_id < b.rule_id ? -1 : a.rule_id > b.rule_id ? 1 : 0);
+    });
+    return occurrences;
+  }
+
+  function assignOccurrenceIds(occurrences, inputSha512) {
+    for (var index = 0; index < occurrences.length; index++) {
+      var occurrence = occurrences[index];
+      occurrence.occurrence_id = Contracts.deterministicId(MODULE_ID, inputSha512, occurrence.rule_id, [{
+        page: occurrence.span.page,
+        char_start: occurrence.span.start,
+        char_end: occurrence.span.end,
+        quote: occurrence.raw
+      }]);
+    }
+  }
+
+  /* id./supra resolution by document order. Never a fuzzy score: id. binds to
+   * the nearest preceding case citation; supra binds to the nearest preceding
+   * case citation whose caption matches its name guess. More than one
+   * remaining antecedent is ambiguous; none is unresolved. */
+  function resolveShortForms(occurrences) {
+    for (var index = 0; index < occurrences.length; index++) {
+      var occurrence = occurrences[index];
+      if (occurrence.kind === 'id') {
+        var antecedent = null;
+        for (var back = index - 1; back >= 0; back--) {
+          if (CASE_KINDS.indexOf(occurrences[back].kind) !== -1) { antecedent = occurrences[back]; break; }
+        }
+        occurrence.resolution = antecedent
+          ? { state: 'resolved', antecedent_occurrence_id: antecedent.occurrence_id, candidates: 1 }
+          : { state: 'unresolved', antecedent_occurrence_id: null, candidates: 0 };
+      } else if (occurrence.kind === 'supra') {
+        var guess = normalizeName(occurrence.components && occurrence.components.name_guess);
+        var candidates = [];
+        if (guess) {
+          for (var back2 = index - 1; back2 >= 0; back2--) {
+            var candidate = occurrences[back2];
+            if (CASE_KINDS.indexOf(candidate.kind) === -1) continue;
+            var caption = normalizeName(candidate.components && candidate.components.caption);
+            if (caption && caption.indexOf(guess) !== -1) candidates.push(candidate.occurrence_id);
+          }
+        }
+        if (candidates.length === 1) {
+          occurrence.resolution = { state: 'resolved', antecedent_occurrence_id: candidates[0], candidates: 1 };
+        } else if (candidates.length > 1) {
+          occurrence.resolution = { state: 'ambiguous', antecedent_occurrence_id: null, candidates: candidates.length };
+        } else {
+          occurrence.resolution = { state: 'unresolved', antecedent_occurrence_id: null, candidates: 0 };
+        }
+      }
+    }
+  }
+
+  function implementationDigest(packs) {
+    return Contracts.sha512Hex(Contracts.stableStringify({
+      module: MODULE_ID,
+      version: MODULE_VERSION,
+      packs: packs.map(function (pack) {
+        return { id: pack.id, version: pack.version, rules: pack.rules.map(function (rule) { return rule.rule_id; }) };
+      })
+    }));
+  }
+
+  /* The module envelope. Runs over the final page texts; every page is a
+   * processed unit. findings is always empty: extraction is an observation. */
+  function runCitationModule(pages, opts) {
+    opts = opts || {};
+    var packs = opts.packs;
+    if (!Array.isArray(packs) || !packs.length) throw new TypeError('runCitationModule needs explicit jurisdiction pack objects');
+    packs.forEach(validatePack);
+    var normalized = normalizePages(pages);
+    var inputSha512 = Contracts.sha512Hex(Contracts.stableStringify(normalized));
+    var occurrences = extractOccurrences(normalized, packs);
+    assignOccurrenceIds(occurrences, inputSha512);
+    resolveShortForms(occurrences);
+    return Contracts.createModuleEnvelope({
+      module_id: MODULE_ID,
+      module_version: MODULE_VERSION,
+      implementation_digest: implementationDigest(packs),
+      status: 'completed',
+      input_sha512: inputSha512,
+      reference_time: opts.referenceTime || null,
+      configuration: { jurisdiction_packs: packs.map(function (pack) { return pack.id; }) },
+      dependencies: [],
+      coverage: {
+        units_total: normalized.length,
+        units_processed: normalized.length,
+        units_skipped: [],
+        units_failed: []
+      },
+      observations: occurrences,
+      findings: [],
+      warnings: [],
+      failure: null
+    });
+  }
+
+  var api = {
+    MODULE_ID: MODULE_ID,
+    MODULE_VERSION: MODULE_VERSION,
+    KINDS: KINDS,
+    CASE_KINDS: CASE_KINDS,
+    normalizePages: normalizePages,
+    validatePack: validatePack,
+    captureCaption: captureCaption,
+    extractOccurrences: extractOccurrences,
+    resolveShortForms: resolveShortForms,
+    runCitationModule: runCitationModule
+  };
+
+  if (typeof module !== 'undefined' && module.exports) module.exports = api;
+  if (root) root.VOLegalCitations = api;
+})(typeof globalThis !== 'undefined' ? globalThis : this);
+/* VO-INLINE:legal-citations.js:END */
 </script>
 <script>
 /* VO-INLINE:forensic-engine-page.js:START */
@@ -16718,6 +17201,56 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     extractionNote += ' Markdown-formatted analysis: ' + _mdPages.length + ' page(s) (' + _mdList + ') carry chat-style markdown markup ("**" bold marks) and read as a rendered AI or chat analysis, not the record; their claims are treated as a secondary source and any observation resting only on them is a lead, never a finding.';
   }
 
+  // Phase 2 (B7 legal mapping): the citations module. When the caller enables
+  // the flag, the neutral occurrence core (legal-citations.js) runs over the
+  // final page texts — after any OCR rescue, so each anchor carries the page's
+  // extraction provenance — behind the explicit jurisdiction packs the caller
+  // selected (never inferred from IP, device region or locale). Extraction is
+  // an observation, never a contradiction: the envelope's findings array is
+  // always empty and nothing here feeds the detector pipeline. A module
+  // failure is disclosed in its envelope and never stops detection.
+  var _citationModule = null;
+  if (opts.modules.citations === true) {
+    var _LC = (typeof globalThis !== 'undefined' && globalThis.VOLegalCitations)
+      ? globalThis.VOLegalCitations
+      : (typeof require === 'function' ? require('./legal-citations.js') : null);
+    var _LP = (typeof globalThis !== 'undefined' && globalThis.VOLegalPacks)
+      ? globalThis.VOLegalPacks
+      : (typeof require === 'function' ? require('./legal-packs.js') : null);
+    var _LCt = (typeof globalThis !== 'undefined' && globalThis.VOAnalysisContracts)
+      ? globalThis.VOAnalysisContracts
+      : (typeof require === 'function' ? require('./analysis-contracts.js') : null);
+    var _citSpec = {
+      module_id: 'legal-citations',
+      module_version: _LC ? _LC.MODULE_VERSION : '1.0.0',
+      implementation_digest: '0'.repeat(128),
+      status: 'failed',
+      input_sha512: '0'.repeat(128),
+      reference_time: opts.referenceTime || null,
+      coverage: { units_total: textBlocks.length, units_processed: 0, units_skipped: [], units_failed: [] }
+    };
+    try {
+      if (!_LC || !_LP || !_LCt) throw new Error('legal-citations.js, legal-packs.js and analysis-contracts.js must load before the citations module runs');
+      if (typeof require === 'function' && !_LP.has('za')) require('./legal-packs/za.js');
+      var _citPages = [];
+      for (var cp = 0; cp < textBlocks.length; cp++) {
+        _citPages.push({
+          text: String(textBlocks[cp] || ''),
+          extraction: { kind: _imageOnlyPages.indexOf(cp + 1) !== -1 ? 'ocr' : 'pdf_text' }
+        });
+      }
+      _citationModule = _LC.runCitationModule(_citPages, {
+        packs: _LP.resolvePacks(opts.jurisdictionPacks.slice()),
+        referenceTime: opts.referenceTime || null
+      });
+    } catch (_citError) {
+      _citationModule = _LCt ? _LCt.createFailureEnvelope(_citSpec, _LCt.createFailure(
+        'citation_module_error',
+        'The citations module could not run: ' + String(_citError && _citError.message).slice(0, 200)
+      )) : null;
+    }
+  }
+
   // Batch 7a: the conduct ledger is extracted once over the final page texts
   // (after any OCR rescue) and handed to the detectors that measure pleadings
   // against it (D61). It is sealed with the bundle — it travels inside the
@@ -17196,7 +17729,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     dates: voExtractDates(_wfText)
   });
 
-  return {
+  var _result = {
     engineVersion: VO_ENGINE_VERSION,
     // The signed rule package this scan applied (version, key, canonical
     // SHA-512, counts) or null: built-in rules only.
@@ -17247,6 +17780,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
         'Re-submit a text-layer copy, or rely on the OCR-rescued pages disclosed in the extraction notes.'
       : generateSummary(allFindings, overallScore)
   };
+  // Phase 2 module envelopes, present only when the caller enabled the module;
+  // with every flag off this field is absent and the result is byte-identical
+  // to the pre-module output.
+  if (_citationModule) _result.moduleResults = { citations: _citationModule };
+  return _result;
 }
 
 function generateSummary(findings, score) {

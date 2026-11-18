@@ -502,6 +502,7 @@
     stableStringify: stableStringify,
     canonicalClone: canonicalClone,
     deepFreeze: deepFreeze,
+    sha512Hex: sha512Hex,
     isValidIsoInstant: isValidIsoInstant,
     deterministicId: deterministicId,
     createFailure: createFailure,
