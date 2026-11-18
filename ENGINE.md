@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   57 registered suites (55 audited baseline + 2 Phase 0 suites); many exist solely to stop the regressions in §4 and §12.
+   58 registered suites (55 audited baseline + 2 Phase 0 suites + 1 Phase 1 evaluation suite); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -838,7 +838,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**57 registered suites** (55 audited baseline suites green on 2026-11-15, plus the Phase 0 contract and documentation guards; recount assertions after any test change).
+**58 registered suites** (55 audited baseline suites green on 2026-11-15, the Phase 0 contract and documentation guards, and the Phase 1 development-evaluation guard; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -893,6 +893,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `batch7c-court-corrections.test.mjs` | 38 | Court-bundle corrections (§4.20): whole-word admissions, date/reference discipline, legal-act nouns, actual billing, factive denial scope, existing burdens, entity status, registry fields, prior-analysis exclusion, behavioural source quality and ownership context |
 | `batch7d-ots-delivered-bytes.test.mjs` | 31 | Delivered-file OpenTimestamps receipts (§12.25): real detached-receipt digest bytes, post-seal/encrypted ordering, QR and Subject scheme markers, direct PDF+receipt compatibility, and legacy QR/metadata/ORIG resolution |
 | `engine-perf.test.mjs` | 5 | Per-page extraction does not re-parse the whole PDF |
+| `evaluation-metrics.test.mjs` | 97 | B9 development-only hand-calculated detection/localization metrics, schema/resource limits, globally optimal matching, one-to-one evidence credit, explicit UTF-16 normalization, pair/evidence/page/scope separation, failures/exclusions, canonical and atomic reports, CLI safety and production isolation |
 
 ---
 
