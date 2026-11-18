@@ -788,16 +788,19 @@ closed). The seal page does not enable the flag in this phase — the module shi
 - An occurrence records the pack and rule id, the kind (`neutral_case`, `reported_case`,
   `docket`, `source_url`, …), the verbatim `raw` text, its exact UTF-16 page span, an
   explicit-components object (nulls, never inventions), a best-effort caption component,
-  and a deterministic `vo1|` occurrence id. `id.`/`supra` short forms resolve by document
-  order only: `resolved` (one antecedent), `ambiguous` (several) or `unresolved` (none) —
-  never a fuzzy score.
+  and a deterministic `vo1|` occurrence id qualified by pack identity. `id.`/`supra` short
+  forms resolve by document order only: `resolved` (one antecedent), `ambiguous` (several) or
+  `unresolved` (none) — never a fuzzy score. The implementation digest covers pack rule
+  patterns and extraction functions; duplicate packs are collapsed before extraction.
 - `VOLegalPacks` registers jurisdiction packs (`za` ships first: `[2026] ZACC 1` neutral
   citations, SALR/SACR reported citations with court codes and `at para 12` pinpoints, CCT
-  dockets, SAFLII URLs). Pack selection is explicit (`opts.jurisdictionPacks`), never
+  dockets, `Id.`/named `supra` short forms, SAFLII URLs with punctuation-trimmed exact hosts).
+  Pack selection is explicit (`opts.jurisdictionPacks`), never
   inferred from IP, region or locale. Statute/section/Act forms stay with the legacy
   `voExtractCitations` until parity is demonstrated.
 - A module error (an unregistered pack, a missing script) yields a disclosed `failed`
-  envelope; detection continues unchanged.
+  envelope with a digest of the analyzed page text, even when the contracts script itself
+  cannot load; detection continues unchanged.
 
 ---
 
@@ -871,7 +874,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**63 registered suites** (55 audited baseline suites green on 2026-11-15, the Phase 0 contract and documentation guards, and the Phase 1 development-evaluation guards; recount assertions after any test change).
+**63 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -930,8 +933,8 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `evaluation-contractnli.test.mjs` | 70 | B9 development-only ContractNLI adapter: pinned release verification, code-point/UTF-16 span conversion, conservative hypothesis mapping, negative-corpus adaptation, exclusion visibility, deterministic sharding, zip integrity and the CLI pipeline on synthetic fixtures |
 | `evaluation-contradoc.test.mjs` | 79 | B9 development-only ContraDoc adapter and dual metrics: verbatim evidence/ref anchoring, published scope labels preserved, verum_exact anchor metrics with per-document ContraDoc-Neg false positives, published_comparable Judge-then-Find/top-k/0.98-threshold reproduction, and the CLI pipeline on synthetic fixtures |
 | `evaluation-eyecite.test.mjs` | 43 | B9 development-only Eyecite conformance spike: pinned corpus integrity, exact span/cluster comparator, adapter normalization and confidence stripping, not_installed/error/resolution states, the no-lookbehind static guard, and the spike CLI |
-| `legal-citations.test.mjs` | 43 | Neutral citation occurrence core and pack registry: exact spans, id./supra resolution (resolved/ambiguous/unresolved), envelope validity, flag-off byte-identity, disclosed module failure, no-lookbehind/no-clock static guards |
-| `legal-citations-za.test.mjs` | 84 | South African pack fixtures: neutral `[2026] ZACC 1`, reported `2026 (3) SA 112 (SCA)` with pinpoints and captions, CCT dockets, SAFLII URLs, negative and neutrality fixtures, verbatim span round-trips, deterministic replay |
+| `legal-citations.test.mjs` | 62 | Neutral citation occurrence core and pack registry: exact spans, pack-qualified IDs, duplicate-pack handling, implementation digest, short-form resolution, envelope validity, immutable disclosed load failures with input identity, OCR/fallback provenance, flag-off findings parity, and static guards |
+| `legal-citations-za.test.mjs` | 92 | South African pack fixtures: neutral and reported citations, Id./supra resolution, CCT dockets, punctuation-safe SAFLII URLs with actual host metadata, negative fixtures, exact spans, and deterministic replay |
 
 ---
 

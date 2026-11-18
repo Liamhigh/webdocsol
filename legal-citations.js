@@ -63,8 +63,13 @@
       throw new TypeError('a jurisdiction pack needs id, version and rules');
     }
     pack.rules.forEach(function (rule) {
-      if (!(rule.pattern instanceof RegExp) || !rule.pattern.global) throw new TypeError(pack.id + '/' + rule.rule_id + ': global RegExp required');
-      if (rule.pattern.source.indexOf('(?<') !== -1) throw new TypeError(pack.id + '/' + rule.rule_id + ': regex lookbehind is not supported');
+      if (KINDS.indexOf(rule.kind) === -1) throw new TypeError(pack.id + '/' + rule.rule_id + ': unsupported citation kind');
+      if (!(rule.pattern instanceof RegExp) || !rule.pattern.global || rule.pattern.sticky) {
+        throw new TypeError(pack.id + '/' + rule.rule_id + ': non-sticky global RegExp required');
+      }
+      if (rule.pattern.source.indexOf('(?<' + '=') !== -1 || rule.pattern.source.indexOf('(?<' + '!') !== -1) {
+        throw new TypeError(pack.id + '/' + rule.rule_id + ': regex lookbehind is not supported');
+      }
     });
     return pack;
   }
@@ -138,15 +143,54 @@
     return occurrences;
   }
 
+  function packImplementation(pack) {
+    return {
+      id: pack.id,
+      version: pack.version,
+      rules: pack.rules.map(function (rule) {
+        return {
+          rule_id: rule.rule_id,
+          kind: rule.kind,
+          pattern: rule.pattern.source,
+          flags: rule.pattern.flags,
+          extract: typeof rule.extract === 'function' ? String(rule.extract) : null
+        };
+      })
+    };
+  }
+
+  function uniquePacks(packs) {
+    var byId = Object.create(null);
+    var unique = [];
+    for (var index = 0; index < packs.length; index++) {
+      var pack = validatePack(packs[index]);
+      var prior = byId[pack.id];
+      if (prior) {
+        if (Contracts.stableStringify(packImplementation(prior)) !== Contracts.stableStringify(packImplementation(pack))) {
+          throw new TypeError('Conflicting versions or implementations for jurisdiction pack ' + pack.id);
+        }
+        continue;
+      }
+      byId[pack.id] = pack;
+      unique.push(pack);
+    }
+    return unique;
+  }
+
   function assignOccurrenceIds(occurrences, inputSha512) {
     for (var index = 0; index < occurrences.length; index++) {
       var occurrence = occurrences[index];
-      occurrence.occurrence_id = Contracts.deterministicId(MODULE_ID, inputSha512, occurrence.rule_id, [{
+      occurrence.occurrence_id = Contracts.deterministicId(
+        MODULE_ID,
+        inputSha512,
+        occurrence.pack_id + '@' + occurrence.pack_version + '/' + occurrence.rule_id,
+        [{
         page: occurrence.span.page,
         char_start: occurrence.span.start,
         char_end: occurrence.span.end,
         quote: occurrence.raw
-      }]);
+        }]
+      );
     }
   }
 
@@ -191,9 +235,7 @@
     return Contracts.sha512Hex(Contracts.stableStringify({
       module: MODULE_ID,
       version: MODULE_VERSION,
-      packs: packs.map(function (pack) {
-        return { id: pack.id, version: pack.version, rules: pack.rules.map(function (rule) { return rule.rule_id; }) };
-      })
+      packs: packs.map(packImplementation)
     }));
   }
 
@@ -201,9 +243,9 @@
    * processed unit. findings is always empty: extraction is an observation. */
   function runCitationModule(pages, opts) {
     opts = opts || {};
-    var packs = opts.packs;
-    if (!Array.isArray(packs) || !packs.length) throw new TypeError('runCitationModule needs explicit jurisdiction pack objects');
-    packs.forEach(validatePack);
+    var selectedPacks = opts.packs;
+    if (!Array.isArray(selectedPacks) || !selectedPacks.length) throw new TypeError('runCitationModule needs explicit jurisdiction pack objects');
+    var packs = uniquePacks(selectedPacks);
     var normalized = normalizePages(pages);
     var inputSha512 = Contracts.sha512Hex(Contracts.stableStringify(normalized));
     var occurrences = extractOccurrences(normalized, packs);

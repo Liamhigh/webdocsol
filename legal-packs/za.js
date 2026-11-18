@@ -9,6 +9,7 @@
  *     with an optional "at para 12" / "at 115" pinpoint immediately following;
  *     "SALR" is only ever a display name and never replaces the SA token;
  *   - Constitutional Court dockets: CCT 19/20, CCT237/20;
+ *   - short forms: Id. and a named "X, supra";
  *   - SAFLII source URLs.
  * Statute/section/Act extraction stays with the legacy voExtractCitations
  * coverage (forensic-engine-page.js) until parity is demonstrated; this pack
@@ -46,7 +47,9 @@
     'g'
   );
   var CCT_DOCKET_RE = /\bCCT\s?(\d{1,3})\s?\/\s?(\d{2,4})\b/g;
-  var SAFLII_RE = /\bhttps?:\/\/(?:www\.)?saflii\.org(?:\.za)?\/[^\s)\]"'<>]+/g;
+  var ID_RE = /\b[Ii]d\.(?:\s+at\s+(?:para(?:graph)?s?\.?\s+\d+(?:\s*[-\u2013]\s*\d+)?|\d+[A-Z]?(?:\s*[-\u2013]\s*\d+[A-Z])?))?/g;
+  var SUPRA_RE = /\b([A-Z][A-Za-z'.-]*),\s+supra\b/g;
+  var SAFLII_RE = /\bhttps?:\/\/(?:www\.)?saflii\.org(?:\.za)?\/[^\s)\]"'<>]*[A-Za-z0-9/#_%~-]/g;
 
   function orNull(value) {
     return value === undefined ? null : value;
@@ -94,11 +97,26 @@
         }
       },
       {
+        rule_id: 'za-id',
+        kind: 'id',
+        pattern: ID_RE,
+        extract: function () { return {}; }
+      },
+      {
+        rule_id: 'za-supra',
+        kind: 'supra',
+        pattern: SUPRA_RE,
+        extract: function (match) {
+          return { name_guess: match[1] };
+        }
+      },
+      {
         rule_id: 'za-saflii-url',
         kind: 'source_url',
         pattern: SAFLII_RE,
         extract: function (match) {
-          return { url: match[0], host: 'saflii.org' };
+          var host = /^https?:\/\/([^/?#]+)/i.exec(match[0])[1].toLowerCase();
+          return { url: match[0], host: host };
         }
       }
     ]
