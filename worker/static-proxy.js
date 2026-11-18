@@ -177,7 +177,13 @@ export async function serveFromAssets(request, env2) {
 }
 __name(serveFromAssets, "serveFromAssets");
 export async function serveSite(request, env2) {
-  const path = new URL(request.url).pathname;
+  const encodedPath = new URL(request.url).pathname;
+  let path;
+  try {
+    path = decodeURIComponent(encodedPath);
+  } catch {
+    path = encodedPath;
+  }
   if (SITE_DENY_RE.test(path)) {
     return new Response(JSON.stringify({ ok: false, error: "not_found", message: "Not a site file." }), {
       status: 404,

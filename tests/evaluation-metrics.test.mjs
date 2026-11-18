@@ -1,6 +1,6 @@
 import { createRequire } from 'node:module';
 import { createHash } from 'node:crypto';
-import { mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, writeFileSync, rmSync, symlinkSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -10,6 +10,7 @@ import {
   evaluateCases,
   validateEvaluationRun,
   matchContradictions,
+  optimalAssignment,
   NOT_DEFINED
 } from '../evaluation/lib/metrics.mjs';
 import {
@@ -20,6 +21,7 @@ import {
   unicodeTokens
 } from '../evaluation/lib/span-alignment.mjs';
 import { buildEvaluationReport, canonicalJson } from '../evaluation/lib/report.mjs';
+import { serveSite } from '../worker/static-proxy.js';
 
 const require = createRequire(import.meta.url);
 const { ok, throws, done } = require('./_assert.js');
@@ -53,6 +55,10 @@ function expectedSpan(source, id, quote, page = null, startOverride = null) {
 function actualAnchor(source, id, quote, page = null, startOverride = null) {
   const start = startOverride === null ? source.indexOf(quote) : startOverride;
   return { anchor_id: id, start, end: start + quote.length, quote, page };
+}
+
+function predictedAnchors(source, spans, prefix) {
+  return spans.map((span, index) => actualAnchor(source, prefix + index, span.quote, span.page, span.start));
 }
 
 function expected(id, ruleId, spans, scope = 'global', pairMode = 'ordered') {
@@ -130,7 +136,7 @@ ok(emptyPrediction.metrics.page_localization.micro.value === NOT_DEFINED && empt
 const negativeClean = evaluationCase('negative-clean', 'No contradiction here.');
 const negativeNoisy = evaluationCase('negative-noisy', 'No contradiction here.', [], [actual('false-alarm', 'D01', [], 'local')]);
 const documentSet = evaluateCases([
-  evaluationCase('positive-hit', pairText, [expected('e', 'D01', pairExpected.evidence_spans)], [actual('a', 'D01', pairExpected.evidence_spans.map((span, index) => ({ ...span, anchor_id: 'a' + index })))]),
+  evaluationCase('positive-hit', pairText, [expected('e', 'D01', pairExpected.evidence_spans)], [actual('a', 'D01', predictedAnchors(pairText, pairExpected.evidence_spans, 'a'))]),
   negativeClean,
   negativeNoisy,
   evaluationCase('positive-miss', pairText, [expected('miss', 'D01', pairExpected.evidence_spans)], [])
@@ -144,7 +150,7 @@ const crossingSpans = [
   expectedSpan(crossingText, 'cross-b', 'defgh', null, 3)
 ];
 ok(spansOverlap(crossingSpans[0], crossingSpans[1]), 'crossing-span fixture genuinely overlaps');
-const crossing = one(evaluationCase('crossing-spans', crossingText, [expected('crossing', 'D02', crossingSpans)], [actual('crossing-pred', 'D02', crossingSpans.map((span, index) => ({ ...span, anchor_id: 'cross-pred-' + index })))]));
+const crossing = one(evaluationCase('crossing-spans', crossingText, [expected('crossing', 'D02', crossingSpans)], [actual('crossing-pred', 'D02', predictedAnchors(crossingText, crossingSpans, 'cross-pred-'))]));
 ok(crossing.metrics.evidence_localization.exact_span.micro.tp === 2 && crossing.metrics.pair_detection.task.micro.tp === 1, 'crossing spans match without clipping or rejection');
 
 
@@ -192,6 +198,7 @@ const trimmedQuoteCase = evaluationCase('untrimmed-quote', ' Alpha ', [expected(
   { span_id: 'bad', start: 0, end: 5, quote: 'Alpha', page: null }
 ])], []);
 ok(validateEvaluationRun(run([trimmedQuoteCase])).some((error) => error.includes('exact, untrimmed source slice')), 'implicitly trimmed or offset-shifted expected quotations fail closed');
+ok(throws(() => one(trimmedQuoteCase)), 'direct library evaluation enforces the same semantic validation as the CLI');
 const trimmedActualCase = evaluationCase('untrimmed-actual', ' Alpha ', [], [actual('bad-anchor', 'D01', [
   { anchor_id: 'bad', start: 0, end: 5, quote: 'Alpha', page: null }
 ])]);
@@ -214,6 +221,18 @@ const wrongScope = one(evaluationCase('wrong-scope', pairText, [expected('scope-
 ok(wrongScope.metrics.pair_detection.task.micro.tp === 1 && wrongScope.metrics.scope_classification.micro.value === 0, 'scope mismatch does not erase an otherwise exact pair');
 ok(wrongScope.metrics.scope_classification.confusion.length === 1 && wrongScope.metrics.scope_classification.confusion[0].expected === 'global' && wrongScope.metrics.scope_classification.confusion[0].actual === 'local', 'scope confusion retains expected and predicted labels');
 
+const scopeTieExpected = [
+  expected('scope-tie-e-a', 'D06', pairExpected.evidence_spans, 'global'),
+  expected('scope-tie-e-b', 'D06', pairExpected.evidence_spans, 'local')
+];
+const scopeTieActual = [
+  actual('scope-tie-a-a', 'D06', predictedAnchors(pairText, pairExpected.evidence_spans, 'scope-tie-a-a-'), 'local'),
+  actual('scope-tie-a-b', 'D06', predictedAnchors(pairText, pairExpected.evidence_spans, 'scope-tie-a-b-'), 'global')
+];
+const scopeTie = one(evaluationCase('scope-tie', pairText, scopeTieExpected, scopeTieActual));
+ok(scopeTie.metrics.scope_classification.micro.numerator === 2 && scopeTie.metrics.scope_classification.micro.value === 1, 'equally supported contradiction assignments prefer matching scope before stable IDs');
+const scopeTieReordered = one(evaluationCase('scope-tie-reordered', pairText, scopeTieExpected.slice().reverse(), scopeTieActual.slice().reverse()));
+ok(scopeTieReordered.metrics.scope_classification.micro.value === 1, 'scope-aware tie-breaking remains independent of input order');
 
 const missedCase = evaluationCase('report-miss', pairText, [expected('missed', 'D01', pairExpected.evidence_spans)], []);
 const falseAlarmCase = evaluationCase('report-false-alarm', 'Clean negative.', [], [actual('orphan', 'D99', [])]);
@@ -253,6 +272,12 @@ const schema = JSON.parse(readFileSync(path.join(root, 'evaluation/schema.json')
 ok(schema.$schema === 'https://json-schema.org/draft/2020-12/schema' && schema.$defs.EvaluationCase && schema.$defs.EvaluationManifest, 'machine-readable schema exposes dataset and case contracts');
 ok(schema.$defs.ExpectedEvidenceSpan.properties.page.anyOf.some((entry) => entry.type === 'null'), 'schema distinguishes missing page mappings from page numbers');
 ok(schema.$defs.EvaluationCase.properties.exclusion.required.includes('reason'), 'schema requires an explicit exclusion reason');
+ok(schema.$defs.StableIdentifier.maxLength === 256 && validateEvaluationRun(run([evaluationCase('x'.repeat(257), 'A')])).some((error) => error.includes('longer than maxLength')), 'bounded identifiers prevent failure-report amplification');
+const duplicateLocationCase = evaluationCase('duplicate-locations', pairText, [expected('duplicate-location-pair', 'D01', [
+  expectedSpan(pairText, 'duplicate-location-a', 'Alpha', 1),
+  expectedSpan(pairText, 'duplicate-location-b', 'Alpha', 1)
+])], []);
+ok(validateEvaluationRun(run([duplicateLocationCase])).some((error) => error.includes('duplicate expected evidence locations')) && throws(() => one(duplicateLocationCase)), 'different IDs cannot reuse the same expected source location for pair credit');
 
 const temp = mkdtempSync(path.join(tmpdir(), 'verum-evaluation-'));
 try {
@@ -282,6 +307,20 @@ for (const productionFile of ['seal-document.html', 'forensic-engine-page.js', '
   const source = readFileSync(path.join(root, productionFile), 'utf8');
   ok(!source.includes('evaluation/run-evaluation') && !source.includes('evaluation/lib/metrics'), productionFile + ' remains isolated from development evaluation');
 }
+const originalFetch = globalThis.fetch;
+let evaluationFallbackFetches = 0;
+globalThis.fetch = async () => {
+  evaluationFallbackFetches++;
+  return new Response('must not be served', { status: 200 });
+};
+try {
+  const encodedEvaluationResponse = await serveSite(new Request('https://example.test/%65valuation/schema.json'), {
+    ASSETS: { fetch: async () => new Response(null, { status: 404 }) }
+  });
+  ok(encodedEvaluationResponse.status === 404 && evaluationFallbackFetches === 0, 'percent-encoded evaluation paths are denied before repository or Pages fallback');
+} finally {
+  globalThis.fetch = originalFetch;
+}
 ok(validateEvaluationRun(run([excludedCase])).length === 0, 'an explicit, justified exclusion is valid');
 ok(validateEvaluationRun(run([{ ...excludedCase, exclusion: {} }])).some((error) => error.includes('exclusion requires a reason')), 'silent or unexplained exclusion is rejected');
 
@@ -304,6 +343,11 @@ ok(globalAssignment.metrics.pair_detection.task.micro.tp === 2, 'global assignme
 const globalReordered = one(evaluationCase('global-assignment-reordered', pairText, globalExpected, globalActual.slice().reverse()));
 ok(globalReordered.metrics.pair_detection.task.micro.tp === 2, 'globally optimal assignment is independent of prediction input order');
 
+const potentialMatrix = [[19, 15, 8], [4, 4, 17], [16, 18, 12]];
+const potentialAssignment = optimalAssignment([0, 1, 2], [0, 1, 2], (left, right) => BigInt(potentialMatrix[left][right]));
+const potentialCost = potentialAssignment.reduce((sum, pair) => sum + potentialMatrix[pair.leftIndex][pair.rightIndex], 0);
+ok(potentialAssignment.length === 3 && potentialCost === 28, 'shortest augmenting paths settle all reachable nodes before updating potentials');
+
 const repeatedText = 'Alpha Alpha';
 const repeatedExpected = [
   expectedSpan(repeatedText, 'repeat-e0', 'Alpha', 1, 0),
@@ -315,17 +359,19 @@ ok(oneAnchor.metrics.page_localization.micro.numerator === 1 && oneAnchor.metric
 const surplusAnchors = one(evaluationCase('surplus-anchors', repeatedText, [expected('surplus-pair', 'D21', [repeatedExpected[0]])], [actual('surplus-prediction', 'D21', [actualAnchor(repeatedText, 'surplus-a0', 'Alpha', 1, 0), actualAnchor(repeatedText, 'surplus-a1', 'Alpha', 2, 6)])]));
 ok(surplusAnchors.metrics.evidence_localization.token_overlap.micro.fp === 1, 'unmatched actual anchors contribute token false positives');
 
-const sharedPositive = evaluationCase('shared-positive', pairText, [pairExpected], [actual('shared-prediction', 'D01', pairExpected.evidence_spans.map((span, index) => ({ ...span, anchor_id: 'shared-a' + index })))]);
+const sharedPositive = evaluationCase('shared-positive', pairText, [pairExpected], [actual('shared-prediction', 'D01', predictedAnchors(pairText, pairExpected.evidence_spans, 'shared-a'))]);
 const sharedNegative = evaluationCase('shared-negative', 'No additional contradiction.');
 sharedPositive.document_id = 'shared-document';
 sharedNegative.document_id = 'shared-document';
 const sharedDocuments = evaluateCases([sharedPositive, sharedNegative]);
 ok(sharedDocuments.metrics.document_detection.micro.tp === 1 && sharedDocuments.metrics.document_detection.micro.tn === 0, 'document detection counts a shared document_id only once');
+const sharedDocumentReport = buildEvaluationReport(run([sharedPositive, sharedNegative]), sharedDocuments);
+ok(sharedDocumentReport.cases.every((entry) => !Object.hasOwn(entry, 'document_detection')), 'per-case reports omit misleading document-level metrics for shared document IDs');
 
 const singleSpan = one(evaluationCase('single-span-completeness', pairText, [expected('single-e', 'D22', [expectedSpan(pairText, 'single-span', 'Alpha', 1)])], [actual('single-a', 'D22', [actualAnchor(pairText, 'single-anchor', 'Alpha', 1)])]));
 ok(singleSpan.metrics.pair_detection.pair_completeness.micro.value === NOT_DEFINED && singleSpan.metrics.pair_detection.pair_completeness.micro.denominator === 0, 'single-span expectations do not enter pair-completeness denominators');
 
-const nulScope = one(evaluationCase('nul-scope', pairText, [expected('nul-e', 'D23', pairExpected.evidence_spans, 'local\u0000gold')], [actual('nul-a', 'D23', pairExpected.evidence_spans.map((span, index) => ({ ...span, anchor_id: 'nul-a' + index })), 'local\u0000actual')]));
+const nulScope = one(evaluationCase('nul-scope', pairText, [expected('nul-e', 'D23', pairExpected.evidence_spans, 'local\u0000gold')], [actual('nul-a', 'D23', predictedAnchors(pairText, pairExpected.evidence_spans, 'nul-a'), 'local\u0000actual')]));
 ok(nulScope.metrics.scope_classification.confusion[0].expected === 'local\u0000gold' && nulScope.metrics.scope_classification.confusion[0].actual === 'local\u0000actual', 'scope confusion preserves labels containing NUL characters');
 
 const prototypeInput = JSON.parse('{"__proto__":{"polluted":true},"safe":1}');
@@ -361,8 +407,11 @@ ok(overlapAssignment.metrics.evidence_localization.token_overlap.micro.tp === 2 
 
 const crowdedExpected = Array.from({ length: 129 }, (_, index) => expected('crowded-e' + index, 'D25', [expectedSpan('A', 'crowded-span' + index, 'A')]));
 const crowdedActual = Array.from({ length: 129 }, (_, index) => actual('crowded-a' + index, 'D25', [actualAnchor('A', 'crowded-anchor' + index, 'A')]));
+let crowdedRuleReads = 0;
+for (const record of crowdedActual) Object.defineProperty(record, 'rule_id', { get() { crowdedRuleReads++; return 'D25'; } });
 const crowdedErrors = validateEvaluationRun(run([evaluationCase('crowded', 'A', crowdedExpected, crowdedActual)]));
-ok(crowdedErrors.some((error) => error.includes('too many same-rule candidate pairs')), 'per-case candidate work is bounded before matching');
+ok(crowdedErrors.some((error) => error.includes('too many expected contradictions')) && crowdedErrors.some((error) => error.includes('too many actual findings')), 'oversized case arrays are rejected before matching');
+ok(crowdedRuleReads === 0, 'resource rejection avoids nested same-rule candidate enumeration');
 ok(throws(() => createAlignmentTable('a'.repeat(1000001), 'a'.repeat(1000001))), 'alignment allocation rejects text beyond the per-case limit');
 
 const reviewTemp = mkdtempSync(path.join(tmpdir(), 'verum-evaluation-review-'));
@@ -374,6 +423,11 @@ try {
   const collision = spawnSync(process.execPath, [cli, collisionInput, '--output', collisionInput], { encoding: 'utf8' });
   ok(collision.status === 1 && collision.stderr.includes('must not overwrite the input dataset'), 'an output/input path collision is rejected');
   ok(readFileSync(collisionInput, 'utf8') === originalInput, 'a rejected output collision preserves the source dataset byte-for-byte');
+  const inputAlias = path.join(reviewTemp, 'input-alias.json');
+  symlinkSync(collisionInput, inputAlias);
+  const symlinkCollision = spawnSync(process.execPath, [cli, inputAlias, '--output', collisionInput], { encoding: 'utf8' });
+  ok(symlinkCollision.status === 1 && symlinkCollision.stderr.includes('must not overwrite the input dataset'), 'canonical input/output paths reject symlink aliases');
+  ok(readFileSync(collisionInput, 'utf8') === originalInput, 'a rejected symlink collision preserves the source dataset byte-for-byte');
 
   const terminalInput = path.join(reviewTemp, 'terminal.json');
   const terminalCase = evaluationCase('bad\u001b[2J-id', 'Synthetic.');
@@ -385,6 +439,13 @@ try {
   writeFileSync(oversizedInput, Buffer.alloc(16 * 1024 * 1024 + 1, 32));
   const oversized = spawnSync(process.execPath, [cli, oversizedInput], { encoding: 'utf8' });
   ok(oversized.status === 1 && oversized.stderr.includes('16 MiB corpus limit'), 'oversized input is rejected before JSON parsing');
+
+  const malformedInput = path.join(reviewTemp, 'malformed-utf8.json');
+  const malformedBytes = Buffer.from(JSON.stringify(run([evaluationCase('malformed-marker', 'Synthetic.')])));
+  malformedBytes[malformedBytes.indexOf(Buffer.from('malformed-marker'))] = 0xff;
+  writeFileSync(malformedInput, malformedBytes);
+  const malformed = spawnSync(process.execPath, [cli, malformedInput], { encoding: 'utf8' });
+  ok(malformed.status === 1 && malformed.stderr.includes('valid UTF-8'), 'malformed UTF-8 is rejected instead of being replaced and scored');
 
   const concurrentOutput = path.join(reviewTemp, 'concurrent.json');
   function runConcurrent() {

@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Development/CI only. This adapter is never imported by browser or production engine code.
 
-import { readFile, mkdir, open, rename, stat, unlink } from 'node:fs/promises';
+import { readFile, mkdir, open, realpath, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { EVALUATION_LIMITS } from './lib/span-alignment.mjs';
 import { evaluateCases, validateEvaluationRun } from './lib/metrics.mjs';
@@ -16,9 +16,19 @@ function usage() {
   process.exitCode = 2;
 }
 
-async function writeAtomically(outputPath, serialized) {
+async function canonicalOutputPath(outputPath) {
   const directory = path.dirname(outputPath);
   await mkdir(directory, { recursive: true });
+  try {
+    return await realpath(outputPath);
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    return path.join(await realpath(directory), path.basename(outputPath));
+  }
+}
+
+async function writeAtomically(outputPath, serialized) {
+  const directory = path.dirname(outputPath);
   let handle;
   let temporaryPath;
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -61,9 +71,18 @@ if (!inputPath || args.length || (outputIndex !== -1 && !outputPath)) {
     if (resolvedOutput === resolvedInput) throw new Error('Evaluation output must not overwrite the input dataset');
     const inputStat = await stat(resolvedInput);
     if (inputStat.size > EVALUATION_LIMITS.maxInputBytes) throw new Error('Evaluation input exceeds the 16 MiB corpus limit');
-    const inputBytes = await readFile(resolvedInput);
+    const canonicalInput = await realpath(resolvedInput);
+    const canonicalOutput = resolvedOutput ? await canonicalOutputPath(resolvedOutput) : null;
+    if (canonicalOutput === canonicalInput) throw new Error('Evaluation output must not overwrite the input dataset');
+    const inputBytes = await readFile(canonicalInput);
     if (inputBytes.byteLength > EVALUATION_LIMITS.maxInputBytes) throw new Error('Evaluation input exceeds the 16 MiB corpus limit');
-    const run = JSON.parse(inputBytes.toString('utf8'));
+    let inputText;
+    try {
+      inputText = new TextDecoder('utf-8', { fatal: true }).decode(inputBytes);
+    } catch {
+      throw new Error('Evaluation input must be valid UTF-8');
+    }
+    const run = JSON.parse(inputText);
     const errors = validateEvaluationRun(run);
     if (errors.length) throw new Error('Evaluation input validation failed:\n- ' + errors.join('\n- '));
     const report = buildEvaluationReport(run, evaluateCases(run.cases));

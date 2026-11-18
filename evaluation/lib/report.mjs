@@ -22,7 +22,6 @@ export function canonicalJson(value) {
 function publicCaseResult(result) {
   return {
     case_id: result.case_id,
-    document_detection: result.document,
     contradiction_detection: result.detection,
     pair_detection: {
       exact: result.exact_pairs,
