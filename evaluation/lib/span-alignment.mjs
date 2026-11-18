@@ -1,5 +1,20 @@
 // Development-only evaluation span alignment. All offsets are UTF-16 code units.
 
+export const EVALUATION_LIMITS = Object.freeze({
+  maxInputBytes: 16 * 1024 * 1024,
+  maxCases: 2048,
+  maxSourceCodeUnitsPerCase: 1000000,
+  maxTotalSourceCodeUnits: 4000000,
+  maxExpectedContradictionsPerCase: 128,
+  maxActualFindingsPerCase: 128,
+  maxEvidenceSpansPerContradiction: 128,
+  maxAnchorsPerFinding: 128,
+  maxCandidatePairsPerCase: 16384,
+  maxCandidatePairsPerRun: 65536,
+  maxLocalizationComparisonsPerCase: 131072,
+  maxLocalizationComparisonsPerRun: 1048576
+});
+
 function assertText(value, name) {
   if (typeof value !== 'string') throw new TypeError(name + ' must be a string');
 }
@@ -13,6 +28,9 @@ function assertBoundary(value, limit, name) {
 export function createAlignmentTable(sourceText, normalizedText, normalizedToOriginal, transformation = 'identity') {
   assertText(sourceText, 'sourceText');
   assertText(normalizedText, 'normalizedText');
+  if (sourceText.length > EVALUATION_LIMITS.maxSourceCodeUnitsPerCase || normalizedText.length > EVALUATION_LIMITS.maxSourceCodeUnitsPerCase) {
+    throw new RangeError('alignment text exceeds the per-case UTF-16 code-unit limit');
+  }
   if (typeof transformation !== 'string' || !transformation.trim()) {
     throw new TypeError('transformation must name the recorded normalization');
   }
@@ -68,7 +86,7 @@ export function spansOverlap(a, b) {
 
 export function unicodeTokens(text) {
   assertText(text, 'text');
-  return text.match(/[\p{L}\p{N}_]+/gu) || [];
+  return text.match(/[\p{L}\p{N}_][\p{L}\p{N}\p{M}_]*/gu) || [];
 }
 
 export function tokenOverlapCounts(expectedText, actualText) {
