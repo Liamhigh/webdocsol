@@ -50,7 +50,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**63 registered suites**: the 55-suite audited baseline of 15 November 2026, the two Phase 0 suites, four Phase 1 evaluation suites (`evaluation-metrics.test.mjs`, `evaluation-contractnli.test.mjs`, `evaluation-contradoc.test.mjs`, `evaluation-eyecite.test.mjs`), and two Phase 2 citation suites. `run-all.js` is the
+**64 registered suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, and one Phase 3 redaction-fixture suite. `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file
 there. What each suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
@@ -102,6 +102,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 61 | `evaluation-eyecite` | `evaluation-eyecite.test.mjs` | 60 | Eyecite conformance spike: bounded corpus and span validation, strict citation/group/cluster comparison, fixed adapter allowlist, package-pin and resolution-state handling, optional real extraction only for exact pinned installs, portable CLI and atomic-generator guards |
 | 62 | `legal-citations` | `legal-citations.test.mjs` | 78 | Neutral citation occurrence core: registry and helper validation, exact spans and IDs, immediate-predecessor Id./exact-caption supra resolution, empty pack selection, envelope validity, engine flag on/off integration, exact failure identity and failed-page coverage |
 | 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 98 | ZA pack fixtures: neutral/reported/docket/SAFLII forms and boundaries, multiword supra, pinpoints, captions, negatives and neutrality, verbatim round-trips, byte-identical replay |
+| 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 | Phase 3 synthetic redaction corpus: exact UTF-16 ranges, protected verbatim evidence quotes, preserved references, and a fail-closed production-module flag |
 
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete registry.

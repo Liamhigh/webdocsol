@@ -1,0 +1,60 @@
+{
+  "schema_version": "1.0.0",
+  "fixture_set": "phase3-redaction-boundaries",
+  "dataset_license": "CC0-1.0; synthetic test text only",
+  "synthetic_only": true,
+  "offset_unit": "utf16",
+  "cases": [
+    {
+      "case_id": "contact-fields-next-to-evidence-quote",
+      "source_text": "Contact email: person@example.invalid; phone: 000-000-0000. Evidence quote: \"person@example.invalid confirmed the transfer.\" Case CCT 19/20; amount R231.3 million.",
+      "expected_redactions": [
+        { "kind": "email", "start": 15, "end": 37, "quote": "person@example.invalid" },
+        { "kind": "phone", "start": 46, "end": 58, "quote": "000-000-0000" }
+      ],
+      "protected_spans": [
+        {
+          "channel": "verbatim_evidence_quote",
+          "start": 76,
+          "end": 124,
+          "quote": "\"person@example.invalid confirmed the transfer.\""
+        }
+      ],
+      "must_preserve": [
+        { "start": 130, "end": 139, "quote": "CCT 19/20" },
+        { "start": 148, "end": 162, "quote": "R231.3 million" }
+      ]
+    },
+    {
+      "case_id": "labelled-synthetic-id-and-similar-reference",
+      "source_text": "Contact ID (synthetic invalid): 00000000000. Invoice reference: 12345678901. The verbatim record says \"ID 00000000000 was printed on the form.\"",
+      "expected_redactions": [
+        { "kind": "identifier", "start": 32, "end": 43, "quote": "00000000000" }
+      ],
+      "protected_spans": [
+        {
+          "channel": "verbatim_evidence_quote",
+          "start": 102,
+          "end": 143,
+          "quote": "\"ID 00000000000 was printed on the form.\""
+        }
+      ],
+      "must_preserve": [
+        { "start": 64, "end": 75, "quote": "12345678901" }
+      ]
+    },
+    {
+      "case_id": "unicode-context-and-trailing-punctuation",
+      "source_text": "🧪 decomposed café é; contact person@example.invalid! Keep date 1 January 2026, amount R231.3 and docket CCT 19/20.",
+      "expected_redactions": [
+        { "kind": "email", "start": 32, "end": 54, "quote": "person@example.invalid" }
+      ],
+      "protected_spans": [],
+      "must_preserve": [
+        { "start": 66, "end": 80, "quote": "1 January 2026" },
+        { "start": 89, "end": 95, "quote": "R231.3" },
+        { "start": 107, "end": 116, "quote": "CCT 19/20" }
+      ]
+    }
+  ]
+}

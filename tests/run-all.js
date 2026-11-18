@@ -70,6 +70,7 @@ const suites = [
   'evaluation-eyecite.test.mjs',
   'legal-citations.test.mjs',
   'legal-citations-za.test.mjs',
+  'redaction-fixtures.test.mjs',
 ];
 
 // A suite PASSES only if its own process exits 0. The runner prints its OWN
