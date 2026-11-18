@@ -66,7 +66,7 @@ This repository holds the website and the sealing standard that all four surface
 > `seal-document.html` and `verify.html` kept alongside the portable sealing spec. The pages
 > the Worker actually serves are the ones at the **repository root**, and they have moved
 > a long way past those snapshots (the live `seal-document.html` is about 1.1 MB — 1,138,885
-> current source is larger — because the seven forensic/contract scripts are inlined into it; the
+> current source is larger — because the ten forensic/contract/citation scripts are inlined into it; the
 > snapshot is ~136 KB). **Edit the root files.**
 > A change made only in `seal-module/web/` ships nothing.
 
@@ -287,7 +287,7 @@ webdocsol/
 |-- analysis-contracts.js, analysis-config.js  # deterministic contracts and disabled-by-default replay options
 |-- forensic-report.js                 # sealed report generator (build / buildNarrative / buildHumanReport / seal)
 |-- seal-guard.js, ots-proof.js, pdf-encrypt.js
-|                                      #   ^ all seven are ALSO inlined into seal-document.html
+|                                      #   ^ all ten are ALSO inlined into seal-document.html
 |-- verum-ui.css                       # the binding design tokens (VERUM_UI_TOKENS.md) as CSS; no page links it
 |-- Verum-Omnis-Briefing.pdf           # public briefing, linked from index.html
 |-- constitution.json, constitution-v8.pdf, llms.txt, robots.txt, sitemap.xml
@@ -297,7 +297,7 @@ webdocsol/
 |   |-- static-proxy.js                # the site-serving chain (assets -> main branch on GitHub -> legacy Pages -> embedded images)
 |   |-- site-assets.js                 # embedded last-resort copies of the logo and watermark
 |   |-- rule-format.md, public-key.der.b64, seed-rules.json
-|-- tests/                             # 61 registered suites (55 audited baseline + 2 Phase 0 + 4 Phase 1) — node tests/run-all.js
+|-- tests/                             # 63 registered suites (55 audited baseline + 2 Phase 0 + 4 Phase 1 + 2 Phase 2) — node tests/run-all.js
 |   |-- run-all.js                     # the registry — an unregistered file does not run
 |   |-- README.md                      # the short guide to the suites
 |-- evaluation/                        # B9 development/CI metrics only; never imported by production/browser analysis
@@ -367,11 +367,11 @@ operating instrument remains v6.1 (seal `VO-9E51D3F507E6`). All implementations 
 ## Working on this repository
 
 ```
-node tests/run-all.js   # or npm test — 61 registered suites; every suite green
-npm run check          # node --check on the five inlined scripts and the three worker files
+node tests/run-all.js   # or npm test — 63 registered suites; every suite green
+npm run check          # node --check on the ten inlined scripts and the three worker files
 ```
 
-- The seven scripts inlined into `seal-document.html` sit between `/* VO-INLINE:<file>:START/END */`
+- The ten scripts inlined into `seal-document.html` sit between `/* VO-INLINE:<file>:START/END */`
   markers: edit the source file, then re-splice (`ENGINE.md` §9); `tests/inline-scripts.test.mjs`
   byte-compares them.
 - `tests/run-all.js` is the registry — a test file not listed there does not run. Ordinary CI

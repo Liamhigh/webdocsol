@@ -9053,6 +9053,56 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     extractionNote += ' Markdown-formatted analysis: ' + _mdPages.length + ' page(s) (' + _mdList + ') carry chat-style markdown markup ("**" bold marks) and read as a rendered AI or chat analysis, not the record; their claims are treated as a secondary source and any observation resting only on them is a lead, never a finding.';
   }
 
+  // Phase 2 (B7 legal mapping): the citations module. When the caller enables
+  // the flag, the neutral occurrence core (legal-citations.js) runs over the
+  // final page texts — after any OCR rescue, so each anchor carries the page's
+  // extraction provenance — behind the explicit jurisdiction packs the caller
+  // selected (never inferred from IP, device region or locale). Extraction is
+  // an observation, never a contradiction: the envelope's findings array is
+  // always empty and nothing here feeds the detector pipeline. A module
+  // failure is disclosed in its envelope and never stops detection.
+  var _citationModule = null;
+  if (opts.modules.citations === true) {
+    var _LC = (typeof globalThis !== 'undefined' && globalThis.VOLegalCitations)
+      ? globalThis.VOLegalCitations
+      : (typeof require === 'function' ? require('./legal-citations.js') : null);
+    var _LP = (typeof globalThis !== 'undefined' && globalThis.VOLegalPacks)
+      ? globalThis.VOLegalPacks
+      : (typeof require === 'function' ? require('./legal-packs.js') : null);
+    var _LCt = (typeof globalThis !== 'undefined' && globalThis.VOAnalysisContracts)
+      ? globalThis.VOAnalysisContracts
+      : (typeof require === 'function' ? require('./analysis-contracts.js') : null);
+    var _citSpec = {
+      module_id: 'legal-citations',
+      module_version: _LC ? _LC.MODULE_VERSION : '1.0.0',
+      implementation_digest: '0'.repeat(128),
+      status: 'failed',
+      input_sha512: '0'.repeat(128),
+      reference_time: opts.referenceTime || null,
+      coverage: { units_total: textBlocks.length, units_processed: 0, units_skipped: [], units_failed: [] }
+    };
+    try {
+      if (!_LC || !_LP || !_LCt) throw new Error('legal-citations.js, legal-packs.js and analysis-contracts.js must load before the citations module runs');
+      if (typeof require === 'function' && !_LP.has('za')) require('./legal-packs/za.js');
+      var _citPages = [];
+      for (var cp = 0; cp < textBlocks.length; cp++) {
+        _citPages.push({
+          text: String(textBlocks[cp] || ''),
+          extraction: { kind: _imageOnlyPages.indexOf(cp + 1) !== -1 ? 'ocr' : 'pdf_text' }
+        });
+      }
+      _citationModule = _LC.runCitationModule(_citPages, {
+        packs: _LP.resolvePacks(opts.jurisdictionPacks.slice()),
+        referenceTime: opts.referenceTime || null
+      });
+    } catch (_citError) {
+      _citationModule = _LCt ? _LCt.createFailureEnvelope(_citSpec, _LCt.createFailure(
+        'citation_module_error',
+        'The citations module could not run: ' + String(_citError && _citError.message).slice(0, 200)
+      )) : null;
+    }
+  }
+
   // Batch 7a: the conduct ledger is extracted once over the final page texts
   // (after any OCR rescue) and handed to the detectors that measure pleadings
   // against it (D61). It is sealed with the bundle — it travels inside the
@@ -9531,7 +9581,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     dates: voExtractDates(_wfText)
   });
 
-  return {
+  var _result = {
     engineVersion: VO_ENGINE_VERSION,
     // The signed rule package this scan applied (version, key, canonical
     // SHA-512, counts) or null: built-in rules only.
@@ -9582,6 +9632,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
         'Re-submit a text-layer copy, or rely on the OCR-rescued pages disclosed in the extraction notes.'
       : generateSummary(allFindings, overallScore)
   };
+  // Phase 2 module envelopes, present only when the caller enabled the module;
+  // with every flag off this field is absent and the result is byte-identical
+  // to the pre-module output.
+  if (_citationModule) _result.moduleResults = { citations: _citationModule };
+  return _result;
 }
 
 function generateSummary(findings, score) {

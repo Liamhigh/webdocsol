@@ -1,0 +1,13 @@
+[
+  { "id": "bare-year-paren", "text": "In 2026 (3) of the annual report the figure changed." },
+  { "id": "ordinary-numbers", "text": "The total was 2026 units at (3) SA-side warehouses, counting 112 boxes." },
+  { "id": "legislation-section", "text": "Section 12 of the Companies Act 71 of 2008 applies here." },
+  { "id": "unknown-neutral-court", "text": "The note cites [2026] ZAXXX 9, which is not a SAFLII court." },
+  { "id": "cct-without-number", "text": "The CCT heard argument that morning." },
+  { "id": "saflii-name-only", "text": "SAFLII publishes the judgments online." },
+  { "id": "year-only", "text": "The 2026 term began in February." },
+  { "id": "malformed-reporter", "text": "He cited 2026 (3) SAX 112 (SCA) from memory." },
+  { "id": "us-reporter", "text": "The American text cites Foo v. Bar, 123 F.3d 456 (9th Cir. 2020)." },
+  { "id": "docket-like-string", "text": "Invoice CCTA 19/202 was paid late." },
+  { "id": "ambiguous-case-name", "text": "Smith v Smith is discussed without any citation at all." }
+]
