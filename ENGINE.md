@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   63 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites); many exist solely to stop the regressions in §4 and §12.
+   64 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -874,7 +874,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**63 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites; recount assertions after any test change).
+**64 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -935,6 +935,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `evaluation-eyecite.test.mjs` | 43 | B9 development-only Eyecite conformance spike: pinned corpus integrity, exact span/cluster comparator, adapter normalization and confidence stripping, not_installed/error/resolution states, the no-lookbehind static guard, and the spike CLI |
 | `legal-citations.test.mjs` | 62 | Neutral citation occurrence core and pack registry: exact spans, pack-qualified IDs, duplicate-pack handling, implementation digest, short-form resolution, envelope validity, immutable disclosed load failures with input identity, OCR/fallback provenance, flag-off findings parity, and static guards |
 | `legal-citations-za.test.mjs` | 92 | South African pack fixtures: neutral and reported citations, Id./supra resolution, CCT dockets, punctuation-safe SAFLII URLs with actual host metadata, negative fixtures, exact spans, and deterministic replay |
+| `redaction-fixtures.test.mjs` | 54 | Phase 3 fixture-only corpus: synthetic contact fields, exact UTF-16 spans, protected verbatim evidence quotes, explicitly preserved references, and redaction-module flag remains disabled |
 
 ---
 
