@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   58 registered suites (55 audited baseline + 2 Phase 0 suites + 1 Phase 1 evaluation suite); many exist solely to stop the regressions in §4 and §12.
+   59 registered suites (55 audited baseline + 2 Phase 0 suites + 2 Phase 1 evaluation suites); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -838,7 +838,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**58 registered suites** (55 audited baseline suites green on 2026-11-15, the Phase 0 contract and documentation guards, and the Phase 1 development-evaluation guard; recount assertions after any test change).
+**59 registered suites** (55 audited baseline suites green on 2026-11-15, the Phase 0 contract and documentation guards, and the Phase 1 development-evaluation guards; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -894,6 +894,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `batch7d-ots-delivered-bytes.test.mjs` | 31 | Delivered-file OpenTimestamps receipts (§12.25): real detached-receipt digest bytes, post-seal/encrypted ordering, QR and Subject scheme markers, direct PDF+receipt compatibility, and legacy QR/metadata/ORIG resolution |
 | `engine-perf.test.mjs` | 5 | Per-page extraction does not re-parse the whole PDF |
 | `evaluation-metrics.test.mjs` | 114 | B9 development-only hand-calculated detection/localization metrics, full direct-call validation, bounded identifiers/diagnostics and early resource rejection, minimum-cost and scope-aware matching, distinct evidence locations, one-to-one evidence credit, explicit UTF-16 normalization, pair/evidence/page/scope separation, failures/exclusions, versioned canonical and atomic reports, strict UTF-8 and canonical-directory/symlink-safe CLI handling, and fully normalized encoded-path production isolation |
+| `evaluation-contractnli.test.mjs` | 92 | B9 development-only ContractNLI adapter: pinned release/hash verification, code-point/UTF-16 span conversion, conservative hypothesis mapping, negative-corpus adaptation, provenance and input safety, annotations, collision-free identifiers, bounded shards and generation publication, exclusion visibility, zip integrity and the CLI pipeline on synthetic fixtures |
 
 ---
 
