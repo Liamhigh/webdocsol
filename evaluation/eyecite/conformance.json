@@ -1,0 +1,612 @@
+{
+  "cases": [
+    {
+      "behavior": "full case cite, caption, court and year",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              0,
+              40
+            ],
+            "groups": {
+              "page": "456",
+              "reporter": "F.3d",
+              "volume": "123"
+            },
+            "matched_text": "123 F.3d 456",
+            "metadata": {
+              "court": "ca9",
+              "defendant": "Bar",
+              "plaintiff": "Foo",
+              "year": "2020"
+            },
+            "span": [
+              12,
+              24
+            ],
+            "type": "full_case"
+          }
+        ],
+        "clusters": [
+          [
+            0
+          ]
+        ]
+      },
+      "id": "full-basic",
+      "text": "Foo v. Bar, 123 F.3d 456 (9th Cir. 2020)."
+    },
+    {
+      "behavior": "pin cite after the first page",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              0,
+              45
+            ],
+            "groups": {
+              "page": "456",
+              "reporter": "F.3d",
+              "volume": "123"
+            },
+            "matched_text": "123 F.3d 456",
+            "metadata": {
+              "court": "ca9",
+              "defendant": "Bar",
+              "pin_cite": "459",
+              "plaintiff": "Foo",
+              "year": "2020"
+            },
+            "span": [
+              12,
+              24
+            ],
+            "type": "full_case"
+          }
+        ],
+        "clusters": [
+          [
+            0
+          ]
+        ]
+      },
+      "id": "full-pin-cite",
+      "text": "Foo v. Bar, 123 F.3d 456, 459 (9th Cir. 2020)."
+    },
+    {
+      "behavior": "parallel citations share one caption",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              0,
+              55
+            ],
+            "groups": {
+              "page": "456",
+              "reporter": "F.3d",
+              "volume": "123"
+            },
+            "matched_text": "123 F.3d 456",
+            "metadata": {
+              "court": "ca9",
+              "defendant": "Bar",
+              "extra": "124 F.4th 789",
+              "plaintiff": "Foo",
+              "year": "2020"
+            },
+            "span": [
+              12,
+              24
+            ],
+            "type": "full_case"
+          },
+          {
+            "full_span": [
+              0,
+              55
+            ],
+            "groups": {
+              "page": "789",
+              "reporter": "F.4th",
+              "volume": "124"
+            },
+            "matched_text": "124 F.4th 789",
+            "metadata": {
+              "court": "ca9",
+              "defendant": "Bar",
+              "plaintiff": "Foo",
+              "year": "2020"
+            },
+            "span": [
+              26,
+              39
+            ],
+            "type": "full_case"
+          }
+        ],
+        "clusters": [
+          [
+            0
+          ],
+          [
+            1
+          ]
+        ]
+      },
+      "id": "full-parallel",
+      "text": "Foo v. Bar, 123 F.3d 456, 124 F.4th 789 (9th Cir. 2020)."
+    },
+    {
+      "behavior": "U.S. Reports cite implies scotus",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              16,
+              35
+            ],
+            "groups": {
+              "page": "100",
+              "reporter": "U.S.",
+              "volume": "555"
+            },
+            "matched_text": "555 U.S. 100",
+            "metadata": {
+              "court": "scotus",
+              "year": "2010"
+            },
+            "span": [
+              16,
+              28
+            ],
+            "type": "full_case"
+          }
+        ],
+        "clusters": [
+          [
+            0
+          ]
+        ]
+      },
+      "id": "full-scotus",
+      "text": "Something else, 555 U.S. 100 (2010)."
+    },
+    {
+      "behavior": "id. short form with pin cite and resolution",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              0,
+              40
+            ],
+            "groups": {
+              "page": "456",
+              "reporter": "F.3d",
+              "volume": "123"
+            },
+            "matched_text": "123 F.3d 456",
+            "metadata": {
+              "court": "ca9",
+              "defendant": "Bar",
+              "plaintiff": "Foo",
+              "year": "2020"
+            },
+            "span": [
+              12,
+              24
+            ],
+            "type": "full_case"
+          },
+          {
+            "full_span": [
+              42,
+              52
+            ],
+            "groups": {},
+            "matched_text": "Id.",
+            "metadata": {
+              "pin_cite": "at 458"
+            },
+            "span": [
+              42,
+              52
+            ],
+            "type": "id"
+          }
+        ],
+        "clusters": [
+          [
+            0,
+            1
+          ]
+        ]
+      },
+      "id": "short-id",
+      "text": "Foo v. Bar, 123 F.3d 456 (9th Cir. 2020). Id. at 458."
+    },
+    {
+      "behavior": "supra short form with antecedent guess and resolution",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              0,
+              40
+            ],
+            "groups": {
+              "page": "456",
+              "reporter": "F.3d",
+              "volume": "123"
+            },
+            "matched_text": "123 F.3d 456",
+            "metadata": {
+              "court": "ca9",
+              "defendant": "Bar",
+              "plaintiff": "Foo",
+              "year": "2020"
+            },
+            "span": [
+              12,
+              24
+            ],
+            "type": "full_case"
+          },
+          {
+            "full_span": [
+              49,
+              67
+            ],
+            "groups": {},
+            "matched_text": "supra,",
+            "metadata": {
+              "pin_cite": "at 459"
+            },
+            "span": [
+              54,
+              67
+            ],
+            "type": "supra"
+          }
+        ],
+        "clusters": [
+          [
+            0,
+            1
+          ]
+        ]
+      },
+      "id": "short-supra",
+      "text": "Foo v. Bar, 123 F.3d 456 (9th Cir. 2020). Later, Foo, supra, at 459."
+    },
+    {
+      "behavior": "id. following a section heading",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              0,
+              40
+            ],
+            "groups": {
+              "page": "456",
+              "reporter": "F.3d",
+              "volume": "123"
+            },
+            "matched_text": "123 F.3d 456",
+            "metadata": {
+              "court": "ca9",
+              "defendant": "Bar",
+              "plaintiff": "Foo",
+              "year": "2020"
+            },
+            "span": [
+              12,
+              24
+            ],
+            "type": "full_case"
+          },
+          {
+            "full_span": [
+              59,
+              69
+            ],
+            "groups": {},
+            "matched_text": "Id.",
+            "metadata": {
+              "pin_cite": "at 458"
+            },
+            "span": [
+              59,
+              69
+            ],
+            "type": "id"
+          }
+        ],
+        "clusters": [
+          [
+            0,
+            1
+          ]
+        ]
+      },
+      "id": "short-id-after-heading",
+      "text": "Foo v. Bar, 123 F.3d 456 (9th Cir. 2020).\n\nII. Discussion\n\nId. at 458."
+    },
+    {
+      "behavior": "supra antecedent shared by two cases",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              0,
+              44
+            ],
+            "groups": {
+              "page": "200",
+              "reporter": "F.3d",
+              "volume": "100"
+            },
+            "matched_text": "100 F.3d 200",
+            "metadata": {
+              "court": "ca1",
+              "defendant": "Alpha",
+              "plaintiff": "Smith",
+              "year": "2010"
+            },
+            "span": [
+              16,
+              28
+            ],
+            "type": "full_case"
+          },
+          {
+            "full_span": [
+              46,
+              88
+            ],
+            "groups": {
+              "page": "400",
+              "reporter": "F.3d",
+              "volume": "300"
+            },
+            "matched_text": "300 F.3d 400",
+            "metadata": {
+              "court": "ca2",
+              "defendant": "Beta",
+              "plaintiff": "Smith",
+              "year": "2015"
+            },
+            "span": [
+              61,
+              73
+            ],
+            "type": "full_case"
+          },
+          {
+            "full_span": [
+              94,
+              114
+            ],
+            "groups": {},
+            "matched_text": "supra,",
+            "metadata": {
+              "pin_cite": "at 250"
+            },
+            "span": [
+              101,
+              114
+            ],
+            "type": "supra"
+          }
+        ],
+        "clusters": [
+          [
+            0
+          ],
+          [
+            1
+          ]
+        ]
+      },
+      "id": "ambiguous-supra",
+      "text": "Smith v. Alpha, 100 F.3d 200 (1st Cir. 2010). Smith v. Beta, 300 F.3d 400 (2d Cir. 2015). See Smith, supra, at 250."
+    },
+    {
+      "behavior": "non-ASCII text around a cite",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              14,
+              54
+            ],
+            "groups": {
+              "page": "456",
+              "reporter": "F.3d",
+              "volume": "123"
+            },
+            "matched_text": "123 F.3d 456",
+            "metadata": {
+              "court": "ca9",
+              "defendant": "Bar",
+              "plaintiff": "Foo",
+              "year": "2020"
+            },
+            "span": [
+              26,
+              38
+            ],
+            "type": "full_case"
+          }
+        ],
+        "clusters": [
+          [
+            0
+          ]
+        ]
+      },
+      "id": "unicode-text",
+      "text": "Résumé élan — Foo v. Bar, 123 F.3d 456 (9th Cir. 2020) — naïve über."
+    },
+    {
+      "behavior": "newline inside the citation",
+      "expected": {
+        "citations": [],
+        "clusters": []
+      },
+      "id": "line-break-in-cite",
+      "text": "Foo v. Bar, 123 F.3d\n456 (9th Cir. 2020)."
+    },
+    {
+      "behavior": "hyphenated party names",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              0,
+              59
+            ],
+            "groups": {
+              "page": "100",
+              "reporter": "F. Supp. 2d",
+              "volume": "789"
+            },
+            "matched_text": "789 F. Supp. 2d 100",
+            "metadata": {
+              "court": "nysd",
+              "defendant": "O'Brien",
+              "plaintiff": "Smith-Jones",
+              "year": "2005"
+            },
+            "span": [
+              24,
+              43
+            ],
+            "type": "full_case"
+          }
+        ],
+        "clusters": [
+          [
+            0
+          ]
+        ]
+      },
+      "id": "hyphenated-caption",
+      "text": "Smith-Jones v. O'Brien, 789 F. Supp. 2d 100 (S.D.N.Y. 2005)."
+    },
+    {
+      "behavior": "volume and reporter without a page",
+      "expected": {
+        "citations": [],
+        "clusters": []
+      },
+      "id": "malformed-no-page",
+      "text": "The reference 123 F.3d without more is not a citation."
+    },
+    {
+      "behavior": "reporter string eyecite does not know",
+      "expected": {
+        "citations": [],
+        "clusters": []
+      },
+      "id": "malformed-unknown-reporter",
+      "text": "See 999 XYZABC 1 (2001) for nothing at all."
+    },
+    {
+      "behavior": "U.S. Code statute cite",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              6,
+              23
+            ],
+            "groups": {
+              "reporter": "U.S.C.",
+              "section": "1983",
+              "title": "42"
+            },
+            "matched_text": "42 U.S.C. § 1983",
+            "metadata": {},
+            "span": [
+              6,
+              22
+            ],
+            "type": "full_law"
+          }
+        ],
+        "clusters": [
+          [
+            0
+          ]
+        ]
+      },
+      "id": "law-statute",
+      "text": "Under 42 U.S.C. § 1983 the claim proceeds."
+    },
+    {
+      "behavior": "law journal cite",
+      "expected": {
+        "citations": [
+          {
+            "full_span": [
+              10,
+              38
+            ],
+            "groups": {
+              "page": "456",
+              "reporter": "Harv. L. Rev.",
+              "volume": "123"
+            },
+            "matched_text": "123 Harv. L. Rev. 456",
+            "metadata": {
+              "year": "2010"
+            },
+            "span": [
+              10,
+              31
+            ],
+            "type": "full_journal"
+          }
+        ],
+        "clusters": [
+          [
+            0
+          ]
+        ]
+      },
+      "id": "journal",
+      "text": "See Note, 123 Harv. L. Rev. 456 (2010)."
+    },
+    {
+      "behavior": "South African reporter form is not a US cite",
+      "expected": {
+        "citations": [],
+        "clusters": []
+      },
+      "id": "neutral-za-sa-negative",
+      "text": "The court in 2026 (3) SA 112 (SCA) said nothing of the sort."
+    },
+    {
+      "behavior": "South African neutral citation is not a US cite",
+      "expected": {
+        "citations": [],
+        "clusters": []
+      },
+      "id": "neutral-za-zacc-negative",
+      "text": "As held in [2026] ZACC 1 at para 12."
+    }
+  ],
+  "corpus_version": "1.0.0",
+  "note": "Expected output generated by generate-conformance.py from the pinned official eyecite release and reviewed case by case. Offsets are Python string indices (Unicode code points); the corpus texts are BMP-only, so they equal UTF-16 code-unit offsets for these cases. Span slices are asserted at generation time.",
+  "reference": {
+    "license": "BSD-2-Clause",
+    "name": "eyecite",
+    "upstream": "freelawproject/eyecite",
+    "version": "2.7.8"
+  }
+}

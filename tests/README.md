@@ -50,7 +50,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**60 registered suites**: the 55-suite audited baseline of 15 November 2026, the two Phase 0 suites, and the Phase 1 evaluation suites (`evaluation-metrics.test.mjs`, `evaluation-contractnli.test.mjs`, `evaluation-contradoc.test.mjs`). `run-all.js` is the
+**61 registered suites**: the 55-suite audited baseline of 15 November 2026, the two Phase 0 suites, and the Phase 1 evaluation suites (`evaluation-metrics.test.mjs`, `evaluation-contractnli.test.mjs`, `evaluation-contradoc.test.mjs`, `evaluation-eyecite.test.mjs`). `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file
 there. What each suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
@@ -99,6 +99,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 58 | `evaluation-metrics` | `evaluation-metrics.test.mjs` | 116 | Hand-calculated B9 development metrics, direct-call validation, bounded identifiers/diagnostics and early resource rejection, minimum-cost and scope-aware matching, distinct evidence locations, one-to-one evidence credit, UTF-16/normalization alignment, incomplete-pair exclusion, pairs, Unicode, negative documents, failures/exclusions, versioned canonical and atomic reports, strict UTF-8 and canonical-directory/symlink-safe CLI handling, and fully normalized encoded-path production isolation |
 | 59 | `evaluation-contractnli` | `evaluation-contractnli.test.mjs` | 92 | ContractNLI adapter: pinned release/hashes, UTF-16 spans, conservative mapping, provenance and input safety, annotations, collision-free IDs, bounded shards, generation publication, zip integrity, CLI pipeline |
 | 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 | ContraDoc adapter and dual metrics: verbatim evidence/ref anchoring, mapped scopes, incomplete-pair exclusion, verum_exact metrics with per-document negative-set false positives, published_comparable settings and input limits, generation publication, CLI pipeline |
+| 61 | `evaluation-eyecite` | `evaluation-eyecite.test.mjs` | 60 | Eyecite conformance spike: bounded corpus and span validation, strict citation/group/cluster comparison, fixed adapter allowlist, package-pin and resolution-state handling, optional real extraction only for exact pinned installs, portable CLI and atomic-generator guards |
 
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete registry.
