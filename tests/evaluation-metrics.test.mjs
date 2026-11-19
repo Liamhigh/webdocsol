@@ -121,6 +121,21 @@ ok(partialPair.metrics.evidence_localization.exact_span.micro.tp === 1 && partia
 const incompletePair = one(evaluationCase('incomplete-pair', pairText, [expected('expected-incomplete', 'D01', pairExpected.evidence_spans)], [actual('actual-incomplete', 'D01', [actualAnchor(pairText, 'pred-a', 'Alpha', 1)])]));
 ok(incompletePair.metrics.pair_detection.pair_completeness.micro.value === 0 && incompletePair.metrics.pair_detection.partial_pair_credit.micro.value === 0.5, 'one-anchor prediction is incomplete but retains separate half credit');
 
+const incompleteExpectedPair = one(evaluationCase('incomplete-expected-pair', pairText,
+  [expected('expected-one-anchor', 'D01', [pairExpected.evidence_spans[0]])],
+  [actual('actual-one-anchor', 'D01', [actualAnchor(pairText, 'pred-a', 'Alpha', 1)])]));
+ok(incompleteExpectedPair.metrics.contradiction_detection.micro.tp === 1 &&
+  incompleteExpectedPair.metrics.pair_detection.exact.micro.tp === 0 &&
+  incompleteExpectedPair.metrics.pair_detection.exact.excluded_incomplete_expected_pairs === 1 &&
+  incompleteExpectedPair.metrics.pair_detection.exact.micro.precision === NOT_DEFINED &&
+  incompleteExpectedPair.caseResults[0].pair_metric_exclusions[0].reason.includes('fewer than two'),
+'one-anchor gold remains a detection match but is visibly excluded from exact-pair credit');
+ok(buildEvaluationReport(run([evaluationCase('incomplete-expected-pair', pairText,
+  [expected('expected-one-anchor', 'D01', [pairExpected.evidence_spans[0]])],
+  [actual('actual-one-anchor', 'D01', [actualAnchor(pairText, 'pred-a', 'Alpha', 1)])])]),
+incompleteExpectedPair).pair_metric_exclusions.length === 1,
+'the evaluation report exposes incomplete expected pairs');
+
 const duplicate = one(evaluationCase('duplicate-prediction', pairText, [expected('expected-duplicate', 'D01', pairExpected.evidence_spans)], [
   actual('actual-exact', 'D01', [actualAnchor(pairText, 'pred-a', 'Alpha', 1), actualAnchor(pairText, 'pred-b', 'Beta', 2)]),
   actual('actual-duplicate', 'D01', [actualAnchor(pairText, 'pred-a2', 'Alpha', 1), actualAnchor(pairText, 'pred-b2', 'Beta', 2)])
