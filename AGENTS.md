@@ -26,6 +26,10 @@ re-introduces a false statement of fact under seal.
 **Repo map:** [`REFERENCE.md`](./REFERENCE.md) — every page, script, worker endpoint and
 directory, and what each one does.
 
+**Enhancement plan:** [`ENHANCEMENT-PLAN.md`](./ENHANCEMENT-PLAN.md) — the status record for the
+multi-phase forensic-capability plan (Phases 0–5): each slice, its PR, and whether it is merged,
+open, blocked or not started. Update it whenever a slice moves.
+
 ## Start here — the state of the platform (updated 2026-10-05; describes `main` once PR #218 — the Combine 06 April 2026 run — is merged; PR #216 and #217 are live)
 
 Read this section first; it is the two-minute orientation. Everything below it is the detail.

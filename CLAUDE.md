@@ -14,6 +14,7 @@ repositories depend on this one, the dated known state, what must never be done)
 - Shipping, routing, static assets, the serving chain → `DEPLOYMENT.md`
 - Every file, page and endpoint → `REFERENCE.md`
 - Diagnosing a failed seal or a missing narrative → `FORENSIC-DEBUG.md`
+- Where the multi-phase forensic-capability enhancement plan stands → `ENHANCEMENT-PLAN.md`
 - Where this repository sits among the surfaces, and the system's hard constraints → `ARCHITECTURE.md`
 - The look of any page → `VERUM_UI_TOKENS.md` (binding) and `DESIGN_LOCK.md`
 - The signed rule-package manifest, a contract (6 below) → `worker/rule-format.md`
