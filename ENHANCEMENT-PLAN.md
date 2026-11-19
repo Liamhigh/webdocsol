@@ -20,7 +20,7 @@ Last updated: **2026-11-19**.
 |---|---|---|---|
 | 0 | Verified deterministic analysis foundations (`analysis-contracts.js`, `analysis-config.js`) | #302 | **Merged** (2026-11-17) |
 | 1 | Development-only B9 evaluation harness | #303 | **Merged** (2026-11-18) |
-| 1 | Post-merge correction `042249f`; remove transfer payload | #308 | Open (base of the stack) |
+| 1 | Post-merge correction `042249f`; remove transfer payload | #308 | Open (corrected head `0c06cd215786761f3f5a4b2a4566f57e7300457f`; base of the stack) |
 | 1 | ContractNLI evaluation adapter (PR 1.2) | #309 | Open |
 | 1 | ContraDoc adapter + dual metrics (PR 1.3) | #310 | Open |
 | 2 | Eyecite citation conformance spike + decision record (PR 2.1) | #311 | Open |
@@ -28,17 +28,22 @@ Last updated: **2026-11-19**.
 | 2 | Signed authority packs (PR 2.3) | — | **Blocked** (founder key rotation) |
 | 2 | ECTA note (PR 2.4) | — | **Blocked** (needs qualified legal review) |
 | 3 | Synthetic redaction boundary fixtures (PR 3.1) | #313 | Open (ready for review) |
+| 3 | Enhancement-plan status record | #314 | Open |
+| 4 | PDF graph and incremental-revision forensics (PRs 4.1–4.2) | — | Not started |
 | 5 | Allen temporal algebra (PR 5.1) | — | Not started |
 
-The open phase work is a single stack, each PR based on the previous one:
+The open phase work is a single stack, each PR based on the previous one. #307 is a duplicate
+corrective PR that remains open; it is not the base of this stack.
 
 ```
 main
- └─ #308 ─ #309 ─ #310 ─ #311 ─ #312 ─ #313
-    P1      P1      P1      P2      P2      P3
+ └─ #308 ─ #309 ─ #310 ─ #311 ─ #312 ─ #313 ─ #314
+    P1      P1      P1      P2      P2      P3      docs
 ```
 
-Merge in stack order; each PR must land (or be retargeted to `main`) before the one above it.
+All PRs #308–#314 are open as of this update. Merge in stack order; each PR must land (or be
+retargeted to `main`) before the one above it. Do not mark work merged until GitHub confirms the
+merge.
 
 ## Phase detail
 
@@ -84,9 +89,9 @@ git-ignored (`evaluation/.cache/`).
   the detector pipeline or the findings JSON. Occurrences keep raw text and page-local UTF-16
   offsets; `Id.`/`supra` resolution is `resolved`/`ambiguous`/`unresolved`, never a score.
   Guarded by `tests/legal-citations.test.mjs` and `tests/legal-citations-za.test.mjs`.
-- **PR 2.3 — signed authority packs · Blocked.** Depends on the founder's key-rotation decision
-  (`AGENTS.md` "Open today"): the signing key is not on the Worker, and every client pins
-  `vo-master-1`, so no new signed pack can ship until a key rotation completes.
+- **PR 2.3 — signed authority packs · Blocked.** The founder chose to **defer key rotation**.
+  Rotation has **not started**. The signing key is not on the Worker, and every client pins
+  `vo-master-1`; signed-pack work remains blocked unless and until the rotation proceeds.
 - **PR 2.4 — ECTA note · Blocked.** Requires qualified legal review before any statutory note is
   written into the engine or reports.
 
@@ -99,6 +104,20 @@ redaction behaviour is implemented**: the `redaction` module in `analysis-config
 as implemented and the test confirms it still fails closed. This encodes the binding boundary in
 [`ENGINE.md`](./ENGINE.md) §12.22: redaction or other filtering may affect generated descriptions
 only — never the record or verbatim evidence quotations.
+
+### Phase 4 — PDF graph and incremental-revision forensics · Not started
+
+The source plan defines two future slices; neither implementation is approved or merged:
+
+- **PR 4.1 — QPDF/WASM feasibility and active-graph adapter · Not started.** Assess feasibility
+  and, only if separately approved, expose a bounded description of the PDF's active object
+  graph. QPDF's writer is not a revision-history API.
+- **PR 4.2 — revision-chain scanner · Not started.** A separate bounded scanner for incremental
+  revision history; it must not rewrite source bytes.
+
+Any future work must fail closed on unsupported or ambiguous input, enforce explicit resource
+bounds, preserve the original bytes, and never rewrite the source document. These are constraints
+on future proposals, not claims that an implementation or approval exists.
 
 ### Phase 5 — Allen temporal algebra · Not started
 
@@ -115,3 +134,6 @@ or PR exists.
 4. Update suite counts wherever they are written (`tests/run-all.js`, `ENGINE.md`, `AGENTS.md`,
    `REFERENCE.md`, `README.md`, `tests/README.md`, `tests/documentation-consistency.test.mjs`) and
    update **this file**.
+5. Before updating statuses, check live PR states, exact heads and base refs; keep the full open
+   stack (including the current status-record PR) accurate, list duplicate #307 separately, and
+   update the PR description's stack diagram. Mark a slice merged only after GitHub confirms it.

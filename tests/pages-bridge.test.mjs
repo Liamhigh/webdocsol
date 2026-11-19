@@ -5,9 +5,9 @@
  * unchanged — site, API and forensic service alike. Locks: the target keeps
  * path and query; method, headers and body pass through; redirects pass
  * through untouched; a request marked by the Worker's own serving chain is
- * answered from the static files (never bridged back — a loop); an
- * unreachable Worker falls back to the static files with an honest header;
- * the bridge never ships as a Worker asset.
+ * answered from the static files (never bridged back — a loop); Markdown is
+ * denied on both static-file paths; an unreachable Worker falls back to the
+ * static files with an honest header; the bridge never ships as a Worker asset.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -59,14 +59,25 @@ const env = { ASSETS: { fetch: async (req) => { assetsCalls.push(new URL(req.url
   ok(!workerCalled && assetsCalls[assetsCalls.length - 1] === '/images/logo-full.png' && (await res.text()) === 'static /images/logo-full.png', 'a request marked X-VO-Chain is served from the static files (no loop)');
 }
 
-// 4. An unreachable Worker falls back to the static site with an honest header.
+// 4. The Pages static paths never expose root Markdown files.
+{
+  const before = assetsCalls.length;
+  const chained = await B.bridge(new Request('https://verumglobal.pages.dev/AGENTS.md', { headers: { 'x-vo-chain': 'worker' } }), env, async () => new Response('unexpected'));
+  ok(chained.status === 404 && (await chained.text()) === 'not found' && assetsCalls.length === before, 'a chained root Markdown request is denied before static assets are fetched');
+
+  const fake = async () => { throw new Error('connect failed'); };
+  const fallback = await B.bridge(new Request('https://www.verumglobal.foundation/AGENTS.md'), env, fake);
+  ok(fallback.status === 404 && fallback.headers.get('x-vo-bridge') === 'worker-unreachable' && (await fallback.text()) === 'not found' && assetsCalls.length === before, 'an unreachable Worker cannot expose a root Markdown file through static fallback');
+}
+
+// 5. An unreachable Worker falls back to the static site with an honest header.
 {
   const fake = async () => { throw new Error('connect failed'); };
   const res = await B.bridge(new Request('https://www.verumglobal.foundation/'), env, fake);
   ok(res.status === 200 && res.headers.get('x-vo-bridge') === 'worker-unreachable' && (await res.text()) === 'static /', 'the static home page answers when the Worker cannot be reached, and says so');
 }
 
-// 5. The Worker marks its own Pages-tier requests, and never ships the bridge as an asset.
+// 6. The Worker marks its own Pages-tier requests, and never ships the bridge as an asset.
 {
   const h = sp.chainHeaders(new Request('https://x/y', { headers: { accept: '*/*' } }));
   ok(h.get('x-vo-chain') === 'worker' && h.get('accept') === '*/*', 'serveStatic marks its requests to the Pages origin with X-VO-Chain: worker');
