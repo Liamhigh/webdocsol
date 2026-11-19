@@ -67,6 +67,10 @@ const engineDoc = read('ENGINE.md');
 ok(engineDoc.includes('## 2. Contradiction types (CT01–CT61)') && engineDoc.includes('## 3. Detector inventory (63 registered entries)'), 'ENGINE current taxonomy and detector headings agree with source');
 ok(engineDoc.includes('**Findings JSON:** v1.11.0') && engineDoc.includes('report builder v1.3.1'), 'ENGINE header has current findings and report-builder versions');
 ok(engineDoc.includes('**64 registered suites**'), 'ENGINE test section names the current registry size');
+const testReadme = read('tests/README.md');
+ok(engineDoc.includes('| `redaction-fixtures.test.mjs` | 54 |') &&
+   testReadme.includes('| 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 |'),
+  'redaction fixture assertion count matches the measured suite output in both inventories');
 
 ok(!html.includes("of 46 contradiction types triggered") && !html.includes("'/46 triggered"), 'stale 46-type user-facing totals are gone');
 const detectorProgress = html.match(/\b\d+ contradiction detectors running\.\.\./g) || [];

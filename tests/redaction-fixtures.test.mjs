@@ -2,11 +2,12 @@
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 const require = createRequire(import.meta.url);
 const { ok, done, throws } = require('./_assert.js');
 const Config = require('../analysis-config.js');
-const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
+const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const corpus = JSON.parse(readFileSync(path.join(root, 'tests/fixtures/redaction/cases-v1.json'), 'utf8'));
 
 ok(corpus.schema_version === '1.0.0' && corpus.fixture_set === 'phase3-redaction-boundaries',
