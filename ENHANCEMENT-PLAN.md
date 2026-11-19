@@ -29,7 +29,7 @@ Last updated: **2026-11-19**.
 | 2 | ECTA note (PR 2.4) | — | **Blocked** (needs qualified legal review) |
 | 3 | Synthetic redaction boundary fixtures (PR 3.1) | #313 | Open (ready for review) |
 | 3 | Enhancement-plan status record | #314 | Open |
-| 4 | Bounded QPDF-WASM active-graph prototype (PR 4.1) | #TBD | Open |
+| 4 | Bounded QPDF-WASM active-graph prototype (PR 4.1) | #316 | Open |
 | 4 | Incremental-revision chain scanner (PR 4.2) | — | Not started |
 | 5 | Allen temporal algebra (PR 5.1) | — | Not started |
 
@@ -38,12 +38,12 @@ corrective PR that remains open; it is not the base of this stack.
 
 ```
 main
- └─ #308 ─ #309 ─ #310 ─ #311 ─ #312 ─ #313 ─ #314
-    P1      P1      P1      P2      P2      P3      docs
+ └─ #308 ─ #309 ─ #310 ─ #311 ─ #312 ─ #313 ─ #314 ─ #316
+    P1      P1      P1      P2      P2      P3      docs    P4.1
 ```
 
-All PRs #308–#314 are open as of this update. Merge in stack order; each PR must land (or be
-retargeted to `main`) before the one above it. Do not mark work merged until GitHub confirms the
+All PRs #308–#314 and #316 are open as of this update. Merge in stack order; each PR must land (or
+be retargeted to `main`) before the one above it. Do not mark work merged until GitHub confirms the
 merge.
 
 ## Phase detail
@@ -106,11 +106,11 @@ as implemented and the test confirms it still fails closed. This encodes the bin
 [`ENGINE.md`](./ENGINE.md) §12.22: redaction or other filtering may affect generated descriptions
 only — never the record or verbatim evidence quotations.
 
-### Phase 4 — PDF graph and incremental-revision forensics · PR 4.1 open; PR 4.2 not started
+### Phase 4 — PDF graph and incremental-revision forensics · PR 4.1 open (#316); PR 4.2 not started
 
 The source plan defines two separate slices:
 
-- **PR 4.1 — QPDF/WASM active-graph prototype · Open.** `modules.pdfGraph` is explicit and
+- **PR 4.1 — QPDF/WASM active-graph prototype · Open (#316).** `modules.pdfGraph` is explicit and
   default-off. QPDF 12.2.0 runs in a disposable browser worker with an 8-MiB input cap, a 256-MiB
   Wasm memory maximum, a 2-MiB JSON-output cap, object/reference/traversal limits and a 15-second
   deadline. It returns only the PDF version and bounded page/object/reference/type counts; stream
