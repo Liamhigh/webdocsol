@@ -39,6 +39,10 @@ ok(!runList.includes('D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT') && detectorK
 ok(reportCounts && +reportCounts[1] === runList.length && +reportCounts[2] === ctKeys.length && +reportCounts[3] === 17, 'report fallback counts match main run-list, taxonomy and serial registry');
 ok(findingsVersion && findingsVersion[1] === '1.11.0', 'production findings JSON remains at source-derived 1.11.0');
 ok(suiteCount === 63 && suiteRegistry.includes("'analysis-contracts.test.mjs'") && suiteRegistry.includes("'documentation-consistency.test.mjs'") && suiteRegistry.includes("'evaluation-metrics.test.mjs'") && suiteRegistry.includes("'evaluation-contractnli.test.mjs'") && suiteRegistry.includes("'evaluation-contradoc.test.mjs'") && suiteRegistry.includes("'evaluation-eyecite.test.mjs'") && suiteRegistry.includes("'legal-citations.test.mjs'") && suiteRegistry.includes("'legal-citations-za.test.mjs'"), 'all 63 Node suites are explicitly registered');
+const testsGuide = read('tests/README.md');
+ok(testsGuide.includes('| 58 | `evaluation-metrics` | `evaluation-metrics.test.mjs` | 116 |') &&
+   testsGuide.includes('| 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 |'),
+'test guidance records actual assertions without changing the verified 60-suite registry count');
 
 const readme = read('README.md');
 ok(readme.includes('VO_ENGINE_VERSION 5.7.2-web') && readme.includes('CT01–CT61') && readme.includes('findings JSON 1.11.0'), 'README current engine/taxonomy/findings line agrees with source');

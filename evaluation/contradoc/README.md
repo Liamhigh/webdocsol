@@ -38,16 +38,38 @@ closed and is never overwritten.
 ```sh
 node evaluation/contradoc/adapter.mjs \
   --engine-commit "$(git rev-parse HEAD)" --ruleset vo-engine-5.7.2-web \
-  --reference-time 2026-11-15T00:00:00Z
-node evaluation/run-evaluation.mjs evaluation/reports/contradoc.json
-node evaluation/contradoc/verum-exact-metrics.mjs evaluation/reports/contradoc.json
+  --reference-time 2026-11-15T00:00:00Z \
+  --output-prefix evaluation/reports/contradoc
+GENERATION="$(node -p "JSON.parse(require('fs').readFileSync('evaluation/reports/contradoc.current.json')).generation_id")"
+GEN_DIR="evaluation/reports/contradoc.generations/$GENERATION"
+mkdir -p evaluation/reports/contradoc-evaluations
+for run in "$GEN_DIR"/contradoc.shard-*.json; do
+  node evaluation/run-evaluation.mjs "$run" --output "evaluation/reports/contradoc-evaluations/$(basename "$run").evaluation.json"
+  node evaluation/contradoc/verum-exact-metrics.mjs "$run" > "evaluation/reports/contradoc-evaluations/$(basename "$run").verum-exact.json"
+done
 ```
 
 The adapter converts all 891 documents (no sampling), shards the output inside
 the harness resource limits, and validates each shard against
-`../schema.json` before writing. Engine findings merge through `--actuals
-<file.json>` (`case_id` → array of `ActualFinding` records, rule id
-`contradoc:self_contradiction`); unknown case IDs are rejected.
+`../schema.json` before publishing. The `.current.json` pointer names one
+immutable output generation and its run shards plus coverage file. Generation
+contents are staged before the pointer is atomically replaced under a
+per-prefix lock, so a failed or competing run cannot mix shards; older
+generations are retained and are never selected by the current pointer. If a
+process is killed while holding the lock, remove the stale `.lock` only after
+confirming no adapter process is still running. Engine findings merge through
+`--actuals <file.json>` (`case_id` → array of `ActualFinding` records, rule id
+`contradoc:self_contradiction`); unknown case IDs are rejected. Dataset reads
+are limited to 64 MiB and actuals reads to 16 MiB, from opened file
+descriptors; output aliases of either input, including symlinks, are rejected.
+Each generated run shard is the input to both `run-evaluation.mjs` and
+`verum-exact-metrics.mjs`; the former's report is a separate output and is not
+an input to the latter. The `published_comparable` runner consumes a separate
+responses JSON and does not compute BERTScore:
+
+```sh
+node evaluation/contradoc/official-metric-runner.mjs path/to/responses.json --top-k
+```
 
 ## Anchoring and scope rules
 
@@ -58,17 +80,19 @@ the harness resource limits, and validates each shard against
   `evidence_not_located_verbatim`; a `ref sentences` entry that cannot be
   located is omitted and listed per document in the coverage sidecar. Gold
   text is never trimmed or normalized to make a match.
-- **Published scope labels are preserved verbatim** as
-  `contradoc:<label>`. `CONTRADOC_SCOPE_MAP` in the adapter is the only bridge
-  to Verum granularity (`intra` → within-sentence, `local` → nearby,
-  `global` → distant); it is an explicit, tested mapping and does not claim
-  the taxonomies are identical. The hybrid `global, intra` label stays as
-  published and has no mapping entry.
+- `CONTRADOC_SCOPE_MAP` maps both expected ContraDoc labels and merged actual
+  aliases to Verum granularity (`intra` → within-sentence, `local` → nearby,
+  `global` → distant). Published labels and their distributions remain in the
+  coverage sidecar. The hybrid `global, intra` label stays disclosed as
+  published and unmapped; this bridge does not claim identical taxonomies.
 - **Pairs are the contradiction pair.** Expected evidence spans are the
   located `ref sentences` plus the evidence sentence (`pair_mode:
-  "unordered"`). The 80 positive documents without `ref sentences` are
-  structurally incomplete pairs; the harness reports that rather than hiding
-  it. `page` is `null` throughout: the dataset has no audited page mapping.
+  "unordered"`). A positive record with no locatable distinct reference is
+  listed as an incomplete pair in coverage. It remains in document and
+  contradiction detection, but its one-anchor gold is explicitly excluded
+  from exact-pair credit and reported in `pair_metric_exclusions`; it does not
+  earn a misleading exact-pair true positive. `page` is `null` throughout:
+  the dataset has no audited page mapping.
 
 ## Two metric families, never conflated
 
@@ -82,7 +106,16 @@ the harness resource limits, and validates each shard against
    the 20-character direct-find rules, the published BERTScore
    precision/recall threshold of 0.98, top-k capped at five candidates, and
    Judge-then-Find (evidence is evaluated only when the model answers "yes"
-   and the document is gold-positive). BERTScore values are **externally
+   and the document is gold-positive). Top-k truncates candidates and their
+   aligned score arrays after five, and the result reports how many candidates
+   were    discarded. Direct-find cutoffs count Unicode code points, matching Python.
+   The pinned `trim_string` trims spaces and newlines on the serialized model
+   response before its evidence list is parsed; parsed candidate and gold
+   evidence strings are only lowercased before matching, as in `yes_verify`.
+   Supplied
+   BERTScore precision/recall values must be finite and in `[0, 1]`; maxima are
+   accumulated iteratively. Empty-set ratios, including accuracy, are
+   `not_defined`, never coerced to zero. BERTScore values are **externally
    supplied data** with mandatory provenance (`scores_source`, `score_model`);
    no Python or neural package is required or used here, and none is an
    application runtime dependency.

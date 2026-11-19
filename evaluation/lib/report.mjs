@@ -53,7 +53,7 @@ export function buildEvaluationReport(run, evaluation) {
   const actual = included.reduce((sum, evaluationCase) => sum + evaluationCase.actual_findings.length, 0);
   return {
     report_type: 'verum_omnis_developer_evaluation',
-    report_version: '1.0.0',
+    report_version: '1.1.0',
     architectural_owner: 'B9',
     production_finding_effect: 'none',
     manifest: run.manifest,
@@ -71,6 +71,12 @@ export function buildEvaluationReport(run, evaluation) {
       const right = JSON.stringify([b.case_id, b.contradiction_id || '', b.finding_id || '', b.reason]);
       return left < right ? -1 : left > right ? 1 : 0;
     }),
+    pair_metric_exclusions: evaluation.caseResults.flatMap((result) => result.pair_metric_exclusions)
+      .sort((a, b) => {
+        const left = JSON.stringify([a.case_id, a.contradiction_id, a.reason]);
+        const right = JSON.stringify([b.case_id, b.contradiction_id, b.reason]);
+        return left < right ? -1 : left > right ? 1 : 0;
+      }),
     exclusions: evaluation.exclusions.slice().sort((a, b) => a.case_id < b.case_id ? -1 : a.case_id > b.case_id ? 1 : 0),
     limitations: [
       'Development evaluation only; these values are not finding confidence, severity, or courtroom reliability.',

@@ -54,7 +54,11 @@ function aggregateMetrics(perItem) {
 }
 
 function aggregateBinary(caseResults, key) {
-  return aggregateMetrics(caseResults.map((result) => result[key]));
+  const metrics = aggregateMetrics(caseResults.map((result) => result[key]));
+  metrics.excluded_incomplete_expected_pairs = caseResults.reduce(
+    (sum, result) => sum + (result[key].excluded_incomplete_expected_pairs || 0), 0
+  );
+  return metrics;
 }
 
 function ratioMetrics(numerator, denominator) {
@@ -204,28 +208,34 @@ function resourceErrors(run) {
     const expected = Array.isArray(evaluationCase.expected_contradictions) ? evaluationCase.expected_contradictions : [];
     const actual = Array.isArray(evaluationCase.actual_findings) ? evaluationCase.actual_findings : [];
     let oversized = false;
+    const actualOversized = actual.length > EVALUATION_LIMITS.maxActualFindingsPerCase;
     if (expected.length > EVALUATION_LIMITS.maxExpectedContradictionsPerCase) {
       errors.push(caseId + ': too many expected contradictions');
       oversized = true;
     }
-    if (actual.length > EVALUATION_LIMITS.maxActualFindingsPerCase) {
+    if (actualOversized) {
       errors.push(caseId + ': too many actual findings');
       oversized = true;
-    }
-    for (const actualRecord of actual) {
-      if (isObject(actualRecord) && Array.isArray(actualRecord.anchors) && actualRecord.anchors.length > EVALUATION_LIMITS.maxAnchorsPerFinding) {
-        errors.push(caseId + ': too many actual anchors');
-        oversized = true;
+    } else {
+      let anchorLimitReported = false;
+      for (const actualRecord of actual) {
+        if (isObject(actualRecord) && Array.isArray(actualRecord.anchors) && actualRecord.anchors.length > EVALUATION_LIMITS.maxAnchorsPerFinding) {
+          if (!anchorLimitReported) errors.push(caseId + ': too many actual anchors');
+          anchorLimitReported = true;
+          oversized = true;
+        }
       }
     }
     if (oversized) continue;
     let candidatePairs = 0;
     let comparisons = 0;
+    let spanLimitReported = false;
     for (const expectedRecord of expected) {
       if (!isObject(expectedRecord)) continue;
       const spans = Array.isArray(expectedRecord.evidence_spans) ? expectedRecord.evidence_spans : [];
       if (spans.length > EVALUATION_LIMITS.maxEvidenceSpansPerContradiction) {
-        errors.push(caseId + ': too many expected evidence spans');
+        if (!spanLimitReported) errors.push(caseId + ': too many expected evidence spans');
+        spanLimitReported = true;
         continue;
       }
       for (const actualRecord of actual) {
@@ -528,16 +538,33 @@ export function matchContradictions(expectedRecords, actualRecords) {
 
 function pairCounts(matching, mode) {
   let tp = 0;
+  let excludedIncomplete = 0;
+  let fp = matching.unmatchedActual.length;
+  let fn = 0;
   for (const match of matching.matches) {
     const expected = match.expected.aligned_spans;
     const actual = match.actual.anchors;
+    if (expected.length < 2) {
+      excludedIncomplete++;
+      continue;
+    }
     const exact = mode === 'ordered' ? exactOrdered(expected, actual)
       : mode === 'unordered' ? exactUnordered(expected, actual)
         : (match.expected.pair_mode || 'ordered') === 'unordered' ? exactUnordered(expected, actual) : exactOrdered(expected, actual);
     if (exact) tp++;
+    else {
+      fp++;
+      fn++;
+    }
   }
-  const incorrect = matching.matches.length - tp;
-  return binaryMetrics({ tp, fp: matching.unmatchedActual.length + incorrect, fn: matching.unmatchedExpected.length + incorrect });
+  for (const expected of matching.unmatchedExpected) {
+    if (expected.aligned_spans.length < 2) excludedIncomplete++;
+    else fn++;
+  }
+  return {
+    ...binaryMetrics({ tp, fp, fn }),
+    excluded_incomplete_expected_pairs: excludedIncomplete
+  };
 }
 
 function documentCounts(expectedCount, actualCount) {
@@ -568,6 +595,16 @@ function evaluateCase(evaluationCase) {
   const page = { correct: 0, total: 0, excluded_no_mapping: 0 };
   const scope = { correct: 0, total: 0 };
   const pairFailures = [];
+  const pairMetricExclusions = [];
+  for (const expected of matching.matches.map((match) => match.expected).concat(matching.unmatchedExpected)) {
+    if (expected.aligned_spans.length < 2) {
+      pairMetricExclusions.push({
+        case_id: evaluationCase.case_id,
+        contradiction_id: expected.contradiction_id,
+        reason: 'fewer than two distinct expected evidence spans; excluded from exact-pair metrics'
+      });
+    }
+  }
   for (const match of matching.matches) {
     const expectedForPair = match.expected.aligned_spans;
     const actualForPair = match.actual.anchors;
@@ -636,6 +673,7 @@ function evaluateCase(evaluationCase) {
     scope_confusion: confusion,
     normalization_transformations: [evaluationCase.normalization?.name || 'identity'],
     matching,
+    pair_metric_exclusions: pairMetricExclusions,
     failures: [...unmatchedFailures, ...pairFailures]
   };
 }

@@ -4,13 +4,14 @@
 // d1c42d1e433595dd6e98fab7b669722cdc050b1d). BERTScore is never computed here:
 // externally produced precision/recall arrays are accepted as DATA with their
 // provenance recorded, and this runner applies the published 0.98 threshold,
-// direct-find, top-k and Judge-then-Find rules exactly. Results are labelled
+// direct-find, top-k truncation and Judge-then-Find rules. Results are labelled
 // published_comparable, never deterministic anchor truth (that is
 // verum-exact-metrics.mjs). No Python or neural package is required or used.
 
 import { readFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
+import { NOT_DEFINED } from '../lib/metrics.mjs';
 import { canonicalJson } from '../lib/report.mjs';
 
 export const PUBLISHED_THRESHOLD = 0.98;
@@ -22,20 +23,46 @@ function fail(message) {
 }
 
 export function trimString(value) {
+  if (typeof value !== 'string') fail('evidence strings must be strings');
+  const characters = Array.from(value);
   let start = 0;
-  let end = value.length - 1;
-  while (start <= end && (value[start] === ' ' || value[start] === '\n')) start++;
-  while (end >= start && (value[end] === ' ' || value[end] === '\n')) end--;
-  return value.slice(start, end + 1);
+  let end = characters.length;
+  while (start < end && (characters[start] === ' ' || characters[start] === '\n')) start++;
+  while (end > start && (characters[end - 1] === ' ' || characters[end - 1] === '\n')) end--;
+  return characters.slice(start, end).join('');
+}
+
+function codePointLength(value) {
+  return Array.from(value).length;
+}
+
+function validateBertScore(scores, candidateCount) {
+  if (!scores || !Array.isArray(scores.precision) || !Array.isArray(scores.recall) ||
+      scores.precision.length !== candidateCount || scores.recall.length !== candidateCount) {
+    fail('bertscore precision/recall arrays must align with the candidate list');
+  }
+  for (const values of [scores.precision, scores.recall]) {
+    for (const value of values) {
+      if (typeof value !== 'number' || !Number.isFinite(value) || value < 0 || value > 1) {
+        fail('bertscore values must be finite numbers in the range [0, 1]');
+      }
+    }
+  }
+}
+
+function maxValue(values) {
+  let maximum = -Infinity;
+  for (const value of values) if (value > maximum) maximum = value;
+  return maximum;
 }
 
 // Official rule: a query shorter than 20 characters never matches; candidate
 // sentences shorter than 20 are skipped; a match is a substring relation in
 // either direction.
 export function directFind(candidates, query) {
-  if (query.length < DIRECT_FIND_MIN_LENGTH) return null;
+  if (codePointLength(query) < DIRECT_FIND_MIN_LENGTH) return null;
   for (let index = 0; index < candidates.length; index++) {
-    if (candidates[index].length < DIRECT_FIND_MIN_LENGTH) continue;
+    if (codePointLength(candidates[index]) < DIRECT_FIND_MIN_LENGTH) continue;
     if (query.includes(candidates[index]) || candidates[index].includes(query)) return index;
   }
   return null;
@@ -43,7 +70,8 @@ export function directFind(candidates, query) {
 
 // Official yes_verify: lowercase, optional top-3 trim, direct find, else the
 // published BERTScore precision/recall threshold over externally supplied
-// scores aligned with the (trimmed) candidate list.
+// scores aligned with the candidate list. trim_string is used on the raw
+// response before evidence-list parsing, not on these parsed evidence strings.
 export function yesVerify(candidates, goldEvidence, options = {}) {
   if (!Array.isArray(candidates) || candidates.length === 0) return false;
   if (typeof goldEvidence !== 'string' || !goldEvidence) fail('gold evidence is required for verification');
@@ -51,7 +79,9 @@ export function yesVerify(candidates, goldEvidence, options = {}) {
     if (typeof candidate !== 'string') fail('candidate evidence must be strings');
     return candidate.toLowerCase();
   });
+  const gold = goldEvidence.toLowerCase();
   let scores = options.bertscore || null;
+  if (scores) validateBertScore(scores, lowered.length);
   if (options.onlyTop3 && lowered.length > 3) {
     lowered = lowered.slice(0, 3);
     if (scores) {
@@ -61,20 +91,10 @@ export function yesVerify(candidates, goldEvidence, options = {}) {
       };
     }
   }
-  if (scores) {
-    if (!Array.isArray(scores.precision) || !Array.isArray(scores.recall) ||
-        scores.precision.length !== lowered.length || scores.recall.length !== lowered.length) {
-      fail('bertscore precision/recall arrays must align with the candidate list');
-    }
-    for (const value of [...scores.precision, ...scores.recall]) {
-      if (typeof value !== 'number' || !Number.isFinite(value)) fail('bertscore values must be finite numbers');
-    }
-  }
-  const gold = goldEvidence.toLowerCase();
   if (directFind(lowered, gold) !== null) return true;
   if (!scores) return false;
-  const maxPrecision = Math.max(...scores.precision);
-  const maxRecall = Math.max(...scores.recall);
+  const maxPrecision = maxValue(scores.precision);
+  const maxRecall = maxValue(scores.recall);
   return maxPrecision > PUBLISHED_THRESHOLD || maxRecall > PUBLISHED_THRESHOLD;
 }
 
@@ -101,7 +121,7 @@ export function calculateMetrics(goldLabels, predictedLabels) {
     'Precision': precision,
     'Recall': recall,
     'F1 Score': precision + recall > 0 ? 2 * precision * recall / (precision + recall) : 0,
-    'Accuracy': (tp + tn) / (tp + tn + fn + fp),
+    'Accuracy': tp + tn + fn + fp > 0 ? (tp + tn) / (tp + tn + fn + fp) : NOT_DEFINED,
     'True Positive': tp,
     'False Positive': fp,
     'True Negative': tn,
@@ -111,34 +131,47 @@ export function calculateMetrics(goldLabels, predictedLabels) {
 
 // Official Judge-then-Find: evidence is evaluated only when the model answered
 // "yes" AND the document is gold-positive; every other prediction stands as
-// judged. In top_k task settings the candidate list is capped at the published
-// five; more is a data error, never a silent trim.
+// judged. Top_k candidate and score arrays are truncated together at five.
 export function judgeThenFind(responses, options = {}) {
   if (!Array.isArray(responses)) fail('responses must be an array');
   const taskSetting = options.taskSetting || 'judge_then_find';
   if (taskSetting !== 'judge_then_find' && taskSetting !== 'top_k') fail('unknown task setting ' + taskSetting);
   let scoresUsed = false;
+  let topKCandidatesTruncated = 0;
   const verified = responses.map((response, index) => {
     if (!response || typeof response !== 'object') fail('response ' + index + ' must be an object');
     if (typeof response.gold !== 'boolean') fail('response ' + index + ' needs a boolean gold label');
     if (response.judgment !== 'yes' && response.judgment !== 'no') fail('response ' + index + ' judgment must be yes or no');
     if (!Array.isArray(response.evidence)) fail('response ' + index + ' evidence must be an array');
-    if (taskSetting === 'top_k' && response.evidence.length > PUBLISHED_TOP_K) {
-      fail('response ' + index + ' lists more than the published top-' + PUBLISHED_TOP_K + ' candidates');
+    let evidence = response.evidence;
+    let bertscore = response.bertscore;
+    if (taskSetting === 'top_k') {
+      if (bertscore) validateBertScore(bertscore, evidence.length);
+      if (evidence.length > PUBLISHED_TOP_K) {
+        topKCandidatesTruncated += evidence.length - PUBLISHED_TOP_K;
+        evidence = evidence.slice(0, PUBLISHED_TOP_K);
+        if (bertscore) {
+          bertscore = {
+            precision: bertscore.precision.slice(0, PUBLISHED_TOP_K),
+            recall: bertscore.recall.slice(0, PUBLISHED_TOP_K)
+          };
+        }
+      }
     }
     const answeredYes = response.judgment === 'yes';
     if (!answeredYes || !response.gold) return answeredYes;
-    if (response.bertscore) scoresUsed = true;
-    return yesVerify(response.evidence, response.evidenceGold, {
+    if (bertscore) scoresUsed = true;
+    return yesVerify(evidence, response.evidenceGold, {
       onlyTop3: options.onlyTop3,
-      bertscore: response.bertscore
+      bertscore
     });
   });
   return {
     verifiedPredictions: verified,
     rawPredictions: responses.map((response) => response.judgment === 'yes'),
     goldLabels: responses.map((response) => response.gold),
-    scoresUsed
+    scoresUsed,
+    top_k_candidates_truncated: topKCandidatesTruncated
   };
 }
 
@@ -161,8 +194,9 @@ export function runOfficialMetrics(input, options = {}) {
       only_top3: Boolean(options.onlyTop3),
       bertscore_threshold: PUBLISHED_THRESHOLD,
       direct_find_min_length: DIRECT_FIND_MIN_LENGTH,
-      note: 'Judge-then-Find evaluates evidence only when the model answers yes and the document is gold-positive; top-k settings use at most five candidate sentences.'
+      note: 'Judge-then-Find evaluates evidence only when the model answers yes and the document is gold-positive; top-k settings truncate candidates and aligned BERTScore arrays after the first five.'
     },
+    top_k_candidates_truncated: outcome.top_k_candidates_truncated,
     provenance: input.provenance || null,
     without_verify: calculateMetrics(outcome.goldLabels, outcome.rawPredictions),
     verify: calculateMetrics(outcome.goldLabels, outcome.verifiedPredictions),

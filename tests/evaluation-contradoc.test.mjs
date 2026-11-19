@@ -1,7 +1,7 @@
 // tests/evaluation-contradoc.test.mjs — PR 1.3 ContraDoc adapter + dual metrics (B9, development-only).
 // Synthetic fixtures only; the real dataset is never committed or required here.
 import { createRequire } from 'node:module';
-import { mkdtempSync, readFileSync, rmSync, writeFileSync, existsSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync, truncateSync, symlinkSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -12,8 +12,11 @@ import {
   adaptDataset,
   buildRunInput,
   locateSentence,
+  mapContraDocScope,
   mergeActualFindings,
-  parseContraDocDataset
+  parseContraDocDataset,
+  writeAtomically,
+  readBoundedHandle
 } from '../evaluation/contradoc/adapter.mjs';
 import { buildVerumExactSummary } from '../evaluation/contradoc/verum-exact-metrics.mjs';
 import {
@@ -25,8 +28,8 @@ import {
   trimString,
   yesVerify
 } from '../evaluation/contradoc/official-metric-runner.mjs';
-import { CONTRADOC_RELEASE, planCacheAction, verifyMemberBytes } from '../evaluation/contradoc/download-or-verify.mjs';
-import { validateEvaluationRun } from '../evaluation/lib/metrics.mjs';
+import { CONTRADOC_RELEASE, planCacheAction, readResponseBytes, verifyMemberBytes } from '../evaluation/contradoc/download-or-verify.mjs';
+import { NOT_DEFINED, validateEvaluationRun } from '../evaluation/lib/metrics.mjs';
 import { canonicalJson } from '../evaluation/lib/report.mjs';
 
 const require = createRequire(import.meta.url);
@@ -68,8 +71,8 @@ ok(adapted.cases.length === 2 && adapted.cases[0].case_id === 'cdoc-pos-p1' && a
   const pos = adapted.cases[0];
   ok(pos.expected_contradictions.length === 1, 'a positive document yields one expected contradiction');
   const contradiction = pos.expected_contradictions[0];
-  ok(contradiction.rule_id === 'contradoc:self_contradiction' && contradiction.scope === 'contradoc:local',
-    'rule id is the dataset task and the published scope label is preserved');
+  ok(contradiction.rule_id === 'contradoc:self_contradiction' && contradiction.scope === CONTRADOC_SCOPE_MAP.local,
+    'rule id is the dataset task and the published scope maps to Verum granularity');
   ok(contradiction.pair_mode === 'unordered', 'the contradiction pair is unordered');
   const spans = contradiction.evidence_spans;
   ok(spans.length === 2 && spans[0].span_id === 'ref0' && spans[1].span_id === 'evidence',
@@ -95,6 +98,11 @@ ok(adapted.cases.length === 2 && adapted.cases[0].case_id === 'cdoc-pos-p1' && a
   ok(CONTRADOC_SCOPE_MAP.intra === 'within_sentence' && CONTRADOC_SCOPE_MAP.local === 'within_document_nearby' &&
      CONTRADOC_SCOPE_MAP.global === 'within_document_distant' && !('global, intra' in CONTRADOC_SCOPE_MAP),
   'the scope mapping is explicit and the hybrid label has no entry');
+  ok(mapContraDocScope('contradoc:local') === CONTRADOC_SCOPE_MAP.local &&
+     mapContraDocScope('local') === CONTRADOC_SCOPE_MAP.local &&
+     mapContraDocScope('within_document_nearby') === CONTRADOC_SCOPE_MAP.local &&
+     mapContraDocScope('contradoc:global, intra') === 'contradoc:global, intra',
+  'published, bare, and Verum scope values normalize consistently while the hybrid stays unmapped');
 }
 
 {
@@ -106,12 +114,16 @@ ok(adapted.cases.length === 2 && adapted.cases[0].case_id === 'cdoc-pos-p1' && a
      result.coverage.ref_sentences_omitted[0].document_id === 'cdoc-pos-p2' &&
      result.coverage.ref_sentences_omitted[0].reason === 'not_found_verbatim',
   'the omission is disclosed per document with its reason');
+  ok(result.coverage.incomplete_pairs[0].case_id === 'cdoc-pos-p2',
+    'a positive record without a locatable distinct reference is listed as an incomplete pair');
   const dup = adaptDataset({ pos: { p3: posRecord({ 'ref sentences': [REF, REF] }) }, neg: {} });
   ok(dup.coverage.ref_sentences_omitted.length === 1 && dup.coverage.ref_sentences_omitted[0].reason === 'duplicate_location',
     'a duplicated ref location is omitted and disclosed');
   const noRefs = adaptDataset({ pos: { p4: posRecord({ 'ref sentences': undefined }) }, neg: {} });
   ok(noRefs.cases[0].expected_contradictions[0].evidence_spans.length === 1,
     'a positive document without ref sentences keeps its evidence span');
+  ok(noRefs.coverage.incomplete_pairs.length === 1 && noRefs.coverage.incomplete_pairs[0].case_id === 'cdoc-pos-p4',
+    'a one-anchor gold pair is explicitly excluded from pair metrics');
 }
 
 {
@@ -121,9 +133,9 @@ ok(adapted.cases.length === 2 && adapted.cases[0].case_id === 'cdoc-pos-p1' && a
   ok(sameAsEvidence.coverage.ref_sentences_omitted[0].reason === 'same_location_as_evidence',
     'the redundant ref omission is disclosed');
   const arrayScope = adaptDataset({ pos: { p6: posRecord({ scope: ['global'] }) }, neg: {} });
-  ok(!arrayScope.cases[0].exclusion && arrayScope.cases[0].expected_contradictions[0].scope === 'contradoc:global' &&
+  ok(!arrayScope.cases[0].exclusion && arrayScope.cases[0].expected_contradictions[0].scope === CONTRADOC_SCOPE_MAP.global &&
      arrayScope.coverage.scope_array_normalized === 1,
-  'a single-element scope array is normalized to the published label and recorded');
+  'a single-element scope array is normalized, mapped, and recorded');
   ok(posExclusion(posRecord({ scope: ['global', 'intra'] })) === 'scope_missing',
     'a multi-element scope array excludes the document');
 }
@@ -169,9 +181,10 @@ ok(locateSentence(posText, '') === 'missing', 'locateSentence refuses an empty s
       ]
     }]
   });
-  ok(merged[0].actual_findings.length === 1, 'actual findings merge onto the named case');
-  throws(() => mergeActualFindings(adapted.cases, { 'cdoc-pos-unknown': [] }));
-  ok(true, 'actual findings for an unknown case id are rejected');
+  ok(merged[0].actual_findings.length === 1 && merged[0].actual_findings[0].scope === CONTRADOC_SCOPE_MAP.local,
+    'actual findings merge onto the named case and map ContraDoc scope aliases to Verum labels');
+  ok(throws(() => mergeActualFindings(adapted.cases, { 'cdoc-pos-unknown': [] })),
+    'actual findings for an unknown case id are rejected');
 }
 
 // --- verum-exact metrics -------------------------------------------------------
@@ -201,6 +214,8 @@ ok(locateSentence(posText, '') === 'missing', 'locateSentence refuses an empty s
   'a ContraDoc-Neg false positive is listed per document, never hidden');
   ok(summary.positive_subset_metrics.contradiction_detection.micro.tp === 1,
     'the positive subset records the matched contradiction');
+  ok(summary.positive_subset_metrics.scope_classification.micro.value === 1,
+    'mapped gold and actual ContraDoc scope labels receive correct Verum scope credit');
   ok(summary.overall_metrics.evidence_localization.exact_span.micro.tp === 2,
     'both exact evidence spans localize');
   ok(summary.limitations.some((line) => line.includes('never conflated')), 'the summary states the two families are never conflated');
@@ -238,9 +253,9 @@ ok(yesVerify(['a candidate with no overlap at all here'], 'gold evidence sentenc
     'onlyTop3 drops the fourth candidate before matching');
   ok(yesVerify(four, 'the gold evidence sentence') === true, 'without onlyTop3 the fourth candidate matches');
 }
-throws(() => yesVerify(['a candidate with no overlap at all here'], 'gold evidence sentence long enough',
-  { bertscore: { precision: [0.99, 0.1], recall: [0.5] } }));
-ok(true, 'misaligned bertscore arrays are rejected');
+ok(throws(() => yesVerify(['a candidate with no overlap at all here'], 'gold evidence sentence long enough',
+  { bertscore: { precision: [0.99, 0.1], recall: [0.5] } })),
+'misaligned bertscore arrays are rejected');
 
 {
   const metrics = calculateMetrics([true, true, false, false], [true, false, true, false]);
@@ -251,8 +266,33 @@ ok(true, 'misaligned bertscore arrays are rejected');
   const zeros = calculateMetrics([false], [false]);
   ok(zeros['Precision'] === 0 && zeros['Recall'] === 0 && zeros['F1 Score'] === 0 && zeros['Accuracy'] === 1,
     'official zero-denominator behaviour is reproduced exactly');
-  throws(() => calculateMetrics([true], [true, false]));
-  ok(true, 'mismatched label lengths are rejected');
+  ok(throws(() => calculateMetrics([true], [true, false])), 'mismatched label lengths are rejected');
+  const empty = runOfficialMetrics({ responses: [] });
+  ok(empty.without_verify.Accuracy === NOT_DEFINED && empty.verify.Accuracy === NOT_DEFINED &&
+     canonicalJson(empty).includes('"Accuracy": "not_defined"'),
+  'an empty official run serializes explicit undefined accuracy rather than NaN or a misleading score');
+}
+
+ok(directFind(['😀'.repeat(19)], '😀'.repeat(19)) === null &&
+   directFind(['😀'.repeat(20)], '😀'.repeat(20)) === 0,
+'directFind applies the 20-character cutoff as Python Unicode code points');
+ok(trimString(' \ntrimmed evidence\n ') === 'trimmed evidence' &&
+   trimString('\u3000trimmed evidence\u001c') === '\u3000trimmed evidence\u001c' &&
+   !yesVerify([' ' + 'c'.repeat(20) + '  '], '  ' + 'c'.repeat(20) + ' '),
+'published trimming applies to serialized responses before parsing, not parsed evidence strings passed to matching');
+
+ok(throws(() => yesVerify(['a candidate with no overlap at all here'], 'gold evidence sentence long enough',
+  { bertscore: { precision: [1.01], recall: [0.5] } })) &&
+   throws(() => yesVerify(['a candidate with no overlap at all here'], 'gold evidence sentence long enough',
+  { bertscore: { precision: [-0.01], recall: [0.5] } })),
+'BERTScore precision and recall reject values outside [0, 1]');
+
+{
+  const largeCandidates = Array(130000).fill('candidate evidence with no matching gold text');
+  const largeScores = Array(largeCandidates.length).fill(0.5);
+  ok(yesVerify(largeCandidates, 'unrelated gold evidence sentence', {
+    bertscore: { precision: largeScores, recall: largeScores }
+  }) === false, 'large BERTScore arrays use iterative maxima without argument-limit errors');
 }
 
 {
@@ -271,17 +311,44 @@ ok(true, 'misaligned bertscore arrays are rejected');
     'verification drops the yes whose evidence does not verify');
   ok(result.task_settings.top_k === 5 && result.task_settings.bertscore_threshold === 0.98,
     'the published top-k and threshold settings are recorded');
-  throws(() => judgeThenFind([{ gold: true, judgment: 'yes', evidence: ['e'], evidenceGold: 'g', bertscore: { precision: [0.9], recall: [0.9] } }], {})
-    && runOfficialMetrics({ responses: [{ gold: true, judgment: 'yes', evidence: ['e'], evidenceGold: 'g', bertscore: { precision: [0.9], recall: [0.9] } }] }));
-  ok(true, 'bertscore values without provenance are rejected');
+  const topKAligned = judgeThenFind([{
+    gold: true, judgment: 'yes',
+    evidence: Array.from({ length: 6 }, (_, index) => 'candidate evidence sentence number ' + index),
+    evidenceGold: 'the gold evidence sentence',
+    bertscore: {
+      precision: [0.1, 0.1, 0.1, 0.1, 0.99, 0.99],
+      recall: [0.1, 0.1, 0.1, 0.1, 0.5, 0.99]
+    }
+  }], { taskSetting: 'top_k' });
+  ok(topKAligned.verifiedPredictions[0] && topKAligned.top_k_candidates_truncated === 1,
+    'top-k truncation slices candidates and both aligned BERTScore arrays together');
+  const sixthOnly = judgeThenFind([{
+    gold: true, judgment: 'yes',
+    evidence: Array.from({ length: 6 }, (_, index) => 'candidate evidence sentence number ' + index),
+    evidenceGold: 'the gold evidence sentence',
+    bertscore: {
+      precision: [0.1, 0.1, 0.1, 0.1, 0.1, 0.99],
+      recall: [0.1, 0.1, 0.1, 0.1, 0.1, 0.99]
+    }
+  }], { taskSetting: 'top_k' });
+  ok(!sixthOnly.verifiedPredictions[0],
+    'a high score belonging only to a discarded sixth candidate cannot verify evidence');
+  ok(throws(() => runOfficialMetrics({ responses: [{ gold: true, judgment: 'yes', evidence: ['e'], evidenceGold: 'g', bertscore: { precision: [0.9], recall: [0.9] } }] })),
+    'bertscore values without provenance are rejected');
   const withProvenance = runOfficialMetrics({
     provenance: { scores_source: 'external run 2026-11', score_model: 'bertscore-roberta-large' },
     responses: [{ gold: true, judgment: 'yes', evidence: ['no overlap candidate sentence'], evidenceGold: 'the gold evidence sentence', bertscore: { precision: [0.99], recall: [0.1] } }]
   });
   ok(withProvenance.verify['True Positive'] === 1 && withProvenance.provenance.score_model === 'bertscore-roberta-large',
     'externally scored evidence verifies with recorded provenance');
-  throws(() => judgeThenFind([{ gold: true, judgment: 'yes', evidence: ['1', '2', '3', '4', '5', '6'], evidenceGold: 'g' }], { taskSetting: 'top_k' }));
-  ok(true, 'top_k rejects more than the published five candidates');
+  const truncated = judgeThenFind([{
+    gold: true, judgment: 'yes',
+    evidence: ['candidate evidence sentence one', 'candidate evidence sentence two', 'candidate evidence sentence three',
+      'candidate evidence sentence four', 'candidate evidence sentence five', 'the gold evidence sentence'],
+    evidenceGold: 'the gold evidence sentence'
+  }], { taskSetting: 'top_k' });
+  ok(truncated.verifiedPredictions[0] === false && truncated.top_k_candidates_truncated === 1,
+    'top_k truncates after five and reports candidates discarded beyond the published limit');
 }
 
 // --- download-or-verify ----------------------------------------------------------
@@ -294,11 +361,38 @@ ok(true, 'misaligned bertscore arrays are rejected');
   const plan = planCacheAction(oneInvalid);
   ok(plan.action === 'error' && plan.reason.includes('ContraDoc.json'), 'a mismatched cached file fails closed and names the file');
   const member = CONTRADOC_RELEASE.members['ContraDoc.json'];
-  throws(() => verifyMemberBytes('ContraDoc.json', Buffer.alloc(member.bytes, 0)));
-  ok(true, 'a wrong dataset body fails the pinned SHA-256 check');
+  ok(throws(() => verifyMemberBytes('ContraDoc.json', Buffer.alloc(member.bytes, 0))),
+    'a wrong dataset body fails the pinned SHA-256 check');
   ok(member.bytes === 4420050 && /^[0-9a-f]{64}$/.test(member.sha256) &&
      CONTRADOC_RELEASE.revision === 'd1c42d1e433595dd6e98fab7b669722cdc050b1d',
   'the pinned release carries revision, size and SHA-256');
+}
+
+{
+  let cancelled = false;
+  const response = {
+    headers: { get: () => null },
+    body: new ReadableStream({
+      start(controller) {
+        controller.enqueue(Uint8Array.from([1, 2]));
+        controller.enqueue(Uint8Array.from([3, 4]));
+      },
+      cancel() { cancelled = true; }
+    })
+  };
+  const rejected = await readResponseBytes(response, 3).then(() => false, () => true);
+  ok(rejected && cancelled, 'download streaming cancels as soon as the pinned byte ceiling is exceeded');
+  const growingDescriptor = {
+    async stat() { return { isFile: () => true, size: 2 }; },
+    async read(buffer, offset, length, position) {
+      const bytes = Buffer.from([1, 2, 3]).subarray(position, position + length);
+      bytes.copy(buffer, offset);
+      return { bytesRead: bytes.length };
+    }
+  };
+  const growthRejected = await readBoundedHandle(growingDescriptor, 2, 'synthetic input')
+    .then(() => false, () => true);
+  ok(growthRejected, 'descriptor reads reject bytes added after the initial descriptor-size check');
 }
 
 // --- CLI end to end (synthetic input, temp directory, no network) -----------------
@@ -308,32 +402,96 @@ ok(true, 'misaligned bertscore arrays are rejected');
   try {
     const datasetPath = path.join(scratch, 'ContraDoc.json');
     writeFileSync(datasetPath, JSON.stringify({
-      pos: { p1: posRecord() },
-      neg: { n1: { text: 'A calm document with nothing contradictory at all.', doc_type: 'story', 'unique id': 'n1' } }
+      pos: {
+        p1: posRecord({ text: posText + '\n' + 'x'.repeat(450) }),
+        p2: posRecord({ text: posText + '\n' + 'y'.repeat(450) })
+      },
+      neg: { n1: { text: 'A calm document. '.repeat(35), doc_type: 'story', 'unique id': 'n1' } }
     }));
     const outputPrefix = path.join(scratch, 'out', 'run');
     const adapterCli = path.join(root, 'evaluation/contradoc/adapter.mjs');
     const args = ['--engine-commit', 'test-commit', '--ruleset', 'test-ruleset',
-      '--reference-time', '2026-11-15T00:00:00Z', '--input', datasetPath, '--output-prefix', outputPrefix];
+      '--reference-time', '2026-11-15T00:00:00Z', '--input', datasetPath, '--output-prefix', outputPrefix, '--shard-chars', '1000'];
     const first = spawnSync(process.execPath, [adapterCli, ...args], { encoding: 'utf8' });
     ok(first.status === 0, 'adapter CLI exits 0 on a clean synthetic dataset' + (first.status === 0 ? '' : ': ' + first.stderr));
-    ok(existsSync(outputPrefix + '.json') && existsSync(outputPrefix + '.coverage.json'), 'adapter CLI writes the run and the coverage sidecar');
-    const coverage = JSON.parse(readFileSync(outputPrefix + '.coverage.json', 'utf8'));
-    ok(coverage.pos_documents === 1 && coverage.neg_documents === 1 && coverage.adapter_version === CONTRADOC_ADAPTER_VERSION,
-      'coverage reports the document totals');
+    const pointerPath = outputPrefix + '.current.json';
+    const pointer = JSON.parse(readFileSync(pointerPath, 'utf8'));
+    const generationDirectory = path.resolve(path.dirname(pointerPath), pointer.generation_directory);
+    ok(pointer.run_files.length > 1 && pointer.run_files.every((file) => existsSync(path.join(generationDirectory, file))),
+      'multi-shard publication points only to complete run files in one generation');
+    const coverage = JSON.parse(readFileSync(path.join(generationDirectory, pointer.coverage_file), 'utf8'));
+    ok(coverage.pos_documents === 2 && coverage.neg_documents === 1 &&
+       coverage.adapter_version === CONTRADOC_ADAPTER_VERSION && coverage.shards.length === pointer.run_files.length,
+      'coverage reports the complete corpus and the same generation shard set');
 
-    const runOutput = path.join(scratch, 'report.json');
-    const evaluation = spawnSync(process.execPath, [path.join(root, 'evaluation/run-evaluation.mjs'), outputPrefix + '.json', '--output', runOutput], { encoding: 'utf8' });
-    ok(evaluation.status === 0 && existsSync(runOutput), 'run-evaluation consumes the adapted run' + (evaluation.status === 0 ? '' : ': ' + evaluation.stderr));
+    const runFile = path.join(generationDirectory, pointer.run_files[0]);
+    const evaluationDirectory = path.join(scratch, 'evaluations');
+    const runOutput = path.join(evaluationDirectory, path.basename(runFile) + '.evaluation.json');
+    const evaluation = spawnSync(process.execPath,
+      [path.join(root, 'evaluation/run-evaluation.mjs'), runFile, '--output', runOutput], { encoding: 'utf8' });
+    ok(evaluation.status === 0 && existsSync(runOutput),
+      'run-evaluation consumes a generated run shard and writes a separate report' + (evaluation.status === 0 ? '' : ': ' + evaluation.stderr));
 
-    const summaryCli = spawnSync(process.execPath, [path.join(root, 'evaluation/contradoc/verum-exact-metrics.mjs'), outputPrefix + '.json'], { encoding: 'utf8' });
+    const summaryCli = spawnSync(process.execPath,
+      [path.join(root, 'evaluation/contradoc/verum-exact-metrics.mjs'), runFile], { encoding: 'utf8' });
     ok(summaryCli.status === 0 && JSON.parse(summaryCli.stdout).result_label === 'verum_exact',
-      'verum-exact-metrics CLI summarizes the run');
+      'verum-exact-metrics consumes the original run shard, not its evaluation report');
     const responsesPath = path.join(scratch, 'responses.json');
     writeFileSync(responsesPath, JSON.stringify({ responses: [{ gold: true, judgment: 'yes', evidence: ['the gold evidence sentence'], evidenceGold: 'the gold evidence sentence' }] }));
     const officialCli = spawnSync(process.execPath, [path.join(root, 'evaluation/contradoc/official-metric-runner.mjs'), responsesPath], { encoding: 'utf8' });
     ok(officialCli.status === 0 && JSON.parse(officialCli.stdout).result_label === 'published_comparable',
       'official-metric-runner CLI reproduces the published task settings');
+
+    const previousPointer = readFileSync(pointerPath, 'utf8');
+    writeFileSync(outputPrefix + '.lock', 'another process');
+    const locked = spawnSync(process.execPath, [adapterCli, ...args], { encoding: 'utf8' });
+    ok(locked.status !== 0 && locked.stderr.includes('locked') &&
+       readFileSync(pointerPath, 'utf8') === previousPointer,
+    'a competing writer cannot replace the published generation while the prefix lock is held');
+    rmSync(outputPrefix + '.lock', { force: true });
+
+    writeFileSync(datasetPath, JSON.stringify({
+      pos: { p1: posRecord() },
+      neg: {}
+    }));
+    const second = spawnSync(process.execPath, [adapterCli, ...args], { encoding: 'utf8' });
+    const current = JSON.parse(readFileSync(pointerPath, 'utf8'));
+    const currentDirectory = path.resolve(path.dirname(pointerPath), current.generation_directory);
+    ok(second.status === 0 && current.run_files.length === 1 &&
+       readdirSync(currentDirectory).filter((file) => file.endsWith('.shard-01.json')).length === 1 &&
+       readdirSync(outputPrefix + '.generations').length === 2,
+    'a new one-shard generation excludes stale shards from its pointer while retaining the prior immutable generation');
+
+    const originalDataset = readFileSync(datasetPath);
+    const alias = spawnSync(process.execPath,
+      [adapterCli, ...args.slice(0, -2), '--output-prefix', datasetPath, '--shard-chars', '1000'], { encoding: 'utf8' });
+    ok(alias.status !== 0 && alias.stderr.includes('overwrite an input file') &&
+       readFileSync(datasetPath).equals(originalDataset),
+    'canonical input/output aliases are rejected before publishing anything');
+    const symlinkAlias = path.join(scratch, 'dataset-alias');
+    symlinkSync(datasetPath, symlinkAlias);
+    const symlinkResult = spawnSync(process.execPath,
+      [adapterCli, ...args.slice(0, -2), '--output-prefix', symlinkAlias, '--shard-chars', '1000'], { encoding: 'utf8' });
+    ok(symlinkResult.status !== 0 && symlinkResult.stderr.includes('overwrite an input file'),
+      'symlinked input/output aliases are rejected canonically');
+
+    const actualsTooLarge = path.join(scratch, 'actuals-too-large.json');
+    writeFileSync(actualsTooLarge, '');
+    truncateSync(actualsTooLarge, 16 * 1024 * 1024 + 1);
+    const actualsResult = spawnSync(process.execPath,
+      [adapterCli, ...args, '--actuals', actualsTooLarge, '--output-prefix', path.join(scratch, 'out', 'large-actuals')],
+      { encoding: 'utf8' });
+    ok(actualsResult.status !== 0 && actualsResult.stderr.includes('16777216-byte limit'),
+      'oversized actuals are refused at the byte ceiling before JSON parsing');
+
+    const datasetTooLarge = path.join(scratch, 'dataset-too-large.json');
+    writeFileSync(datasetTooLarge, '');
+    truncateSync(datasetTooLarge, 64 * 1024 * 1024 + 1);
+    const datasetResult = spawnSync(process.execPath,
+      [adapterCli, ...args.slice(0, -2), '--input', datasetTooLarge, '--output-prefix', path.join(scratch, 'out', 'large-dataset'), '--shard-chars', '1000'],
+      { encoding: 'utf8' });
+    ok(datasetResult.status !== 0 && datasetResult.stderr.includes('67108864-byte limit'),
+      'oversized dataset reads are rejected using the opened file descriptor size');
 
     const missing = spawnSync(process.execPath, [adapterCli, '--engine-commit', 'c'], { encoding: 'utf8' });
     ok(missing.status === 2, 'adapter CLI rejects missing required arguments');
@@ -344,5 +502,36 @@ ok(true, 'misaligned bertscore arrays are rejected');
 
 ok(CONTRADOC_DATASET.dataset_license === 'Apache-2.0' && CONTRADOC_DATASET.dataset_revision.includes('d1c42d1'),
   'the dataset identity records its pinned revision and license');
+
+// --- writeAtomically temp-file ownership (synthetic, no network) --------------
+// A failed write must never remove a temporary file this invocation did not
+// create: a concurrent writer's temp file in the same directory must survive.
+{
+  const scratch = mkdtempSync(path.join(tmpdir(), 'contradoc-atomic-'));
+  try {
+    const outputPath = path.join(scratch, 'out.json');
+    // A concurrent writer's temporary file, matching the temp-name shape.
+    const foreignTemp = path.join(scratch, '.out.json.999999.deadbeefdeadbeefdeadbeef.tmp');
+    writeFileSync(foreignTemp, 'another writer owns this');
+    // Force the rename step to fail by making the destination a non-empty directory.
+    mkdirSync(outputPath);
+    writeFileSync(path.join(outputPath, 'keep'), 'x');
+    let threw = false;
+    try {
+      await writeAtomically(outputPath, '{"a":1}');
+    } catch {
+      threw = true;
+    }
+    ok(threw, 'writeAtomically surfaces the underlying failure rather than swallowing it');
+    ok(existsSync(foreignTemp) && readFileSync(foreignTemp, 'utf8') === 'another writer owns this',
+      'a concurrent writer\'s temporary file is never unlinked during failed cleanup');
+    const leftoverTemps = readdirSync(scratch)
+      .filter((name) => name.endsWith('.tmp') && name !== path.basename(foreignTemp));
+    ok(leftoverTemps.length === 0,
+      'the temporary file this invocation created is removed, leaving no orphans');
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
 
 done('evaluation-contradoc');

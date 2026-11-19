@@ -42,7 +42,10 @@ node evaluation/eyecite/compare.mjs
 
 A port that is not installed is reported `not_installed`, not failed; the
 comparison logic itself is covered hermetically by
-`tests/evaluation-eyecite.test.mjs` (no network, no packages required).
+`tests/evaluation-eyecite.test.mjs` (no network, no packages required). Only
+ports whose installed package version exactly matches the declared pin are
+evaluated; mismatched versions are `not_comparable`. The hermetic tests do not
+count absent or mismatched ports as real extraction coverage.
 
 ## Candidates evaluated (pinned)
 

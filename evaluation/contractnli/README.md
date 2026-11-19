@@ -1,10 +1,11 @@
 # ContractNLI evaluation adapter (B9, development/CI only)
 
-Converts the pinned official **Stanford ContractNLI** release into the Verum
-Omnis development-evaluation input contract (`../schema.json`). This directory
-is never part of document sealing, deterministic analysis, report generation,
-verification, or the independent verifier, and nothing here can create, remove,
-or alter a production finding.
+Converts the pinned official **Stanford ContractNLI** release, or explicitly
+labels caller-supplied unverified inputs, in the Verum Omnis development-
+evaluation input contract (`../schema.json`). This directory is never part of
+document sealing, deterministic analysis, report generation, verification, or
+the independent verifier, and nothing here can create, remove, or alter a
+production finding.
 
 ## Dataset provenance
 
@@ -42,17 +43,28 @@ and valid, no network is used. A cached file that fails its pinned hash is
 node evaluation/contractnli/adapter.mjs --split train \
   --engine-commit "$(git rev-parse HEAD)" --ruleset vo-engine-5.7.2-web \
   --reference-time 2026-11-15T00:00:00Z
-node evaluation/run-evaluation.mjs evaluation/reports/contractnli-train.json
 ```
 
 The adapter reads `evaluation/.cache/contractnli/<split>.json`, converts every
 document and every hypothesis (no sampling), shards the output so each shard
-stays inside the harness resource limits, validates each shard against
-`../schema.json` before writing it, and writes a `<prefix>.coverage.json`
-sidecar with per-hypothesis dispositions, exclusions, and limitations. Engine
-findings enter through `--actuals <file.json>` (a JSON object mapping
-`case_id` to an array of `ActualFinding` records, as produced by an engine
-runner); unknown case IDs are rejected.
+stays inside every harness resource and serialized-size limit, validates each
+shard before writing it, and writes generation-addressed shard files followed
+by a `<prefix>.coverage.json` sidecar. The coverage file is the commit pointer
+for one complete generation; it names the exact shard files to evaluate. Older
+generations are left untouched, so a failed run cannot invalidate the previous
+coverage pointer or delete files another process may be using. Run
+`node evaluation/run-evaluation.mjs <shard-file-from-coverage> --output <report.json>`
+for each listed shard.
+
+The coverage sidecar contains per-hypothesis dispositions, exclusions, and
+limitations. An input is attributed to the pinned release only when its bytes
+match the split's pinned member size and SHA-256; any other `--input` is marked
+caller-supplied/unverified and receives no detector mappings. Engine findings
+enter through `--actuals <file.json>` (a JSON object mapping `case_id` to an
+array of `ActualFinding` records, as produced by an engine runner); unknown
+case IDs, findings for excluded cases, and findings without a reviewed
+hypothesis-to-rule mapping are rejected. Dataset and actuals reads are bounded,
+and output paths may not alias either input (including through symlinks).
 
 ## Task adaptation — read before quoting any number
 
@@ -82,7 +94,9 @@ runner); unknown case IDs are rejected.
   unordered evidence-set matching.
 - **Coverage is complete.** Parser failures, annotation anomalies, and excluded
   documents are enumerated with reasons in the coverage sidecar and in the
-  evaluation report; nothing is silently dropped.
+  evaluation report; nothing is silently dropped. Documents that cannot fit a
+  single evaluator run are represented by bounded exclusion records. Their
+  source is not rewritten or truncated into a finding quote.
 
 No result from this adapter is a finding confidence, a severity, dataset-wide
 validation of unrelated detectors, or a courtroom-reliability claim.

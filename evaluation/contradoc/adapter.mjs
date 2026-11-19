@@ -1,11 +1,11 @@
 #!/usr/bin/env node
 // Development/CI only. Converts the pinned official ContraDoc dataset into the
 // Verum Omnis development-evaluation input contract (evaluation/schema.json).
-// Never imported by browser or production engine code; reads no wall clock,
-// uses no randomness, and sends nothing anywhere.
+// Never imported by browser or production engine code; output content depends
+// only on the supplied data and options, with no sampling or external writes.
 
-import { createHash } from 'node:crypto';
-import { mkdir, open, readFile, rename, stat, unlink } from 'node:fs/promises';
+import { createHash, randomBytes } from 'node:crypto';
+import { mkdir, mkdtemp, open, readFile, realpath, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { validateEvaluationRun } from '../lib/metrics.mjs';
@@ -21,10 +21,9 @@ export const CONTRADOC_DATASET = Object.freeze({
   rule_id: 'contradoc:self_contradiction'
 });
 
-// Explicit scope mapping. The published labels (intra / local / global, and
-// one hybrid "global, intra" record) are preserved verbatim on every expected
-// contradiction as "contradoc:<label>"; this table is the only bridge to
-// Verum granularity and it does not claim the taxonomies are identical.
+// Explicit scope mapping from published ContraDoc labels to Verum labels.
+// Published labels and their distributions remain in the coverage sidecar;
+// this bridge does not claim the taxonomies are identical.
 export const CONTRADOC_SCOPE_MAP = Object.freeze({
   'intra': 'within_sentence',
   'local': 'within_document_nearby',
@@ -32,9 +31,61 @@ export const CONTRADOC_SCOPE_MAP = Object.freeze({
 });
 
 const MAX_DATASET_BYTES = 64 * 1024 * 1024;
+const MAX_ACTUALS_BYTES = 16 * 1024 * 1024;
 
 function fail(message) {
   throw new Error('[contradoc] ' + message);
+}
+
+export function mapContraDocScope(scope) {
+  if (typeof scope !== 'string') return scope;
+  const label = scope.startsWith('contradoc:') ? scope.slice('contradoc:'.length) : scope;
+  if (Object.prototype.hasOwnProperty.call(CONTRADOC_SCOPE_MAP, label)) return CONTRADOC_SCOPE_MAP[label];
+  if (Object.values(CONTRADOC_SCOPE_MAP).includes(scope)) return scope;
+  return scope.startsWith('contradoc:') ? scope : 'contradoc:' + scope;
+}
+
+export async function readBoundedHandle(handle, maxBytes, label) {
+  const info = await handle.stat();
+  if (!info.isFile()) fail(label + ' must be a regular file');
+  if (info.size > maxBytes) fail(label + ' exceeds the ' + maxBytes + '-byte limit');
+  const chunks = [];
+  let total = 0;
+  while (true) {
+    const length = Math.min(64 * 1024, maxBytes - total + 1);
+    const buffer = Buffer.allocUnsafe(length);
+    const { bytesRead } = await handle.read(buffer, 0, length, total);
+    if (!bytesRead) break;
+    total += bytesRead;
+    if (total > maxBytes) fail(label + ' exceeds the ' + maxBytes + '-byte limit');
+    chunks.push(buffer.subarray(0, bytesRead));
+  }
+  return Buffer.concat(chunks, total);
+}
+
+export async function readBoundedFile(filePath, maxBytes, label) {
+  const handle = await open(filePath, 'r');
+  try {
+    return await readBoundedHandle(handle, maxBytes, label);
+  } finally {
+    await handle.close();
+  }
+}
+
+async function canonicalFuturePath(target) {
+  let current = path.resolve(target);
+  const suffix = [];
+  while (true) {
+    try {
+      return path.join(await realpath(current), ...suffix);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      const parent = path.dirname(current);
+      if (parent === current) throw error;
+      suffix.unshift(path.basename(current));
+      current = parent;
+    }
+  }
 }
 
 function isPlainObject(value) {
@@ -82,7 +133,8 @@ export function adaptDataset(dataset) {
     doc_types: {},
     ref_sentences_total: 0,
     ref_sentences_located: 0,
-    ref_sentences_omitted: []
+    ref_sentences_omitted: [],
+    incomplete_pairs: []
   };
   const bump = (table, key) => { table[key] = (table[key] || 0) + 1; };
   const sortedKeys = (object) => Object.keys(object).sort((a, b) => (a < b ? -1 : a > b ? 1 : 0));
@@ -169,6 +221,12 @@ export function adaptDataset(dataset) {
         page: null
       });
     });
+    if (spans.length === 0) {
+      coverage.incomplete_pairs.push({
+        case_id: caseId,
+        reason: 'no_locatable_distinct_reference_span'
+      });
+    }
     spans.push({
       span_id: 'evidence',
       start: evidenceStart,
@@ -183,7 +241,7 @@ export function adaptDataset(dataset) {
       expected_contradictions: [{
         contradiction_id: 'self',
         rule_id: CONTRADOC_DATASET.rule_id,
-        scope: 'contradoc:' + scope,
+        scope: mapContraDocScope('contradoc:' + scope),
         pair_mode: 'unordered',
         evidence_spans: spans
       }],
@@ -227,7 +285,10 @@ export function mergeActualFindings(cases, actuals) {
   }
   return cases.map((evaluationCase) => Object.freeze({
     ...evaluationCase,
-    actual_findings: actuals[evaluationCase.case_id] || evaluationCase.actual_findings
+    actual_findings: (actuals[evaluationCase.case_id] || evaluationCase.actual_findings).map((finding) => ({
+      ...finding,
+      scope: mapContraDocScope(finding.scope)
+    }))
   }));
 }
 
@@ -253,7 +314,7 @@ export function buildRunInput(manifestFields, cases) {
   return run;
 }
 
-export { shardCases };
+export { shardCases, writeAtomically };
 
 // --- CLI -----------------------------------------------------------------
 
@@ -270,19 +331,117 @@ function usage() {
 async function writeAtomically(outputPath, serialized) {
   const directory = path.dirname(outputPath);
   await mkdir(directory, { recursive: true });
-  const temporaryPath = path.join(directory, '.' + path.basename(outputPath) + '.' + process.pid + '.tmp');
   let handle;
+  let temporaryPath;
+  let created = false;
   try {
-    handle = await open(temporaryPath, 'wx');
+    for (let attempt = 0; attempt < 100; attempt++) {
+      const candidate = path.join(directory,
+        '.' + path.basename(outputPath) + '.' + process.pid + '.' + randomBytes(12).toString('hex') + '.tmp');
+      try {
+        handle = await open(candidate, 'wx');
+        temporaryPath = candidate;
+        created = true;
+        break;
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+      }
+    }
+    if (!created) throw new Error('Could not allocate a temporary ContraDoc output file');
     await handle.writeFile(serialized, 'utf8');
     await handle.sync();
     await handle.close();
     handle = null;
     await rename(temporaryPath, outputPath);
+    created = false;
   } catch (error) {
-    if (handle) await handle.close();
-    await unlink(temporaryPath).catch(() => {});
+    if (handle) await handle.close().catch(() => {});
+    // Only remove a temporary file this invocation actually created.
+    if (created) await unlink(temporaryPath).catch(() => {});
     throw error;
+  }
+}
+
+async function assertNoOutputAliases(outputPrefix, inputPath, actualsPath, shardCount) {
+  const protectedInputs = new Set([await canonicalFuturePath(inputPath)]);
+  if (actualsPath) protectedInputs.add(await canonicalFuturePath(actualsPath));
+  const prefixName = path.basename(outputPrefix);
+  const outputPaths = [
+    outputPrefix,
+    outputPrefix + '.current.json',
+    outputPrefix + '.lock',
+    outputPrefix + '.generations',
+    outputPrefix + '.json',
+    outputPrefix + '.coverage.json',
+    ...Array.from({ length: shardCount }, (_, index) =>
+      outputPrefix + '.shard-' + String(index + 1).padStart(2, '0') + '.json')
+  ];
+  for (const outputPath of outputPaths) {
+    if (protectedInputs.has(await canonicalFuturePath(outputPath))) {
+      fail('output prefix would overwrite an input file: ' + prefixName);
+    }
+  }
+}
+
+async function publishGeneration(outputPrefix, outputFiles) {
+  const generationRoot = outputPrefix + '.generations';
+  const currentPath = outputPrefix + '.current.json';
+  const lockPath = outputPrefix + '.lock';
+  await mkdir(path.dirname(outputPrefix), { recursive: true });
+  let lock;
+  try {
+    lock = await open(lockPath, 'wx');
+  } catch (error) {
+    if (error.code === 'EEXIST') fail('output prefix is locked by another adapter process: ' + path.basename(outputPrefix));
+    throw error;
+  }
+  let stageDirectory;
+  try {
+    await lock.writeFile(String(process.pid));
+    await lock.sync();
+    await lock.close();
+    lock = null;
+    await mkdir(generationRoot, { recursive: true });
+    stageDirectory = await mkdtemp(path.join(generationRoot, '.stage-'));
+    const hash = createHash('sha256');
+    for (const output of outputFiles) {
+      hash.update(output.file).update('\0').update(output.serialized);
+      await writeFile(path.join(stageDirectory, output.file), output.serialized, 'utf8');
+    }
+    const generationId = hash.digest('hex');
+    const generationDirectory = path.join(generationRoot, generationId);
+    let existingGeneration = false;
+    try {
+      const info = await stat(generationDirectory);
+      if (!info.isDirectory()) fail('generation path exists but is not a directory');
+      existingGeneration = true;
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+    }
+    if (existingGeneration) {
+      for (const output of outputFiles) {
+        const existing = await readFile(path.join(generationDirectory, output.file), 'utf8');
+        if (existing !== output.serialized) fail('existing generation does not match its content identifier');
+      }
+      await rm(stageDirectory, { recursive: true, force: true });
+      stageDirectory = null;
+    } else {
+      await rename(stageDirectory, generationDirectory);
+      stageDirectory = null;
+    }
+    const pointer = {
+      adapter: 'contradoc-adapter',
+      generation_id: generationId,
+      generation_directory: path.relative(path.dirname(currentPath), generationDirectory),
+      run_files: outputFiles.filter((output) => output.kind === 'run').map((output) => output.file),
+      coverage_file: outputFiles.find((output) => output.kind === 'coverage').file
+    };
+    await writeAtomically(currentPath, canonicalJson(pointer));
+    return { pointer, currentPath };
+  } finally {
+    if (lock) await lock.close().catch(() => {});
+    if (stageDirectory) await rm(stageDirectory, { recursive: true, force: true });
+    await unlink(lockPath).catch(() => {});
   }
 }
 
@@ -297,22 +456,29 @@ async function main(argv) {
   }
   const inputPath = path.resolve(args.input || path.join('evaluation', '.cache', 'contradoc', 'ContraDoc.json'));
   const outputPrefix = path.resolve(args['output-prefix'] || path.join('evaluation', 'reports', 'contradoc'));
+  const actualsPath = args.actuals ? path.resolve(args.actuals) : null;
   const shardChars = args['shard-chars'] ? Number(args['shard-chars']) : 3500000;
   if (!Number.isInteger(shardChars) || shardChars < 1000) fail('--shard-chars must be an integer >= 1000');
 
-  const inputStat = await stat(inputPath).catch(() => fail('dataset file not found: ' + inputPath + ' (run download-or-verify.mjs first)'));
-  if (inputStat.size > MAX_DATASET_BYTES) fail('dataset file exceeds the 64 MiB adapter limit');
-  const inputBytes = await readFile(inputPath);
+  const inputBytes = await readBoundedFile(inputPath, MAX_DATASET_BYTES, 'dataset file')
+    .catch((error) => {
+      if (error.code === 'ENOENT') fail('dataset file not found: ' + inputPath + ' (run download-or-verify.mjs first)');
+      throw error;
+    });
   const datasetSha512 = createHash('sha512').update(inputBytes).digest('hex');
   const dataset = parseContraDocDataset(new TextDecoder('utf-8', { fatal: true }).decode(inputBytes));
 
   let { cases, coverage } = adaptDataset(dataset);
-  if (args.actuals) {
-    const actuals = JSON.parse(await readFile(path.resolve(args.actuals), 'utf8'));
+  if (actualsPath) {
+    const actualsBytes = await readBoundedFile(actualsPath, MAX_ACTUALS_BYTES, 'actual findings file');
+    const actualsText = new TextDecoder('utf-8', { fatal: true }).decode(actualsBytes);
+    const actuals = JSON.parse(actualsText);
     cases = mergeActualFindings(cases, actuals);
   }
   const shards = shardCases(cases, { maxCodeUnits: shardChars });
+  await assertNoOutputAliases(outputPrefix, inputPath, actualsPath, shards.length);
   const shardDescriptions = [];
+  const outputFiles = [];
   for (let index = 0; index < shards.length; index++) {
     const run = buildRunInput({
       dataset_sha512: datasetSha512,
@@ -322,17 +488,17 @@ async function main(argv) {
       options: {
         adaptation: 'self_contradiction_detection',
         pair_mode: 'unordered',
-        scope_labels: 'preserved_verbatim',
+        scope_labels: 'mapped_to_verum_granularity',
+        scope_mapping: CONTRADOC_SCOPE_MAP,
         shard_index: index + 1,
         shard_count: shards.length
       }
     }, shards[index]);
-    const outputPath = shards.length === 1
-      ? outputPrefix + '.json'
-      : outputPrefix + '.shard-' + String(index + 1).padStart(2, '0') + '.json';
-    await writeAtomically(outputPath, canonicalJson(run));
+    const outputName = path.basename(outputPrefix) + '.shard-' + String(index + 1).padStart(2, '0') + '.json';
+    const serialized = canonicalJson(run);
+    outputFiles.push({ file: outputName, serialized, kind: 'run' });
     shardDescriptions.push({
-      file: path.basename(outputPath),
+      file: outputName,
       cases: shards[index].length,
       code_units: shards[index].reduce((sum, evaluationCase) => sum + evaluationCase.source_text.length, 0)
     });
@@ -349,22 +515,26 @@ async function main(argv) {
     },
     ...coverage,
     scope_mapping: CONTRADOC_SCOPE_MAP,
+    published_scope_labels: coverage.scope_labels,
     cases_excluded: cases.filter((evaluationCase) => evaluationCase.exclusion)
       .map((evaluationCase) => ({ case_id: evaluationCase.case_id, reason: evaluationCase.exclusion.reason })),
     shards: shardDescriptions,
     limitations: [
-      'Scope labels are the published ContraDoc labels preserved verbatim; the scope mapping is an explicit bridge, not a claim of identical taxonomies.',
+      'Expected and actual scope aliases use the explicit ContraDoc-to-Verum bridge; published labels and their distributions remain in this sidecar, and the mapping does not claim identical taxonomies.',
       'Evidence and ref sentences are located by exact verbatim match only; omitted ref sentences are listed per document above.',
-      'ref sentences absent from a positive document leave the pair structurally incomplete; the harness reports that rather than hiding it.',
+      'Positive documents without a locatable distinct ref sentence are listed as incomplete_pairs and excluded from exact-pair credit; other document and detection metrics remain visible.',
       'Source character spans only; page is null because the dataset has no audited page mapping.',
       'Development evaluation only; no result here is finding confidence, severity, or courtroom reliability.'
     ]
   };
-  const coveragePath = outputPrefix + '.coverage.json';
-  await writeAtomically(coveragePath, canonicalJson(coverageDocument));
+  const coverageName = path.basename(outputPrefix) + '.coverage.json';
+  outputFiles.push({ file: coverageName, serialized: canonicalJson(coverageDocument), kind: 'coverage' });
+  await assertNoOutputAliases(outputPrefix, inputPath, actualsPath, shards.length);
+  const { pointer, currentPath } = await publishGeneration(outputPrefix, outputFiles);
   console.log('[contradoc] documents=' + cases.length + ' excluded=' + coverageDocument.cases_excluded.length +
     ' pos=' + coverage.pos_documents + ' neg=' + coverage.neg_documents + ' shards=' + shards.length);
-  console.log('[contradoc] coverage=' + terminalSafe(coveragePath));
+  console.log('[contradoc] generation=' + pointer.generation_id + ' runs=' + pointer.run_files.length);
+  console.log('[contradoc] current=' + terminalSafe(currentPath));
 }
 
 const invokedAsScript = process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;

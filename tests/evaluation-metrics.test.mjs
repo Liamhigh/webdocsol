@@ -121,6 +121,21 @@ ok(partialPair.metrics.evidence_localization.exact_span.micro.tp === 1 && partia
 const incompletePair = one(evaluationCase('incomplete-pair', pairText, [expected('expected-incomplete', 'D01', pairExpected.evidence_spans)], [actual('actual-incomplete', 'D01', [actualAnchor(pairText, 'pred-a', 'Alpha', 1)])]));
 ok(incompletePair.metrics.pair_detection.pair_completeness.micro.value === 0 && incompletePair.metrics.pair_detection.partial_pair_credit.micro.value === 0.5, 'one-anchor prediction is incomplete but retains separate half credit');
 
+const incompleteExpectedPair = one(evaluationCase('incomplete-expected-pair', pairText,
+  [expected('expected-one-anchor', 'D01', [pairExpected.evidence_spans[0]])],
+  [actual('actual-one-anchor', 'D01', [actualAnchor(pairText, 'pred-a', 'Alpha', 1)])]));
+ok(incompleteExpectedPair.metrics.contradiction_detection.micro.tp === 1 &&
+  incompleteExpectedPair.metrics.pair_detection.exact.micro.tp === 0 &&
+  incompleteExpectedPair.metrics.pair_detection.exact.excluded_incomplete_expected_pairs === 1 &&
+  incompleteExpectedPair.metrics.pair_detection.exact.micro.precision === NOT_DEFINED &&
+  incompleteExpectedPair.caseResults[0].pair_metric_exclusions[0].reason.includes('fewer than two'),
+'one-anchor gold remains a detection match but is visibly excluded from exact-pair credit');
+ok(buildEvaluationReport(run([evaluationCase('incomplete-expected-pair', pairText,
+  [expected('expected-one-anchor', 'D01', [pairExpected.evidence_spans[0]])],
+  [actual('actual-one-anchor', 'D01', [actualAnchor(pairText, 'pred-a', 'Alpha', 1)])])]),
+incompleteExpectedPair).pair_metric_exclusions.length === 1,
+'the evaluation report exposes incomplete expected pairs');
+
 const duplicate = one(evaluationCase('duplicate-prediction', pairText, [expected('expected-duplicate', 'D01', pairExpected.evidence_spans)], [
   actual('actual-exact', 'D01', [actualAnchor(pairText, 'pred-a', 'Alpha', 1), actualAnchor(pairText, 'pred-b', 'Beta', 2)]),
   actual('actual-duplicate', 'D01', [actualAnchor(pairText, 'pred-a2', 'Alpha', 1), actualAnchor(pairText, 'pred-b2', 'Beta', 2)])
@@ -256,6 +271,7 @@ ok(canonicalA === canonicalB && canonicalA.indexOf('"a"') < canonicalA.indexOf('
 ok(canonicalJson({ value: undefined }) === '{}\n', 'undefined optional report fields are omitted deterministically');
 ok(throws(() => canonicalJson({ value: Number.NaN })) && throws(() => canonicalJson({ value: new Date(0) })), 'canonical report JSON rejects non-finite numbers and non-plain objects');
 ok(!Object.keys(report).some((key) => /generated|timestamp|created/i.test(key)), 'deterministic report contains no wall-clock generation field');
+ok(report.report_version === '1.1.0', 'the evaluation report version identifies the revised per-case output contract without changing production findings JSON');
 
 const reorderedExpected = [
   expected('rule-a', 'D07', [expectedSpan(pairText, 'rule-a-span', 'Alpha')]),
@@ -318,6 +334,21 @@ try {
     ASSETS: { fetch: async () => new Response(null, { status: 404 }) }
   });
   ok(encodedEvaluationResponse.status === 404 && evaluationFallbackFetches === 0, 'percent-encoded evaluation paths are denied before repository or Pages fallback');
+  const deniedResponses = [];
+  for (const deniedPath of ['/%2565valuation/schema.json', '/%2Fevaluation/schema.json', '/safe/%2E%2E/evaluation/schema.json', '/%E0%A4%A']) {
+    deniedResponses.push(await serveSite(new Request('https://example.test' + deniedPath), {
+      ASSETS: { fetch: async () => new Response(null, { status: 404 }) }
+    }));
+  }
+  ok(deniedResponses.every((response) => response.status === 404) && evaluationFallbackFetches === 0, 'multiply encoded, encoded-slash, dot-segment, and malformed paths fail closed before every fallback');
+  let checkedAssetPath = null;
+  const normalizedAssetResponse = await serveSite(new Request('https://example.test/%69ndex.html'), {
+    ASSETS: { fetch: async (request) => {
+      checkedAssetPath = new URL(request.url).pathname;
+      return new Response('ok', { status: 200 });
+    } }
+  });
+  ok(normalizedAssetResponse.status === 200 && checkedAssetPath === '/index.html', 'assets receive the exact normalized path that passed the deny check');
 } finally {
   globalThis.fetch = originalFetch;
 }
@@ -412,6 +443,13 @@ for (const record of crowdedActual) Object.defineProperty(record, 'rule_id', { g
 const crowdedErrors = validateEvaluationRun(run([evaluationCase('crowded', 'A', crowdedExpected, crowdedActual)]));
 ok(crowdedErrors.some((error) => error.includes('too many expected contradictions')) && crowdedErrors.some((error) => error.includes('too many actual findings')), 'oversized case arrays are rejected before matching');
 ok(crowdedRuleReads === 0, 'resource rejection avoids nested same-rule candidate enumeration');
+const actualOnlyOversized = Array.from({ length: 129 }, (_, index) => actual('actual-overflow-' + index, 'D25', []));
+let nestedAnchorReads = 0;
+for (const record of actualOnlyOversized) Object.defineProperty(record, 'anchors', { get() { nestedAnchorReads++; return []; } });
+const actualOnlyErrors = validateEvaluationRun(run([evaluationCase('actual-overflow', 'A', [], actualOnlyOversized)]));
+const repeatedAnchorOverflow = Array.from({ length: 128 }, (_, index) => actual('anchor-overflow-' + index, 'D25', Array.from({ length: 129 }, (_, anchorIndex) => actualAnchor('A', 'overflow-anchor-' + anchorIndex, 'A'))));
+const repeatedAnchorErrors = validateEvaluationRun(run([evaluationCase('anchor-overflow', 'A', [], repeatedAnchorOverflow)]));
+ok(actualOnlyErrors.length === 1 && nestedAnchorReads === 0 && repeatedAnchorErrors.length === 1, 'oversized actual findings skip nested inspection and resource diagnostics remain bounded per case');
 ok(throws(() => createAlignmentTable('a'.repeat(1000001), 'a'.repeat(1000001))), 'alignment allocation rejects text beyond the per-case limit');
 
 const reviewTemp = mkdtempSync(path.join(tmpdir(), 'verum-evaluation-review-'));
@@ -428,6 +466,12 @@ try {
   const symlinkCollision = spawnSync(process.execPath, [cli, inputAlias, '--output', collisionInput], { encoding: 'utf8' });
   ok(symlinkCollision.status === 1 && symlinkCollision.stderr.includes('must not overwrite the input dataset'), 'canonical input/output paths reject symlink aliases');
   ok(readFileSync(collisionInput, 'utf8') === originalInput, 'a rejected symlink collision preserves the source dataset byte-for-byte');
+  const outputTarget = path.join(reviewTemp, 'unrelated-output-target.json');
+  const outputAlias = path.join(reviewTemp, 'output-alias.json');
+  writeFileSync(outputTarget, 'preserve unrelated target');
+  symlinkSync(outputTarget, outputAlias);
+  const symlinkOutput = spawnSync(process.execPath, [cli, collisionInput, '--output', outputAlias], { encoding: 'utf8' });
+  ok(symlinkOutput.status === 0 && JSON.parse(readFileSync(outputAlias, 'utf8')).report_version === '1.1.0' && readFileSync(outputTarget, 'utf8') === 'preserve unrelated target', 'atomic output replacement preserves an unrelated existing symlink target');
 
   const terminalInput = path.join(reviewTemp, 'terminal.json');
   const terminalCase = evaluationCase('bad\u001b[2J-id', 'Synthetic.');
