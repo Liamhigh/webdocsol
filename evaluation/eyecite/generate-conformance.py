@@ -8,7 +8,10 @@
 # The output is committed and reviewed; regenerating must be byte-identical.
 
 import json
+import os
 import sys
+import tempfile
+from pathlib import Path
 
 import importlib.metadata
 
@@ -133,9 +136,20 @@ def main():
         "cases": out_cases,
     }
     payload = json.dumps(document, indent=2, sort_keys=True, ensure_ascii=False) + "\n"
-    target = __file__.rsplit("/", 1)[0] + "/conformance.json"
-    with open(target, "w", encoding="utf-8") as handle:
-        handle.write(payload)
+    target = Path(__file__).resolve().with_name("conformance.json")
+    temporary_path = None
+    try:
+        with tempfile.NamedTemporaryFile(
+                mode="w", encoding="utf-8", newline="\n", dir=target.parent,
+                prefix=target.name + ".", suffix=".tmp", delete=False) as handle:
+            temporary_path = Path(handle.name)
+            handle.write(payload)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, target)
+    finally:
+        if temporary_path is not None:
+            temporary_path.unlink(missing_ok=True)
     print(f"wrote {target}: {len(out_cases)} cases")
 
 

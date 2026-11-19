@@ -13,7 +13,15 @@ repository and is not introduced unilaterally. If the founder accepts that
 convention, this file can move to `docs/decisions/citation-parser.md`
 unchanged.
 
-## Measured results (reproduce: `node evaluation/eyecite/compare.mjs`)
+## Measured results (recorded pinned-install run)
+
+The figures below are the recorded result of running the adapters with the
+exact pinned candidate packages installed in the ignored cache. The hermetic
+test run does not claim real extraction coverage when a package is absent or
+has a different version; the CLI then reports `not_installed` or
+`version_mismatch` and marks comparison `not_evaluated` or `not_comparable`.
+Reproduce the measurements only after installing the exact versions shown
+above in the ignored cache, then run `node evaluation/eyecite/compare.mjs`.
 
 | Port | Exact case matches | Resolution clusters |
 |---|---|---|

@@ -4,7 +4,9 @@
 // confidence scores or telemetry fields).
 
 import { createRequire } from 'node:module';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
+import { fileURLToPath } from 'node:url';
 
 export const name = '@beshkenadze/eyecite';
 export const pinnedVersion = '2.7.6-alpha.28';
@@ -12,7 +14,8 @@ export const license = 'BSD-2-Clause';
 export const upstream = 'beshkenadze/eyecite-js';
 export const strippedFields = [];
 
-const require = createRequire(path.join(process.cwd(), 'evaluation/.cache/eyecite-ports/package.json'));
+const cacheDirectory = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '../../../evaluation/.cache/eyecite-ports');
+const require = createRequire(path.join(cacheDirectory, 'package.json'));
 
 const TYPE_NAMES = {
   FullCaseCitation: 'full_case',
@@ -28,17 +31,38 @@ const TYPE_NAMES = {
 
 const METADATA_KEYS = ['court', 'year', 'pinCite', 'plaintiff', 'defendant', 'parenthetical', 'extra'];
 
-function load() {
-  return require('@beshkenadze/eyecite');
+export function checkInstallation() {
+  try {
+    const resolved = require.resolve('@beshkenadze/eyecite');
+    const relative = path.relative(cacheDirectory, resolved);
+    if (relative.startsWith('..') || path.isAbsolute(relative)) {
+      return { status: 'installation_error', error: 'package resolved outside the ignored cache' };
+    }
+    let directory = path.dirname(resolved);
+    while (directory !== path.dirname(directory)) {
+      const packagePath = path.join(directory, 'package.json');
+      try {
+        const metadata = JSON.parse(readFileSync(packagePath, 'utf8'));
+        if (metadata.name === '@beshkenadze/eyecite') {
+          return {
+            status: metadata.version === pinnedVersion ? 'available' : 'version_mismatch',
+            version: metadata.version
+          };
+        }
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+      }
+      directory = path.dirname(directory);
+    }
+    return { status: 'installation_error', error: 'package metadata was not found' };
+  } catch (error) {
+    if (error.code === 'MODULE_NOT_FOUND') return { status: 'not_installed' };
+    return { status: 'installation_error', error: String(error && error.message).slice(0, 200) };
+  }
 }
 
-export function isAvailable() {
-  try {
-    require.resolve('@beshkenadze/eyecite');
-    return true;
-  } catch {
-    return false;
-  }
+function load() {
+  return require('@beshkenadze/eyecite');
 }
 
 function spanPair(citation, method) {
