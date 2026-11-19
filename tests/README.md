@@ -103,7 +103,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 62 | `legal-citations` | `legal-citations.test.mjs` | 62 | Neutral citation occurrence core and pack registry: exact spans, pack-qualified IDs, duplicate-pack handling, implementation digest, short-form resolution, envelope validity, immutable disclosed load failures with input identity, OCR/fallback provenance, flag-off findings parity, and static guards |
 | 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 92 | South African pack fixtures: neutral and reported citations, Id./supra resolution, CCT dockets, punctuation-safe SAFLII URLs with actual host metadata, negative fixtures, exact spans, and deterministic replay |
 | 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 | Phase 3 synthetic redaction corpus: exact UTF-16 ranges, protected verbatim evidence quotes, preserved references, and a fail-closed production-module flag |
-| 65 | `pdf-graph` | `pdf-graph.test.mjs` | 24 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, resource limits, opt-in Worker, observations-only module and detector-finding parity |
+| 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
 
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete registry.

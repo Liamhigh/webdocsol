@@ -85,7 +85,16 @@ test('local PDF analysis is deterministic and all new flags stay off', async ({ 
   expect(result.same).toBeTruthy();
   expect(result.version).toBe('5.7.2-web');
   expect(result.findings).toBeGreaterThanOrEqual(0);
-  expect(Object.values(result.flags)).toEqual(Array(7).fill(false));
+  expect(result.flags).toEqual({
+    citations: false,
+    redaction: false,
+    revisions: false,
+    temporalAlgebra: false,
+    imageMetadata: false,
+    c2pa: false,
+    spatialOcr: false,
+    pdfGraph: false
+  });
   expect(result.referenceTime).toBe('2026-11-15T00:00:00.000Z');
   expect(result.canonical).not.toContain('elapsed_ms');
   expect(errors).toEqual([]);

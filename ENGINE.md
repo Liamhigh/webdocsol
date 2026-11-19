@@ -907,7 +907,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `inline-scripts.test.mjs` | 25 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.js` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
 | `digital-forensics.test.mjs` | 19 | PDF structure and digital-forensics measurements |
-| `pdf-graph.test.mjs` | 24 | QPDF-WASM active graph: pinned assets, 256-MiB Wasm cap, input/output/object limits, worker opt-in, observations-only envelope and findings parity |
+| `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: pinned assets, 256-MiB Wasm cap, pre-hash input limit and sentinel, input/output/object limits, worker opt-in, observations-only envelope and findings parity |
 | `narrate-excerpt.test.mjs` | 16 | AI excerpt building |
 | `findings-json.test.mjs` | 29 | JSON contract v1.9.0 (`cross_document_observations` w/ byte-faithful `quote_verbatim`); 1.8.0 `candidate_law`; 1.7.0: `display_name`, `brain`, `triple_verification`, `ai_review_note`; an AI candidate carries `INSUFFICIENT`, never a band |
 | `franchise-lease.test.mjs` | 17 | D38/D39 (CT44/CT45) |
