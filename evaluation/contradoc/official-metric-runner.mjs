@@ -70,16 +70,16 @@ export function directFind(candidates, query) {
 
 // Official yes_verify: lowercase, optional top-3 trim, direct find, else the
 // published BERTScore precision/recall threshold over externally supplied
-// scores aligned with the (trimmed) candidate list.
+// scores aligned with the candidate list. trim_string is used on the raw
+// response before evidence-list parsing, not on these parsed evidence strings.
 export function yesVerify(candidates, goldEvidence, options = {}) {
   if (!Array.isArray(candidates) || candidates.length === 0) return false;
   if (typeof goldEvidence !== 'string' || !goldEvidence) fail('gold evidence is required for verification');
   let lowered = candidates.map((candidate) => {
     if (typeof candidate !== 'string') fail('candidate evidence must be strings');
-    return trimString(candidate).toLowerCase();
+    return candidate.toLowerCase();
   });
-  const gold = trimString(goldEvidence).toLowerCase();
-  if (!gold) fail('gold evidence must not be empty after trimming');
+  const gold = goldEvidence.toLowerCase();
   let scores = options.bertscore || null;
   if (scores) validateBertScore(scores, lowered.length);
   if (options.onlyTop3 && lowered.length > 3) {

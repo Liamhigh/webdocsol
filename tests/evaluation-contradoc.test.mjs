@@ -277,8 +277,8 @@ ok(directFind(['😀'.repeat(19)], '😀'.repeat(19)) === null &&
 'directFind applies the 20-character cutoff as Python Unicode code points');
 ok(trimString(' \ntrimmed evidence\n ') === 'trimmed evidence' &&
    trimString('\u3000trimmed evidence\u001c') === '\u3000trimmed evidence\u001c' &&
-   yesVerify([' \n' + 'c'.repeat(20) + '\n'], ' \n' + 'c'.repeat(20) + ' \n'),
-'official space/newline trimming is applied before matching without broad Unicode normalization');
+   !yesVerify([' ' + 'c'.repeat(20) + '  '], '  ' + 'c'.repeat(20) + ' '),
+'published trimming applies to serialized responses before parsing, not parsed evidence strings passed to matching');
 
 ok(throws(() => yesVerify(['a candidate with no overlap at all here'], 'gold evidence sentence long enough',
   { bertscore: { precision: [1.01], recall: [0.5] } })) &&

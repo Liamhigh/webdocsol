@@ -108,9 +108,11 @@ node evaluation/contradoc/official-metric-runner.mjs path/to/responses.json --to
    Judge-then-Find (evidence is evaluated only when the model answers "yes"
    and the document is gold-positive). Top-k truncates candidates and their
    aligned score arrays after five, and the result reports how many candidates
-   were discarded. Direct-find cutoffs count Unicode code points and trim only
-   spaces and newlines, matching the pinned Python implementation, before
-   matching. Supplied
+   were    discarded. Direct-find cutoffs count Unicode code points, matching Python.
+   The pinned `trim_string` trims spaces and newlines on the serialized model
+   response before its evidence list is parsed; parsed candidate and gold
+   evidence strings are only lowercased before matching, as in `yes_verify`.
+   Supplied
    BERTScore precision/recall values must be finite and in `[0, 1]`; maxima are
    accumulated iteratively. Empty-set ratios, including accuracy, are
    `not_defined`, never coerced to zero. BERTScore values are **externally
