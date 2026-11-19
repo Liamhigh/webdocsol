@@ -9,12 +9,13 @@
     'temporalAlgebra',
     'imageMetadata',
     'c2pa',
-    'spatialOcr'
+    'spatialOcr',
+    'pdfGraph'
   ]);
   // Modules with a shipped implementation. citations is implemented by
   // legal-citations.js + legal-packs.js + legal-packs/za.js (Phase 2 PR 2.2);
   // every other flag must stay false until its module ships.
-  var IMPLEMENTED_MODULES = Object.freeze({ citations: true });
+  var IMPLEMENTED_MODULES = Object.freeze({ citations: true, pdfGraph: true });
   var ISO_INSTANT_RE = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.\d{1,9})?(Z|([+-])(\d{2}):(\d{2}))$/;
 
   function isValidIsoInstant(value) {

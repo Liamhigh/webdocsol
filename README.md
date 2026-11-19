@@ -297,11 +297,11 @@ webdocsol/
 |   |-- static-proxy.js                # the site-serving chain (assets -> main branch on GitHub -> legacy Pages -> embedded images)
 |   |-- site-assets.js                 # embedded last-resort copies of the logo and watermark
 |   |-- rule-format.md, public-key.der.b64, seed-rules.json
-|-- tests/                             # 64 registered suites (55 audited baseline + 2 Phase 0 + 4 Phase 1 + 2 Phase 2 + 1 Phase 3) — node tests/run-all.js
+|-- tests/                             # 65 registered suites (55 audited baseline + 2 Phase 0 + 4 Phase 1 + 2 Phase 2 + 1 Phase 3 + 1 Phase 4) — node tests/run-all.js
 |   |-- run-all.js                     # the registry — an unregistered file does not run
 |   |-- README.md                      # the short guide to the suites
 |-- evaluation/                        # B9 development/CI metrics only; never imported by production/browser analysis
-|-- vendor/                            # pinned pdf.js, pdf-lib, qrcode, Tesseract (offline-first)
+|-- vendor/                            # pinned pdf.js, pdf-lib, qrcode, Tesseract and opt-in QPDF-WASM (offline-first)
 |-- images/                            # logo, favicon, sealed-PDF watermark, the home page's two photos (the only images the site serves)
 |-- brand/                             # app icon and banner artwork — repository material, never served
 |-- CLAUDE.md, AGENTS.md, ARCHITECTURE.md, ENGINE.md, DEPLOYMENT.md, REFERENCE.md, FORENSIC-DEBUG.md, ENHANCEMENT-PLAN.md, VERUM_UI_TOKENS.md, ...   # docs (see REFERENCE.md §5); never served
@@ -367,13 +367,15 @@ operating instrument remains v6.1 (seal `VO-9E51D3F507E6`). All implementations 
 ## Working on this repository
 
 ```
-node tests/run-all.js   # or npm test — 64 registered suites; every suite green
-npm run check          # node --check on the ten inlined scripts and the three worker files
+node tests/run-all.js   # or npm test — 65 registered suites; every suite green
+npm run check          # node --check on the source scripts and workers
 ```
 
-- The ten scripts inlined into `seal-document.html` sit between `/* VO-INLINE:<file>:START/END */`
+- The ten legacy scripts inlined into `seal-document.html` sit between `/* VO-INLINE:<file>:START/END */`
   markers: edit the source file, then re-splice (`ENGINE.md` §9); `tests/inline-scripts.test.mjs`
   byte-compares them.
+- `modules.pdfGraph` is an explicit, default-off QPDF-WASM active-graph prototype. It runs in a
+  disposable worker and returns only bounded counts; it does not inspect revision history or emit findings.
 - `tests/run-all.js` is the registry — a test file not listed there does not run. Ordinary CI
   runs syntax/unit tests on pull requests and pushes to `main`; browser gates run separately.
 - Merge to `main` is the deploy (Cloudflare Workers Builds ships the Worker and the site together).

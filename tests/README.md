@@ -1,14 +1,14 @@
 # Tests
 
 The Node test suite for WebDocSol uses Node built-ins plus the browser libraries vendored in
-`vendor/` (pdf-lib, pdf.js, Tesseract, qrcode). There are no production dependencies. CI pins
-Node 22 LTS and installs the development-only Playwright browser dependency with `npm ci`.
+`vendor/` (pdf-lib, pdf.js, Tesseract, qrcode, QPDF-WASM). There are no production dependencies.
+CI pins Node 22 LTS and installs development-only Playwright and QPDF-WASM packages with `npm ci`.
 
 ```bash
 # from the repository root
-npm ci                  # development-only browser tooling; no production dependencies
+npm ci                  # development-only browser/QPDF tooling; no production dependencies
 npm test                # every registered Node suite
-npm run check           # node --check on the ten shipped source files
+npm run check           # node --check on shipped source and worker files
 npm run test:browser    # Chromium, Firefox and WebKit gates
 node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 ```
@@ -50,7 +50,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**64 registered suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, and one Phase 3 redaction-fixture suite. `run-all.js` is the
+**65 registered suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, and one Phase 4 active-graph suite. `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file
 there. What each suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
@@ -103,6 +103,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 62 | `legal-citations` | `legal-citations.test.mjs` | 78 | Neutral citation occurrence core: registry and helper validation, exact spans and IDs, immediate-predecessor Id./exact-caption supra resolution, empty pack selection, envelope validity, engine flag on/off integration, exact failure identity and failed-page coverage |
 | 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 98 | ZA pack fixtures: neutral/reported/docket/SAFLII forms and boundaries, multiword supra, pinpoints, captions, negatives and neutrality, verbatim round-trips, byte-identical replay |
 | 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 | Phase 3 synthetic redaction corpus: exact UTF-16 ranges, protected verbatim evidence quotes, preserved references, and a fail-closed production-module flag |
+| 65 | `pdf-graph` | `pdf-graph.test.mjs` | 24 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, resource limits, opt-in Worker, observations-only module and detector-finding parity |
 
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete registry.
