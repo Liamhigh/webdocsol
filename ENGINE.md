@@ -894,7 +894,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `batch7d-ots-delivered-bytes.test.mjs` | 31 | Delivered-file OpenTimestamps receipts (§12.25): real detached-receipt digest bytes, post-seal/encrypted ordering, QR and Subject scheme markers, direct PDF+receipt compatibility, and legacy QR/metadata/ORIG resolution |
 | `engine-perf.test.mjs` | 5 | Per-page extraction does not re-parse the whole PDF |
 | `evaluation-metrics.test.mjs` | 114 | B9 development-only hand-calculated detection/localization metrics, full direct-call validation, bounded identifiers/diagnostics and early resource rejection, minimum-cost and scope-aware matching, distinct evidence locations, one-to-one evidence credit, explicit UTF-16 normalization, pair/evidence/page/scope separation, failures/exclusions, versioned canonical and atomic reports, strict UTF-8 and canonical-directory/symlink-safe CLI handling, and fully normalized encoded-path production isolation |
-| `evaluation-contractnli.test.mjs` | 70 | B9 development-only ContractNLI adapter: pinned release verification, code-point/UTF-16 span conversion, conservative hypothesis mapping, negative-corpus adaptation, exclusion visibility, deterministic sharding, zip integrity and the CLI pipeline on synthetic fixtures |
+| `evaluation-contractnli.test.mjs` | 92 | B9 development-only ContractNLI adapter: pinned release/hash verification, code-point/UTF-16 span conversion, conservative hypothesis mapping, negative-corpus adaptation, provenance and input safety, annotations, collision-free identifiers, bounded shards and generation publication, exclusion visibility, zip integrity and the CLI pipeline on synthetic fixtures |
 
 ---
 

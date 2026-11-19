@@ -97,7 +97,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 56 | `analysis-contracts` | `analysis-contracts.test.mjs` | — | Deterministic envelopes, UTF-16/structural/OCR/pair anchors, stable ordering/IDs, disabled flags, old/new readers and fresh-process/time-zone replay |
 | 57 | `documentation-consistency` | `documentation-consistency.test.mjs` | — | Current engine/taxonomy/detector/findings values and source-derived UI counts |
 | 58 | `evaluation-metrics` | `evaluation-metrics.test.mjs` | 114 | Hand-calculated B9 development metrics, direct-call validation, bounded identifiers/diagnostics and early resource rejection, minimum-cost and scope-aware matching, distinct evidence locations, one-to-one evidence credit, UTF-16/normalization alignment, pairs, Unicode, negative documents, failures/exclusions, versioned canonical and atomic reports, strict UTF-8 and canonical-directory/symlink-safe CLI handling, and fully normalized encoded-path production isolation |
-| 59 | `evaluation-contractnli` | `evaluation-contractnli.test.mjs` | 70 | ContractNLI adapter: pinned release/hashes, code-point→UTF-16 spans, conservative hypothesis map, negative-corpus adaptation, exclusion visibility, sharding, zip integrity, CLI pipeline |
+| 59 | `evaluation-contractnli` | `evaluation-contractnli.test.mjs` | 92 | ContractNLI adapter: pinned release/hashes, UTF-16 spans, conservative mapping, provenance and input safety, annotations, collision-free IDs, bounded shards, generation publication, zip integrity, CLI pipeline |
 
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete registry.

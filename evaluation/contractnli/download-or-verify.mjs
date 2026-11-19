@@ -5,7 +5,7 @@
 // mismatch and never overwrites a mismatched file. No document content is ever
 // uploaded; the only network operation is a GET of the public dataset zip.
 
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -114,6 +114,33 @@ export function verifyMemberBytes(name, data) {
   return true;
 }
 
+export async function readResponseLimited(response, maxBytes) {
+  const contentLength = response.headers && response.headers.get('content-length');
+  if (contentLength !== null && contentLength !== undefined) {
+    const declared = Number(contentLength);
+    if (!Number.isSafeInteger(declared) || declared < 0 || declared > maxBytes) fail('download exceeds its byte limit');
+  }
+  if (!response.body || typeof response.body.getReader !== 'function') fail('download response has no readable body');
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel();
+        fail('download exceeded its byte limit while streaming');
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, total);
+}
+
 // Pure cache decision, exported for tests: given the state of each member file
 // on disk, decide whether the cache is usable, downloadable, or unsafe.
 export function planCacheAction(memberStates) {
@@ -135,18 +162,30 @@ function terminalSafe(value) {
 }
 
 async function writeAtomically(outputPath, data) {
-  const temporaryPath = path.join(path.dirname(outputPath), '.' + path.basename(outputPath) + '.' + process.pid + '.tmp');
   let handle;
+  let temporaryPath;
+  let created = false;
   try {
-    handle = await open(temporaryPath, 'wx');
+    for (let attempt = 0; attempt < 20; attempt++) {
+      temporaryPath = path.join(path.dirname(outputPath), '.' + path.basename(outputPath) + '.' + randomBytes(16).toString('hex') + '.tmp');
+      try {
+        handle = await open(temporaryPath, 'wx');
+        created = true;
+        break;
+      } catch (error) {
+        if (error.code !== 'EEXIST') throw error;
+      }
+    }
+    if (!handle) fail('could not allocate a temporary cache file');
     await handle.writeFile(data);
     await handle.sync();
     await handle.close();
     handle = null;
     await rename(temporaryPath, outputPath);
+    created = false;
   } catch (error) {
-    if (handle) await handle.close();
-    await unlink(temporaryPath).catch(() => {});
+    if (handle) await handle.close().catch(() => {});
+    if (created) await unlink(temporaryPath).catch(() => {});
     throw error;
   }
 }
@@ -170,7 +209,7 @@ async function downloadZip() {
     try {
       const response = await fetch(source, { signal: AbortSignal.timeout(120000) });
       if (!response.ok) throw new Error('HTTP ' + response.status);
-      const buffer = Buffer.from(await response.arrayBuffer());
+      const buffer = await readResponseLimited(response, CONTRACTNLI_RELEASE.zip.bytes);
       if (buffer.length !== CONTRACTNLI_RELEASE.zip.bytes) throw new Error('zip has ' + buffer.length + ' bytes, expected ' + CONTRACTNLI_RELEASE.zip.bytes);
       if (sha256Hex(buffer) !== CONTRACTNLI_RELEASE.zip.sha256) throw new Error('zip failed its pinned SHA-256 check');
       return buffer;
