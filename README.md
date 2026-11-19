@@ -304,7 +304,7 @@ webdocsol/
 |-- vendor/                            # pinned pdf.js, pdf-lib, qrcode, Tesseract (offline-first)
 |-- images/                            # logo, favicon, sealed-PDF watermark, the home page's two photos (the only images the site serves)
 |-- brand/                             # app icon and banner artwork — repository material, never served
-|-- CLAUDE.md, AGENTS.md, ARCHITECTURE.md, ENGINE.md, DEPLOYMENT.md, REFERENCE.md, FORENSIC-DEBUG.md, VERUM_UI_TOKENS.md, ...   # docs (see REFERENCE.md §5); never served
+|-- CLAUDE.md, AGENTS.md, ARCHITECTURE.md, ENGINE.md, DEPLOYMENT.md, REFERENCE.md, FORENSIC-DEBUG.md, ENHANCEMENT-PLAN.md, VERUM_UI_TOKENS.md, ...   # docs (see REFERENCE.md §5); never served
 |-- DESIGN_LOCK.md                     # permanent visual standard (DO NOT REGRESS)
 |-- seal-module/                       # the PORTABLE SEALING SPEC — not the live site
 |   |-- SPEC.md                        # full technical specification
