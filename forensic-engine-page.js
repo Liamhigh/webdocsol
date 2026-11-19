@@ -9157,6 +9157,17 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     }
   }
 
+  var _pdfGraphModule = null;
+  if (opts.modules.pdfGraph === true) {
+    var _pdfGraph = (typeof globalThis !== 'undefined' && globalThis.VOPdfGraph)
+      ? globalThis.VOPdfGraph
+      : (typeof require === 'function' ? require('./pdf-graph.js') : null);
+    if (!_pdfGraph || typeof _pdfGraph.run !== 'function') {
+      throw new Error('pdf-graph.js must load before the active-graph module runs');
+    }
+    _pdfGraphModule = await _pdfGraph.run(pdfBytes);
+  }
+
   // Batch 7a: the conduct ledger is extracted once over the final page texts
   // (after any OCR rescue) and handed to the detectors that measure pleadings
   // against it (D61). It is sealed with the bundle — it travels inside the
@@ -9686,10 +9697,13 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
         'Re-submit a text-layer copy, or rely on the OCR-rescued pages disclosed in the extraction notes.'
       : generateSummary(allFindings, overallScore)
   };
-  // Phase 2 module envelopes, present only when the caller enabled the module;
-  // with every flag off this field is absent and the result is byte-identical
-  // to the pre-module output.
-  if (_citationModule) _result.moduleResults = { citations: _citationModule };
+  // Enhancement module envelopes are present only when a caller enables them;
+  // with every flag off the result is byte-identical to the pre-module output.
+  if (_citationModule || _pdfGraphModule) {
+    _result.moduleResults = {};
+    if (_citationModule) _result.moduleResults.citations = _citationModule;
+    if (_pdfGraphModule) _result.moduleResults.pdfGraph = _pdfGraphModule;
+  }
   return _result;
 }
 
