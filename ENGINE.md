@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   61 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites); many exist solely to stop the regressions in §4 and §12.
+   63 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -67,6 +67,10 @@ PDF bytes + pdf-lib PDFDocument (+ opts.referenceTime from the seal page)
   ├─ voStripSealFurnitureBlocks()    this platform's own seal footers removed before detection
   ├─ voSecondaryPages()              pages of extracts, commentaries and a party's submission about other sealed records
   ├─ voMarkdownAnalysisPages()       pages carrying chat-style markdown (bold runs, ## headings): a rendered AI or chat analysis (§12.15)
+  ├─ citations module (flagged)      only when opts.modules.citations is true: the neutral occurrence core
+  │                                  (legal-citations.js) runs over the final page texts behind the caller's explicit
+  │                                  jurisdiction packs and records a module envelope in result.moduleResults.citations
+  │                                  (observations only — the envelope's findings array is always empty; §8)
   ├─ main detector run-list           61 registered entries, each returns findings[] (§3)
   ├─ contextOnly split               CT38 / CT43 breadth notes go to the engine notes, never the findings
   ├─ voDatedAfterReference()         a first-page "Date:" later than opts.referenceTime's day becomes an engine note
@@ -768,12 +772,50 @@ pass `unreadPages`, `ocrPages`, `ocrConfidence` and `gps` to both, or the narrat
 loses the unread-page and OCR disclosure and the home jurisdiction; `aiNarrative` and
 `aiNarrativeSource` go to `build` only (§12.5).
 
+### `legal-citations.js`, `legal-packs.js`, `legal-packs/za.js` (Phase 2, citations module)
+
+The citation occurrence core is a **flagged module**, not a detector: it runs only when
+`opts.modules.citations === true` (analysis-config.js; every other module flag still fails
+closed). The seal page does not enable the flag in this phase — the module ships dark.
+
+- `VOLegalCitations.runCitationModule(pages, { packs, referenceTime })` runs the registered
+  packs over the final page texts (OCR pages keep `extraction.kind: 'ocr'`) and returns a
+  frozen module envelope (`analysis-contracts.js`): status `completed`, every page a
+  processed coverage unit, `observations` the occurrences, **`findings` always empty** —
+  extraction is an observation, never a contradiction. The envelope lands in
+  `result.moduleResults.citations`; with the flag off the result carries no `moduleResults`
+  key and is byte-identical to the pre-module output.
+- An occurrence records the pack and rule id, the kind (`neutral_case`, `reported_case`,
+  `docket`, `source_url`, …), the verbatim `raw` text, its exact UTF-16 page span, an
+  explicit-components object (nulls, never inventions), a best-effort caption component,
+  and a deterministic `vo1|` occurrence id qualified by pack identity. `Id.` resolves only
+  to the immediately preceding citation observation when it is a case; `supra` resolves only
+  when the exact normalized first-party caption (before `v`) matches. Resolution remains
+  `resolved` (one antecedent), `ambiguous` (several) or `unresolved` (none) — never a fuzzy
+  score. The implementation digest covers core helpers, pack rule patterns and extractors,
+  and declared pack helpers. Only repeated references to the identical pack object are
+  collapsed; distinct objects with the same id are rejected. An explicit empty pack array
+  completes with zero observations.
+- `VOLegalPacks` registers jurisdiction packs (`za` ships first: `[2026] ZACC 1` neutral
+  citations, SALR/SACR reported citations with court codes and `at para 12` pinpoints, CCT
+  dockets, `Id.`/named `supra` short forms, SAFLII URLs with punctuation-trimmed exact hosts).
+  Pack selection is explicit (`opts.jurisdictionPacks`), never
+  inferred from IP, region or locale. Statute/section/Act forms stay with the legacy
+  `voExtractCitations` until parity is demonstrated.
+- A module error (an unregistered pack, a missing script) yields a disclosed `failed`
+  envelope with a digest of the exact normalized analyzed pages and every page listed in
+  `coverage.units_failed`, even when the contracts script itself cannot load; detection
+  continues unchanged. Browser hashing falls back to the loaded analysis contract when Web
+  Crypto and CommonJS are unavailable.
+
 ---
 
 ## 9. Inlining
 
 `forensic-engine-page.js`, `forensic-report.js`, `seal-guard.js`, `ots-proof.js` and
-`pdf-encrypt.js` are **inlined** into `seal-document.html` between
+`pdf-encrypt.js`, plus the Phase 0/2 contracts and citation scripts
+(`analysis-contracts.js`, `analysis-config.js`, `legal-packs.js`, `legal-packs/za.js`,
+`legal-citations.js`), are **inlined** into `seal-document.html` between
 `/* VO-INLINE:<file>:START */` … `/* VO-INLINE:<file>:END */` markers, because root-level `.js`
 fetches once intermittently returned the home page's HTML (recorded in
 `tests/inline-scripts.test.mjs`; the rule stands since the move to Worker static assets, #186) —
@@ -797,7 +839,7 @@ fs.writeFileSync('seal-document.html', html);
 ```
 Then run `node tests/inline-scripts.test.mjs`. On an unchanged tree the script is idempotent.
 
-The same test also forbids a `<script src="/<file>">` tag for any of the seven, and requires the
+The same test also forbids a `<script src="/<file>">` tag for any of the ten, and requires the
 seal page's own CT maps (`CTNAME`, `CTCAT`, `CATLAB`, `CATORD` in `buildLocalNarrative`, outside
 the inline blocks) to equal `CT_NAMES`, `CT_CATEGORY`, `CATEGORY_LABEL` and `CATEGORY_ORDER`.
 Edit those by hand; re-splicing does not touch them.
@@ -838,7 +880,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**61 registered suites** (55 audited baseline suites green on 2026-11-15, the Phase 0 contract and documentation guards, and the Phase 1 development-evaluation guards; recount assertions after any test change).
+**63 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -897,6 +939,8 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `evaluation-contractnli.test.mjs` | 92 | B9 development-only ContractNLI adapter: pinned release/hash verification, code-point/UTF-16 span conversion, conservative hypothesis mapping, negative-corpus adaptation, provenance and input safety, annotations, collision-free identifiers, bounded shards and generation publication, exclusion visibility, zip integrity and the CLI pipeline on synthetic fixtures |
 | `evaluation-contradoc.test.mjs` | 101 | B9 development-only ContraDoc adapter and dual metrics: verbatim evidence/ref anchoring, mapped scopes, incomplete-pair exclusion, verum_exact anchor metrics with per-document ContraDoc-Neg false positives, published_comparable Judge-then-Find/top-k/0.98-threshold reproduction, bounded external inputs, generation publication, and CLI workflow on synthetic fixtures |
 | `evaluation-eyecite.test.mjs` | 60 | B9 development-only Eyecite conformance spike: bounded corpus/span validation, exact bidirectional group and numeric cluster comparison, fixed adapter allowlist, package-pin and resolution-state handling, optional extraction only for exact pinned installs, portable paths, atomic-generator guard, and CLI |
+| `legal-citations.test.mjs` | 78 | Neutral citation occurrence core and pack registry: exact spans, pack-qualified IDs, object-identity deduplication, helper-aware implementation digest, short-form resolution, empty selection, envelope validity, immutable disclosed load failures with exact input identity and failed-page coverage, OCR/fallback provenance, flag-off findings parity, and static guards |
+| `legal-citations-za.test.mjs` | 98 | South African pack fixtures: neutral and boundary-checked reported citations, multiword Id./supra resolution, CCT dockets, case-insensitive punctuation-safe SAFLII URLs with normalized host metadata, negative fixtures, exact spans, and deterministic replay |
 
 ---
 

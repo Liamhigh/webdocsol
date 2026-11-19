@@ -1,0 +1,50 @@
+[
+  {
+    "id": "neutral-zacc",
+    "text": "The Constitutional Court in [2026] ZACC 1 held otherwise.",
+    "expect": [{ "rule_id": "za-neutral-court", "kind": "neutral_case", "raw": "[2026] ZACC 1", "components": { "year": "2026", "court": "ZACC", "ordinal": "1" } }]
+  },
+  {
+    "id": "neutral-zasca",
+    "text": "See [2026] ZASCA 15 at para 9, and the discussion below.",
+    "expect": [{ "rule_id": "za-neutral-court", "kind": "neutral_case", "raw": "[2026] ZASCA 15", "components": { "year": "2026", "court": "ZASCA", "ordinal": "15" } }]
+  },
+  {
+    "id": "reported-sca-pinpoint",
+    "text": "In Foo v Bar, 2026 (3) SA 112 (SCA) at para 12 the court said so.",
+    "expect": [{ "rule_id": "za-reported-sa", "kind": "reported_case", "raw": "2026 (3) SA 112 (SCA) at para 12", "components": { "year": "2026", "volume": "3", "reporter": "SA", "first_page": "112", "court": "SCA", "pinpoint": "para 12", "caption": "Foo v Bar" } }]
+  },
+  {
+    "id": "reported-sacr-cc",
+    "text": "The accused in 2011 (1) SACR 200 (CC) was acquitted.",
+    "expect": [{ "rule_id": "za-reported-sa", "kind": "reported_case", "raw": "2011 (1) SACR 200 (CC)", "components": { "year": "2011", "volume": "1", "reporter": "SACR", "first_page": "200", "court": "CC", "pinpoint": null } }]
+  },
+  {
+    "id": "reported-no-court",
+    "text": "Compare 1998 (2) SA 450 with the later approach.",
+    "expect": [{ "rule_id": "za-reported-sa", "kind": "reported_case", "raw": "1998 (2) SA 450", "components": { "year": "1998", "volume": "2", "reporter": "SA", "first_page": "450", "court": null, "pinpoint": null } }]
+  },
+  {
+    "id": "docket-cct-spaced",
+    "text": "The application under CCT 19/20 was filed in June.",
+    "expect": [{ "rule_id": "za-docket-cct", "kind": "docket", "raw": "CCT 19/20", "components": { "court": "CCT", "number": "19", "year_suffix": "20" } }]
+  },
+  {
+    "id": "docket-cct-compact",
+    "text": "Rescission was sought in CCT237/20 together with CCT 19/20.",
+    "expect": [
+      { "rule_id": "za-docket-cct", "kind": "docket", "raw": "CCT237/20", "components": { "court": "CCT", "number": "237", "year_suffix": "20" } },
+      { "rule_id": "za-docket-cct", "kind": "docket", "raw": "CCT 19/20", "components": { "court": "CCT", "number": "19", "year_suffix": "20" } }
+    ]
+  },
+  {
+    "id": "saflii-url",
+    "text": "Read the judgment at https://www.saflii.org/za/cases/ZACC/2026/1.html before filing.",
+    "expect": [{ "rule_id": "za-saflii-url", "kind": "source_url", "raw": "https://www.saflii.org/za/cases/ZACC/2026/1.html", "components": { "host": "www.saflii.org" } }]
+  },
+  {
+    "id": "saflii-url-dot-za-sentence-period",
+    "text": "The source is https://saflii.org.za/za/cases/ZACC/2026/1.html.",
+    "expect": [{ "rule_id": "za-saflii-url", "kind": "source_url", "raw": "https://saflii.org.za/za/cases/ZACC/2026/1.html", "components": { "host": "saflii.org.za" } }]
+  }
+]

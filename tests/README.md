@@ -50,7 +50,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**61 registered suites**: the 55-suite audited baseline of 15 November 2026, the two Phase 0 suites, and the Phase 1 evaluation suites (`evaluation-metrics.test.mjs`, `evaluation-contractnli.test.mjs`, `evaluation-contradoc.test.mjs`, `evaluation-eyecite.test.mjs`). `run-all.js` is the
+**63 registered suites**: the 55-suite audited baseline of 15 November 2026, the two Phase 0 suites, four Phase 1 evaluation suites (`evaluation-metrics.test.mjs`, `evaluation-contractnli.test.mjs`, `evaluation-contradoc.test.mjs`, `evaluation-eyecite.test.mjs`), and two Phase 2 citation suites. `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file
 there. What each suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
@@ -87,7 +87,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 26 | `pages-bridge` | `pages-bridge.test.mjs` | 16 | `functions/[[path]].js`, the www bridge |
 | 27 | `zip-intake` | `zip-intake.test.mjs` | 25 | The page's ZIP reader for WhatsApp chat exports |
 | 28 | `rule-package` | `rule-package.test.mjs` | 129 | Signed rule packages on the website |
-| 29 | `inline-scripts` | `inline-scripts.test.mjs` | 25+ | The seven inline copies in `seal-document.html` are byte-identical to their sources |
+| 29 | `inline-scripts` | `inline-scripts.test.mjs` | 25+ | The ten inline copies in `seal-document.html` are byte-identical to their sources |
 | 30 | `legal-analysis` | `legal-analysis.test.js` | 216 | `forensic-report.js`: parties and jurisdiction, legal subjects, **PD16 language** (no scores, no bands, no hedging), the §15.2 narrative gate, sentence splitting, page anchors, SEALED FINDINGS integrity |
 | 31 | `greensky-regression` | `greensky-regression.test.js` | 98 | The Greensky run of 7 August 2026, and its re-run of 3 October 2026 (§9; `ENGINE.md` §12.15) |
 | 32 | `allfuels-regression` | `allfuels-regression.test.js` | 59 | The AllFuels run of 14 August 2026 |
@@ -100,6 +100,8 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 59 | `evaluation-contractnli` | `evaluation-contractnli.test.mjs` | 92 | ContractNLI adapter: pinned release/hashes, UTF-16 spans, conservative mapping, provenance and input safety, annotations, collision-free IDs, bounded shards, generation publication, zip integrity, CLI pipeline |
 | 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 | ContraDoc adapter and dual metrics: verbatim evidence/ref anchoring, mapped scopes, incomplete-pair exclusion, verum_exact metrics with per-document negative-set false positives, published_comparable settings and input limits, generation publication, CLI pipeline |
 | 61 | `evaluation-eyecite` | `evaluation-eyecite.test.mjs` | 60 | Eyecite conformance spike: bounded corpus and span validation, strict citation/group/cluster comparison, fixed adapter allowlist, package-pin and resolution-state handling, optional real extraction only for exact pinned installs, portable CLI and atomic-generator guards |
+| 62 | `legal-citations` | `legal-citations.test.mjs` | 78 | Neutral citation occurrence core: registry and helper validation, exact spans and IDs, immediate-predecessor Id./exact-caption supra resolution, empty pack selection, envelope validity, engine flag on/off integration, exact failure identity and failed-page coverage |
+| 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 98 | ZA pack fixtures: neutral/reported/docket/SAFLII forms and boundaries, multiword supra, pinpoints, captions, negatives and neutrality, verbatim round-trips, byte-identical replay |
 
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete registry.

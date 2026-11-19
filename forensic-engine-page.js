@@ -8938,6 +8938,36 @@ var VOAnalysisConfig = (typeof globalThis !== 'undefined' && globalThis.VOAnalys
   ? globalThis.VOAnalysisConfig
   : (typeof require === 'function' ? require('./analysis-config.js') : null);
 
+async function voCitationInputSha512(pages) {
+  var normalized = pages.map(function (page, index) {
+    return {
+      extraction: { kind: page.extraction.kind },
+      page: index + 1,
+      text: page.text
+    };
+  });
+  var serialized = JSON.stringify(normalized);
+  var bytes = new TextEncoder().encode(serialized);
+  var cryptoApi = typeof globalThis !== 'undefined' ? globalThis.crypto : null;
+  if (cryptoApi && cryptoApi.subtle) {
+    var digest = await cryptoApi.subtle.digest('SHA-512', bytes);
+    var cryptoHash = Array.prototype.map.call(new Uint8Array(digest), function (byte) {
+      return byte.toString(16).padStart(2, '0');
+    }).join('');
+    if (/^[0-9a-f]{128}$/.test(cryptoHash) && cryptoHash !== '0'.repeat(128)) return cryptoHash;
+  }
+  if (typeof require === 'function') {
+    var nodeHash = require('crypto').createHash('sha512').update(bytes).digest('hex');
+    if (/^[0-9a-f]{128}$/.test(nodeHash) && nodeHash !== '0'.repeat(128)) return nodeHash;
+  }
+  var contracts = typeof globalThis !== 'undefined' ? globalThis.VOAnalysisContracts : null;
+  if (contracts && typeof contracts.sha512Hex === 'function') {
+    var contractHash = contracts.sha512Hex(serialized);
+    if (/^[0-9a-f]{128}$/.test(contractHash) && contractHash !== '0'.repeat(128)) return contractHash;
+  }
+  throw new Error('SHA-512 is unavailable for citation module input identity');
+}
+
 async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   if (!VOAnalysisConfig) throw new Error('analysis-config.js must load before the forensic engine');
   opts = VOAnalysisConfig.withAnalysisDefaults(opts);
@@ -8947,6 +8977,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   var textBlocks = [];
   var extractionNote = 'Per-page PDF content-stream decoding with ToUnicode CMaps.';
   var _ocrPages = [], _ocrConfidence = null, _imageOnlyPages = [], _ocrRan = false;
+  var _wholeDocumentFallback = false;
   try {
     var pages = pdfDoc.getPages();
     for (var i = 0; i < pages.length; i++) {
@@ -9007,6 +9038,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     }
   } catch(e) {
     // Fallback: treat entire document as one block
+    _wholeDocumentFallback = true;
     extractionNote = 'FALLBACK: per-page text extraction failed (' + (e && e.message ? e.message : 'unknown error') + '); whole-document raw stream scan used. Page anchors may be degraded.';
     var allTexts = await extractPdfText(pdfBytes);
     textBlocks = [allTexts.join(' ')];
@@ -9051,6 +9083,94 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   if (_mdPages.length) {
     var _mdList = _mdPages.length > 12 ? _mdPages.slice(0, 12).join(', ') + ', … (' + _mdPages.length + ' in total)' : _mdPages.join(', ');
     extractionNote += ' Markdown-formatted analysis: ' + _mdPages.length + ' page(s) (' + _mdList + ') carry chat-style markdown markup ("**" bold marks) and read as a rendered AI or chat analysis, not the record; their claims are treated as a secondary source and any observation resting only on them is a lead, never a finding.';
+  }
+
+  // Phase 2 (B7 legal mapping): the citations module. When the caller enables
+  // the flag, the neutral occurrence core (legal-citations.js) runs over the
+  // final page texts — after any OCR rescue, so each anchor carries the page's
+  // extraction provenance — behind the explicit jurisdiction packs the caller
+  // selected (never inferred from IP, device region or locale). Extraction is
+  // an observation, never a contradiction: the envelope's findings array is
+  // always empty and nothing here feeds the detector pipeline. A module
+  // failure is disclosed in its envelope and never stops detection.
+  var _citationModule = null;
+  if (opts.modules.citations === true) {
+    var _LC = null, _LP = null, _LCt = null;
+    var _citPages = [];
+    for (var cp = 0; cp < textBlocks.length; cp++) {
+      _citPages.push({
+        text: String(textBlocks[cp] || ''),
+        extraction: { kind: !_wholeDocumentFallback && _ocrPages.indexOf(cp + 1) !== -1 ? 'ocr' : 'pdf_text' }
+      });
+    }
+    var _citSpec = {
+      module_id: 'legal-citations',
+      module_version: '1.0.0',
+      implementation_digest: '0'.repeat(128),
+      status: 'failed',
+      input_sha512: null,
+      reference_time: opts.referenceTime || null,
+      configuration: { jurisdiction_packs: Array.isArray(opts.jurisdictionPacks) ? opts.jurisdictionPacks.slice() : [] },
+      dependencies: [],
+      coverage: {
+        units_total: textBlocks.length,
+        units_processed: 0,
+        units_skipped: [],
+        units_failed: textBlocks.map(function (_page, index) { return index + 1; })
+      }
+    };
+    try {
+      _citSpec.input_sha512 = await voCitationInputSha512(_citPages);
+      _LC = (typeof globalThis !== 'undefined' && globalThis.VOLegalCitations)
+        ? globalThis.VOLegalCitations
+        : (typeof require === 'function' ? require('./legal-citations.js') : null);
+      _LP = (typeof globalThis !== 'undefined' && globalThis.VOLegalPacks)
+        ? globalThis.VOLegalPacks
+        : (typeof require === 'function' ? require('./legal-packs.js') : null);
+      _LCt = (typeof globalThis !== 'undefined' && globalThis.VOAnalysisContracts)
+        ? globalThis.VOAnalysisContracts
+        : (typeof require === 'function' ? require('./analysis-contracts.js') : null);
+      if (!_LC || !_LP || !_LCt) throw new Error('legal-citations.js, legal-packs.js and analysis-contracts.js must load before the citations module runs');
+      _citSpec.module_version = _LC.MODULE_VERSION;
+      _citSpec.input_sha512 = _LCt.sha512Hex(_LCt.stableStringify(_LC.normalizePages(_citPages)));
+      if (typeof require === 'function' && !_LP.has('za')) require('./legal-packs/za.js');
+      _citationModule = _LC.runCitationModule(_citPages, {
+        packs: _LP.resolvePacks(opts.jurisdictionPacks.slice()),
+        referenceTime: opts.referenceTime || null
+      });
+    } catch (_citError) {
+      if (!/^[0-9a-f]{128}$/.test(_citSpec.input_sha512) || _citSpec.input_sha512 === '0'.repeat(128)) {
+        throw new Error('Citation module input identity could not be established');
+      }
+      var _citMessage = 'The citations module could not run: ' + String(_citError && _citError.message).slice(0, 200);
+      var _citFailure = _LCt
+        ? _LCt.createFailure('citation_module_error', _citMessage)
+        : { code: 'citation_module_error', message: _citMessage };
+      _citationModule = _LCt
+        ? _LCt.createFailureEnvelope(_citSpec, _citFailure)
+        : Object.freeze({
+          module_id: _citSpec.module_id,
+          module_version: _citSpec.module_version,
+          implementation_digest: _citSpec.implementation_digest,
+          status: 'failed',
+          input_sha512: _citSpec.input_sha512,
+          reference_time: _citSpec.reference_time,
+          configuration: Object.freeze({
+            jurisdiction_packs: Object.freeze(_citSpec.configuration.jurisdiction_packs.slice())
+          }),
+          dependencies: Object.freeze([]),
+          coverage: Object.freeze({
+            units_total: _citSpec.coverage.units_total,
+            units_processed: 0,
+            units_skipped: Object.freeze([]),
+            units_failed: Object.freeze(_citSpec.coverage.units_failed.slice())
+          }),
+          observations: Object.freeze([]),
+          findings: Object.freeze([]),
+          warnings: Object.freeze([]),
+          failure: Object.freeze(_citFailure)
+        });
+    }
   }
 
   // Batch 7a: the conduct ledger is extracted once over the final page texts
@@ -9531,7 +9651,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     dates: voExtractDates(_wfText)
   });
 
-  return {
+  var _result = {
     engineVersion: VO_ENGINE_VERSION,
     // The signed rule package this scan applied (version, key, canonical
     // SHA-512, counts) or null: built-in rules only.
@@ -9582,6 +9702,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
         'Re-submit a text-layer copy, or rely on the OCR-rescued pages disclosed in the extraction notes.'
       : generateSummary(allFindings, overallScore)
   };
+  // Phase 2 module envelopes, present only when the caller enabled the module;
+  // with every flag off this field is absent and the result is byte-identical
+  // to the pre-module output.
+  if (_citationModule) _result.moduleResults = { citations: _citationModule };
+  return _result;
 }
 
 function generateSummary(findings, score) {
