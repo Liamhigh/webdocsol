@@ -1,7 +1,7 @@
 // tests/evaluation-contradoc.test.mjs — PR 1.3 ContraDoc adapter + dual metrics (B9, development-only).
 // Synthetic fixtures only; the real dataset is never committed or required here.
 import { createRequire } from 'node:module';
-import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync, truncateSync, symlinkSync } from 'node:fs';
+import { mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync, existsSync, truncateSync, symlinkSync, mkdirSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 import { spawnSync } from 'node:child_process';
@@ -15,6 +15,7 @@ import {
   mapContraDocScope,
   mergeActualFindings,
   parseContraDocDataset,
+  writeAtomically,
   readBoundedHandle
 } from '../evaluation/contradoc/adapter.mjs';
 import { buildVerumExactSummary } from '../evaluation/contradoc/verum-exact-metrics.mjs';
@@ -501,5 +502,36 @@ ok(throws(() => yesVerify(['a candidate with no overlap at all here'], 'gold evi
 
 ok(CONTRADOC_DATASET.dataset_license === 'Apache-2.0' && CONTRADOC_DATASET.dataset_revision.includes('d1c42d1'),
   'the dataset identity records its pinned revision and license');
+
+// --- writeAtomically temp-file ownership (synthetic, no network) --------------
+// A failed write must never remove a temporary file this invocation did not
+// create: a concurrent writer's temp file in the same directory must survive.
+{
+  const scratch = mkdtempSync(path.join(tmpdir(), 'contradoc-atomic-'));
+  try {
+    const outputPath = path.join(scratch, 'out.json');
+    // A concurrent writer's temporary file, matching the temp-name shape.
+    const foreignTemp = path.join(scratch, '.out.json.999999.deadbeefdeadbeefdeadbeef.tmp');
+    writeFileSync(foreignTemp, 'another writer owns this');
+    // Force the rename step to fail by making the destination a non-empty directory.
+    mkdirSync(outputPath);
+    writeFileSync(path.join(outputPath, 'keep'), 'x');
+    let threw = false;
+    try {
+      await writeAtomically(outputPath, '{"a":1}');
+    } catch {
+      threw = true;
+    }
+    ok(threw, 'writeAtomically surfaces the underlying failure rather than swallowing it');
+    ok(existsSync(foreignTemp) && readFileSync(foreignTemp, 'utf8') === 'another writer owns this',
+      'a concurrent writer\'s temporary file is never unlinked during failed cleanup');
+    const leftoverTemps = readdirSync(scratch)
+      .filter((name) => name.endsWith('.tmp') && name !== path.basename(foreignTemp));
+    ok(leftoverTemps.length === 0,
+      'the temporary file this invocation created is removed, leaving no orphans');
+  } finally {
+    rmSync(scratch, { recursive: true, force: true });
+  }
+}
 
 done('evaluation-contradoc');

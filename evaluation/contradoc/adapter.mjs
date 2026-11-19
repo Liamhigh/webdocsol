@@ -4,7 +4,7 @@
 // Never imported by browser or production engine code; output content depends
 // only on the supplied data and options, with no sampling or external writes.
 
-import { createHash } from 'node:crypto';
+import { createHash, randomBytes } from 'node:crypto';
 import { mkdir, mkdtemp, open, readFile, realpath, rename, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
@@ -314,7 +314,7 @@ export function buildRunInput(manifestFields, cases) {
   return run;
 }
 
-export { shardCases };
+export { shardCases, writeAtomically };
 
 // --- CLI -----------------------------------------------------------------
 
@@ -333,25 +333,31 @@ async function writeAtomically(outputPath, serialized) {
   await mkdir(directory, { recursive: true });
   let handle;
   let temporaryPath;
+  let created = false;
   try {
     for (let attempt = 0; attempt < 100; attempt++) {
-      temporaryPath = path.join(directory, '.' + path.basename(outputPath) + '.' + process.pid + '.' + attempt + '.tmp');
+      const candidate = path.join(directory,
+        '.' + path.basename(outputPath) + '.' + process.pid + '.' + randomBytes(12).toString('hex') + '.tmp');
       try {
-        handle = await open(temporaryPath, 'wx');
+        handle = await open(candidate, 'wx');
+        temporaryPath = candidate;
+        created = true;
         break;
       } catch (error) {
         if (error.code !== 'EEXIST') throw error;
       }
     }
-    if (!handle) throw new Error('Could not allocate a temporary ContraDoc pointer file');
+    if (!created) throw new Error('Could not allocate a temporary ContraDoc output file');
     await handle.writeFile(serialized, 'utf8');
     await handle.sync();
     await handle.close();
     handle = null;
     await rename(temporaryPath, outputPath);
+    created = false;
   } catch (error) {
-    if (handle) await handle.close();
-    await unlink(temporaryPath).catch(() => {});
+    if (handle) await handle.close().catch(() => {});
+    // Only remove a temporary file this invocation actually created.
+    if (created) await unlink(temporaryPath).catch(() => {});
     throw error;
   }
 }

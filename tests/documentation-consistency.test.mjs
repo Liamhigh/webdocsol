@@ -40,8 +40,8 @@ ok(reportCounts && +reportCounts[1] === runList.length && +reportCounts[2] === c
 ok(findingsVersion && findingsVersion[1] === '1.11.0', 'production findings JSON remains at source-derived 1.11.0');
 ok(suiteCount === 60 && suiteRegistry.includes("'analysis-contracts.test.mjs'") && suiteRegistry.includes("'documentation-consistency.test.mjs'") && suiteRegistry.includes("'evaluation-metrics.test.mjs'") && suiteRegistry.includes("'evaluation-contractnli.test.mjs'") && suiteRegistry.includes("'evaluation-contradoc.test.mjs'"), 'all 60 Node suites are explicitly registered');
 const testsGuide = read('tests/README.md');
-ok(testsGuide.includes('| 58 | `evaluation-metrics` | `evaluation-metrics.test.mjs` | 111 |') &&
-   testsGuide.includes('| 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 98 |'),
+ok(testsGuide.includes('| 58 | `evaluation-metrics` | `evaluation-metrics.test.mjs` | 116 |') &&
+   testsGuide.includes('| 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 |'),
 'test guidance records actual assertions without changing the verified 60-suite registry count');
 
 const readme = read('README.md');
