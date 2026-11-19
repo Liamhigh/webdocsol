@@ -53,7 +53,7 @@ export function buildEvaluationReport(run, evaluation) {
   const actual = included.reduce((sum, evaluationCase) => sum + evaluationCase.actual_findings.length, 0);
   return {
     report_type: 'verum_omnis_developer_evaluation',
-    report_version: '1.0.0',
+    report_version: '1.1.0',
     architectural_owner: 'B9',
     production_finding_effect: 'none',
     manifest: run.manifest,

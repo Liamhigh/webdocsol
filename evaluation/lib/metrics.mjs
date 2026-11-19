@@ -204,28 +204,34 @@ function resourceErrors(run) {
     const expected = Array.isArray(evaluationCase.expected_contradictions) ? evaluationCase.expected_contradictions : [];
     const actual = Array.isArray(evaluationCase.actual_findings) ? evaluationCase.actual_findings : [];
     let oversized = false;
+    const actualOversized = actual.length > EVALUATION_LIMITS.maxActualFindingsPerCase;
     if (expected.length > EVALUATION_LIMITS.maxExpectedContradictionsPerCase) {
       errors.push(caseId + ': too many expected contradictions');
       oversized = true;
     }
-    if (actual.length > EVALUATION_LIMITS.maxActualFindingsPerCase) {
+    if (actualOversized) {
       errors.push(caseId + ': too many actual findings');
       oversized = true;
-    }
-    for (const actualRecord of actual) {
-      if (isObject(actualRecord) && Array.isArray(actualRecord.anchors) && actualRecord.anchors.length > EVALUATION_LIMITS.maxAnchorsPerFinding) {
-        errors.push(caseId + ': too many actual anchors');
-        oversized = true;
+    } else {
+      let anchorLimitReported = false;
+      for (const actualRecord of actual) {
+        if (isObject(actualRecord) && Array.isArray(actualRecord.anchors) && actualRecord.anchors.length > EVALUATION_LIMITS.maxAnchorsPerFinding) {
+          if (!anchorLimitReported) errors.push(caseId + ': too many actual anchors');
+          anchorLimitReported = true;
+          oversized = true;
+        }
       }
     }
     if (oversized) continue;
     let candidatePairs = 0;
     let comparisons = 0;
+    let spanLimitReported = false;
     for (const expectedRecord of expected) {
       if (!isObject(expectedRecord)) continue;
       const spans = Array.isArray(expectedRecord.evidence_spans) ? expectedRecord.evidence_spans : [];
       if (spans.length > EVALUATION_LIMITS.maxEvidenceSpansPerContradiction) {
-        errors.push(caseId + ': too many expected evidence spans');
+        if (!spanLimitReported) errors.push(caseId + ': too many expected evidence spans');
+        spanLimitReported = true;
         continue;
       }
       for (const actualRecord of actual) {

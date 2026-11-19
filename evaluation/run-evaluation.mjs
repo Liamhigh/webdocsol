@@ -16,14 +16,20 @@ function usage() {
   process.exitCode = 2;
 }
 
-async function canonicalOutputPath(outputPath) {
+async function prepareOutput(outputPath) {
   const directory = path.dirname(outputPath);
   await mkdir(directory, { recursive: true });
+  // Resolve the parent once, then use that canonical directory for both the
+  // temporary file and rename. Retargeting a symlink in the original parent
+  // path after this check cannot redirect the write. Keep the original basename
+  // so an existing output symlink is replaced, rather than its target.
+  const canonicalDirectory = await realpath(directory);
+  const writePath = path.join(canonicalDirectory, path.basename(outputPath));
   try {
-    return await realpath(outputPath);
+    return { canonicalPath: await realpath(writePath), writePath };
   } catch (error) {
     if (error.code !== 'ENOENT') throw error;
-    return path.join(await realpath(directory), path.basename(outputPath));
+    return { canonicalPath: writePath, writePath };
   }
 }
 
@@ -72,8 +78,8 @@ if (!inputPath || args.length || (outputIndex !== -1 && !outputPath)) {
     const inputStat = await stat(resolvedInput);
     if (inputStat.size > EVALUATION_LIMITS.maxInputBytes) throw new Error('Evaluation input exceeds the 16 MiB corpus limit');
     const canonicalInput = await realpath(resolvedInput);
-    const canonicalOutput = resolvedOutput ? await canonicalOutputPath(resolvedOutput) : null;
-    if (canonicalOutput === canonicalInput) throw new Error('Evaluation output must not overwrite the input dataset');
+    const output = resolvedOutput ? await prepareOutput(resolvedOutput) : null;
+    if (output?.canonicalPath === canonicalInput) throw new Error('Evaluation output must not overwrite the input dataset');
     const inputBytes = await readFile(canonicalInput);
     if (inputBytes.byteLength > EVALUATION_LIMITS.maxInputBytes) throw new Error('Evaluation input exceeds the 16 MiB corpus limit');
     let inputText;
@@ -87,8 +93,8 @@ if (!inputPath || args.length || (outputIndex !== -1 && !outputPath)) {
     if (errors.length) throw new Error('Evaluation input validation failed:\n- ' + errors.join('\n- '));
     const report = buildEvaluationReport(run, evaluateCases(run.cases));
     const serialized = canonicalJson(report);
-    if (resolvedOutput) {
-      await writeAtomically(resolvedOutput, serialized);
+    if (output) {
+      await writeAtomically(output.writePath, serialized);
     } else {
       process.stdout.write(serialized);
     }
