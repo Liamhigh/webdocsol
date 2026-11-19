@@ -29,7 +29,7 @@ Last updated: **2026-11-19**.
 | 2 | ECTA note (PR 2.4) | — | **Blocked** (needs qualified legal review) |
 | 3 | Synthetic redaction boundary fixtures (PR 3.1) | #313 | Open (ready for review) |
 | 3 | Enhancement-plan status record | #314 | Open |
-| 4 | Bounded QPDF-WASM active-graph prototype (PR 4.1) | #316 | Open |
+| 4 | Bounded QPDF-WASM active-graph feasibility prototype (PR 4.1) | #316 | Open |
 | 4 | Incremental-revision chain scanner (PR 4.2) | — | Not started |
 | 5 | Allen temporal algebra (PR 5.1) | — | Not started |
 
@@ -106,16 +106,19 @@ as implemented and the test confirms it still fails closed. This encodes the bin
 [`ENGINE.md`](./ENGINE.md) §12.22: redaction or other filtering may affect generated descriptions
 only — never the record or verbatim evidence quotations.
 
-### Phase 4 — PDF graph and incremental-revision forensics · PR 4.1 open (#316); PR 4.2 not started
+### Phase 4 — PDF graph and incremental-revision forensics · PR 4.1 open (#316; feasibility prototype, not full acceptance); PR 4.2 not started
 
 The source plan defines two separate slices:
 
-- **PR 4.1 — QPDF/WASM active-graph prototype · Open (#316).** `modules.pdfGraph` is explicit and
+- **PR 4.1 — QPDF/WASM active-graph feasibility prototype · Open (#316), not full Phase 4.1 acceptance.** `modules.pdfGraph` is explicit and
   default-off. QPDF 12.2.0 runs in a disposable browser worker with an 8-MiB input cap, a 256-MiB
   Wasm memory maximum, a 2-MiB JSON-output cap, object/reference/traversal limits and a 15-second
   deadline. It returns only the PDF version and bounded page/object/reference/type counts; stream
   data, raw objects, metadata and findings never leave the worker. The observation describes the
-  active graph only. It does not expose or scan prior revisions.
+  active graph only. It does not expose or scan prior revisions. Input over the 8-MiB cap is rejected
+  before hashing or worker creation; the envelope's required 128-hex `input_sha512` is then an
+  all-zero sentinel, not a digest, and `failure.details` names `not_computed_input_over_limit` and
+  the exact `input_bytes`. In-bounds inputs retain their actual SHA-512 identity.
 - **PR 4.2 — revision-chain scanner · Not started.** A separate bounded scanner for incremental
   revision history; it must follow the original byte-level cross-reference chain and never rewrite
   source bytes. QPDF's writer is not a revision-history API.

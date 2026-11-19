@@ -13,6 +13,7 @@
   var MODULE_ID = 'pdf-active-graph';
   var MODULE_VERSION = '0.1.0';
   var QPDF_WASM_VERSION = '0.3.1';
+  var NOT_COMPUTED_INPUT_SHA512 = '0'.repeat(128);
   var LIMITS = Object.freeze({
     input_bytes: 8 * 1024 * 1024,
     output_bytes: 2 * 1024 * 1024,
@@ -148,7 +149,8 @@
   function makeEnvelope(inputHash, status, result) {
     var completed = status === 'completed';
     var failure = result && result.failure
-      ? Contracts.createFailure(result.failure.code, FAILURE_MESSAGES[result.failure.code] || FAILURE_MESSAGES.pdf_graph_worker_error)
+      ? Contracts.createFailure(result.failure.code, FAILURE_MESSAGES[result.failure.code] || FAILURE_MESSAGES.pdf_graph_worker_error,
+        result.failure.details)
       : null;
     if (!completed && status !== 'budget_exceeded') status = 'failed';
     if (!completed && !failure) {
@@ -198,12 +200,18 @@
   async function run(input, options) {
     options = options || {};
     var bytes = toBytes(input);
-    var inputHash = await inputDigest(bytes);
     if (bytes.byteLength > LIMITS.input_bytes) {
-      return makeEnvelope(inputHash, 'budget_exceeded', {
-        failure: { code: 'pdf_graph_input_limit' }
+      return makeEnvelope(NOT_COMPUTED_INPUT_SHA512, 'budget_exceeded', {
+        failure: {
+          code: 'pdf_graph_input_limit',
+          details: {
+            input_identity: 'not_computed_input_over_limit',
+            input_bytes: bytes.byteLength
+          }
+        }
       });
     }
+    var inputHash = await inputDigest(bytes);
     var WorkerCtor = options.Worker || (root && root.Worker);
     if (typeof WorkerCtor !== 'function' || !root || !root.location || typeof root.location.href !== 'string') {
       return makeEnvelope(inputHash, 'failed', {

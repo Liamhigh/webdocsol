@@ -153,15 +153,39 @@ globalThis.Worker = FakeWorker;
 try {
   const pdfBytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52]);
   const pdfDoc = { getPages() { throw new Error('synthetic raw-text fallback'); } };
-  const oversized = await Graph.run(new Uint8Array(Graph.LIMITS.input_bytes + 1));
-  ok(oversized.status === 'budget_exceeded' && oversized.failure.code === 'pdf_graph_input_limit' &&
-     workerCount === 0, 'input beyond the byte cap is rejected before starting a worker');
+  let digestCount = 0;
+  const subtle = globalThis.crypto.subtle;
+  const originalDigest = subtle.digest;
+  subtle.digest = function () {
+    digestCount++;
+    return originalDigest.apply(this, arguments);
+  };
+  let oversized;
+  try {
+    oversized = await Graph.run(new Uint8Array(Graph.LIMITS.input_bytes + 1));
+  } finally {
+    subtle.digest = originalDigest;
+  }
+  ok(oversized.status === 'budget_exceeded' && oversized.failure.code === 'pdf_graph_input_limit',
+    'input beyond the byte cap returns the input-limit budget failure');
+  ok(digestCount === 0 && workerCount === 0,
+    'input beyond the byte cap is rejected before digesting or creating a worker');
+  ok(Contracts.validateModuleEnvelope(oversized).valid &&
+     oversized.coverage.units_total === 1 && oversized.coverage.units_processed === 0 &&
+     oversized.coverage.units_failed.length === 1 && oversized.coverage.units_failed[0] === 'active_graph',
+    'pre-analysis input-limit rejection has valid failed-unit coverage');
+  ok(oversized.input_sha512 === '0'.repeat(128) &&
+     oversized.failure.details.input_identity === 'not_computed_input_over_limit' &&
+     oversized.failure.details.input_bytes === Graph.LIMITS.input_bytes + 1,
+    'pre-analysis input-limit rejection identifies the non-digest sentinel and exact byte count');
   const off = await Engine.runForensicEngine(pdfBytes, pdfDoc, null, {});
   ok(!('moduleResults' in off) && workerCount === 0, 'default-off configuration does not start the QPDF worker');
   const on = await Engine.runForensicEngine(pdfBytes, pdfDoc, null, { modules: { pdfGraph: true } });
   const envelope = on.moduleResults && on.moduleResults.pdfGraph;
   ok(envelope && Contracts.validateModuleEnvelope(envelope).valid && envelope.status === 'completed',
     'explicit opt-in returns a valid active-graph module envelope');
+  ok(envelope.input_sha512 === require('node:crypto').createHash('sha512').update(pdfBytes).digest('hex'),
+    'in-bounds active-graph envelopes retain the actual input SHA-512');
   ok(envelope.findings.length === 0 && envelope.observations[0].kind === 'active_graph_summary',
     'the QPDF adapter returns observations only and never findings');
   ok(Contracts.stableStringify(off.findings) === Contracts.stableStringify(on.findings),
