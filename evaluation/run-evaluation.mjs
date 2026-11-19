@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Development/CI only. This adapter is never imported by browser or production engine code.
 
-import { readFile, mkdir, open, rename, stat, unlink } from 'node:fs/promises';
+import { readFile, mkdir, open, realpath, rename, stat, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { EVALUATION_LIMITS } from './lib/span-alignment.mjs';
 import { evaluateCases, validateEvaluationRun } from './lib/metrics.mjs';
@@ -16,9 +16,25 @@ function usage() {
   process.exitCode = 2;
 }
 
-async function writeAtomically(outputPath, serialized) {
+async function prepareOutput(outputPath) {
   const directory = path.dirname(outputPath);
   await mkdir(directory, { recursive: true });
+  // Resolve the parent once, then use that canonical directory for both the
+  // temporary file and rename. Retargeting a symlink in the original parent
+  // path after this check cannot redirect the write. Keep the original basename
+  // so an existing output symlink is replaced, rather than its target.
+  const canonicalDirectory = await realpath(directory);
+  const writePath = path.join(canonicalDirectory, path.basename(outputPath));
+  try {
+    return { canonicalPath: await realpath(writePath), writePath };
+  } catch (error) {
+    if (error.code !== 'ENOENT') throw error;
+    return { canonicalPath: writePath, writePath };
+  }
+}
+
+async function writeAtomically(outputPath, serialized) {
+  const directory = path.dirname(outputPath);
   let handle;
   let temporaryPath;
   for (let attempt = 0; attempt < 100; attempt++) {
@@ -61,15 +77,24 @@ if (!inputPath || args.length || (outputIndex !== -1 && !outputPath)) {
     if (resolvedOutput === resolvedInput) throw new Error('Evaluation output must not overwrite the input dataset');
     const inputStat = await stat(resolvedInput);
     if (inputStat.size > EVALUATION_LIMITS.maxInputBytes) throw new Error('Evaluation input exceeds the 16 MiB corpus limit');
-    const inputBytes = await readFile(resolvedInput);
+    const canonicalInput = await realpath(resolvedInput);
+    const output = resolvedOutput ? await prepareOutput(resolvedOutput) : null;
+    if (output?.canonicalPath === canonicalInput) throw new Error('Evaluation output must not overwrite the input dataset');
+    const inputBytes = await readFile(canonicalInput);
     if (inputBytes.byteLength > EVALUATION_LIMITS.maxInputBytes) throw new Error('Evaluation input exceeds the 16 MiB corpus limit');
-    const run = JSON.parse(inputBytes.toString('utf8'));
+    let inputText;
+    try {
+      inputText = new TextDecoder('utf-8', { fatal: true }).decode(inputBytes);
+    } catch {
+      throw new Error('Evaluation input must be valid UTF-8');
+    }
+    const run = JSON.parse(inputText);
     const errors = validateEvaluationRun(run);
     if (errors.length) throw new Error('Evaluation input validation failed:\n- ' + errors.join('\n- '));
     const report = buildEvaluationReport(run, evaluateCases(run.cases));
     const serialized = canonicalJson(report);
-    if (resolvedOutput) {
-      await writeAtomically(resolvedOutput, serialized);
+    if (output) {
+      await writeAtomically(output.writePath, serialized);
     } else {
       process.stdout.write(serialized);
     }

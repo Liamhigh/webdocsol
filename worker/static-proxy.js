@@ -176,19 +176,47 @@ export async function serveFromAssets(request, env2) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 __name(serveFromAssets, "serveFromAssets");
+function normalizedSitePath(pathname) {
+  let path = pathname || "/";
+  for (let attempt = 0; attempt < 16; attempt++) {
+    let decoded;
+    try {
+      decoded = decodeURIComponent(path);
+    } catch {
+      return null;
+    }
+    if (/[\x00-\x1f\x7f\\]/.test(decoded)) return null;
+    const segments = [];
+    for (const segment of decoded.split("/")) {
+      if (!segment || segment === ".") continue;
+      if (segment === "..") segments.pop();
+      else segments.push(segment);
+    }
+    const normalized = "/" + segments.join("/") + (decoded.endsWith("/") && segments.length ? "/" : "");
+    if (normalized === path) return normalized;
+    path = normalized;
+  }
+  return null;
+}
+__name(normalizedSitePath, "normalizedSitePath");
 export async function serveSite(request, env2) {
-  const path = new URL(request.url).pathname;
-  if (SITE_DENY_RE.test(path)) {
+  const url = new URL(request.url);
+  const path = normalizedSitePath(url.pathname);
+  if (!path || SITE_DENY_RE.test(path)) {
     return new Response(JSON.stringify({ ok: false, error: "not_found", message: "Not a site file." }), {
       status: 404,
       headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" }
     });
   }
-  const fromAssets = await serveFromAssets(request, env2);
+  // Every downstream handler receives the same fully decoded, normalized path
+  // that passed the deny check; no later decoding can expose a denied file.
+  url.pathname = path;
+  const checkedRequest = new Request(url.toString(), request);
+  const fromAssets = await serveFromAssets(checkedRequest, env2);
   if (fromAssets) return fromAssets;
-  const fromRepo = await serveFromRepo(request);
+  const fromRepo = await serveFromRepo(checkedRequest);
   if (fromRepo) return fromRepo;
-  const res = await serveStatic(request);
+  const res = await serveStatic(checkedRequest);
   const headers = new Headers(res.headers);
   headers.set("X-VO-Site-Source", "pages");
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
