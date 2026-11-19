@@ -163,6 +163,7 @@ everything.
 | `package.json`, `package-lock.json` | No production dependencies; Playwright is development-only. `npm test` runs `tests/run-all.js`; `npm run check` syntax-checks the ten inlined scripts and three Worker files. Never served. |
 | `.gitignore` | Ignores `deployment.log`. |
 | `CLAUDE.md` | Pointer to `AGENTS.md` and the eight non-negotiables. Never served. |
+| `ENHANCEMENT-PLAN.md` | Status record for the multi-phase enhancement plan (§5). Never served (`*.md`). |
 | `constitution.json` | Machine-readable twin of `constitution.html` (v8.0). Served; pinned by `tests/constitution-lock.test.mjs`. |
 | `llms.txt` | Public guidance for AI crawlers. Served. It still names Constitution v6.0 FINAL as the canonical text; open with the founder. |
 | `robots.txt`, `sitemap.xml` | Crawler rules (every agent allowed; its header comment, like `llms.txt`, still names Constitution v6.0 FINAL) and the sitemap (nine URLs, including `preview-documents.html`). Served. |
@@ -197,6 +198,7 @@ history or make the repository private is open with the founder (AGENTS.md "Open
 | `AGENTS.md` | **Entry point for code assistants.** "Start here" is the two-minute state of the platform (what runs where, how a change ships, which repositories depend on this one, what is known-broken, what must never be done); then the stakes, the seven things most likely to be regressed, the founder rulings that must not be re-litigated, and how the Constitution's standing may be described. |
 | `CLAUDE.md` | The short pointer for AI agents: read `AGENTS.md` first, which document covers which area, and the eight non-negotiables. |
 | `README.md` | Project overview. |
+| `ENHANCEMENT-PLAN.md` | **Status record for the multi-phase forensic-capability enhancement plan** (Phases 0–5): what each slice is, its PR, and whether it is merged, open, blocked or not started. Update it whenever a slice moves. |
 | `tests/README.md` | How to run the suite, the `npm` aliases, and notes on which files the tests target. |
 | `worker/rule-format.md` | Wire format of signed rule packages and the manifest. |
 | `seal-module/SPEC.md` | The VO-DSS-1.2 sealing specification. |

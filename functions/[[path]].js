@@ -21,6 +21,21 @@ export const WORKER_ORIGIN = 'https://webdocsol.liamhigh78.workers.dev';
 export const CHAIN_HEADER = 'x-vo-chain';
 const HOP_BY_HOP = ['connection', 'keep-alive', 'transfer-encoding', 'upgrade', 'proxy-authenticate', 'proxy-authorization', 'te', 'trailer', 'host', 'content-length'];
 
+function isMarkdownRequest(request) {
+  let pathname;
+  try {
+    pathname = decodeURIComponent(new URL(request.url).pathname);
+  } catch {
+    return true;
+  }
+  return /(?:^|\/)[^/]*\.md$/i.test(pathname);
+}
+
+function fetchStaticAsset(request, assets) {
+  if (isMarkdownRequest(request)) return new Response('not found', { status: 404 });
+  return assets.fetch(request);
+}
+
 /** The same path and query on the Worker. */
 export function bridgeTarget(url, origin) {
   const u = new URL(url);
@@ -38,7 +53,7 @@ export async function bridge(request, env, fetchImpl) {
   const assets = env && env.ASSETS;
   if (request.headers.get(CHAIN_HEADER)) {
     // The Worker asking Pages for a file: static files only, no proxy (loop).
-    return assets ? assets.fetch(request) : new Response('not found', { status: 404 });
+    return assets ? fetchStaticAsset(request, assets) : new Response('not found', { status: 404 });
   }
   const origin = (env && env.VO_WORKER_ORIGIN) || WORKER_ORIGIN;
   const headers = new Headers(request.headers);
@@ -59,7 +74,7 @@ export async function bridge(request, env, fetchImpl) {
     // The Worker could not be reached: the static site still answers, and the
     // header says why the API is missing.
     if (!assets) return new Response('service unavailable', { status: 503, headers: { 'x-vo-bridge': 'worker-unreachable' } });
-    const fallback = await assets.fetch(request);
+    const fallback = await fetchStaticAsset(request, assets);
     const fh = new Headers(fallback.headers);
     fh.set('x-vo-bridge', 'worker-unreachable');
     return new Response(fallback.body, { status: fallback.status, statusText: fallback.statusText, headers: fh });
