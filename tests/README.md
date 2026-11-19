@@ -50,7 +50,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**61 registered suites**: the 55-suite audited baseline of 15 November 2026, the two Phase 0 suites, and the Phase 1 evaluation suites (`evaluation-metrics.test.mjs`, `evaluation-contractnli.test.mjs`, `evaluation-contradoc.test.mjs`, `evaluation-eyecite.test.mjs`). `run-all.js` is the
+**63 registered suites**: the 55-suite audited baseline of 15 November 2026, the two Phase 0 suites, four Phase 1 evaluation suites (`evaluation-metrics.test.mjs`, `evaluation-contractnli.test.mjs`, `evaluation-contradoc.test.mjs`, `evaluation-eyecite.test.mjs`), and two Phase 2 citation suites. `run-all.js` is the
 registry — **a test file that is not listed in it does not run**, so register every new file
 there. What each suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
@@ -100,8 +100,8 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 59 | `evaluation-contractnli` | `evaluation-contractnli.test.mjs` | 92 | ContractNLI adapter: pinned release/hashes, UTF-16 spans, conservative mapping, provenance and input safety, annotations, collision-free IDs, bounded shards, generation publication, zip integrity, CLI pipeline |
 | 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 | ContraDoc adapter and dual metrics: verbatim evidence/ref anchoring, mapped scopes, incomplete-pair exclusion, verum_exact metrics with per-document negative-set false positives, published_comparable settings and input limits, generation publication, CLI pipeline |
 | 61 | `evaluation-eyecite` | `evaluation-eyecite.test.mjs` | 60 | Eyecite conformance spike: bounded corpus and span validation, strict citation/group/cluster comparison, fixed adapter allowlist, package-pin and resolution-state handling, optional real extraction only for exact pinned installs, portable CLI and atomic-generator guards |
-| 62 | `legal-citations` | `legal-citations.test.mjs` | 43 | Neutral citation occurrence core: pack registry, exact spans, id./supra resolution states, module envelope, engine flag on/off integration, failure disclosure |
-| 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 84 | ZA pack fixtures: neutral/reported/docket/SAFLII forms, pinpoints, captions, negatives and neutrality, verbatim round-trips, byte-identical replay |
+| 62 | `legal-citations` | `legal-citations.test.mjs` | 78 | Neutral citation occurrence core: registry and helper validation, exact spans and IDs, immediate-predecessor Id./exact-caption supra resolution, empty pack selection, envelope validity, engine flag on/off integration, exact failure identity and failed-page coverage |
+| 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 98 | ZA pack fixtures: neutral/reported/docket/SAFLII forms and boundaries, multiword supra, pinpoints, captions, negatives and neutrality, verbatim round-trips, byte-identical replay |
 
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete registry.

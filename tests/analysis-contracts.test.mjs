@@ -167,6 +167,14 @@ ok(C.stableStringify({ z: 1, a: { z: 2, a: 3 } }) === '{"a":{"a":3,"z":2},"z":1}
 
 const defaults = Config.selectedConfiguration();
 ok(Config.MODULE_NAMES.every((name) => defaults.modules[name] === false), 'every new module flag defaults to false');
+ok(Object.keys(Config.IMPLEMENTED_MODULES).filter((name) => Config.IMPLEMENTED_MODULES[name]).join(',') === 'citations',
+  'citations is exactly the enabled analysis module');
+ok(Config.selectedConfiguration({ modules: { citations: true } }).modules.citations === true,
+  'the implemented citations module flag is accepted');
+for (const name of Config.MODULE_NAMES.filter((moduleName) => moduleName !== 'citations')) {
+  ok(throws(() => Config.selectedConfiguration({ modules: { [name]: true } })),
+    'every module other than citations remains rejected: ' + name);
+}
 ok(defaults.jurisdictionPacks.join(',') === 'za' && defaults.reference_time === undefined, 'default replay configuration is explicit');
 ok(defaults.referenceTime === null && Object.isFrozen(defaults.modules), 'reference time defaults to null and configuration is frozen');
 ok(throws(() => Config.selectedConfiguration({ modules: { unknown: true } })), 'unknown module flag fails closed');

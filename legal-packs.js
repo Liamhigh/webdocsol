@@ -23,7 +23,7 @@
     return prototype === Object.prototype || prototype === null;
   }
 
-  var packs = {};
+  var packs = Object.create(null);
 
   function validateRule(packId, rule) {
     if (!isPlainRecord(rule)) throw new TypeError(packId + ': every rule must be a plain object');
@@ -50,10 +50,16 @@
     }
     if (typeof pack.version !== 'string' || !pack.version) throw new TypeError(pack.id + ': version is required');
     if (!Array.isArray(pack.rules) || !pack.rules.length) throw new TypeError(pack.id + ': rules must be a non-empty array');
-    var seen = {};
+    if (typeof pack.helpers !== 'undefined' &&
+      (!Array.isArray(pack.helpers) || pack.helpers.some(function (helper) { return typeof helper !== 'function'; }))) {
+      throw new TypeError(pack.id + ': helpers must be an array of functions');
+    }
+    var seen = Object.create(null);
     pack.rules.forEach(function (rule) {
       validateRule(pack.id, rule);
-      if (seen[rule.rule_id]) throw new TypeError(pack.id + ': duplicate rule_id ' + rule.rule_id);
+      if (Object.prototype.hasOwnProperty.call(seen, rule.rule_id)) {
+        throw new TypeError(pack.id + ': duplicate rule_id ' + rule.rule_id);
+      }
       seen[rule.rule_id] = true;
     });
     return pack;
@@ -71,7 +77,9 @@
 
   function register(pack) {
     validatePack(pack);
-    if (packs[pack.id]) throw new Error('Jurisdiction pack already registered: ' + pack.id);
+    if (Object.prototype.hasOwnProperty.call(packs, pack.id)) {
+      throw new Error('Jurisdiction pack already registered: ' + pack.id);
+    }
     packs[pack.id] = deepFreeze(pack);
     return packs[pack.id];
   }

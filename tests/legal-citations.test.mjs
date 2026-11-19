@@ -2,6 +2,7 @@
 // registry, resolution, envelope and engine integration (Phase 2 PR 2.2).
 import { createRequire } from 'node:module';
 import { readFileSync } from 'node:fs';
+import vm from 'node:vm';
 import path from 'node:path';
 
 const require = createRequire(import.meta.url);
@@ -26,9 +27,10 @@ const xxPack = {
   version: '1.0.0',
   rules: [
     syntheticRule('xx-full-case', 'full_case', /\b(\d{3}) (XXR) (\d+)\b/g,
-      (m, context) => ({ volume: m[1], reporter: m[2], page: m[3], caption: context.text.slice(0, m.index).trim().split(/\s+/).pop() || null })),
+      (m, context) => ({ volume: m[1], reporter: m[2], page: m[3], caption: context.captureCaption(context.text, m.index) })),
     syntheticRule('xx-id', 'id', /\bId\./g, () => ({})),
-    syntheticRule('xx-supra', 'supra', /\b([A-Z][a-z]+), supra\b/g, (m) => ({ name_guess: m[1] }))
+    syntheticRule('xx-supra', 'supra', /\b([A-Z][A-Za-z'.-]*(?:\s+[A-Z][A-Za-z'.-]*){0,7}), supra\b/g, (m) => ({ name_guess: m[1] })),
+    syntheticRule('xx-docket', 'docket', /\bCCT\s?\d{1,3}\s?\/\s?\d{2,4}\b/g, () => ({}))
   ]
 };
 
@@ -47,6 +49,24 @@ throws(() => Packs.register({ id: 'yy', version: '1', rules: [syntheticRule('yy-
 ok(true, 'a sticky pattern is rejected at registration');
 throws(() => Packs.register({ id: 'yy', version: '1', rules: [syntheticRule('yy-kind', 'unsupported', /x/g)] }));
 ok(true, 'an unsupported citation kind is rejected at registration');
+throws(() => Packs.validatePack({
+  id: 'yy', version: '1',
+  rules: [syntheticRule('constructor', 'id', /x/g), syntheticRule('constructor', 'id', /y/g)]
+}));
+ok(true, 'duplicate rule id constructor is rejected without a prototype collision');
+ok(noThrow(() => Packs.validatePack({
+  id: 'yy', version: '1', helpers: [() => null],
+  rules: [syntheticRule('yy-helper', 'id', /x/g)]
+})), 'an optional helper array of functions is accepted');
+throws(() => Packs.validatePack({
+  id: 'yy', version: '1', helpers: {},
+  rules: [syntheticRule('yy-helper', 'id', /x/g)]
+}));
+throws(() => Packs.validatePack({
+  id: 'yy', version: '1', helpers: [null],
+  rules: [syntheticRule('yy-helper', 'id', /x/g)]
+}));
+ok(true, 'non-array and non-function pack helpers are rejected');
 ok(noThrow(() => Packs.validatePack({
   id: 'yy', version: '1',
   rules: [syntheticRule('yy-named', 'id', /(?<number>\d+)/g)]
@@ -80,27 +100,42 @@ ok(Packs.resolvePacks(['xx'])[0] === xxPack, 'resolvePacks preserves explicit or
 // --- core: short-form resolution ----------------------------------------------------
 
 {
-  const idText = 'Foo 100 XXR 200. Bar 555 XXR 777. Id. applies.';
+  const idText = 'Foo v Alpha, 100 XXR 200. Bar v Beta, 555 XXR 777. Id. applies.';
   const idRun = Citations.runCitationModule([idText], { packs: [xxPack], referenceTime: '2026-11-15T00:00:00Z' });
   const idOcc = idRun.observations.find((o) => o.kind === 'id');
   const nearest = idRun.observations.find((o) => o.kind === 'full_case' && o.components.volume === '555');
   ok(idOcc.resolution.state === 'resolved' && idOcc.resolution.antecedent_occurrence_id === nearest.occurrence_id,
     'id. binds to the nearest preceding case citation');
 
-  const ambiguousText = 'Foo 100 XXR 200. Foo 555 XXR 777. Later Foo, supra governs.';
+  const ambiguousText = 'Foo v One, 100 XXR 200. Foo v Two, 555 XXR 777. Foo, supra governs.';
   const ambiguousRun = Citations.runCitationModule([ambiguousText], { packs: [xxPack] });
   const ambiguousSupra = ambiguousRun.observations.find((o) => o.kind === 'supra');
   ok(ambiguousSupra.resolution.state === 'ambiguous' && ambiguousSupra.resolution.candidates === 2,
     'a supra name guess shared by two cases is ambiguous, never fuzzy-picked');
 
-  const distinctText = 'Foo 100 XXR 200. Bar 555 XXR 777. Later Bar, supra governs.';
-  const distinctRun = Citations.runCitationModule([distinctText], { packs: [xxPack] });
+  const distinctText = ['Foo v Alpha, 100 XXR 200.', 'Bar v Beta, 555 XXR 777. Bar, supra governs.'];
+  const distinctRun = Citations.runCitationModule(distinctText, { packs: [xxPack] });
   const distinctSupra = distinctRun.observations.find((o) => o.kind === 'supra');
-  const barCase = distinctRun.observations.find((o) => o.kind === 'full_case' && o.components.caption === 'Bar');
+  const barCase = distinctRun.observations.find((o) => o.kind === 'full_case' && o.components.volume === '555');
   ok(distinctSupra.resolution.state === 'resolved' && distinctSupra.resolution.antecedent_occurrence_id === barCase.occurrence_id,
     'a supra with one matching caption resolves to that antecedent');
   ok(ambiguousRun.observations.every((o) => o.resolution === null || ['resolved', 'ambiguous', 'unresolved'].includes(o.resolution.state)),
     'resolution states are explicit');
+
+  const multiword = Citations.runCitationModule([
+    'North Shore Holdings v Coastal Group, 100 XXR 200. North Shore Holdings, supra applies.'
+  ], { packs: [xxPack] });
+  const multiwordSupra = multiword.observations.find((o) => o.kind === 'supra');
+  const multiwordCase = multiword.observations.find((o) => o.kind === 'full_case');
+  ok(multiwordSupra.resolution.state === 'resolved' &&
+     multiwordSupra.resolution.antecedent_occurrence_id === multiwordCase.occurrence_id,
+    'a supra resolves by exact normalized multiword first-party caption');
+
+  const interveningDocket = Citations.runCitationModule([
+    'Foo v Bar, 100 XXR 200. CCT 12/24. Id. follows.'
+  ], { packs: [xxPack] });
+  ok(interveningDocket.observations.find((o) => o.kind === 'id').resolution.state === 'unresolved',
+    'id. does not skip an intervening docket to bind an older case');
 }
 
 {
@@ -127,13 +162,21 @@ ok(Packs.resolvePacks(['xx'])[0] === xxPack, 'resolvePacks preserves explicit or
     'two runs over identical input produce byte-identical canonical envelopes');
   ok(envelope.observations[0].occurrence_id.startsWith('vo1|'),
     'occurrence ids are deterministic vo1 digests');
-  throws(() => Citations.runCitationModule(['x'], { packs: [] }));
-  ok(true, 'running without explicit packs fails closed');
+  const emptySelection = Citations.runCitationModule(['100 XXR 200.', ''], { packs: [] });
+  ok(emptySelection.status === 'completed' && emptySelection.observations.length === 0 &&
+     emptySelection.coverage.units_total === 2 && emptySelection.coverage.units_processed === 2 &&
+     Contracts.validateModuleEnvelope(emptySelection).valid,
+    'an explicit empty pack selection completes with valid zero-observation coverage');
+  throws(() => Citations.runCitationModule(['x'], {}));
+  throws(() => Citations.runCitationModule(['x'], { packs: null }));
+  ok(true, 'missing or non-array pack selection fails closed');
   const repeatedPack = Citations.runCitationModule(['100 XXR 200.'], { packs: [xxPack, xxPack] });
   const singlePack = Citations.runCitationModule(['100 XXR 200.'], { packs: [xxPack] });
   ok(repeatedPack.observations.length === 1 &&
      repeatedPack.observations[0].occurrence_id === singlePack.observations[0].occurrence_id,
     'repeating the same selected pack does not duplicate its occurrences or IDs');
+  throws(() => Citations.runCitationModule(['100 XXR 200.'], { packs: [xxPack, { ...xxPack }] }));
+  ok(true, 'a distinct object with an identical same-id implementation is rejected');
   const secondPack = {
     id: 'xy',
     version: '1.0.0',
@@ -162,6 +205,24 @@ ok(Packs.resolvePacks(['xx'])[0] === xxPack, 'resolvePacks preserves explicit or
   const changedExtractor = Citations.runCitationModule(['100 XXR 200.'], { packs: [changedExtractorPack] });
   ok(changedExtractor.implementation_digest !== singlePack.implementation_digest,
     'the implementation digest changes when an extraction function changes');
+  const changedHelperPack = {
+    ...xxPack,
+    helpers: [function optionalHelper() { return null; }]
+  };
+  ok(Citations.implementationDigest([changedHelperPack]) !== Citations.implementationDigest([xxPack]),
+    'the implementation digest includes declared pack helper source');
+  const anotherHelperPack = {
+    ...xxPack,
+    helpers: [function optionalHelper() { return true; }]
+  };
+  ok(Citations.implementationDigest([changedHelperPack]) !== Citations.implementationDigest([anotherHelperPack]),
+    'different declared helper implementations produce different digests');
+  const repeatedCitations = Citations.runCitationModule(['100 XXR 200. 100 XXR 200.'], { packs: [xxPack] });
+  const repeatedCitationsAgain = Citations.runCitationModule(['100 XXR 200. 100 XXR 200.'], { packs: [xxPack] });
+  ok(repeatedCitations.observations[0].occurrence_id !== repeatedCitations.observations[1].occurrence_id &&
+     repeatedCitations.observations.map((o) => o.occurrence_id).join(',') ===
+       repeatedCitationsAgain.observations.map((o) => o.occurrence_id).join(','),
+    'same-pack occurrences at distinct spans have distinct stable IDs');
 }
 
 // --- engine integration --------------------------------------------------------------
@@ -271,11 +332,30 @@ ok(Packs.resolvePacks(['xx'])[0] === xxPack, 'resolvePacks preserves explicit or
   const savedGlobals = {
     contracts: globalThis.VOAnalysisContracts,
     packs: globalThis.VOLegalPacks,
-    citations: globalThis.VOLegalCitations
+    citations: globalThis.VOLegalCitations,
+    pdfLib: globalThis.PDFLib
   };
-  const previousText = globalThis.extractPdfText;
-  globalThis.extractPdfText = async () => ['A text block with enough words to reach the citations module safely.'];
-  const doc = { getPages() { throw new Error('synthetic raw-text fallback'); } };
+  class TestPDFRawStream {
+    constructor(content) { this.content = content; }
+  }
+  globalThis.PDFLib = {
+    PDFName: { of: (name) => name },
+    PDFArray: function PDFArray() {},
+    PDFRawStream: TestPDFRawStream,
+    decodePDFRawStream: (stream) => ({ decode: () => new TextEncoder().encode(stream.content) })
+  };
+  const failurePages = [
+    'Page one synthetic citation module text has enough words for a stable failure hash.',
+    'Page two synthetic citation module text has enough words for a stable failure hash.'
+  ];
+  const doc = {
+    getPages() {
+      return failurePages.map((text) => ({
+        node: { get: (name) => name === 'Contents' ? new TestPDFRawStream('(' + text + ') Tj') : null }
+      }));
+    },
+    context: { lookup: (value) => value }
+  };
   const bytes = new Uint8Array([37, 80, 68, 70, 45, 49, 46, 52]);
   try {
     for (const failedRequest of ['./legal-citations.js', './analysis-contracts.js']) {
@@ -294,6 +374,10 @@ ok(Packs.resolvePacks(['xx'])[0] === xxPack, 'resolvePacks preserves explicit or
         failedRequest + ' load failure is disclosed without aborting the scan');
       ok(/^[0-9a-f]{128}$/.test(failure.input_sha512) && failure.input_sha512 !== '0'.repeat(128),
         failedRequest + ' failure envelope identifies the analyzed page text');
+      ok(failure.input_sha512 === Contracts.sha512Hex(Contracts.stableStringify(Citations.normalizePages(failurePages))),
+        failedRequest + ' failure digest hashes the exact normalized per-page text');
+      ok(failure.coverage.units_total === 2 && failure.coverage.units_failed.join(',') === '1,2',
+        failedRequest + ' failure coverage enumerates every 1-based page before dependency loading');
       ok(Contracts.validateModuleEnvelope(failure).valid,
         failedRequest + ' failure result still satisfies the module-envelope contract');
       ok(Object.isFrozen(failure) && Object.isFrozen(failure.coverage.units_failed),
@@ -301,15 +385,44 @@ ok(Packs.resolvePacks(['xx'])[0] === xxPack, 'resolvePacks preserves explicit or
     }
   } finally {
     Module._load = originalLoad;
-    if (typeof previousText === 'undefined') delete globalThis.extractPdfText;
-    else globalThis.extractPdfText = previousText;
     if (typeof savedGlobals.contracts === 'undefined') delete globalThis.VOAnalysisContracts;
     else globalThis.VOAnalysisContracts = savedGlobals.contracts;
     if (typeof savedGlobals.packs === 'undefined') delete globalThis.VOLegalPacks;
     else globalThis.VOLegalPacks = savedGlobals.packs;
     if (typeof savedGlobals.citations === 'undefined') delete globalThis.VOLegalCitations;
     else globalThis.VOLegalCitations = savedGlobals.citations;
+    if (typeof savedGlobals.pdfLib === 'undefined') delete globalThis.PDFLib;
+    else globalThis.PDFLib = savedGlobals.pdfLib;
   }
+}
+
+{
+  const engineSource = readFileSync(path.join(root, 'forensic-engine-page.js'), 'utf8');
+  const functionSource = engineSource.match(/async function voCitationInputSha512\(pages\) \{[\s\S]*?\n\}/);
+  ok(Boolean(functionSource), 'the engine exposes its page-input digest helper for the browser fallback check');
+  let receivedSerialization = null;
+  const serialized = JSON.stringify([{
+    extraction: { kind: 'pdf_text' },
+    page: 1,
+    text: 'Browser-context citation hash fallback.'
+  }]);
+  const browserContext = {
+    TextEncoder,
+    crypto: undefined,
+    require: undefined,
+    VOAnalysisContracts: {
+      sha512Hex(value) {
+        receivedSerialization = value;
+        return Contracts.sha512Hex(value);
+      }
+    }
+  };
+  const hash = await vm.runInNewContext(
+    functionSource[0] + '\nvoCitationInputSha512([{ text: "Browser-context citation hash fallback.", extraction: { kind: "pdf_text" } }])',
+    browserContext
+  );
+  ok(hash === Contracts.sha512Hex(serialized) && receivedSerialization === serialized,
+    'without Web Crypto or CommonJS, the browser fallback hashes the exact serialized normalized pages');
 }
 
 // --- static guards over the new production sources --------------------------------------

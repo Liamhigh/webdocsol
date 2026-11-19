@@ -94,6 +94,13 @@
     return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
+  function captionAntecedentName(caption) {
+    if (typeof caption !== 'string') return null;
+    var separator = /\s+v\.?\s+/i.exec(caption);
+    if (!separator) return null;
+    return normalizeName(caption.slice(0, separator.index)) || null;
+  }
+
   function extractOccurrences(pages, packs) {
     var occurrences = [];
     for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) {
@@ -147,6 +154,7 @@
     return {
       id: pack.id,
       version: pack.version,
+      helpers: Array.isArray(pack.helpers) ? pack.helpers.map(String) : [],
       rules: pack.rules.map(function (rule) {
         return {
           rule_id: rule.rule_id,
@@ -164,9 +172,8 @@
     var unique = [];
     for (var index = 0; index < packs.length; index++) {
       var pack = validatePack(packs[index]);
-      var prior = byId[pack.id];
-      if (prior) {
-        if (Contracts.stableStringify(packImplementation(prior)) !== Contracts.stableStringify(packImplementation(pack))) {
+      if (Object.prototype.hasOwnProperty.call(byId, pack.id)) {
+        if (byId[pack.id] !== pack) {
           throw new TypeError('Conflicting versions or implementations for jurisdiction pack ' + pack.id);
         }
         continue;
@@ -194,32 +201,23 @@
     }
   }
 
-  /* id./supra resolution by document order. Never a fuzzy score: id. binds to
-   * the nearest preceding case citation; supra binds to the nearest preceding
-   * case citation whose caption matches its name guess. More than one
-   * remaining antecedent is ambiguous; none is unresolved. */
+  /* id./supra resolution by document order. Never a fuzzy score: id. binds
+   * only to the immediately preceding citation observation when it is a case;
+   * supra binds to preceding cases with an exactly matching first-party
+   * caption. More than one antecedent is ambiguous; none is unresolved. */
   function resolveShortForms(occurrences) {
+    var captions = Object.create(null);
+    var previous = null;
     for (var index = 0; index < occurrences.length; index++) {
       var occurrence = occurrences[index];
       if (occurrence.kind === 'id') {
-        var antecedent = null;
-        for (var back = index - 1; back >= 0; back--) {
-          if (CASE_KINDS.indexOf(occurrences[back].kind) !== -1) { antecedent = occurrences[back]; break; }
-        }
+        var antecedent = previous && CASE_KINDS.indexOf(previous.kind) !== -1 ? previous : null;
         occurrence.resolution = antecedent
           ? { state: 'resolved', antecedent_occurrence_id: antecedent.occurrence_id, candidates: 1 }
           : { state: 'unresolved', antecedent_occurrence_id: null, candidates: 0 };
       } else if (occurrence.kind === 'supra') {
         var guess = normalizeName(occurrence.components && occurrence.components.name_guess);
-        var candidates = [];
-        if (guess) {
-          for (var back2 = index - 1; back2 >= 0; back2--) {
-            var candidate = occurrences[back2];
-            if (CASE_KINDS.indexOf(candidate.kind) === -1) continue;
-            var caption = normalizeName(candidate.components && candidate.components.caption);
-            if (caption && caption.indexOf(guess) !== -1) candidates.push(candidate.occurrence_id);
-          }
-        }
+        var candidates = guess && Object.prototype.hasOwnProperty.call(captions, guess) ? captions[guess] : [];
         if (candidates.length === 1) {
           occurrence.resolution = { state: 'resolved', antecedent_occurrence_id: candidates[0], candidates: 1 };
         } else if (candidates.length > 1) {
@@ -228,6 +226,14 @@
           occurrence.resolution = { state: 'unresolved', antecedent_occurrence_id: null, candidates: 0 };
         }
       }
+      if (CASE_KINDS.indexOf(occurrence.kind) !== -1) {
+        var captionName = captionAntecedentName(occurrence.components && occurrence.components.caption);
+        if (captionName) {
+          if (!Object.prototype.hasOwnProperty.call(captions, captionName)) captions[captionName] = [];
+          captions[captionName].push(occurrence.occurrence_id);
+        }
+      }
+      previous = occurrence;
     }
   }
 
@@ -235,6 +241,15 @@
     return Contracts.sha512Hex(Contracts.stableStringify({
       module: MODULE_ID,
       version: MODULE_VERSION,
+      core: {
+        normalizePages: String(normalizePages),
+        captureCaption: String(captureCaption),
+        normalizeName: String(normalizeName),
+        captionAntecedentName: String(captionAntecedentName),
+        extractOccurrences: String(extractOccurrences),
+        assignOccurrenceIds: String(assignOccurrenceIds),
+        resolveShortForms: String(resolveShortForms)
+      },
       packs: packs.map(packImplementation)
     }));
   }
@@ -244,7 +259,7 @@
   function runCitationModule(pages, opts) {
     opts = opts || {};
     var selectedPacks = opts.packs;
-    if (!Array.isArray(selectedPacks) || !selectedPacks.length) throw new TypeError('runCitationModule needs explicit jurisdiction pack objects');
+    if (!Array.isArray(selectedPacks)) throw new TypeError('runCitationModule needs an explicit jurisdiction pack array');
     var packs = uniquePacks(selectedPacks);
     var normalized = normalizePages(pages);
     var inputSha512 = Contracts.sha512Hex(Contracts.stableStringify(normalized));
@@ -283,6 +298,7 @@
     captureCaption: captureCaption,
     extractOccurrences: extractOccurrences,
     resolveShortForms: resolveShortForms,
+    implementationDigest: implementationDigest,
     runCitationModule: runCitationModule
   };
 

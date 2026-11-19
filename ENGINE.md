@@ -788,10 +788,14 @@ closed). The seal page does not enable the flag in this phase — the module shi
 - An occurrence records the pack and rule id, the kind (`neutral_case`, `reported_case`,
   `docket`, `source_url`, …), the verbatim `raw` text, its exact UTF-16 page span, an
   explicit-components object (nulls, never inventions), a best-effort caption component,
-  and a deterministic `vo1|` occurrence id qualified by pack identity. `id.`/`supra` short
-  forms resolve by document order only: `resolved` (one antecedent), `ambiguous` (several) or
-  `unresolved` (none) — never a fuzzy score. The implementation digest covers pack rule
-  patterns and extraction functions; duplicate packs are collapsed before extraction.
+  and a deterministic `vo1|` occurrence id qualified by pack identity. `Id.` resolves only
+  to the immediately preceding citation observation when it is a case; `supra` resolves only
+  when the exact normalized first-party caption (before `v`) matches. Resolution remains
+  `resolved` (one antecedent), `ambiguous` (several) or `unresolved` (none) — never a fuzzy
+  score. The implementation digest covers core helpers, pack rule patterns and extractors,
+  and declared pack helpers. Only repeated references to the identical pack object are
+  collapsed; distinct objects with the same id are rejected. An explicit empty pack array
+  completes with zero observations.
 - `VOLegalPacks` registers jurisdiction packs (`za` ships first: `[2026] ZACC 1` neutral
   citations, SALR/SACR reported citations with court codes and `at para 12` pinpoints, CCT
   dockets, `Id.`/named `supra` short forms, SAFLII URLs with punctuation-trimmed exact hosts).
@@ -799,8 +803,10 @@ closed). The seal page does not enable the flag in this phase — the module shi
   inferred from IP, region or locale. Statute/section/Act forms stay with the legacy
   `voExtractCitations` until parity is demonstrated.
 - A module error (an unregistered pack, a missing script) yields a disclosed `failed`
-  envelope with a digest of the analyzed page text, even when the contracts script itself
-  cannot load; detection continues unchanged.
+  envelope with a digest of the exact normalized analyzed pages and every page listed in
+  `coverage.units_failed`, even when the contracts script itself cannot load; detection
+  continues unchanged. Browser hashing falls back to the loaded analysis contract when Web
+  Crypto and CommonJS are unavailable.
 
 ---
 
@@ -933,8 +939,8 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `evaluation-contractnli.test.mjs` | 92 | B9 development-only ContractNLI adapter: pinned release/hash verification, code-point/UTF-16 span conversion, conservative hypothesis mapping, negative-corpus adaptation, provenance and input safety, annotations, collision-free identifiers, bounded shards and generation publication, exclusion visibility, zip integrity and the CLI pipeline on synthetic fixtures |
 | `evaluation-contradoc.test.mjs` | 101 | B9 development-only ContraDoc adapter and dual metrics: verbatim evidence/ref anchoring, mapped scopes, incomplete-pair exclusion, verum_exact anchor metrics with per-document ContraDoc-Neg false positives, published_comparable Judge-then-Find/top-k/0.98-threshold reproduction, bounded external inputs, generation publication, and CLI workflow on synthetic fixtures |
 | `evaluation-eyecite.test.mjs` | 60 | B9 development-only Eyecite conformance spike: bounded corpus/span validation, exact bidirectional group and numeric cluster comparison, fixed adapter allowlist, package-pin and resolution-state handling, optional extraction only for exact pinned installs, portable paths, atomic-generator guard, and CLI |
-| `legal-citations.test.mjs` | 62 | Neutral citation occurrence core and pack registry: exact spans, pack-qualified IDs, duplicate-pack handling, implementation digest, short-form resolution, envelope validity, immutable disclosed load failures with input identity, OCR/fallback provenance, flag-off findings parity, and static guards |
-| `legal-citations-za.test.mjs` | 92 | South African pack fixtures: neutral and reported citations, Id./supra resolution, CCT dockets, punctuation-safe SAFLII URLs with actual host metadata, negative fixtures, exact spans, and deterministic replay |
+| `legal-citations.test.mjs` | 78 | Neutral citation occurrence core and pack registry: exact spans, pack-qualified IDs, object-identity deduplication, helper-aware implementation digest, short-form resolution, empty selection, envelope validity, immutable disclosed load failures with exact input identity and failed-page coverage, OCR/fallback provenance, flag-off findings parity, and static guards |
+| `legal-citations-za.test.mjs` | 98 | South African pack fixtures: neutral and boundary-checked reported citations, multiword Id./supra resolution, CCT dockets, case-insensitive punctuation-safe SAFLII URLs with normalized host metadata, negative fixtures, exact spans, and deterministic replay |
 
 ---
 

@@ -7698,7 +7698,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     return prototype === Object.prototype || prototype === null;
   }
 
-  var packs = {};
+  var packs = Object.create(null);
 
   function validateRule(packId, rule) {
     if (!isPlainRecord(rule)) throw new TypeError(packId + ': every rule must be a plain object');
@@ -7725,10 +7725,16 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     }
     if (typeof pack.version !== 'string' || !pack.version) throw new TypeError(pack.id + ': version is required');
     if (!Array.isArray(pack.rules) || !pack.rules.length) throw new TypeError(pack.id + ': rules must be a non-empty array');
-    var seen = {};
+    if (typeof pack.helpers !== 'undefined' &&
+      (!Array.isArray(pack.helpers) || pack.helpers.some(function (helper) { return typeof helper !== 'function'; }))) {
+      throw new TypeError(pack.id + ': helpers must be an array of functions');
+    }
+    var seen = Object.create(null);
     pack.rules.forEach(function (rule) {
       validateRule(pack.id, rule);
-      if (seen[rule.rule_id]) throw new TypeError(pack.id + ': duplicate rule_id ' + rule.rule_id);
+      if (Object.prototype.hasOwnProperty.call(seen, rule.rule_id)) {
+        throw new TypeError(pack.id + ': duplicate rule_id ' + rule.rule_id);
+      }
       seen[rule.rule_id] = true;
     });
     return pack;
@@ -7746,7 +7752,9 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 
   function register(pack) {
     validatePack(pack);
-    if (packs[pack.id]) throw new Error('Jurisdiction pack already registered: ' + pack.id);
+    if (Object.prototype.hasOwnProperty.call(packs, pack.id)) {
+      throw new Error('Jurisdiction pack already registered: ' + pack.id);
+    }
     packs[pack.id] = deepFreeze(pack);
     return packs[pack.id];
   }
@@ -7830,14 +7838,15 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
   var NEUTRAL_RE = new RegExp('\\[(\\d{4})\\]\\s+(' + NEUTRAL_COURTS.join('|') + ')\\s+(\\d+)\\b', 'g');
   var REPORTED_RE = new RegExp(
     '\\b(\\d{4})\\s+\\((\\d)\\)\\s+(SA|SACR)\\s+(\\d+)' +
-    '(?:\\s+\\((' + REPORT_COURTS.join('|') + ')\\))?' +
-    '(?:\\s+at\\s+(para(?:graph)?s?\\.?\\s+\\d+(?:\\s*[-\u2013]\\s*\\d+)?|\\d+[A-Z]?(?:\\s*[-\u2013]\\s*\\d+[A-Z])?))?',
+    '(?:\\s+\\((' + REPORT_COURTS.join('|') + ')\\)(?![A-Za-z0-9]))?' +
+    '(?:\\s+at\\s+(para(?:graph)?s?\\.?\\s+\\d+(?:\\s*[-\u2013]\\s*\\d+)?|\\d+[A-Z]?(?:\\s*[-\u2013]\\s*\\d+[A-Z])?)(?![A-Za-z0-9]))?' +
+    '(?![A-Za-z0-9]|\\s+(?:at\\b|\\([A-Za-z0-9]))',
     'g'
   );
   var CCT_DOCKET_RE = /\bCCT\s?(\d{1,3})\s?\/\s?(\d{2,4})\b/g;
   var ID_RE = /\b[Ii]d\.(?:\s+at\s+(?:para(?:graph)?s?\.?\s+\d+(?:\s*[-\u2013]\s*\d+)?|\d+[A-Z]?(?:\s*[-\u2013]\s*\d+[A-Z])?))?/g;
-  var SUPRA_RE = /\b([A-Z][A-Za-z'.-]*),\s+supra\b/g;
-  var SAFLII_RE = /\bhttps?:\/\/(?:www\.)?saflii\.org(?:\.za)?\/[^\s)\]"'<>]*[A-Za-z0-9/#_%~-]/g;
+  var SUPRA_RE = /\b([A-Z][A-Za-z'.&-]*(?:\s+(?:[A-Z][A-Za-z'.&-]*|of|the|and|for|in|on|de|van|von|du|la|le|da|del|della|di|al|bin)){0,7}),\s+supra\b/g;
+  var SAFLII_RE = /\bhttps?:\/\/(?:www\.)?saflii\.org(?:\.za)?\/[^\s)\]"'<>]*[A-Za-z0-9/#_%~-]/gi;
 
   function orNull(value) {
     return value === undefined ? null : value;
@@ -7846,6 +7855,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
   var pack = {
     id: PACK_ID,
     version: PACK_VERSION,
+    helpers: [orNull],
     rules: [
       {
         rule_id: 'za-neutral-court',
@@ -8014,6 +8024,13 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     return String(value || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').replace(/\s+/g, ' ').trim();
   }
 
+  function captionAntecedentName(caption) {
+    if (typeof caption !== 'string') return null;
+    var separator = /\s+v\.?\s+/i.exec(caption);
+    if (!separator) return null;
+    return normalizeName(caption.slice(0, separator.index)) || null;
+  }
+
   function extractOccurrences(pages, packs) {
     var occurrences = [];
     for (var pageIndex = 0; pageIndex < pages.length; pageIndex++) {
@@ -8067,6 +8084,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     return {
       id: pack.id,
       version: pack.version,
+      helpers: Array.isArray(pack.helpers) ? pack.helpers.map(String) : [],
       rules: pack.rules.map(function (rule) {
         return {
           rule_id: rule.rule_id,
@@ -8084,9 +8102,8 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     var unique = [];
     for (var index = 0; index < packs.length; index++) {
       var pack = validatePack(packs[index]);
-      var prior = byId[pack.id];
-      if (prior) {
-        if (Contracts.stableStringify(packImplementation(prior)) !== Contracts.stableStringify(packImplementation(pack))) {
+      if (Object.prototype.hasOwnProperty.call(byId, pack.id)) {
+        if (byId[pack.id] !== pack) {
           throw new TypeError('Conflicting versions or implementations for jurisdiction pack ' + pack.id);
         }
         continue;
@@ -8114,32 +8131,23 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     }
   }
 
-  /* id./supra resolution by document order. Never a fuzzy score: id. binds to
-   * the nearest preceding case citation; supra binds to the nearest preceding
-   * case citation whose caption matches its name guess. More than one
-   * remaining antecedent is ambiguous; none is unresolved. */
+  /* id./supra resolution by document order. Never a fuzzy score: id. binds
+   * only to the immediately preceding citation observation when it is a case;
+   * supra binds to preceding cases with an exactly matching first-party
+   * caption. More than one antecedent is ambiguous; none is unresolved. */
   function resolveShortForms(occurrences) {
+    var captions = Object.create(null);
+    var previous = null;
     for (var index = 0; index < occurrences.length; index++) {
       var occurrence = occurrences[index];
       if (occurrence.kind === 'id') {
-        var antecedent = null;
-        for (var back = index - 1; back >= 0; back--) {
-          if (CASE_KINDS.indexOf(occurrences[back].kind) !== -1) { antecedent = occurrences[back]; break; }
-        }
+        var antecedent = previous && CASE_KINDS.indexOf(previous.kind) !== -1 ? previous : null;
         occurrence.resolution = antecedent
           ? { state: 'resolved', antecedent_occurrence_id: antecedent.occurrence_id, candidates: 1 }
           : { state: 'unresolved', antecedent_occurrence_id: null, candidates: 0 };
       } else if (occurrence.kind === 'supra') {
         var guess = normalizeName(occurrence.components && occurrence.components.name_guess);
-        var candidates = [];
-        if (guess) {
-          for (var back2 = index - 1; back2 >= 0; back2--) {
-            var candidate = occurrences[back2];
-            if (CASE_KINDS.indexOf(candidate.kind) === -1) continue;
-            var caption = normalizeName(candidate.components && candidate.components.caption);
-            if (caption && caption.indexOf(guess) !== -1) candidates.push(candidate.occurrence_id);
-          }
-        }
+        var candidates = guess && Object.prototype.hasOwnProperty.call(captions, guess) ? captions[guess] : [];
         if (candidates.length === 1) {
           occurrence.resolution = { state: 'resolved', antecedent_occurrence_id: candidates[0], candidates: 1 };
         } else if (candidates.length > 1) {
@@ -8148,6 +8156,14 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
           occurrence.resolution = { state: 'unresolved', antecedent_occurrence_id: null, candidates: 0 };
         }
       }
+      if (CASE_KINDS.indexOf(occurrence.kind) !== -1) {
+        var captionName = captionAntecedentName(occurrence.components && occurrence.components.caption);
+        if (captionName) {
+          if (!Object.prototype.hasOwnProperty.call(captions, captionName)) captions[captionName] = [];
+          captions[captionName].push(occurrence.occurrence_id);
+        }
+      }
+      previous = occurrence;
     }
   }
 
@@ -8155,6 +8171,15 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     return Contracts.sha512Hex(Contracts.stableStringify({
       module: MODULE_ID,
       version: MODULE_VERSION,
+      core: {
+        normalizePages: String(normalizePages),
+        captureCaption: String(captureCaption),
+        normalizeName: String(normalizeName),
+        captionAntecedentName: String(captionAntecedentName),
+        extractOccurrences: String(extractOccurrences),
+        assignOccurrenceIds: String(assignOccurrenceIds),
+        resolveShortForms: String(resolveShortForms)
+      },
       packs: packs.map(packImplementation)
     }));
   }
@@ -8164,7 +8189,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
   function runCitationModule(pages, opts) {
     opts = opts || {};
     var selectedPacks = opts.packs;
-    if (!Array.isArray(selectedPacks) || !selectedPacks.length) throw new TypeError('runCitationModule needs explicit jurisdiction pack objects');
+    if (!Array.isArray(selectedPacks)) throw new TypeError('runCitationModule needs an explicit jurisdiction pack array');
     var packs = uniquePacks(selectedPacks);
     var normalized = normalizePages(pages);
     var inputSha512 = Contracts.sha512Hex(Contracts.stableStringify(normalized));
@@ -8203,6 +8228,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
     captureCaption: captureCaption,
     extractOccurrences: extractOccurrences,
     resolveShortForms: resolveShortForms,
+    implementationDigest: implementationDigest,
     runCitationModule: runCitationModule
   };
 
@@ -17161,16 +17187,24 @@ async function voCitationInputSha512(pages) {
       text: page.text
     };
   });
-  var bytes = new TextEncoder().encode(JSON.stringify(normalized));
+  var serialized = JSON.stringify(normalized);
+  var bytes = new TextEncoder().encode(serialized);
   var cryptoApi = typeof globalThis !== 'undefined' ? globalThis.crypto : null;
   if (cryptoApi && cryptoApi.subtle) {
     var digest = await cryptoApi.subtle.digest('SHA-512', bytes);
-    return Array.prototype.map.call(new Uint8Array(digest), function (byte) {
+    var cryptoHash = Array.prototype.map.call(new Uint8Array(digest), function (byte) {
       return byte.toString(16).padStart(2, '0');
     }).join('');
+    if (/^[0-9a-f]{128}$/.test(cryptoHash) && cryptoHash !== '0'.repeat(128)) return cryptoHash;
   }
   if (typeof require === 'function') {
-    return require('crypto').createHash('sha512').update(bytes).digest('hex');
+    var nodeHash = require('crypto').createHash('sha512').update(bytes).digest('hex');
+    if (/^[0-9a-f]{128}$/.test(nodeHash) && nodeHash !== '0'.repeat(128)) return nodeHash;
+  }
+  var contracts = typeof globalThis !== 'undefined' ? globalThis.VOAnalysisContracts : null;
+  if (contracts && typeof contracts.sha512Hex === 'function') {
+    var contractHash = contracts.sha512Hex(serialized);
+    if (/^[0-9a-f]{128}$/.test(contractHash) && contractHash !== '0'.repeat(128)) return contractHash;
   }
   throw new Error('SHA-512 is unavailable for citation module input identity');
 }
@@ -17315,11 +17349,16 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
       module_version: '1.0.0',
       implementation_digest: '0'.repeat(128),
       status: 'failed',
-      input_sha512: '0'.repeat(128),
+      input_sha512: null,
       reference_time: opts.referenceTime || null,
       configuration: { jurisdiction_packs: Array.isArray(opts.jurisdictionPacks) ? opts.jurisdictionPacks.slice() : [] },
       dependencies: [],
-      coverage: { units_total: textBlocks.length, units_processed: 0, units_skipped: [], units_failed: [] }
+      coverage: {
+        units_total: textBlocks.length,
+        units_processed: 0,
+        units_skipped: [],
+        units_failed: textBlocks.map(function (_page, index) { return index + 1; })
+      }
     };
     try {
       _citSpec.input_sha512 = await voCitationInputSha512(_citPages);
@@ -17341,6 +17380,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
         referenceTime: opts.referenceTime || null
       });
     } catch (_citError) {
+      if (!/^[0-9a-f]{128}$/.test(_citSpec.input_sha512) || _citSpec.input_sha512 === '0'.repeat(128)) {
+        throw new Error('Citation module input identity could not be established');
+      }
       var _citMessage = 'The citations module could not run: ' + String(_citError && _citError.message).slice(0, 200);
       var _citFailure = _LCt
         ? _LCt.createFailure('citation_module_error', _citMessage)
@@ -17362,7 +17404,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
             units_total: _citSpec.coverage.units_total,
             units_processed: 0,
             units_skipped: Object.freeze([]),
-            units_failed: Object.freeze([])
+            units_failed: Object.freeze(_citSpec.coverage.units_failed.slice())
           }),
           observations: Object.freeze([]),
           findings: Object.freeze([]),

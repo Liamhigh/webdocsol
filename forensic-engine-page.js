@@ -8946,16 +8946,24 @@ async function voCitationInputSha512(pages) {
       text: page.text
     };
   });
-  var bytes = new TextEncoder().encode(JSON.stringify(normalized));
+  var serialized = JSON.stringify(normalized);
+  var bytes = new TextEncoder().encode(serialized);
   var cryptoApi = typeof globalThis !== 'undefined' ? globalThis.crypto : null;
   if (cryptoApi && cryptoApi.subtle) {
     var digest = await cryptoApi.subtle.digest('SHA-512', bytes);
-    return Array.prototype.map.call(new Uint8Array(digest), function (byte) {
+    var cryptoHash = Array.prototype.map.call(new Uint8Array(digest), function (byte) {
       return byte.toString(16).padStart(2, '0');
     }).join('');
+    if (/^[0-9a-f]{128}$/.test(cryptoHash) && cryptoHash !== '0'.repeat(128)) return cryptoHash;
   }
   if (typeof require === 'function') {
-    return require('crypto').createHash('sha512').update(bytes).digest('hex');
+    var nodeHash = require('crypto').createHash('sha512').update(bytes).digest('hex');
+    if (/^[0-9a-f]{128}$/.test(nodeHash) && nodeHash !== '0'.repeat(128)) return nodeHash;
+  }
+  var contracts = typeof globalThis !== 'undefined' ? globalThis.VOAnalysisContracts : null;
+  if (contracts && typeof contracts.sha512Hex === 'function') {
+    var contractHash = contracts.sha512Hex(serialized);
+    if (/^[0-9a-f]{128}$/.test(contractHash) && contractHash !== '0'.repeat(128)) return contractHash;
   }
   throw new Error('SHA-512 is unavailable for citation module input identity');
 }
@@ -9100,11 +9108,16 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
       module_version: '1.0.0',
       implementation_digest: '0'.repeat(128),
       status: 'failed',
-      input_sha512: '0'.repeat(128),
+      input_sha512: null,
       reference_time: opts.referenceTime || null,
       configuration: { jurisdiction_packs: Array.isArray(opts.jurisdictionPacks) ? opts.jurisdictionPacks.slice() : [] },
       dependencies: [],
-      coverage: { units_total: textBlocks.length, units_processed: 0, units_skipped: [], units_failed: [] }
+      coverage: {
+        units_total: textBlocks.length,
+        units_processed: 0,
+        units_skipped: [],
+        units_failed: textBlocks.map(function (_page, index) { return index + 1; })
+      }
     };
     try {
       _citSpec.input_sha512 = await voCitationInputSha512(_citPages);
@@ -9126,6 +9139,9 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
         referenceTime: opts.referenceTime || null
       });
     } catch (_citError) {
+      if (!/^[0-9a-f]{128}$/.test(_citSpec.input_sha512) || _citSpec.input_sha512 === '0'.repeat(128)) {
+        throw new Error('Citation module input identity could not be established');
+      }
       var _citMessage = 'The citations module could not run: ' + String(_citError && _citError.message).slice(0, 200);
       var _citFailure = _LCt
         ? _LCt.createFailure('citation_module_error', _citMessage)
@@ -9147,7 +9163,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
             units_total: _citSpec.coverage.units_total,
             units_processed: 0,
             units_skipped: Object.freeze([]),
-            units_failed: Object.freeze([])
+            units_failed: Object.freeze(_citSpec.coverage.units_failed.slice())
           }),
           observations: Object.freeze([]),
           findings: Object.freeze([]),
