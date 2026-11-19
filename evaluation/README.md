@@ -53,7 +53,9 @@ The report deliberately keeps these tasks separate:
    - unordered exact-span matching;
    - task matching using each expectation's `pair_mode`;
    - partial pair credit, including unmatched expectations in the denominator;
-   - structural pair completeness.
+   - structural pair completeness. Expected records with fewer than two
+     distinct evidence spans remain visible for detection but are explicitly
+     excluded from exact-pair credit and listed in `pair_metric_exclusions`.
 4. **Evidence localization**: exact-span TP/FP/FN and separate duplicate-sensitive Unicode token-overlap metrics. Expected spans and actual anchors are assigned one-to-one; unmatched anchors remain token false positives, and combining marks stay attached to their tokens.
 5. **Page localization**: accuracy only over expected spans with genuine integer page mappings; missing mappings are counted separately.
 6. **Scope classification**: accuracy plus expected/actual scope-confusion records.

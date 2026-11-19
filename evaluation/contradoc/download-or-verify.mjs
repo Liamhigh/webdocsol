@@ -6,7 +6,7 @@
 // the public dataset files at the pinned commit.
 
 import { createHash } from 'node:crypto';
-import { mkdir, open, readFile, rename, unlink } from 'node:fs/promises';
+import { mkdir, open, rename, unlink } from 'node:fs/promises';
 import path from 'node:path';
 import { pathToFileURL } from 'node:url';
 
@@ -42,6 +42,55 @@ export function verifyMemberBytes(name, data) {
   if (data.length !== expected.bytes) fail(name + ' has ' + data.length + ' bytes, expected ' + expected.bytes);
   if (sha256Hex(data) !== expected.sha256) fail(name + ' failed its pinned SHA-256 check');
   return true;
+}
+
+export async function readResponseBytes(response, maxBytes) {
+  const contentLength = response.headers && response.headers.get('content-length');
+  if (contentLength !== null && contentLength !== undefined &&
+      /^\d+$/.test(contentLength) && Number(contentLength) > maxBytes) {
+    fail('response exceeds the ' + maxBytes + '-byte limit');
+  }
+  if (!response.body || typeof response.body.getReader !== 'function') fail('response body is unavailable');
+  const reader = response.body.getReader();
+  const chunks = [];
+  let total = 0;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      total += value.byteLength;
+      if (total > maxBytes) {
+        await reader.cancel().catch(() => {});
+        fail('response exceeds the ' + maxBytes + '-byte limit');
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, total);
+}
+
+async function readCacheBytes(filePath, maxBytes) {
+  const handle = await open(filePath, 'r');
+  try {
+    const info = await handle.stat();
+    if (!info.isFile() || info.size > maxBytes) fail('cached member exceeds the pinned byte limit');
+    const chunks = [];
+    let total = 0;
+    while (true) {
+      const length = Math.min(64 * 1024, maxBytes - total + 1);
+      const buffer = Buffer.allocUnsafe(length);
+      const { bytesRead } = await handle.read(buffer, 0, length, total);
+      if (!bytesRead) break;
+      total += bytesRead;
+      if (total > maxBytes) fail('cached member exceeds the pinned byte limit');
+      chunks.push(buffer.subarray(0, bytesRead));
+    }
+    return Buffer.concat(chunks, total);
+  } finally {
+    await handle.close();
+  }
 }
 
 // Pure cache decision, exported for tests.
@@ -81,7 +130,7 @@ async function writeAtomically(outputPath, data) {
 
 async function cacheMemberState(directory, name) {
   try {
-    const data = await readFile(path.join(directory, name));
+    const data = await readCacheBytes(path.join(directory, name), CONTRADOC_RELEASE.members[name].bytes);
     verifyMemberBytes(name, data);
     return 'valid';
   } catch (error) {
@@ -107,7 +156,7 @@ async function main() {
     if (states[name] === 'valid') continue;
     const response = await fetch(member.url, { signal: AbortSignal.timeout(120000) });
     if (!response.ok) fail('HTTP ' + response.status + ' for ' + name);
-    const data = Buffer.from(await response.arrayBuffer());
+    const data = await readResponseBytes(response, member.bytes);
     verifyMemberBytes(name, data);
     await writeAtomically(path.join(directory, name), data);
     console.log('[contradoc-download] wrote ' + terminalSafe(name) + ' (' + data.length + ' bytes)');

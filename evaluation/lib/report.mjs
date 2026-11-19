@@ -71,6 +71,12 @@ export function buildEvaluationReport(run, evaluation) {
       const right = JSON.stringify([b.case_id, b.contradiction_id || '', b.finding_id || '', b.reason]);
       return left < right ? -1 : left > right ? 1 : 0;
     }),
+    pair_metric_exclusions: evaluation.caseResults.flatMap((result) => result.pair_metric_exclusions)
+      .sort((a, b) => {
+        const left = JSON.stringify([a.case_id, a.contradiction_id, a.reason]);
+        const right = JSON.stringify([b.case_id, b.contradiction_id, b.reason]);
+        return left < right ? -1 : left > right ? 1 : 0;
+      }),
     exclusions: evaluation.exclusions.slice().sort((a, b) => a.case_id < b.case_id ? -1 : a.case_id > b.case_id ? 1 : 0),
     limitations: [
       'Development evaluation only; these values are not finding confidence, severity, or courtroom reliability.',
