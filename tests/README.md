@@ -84,7 +84,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 23 | `narrate-excerpt` | `narrate-excerpt.test.mjs` | 16 | `voBuildNarrateExcerpt` |
 | 24 | `human-report` | `human-report.test.mjs` | 81 | The court-ready narrative wiring: Worker, `forensic-report.js` and page agree |
 | 25 | `site-serving` | `site-serving.test.mjs` | 56 | `worker/static-proxy.js` serving tiers and `/api/v1/site/health` |
-| 26 | `pages-bridge` | `pages-bridge.test.mjs` | 16 | `functions/[[path]].js`, the www bridge |
+| 26 | `pages-bridge` | `pages-bridge.test.mjs` | 18 | `functions/[[path]].js`, the www bridge; static fallback denies Markdown |
 | 27 | `zip-intake` | `zip-intake.test.mjs` | 25 | The page's ZIP reader for WhatsApp chat exports |
 | 28 | `rule-package` | `rule-package.test.mjs` | 129 | Signed rule packages on the website |
 | 29 | `inline-scripts` | `inline-scripts.test.mjs` | 25+ | The ten inline copies in `seal-document.html` are byte-identical to their sources |
