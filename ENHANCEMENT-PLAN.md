@@ -29,7 +29,8 @@ Last updated: **2026-11-19**.
 | 2 | ECTA note (PR 2.4) | — | **Blocked** (needs qualified legal review) |
 | 3 | Synthetic redaction boundary fixtures (PR 3.1) | #313 | Open (ready for review) |
 | 3 | Enhancement-plan status record | #314 | Open |
-| 4 | PDF graph and incremental-revision forensics (PRs 4.1–4.2) | — | Not started |
+| 4 | Bounded QPDF-WASM active-graph feasibility prototype (PR 4.1) | #316 | Open |
+| 4 | Incremental-revision chain scanner (PR 4.2) | — | Not started |
 | 5 | Allen temporal algebra (PR 5.1) | — | Not started |
 
 The open phase work is a single stack, each PR based on the previous one. #307 is a duplicate
@@ -37,12 +38,12 @@ corrective PR that remains open; it is not the base of this stack.
 
 ```
 main
- └─ #308 ─ #309 ─ #310 ─ #311 ─ #312 ─ #313 ─ #314
-    P1      P1      P1      P2      P2      P3      docs
+ └─ #308 ─ #309 ─ #310 ─ #311 ─ #312 ─ #313 ─ #314 ─ #316
+    P1      P1      P1      P2      P2      P3      docs    P4.1
 ```
 
-All PRs #308–#314 are open as of this update. Merge in stack order; each PR must land (or be
-retargeted to `main`) before the one above it. Do not mark work merged until GitHub confirms the
+All PRs #308–#314 and #316 are open as of this update. Merge in stack order; each PR must land (or
+be retargeted to `main`) before the one above it. Do not mark work merged until GitHub confirms the
 merge.
 
 ## Phase detail
@@ -105,19 +106,26 @@ as implemented and the test confirms it still fails closed. This encodes the bin
 [`ENGINE.md`](./ENGINE.md) §12.22: redaction or other filtering may affect generated descriptions
 only — never the record or verbatim evidence quotations.
 
-### Phase 4 — PDF graph and incremental-revision forensics · Not started
+### Phase 4 — PDF graph and incremental-revision forensics · PR 4.1 open (#316; feasibility prototype, not full acceptance); PR 4.2 not started
 
-The source plan defines two future slices; neither implementation is approved or merged:
+The source plan defines two separate slices:
 
-- **PR 4.1 — QPDF/WASM feasibility and active-graph adapter · Not started.** Assess feasibility
-  and, only if separately approved, expose a bounded description of the PDF's active object
-  graph. QPDF's writer is not a revision-history API.
+- **PR 4.1 — QPDF/WASM active-graph feasibility prototype · Open (#316), not full Phase 4.1 acceptance.** `modules.pdfGraph` is explicit and
+  default-off. QPDF 12.2.0 runs in a disposable browser worker with an 8-MiB input cap, a 256-MiB
+  Wasm memory maximum, a 2-MiB JSON-output cap, object/reference/traversal limits and a 15-second
+  deadline. It returns only the PDF version and bounded page/object/reference/type counts; stream
+  data, raw objects, metadata and findings never leave the worker. The observation describes the
+  active graph only. It does not expose or scan prior revisions. Input over the 8-MiB cap is rejected
+  before hashing or worker creation; the envelope's required 128-hex `input_sha512` is then an
+  all-zero sentinel, not a digest, and `failure.details` names `not_computed_input_over_limit` and
+  the exact `input_bytes`. In-bounds inputs retain their actual SHA-512 identity.
 - **PR 4.2 — revision-chain scanner · Not started.** A separate bounded scanner for incremental
-  revision history; it must not rewrite source bytes.
+  revision history; it must follow the original byte-level cross-reference chain and never rewrite
+  source bytes. QPDF's writer is not a revision-history API.
 
-Any future work must fail closed on unsupported or ambiguous input, enforce explicit resource
-bounds, preserve the original bytes, and never rewrite the source document. These are constraints
-on future proposals, not claims that an implementation or approval exists.
+Both slices must fail closed on unsupported or ambiguous input, preserve the original bytes and
+never rewrite the source document. The active-graph prototype remains an observation, not an
+assessment of authenticity or tampering.
 
 ### Phase 5 — Allen temporal algebra · Not started
 
