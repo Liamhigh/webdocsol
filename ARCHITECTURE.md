@@ -93,9 +93,9 @@ The website is the centre of gravity: **all document verification happens at the
 ## What runs where (state after the Public Protector submission run, October 2026)
 
 - **The visitor's browser** does everything that touches a document. `seal-document.html`
-  carries five inlined scripts (engine, reports, seal guard, OpenTimestamps, PDF encryption) and
-  makes the hashes, the forensic scan, the reports and the seal on the device. `verify.html`
-  checks seals on the device.
+  carries ten inlined scripts (contracts, analysis configuration, citation packs and core, engine,
+  reports, seal guard, OpenTimestamps and PDF encryption) and makes the hashes, the forensic scan,
+  the reports and the seal on the device. `verify.html` checks seals on the device.
 - **OpenTimestamps.** After sealing and optional encryption, the seal page posts SHA-256 of the
   exact delivered PDF bytes straight to three public calendars: `a.pool.opentimestamps.org`,
   `b.pool.opentimestamps.org` and `a.pool.eternitywall.com`. Reports follow the same post-seal
@@ -202,15 +202,16 @@ The website is the centre of gravity: **all document verification happens at the
 
 ## Working in this repo (webdocsol)
 
-- The seven forensic/contract scripts are **inlined** into `seal-document.html` between
+- All ten forensic/contract scripts are **inlined** into `seal-document.html` between
   `/* VO-INLINE:<file>:START/END */` markers and **byte-guarded** by
-  `tests/inline-scripts.test.mjs`: `analysis-contracts.js`, `analysis-config.js`, `forensic-engine-page.js` (engine), `forensic-report.js`
-  (reports), `seal-guard.js`, `ots-proof.js` and `pdf-encrypt.js`. **Workflow:** edit the source
-  file, then re-splice the inline block (`ENGINE.md` §9). **Do not** "de-duplicate" the inline
-  copy into a shared runtime module. Root-level `.js` requests once came back as the home page
-  HTML (the old Pages origin answered missing files with its home page), and a dropped script
-  means a scan that silently never runs. The site now ships as Workers Static Assets (#186), and
-  the rule still stands.
+  `tests/inline-scripts.test.mjs`: `analysis-contracts.js`, `analysis-config.js`, `legal-packs.js`,
+  `legal-packs/za.js`, `legal-citations.js`, `forensic-engine-page.js` (engine),
+  `forensic-report.js` (reports), `seal-guard.js`, `ots-proof.js` and `pdf-encrypt.js`.
+  **Workflow:** edit the source file, then re-splice the inline block (`ENGINE.md` §9). **Do not**
+  "de-duplicate" the inline copy into a shared runtime module. Root-level `.js` requests once came
+  back as the home page HTML (the old Pages origin answered missing files with its home page), and
+  a dropped script means a scan that silently never runs. The site now ships as Workers Static
+  Assets (#186), and the rule still stands.
 - Contradiction types are **CT01–CT61**. The detector registry has **63 entries**: 46 distinct
   numeric prefixes, 45 unsuffixed entries and 18 auxiliary/suffixed entries. The main run-list has
   **61 entries** (`DETECTOR_COUNT = 61`); D37 runs separately as catch-all, and D10A is retained

@@ -93,10 +93,22 @@ for (const fixture of negatives) {
     'wide whitespace matches and the raw quote is preserved byte-for-byte');
 }
 
+{
+  for (const text of [
+    '2026 (3) SA 1123X',
+    '2026 (3) SA 112 (SCA)junk',
+    '2026 (3) SA 112 at para 12xyz',
+    '2026 (3) SA 112 at 115A1'
+  ]) {
+    const occurrences = Citations.extractOccurrences(Citations.normalizePages([text]), [zaPack]);
+    ok(occurrences.length === 0, 'reported citation rejects a partial page, court or pinpoint: ' + text);
+  }
+}
+
 // --- South African short-form references ----------------------------------------------
 
 {
-  const text = 'In Foo v Bar, 2026 (3) SA 112 (SCA). Id. at para 12. Foo, supra applies.';
+  const text = 'In South African Airways v Coastal Group, 2026 (3) SA 112 (SCA). Id. at para 12. South African Airways, supra applies.';
   const envelope = Citations.runCitationModule([text], { packs: [zaPack] });
   const id = envelope.observations.find((observation) => observation.kind === 'id');
   const supra = envelope.observations.find((observation) => observation.kind === 'supra');
@@ -104,9 +116,24 @@ for (const fixture of negatives) {
   ok(id && id.raw === 'Id. at para 12' && id.resolution.state === 'resolved' &&
      id.resolution.antecedent_occurrence_id === caseCitation.occurrence_id,
     'ZA Id. references are emitted and resolve to the preceding case citation');
-  ok(supra && supra.raw === 'Foo, supra' && supra.resolution.state === 'resolved' &&
+  ok(supra && supra.raw === 'South African Airways, supra' && supra.resolution.state === 'resolved' &&
      supra.resolution.antecedent_occurrence_id === caseCitation.occurrence_id,
-    'a ZA named supra reference resolves only to the matching preceding caption');
+    'a ZA multiword supra resolves to the exact first-party caption');
+
+  const partial = Citations.runCitationModule([
+    'South African Airways v Coastal Group, 2026 (3) SA 112 (SCA). South African, supra follows.'
+  ], { packs: [zaPack] });
+  const partialSupra = partial.observations.find((observation) => observation.kind === 'supra');
+  ok(partialSupra && partialSupra.resolution.state === 'unresolved',
+    'a partial first-party caption does not resolve a supra reference');
+}
+
+{
+  const rawUrl = 'HTTPS://WWW.SAFlii.ORG.ZA/za/cases/ZACC/2026/1';
+  const occurrence = Citations.extractOccurrences(Citations.normalizePages([rawUrl]), [zaPack])[0];
+  ok(occurrence && occurrence.raw === rawUrl && occurrence.components.url === rawUrl &&
+     occurrence.components.host === 'www.saflii.org.za',
+    'SAFLII matching is case-insensitive while raw URL is preserved and host is normalized');
 }
 
 done('legal-citations-za');

@@ -42,14 +42,15 @@
   var NEUTRAL_RE = new RegExp('\\[(\\d{4})\\]\\s+(' + NEUTRAL_COURTS.join('|') + ')\\s+(\\d+)\\b', 'g');
   var REPORTED_RE = new RegExp(
     '\\b(\\d{4})\\s+\\((\\d)\\)\\s+(SA|SACR)\\s+(\\d+)' +
-    '(?:\\s+\\((' + REPORT_COURTS.join('|') + ')\\))?' +
-    '(?:\\s+at\\s+(para(?:graph)?s?\\.?\\s+\\d+(?:\\s*[-\u2013]\\s*\\d+)?|\\d+[A-Z]?(?:\\s*[-\u2013]\\s*\\d+[A-Z])?))?',
+    '(?:\\s+\\((' + REPORT_COURTS.join('|') + ')\\)(?![A-Za-z0-9]))?' +
+    '(?:\\s+at\\s+(para(?:graph)?s?\\.?\\s+\\d+(?:\\s*[-\u2013]\\s*\\d+)?|\\d+[A-Z]?(?:\\s*[-\u2013]\\s*\\d+[A-Z])?)(?![A-Za-z0-9]))?' +
+    '(?![A-Za-z0-9]|\\s+(?:at\\b|\\([A-Za-z0-9]))',
     'g'
   );
   var CCT_DOCKET_RE = /\bCCT\s?(\d{1,3})\s?\/\s?(\d{2,4})\b/g;
   var ID_RE = /\b[Ii]d\.(?:\s+at\s+(?:para(?:graph)?s?\.?\s+\d+(?:\s*[-\u2013]\s*\d+)?|\d+[A-Z]?(?:\s*[-\u2013]\s*\d+[A-Z])?))?/g;
-  var SUPRA_RE = /\b([A-Z][A-Za-z'.-]*),\s+supra\b/g;
-  var SAFLII_RE = /\bhttps?:\/\/(?:www\.)?saflii\.org(?:\.za)?\/[^\s)\]"'<>]*[A-Za-z0-9/#_%~-]/g;
+  var SUPRA_RE = /\b([A-Z][A-Za-z'.&-]*(?:\s+(?:[A-Z][A-Za-z'.&-]*|of|the|and|for|in|on|de|van|von|du|la|le|da|del|della|di|al|bin)){0,7}),\s+supra\b/g;
+  var SAFLII_RE = /\bhttps?:\/\/(?:www\.)?saflii\.org(?:\.za)?\/[^\s)\]"'<>]*[A-Za-z0-9/#_%~-]/gi;
 
   function orNull(value) {
     return value === undefined ? null : value;
@@ -58,6 +59,7 @@
   var pack = {
     id: PACK_ID,
     version: PACK_VERSION,
+    helpers: [orNull],
     rules: [
       {
         rule_id: 'za-neutral-court',
