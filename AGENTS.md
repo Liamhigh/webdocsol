@@ -26,9 +26,12 @@ re-introduces a false statement of fact under seal.
 **Repo map:** [`REFERENCE.md`](./REFERENCE.md) — every page, script, worker endpoint and
 directory, and what each one does.
 
-**Enhancement plan:** [`ENHANCEMENT-PLAN.md`](./ENHANCEMENT-PLAN.md) — the status record for the
-multi-phase forensic-capability plan (Phases 0–5): each slice, its PR, and whether it is merged,
-open, blocked or not started. Update it whenever a slice moves.
+**Enhancement programme:** [`ENHANCEMENT-IMPLEMENTATION-PLAN.md`](./ENHANCEMENT-IMPLEMENTATION-PLAN.md)
+is the complete dependency-led implementation design; [`ENHANCEMENT-PLAN.md`](./ENHANCEMENT-PLAN.md)
+is the living status record. Read both before selecting work, and update the status record whenever
+a slice moves. Court-file and public-law wording is governed by
+[`LEGAL-VALIDATION.md`](./LEGAL-VALIDATION.md): filing, receipt, non-exclusion and procedural
+history are not judicial validation.
 
 ## Start here — the state of the platform (updated 2026-10-05; describes `main` once PR #218 — the Combine 06 April 2026 run — is merged; PR #216 and #217 are live)
 
@@ -545,10 +548,12 @@ failure looks like).
 (#173), from the founder: sealed documents and forensic reports produced by this code have been filed in the
 Constitutional Court of South Africa (rescission, CCT237/20 & CCT19/20), in a KwaZulu-Natal High
 Court matter (2026-179949), in SAPS and Hawks dockets, and in served evidence schedules whose
-SHA-512 values opposing senior counsel have been invited to verify. The repository holds no
-record of the High Court filing. Filing is not a ruling: none of those forums has ruled on Verum
-Omnis. The rule below that no High Court is among the courts of record concerns where the
-Constitution itself was placed, and it stands. That means:
+SHA-512 values opposing senior counsel have been invited to verify. A supplied Court Online copy
+reviewed on 20 November 2026 separately records Constitution v8.0 as Annexure 02 in High Court
+case 2026-179949, electronically filed on 21 August 2026; see
+[`LEGAL-VALIDATION.md`](./LEGAL-VALIDATION.md) for the exact source and verification limits. The
+full confidential court bundle is not committed. Filing is not a ruling: none of those forums has
+ruled on the merits of Verum Omnis, its engine or its methodology. That means:
 
 - **A regression is not a bug — it is a discrepancy an opposing expert can put to a judge.**
   Determinism (same input → same findings on every run) is what lets anyone, an opposing expert
@@ -817,14 +822,18 @@ The record, stated exactly:
 
 | Forum | Reference | What actually happened |
 |---|---|---|
-| Constitutional Court of South Africa | CCT237/20 & CCT19/20 | Application **filed** (founding affidavit 23 June 2026, `constitution.json`); receipt acknowledged by the Registrar's office on 9 July 2026. Notice to oppose filed. **No ruling on the merits.** Which Constitution version was filed is open with the founder: `constitution.html` and `constitution.json` name v6.0, whose seal is dated 14 July 2026, after the acknowledgement. |
-| Port Shepstone **Magistrate's** Court | H208/25 | A sealed case file was **placed before the Court and relied upon** — not excluded, struck out, or challenged on admissibility. The application was **dismissed** (harassment not proved) and the Court made **no finding on Verum Omnis**; both parties were unrepresented. |
+| Constitutional Court of South Africa | CCT237/20 & CCT19/20 | Application **filed** (founding affidavit 23 June 2026, `constitution.json`); receipt acknowledged by the Registrar's office on 9 July 2026. Notice to oppose filed. **No ruling on the merits.** Which Constitution version was filed is open with the founder: `constitution.html` and `constitution.json` name v6.0, whose seal is dated 14 July 2026, after the acknowledgement. Later procedural history is qualified in `LEGAL-VALIDATION.md`; do not infer a current merits outcome without the primary orders and registry status. |
+| KwaZulu-Natal Local Division, Durban, **High Court** | 2026-179949 | A supplied Court Online copy records **Constitution v8.0 as Annexure 02**, electronically filed by the Registrar on **21 August 2026 at 12:14:35 PM SAST**. This is a filing fact only — not admission, a merits ruling or endorsement. Independent registry verification remains required; see `LEGAL-VALIDATION.md`. |
+| Port Shepstone **Magistrate's** Court | H208/25 | A Verum Omnis-prepared sealed case file was **submitted as part of the respondent's evidence, placed before the Court and relied upon**. The supplied narrative reports that it was not excluded, struck out or challenged on admissibility. The application was **dismissed** (harassment not proved) and the Court made **no separate finding on Verum Omnis's admissibility, scientific reliability or methodology**; both parties were unrepresented. See `LEGAL-VALIDATION.md` for the affidavit/judgment source chain. |
 
 **Never write, and never let a prompt imply:** that a court has adopted,
 endorsed, validated, accredited or ruled on the merits of Verum Omnis, its
-engine or its methodology; that the platform is "court-recognised" or
-"judicially validated"; or that a **High Court** is among the courts of record
-(it is not — the forums are the Constitutional Court and a Magistrate's Court).
+engine or its methodology; or that the platform is "court-recognised" or
+"judicially validated". Do not deny the documented High Court filing, and do
+not inflate it: the High Court is now among the forums in which Constitution
+v8.0 is recorded as filed, alongside the Constitutional Court and Port
+Shepstone Magistrate's Court records described above. None is judicial
+validation.
 
 **Also never write:** that a matter was "reassessed as criminal" or reclassified from
 commercial to criminal by instructed counsel — the correspondence of 19 May 2025 records the
@@ -861,15 +870,16 @@ not parties and against whom no victim-level evidence exists — a defamation ex
 the best-resourced litigants in the country, and an easy way to lose a strong case to a fight
 that was never necessary.
 
-**"Accepted" is the word to watch.** It has been softened out of `index.html`
-three separate times — "accepted as prima facie evidence", "accepted into court
-record", "accepted as formal proof of cyber forgery" — because it is the
-natural way to say it and it is wrong every time. A court *accepting* evidence
-means an admissibility ruling went in its favour. What happened is that the
-sealed file was **placed before the Court and not challenged** — nobody ruled
-either way. "Placed before the Court and relied upon; not excluded, struck out
-or challenged on admissibility" is the long way round, and it is the only
-version that survives being checked. Use it.
+**"Accepted" has an ordinary practical sense and a formal legal sense — do not conflate them.**
+It has been softened out of `index.html` three separate times — "accepted as prima facie
+evidence", "accepted into court record", "accepted as formal proof of cyber forgery" —
+because those formulations implied a ruling the judgment does not contain. The supported
+practical fact is meaningful and must not be erased: a Verum Omnis-prepared sealed case file
+was **submitted as part of the respondent's evidence, placed before the Court and relied upon**.
+The supplied narrative reports that it was not excluded, struck out or challenged on
+admissibility. Use that full formulation. If "accepted" is used conversationally, qualify it
+immediately as receipt and use in the respondent's evidence, not a separate admissibility,
+scientific-reliability or methodology ruling.
 The phrase *"in good faith and in the interest of justice"* in H208/25: this file and the
 Worker's honesty clause (locked by `tests/worker.test.mjs`) say it records the **respondent's own
 affidavit**, not a finding by the Court; `constitution.json`, `llms.txt` and `constitution.html`
