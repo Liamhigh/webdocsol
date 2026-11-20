@@ -23,6 +23,11 @@
 >
 > **Shipping, routing or the serving chain?** [`DEPLOYMENT.md`](./DEPLOYMENT.md). **A failed seal or a
 > missing narrative?** [`FORENSIC-DEBUG.md`](./FORENSIC-DEBUG.md).
+>
+> **Planning forensic enhancements?** Read [`ENHANCEMENT-IMPLEMENTATION-PLAN.md`](./ENHANCEMENT-IMPLEMENTATION-PLAN.md)
+> with the living [`ENHANCEMENT-PLAN.md`](./ENHANCEMENT-PLAN.md) status record. **Describing court
+> filings or public-record status?** [`LEGAL-VALIDATION.md`](./LEGAL-VALIDATION.md) is binding:
+> filing and procedural history are not judicial endorsement.
 
 **Repository:** `Liamhigh/webdocsol`  
 **Sealing standard:** VO-DSS-1.2 ([`seal-module/SPEC.md`](./seal-module/SPEC.md)); QR payload `v: "1.2"`; sealed PDFs carry a `VO-SEAL2|…` Subject (Producer `Verum Omnis Document Sealing Service v1.3.0`); site package version 1.2.5 (`package.json`)  

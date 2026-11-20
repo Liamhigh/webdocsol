@@ -14,7 +14,8 @@ repositories depend on this one, the dated known state, what must never be done)
 - Shipping, routing, static assets, the serving chain → `DEPLOYMENT.md`
 - Every file, page and endpoint → `REFERENCE.md`
 - Diagnosing a failed seal or a missing narrative → `FORENSIC-DEBUG.md`
-- Where the multi-phase forensic-capability enhancement plan stands → `ENHANCEMENT-PLAN.md`
+- Forensic enhancement work → `ENHANCEMENT-IMPLEMENTATION-PLAN.md` (the complete implementation design) **and** `ENHANCEMENT-PLAN.md` (the living status record); never treat a designed option as shipped without checking both
+- Court filings, public-record language and legal-status limits → `LEGAL-VALIDATION.md`; filing or procedural history is not judicial endorsement
 - Where this repository sits among the surfaces, and the system's hard constraints → `ARCHITECTURE.md`
 - The look of any page → `VERUM_UI_TOKENS.md` (binding) and `DESIGN_LOCK.md`
 - The signed rule-package manifest, a contract (6 below) → `worker/rule-format.md`
@@ -70,8 +71,10 @@ Non-negotiables, in one place:
    `workflow_dispatch` only): the AI sandbox cannot reach the site. The Cloudflare connector's
    `webdocsol` `modified_on` is not proof on its own: a branch build moves it too (`AGENTS.md`,
    "How a change ships").
-8. Institutional honesty: no court has adopted, endorsed, accepted, validated, recognised or
-   ruled on the merits of Verum Omnis, its engine or its methodology; write it that way
+8. Institutional honesty: the H208/25 record supports submission and reliance on a Verum
+   Omnis-prepared case file as evidence, but no court has adopted, endorsed, validated,
+   recognised or ruled on the merits of Verum Omnis, its engine or its methodology, and no
+   separate admissibility or scientific-reliability ruling is established; write it that way
    (`AGENTS.md`, "How the Constitution's standing may be described"). A seal is tamper-evident,
    never immutable, and the VO-SEAL2 check alone cannot show that a copy was not altered and
    re-sealed with its own hash (open with the founder, `ENGINE.md` §12.14 (a)). An
