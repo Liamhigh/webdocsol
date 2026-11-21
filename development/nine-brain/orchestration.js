@@ -57,7 +57,10 @@ function supportFromFinding(finding, index, atomsById) {
 }
 
 function makeView(brain, bundle, findings, passNumber) {
-  const ownFindings = brain.id === 'B9' ? [] : findings.filter((finding) => Preview.mapFindingToBrain(finding).brain_id === brain.id);
+  const ownFindings = brain.id === 'B9' ? [] : findings.filter((finding) => {
+    const mapping = finding.development_brain_id === 'B8' ? { brain_id: 'B8' } : Preview.mapFindingToBrain(finding);
+    return mapping.brain_id === brain.id;
+  });
   const payload = {
     schema: VIEW_SCHEMA, brain_id: brain.id, pass_number: passNumber,
     evidence_bundle_sha512: hash(bundle),
@@ -80,7 +83,8 @@ function makeRun(brain, view, passNumber, registers, reviewsComplete) {
   const recommendationIds = brain.id === 'B9' ? registers.recommendations.map((item) => item.recommendation_id) : [];
   const oppositionIds = brain.id === 'B1' ? registers.oppositions.map((item) => item.opposition_id) : [];
   const exclusionIds = brain.id === 'B1' ? registers.exclusions.map((item) => item.exclusion_id) : [];
-  const findingIds = passNumber === 2 ? registers.promotions.filter((item) => item.decision === 'PROMOTED' && item.brain_id === brain.id).map((item) => item.candidate_id) : [];
+  const findingIds = passNumber === 2 ? registers.promotions.filter((item) => item.decision === 'PROMOTED' && item.brain_id === brain.id &&
+    registers.guardianItems.some((guardianItem) => guardianItem.finding_id === item.candidate_id && guardianItem.decision === 'APPROVED')).map((item) => item.candidate_id) : [];
   const uncertainties = [];
   if (brain.id === 'B4') uncertainties.push('B4 support is never independent corroboration.');
   if (brain.id === 'B8' && !engaged) uncertainties.push('No contracted rich-media input or existing B8 observation was supplied.');
@@ -231,7 +235,7 @@ function buildDevelopmentRun(spec) {
     unresolved_limitations: ['NB-0 concordance remains unresolved.', 'Technical certification is not truth, legal validity or human adjudication.'],
     human_adjudication: 'NOT_ADJUDICATED'
   });
-  const registers = { candidates, supports, oppositions, exclusions, recommendations, promotions };
+  const registers = { candidates, supports, oppositions, exclusions, recommendations, promotions, guardianItems };
   const firstViews = Sources.SOURCE_REGISTER.canonical_brains.map((brain) => makeView(brain, spec.bundle, spec.findings, 1));
   const firstPass = Sources.SOURCE_REGISTER.canonical_brains.map((brain, index) => makeRun(brain, firstViews[index], 1, registers, false));
   const secondViews = Sources.SOURCE_REGISTER.canonical_brains.map((brain) => makeView(brain, spec.bundle, spec.findings, 2));
@@ -286,7 +290,7 @@ function buildDevelopmentRun(spec) {
   return freeze(output);
 }
 
-function validateDevelopmentRun(run) {
+function validateDevelopmentRunUnsafe(run) {
   const errors = [];
   if (!plain(run) || run.schema !== SCHEMA) return { valid: false, errors: ['wrong development-run schema'] };
   if (run.development_only !== true || run.default_off !== true || run.nb0_status !== 'OPEN_AWAITING_GOVERNANCE_DECISION' || run.concordance_status !== 'POLICY_UNRESOLVED') errors.push('development and unresolved-NB-0 boundaries must be explicit');
@@ -317,6 +321,12 @@ function validateDevelopmentRun(run) {
     const secondPassRun = candidate && (run.second_pass || []).find((brainRun) => brainRun.brain_id === candidate.brain_id);
     if (!candidate || !secondPassRun || certification.run_id !== secondPassRun.run_id || certification.finding_sha512 !== hash(candidate)) errors.push('certification must bind to the exact candidate and actual second-pass brain run');
   }
+  for (const brainRun of run.second_pass || []) {
+    if (!Array.isArray(brainRun.finding_ids)) continue;
+    const expected = (run.finding_certifications || []).filter((certification) => certification.status === 'CERTIFIED' && certification.guardian_decision === 'APPROVED' &&
+      (run.candidates || []).some((candidate) => candidate.candidate_id === certification.finding_id && candidate.brain_id === brainRun.brain_id)).map((certification) => certification.finding_id);
+    if (C.stableStringify(brainRun.finding_ids) !== C.stableStringify(expected)) errors.push(brainRun.brain_id + ' second-pass finding_ids must exactly list guardian-approved CERTIFIED candidates');
+  }
   if (!plain(run.concordance) || run.concordance.status !== 'POLICY_UNRESOLVED' ||
       !Array.isArray(run.concordance.concordant_themes) || run.concordance.concordant_themes.length ||
       !Array.isArray(run.concordance.verified_conclusions) || run.concordance.verified_conclusions.length) errors.push('unresolved concordance cannot emit agreement or verified conclusions');
@@ -324,6 +334,11 @@ function validateDevelopmentRun(run) {
   delete digestCopy.run_sha512;
   if (SHA512_RE.test(run.run_sha512 || '') && hash(digestCopy) !== run.run_sha512) errors.push('run digest does not identify the development record');
   return { valid: errors.length === 0, errors };
+}
+
+function validateDevelopmentRun(run) {
+  try { return validateDevelopmentRunUnsafe(run); }
+  catch (error) { return { valid: false, errors: ['Development-run canonicalisation/validation failed closed: ' + error.message] }; }
 }
 
 module.exports = { SCHEMA, VIEW_SCHEMA, RELEASE_FLAGS, buildDevelopmentRun, validateDevelopmentRun };

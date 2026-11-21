@@ -40,6 +40,9 @@ function alignClaims(left, right) {
   if (left.polarity !== right.polarity && sameValue(left.object, right.object)) {
     return freeze({ ...base, status: 'CANDIDATE_CONTRADICTION', candidate_class: 'POLARITY' });
   }
+  if (left.polarity !== right.polarity) {
+    return freeze({ ...base, status: 'UNRESOLVED_OPPOSITE_POLARITY_DIFFERENT_OBJECTS' });
+  }
   if (left.polarity === right.polarity && !sameValue(left.object, right.object)) {
     const numeric = left.object && right.object && typeof left.object === 'object' && typeof right.object === 'object' &&
       Object.prototype.hasOwnProperty.call(left.object, 'amount') && Object.prototype.hasOwnProperty.call(right.object, 'amount') &&
@@ -82,6 +85,11 @@ function buildEvidenceGraph(bundle, sourceTexts) {
   const claimsById = Object.create(null);
   const nodes = [];
   const edges = [];
+  const claimIds = new Set();
+  for (const claim of bundle.claims) {
+    if (claimIds.has(claim.claim_id)) throw new TypeError('Claim IDs must be unique before evidence-graph construction');
+    claimIds.add(claim.claim_id);
+  }
   for (const atom of bundle.evidence_atoms) {
     atomsById[atom.evidence_id] = atom;
     nodes.push({ node_id: 'evidence:' + atom.evidence_id, kind: 'EVIDENCE', artifact_sha512: atom.artifact_sha512 });
@@ -136,14 +144,22 @@ function contractAtomMap(atoms, documentIds) {
   return freeze({ schema: SCHEMA, slice: 'RES-4', duplicate_groups: duplicates, false_positive_only: true, contradiction_finding: false });
 }
 
-function oracleMetrics(expected, actual) {
+function oracleMetrics(expected, actual, candidateUniverse) {
   if (!Array.isArray(expected) || !Array.isArray(actual)) throw new TypeError('Oracle metrics require arrays');
   const expectedById = Object.create(null);
   const actualById = Object.create(null);
-  for (const item of expected) expectedById[item.candidate_id] = item;
-  for (const item of actual) actualById[item.candidate_id] = item;
+  const register = (items, target, label) => {
+    for (const item of items) {
+      if (!plain(item) || !text(item.candidate_id)) throw new TypeError(label + ' entries require candidate IDs');
+      if (own(target, item.candidate_id)) throw new TypeError(label + ' candidate IDs must be unique: ' + item.candidate_id);
+      target[item.candidate_id] = item;
+    }
+  };
+  register(expected, expectedById, 'Expected');
+  register(actual, actualById, 'Actual');
+  if (candidateUniverse !== undefined && (!Array.isArray(candidateUniverse) || candidateUniverse.some((item) => !text(item)) || new Set(candidateUniverse).size !== candidateUniverse.length)) throw new TypeError('Candidate universe must be an explicit array of unique candidate IDs');
   const ids = sortedUnique(Object.keys(expectedById).concat(Object.keys(actualById)));
-  let tp = 0, fp = 0, fn = 0, tn = 0, localized = 0;
+  let tp = 0, fp = 0, fn = 0, localized = 0;
   for (const candidateId of ids) {
     const wanted = own(expectedById, candidateId);
     const found = own(actualById, candidateId);
@@ -153,8 +169,10 @@ function oracleMetrics(expected, actual) {
     } else if (found) fp++;
     else fn++;
   }
+  const detection = { true_positive: tp, false_positive: fp, false_negative: fn };
+  if (candidateUniverse !== undefined) detection.true_negative = candidateUniverse.filter((candidateId) => !own(expectedById, candidateId) && !own(actualById, candidateId)).length;
   return freeze({
-    schema: SCHEMA, slice: 'RES-5', detection: { true_positive: tp, false_positive: fp, false_negative: fn, true_negative: tn },
+    schema: SCHEMA, slice: 'RES-5', detection,
     localization: { detected: tp, exact_anchor_matches: localized },
     detection_and_localization_are_separate: true
   });
@@ -187,18 +205,31 @@ function rejectionRegister(entries) {
   return freeze({ schema: SCHEMA, slice: 'RES-8', entries: records, evidence_deleted: false });
 }
 
+function formalFactKey(fact) {
+  return C.stableStringify({ predicate: fact.predicate, subject: fact.subject, object: fact.object, group: fact.group || null });
+}
+
 function saturateFormalFacts(facts, rules, budget) {
   if (!Array.isArray(facts) || !Array.isArray(rules)) throw new TypeError('Formal saturation requires fact and rule arrays');
   const limit = budget === undefined ? 1000 : budget;
   if (!Number.isSafeInteger(limit) || limit < 1) throw new TypeError('Formal saturation budget must be positive');
   const known = Object.create(null);
   const proofs = Object.create(null);
-  const pending = facts.map((fact) => ({ ...clone(fact), origin: 'ASSERTED' }));
+  const queued = new Set();
+  const pending = [];
+  for (const fact of facts) {
+    const enriched = { ...clone(fact), origin: 'ASSERTED' };
+    const key = formalFactKey(enriched);
+    if (queued.has(key)) continue;
+    queued.add(key);
+    pending.push(enriched);
+  }
   let steps = 0;
   while (pending.length) {
     if (++steps > limit) return freeze({ schema: SCHEMA, slice: 'RES-3', status: 'BUDGET_EXCEEDED', facts: Object.values(known), proofs });
     const fact = pending.shift();
-    const key = C.stableStringify({ predicate: fact.predicate, subject: fact.subject, object: fact.object, group: fact.group || null });
+    const key = formalFactKey(fact);
+    queued.delete(key);
     if (known[key]) continue;
     known[key] = fact;
     proofs[key] = fact.origin === 'ASSERTED' ? [{ fact_id: fact.fact_id, origin: 'ASSERTED' }] : fact.proof;
@@ -215,7 +246,14 @@ function saturateFormalFacts(facts, rules, budget) {
           break;
         }
       }
-      if (matched) pending.push({ ...clone(rule.then), fact_id: rule.rule_id + ':' + Object.keys(known).length + ':' + pending.length, origin: 'DERIVED', proof });
+      if (matched) {
+        const derived = { ...clone(rule.then), fact_id: rule.rule_id + ':' + Object.keys(known).length + ':' + pending.length, origin: 'DERIVED', proof };
+        const derivedKey = formalFactKey(derived);
+        if (!known[derivedKey] && !queued.has(derivedKey)) {
+          queued.add(derivedKey);
+          pending.push(derived);
+        }
+      }
     }
   }
   const values = Object.values(known);
@@ -230,14 +268,18 @@ function saturateFormalFacts(facts, rules, budget) {
   return freeze({ schema: SCHEMA, slice: 'RES-3', status: conflicts.length ? 'FORMAL_CONFLICT_CANDIDATES' : 'SATURATED_NO_DERIVED_CONFLICT', facts: values, proofs, conflicts, steps });
 }
 
-function syntheticLegalReasoner(facts, rules, query) {
+function syntheticLegalReasoner(facts, rules, query, budget) {
   if (!Array.isArray(facts) || !Array.isArray(rules) || !plain(query) || query.synthetic !== true ||
       facts.some((fact) => fact.synthetic !== true) || rules.some((rule) => rule.synthetic !== true || rule.qualified_review_status !== 'SYNTHETIC_FIXTURE_REVIEWED')) {
     throw new TypeError('The formal legal reasoner accepts only explicitly synthetic facts and reviewed synthetic rules');
   }
   const formalFacts = facts.map((fact) => ({ ...fact, fact_id: fact.fact_id || id(SCHEMA, 'SYNTHETIC_FACT', fact) }));
   const formalRules = rules.map((rule) => ({ ...rule, when: rule.when, then: { ...rule.then, synthetic: true } }));
-  const saturated = saturateFormalFacts(formalFacts, formalRules);
+  const saturated = saturateFormalFacts(formalFacts, formalRules, budget);
+  if (saturated.status === 'BUDGET_EXCEEDED') return freeze({
+    schema: SCHEMA, slice: 'RES-9', synthetic_only: true, legal_conclusion: false, governing_law_determination: false,
+    status: 'BUDGET_EXCEEDED', proof: null, qualified_legal_review_still_required: true
+  });
   const match = saturated.facts.find((fact) => fact.predicate === query.predicate && fact.subject === query.subject && sameValue(fact.object, query.object));
   return freeze({
     schema: SCHEMA, slice: 'RES-9', synthetic_only: true, legal_conclusion: false, governing_law_determination: false,
