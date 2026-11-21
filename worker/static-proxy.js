@@ -129,10 +129,10 @@ export function siteHeaders(contentType, isHtml, source) {
   const h = new Headers({ "Content-Type": contentType, "X-Content-Type-Options": "nosniff", "X-VO-Site-Source": source });
   if (isHtml) {
     h.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    headers.set("Pragma", "no-cache");
-    headers.set("Expires", "0");
+    h.set("Pragma", "no-cache");
+    h.set("Expires", "0");
   } else {
-    headers.set("Cache-Control", "public, max-age=300, must-revalidate");
+    h.set("Cache-Control", "public, max-age=300, must-revalidate");
   }
   return h;
 }
