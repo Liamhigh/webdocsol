@@ -22,11 +22,17 @@
     PROMOTION_DECISION: 'vo.promotion-decision.v1',
     FINDING_AUDIT: 'vo.finding-audit.v1',
     GUARDIAN_DECISION: 'vo.guardian-decision.v1',
-    FINDING_CERTIFICATION: 'vo.finding-certification.v1'
+    FINDING_CERTIFICATION: 'vo.finding-certification.v1',
+    EVIDENCE_BUNDLE: 'vo.evidence-bundle.v1'
   });
   var BRAIN_IDS = Object.freeze(['B1', 'B2', 'B3', 'B4', 'B5', 'B6', 'B7', 'B8', 'B9']);
   var ENGAGEMENT_STATUSES = Object.freeze(['ENGAGED', 'PARTIAL', 'NOT_ENGAGED', 'NOT_EVALUATED', 'FAILED', 'UNSUPPORTED']);
   var REVIEW_STATUSES = Object.freeze(['PASS', 'FAIL', 'INSUFFICIENT', 'NOT_EVALUATED']);
+  var RUN_OUTPUT_FIELDS = Object.freeze([
+    'brain_id', 'execution_mode', 'engagement_status', 'coverage',
+    'candidate_ids', 'support_ids', 'opposition_ids', 'exclusion_ids',
+    'recommendation_ids', 'finding_ids', 'rule_hits', 'uncertainties'
+  ]);
   var SHA512_RE = /^[0-9a-f]{128}$/;
 
   function isRecord(value) {
@@ -61,12 +67,20 @@
   }
   function uniqueStrings(value) {
     if (!Array.isArray(value) || !value.length) return false;
-    var seen = {};
+    var seen = Object.create(null);
     for (var i = 0; i < value.length; i++) {
-      if (!nonEmptyString(value[i]) || seen[value[i]]) return false;
+      if (!nonEmptyString(value[i]) || Object.prototype.hasOwnProperty.call(seen, value[i])) return false;
       seen[value[i]] = true;
     }
     return true;
+  }
+  function hasOwn(record, key) {
+    return isRecord(record) && Object.prototype.hasOwnProperty.call(record, key);
+  }
+  function sourceTextFor(sourceTexts, evidenceId) {
+    return hasOwn(sourceTexts, evidenceId) && typeof sourceTexts[evidenceId] === 'string'
+      ? sourceTexts[evidenceId]
+      : undefined;
   }
   function stringArray(value) {
     if (!Array.isArray(value)) return false;
@@ -79,18 +93,22 @@
     return true;
   }
   function validateCoverage(coverage) {
-    var envelope = {
-      module_id: 'coverage-check', module_version: '1', implementation_digest: 'coverage-check',
-      status: 'completed', input_sha512: 'a'.repeat(128), reference_time: null,
-      configuration: {}, dependencies: [], coverage: coverage,
-      observations: [], findings: [], warnings: [], failure: null
-    };
-    var result = C.validateModuleEnvelope(envelope);
-    return result.errors.filter(function (message) {
-      return message.indexOf('coverage') !== -1 || message.indexOf('completed work') !== -1 ||
-        message.indexOf('every unit') !== -1 || message.indexOf('duplicate') !== -1 ||
-        message.indexOf('one unit') !== -1;
-    });
+    try {
+      var envelope = {
+        module_id: 'coverage-check', module_version: '1', implementation_digest: 'coverage-check',
+        status: 'completed', input_sha512: 'a'.repeat(128), reference_time: null,
+        configuration: {}, dependencies: [], coverage: coverage,
+        observations: [], findings: [], warnings: [], failure: null
+      };
+      var result = C.validateModuleEnvelope(envelope);
+      return result.errors.filter(function (message) {
+        return message.indexOf('coverage') !== -1 || message.indexOf('completed work') !== -1 ||
+          message.indexOf('every unit') !== -1 || message.indexOf('duplicate') !== -1 ||
+          message.indexOf('one unit') !== -1;
+      });
+    } catch (error) {
+      return ['coverage is malformed: ' + error.message];
+    }
   }
   function validateMediaAnchor(anchor) {
     var errors = [];
@@ -104,9 +122,11 @@
       'time_base requires positive safe-integer numerator and denominator');
     addError(errors, safeInteger(anchor.start_ticks) && safeInteger(anchor.end_ticks) && anchor.end_ticks > anchor.start_ticks,
       'media time range requires end_ticks after start_ticks');
-    if (anchor.frame_start !== null || anchor.frame_end !== null) {
-      addError(errors, safeInteger(anchor.frame_start) && safeInteger(anchor.frame_end) && anchor.frame_end > anchor.frame_start,
-        'frame range must be null or a non-empty increasing safe-integer range');
+    var hasFrameStart = anchor.frame_start !== null && typeof anchor.frame_start !== 'undefined';
+    var hasFrameEnd = anchor.frame_end !== null && typeof anchor.frame_end !== 'undefined';
+    if (hasFrameStart || hasFrameEnd) {
+      addError(errors, hasFrameStart && hasFrameEnd && safeInteger(anchor.frame_start) && safeInteger(anchor.frame_end) && anchor.frame_end > anchor.frame_start,
+        'frame range must be absent/null or a complete non-empty increasing safe-integer range');
     }
     addError(errors, isPlainRecord(anchor.decoder) && nonEmptyString(anchor.decoder.name) && nonEmptyString(anchor.decoder.version),
       'decoder name and version are required');
@@ -160,11 +180,31 @@
     addError(errors, claim.condition === null || nonEmptyString(claim.condition), 'condition must be a string or null');
     addError(errors, uniqueStrings(claim.source_evidence_ids), 'source_evidence_ids must be a non-empty unique string array');
     addError(errors, stringArray(claim.unresolved_fields), 'unresolved_fields must be a string array');
+    if (Array.isArray(claim.unresolved_fields)) {
+      ['subject', 'predicate', 'actor', 'object', 'modality', 'condition'].forEach(function (key) {
+        addError(errors, claim[key] !== null || claim.unresolved_fields.indexOf(key) !== -1,
+          'null semantic field ' + key + ' must be listed in unresolved_fields');
+      });
+    }
     return { valid: errors.length === 0, errors: errors };
   }
   function createClaimRecord(spec) {
     var record = cloneWithSchema(spec, SCHEMAS.CLAIM_RECORD);
     return finish(record, validateClaimRecord(record).errors);
+  }
+
+  function brainRunOutputPayload(run) {
+    if (!isPlainRecord(run)) throw new TypeError('BrainRunRecord output requires a plain object');
+    var payload = {};
+    for (var i = 0; i < RUN_OUTPUT_FIELDS.length; i++) {
+      var key = RUN_OUTPUT_FIELDS[i];
+      if (!hasOwn(run, key)) throw new TypeError('BrainRunRecord output is missing ' + key);
+      payload[key] = run[key];
+    }
+    return payload;
+  }
+  function hashBrainRunOutput(run) {
+    return hashRecordPayload(brainRunOutputPayload(run));
   }
 
   function validateBrainRunRecord(run) {
@@ -187,6 +227,28 @@
     });
     addError(errors, plainRecordArray(run.rule_hits), 'rule_hits must contain plain records');
     addError(errors, validHash(run.output_sha512), 'output_sha512 must be a SHA-512 identity');
+    if (validHash(run.output_sha512)) {
+      try {
+        addError(errors, run.output_sha512 === hashBrainRunOutput(run), 'output_sha512 must identify the exact contracted run output');
+      } catch (error) {
+        errors.push('run output cannot be canonically hashed: ' + error.message);
+      }
+    }
+    if (run.execution_mode === 'ANALYSIS' && (run.engagement_status === 'ENGAGED' || run.engagement_status === 'PARTIAL')) {
+      addError(errors, Array.isArray(run.input_view_hashes) && run.input_view_hashes.length > 0,
+        'ENGAGED/PARTIAL analysis requires at least one input-view hash');
+      addError(errors, isRecord(run.coverage) && safeInteger(run.coverage.units_processed) && run.coverage.units_processed > 0,
+        'ENGAGED/PARTIAL analysis requires processed coverage');
+    }
+    if (run.execution_mode === 'PREVIEW') {
+      ['candidate_ids', 'support_ids', 'opposition_ids', 'exclusion_ids', 'recommendation_ids', 'finding_ids', 'rule_hits', 'input_view_hashes'].forEach(function (key) {
+        addError(errors, Array.isArray(run[key]) && run[key].length === 0, 'PREVIEW cannot emit or claim ' + key);
+      });
+      addError(errors, isRecord(run.coverage) && run.coverage.units_total === 0 && run.coverage.units_processed === 0 &&
+        Array.isArray(run.coverage.units_skipped) && run.coverage.units_skipped.length === 0 &&
+        Array.isArray(run.coverage.units_failed) && run.coverage.units_failed.length === 0,
+        'PREVIEW coverage must be empty with zero processed units');
+    }
     if (run.brain_id === 'B9') {
       ['candidate_ids', 'support_ids', 'opposition_ids', 'exclusion_ids', 'finding_ids'].forEach(function (key) {
         addError(errors, Array.isArray(run[key]) && run[key].length === 0, 'B9 cannot emit ' + key);
@@ -207,7 +269,7 @@
     if (!isPlainRecord(result)) return;
     addError(errors, REVIEW_STATUSES.indexOf(result.status) !== -1, label + '.status is not contracted');
     addError(errors, stringArray(result.reasons), label + '.reasons must be a string array');
-    addError(errors, result.status === 'NOT_EVALUATED' || result.reasons.length > 0, label + ' evaluated status requires a reason');
+    addError(errors, result.status === 'NOT_EVALUATED' || (Array.isArray(result.reasons) && result.reasons.length > 0), label + ' evaluated status requires a reason');
   }
   function validatePromotionDecision(decision) {
     var errors = [];
@@ -216,6 +278,13 @@
     addError(errors, nonEmptyString(decision.decision_id) && nonEmptyString(decision.candidate_id), 'decision_id and candidate_id are required');
     for (var i = 1; i <= 7; i++) validateRuleResult(decision['P' + i], 'P' + i, errors);
     addError(errors, stringArray(decision.failed_rules), 'failed_rules must be a string array');
+    var expectedFailedRules = [];
+    for (var f = 1; f <= 7; f++) {
+      var rule = decision['P' + f];
+      if (isPlainRecord(rule) && (rule.status === 'FAIL' || rule.status === 'INSUFFICIENT')) expectedFailedRules.push('P' + f);
+    }
+    addError(errors, stringArray(decision.failed_rules) && C.stableStringify(decision.failed_rules) === C.stableStringify(expectedFailedRules),
+      'failed_rules must exactly list every FAIL/INSUFFICIENT P-rule in P1–P7 order');
     addError(errors, decision.supported_proposition === null || nonEmptyString(decision.supported_proposition), 'supported_proposition must be text or null');
     addError(errors, isPlainRecord(decision.independence_analysis), 'independence_analysis must be a record');
     if (isPlainRecord(decision.independence_analysis)) {
@@ -228,13 +297,13 @@
     addError(errors, stringArray(decision.reasons), 'reasons must be a string array');
     if (decision.decision === 'PROMOTED') {
       for (var p = 1; p <= 7; p++) addError(errors, decision['P' + p] && decision['P' + p].status === 'PASS', 'PROMOTED requires P' + p + ' PASS');
-      addError(errors, decision.failed_rules.length === 0 && nonEmptyString(decision.supported_proposition), 'PROMOTED requires no failed rules and a bounded proposition');
-      addError(errors, decision.independence_analysis.status === 'REVIEWED', 'PROMOTED requires reviewed independence analysis');
+      addError(errors, Array.isArray(decision.failed_rules) && decision.failed_rules.length === 0 && nonEmptyString(decision.supported_proposition), 'PROMOTED requires no failed rules and a bounded proposition');
+      addError(errors, isPlainRecord(decision.independence_analysis) && decision.independence_analysis.status === 'REVIEWED', 'PROMOTED requires reviewed independence analysis');
     }
     if (decision.decision === 'NOT_EVALUATED') {
       for (var n = 1; n <= 7; n++) addError(errors, decision['P' + n] && decision['P' + n].status === 'NOT_EVALUATED', 'NOT_EVALUATED requires every P-rule NOT_EVALUATED');
       addError(errors, decision.supported_proposition === null, 'NOT_EVALUATED cannot assert a supported proposition');
-      addError(errors, decision.independence_analysis.status === 'NOT_EVALUATED', 'NOT_EVALUATED promotion requires independence analysis NOT_EVALUATED');
+      addError(errors, isPlainRecord(decision.independence_analysis) && decision.independence_analysis.status === 'NOT_EVALUATED', 'NOT_EVALUATED promotion requires independence analysis NOT_EVALUATED');
     }
     return { valid: errors.length === 0, errors: errors };
   }
@@ -243,7 +312,7 @@
     return finish(record, validatePromotionDecision(record).errors);
   }
 
-  function validateFindingAudit(audit) {
+  function validateFindingAudit(audit, sourceTexts) {
     var errors = [];
     if (!isPlainRecord(audit)) return { valid: false, errors: ['FindingAudit must be a plain object'] };
     addError(errors, audit.schema === SCHEMAS.FINDING_AUDIT, 'wrong FindingAudit schema');
@@ -252,21 +321,36 @@
     addError(errors, nonEmptyString(audit.type_id), 'type_id is required');
     addError(errors, stringArray(audit.actors), 'actors must be a string array');
     addError(errors, uniqueStrings(audit.source_evidence_ids), 'source_evidence_ids must be non-empty and unique');
-    addError(errors, plainRecordArray(audit.source_anchors), 'source_anchors must contain anchor records');
+    addError(errors, plainRecordArray(audit.source_anchors) && audit.source_anchors.length > 0,
+      'source_anchors must contain at least one valid evidence-linked anchor');
+    if (Array.isArray(audit.source_anchors)) {
+      for (var i = 0; i < audit.source_anchors.length; i++) {
+        var anchor = audit.source_anchors[i];
+        if (!isPlainRecord(anchor)) continue;
+        addError(errors, nonEmptyString(anchor.evidence_id) && Array.isArray(audit.source_evidence_ids) && audit.source_evidence_ids.indexOf(anchor.evidence_id) !== -1,
+          'each source anchor must link to a listed source_evidence_id');
+        try {
+          var anchorResult = validateAnyAnchor(anchor, sourceTextFor(sourceTexts, anchor.evidence_id));
+          for (var a = 0; a < anchorResult.errors.length; a++) errors.push('source_anchors[' + i + ']: ' + anchorResult.errors[a]);
+        } catch (error) {
+          errors.push('source_anchors[' + i + '] is malformed: ' + error.message);
+        }
+      }
+    }
     addError(errors, plainRecordArray(audit.supporting_excerpts) && plainRecordArray(audit.rule_hits), 'supporting_excerpts and rule_hits must contain records');
     ['contradiction_checks', 'corroboration_checks', 'exclusion_checks', 'uncertainties', 'promotion_reasons', 'demotion_reasons'].forEach(function (key) {
       addError(errors, stringArray(audit[key]), key + ' must be a string array');
     });
-    if (Object.prototype.hasOwnProperty.call(audit, 'development_scores')) {
+    if (hasOwn(audit, 'development_scores')) {
       addError(errors, isPlainRecord(audit.development_scores), 'development_scores must be a record when present');
-      addError(errors, audit.development_scores.disclosure === 'DEVELOPMENT_ONLY_NOT_PRODUCTION_CONFIDENCE',
+      addError(errors, isPlainRecord(audit.development_scores) && audit.development_scores.disclosure === 'DEVELOPMENT_ONLY_NOT_PRODUCTION_CONFIDENCE',
         'development scores require explicit non-production disclosure');
     }
     return { valid: errors.length === 0, errors: errors };
   }
-  function createFindingAudit(spec) {
+  function createFindingAudit(spec, sourceTexts) {
     var record = cloneWithSchema(spec, SCHEMAS.FINDING_AUDIT);
-    return finish(record, validateFindingAudit(record).errors);
+    return finish(record, validateFindingAudit(record, sourceTexts).errors);
   }
 
   function validateGuardianDecision(guardian) {
@@ -280,10 +364,19 @@
     addError(errors, plainRecordArray(guardian.items), 'items must contain decision records');
     if (Array.isArray(guardian.items)) {
       var approved = 0, denied = 0;
+      var seenFindingIds = Object.create(null);
       for (var i = 0; i < guardian.items.length; i++) {
         var item = guardian.items[i];
+        if (!isPlainRecord(item)) {
+          errors.push('guardian item ' + i + ' must be a plain record');
+          continue;
+        }
         addError(errors, nonEmptyString(item.finding_id) && ['APPROVED', 'DENIED', 'LIMITED'].indexOf(item.decision) !== -1 && nonEmptyString(item.reason),
           'each guardian item requires finding_id, decision and reason');
+        if (nonEmptyString(item.finding_id)) {
+          addError(errors, !hasOwn(seenFindingIds, item.finding_id), 'guardian finding_id values must be unique');
+          seenFindingIds[item.finding_id] = true;
+        }
         if (item.decision === 'APPROVED') approved++;
         if (item.decision === 'DENIED' || item.decision === 'LIMITED') denied++;
       }
@@ -326,6 +419,77 @@
     return finish(record, validateFindingCertification(record).errors);
   }
 
+  function validateEvidenceBundle(bundle, sourceTexts) {
+    var errors = [];
+    if (!isPlainRecord(bundle)) return { valid: false, errors: ['EvidenceBundle must be a plain object'] };
+    addError(errors, bundle.schema === SCHEMAS.EVIDENCE_BUNDLE, 'wrong EvidenceBundle schema');
+    addError(errors, nonEmptyString(bundle.bundle_id), 'bundle_id is required');
+    addError(errors, plainRecordArray(bundle.evidence_atoms) && bundle.evidence_atoms.length > 0,
+      'evidence_atoms must contain at least one EvidenceAtom record');
+    addError(errors, plainRecordArray(bundle.claims), 'claims must contain ClaimRecord records');
+    addError(errors, plainRecordArray(bundle.finding_audits), 'finding_audits must contain FindingAudit records');
+
+    var atomsById = Object.create(null);
+    if (Array.isArray(bundle.evidence_atoms)) {
+      for (var i = 0; i < bundle.evidence_atoms.length; i++) {
+        var atom = bundle.evidence_atoms[i];
+        if (!isPlainRecord(atom)) continue;
+        var atomResult = validateEvidenceAtom(atom, sourceTextFor(sourceTexts, atom.evidence_id));
+        for (var a = 0; a < atomResult.errors.length; a++) errors.push('evidence_atoms[' + i + ']: ' + atomResult.errors[a]);
+        if (nonEmptyString(atom.evidence_id)) {
+          addError(errors, !hasOwn(atomsById, atom.evidence_id), 'EvidenceAtom IDs must be unique');
+          if (!hasOwn(atomsById, atom.evidence_id)) atomsById[atom.evidence_id] = atom;
+        }
+      }
+    }
+    if (Array.isArray(bundle.claims)) {
+      for (var c = 0; c < bundle.claims.length; c++) {
+        var claim = bundle.claims[c];
+        var claimResult = validateClaimRecord(claim);
+        for (var cr = 0; cr < claimResult.errors.length; cr++) errors.push('claims[' + c + ']: ' + claimResult.errors[cr]);
+        if (isPlainRecord(claim) && Array.isArray(claim.source_evidence_ids)) {
+          for (var ce = 0; ce < claim.source_evidence_ids.length; ce++) {
+            addError(errors, nonEmptyString(claim.source_evidence_ids[ce]) && hasOwn(atomsById, claim.source_evidence_ids[ce]),
+              'claims[' + c + '] references missing EvidenceAtom ' + String(claim.source_evidence_ids[ce]));
+          }
+        }
+      }
+    }
+    if (Array.isArray(bundle.finding_audits)) {
+      for (var f = 0; f < bundle.finding_audits.length; f++) {
+        var audit = bundle.finding_audits[f];
+        var auditResult = validateFindingAudit(audit, sourceTexts);
+        for (var ar = 0; ar < auditResult.errors.length; ar++) errors.push('finding_audits[' + f + ']: ' + auditResult.errors[ar]);
+        if (!isPlainRecord(audit)) continue;
+        if (Array.isArray(audit.source_evidence_ids)) {
+          for (var ae = 0; ae < audit.source_evidence_ids.length; ae++) {
+            addError(errors, nonEmptyString(audit.source_evidence_ids[ae]) && hasOwn(atomsById, audit.source_evidence_ids[ae]),
+              'finding_audits[' + f + '] references missing EvidenceAtom ' + String(audit.source_evidence_ids[ae]));
+          }
+        }
+        if (Array.isArray(audit.source_anchors)) {
+          for (var s = 0; s < audit.source_anchors.length; s++) {
+            var sourceAnchor = audit.source_anchors[s];
+            if (!isPlainRecord(sourceAnchor) || !hasOwn(atomsById, sourceAnchor.evidence_id)) continue;
+            try {
+              var atomAnchor = C.canonicalClone(sourceAnchor);
+              delete atomAnchor.evidence_id;
+              addError(errors, C.stableStringify(atomAnchor) === C.stableStringify(atomsById[sourceAnchor.evidence_id].anchor),
+                'finding_audits[' + f + '] source anchor must exactly match its referenced EvidenceAtom anchor');
+            } catch (error) {
+              errors.push('finding_audits[' + f + '] source anchor cannot be canonically compared: ' + error.message);
+            }
+          }
+        }
+      }
+    }
+    return { valid: errors.length === 0, errors: errors };
+  }
+  function createEvidenceBundle(spec, sourceTexts) {
+    var record = cloneWithSchema(spec, SCHEMAS.EVIDENCE_BUNDLE);
+    return finish(record, validateEvidenceBundle(record, sourceTexts).errors);
+  }
+
   function hashRecordPayload(payload) {
     return C.sha512Hex(C.stableStringify(payload));
   }
@@ -343,6 +507,8 @@
     createClaimRecord: createClaimRecord,
     validateBrainRunRecord: validateBrainRunRecord,
     createBrainRunRecord: createBrainRunRecord,
+    brainRunOutputPayload: brainRunOutputPayload,
+    hashBrainRunOutput: hashBrainRunOutput,
     validatePromotionDecision: validatePromotionDecision,
     createPromotionDecision: createPromotionDecision,
     validateFindingAudit: validateFindingAudit,
@@ -351,6 +517,8 @@
     createGuardianDecision: createGuardianDecision,
     validateFindingCertification: validateFindingCertification,
     createFindingCertification: createFindingCertification,
+    validateEvidenceBundle: validateEvidenceBundle,
+    createEvidenceBundle: createEvidenceBundle,
     hashRecordPayload: hashRecordPayload
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
