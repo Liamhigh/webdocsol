@@ -61,7 +61,7 @@ The three development suites are:
 |---|---|---|
 | `nine-brain-contracts.test.mjs` | 200 | NB-0/NB-1 records and read-only preview |
 | `nine-brain-orchestration-research-legal.test.mjs` | 251 | Two passes, P1–P7/audit/guardian/certification, B4/B8/B9 boundaries, RES-1–RES-9, all 169 Allen compositions, B7 cross-border gaps and adapter gating |
-| `nine-brain-verification-adjudication.test.mjs` | 83 | Bounded immutable packets, trusted audit lineage, isolated mocked providers with cancellation, fail-closed panels, revision-history dispositions, packet-grounded narrative and authoritative-state annexes |
+| `nine-brain-verification-adjudication.test.mjs` | 85 | Bounded immutable packets, trusted audit lineage, isolated mocked providers with cancellation, fail-closed panels, revision-history dispositions, packet-grounded narrative and authoritative-state annexes |
 
 These suites use synthetic fixtures only. They do not call live providers, modify production Findings JSON, or exercise a production Worker route.
 
@@ -75,7 +75,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 4 | `page-boot` | `page-boot.test.mjs` | 101 | `seal-document.html` boots with pdf-lib missing; vendored libraries present; locks on the page's wiring |
 | 5 | `engine-perf` | `engine-perf.test.mjs` | 5 | Per-page extraction parses the PDF once (counts parses, not time) |
 | 6 | `voice-crypto` | `voice-crypto.test.mjs` | 7 | `.voice` encryption round trip between `seal-document.html` and `verify.html` |
-| 7 | `pdf-encrypt` | `pdf-encrypt.test.mjs` | 8 | `pdf-encrypt.js` output opened by the vendored pdf.js |
+| 7 | `pdf-encrypt` | `pdf-encrypt.js` | 8 | `pdf-encrypt.js` output opened by the vendored pdf.js |
 | 8 | `find-seal` | `find-seal.test.mjs` | 8 | The sealed-document finder in `verify.html` |
 | 9 | `seal-guard` | `seal-guard.test.mjs` | 16 | `seal-guard.js`: no unsealed PDF leaves the page |
 | 10 | `franchise-lease` | `franchise-lease.test.mjs` | 15 | D38/D39 (CT44/CT45) |
@@ -123,7 +123,7 @@ The separately gated development registry is `run-development.js`:
 |-------|------|--------|-----------|
 | `nine-brain-contracts` | `nine-brain-contracts.test.mjs` | 200 | NB-0 source register and unresolved concordance; NB-1 shared records and bundle evidence resolution; UTF-16/structural/media anchors; semantic run/output/engagement/promotion/audit/guardian reconciliation; malformed-input safety; read-only preview identity/tamper/replay and immutability checks |
 | `nine-brain-orchestration-research-legal` | `nine-brain-orchestration-research-legal.test.mjs` | 251 | Canonical B8 view/candidate mapping; certified-only finding lists; cyclic/malformed validation; precomputed Allen set composition; unique claims/metric IDs; unresolved different-object polarity; formal deduplication/budget propagation; B7 recomputed identity/digest and coverage reconciliation |
-| `nine-brain-verification-adjudication` | `nine-brain-verification-adjudication.test.mjs` | 83 | Minimum-necessary privacy fixture; exact packet/candidate/audit/evidence links; async authorization and trusted handler lineage; explicit source/context review; endpoint independence and timeout cancellation; evidence-only resolution; complete disposition history; packet-grounded narrative and authoritative annex freshness |
+| `nine-brain-verification-adjudication` | `nine-brain-verification-adjudication.test.mjs` | 85 | Minimum-necessary privacy fixture; exact packet/candidate/audit/evidence links; async authorization and trusted handler lineage; explicit source/context review; endpoint independence and timeout cancellation; evidence-only resolution; complete disposition history; packet-grounded narrative and authoritative annex freshness |
 
 **Writing a regression test:** use the **exact text from the real document** that caused the
 failure, not a paraphrase. Every guard in `ENGINE.md` §4 has one, and that is why they have
@@ -136,7 +136,7 @@ survived reviewers asking for them to be "simplified".
 2. Count with `tests/_assert.js` (`ok`, `noThrow`, `throws`, `done('<name>')`). It is CommonJS;
    from a `.mjs` file load it with `createRequire`, as `pages-bridge.test.mjs` does. A local
    `pass` / `fail` pair, as most suites use, works too.
-3. End by printing `[<name>] PASS=<n> FAIL=<m>` and exit non-zero on any failure. `done()` does
+3. End by printing `[<label>] PASS=<n> FAIL=<m>` and exit non-zero on any failure. `done()` does
    both. `run-all.js` reads only the exit status.
 4. Add production/baseline files to the `suites` array in `tests/run-all.js`. Add an independently gated development contract to `tests/run-development.js` instead, leaving the production/baseline registry unchanged.
 5. Build file paths from the test's own location (`path.join(__dirname, '..', f)`, or
