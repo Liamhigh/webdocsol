@@ -32,7 +32,8 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
   ```
 
 - `npm run check` runs `node --check` on `seal-guard.js`, `forensic-engine-page.js`,
-  `forensic-report.js`, `ots-proof.js`, `pdf-encrypt.js`, `worker/verum-rules.js`,
+  `forensic-report.js`, `ots-proof.js`, `pdf-encrypt.js`, `nine-brain-contracts.js`,
+  `nine-brain-source-register.js`, `nine-brain-preview.js`, `worker/verum-rules.js`,
   `worker/static-proxy.js` and `worker/site-assets.js`. It does not cover `functions/[[path]].js`
   or the page-native scripts inside the HTML pages; `page-boot` evaluates the inline script of
   `seal-document.html` instead.
@@ -50,9 +51,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**65 registered suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, and one Phase 4 active-graph suite. `run-all.js` is the
-registry — **a test file that is not listed in it does not run**, so register every new file
-there. What each suite guards, and the real evidence bundle behind it, is in
+**65 registered production/baseline suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, and one Phase 4 active-graph suite. `run-all.js` is that registry — **a production/baseline test file that is not listed in it does not run**. Separately gated development contracts are registered in `run-development.js`; `npm test` runs both registries. What each production/baseline suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
 
 The registry, in run order. The label is what the suite prints in its `PASS=` line.
@@ -61,7 +60,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 |---|-------|------|--------|-----------|
 | 1 | `forensic-engine` | `forensic-engine.test.js` | 328 | `forensic-engine-page.js`: every detector on edge inputs without throwing; known contradictions detected; clean text silent; the serial-pattern engine; `runForensicEngine` via the raw-text fallback |
 | 2 | `ots-proof` | `ots-proof.test.js` | 16 | `ots-proof.js`: OpenTimestamps receipt format and round trips |
-| 3 | `worker` | `worker.test.mjs` | 388 | `worker/verum-rules.js` against a mocked `env` (no live KV or AI) |
+| 3 | `worker` | `worker.test.mjs` | 408 | `worker/verum-rules.js` against a mocked `env` (no live KV or AI) |
 | 4 | `page-boot` | `page-boot.test.mjs` | 101 | `seal-document.html` boots with pdf-lib missing; vendored libraries present; locks on the page's wiring |
 | 5 | `engine-perf` | `engine-perf.test.mjs` | 5 | Per-page extraction parses the PDF once (counts parses, not time) |
 | 6 | `voice-crypto` | `voice-crypto.test.mjs` | 7 | `.voice` encryption round trip between `seal-document.html` and `verify.html` |
@@ -83,7 +82,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 22 | `ai-assess-batch` | `ai-assess-batch.test.mjs` | 19 | Client batching under the `/api/v1/ai/assess` caps; the review never removes or changes a finding, and a candidate is a duplicate only when it restates one |
 | 23 | `narrate-excerpt` | `narrate-excerpt.test.mjs` | 16 | `voBuildNarrateExcerpt` |
 | 24 | `human-report` | `human-report.test.mjs` | 81 | The court-ready narrative wiring: Worker, `forensic-report.js` and page agree |
-| 25 | `site-serving` | `site-serving.test.mjs` | 56 | `worker/static-proxy.js` serving tiers and `/api/v1/site/health` |
+| 25 | `site-serving` | `site-serving.test.mjs` | 60 | `worker/static-proxy.js` serving tiers, `.assetsignore`/deny-list parity including nine-brain development modules, and `/api/v1/site/health` |
 | 26 | `pages-bridge` | `pages-bridge.test.mjs` | 18 | `functions/[[path]].js`, the www bridge; static fallback denies Markdown |
 | 27 | `zip-intake` | `zip-intake.test.mjs` | 25 | The page's ZIP reader for WhatsApp chat exports |
 | 28 | `rule-package` | `rule-package.test.mjs` | 129 | Signed rule packages on the website |
@@ -104,9 +103,14 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 98 | ZA pack fixtures: neutral/reported/docket/SAFLII forms and boundaries, multiword supra, pinpoints, captions, negatives and neutrality, verbatim round-trips, byte-identical replay |
 | 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 | Phase 3 synthetic redaction corpus: exact UTF-16 ranges, protected verbatim evidence quotes, preserved references, and a fail-closed production-module flag |
 | 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
-
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
-`run-all.js` is always the authoritative complete registry.
+`run-all.js` is always the authoritative complete production/baseline registry.
+
+The separately gated development registry is `run-development.js`:
+
+| Label | File | Checks | Exercises |
+|-------|------|--------|-----------|
+| `nine-brain-contracts` | `nine-brain-contracts.test.mjs` | 200 | NB-0 source register and unresolved concordance; NB-1 shared records and bundle evidence resolution; UTF-16/structural/media anchors; semantic run/output/engagement/promotion/audit/guardian reconciliation; malformed-input safety; read-only preview identity/tamper/replay and immutability checks |
 
 **Writing a regression test:** use the **exact text from the real document** that caused the
 failure, not a paraphrase. Every guard in `ENGINE.md` §4 has one, and that is why they have
@@ -121,7 +125,7 @@ survived reviewers asking for them to be "simplified".
    `pass` / `fail` pair, as most suites use, works too.
 3. End by printing `[<name>] PASS=<n> FAIL=<m>` and exit non-zero on any failure. `done()` does
    both. `run-all.js` reads only the exit status.
-4. Add the file name to the `suites` array in `tests/run-all.js`.
+4. Add production/baseline files to the `suites` array in `tests/run-all.js`. Add an independently gated development contract to `tests/run-development.js` instead, leaving the production/baseline registry unchanged.
 5. Build file paths from the test's own location (`path.join(__dirname, '..', f)`, or
    `import.meta.url` in a `.mjs` file), so the suite does not depend on the working directory.
 6. Load shipped code the way the existing suites do. The root scripts load with `require`
