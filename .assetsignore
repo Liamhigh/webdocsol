@@ -14,6 +14,9 @@ node_modules/
 package.json
 package-lock.json
 wrangler.toml
+nine-brain-contracts.js
+nine-brain-source-register.js
+nine-brain-preview.js
 *.md
 # Brand source assets (app icon, banners) and the portable sealing spec's
 # page snapshots are repository material, not site files.
