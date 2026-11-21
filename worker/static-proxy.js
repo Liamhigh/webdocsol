@@ -77,7 +77,7 @@ export async function serveStatic(request) {
 }
 __name(serveStatic, "serveStatic");
 export const REPO_RAW_ORIGIN = "https://raw.githubusercontent.com/Liamhigh/webdocsol/main";
-export const SITE_DENY_RE = /^\/(?:\.|worker\/|tests\/|evaluation\/|functions\/|node_modules\/|brand\/|seal-module\/|package(?:-lock)?\.json$|wrangler\.toml$|nine-brain-(?:contracts|source-register|preview)\.js$|[^/]*\.md$|.*\/[^/]*\.md$|greensky-ocr-verify\.pdf$|forensic_test_document\.pdf$)/i;
+export const SITE_DENY_RE = /^\/(?:\.|worker\/|tests\/|evaluation\/|development\/|functions\/|node_modules\/|brand\/|seal-module\/|package(?:-lock)?\.json$|wrangler\.toml$|nine-brain-(?:contracts|source-register|preview)\.js$|[^/]*\.md$|.*\/[^/]*\.md$|greensky-ocr-verify\.pdf$|forensic_test_document\.pdf$)/i;
 export const CONTENT_TYPES = {
   html: "text/html; charset=utf-8",
   htm: "text/html; charset=utf-8",
@@ -222,4 +222,3 @@ export async function serveSite(request, env2) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 __name(serveSite, "serveSite");
-
