@@ -75,7 +75,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 4 | `page-boot` | `page-boot.test.mjs` | 101 | `seal-document.html` boots with pdf-lib missing; vendored libraries present; locks on the page's wiring |
 | 5 | `engine-perf` | `engine-perf.test.mjs` | 5 | Per-page extraction parses the PDF once (counts parses, not time) |
 | 6 | `voice-crypto` | `voice-crypto.test.mjs` | 7 | `.voice` encryption round trip between `seal-document.html` and `verify.html` |
-| 7 | `pdf-encrypt` | `pdf-encrypt.js` | 8 | `pdf-encrypt.js` output opened by the vendored pdf.js |
+| 7 | `pdf-encrypt` | `pdf-encrypt.test.mjs` | 8 | `pdf-encrypt.js` output opened by the vendored pdf.js |
 | 8 | `find-seal` | `find-seal.test.mjs` | 8 | The sealed-document finder in `verify.html` |
 | 9 | `seal-guard` | `seal-guard.test.mjs` | 16 | `seal-guard.js`: no unsealed PDF leaves the page |
 | 10 | `franchise-lease` | `franchise-lease.test.mjs` | 15 | D38/D39 (CT44/CT45) |
