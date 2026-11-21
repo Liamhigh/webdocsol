@@ -129,10 +129,10 @@ export function siteHeaders(contentType, isHtml, source) {
   const h = new Headers({ "Content-Type": contentType, "X-Content-Type-Options": "nosniff", "X-VO-Site-Source": source });
   if (isHtml) {
     h.set("Cache-Control", "no-store, no-cache, must-revalidate, proxy-revalidate");
-    h.set("Pragma", "no-cache");
-    h.set("Expires", "0");
+    headers.set("Pragma", "no-cache");
+    headers.set("Expires", "0");
   } else {
-    h.set("Cache-Control", "public, max-age=300, must-revalidate");
+    headers.set("Cache-Control", "public, max-age=300, must-revalidate");
   }
   return h;
 }
@@ -222,3 +222,4 @@ export async function serveSite(request, env2) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 __name(serveSite, "serveSite");
+
