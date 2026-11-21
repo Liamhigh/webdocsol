@@ -6,7 +6,7 @@
 | Repository | `Liamhigh/webdocsol` |
 | Base | `438c7915d613b8727758e4b3d02c93d62894bbfd` (merged NB-0/NB-1 `main`) |
 | Branch | `feat/nine-brain-development-completion` |
-| Build status | Complete local development implementation; pull-request and peer review remain required |
+| Build status | Complete local development implementation; PR #324 review remediation applied; final-head peer review and CI remain required |
 | Production status | **Not enabled**; no production engine, report renderer, Findings JSON, Worker route, seal, QR or OpenTimestamps semantics changed |
 | Canonical architecture | Exactly B1–B9; no tenth brain |
 | NB-0 governance | `OPEN_AWAITING_GOVERNANCE_DECISION` |
@@ -65,10 +65,10 @@ No archive dependency was imported or installed. No real-matter evidence was add
 ## 4. Research slices
 
 - **RES-1:** normalized claim alignment distinguishes polarity and numeric candidates from qualifier/actor mismatches and unknown polarity.
-- **RES-2:** deterministic evidence/claim graph with complete coverage and candidate lineage.
-- **RES-3:** bounded formal-fact saturation with derivation proofs, conflict candidates and budget-exhaustion status.
+- **RES-2:** deterministic evidence/claim graph with complete coverage, unique claim IDs and candidate lineage.
+- **RES-3:** bounded formal-fact saturation with derivation proofs, known/pending deduplication, conflict candidates and budget-exhaustion status.
 - **RES-4:** cross-document contract duplicate map labelled false-positive-only, not a contradiction finding.
-- **RES-5:** detection and exact-anchor localization metrics calculated separately.
+- **RES-5:** detection and exact-anchor localization metrics calculated separately; true negatives are emitted only with an explicit candidate universe and duplicate candidate IDs are rejected.
 - **RES-6:** supplied reviewer-result disagreement analysis; no live reviewer call and no “agreement equals truth” inference.
 - **RES-7:** exact Allen relation composition; path consistency is labelled `PATH_CONSISTENT_NOT_SCHEDULE_PROOF`, while a separate witness validator can prove a supplied schedule.
 - **RES-8:** rejection register that retains evidence and audit history.
@@ -85,25 +85,25 @@ The technical review seats are:
 The implementation enforces the following:
 
 - Both model requests contain the byte-identical immutable packet and exact Constitution text/hash.
-- Packets contain minimum-necessary excerpts and anchors, never original PDF bytes.
+- Packets contain bounded minimum-necessary excerpts and original page offsets, never original PDF bytes or unrelated full-page text. Text context is limited to 160 UTF-16 code units on each side after validating the full original source anchor.
 - Providers receive no other reviewer’s response.
-- Distinct provider/model/endpoint origins are required; duplicate/common-origin seats fail.
-- Strict bounded JSON, response-size limits, timeouts, HTTPS endpoints and explicit unavailable/malformed statuses are implemented.
+- Distinct Mistral/DeepSeek endpoints and transport functions are required; duplicate/common-origin seats fail.
+- Strict bounded JSON, response-size limits, timeout-triggered transport abortion, HTTPS endpoints and explicit unavailable/malformed statuses are implemented.
 - No silent cross-provider fallback exists.
 - Unknown anchors, changed propositions, cross-talk, missing raw output and status/raw-response inconsistencies fail closed.
 - Source, context and independence tests must pass in every seat.
 - Two passing seats out of three produce a failed panel, not verification.
 - A technically supported panel still cannot grant an independent-verification label before separate human adjudication.
 
-The VER-4 development handler derives the responsible-brain review from the finding audit and obtains endpoints/configuration from trusted server-side dependencies. Client-supplied provider endpoints are not used. The handler is **not wired into the production Worker**.
+The VER-4 development handler awaits authorization and derives the responsible-brain review from trusted server-side run/candidate lineage, complete `FindingAudit` validation, original source texts and explicit source/context review evidence. Caller-supplied audits are ignored and matching anchors alone cannot pass the source/context tests. Endpoints/configuration come from trusted server-side dependencies. Client-supplied provider endpoints are not used. The handler is **not wired into the production Worker**.
 
 ## 6. Disposition, narrative and annex controls
 
-`DispositionStore` implements monotonic revisions and compare-and-swap commits. A stale expected revision is rejected. Confirmation requires a valid, recomputed three-seat technical panel. Context resolution requires anchored qualifying evidence from the immutable packet. Rejection, resolution or narrative changes never delete evidence or audit history.
+`DispositionStore` implements monotonic revisions and compare-and-swap commits while preserving every committed revision in history. A stale expected revision is rejected. Confirmation requires a valid, recomputed three-seat technical panel. Context resolution requires anchored qualifying evidence IDs from the immutable packet; candidate IDs do not qualify. Rejection, resolution or narrative changes never delete evidence or audit history.
 
-`NarrativeProvenance` requires separate human approval bound to the current disposition digest. Every material statement must be verbatim authorized source text mapped to source IDs; invented facts or law are rejected. Narrative cannot itself resolve a contradiction.
+`NarrativeProvenance` requires separate human approval bound to the current disposition digest. Every material statement must be a verbatim quote reconciled directly against the linked disposition packet’s evidence IDs and anchors; caller-supplied excerpt maps cannot authorize invention. Narrative cannot itself resolve a contradiction.
 
-`VerificationAnnex` validates packet, reviews, panel, disposition and narrative digests and refuses stale/superseded revisions. It reports `READY_FOR_EXISTING_EXTERNAL_SEALER`, `sealed: false` and `blockchain_anchor: null`; it does not alter the existing sealer or claim blockchain anchoring.
+`VerificationAnnex` validates packet, reviews, panel, disposition and packet-grounded narrative digests and checks freshness against the authoritative disposition store, refusing stale/superseded revisions. It reports `READY_FOR_EXISTING_EXTERNAL_SEALER`, `sealed: false` and `blockchain_anchor: null`; it does not alter the existing sealer or claim blockchain anchoring.
 
 ## 7. B7 cross-border framework
 
@@ -121,9 +121,9 @@ Final local results on the isolated branch:
 
 - `npm test` — **all 65 production/baseline suites GREEN**.
 - `nine-brain-contracts.test.mjs` — **200 assertions passed**.
-- `nine-brain-orchestration-research-legal.test.mjs` — **236 assertions passed**.
-- `nine-brain-verification-adjudication.test.mjs` — **59 assertions passed**.
-- Development total — **495 assertions passed, 0 failed**.
+- `nine-brain-orchestration-research-legal.test.mjs` — **251 assertions passed**.
+- `nine-brain-verification-adjudication.test.mjs` — **83 assertions passed**.
+- Development total — **534 assertions passed, 0 failed**.
 - Playwright — **12 tests passed** across Chromium, Firefox and WebKit.
 - `npm run check` — all shipped and development JavaScript syntax checks passed.
 - `tests/site-serving.test.mjs` — **61 assertions passed**, including `development/` exclusion/deny parity.
@@ -131,7 +131,22 @@ Final local results on the isolated branch:
 
 The first full Node attempt had one environment-only startup failure because the clean worktree lacked locked development dependencies. After installing the lockfile dependencies without lifecycle scripts or bin symlinks, the complete suite passed. The first browser attempt likewise could not launch missing browser binaries; after installing the pinned Playwright browsers, all 12 tests passed. Neither environment failure is counted as a passing test.
 
-## 9. Production compatibility and rollback
+## 9. PR #324 review remediation
+
+The automated PR review findings were addressed with fail-closed implementation changes and regression tests rather than by weakening assertions:
+
+- Minimum-necessary packet/provider excerpts with substantial unrelated-text absence tests.
+- Awaited asynchronous authorization; trusted handler audit lineage; complete audit and exact packet/evidence reconciliation.
+- Explicit responsible-brain source/context review evidence; packet-evidence-only review anchors; shared-endpoint rejection; timeout cancellation.
+- Evidence-only context resolution, complete disposition history, packet-grounded narrative and authoritative-store annex freshness.
+- Consistent explicit B8 view/candidate mapping; guardian-approved certified-only second-pass `finding_ids`; cyclic/malformed run validation without throws.
+- Precomputed Allen set composition; unique claim/metric identities; unresolved opposite-polarity/different-object alignment; formal deduplication and RES-9 budget propagation.
+- Recomputed B7 observation IDs/digests and exact declared-jurisdiction/pack/coverage-gap reconciliation.
+- True negatives omitted unless a candidate universe is defined.
+
+The proposed common production module envelope was **not** applied to RES research outputs. These functions return explicitly development-only, non-module research records; wrapping them in `ModuleEnvelope` would falsely suggest a contracted analysis module executed and would silently mix research contracts with production module semantics. Their existing `vo.nine-brain-research.v1` schemas and production-finding prohibitions remain unchanged.
+
+## 10. Production compatibility and rollback
 
 The following production files were not edited:
 
@@ -147,7 +162,7 @@ Findings JSON remains `1.11.0`; the production engine remains `5.7.2-web`. Exist
 
 Rollback is revert-based: revert the branch commit or remove `development/nine-brain/`, its three test files and registrations, then restore the two static-serving exclusions and documentation. There is no database migration, persisted production state, provider credential, live route or seal-format migration to unwind.
 
-## 10. Remaining gates before any production claim
+## 11. Remaining gates before any production claim
 
 1. Technical, logical, legal and clarity peer review of the pull request.
 2. A versioned human NB-0 governance decision selecting concordance policy, agreement unit and independence test.

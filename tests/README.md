@@ -60,8 +60,8 @@ The three development suites are:
 | File | Checks | Exercises |
 |---|---|---|
 | `nine-brain-contracts.test.mjs` | 200 | NB-0/NB-1 records and read-only preview |
-| `nine-brain-orchestration-research-legal.test.mjs` | 236 | Two passes, P1–P7/audit/guardian/certification, B4/B8/B9 boundaries, RES-1–RES-9, all 169 Allen compositions, B7 cross-border gaps and adapter gating |
-| `nine-brain-verification-adjudication.test.mjs` | 59 | Immutable packets, identical model contexts, isolated mocked providers, fail-closed panels, revision-checked human dispositions, grounded narrative and annexes |
+| `nine-brain-orchestration-research-legal.test.mjs` | 251 | Two passes, P1–P7/audit/guardian/certification, B4/B8/B9 boundaries, RES-1–RES-9, all 169 Allen compositions, B7 cross-border gaps and adapter gating |
+| `nine-brain-verification-adjudication.test.mjs` | 83 | Bounded immutable packets, trusted audit lineage, isolated mocked providers with cancellation, fail-closed panels, revision-history dispositions, packet-grounded narrative and authoritative-state annexes |
 
 These suites use synthetic fixtures only. They do not call live providers, modify production Findings JSON, or exercise a production Worker route.
 
@@ -113,7 +113,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 62 | `legal-citations` | `legal-citations.test.mjs` | 78 | Neutral citation occurrence core: registry and helper validation, exact spans and IDs, immediate-predecessor Id./exact-caption supra resolution, empty pack selection, envelope validity, engine flag on/off integration, exact failure identity and failed-page coverage |
 | 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 98 | ZA pack fixtures: neutral/reported/docket/SAFLII forms and boundaries, multiword supra, pinpoints, captions, negatives and neutrality, verbatim round-trips, byte-identical replay |
 | 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 | Phase 3 synthetic redaction corpus: exact UTF-16 ranges, protected verbatim evidence quotes, preserved references, and a fail-closed production-module flag |
-| 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
+| 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete production/baseline registry.
 
@@ -122,6 +122,8 @@ The separately gated development registry is `run-development.js`:
 | Label | File | Checks | Exercises |
 |-------|------|--------|-----------|
 | `nine-brain-contracts` | `nine-brain-contracts.test.mjs` | 200 | NB-0 source register and unresolved concordance; NB-1 shared records and bundle evidence resolution; UTF-16/structural/media anchors; semantic run/output/engagement/promotion/audit/guardian reconciliation; malformed-input safety; read-only preview identity/tamper/replay and immutability checks |
+| `nine-brain-orchestration-research-legal` | `nine-brain-orchestration-research-legal.test.mjs` | 251 | Canonical B8 view/candidate mapping; certified-only finding lists; cyclic/malformed validation; precomputed Allen set composition; unique claims/metric IDs; unresolved different-object polarity; formal deduplication/budget propagation; B7 recomputed identity/digest and coverage reconciliation |
+| `nine-brain-verification-adjudication` | `nine-brain-verification-adjudication.test.mjs` | 83 | Minimum-necessary privacy fixture; exact packet/candidate/audit/evidence links; async authorization and trusted handler lineage; explicit source/context review; endpoint independence and timeout cancellation; evidence-only resolution; complete disposition history; packet-grounded narrative and authoritative annex freshness |
 
 **Writing a regression test:** use the **exact text from the real document** that caused the
 failure, not a paraphrase. Every guard in `ENGINE.md` §4 has one, and that is why they have
