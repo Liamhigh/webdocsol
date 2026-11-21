@@ -17,6 +17,8 @@ console.log('RUN  nine-brain-orchestration-research-legal.test.mjs');
 console.log('======================================================\n');
 
 const base = makeBase();
+const originalSourceText = base.sourceTexts['evidence-one'];
+const originalBundle = C.stableStringify(base.bundle);
 const initial = O.buildDevelopmentRun(base);
 ok(initial.first_pass.length === 9 && initial.second_pass.length === 9, 'NB-2/NB-6 produce exactly nine canonical records in each pass');
 ok(initial.first_pass.every((run, index) => run.brain_id === 'B' + (index + 1) && run.pass_number === 1), 'First-pass brain order and pass identity are exact');
@@ -26,20 +28,26 @@ ok(initial.support_register.length === 1 && initial.support_register[0].brain_id
 ok(initial.first_pass[3].candidate_ids.length === 0 && initial.first_pass[3].support_ids.length === 1, 'B4 run has support but no candidate output');
 ok(initial.first_pass[8].recommendation_ids.length === 1 && initial.first_pass[8].candidate_ids.length === 0 && initial.first_pass[8].finding_ids.length === 0, 'B9 emits advisory recommendations without candidates or findings');
 ok(initial.candidates.some((candidate) => candidate.brain_id === 'B8' && candidate.source_anchors[0].coordinate_space === 'media-time-v1'), 'NB-8 has a dedicated media candidate register with rational-time evidence anchors');
-ok(initial.opposition_register.length === 2 && initial.exclusion_register.length === 0, 'Structured contradiction candidates retain opposition-register lineage');
+ok(initial.opposition_register.length === 2 && initial.exclusion_register.length === 1 && initial.exclusion_register[0].evidence_retained, 'Structured candidates retain opposition lineage and unresolved different-object polarity enters the exclusion register without deleting evidence');
 ok(initial.concordance.status === 'POLICY_UNRESOLVED' && initial.concordance.verified_conclusions.length === 0, 'NB-0 remains unresolved and cannot emit concordant verified conclusions');
 ok(initial.triple_verification_status === 'NOT_EXECUTED' && initial.human_adjudication_status === 'NOT_ADJUDICATED', 'Orchestration does not fabricate Triple Verification or human adjudication');
 ok(Object.values(O.RELEASE_FLAGS).every((value) => value === false), 'NB-10 release controls are all default-off');
 ok(initial.production_findings_json_version === '1.11.0' && initial.production_engine_version === '5.7.2-web', 'Production compatibility identities remain unchanged');
 const replay = O.buildDevelopmentRun(base);
 ok(C.stableStringify(initial) === C.stableStringify(replay) && initial.run_sha512 === replay.run_sha512, 'Canonical replay is byte-for-byte deterministic');
-ok(C.sha512Hex(C.stableStringify(base.bundle)) === initial.evidence_bundle_sha512 && base.sourceTexts['evidence-one'] === 'Synthetic statement one: the amount is R100.00.', 'Orchestration does not mutate original evidence records or source text');
+ok(C.sha512Hex(C.stableStringify(base.bundle)) === initial.evidence_bundle_sha512 && base.sourceTexts['evidence-one'] === originalSourceText && C.stableStringify(base.bundle) === originalBundle, 'Orchestration does not mutate original evidence records or source text');
+ok(initial.input_views.first_pass[7].existing_findings.length === 1 && initial.input_views.first_pass[7].existing_findings[0].development_brain_id === 'B8' && initial.candidates.some((candidate) => candidate.brain_id === 'B8' && candidate.source_finding.development_brain_id === 'B8'), 'Explicit B8 media-register override is consistent in input views and candidate construction');
 let malformedThrew = false;
 try {
   const malformedResult = O.validateDevelopmentRun({ schema: O.SCHEMA, concordance: {} });
   ok(!malformedResult.valid, 'Malformed development-run input returns an invalid result');
 } catch (error) { malformedThrew = true; }
 ok(!malformedThrew, 'Malformed public development-run validation fails without throwing');
+const cyclicRun = { schema: O.SCHEMA };
+cyclicRun.self = cyclicRun;
+let cyclicResult;
+try { cyclicResult = O.validateDevelopmentRun(cyclicRun); } catch (error) { cyclicResult = { thrown: true }; }
+ok(cyclicResult && cyclicResult.valid === false && !cyclicResult.thrown, 'Cyclic development-run input returns invalid instead of throwing during canonicalisation');
 ok(O.validateDevelopmentRun(initial).valid, 'Development run validates its complete lineage');
 const tamperedRun = C.canonicalClone(initial);
 tamperedRun.candidates[0].proposition = 'Tampered proposition';
@@ -75,6 +83,7 @@ const overclaimPreview = O.buildDevelopmentRun(overclaimBase);
 const overclaim = O.buildDevelopmentRun({ ...overclaimBase, promotionReviews: completeReviews(overclaimPreview) });
 const overclaimCandidate = overclaim.candidates.find((candidate) => candidate.proposition.includes('conclusive truth'));
 ok(overclaim.guardian_decision.denied_count === 1 && overclaim.finding_certifications.find((certification) => certification.finding_id === overclaimCandidate.candidate_id).status === 'NOT_CERTIFIED', 'Guardian denies overclaiming language even after P1–P7 review');
+ok(!overclaim.second_pass.find((brainRun) => brainRun.brain_id === overclaimCandidate.brain_id).finding_ids.includes(overclaimCandidate.candidate_id), 'Guardian-denied candidates are excluded from second-pass finding_ids');
 
 for (const left of Allen.RELATIONS) for (const right of Allen.RELATIONS) {
   const composed = Allen.composePair(left, right);
@@ -82,6 +91,7 @@ for (const left of Allen.RELATIONS) for (const right of Allen.RELATIONS) {
 }
 ok(Allen.relation({ start: 0, end: 2 }, { start: 2, end: 4 }) === 'm', 'Allen meets relation is exact');
 ok(Allen.relation({ start: 0, end: 5 }, { start: 1, end: 4 }) === 'di', 'Allen contains relation is exact');
+ok(Allen.composeSets(['<', 'm'], ['<', 'm']).every((item) => Allen.RELATIONS.includes(item)) && Allen.composeSets(Allen.RELATIONS, Allen.RELATIONS).length === 13, 'Set composition uses canonical precomputed relation results');
 ok(Allen.CONVERSE[Allen.relation({ start: 0, end: 1 }, { start: 3, end: 4 })] === '>', 'Allen converse is correct');
 const temporal = Research.checkTemporalNetwork([
   { from: 0, to: 1, allowed: ['<'] }, { from: 1, to: 2, allowed: ['<'] }, { from: 0, to: 2, allowed: ['<'] }
@@ -101,6 +111,10 @@ const qualifierChanged = { ...negative, qualifiers: { ...negative.qualifiers, ev
 ok(Research.alignClaims(positive, negative).status === 'CANDIDATE_CONTRADICTION', 'RES-1 detects a bounded polarity candidate');
 ok(Research.alignClaims(positive, qualifierChanged).status === 'UNRESOLVED_QUALIFIER_MISMATCH', 'Different event qualifiers cannot be collapsed into a contradiction');
 ok(Research.alignClaims(positive, { ...negative, actor: 'Another actor' }).status === 'UNRESOLVED_NOT_SAME_PROPOSITION', 'Different actors do not silently form the same proposition');
+ok(Research.alignClaims(positive, { ...negative, object: { amount: '500.00', currency: 'ZAR' } }).status === 'UNRESOLVED_OPPOSITE_POLARITY_DIFFERENT_OBJECTS', 'Opposite polarity with different objects remains unresolved rather than aligned');
+const duplicateClaimBundle = C.canonicalClone(base.bundle);
+duplicateClaimBundle.claims.push(C.canonicalClone(duplicateClaimBundle.claims[0]));
+ok(throws(() => Research.buildEvidenceGraph(duplicateClaimBundle, base.sourceTexts)), 'Duplicate claim IDs are rejected before evidence-graph construction');
 const graph = Research.buildEvidenceGraph(base.bundle, base.sourceTexts);
 ok(graph.candidates.length === 2 && graph.coverage.units_total === 7 && graph.coverage.units_processed === 7, 'Evidence graph accounts for every atom and claim');
 ok(graph.candidates.every((candidate) => candidate.production_finding === false && candidate.semantic_review_status === 'NOT_EVALUATED'), 'Research candidates are not production findings');
@@ -113,6 +127,11 @@ const metrics = Research.oracleMetrics([
 ], [{ candidate_id: 'a', anchors: [{ page: 9 }] }, { candidate_id: 'c', anchors: [{ page: 3 }] }]);
 ok(metrics.detection.true_positive === 1 && metrics.detection.false_positive === 1 && metrics.detection.false_negative === 1, 'Detection metrics count expected and actual IDs separately');
 ok(metrics.localization.detected === 1 && metrics.localization.exact_anchor_matches === 0, 'Localization failure does not erase detection success');
+ok(!Object.prototype.hasOwnProperty.call(metrics.detection, 'true_negative'), 'True negatives are omitted without a defined candidate universe');
+const universeMetrics = Research.oracleMetrics([{ candidate_id: 'a', anchors: [] }], [{ candidate_id: 'a', anchors: [] }], ['a', 'b']);
+ok(universeMetrics.detection.true_negative === 1, 'True negatives are calculated only from an explicit candidate universe');
+ok(throws(() => Research.oracleMetrics([{ candidate_id: 'a', anchors: [] }, { candidate_id: 'a', anchors: [] }], [])), 'Duplicate expected candidate IDs invalidate oracle metrics');
+ok(throws(() => Research.oracleMetrics([], [{ candidate_id: 'a', anchors: [] }, { candidate_id: 'a', anchors: [] }])), 'Duplicate actual candidate IDs invalidate oracle metrics');
 const disagreement = Research.reviewerRobustness([
   { candidate_id: 'a', reviewer_id: 'one', status: 'PASS' }, { candidate_id: 'a', reviewer_id: 'two', status: 'FAIL' }
 ]);
@@ -128,10 +147,20 @@ const derived = Research.saturateFormalFacts([{ fact_id: 'f1', predicate: 'premi
   { rule_id: 'r1', when: { predicate: 'premise', subject: 's', object: true }, then: { predicate: 'result', subject: 's', object: true } }
 ]);
 ok(derived.facts.some((fact) => fact.predicate === 'result') && derived.proofs[C.stableStringify({ predicate: 'result', subject: 's', object: true, group: null })][0].rule_id === 'r1', 'Formal derivation retains a proof trace');
+ok(derived.status === 'SATURATED_NO_DERIVED_CONFLICT' && derived.facts.length === 2 && derived.steps === 2, 'Known and pending formal conclusions are deduplicated before enqueueing');
+const duplicateFacts = Research.saturateFormalFacts([
+  { fact_id: 'f1', predicate: 'premise', subject: 's', object: true },
+  { fact_id: 'f1-duplicate', predicate: 'premise', subject: 's', object: true }
+], [], 10);
+ok(duplicateFacts.facts.length === 1, 'Semantically duplicate asserted formal facts are enqueued only once');
 const syntheticLaw = Research.syntheticLegalReasoner([
   { fact_id: 'f1', synthetic: true, predicate: 'premise', subject: 's', object: true }
 ], [{ rule_id: 'r1', synthetic: true, qualified_review_status: 'SYNTHETIC_FIXTURE_REVIEWED', when: { predicate: 'premise', subject: 's', object: true }, then: { predicate: 'result', subject: 's', object: true } }], { synthetic: true, predicate: 'result', subject: 's', object: true });
 ok(syntheticLaw.status === 'SYNTHETIC_PROOF_FOUND' && syntheticLaw.legal_conclusion === false && syntheticLaw.qualified_legal_review_still_required, 'RES-9 remains a synthetic proof exercise, never a legal conclusion');
+const syntheticBudget = Research.syntheticLegalReasoner([
+  { fact_id: 'f1', synthetic: true, predicate: 'premise', subject: 's', object: true }
+], [{ rule_id: 'r1', synthetic: true, qualified_review_status: 'SYNTHETIC_FIXTURE_REVIEWED', when: { predicate: 'premise', subject: 's', object: true }, then: { predicate: 'result', subject: 's', object: true } }], { synthetic: true, predicate: 'result', subject: 's', object: true }, 1);
+ok(syntheticBudget.status === 'BUDGET_EXCEEDED' && syntheticBudget.proof === null, 'RES-9 propagates formal budget exhaustion without claiming a proof');
 ok(throws(() => Research.syntheticLegalReasoner([{ predicate: 'real', subject: 's', object: true }], [], { synthetic: true })), 'Real or unreviewed facts cannot enter the synthetic legal reasoner');
 
 const legal = Legal.buildCrossBorderObservation({
@@ -145,6 +174,12 @@ ok(legal.ip_address_used === false && legal.device_region_used === false && lega
 ok(legal.citation_occurrences[0].semantic_support === 'NOT_EVALUATED' && legal.authoritative_legal_conclusions.length === 0, 'Citation occurrence cannot become semantic legal support');
 ok(legal.selected_packs[0].id === 'za' && legal.selected_packs[0].version === '1.0.0' && legal.selected_packs[0].authority === 'CITATION_SYNTAX_ONLY', 'South Africa is the first explicit versioned syntax-only pack');
 ok(Legal.validateCrossBorderObservation(legal).valid, 'Cross-border observation validates its boundaries');
+const legalCoverageTamper = C.canonicalClone(legal);
+legalCoverageTamper.explicit_jurisdictions = ['za'];
+ok(!Legal.validateCrossBorderObservation(legalCoverageTamper).valid, 'B7 validation reconciles declared jurisdictions, selected packs and explicit coverage gaps');
+const legalIdentityTamper = C.canonicalClone(legal);
+legalIdentityTamper.citation_occurrences[0].occurrence_id = 'changed-occurrence';
+ok(!Legal.validateCrossBorderObservation(legalIdentityTamper).valid, 'B7 validation recomputes observation identity and digest instead of accepting stale lineage');
 ok(throws(() => Legal.buildCrossBorderObservation({ explicit_jurisdictions: ['za'], selected_pack_ids: ['xx'], connecting_factors: [], citation_occurrences: [] })), 'Unknown jurisdiction pack fails closed');
 const adapter = Legal.adapterObservation({
   adapter_id: 'synthetic-archive-adapter', adapter_version: '1.0.0', brain_id: 'B7', licence_security_review: 'APPROVED_FOR_DEVELOPMENT',
