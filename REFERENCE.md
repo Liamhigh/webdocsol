@@ -139,7 +139,7 @@ court-ready-narrative prompts. It must state institutional engagement honestly: 
 adopted, endorsed, accepted, validated or recognised Verum Omnis**, its platform or its
 methodology, or ruled on their merits.
 
-Other worker files: `rule-format.md` (wire format for rule packages) · `public-key.der.b64`
+Other worker files: `rule-format.md` (wire format of rule packages) · `public-key.der.b64`
 (pinned RSA public key, `RSASSA-PKCS1-v1_5` with SHA-512, key id `vo-master-1`) ·
 `seed-rules.json` (the seed rule package v1.0.0 — the engine's own rules; the tests read it) ·
 `static-proxy.js` (the site-serving chain: `serveSite`, `serveFromAssets`, `serveFromRepo`,
@@ -172,7 +172,7 @@ everything.
 | `.gitignore` | Ignores `deployment.log`. |
 | `CLAUDE.md` | Pointer to `AGENTS.md` and the eight non-negotiables. Never served. |
 | `ENHANCEMENT-PLAN.md` | Status record for the multi-phase enhancement plan (§5). Never served (`*.md`). |
-| `constitution.json` | Machine-readable twin of `constitution.html` (v8.0). Served; pinned by `tests/constitution-lock.test.mjs`. |
+| `constitution.json` | Machine-readable twin of `constitution.html` (v8.0). Served; pinned by `constitution-lock.test.mjs`. |
 | `llms.txt` | Public guidance for AI crawlers. Served. It still names Constitution v6.0 FINAL as the canonical text; open with the founder. |
 | `robots.txt`, `sitemap.xml` | Crawler rules (every agent allowed; its header comment, like `llms.txt`, still names Constitution v6.0 FINAL) and the sitemap (nine URLs, including `preview-documents.html`). Served. |
 | `verum-ui.css` | The portable stylesheet for the other surfaces. Served, but no page here links it. |
@@ -198,7 +198,7 @@ history or make the repository private is open with the founder (AGENTS.md "Open
 | `ARCHITECTURE.md` | System constraints: stateless/serverless, verification-at-the-website, how the surfaces stay one engine. |
 | `REFERENCE.md` | This file — repo map, pages, scripts, endpoints. |
 | `VERUM_OMNIS_SYSTEM_PROMPT.md` | The AI code-assistant system prompt for the whole platform (v8.0): nine brains, triple verification, constitutional compliance, per-surface requirements, §12-UI design law. Meant to be identical here, in `Liamhigh/1verum` and in `Liamhigh/firebase`; as of 3 October 2026 this copy differs from the other two in two passages added by #189 and #199 (open with the founder, AGENTS.md "Open today"). Never edited here without mirroring the change in both. |
-| `VERUM_UI_TOKENS.md` + `verum-ui.css` | Binding design system for every surface; `verum-ui.css` is the portable stylesheet for the other surfaces; no page in this repository links it. |
+| `VERUM_UI_TOKENS.md` + `verum-ui.css` | Binding design system for every surface. `verum-ui.css` is the portable stylesheet for the other surfaces; no page in this repository links it. |
 | `CONSTITUTION-v8.md` | The repository copy of the source text of the sealed charter v8.0 (`VO-9A4F3C5E825C`); the sealed PDF `constitution-v8.pdf` is the authoritative instrument. Never edited. |
 | `DEPLOYMENT.md` | Workers Builds deployment, the static-assets bundle, the site-serving chain, `/api/v1/site/health` and the www bridge. |
 | `DESIGN_LOCK.md` | Locked visual decisions on the public site. |
