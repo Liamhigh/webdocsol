@@ -32,7 +32,8 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
   ```
 
 - `npm run check` runs `node --check` on `seal-guard.js`, `forensic-engine-page.js`,
-  `forensic-report.js`, `ots-proof.js`, `pdf-encrypt.js`, `worker/verum-rules.js`,
+  `forensic-report.js`, `ots-proof.js`, `pdf-encrypt.js`, `nine-brain-contracts.js`,
+  `nine-brain-source-register.js`, `nine-brain-preview.js`, `worker/verum-rules.js`,
   `worker/static-proxy.js` and `worker/site-assets.js`. It does not cover `functions/[[path]].js`
   or the page-native scripts inside the HTML pages; `page-boot` evaluates the inline script of
   `seal-document.html` instead.
@@ -59,7 +60,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 |---|-------|------|--------|-----------|
 | 1 | `forensic-engine` | `forensic-engine.test.js` | 328 | `forensic-engine-page.js`: every detector on edge inputs without throwing; known contradictions detected; clean text silent; the serial-pattern engine; `runForensicEngine` via the raw-text fallback |
 | 2 | `ots-proof` | `ots-proof.test.js` | 16 | `ots-proof.js`: OpenTimestamps receipt format and round trips |
-| 3 | `worker` | `worker.test.mjs` | 388 | `worker/verum-rules.js` against a mocked `env` (no live KV or AI) |
+| 3 | `worker` | `worker.test.mjs` | 408 | `worker/verum-rules.js` against a mocked `env` (no live KV or AI) |
 | 4 | `page-boot` | `page-boot.test.mjs` | 101 | `seal-document.html` boots with pdf-lib missing; vendored libraries present; locks on the page's wiring |
 | 5 | `engine-perf` | `engine-perf.test.mjs` | 5 | Per-page extraction parses the PDF once (counts parses, not time) |
 | 6 | `voice-crypto` | `voice-crypto.test.mjs` | 7 | `.voice` encryption round trip between `seal-document.html` and `verify.html` |
@@ -81,7 +82,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 22 | `ai-assess-batch` | `ai-assess-batch.test.mjs` | 19 | Client batching under the `/api/v1/ai/assess` caps; the review never removes or changes a finding, and a candidate is a duplicate only when it restates one |
 | 23 | `narrate-excerpt` | `narrate-excerpt.test.mjs` | 16 | `voBuildNarrateExcerpt` |
 | 24 | `human-report` | `human-report.test.mjs` | 81 | The court-ready narrative wiring: Worker, `forensic-report.js` and page agree |
-| 25 | `site-serving` | `site-serving.test.mjs` | 56 | `worker/static-proxy.js` serving tiers and `/api/v1/site/health` |
+| 25 | `site-serving` | `site-serving.test.mjs` | 60 | `worker/static-proxy.js` serving tiers, `.assetsignore`/deny-list parity including nine-brain development modules, and `/api/v1/site/health` |
 | 26 | `pages-bridge` | `pages-bridge.test.mjs` | 18 | `functions/[[path]].js`, the www bridge; static fallback denies Markdown |
 | 27 | `zip-intake` | `zip-intake.test.mjs` | 25 | The page's ZIP reader for WhatsApp chat exports |
 | 28 | `rule-package` | `rule-package.test.mjs` | 129 | Signed rule packages on the website |
@@ -109,7 +110,7 @@ The separately gated development registry is `run-development.js`:
 
 | Label | File | Checks | Exercises |
 |-------|------|--------|-----------|
-| `nine-brain-contracts` | `nine-brain-contracts.test.mjs` | 164 | NB-0 source register and unresolved concordance; NB-1 shared records, UTF-16/structural/media anchors, B9 non-voting, fail-closed promotion/certification, read-only preview, tamper/replay and immutability checks |
+| `nine-brain-contracts` | `nine-brain-contracts.test.mjs` | 200 | NB-0 source register and unresolved concordance; NB-1 shared records and bundle evidence resolution; UTF-16/structural/media anchors; semantic run/output/engagement/promotion/audit/guardian reconciliation; malformed-input safety; read-only preview identity/tamper/replay and immutability checks |
 
 **Writing a regression test:** use the **exact text from the real document** that caused the
 failure, not a paraphrase. Every guard in `ENGINE.md` §4 has one, and that is why they have
