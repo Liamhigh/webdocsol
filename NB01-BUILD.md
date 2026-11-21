@@ -70,7 +70,7 @@ The preview has no clock, randomness, network, telemetry, locale collation, mode
 
 ## 3. Development-only serving exclusion
 
-The three new root modules are development contracts, not public website assets. `.assetsignore` prevents Workers Static Assets from uploading them, and `SITE_DENY_RE` in `worker/static-proxy.js` independently returns 404 for their repository-fallback paths. `tests/site-serving.test.mjs` locks the exclusion/deny-list parity and `tests/worker.test.mjs` exercises all three public URLs. This is an access-control exclusion only; it does not connect the modules to a production page, API, analysis route or seal.
+The three new root modules are development contracts, not public website assets. `.assetsignore` prevents Workers Static Assets from uploading them, and `SITE_DENY_RE` in `worker/static-proxy.js` independently returns 404 for their repository-fallback paths. `tests/site-serving.test.mjs` locks the exclusion/deny-list parity and exercises all three paths. This is an access-control exclusion only; it does not connect the modules to a production page, API, analysis route or seal.
 
 ## 4. Development API
 
