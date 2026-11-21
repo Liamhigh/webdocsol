@@ -104,20 +104,39 @@
     required_decision: 'A versioned human governance record must choose the concordance rule, agreement unit and independence test before production promotion. This register does not make that decision.'
   };
 
+  function isPlainRecord(value) {
+    if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
+    var prototype = Object.getPrototypeOf(value);
+    return prototype === Object.prototype || prototype === null;
+  }
+  var CANONICAL_BRAIN_NAMES = Object.freeze([
+    'Contradiction Engine', 'Document and Image Forensics', 'Communications Integrity',
+    'Behavioral and Linguistic Patterns', 'Timeline and Continuity',
+    'Financial Exposure and Transaction Patterns', 'Legal Subject Mapping',
+    'Audio and Rich Media Forensics', 'Research and Advisory Mesh'
+  ]);
+
   function validateSourceRegister(value) {
     var errors = [];
-    if (!value || value.schema !== 'vo.nine-brain-source-register.v1') errors.push('wrong source-register schema');
-    if (!value || value.nb0_status !== 'OPEN_AWAITING_GOVERNANCE_DECISION' || value.concordance_status !== 'POLICY_UNRESOLVED' || value.production_promotion_enabled !== false) {
+    if (!isPlainRecord(value)) return { valid: false, errors: ['source register must be a plain object'] };
+    if (value.schema !== 'vo.nine-brain-source-register.v1') errors.push('wrong source-register schema');
+    if (value.nb0_status !== 'OPEN_AWAITING_GOVERNANCE_DECISION' || value.concordance_status !== 'POLICY_UNRESOLVED' || value.production_promotion_enabled !== false) {
       errors.push('NB-0 must remain unresolved and production promotion disabled in this slice');
     }
-    if (!value || !Array.isArray(value.canonical_brains) || value.canonical_brains.length !== 9) errors.push('exactly nine canonical brains are required');
+    if (!Array.isArray(value.canonical_brains) || value.canonical_brains.length !== 9) errors.push('exactly nine canonical brains are required');
     else {
       for (var i = 0; i < 9; i++) {
         var brain = value.canonical_brains[i];
-        if (brain.id !== 'B' + (i + 1) || brain.voting !== (i < 8)) errors.push('canonical brain order/voting mismatch at ' + i);
+        if (!isPlainRecord(brain)) {
+          errors.push('canonical brain entry must be a plain object at ' + i);
+          continue;
+        }
+        if (brain.id !== 'B' + (i + 1) || brain.name !== CANONICAL_BRAIN_NAMES[i] || brain.voting !== (i < 8)) {
+          errors.push('canonical brain order/name/voting mismatch at ' + i);
+        }
       }
     }
-    if (!value || !Array.isArray(value.sources) || !value.sources.length) errors.push('source register cannot be empty');
+    if (!Array.isArray(value.sources) || !value.sources.length) errors.push('source register cannot be empty');
     return { valid: errors.length === 0, errors: errors };
   }
   var validation = validateSourceRegister(register);
