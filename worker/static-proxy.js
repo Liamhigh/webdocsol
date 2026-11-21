@@ -222,3 +222,4 @@ export async function serveSite(request, env2) {
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers });
 }
 __name(serveSite, "serveSite");
+
