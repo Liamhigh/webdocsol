@@ -113,7 +113,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 62 | `legal-citations` | `legal-citations.test.mjs` | 78 | Neutral citation occurrence core: registry and helper validation, exact spans and IDs, immediate-predecessor Id./exact-caption supra resolution, empty pack selection, envelope validity, engine flag on/off integration, exact failure identity and failed-page coverage |
 | 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 98 | ZA pack fixtures: neutral/reported/docket/SAFLII forms and boundaries, multiword supra, pinpoints, captions, negatives and neutrality, verbatim round-trips, byte-identical replay |
 | 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 | Phase 3 synthetic redaction corpus: exact UTF-16 ranges, protected verbatim evidence quotes, preserved references, and a fail-closed production-module flag |
-| 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
+| 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete production/baseline registry.
 
