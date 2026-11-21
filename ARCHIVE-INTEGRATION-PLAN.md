@@ -9,7 +9,7 @@
 | Production source baseline | `48836bc7c2f245b00e181d66b539c199d6fcaf2d` |
 | Engine / Findings JSON | `5.7.2-web` / `1.11.0` |
 | Archive review | Twelve supplied ZIP containers; static inspection only |
-| Constitutional boundary | Exactly B1–B9; B1–B8 vote; B9 is non-voting and advisory |
+| Constitutional boundary | Exactly B1–B9; Constitution v8 permits B1–B8 to issue findings and B9 not to do so; voting/concordance remains proposed pending NB-0 |
 
 This document records what the supplied research archives can safely contribute to Verum Omnis. It does not adopt a dependency, approve a licence, certify a model, change a detector, authorise a legal conclusion, or describe an unimplemented feature as shipped. The supplied implementation-plan patch contains version 1.3 with Addenda D and E; live `main` still contains version 1.0. Version 1.5 and Addenda F/G were not supplied and are not reconstructed here.
 
@@ -23,8 +23,8 @@ The review established the following facts:
 - No real-matter evidence was copied into fixtures or repository content.
 - Existing repository tests were run separately from the archives: all 65 Node suites passed, and `npm run check` passed. Browser tests were not run in this review.
 - The six inspected production sources are unchanged between the production baseline and live `main`; intervening changes are documentation-only.
-- The current report records `independent_verifiers: 1`. Its Thesis/Antithesis/Synthesis structure is one deterministic engine performing three checks, not three independent reviewers.
-- `LLM2_*` and `LLM3_*` are narrator-provider lanes. `/api/v1/ai/verify-law` is a legal-citation review path. Neither establishes independent Triple Verification of contradiction findings.
+- The internal `tripleVerificationOf` helper in `forensic-report.js` returns `independent_verifiers: 1`; the report renderer does not expose that numeric field as a visible report field. Its Thesis/Antithesis/Synthesis structure is one deterministic engine performing three checks, not three independent reviewers.
+- `LLM2_*` and `LLM3_*` configure external provider lanes shared by narrative generation and `lawLanes()` for `/api/v1/ai/verify-law`. When configured and that legal-review route is called, the external request includes `jurisdiction`, `candidates` (including each candidate's `statute`, `section`, and `claim`), and `contextHash` or `null`. This is legal-citation review, not independent Triple Verification of contradiction findings; operators must treat the shared configuration as a potential legal-review data-egress path.
 - Existing B7 citation extraction is deterministic and explicitly pack-driven. It produces anchored observations and leaves `findings` empty; it is not authority verification or legal interpretation.
 
 No dependency CVE audit, archive test execution, benchmark reproduction, external-model call, or legal-authoritative review was performed. Absence of a finding in this static review is not a security guarantee.
@@ -172,7 +172,7 @@ The archives strengthen existing brains; they do not create a tenth brain or cha
 
 A future restored verification label requires all of the following over the **same immutable evidence packet and bounded proposition**:
 
-1. The responsible eligible voting brain’s deterministic source/rule review.
+1. The responsible eligible finding-issuing brain's deterministic source/rule review, occupying the proposed brain-side review seat without presuming that NB-0 has approved a voting rule.
 2. An independent Mistral review.
 3. An independent DeepSeek review.
 4. Passing source, context, and independence tests.
@@ -196,6 +196,8 @@ Before provider integration, define and test:
 - Bounded proposition and existing disposition; no hidden narrative-only resolution.
 - Provider, exact model, prompt/configuration identity, response, concise reasons, coverage, and failure state for each review.
 - Separate human adjudicator decision/reason and narrative provenance when later authorized.
+- A monotonic disposition revision for every finding. Human-disposition writes must use compare-and-swap/version-checked transitions against the revision read by the adjudicator; stale or overlapping writes fail closed rather than overwriting a newer decision.
+- Every verification/disposition annex must bind to the committed disposition revision and its immutable digest. Annex generation must re-read that committed revision immediately before sealing and refuse a stale or concurrently superseded revision.
 
 Do not log secrets or indiscriminately copy evidence into telemetry. Provider packets require data-minimization, retention, region, and egress review.
 
@@ -206,8 +208,8 @@ Do not log secrets or indiscriminately copy evidence into telemetry. Provider pa
 3. **VER-2:** isolated provider adapter with no production route and no finding mutation.
 4. **VER-3:** responsible-brain plus separate Mistral/DeepSeek review records over identical packets.
 5. **VER-4:** separately reviewed bounded endpoint, proposed as `/api/v1/ai/verify-independent`; do not overload existing assess/narrate handlers.
-6. **VER-5:** human adjudication and preserved dispositions.
-7. **VER-6/VER-7:** grounded narrative, sealed verification/disposition annexes, and rollback only after separate approval.
+6. **VER-5:** human adjudication and preserved dispositions using compare-and-swap/version-checked transitions.
+7. **VER-6/VER-7:** grounded narrative, sealed verification/disposition annexes bound to the committed disposition revision, and rollback only after separate approval.
 
 Calling Mistral and DeepSeek before these gates would create additional opinions, not independent Triple Verification.
 
@@ -279,9 +281,9 @@ Each item is independently reviewable and reversible. A later item does not beco
 | **B7 legal packs** | Separate US oracle maintenance and deterministic German admission spike | Existing Eyecite admission standard; German qualified review; exact UTF-16/raw-clean anchors; no authority conclusion from occurrence |
 | **B5/B6 observations** | Selected date/money extractor research after AGPL decision | Licence clearance, deterministic-only subset, ambiguity/reference-time tests, observations-only and default-off |
 | **VER-2/VER-3** | Isolated Mistral/DeepSeek adapters and independent review records | Only after packet and responsible-brain gates; identical packets, no cross-talk, full provenance, all-three/fail-closed tests |
-| **VER-4/VER-5** | Bounded endpoint and human adjudication/dispositions | Separate route/security review, egress/retention controls, no finding mutation, human decision lineage |
+| **VER-4/VER-5** | Bounded endpoint and human adjudication/dispositions | Separate route/security review, egress/retention controls, no finding mutation, human decision lineage, compare-and-swap disposition revisions, and stale-revision/overlapping-adjudication rejection tests |
 | **NB-7/NB-8/NB-9** | Approved research slices, B8 coverage/findings, report/seal compatibility and annexes | Separate taxonomy/schema/seal approvals; old-seal verification and no silent production-version change |
-| **NB-10 / VER-6/VER-7** | Staged rollout, grounded narrative, sealed annexes, rollback | Only authorized anchored material; source-to-sentence coverage; human approval; deployment/rollback rehearsal |
+| **NB-10 / VER-6/VER-7** | Staged rollout, grounded narrative, sealed annexes, rollback | Only authorized anchored material; source-to-sentence coverage; human approval; annex binding to the committed disposition revision; stale-revision sealing refusal; deployment/rollback rehearsal |
 
 Do not rewrite all detectors in one branch. Do not begin provider endpoints before NB-1/VER-1 and the responsible-brain/context prerequisites exist.
 
@@ -307,7 +309,7 @@ Every probabilistic research/evaluation lane must additionally report:
 - A separately labelled evaluation result; no transfer of a paper’s or project’s benchmark score to Verum Omnis accuracy.
 - No sealed-finding output and no independent-verification claim.
 
-Triple Verification tests must include all-three pass, two-of-three rejection, reviewer dissent, provider timeout/failure, malformed response, duplicate/shared-origin reviewer, packet mismatch, Constitution mismatch, missing context, human rejection, and proof that deterministic findings remain byte-for-byte unchanged.
+Triple Verification tests must include all-three pass, two-of-three rejection, reviewer dissent, provider timeout/failure, malformed response, duplicate/shared-origin reviewer, packet mismatch, Constitution mismatch, missing context, human rejection, and proof that deterministic findings remain byte-for-byte unchanged. VER-5 through VER-7 must additionally test stale-revision compare-and-swap rejection, overlapping adjudication, annex generation racing a newer disposition, refusal to seal a superseded revision, and exact binding of every sealed annex to the committed disposition revision and digest.
 
 ## 10. Decisions and non-goals
 
