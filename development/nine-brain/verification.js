@@ -202,6 +202,14 @@ function failureReview(packet, config, status, reasons, rawResponse) {
   });
 }
 
+function lacksPassGrounding(review) {
+  return review.status === 'PASS' && (
+    !Array.isArray(review.anchor_ids) || !review.anchor_ids.length ||
+    !['thesis', 'antithesis', 'synthesis'].every((key) => text(review[key])) ||
+    !Array.isArray(review.reasons) || !review.reasons.length
+  );
+}
+
 function parseReview(packet, config, raw) {
   let parsed;
   try { parsed = JSON.parse(raw); } catch (error) { return failureReview(packet, config, 'MALFORMED', ['Provider response was not valid JSON.'], raw); }
@@ -215,10 +223,12 @@ function parseReview(packet, config, raw) {
   const allowedEvidenceIds = evidenceIds(packet);
   const unknownAnchors = parsed.anchor_ids.filter((anchorId) => allowedEvidenceIds.indexOf(anchorId) === -1);
   const propositionMatches = parsed.proposition === packet.candidate.proposition;
-  const status = unknownAnchors.length || !propositionMatches ? 'FAIL' : parsed.status;
+  const ungroundedPass = lacksPassGrounding(parsed);
+  const status = unknownAnchors.length || !propositionMatches || ungroundedPass ? 'FAIL' : parsed.status;
   const reasons = parsed.reasons.slice();
   if (unknownAnchors.length) reasons.push('Response cited anchors outside the immutable packet: ' + unknownAnchors.join(', '));
   if (!propositionMatches) reasons.push('Response changed the bounded proposition.');
+  if (ungroundedPass) reasons.push('A passing review requires packet evidence anchors and substantive thesis, antithesis, synthesis and reasons.');
   return freeze({
     schema: SCHEMAS.REVIEW, version: VERSION, reviewer_slot: config.reviewer_slot,
     reviewer_origin: config.provider + ':' + config.model + ':' + config.endpoint,
@@ -326,6 +336,7 @@ function validateReviewRecord(review, packet) {
   if (REVIEW_STATUSES.indexOf(review.status) === -1 || TESTS.some((key) => ['PASS', 'FAIL', 'INSUFFICIENT'].indexOf(review[key]) === -1)) errors.push('review status or verification test is malformed');
   if (!['thesis', 'antithesis', 'synthesis'].every((key) => typeof review[key] === 'string') || !Array.isArray(review.anchor_ids) || !Array.isArray(review.reasons)) errors.push('review thesis/antithesis/synthesis, anchors and reasons are required');
   if (Array.isArray(review.anchor_ids) && (new Set(review.anchor_ids).size !== review.anchor_ids.length || review.anchor_ids.some((anchorId) => !text(anchorId)))) errors.push('review anchor IDs must be unique strings');
+  if (lacksPassGrounding(review)) errors.push('passing review requires packet evidence anchors and substantive thesis, antithesis, synthesis and reasons');
   if (packet && Array.isArray(review.anchor_ids)) {
     const allowed = evidenceIds(packet);
     if (review.anchor_ids.some((anchorId) => allowed.indexOf(anchorId) === -1)) errors.push('review anchors must identify packet evidence, not candidate or external IDs');
