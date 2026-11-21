@@ -68,9 +68,10 @@ freeze(COMPOSITION);
 
 function composeSets(left, right) {
   if (!Array.isArray(left) || !Array.isArray(right) || !left.length || !right.length) return [];
+  if (left.some((item) => RELATIONS.indexOf(item) === -1) || right.some((item) => RELATIONS.indexOf(item) === -1)) throw new TypeError('Unknown Allen relation in set composition');
   const output = new Set();
   for (const a of left) {
-    for (const b of right) for (const value of composePair(a, b)) output.add(value);
+    for (const b of right) for (const value of COMPOSITION[a][b]) output.add(value);
   }
   return RELATIONS.filter((item) => output.has(item));
 }

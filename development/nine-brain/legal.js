@@ -67,10 +67,28 @@ function validateCrossBorderObservation(value) {
   else for (const pack of value.selected_packs) {
     if (!plain(pack) || !Object.prototype.hasOwnProperty.call(SUPPORTED_SYNTAX_PACKS, pack.id) || pack.version !== SUPPORTED_SYNTAX_PACKS[pack.id].version || pack.authority !== 'CITATION_SYNTAX_ONLY') errors.push('selected pack identity or authority boundary is invalid');
   }
+  if (!Array.isArray(value.explicit_jurisdictions) || !value.explicit_jurisdictions.length || value.explicit_jurisdictions.some((code) => typeof code !== 'string' || !/^[a-z]{2}$/.test(code)) ||
+      C.stableStringify(value.explicit_jurisdictions) !== C.stableStringify(sortedUnique(value.explicit_jurisdictions))) errors.push('explicit jurisdictions must be canonical unique jurisdiction codes');
+  const packIds = Array.isArray(value.selected_packs) ? value.selected_packs.map((pack) => pack && pack.id).filter((code) => typeof code === 'string') : [];
+  if (new Set(packIds).size !== packIds.length) errors.push('selected packs must be unique');
+  const uncovered = Array.isArray(value.explicit_jurisdictions) ? value.explicit_jurisdictions.filter((code) => packIds.indexOf(code) === -1) : [];
+  const expectedStatus = uncovered.length ? 'PARTIAL_EXPLICIT_GAPS' : 'SYNTAX_PACK_COVERAGE_ONLY';
+  const expectedGaps = uncovered.map((code) => 'No selected syntax pack for explicitly declared jurisdiction ' + code + '.');
+  if (value.coverage_status !== expectedStatus || !Array.isArray(value.coverage_gaps) || C.stableStringify(value.coverage_gaps) !== C.stableStringify(expectedGaps)) errors.push('coverage status and gaps must reconcile with declared jurisdictions and selected packs');
+  if (Array.isArray(value.connecting_factors)) for (const factor of value.connecting_factors) {
+    if (!plain(factor) || !Array.isArray(value.explicit_jurisdictions) || value.explicit_jurisdictions.indexOf(factor.jurisdiction) === -1 || !Array.isArray(factor.source_evidence_ids) || !factor.source_evidence_ids.length) errors.push('connecting factor must remain anchored to an explicit declared jurisdiction');
+  } else errors.push('connecting factor register is required');
   if (!Array.isArray(value.citation_occurrences)) errors.push('citation occurrence register is required');
   else for (const occurrence of value.citation_occurrences) {
     if (!plain(occurrence) || occurrence.occurrence_only !== true || occurrence.semantic_support !== 'NOT_EVALUATED') errors.push('citation occurrence cannot claim semantic support');
+    if (plain(occurrence) && (!Array.isArray(value.explicit_jurisdictions) || value.explicit_jurisdictions.indexOf(occurrence.jurisdiction) === -1)) errors.push('citation occurrence jurisdiction must be explicitly declared');
   }
+  const identityCopy = clone(value);
+  delete identityCopy.observation_id;
+  delete identityCopy.observation_sha512;
+  const expectedId = id(SCHEMA, 'B7_CROSS_BORDER', identityCopy);
+  if (value.observation_id !== expectedId) errors.push('cross-border observation ID does not identify its current payload');
+  if (value.observation_sha512 !== hash({ ...identityCopy, observation_id: value.observation_id })) errors.push('cross-border observation digest does not identify its current payload');
   return { valid: errors.length === 0, errors };
 }
 

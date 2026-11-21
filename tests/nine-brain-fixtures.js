@@ -38,9 +38,11 @@ function mediaAtom() {
 }
 
 function makeBase() {
-  const text1 = 'Synthetic statement one: the amount is R100.00.';
-  const text2 = 'Synthetic statement two: no R100.00 amount is agreed.';
-  const text3 = 'Synthetic statement three: the amount is R900.00.';
+  const unrelatedBefore = 'UNRELATED-PRIVATE-PREFIX ' + 'Unrelated synthetic private material must not leave the bounded source. '.repeat(12);
+  const unrelatedAfter = ' Additional unrelated synthetic private material must stay outside provider packets. '.repeat(12) + ' UNRELATED-PRIVATE-SUFFIX ';
+  const text1 = unrelatedBefore + 'Synthetic statement one: the amount is R100.00.' + unrelatedAfter;
+  const text2 = unrelatedBefore + 'Synthetic statement two: no R100.00 amount is agreed.' + unrelatedAfter;
+  const text3 = unrelatedBefore + 'Synthetic statement three: the amount is R900.00.' + unrelatedAfter;
   const atoms = [
     textAtom('evidence-one', text1, 'the amount is R100.00', 1),
     textAtom('evidence-two', text2, 'no R100.00 amount is agreed', 2),
