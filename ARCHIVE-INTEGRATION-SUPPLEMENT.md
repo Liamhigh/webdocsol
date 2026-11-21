@@ -6,7 +6,7 @@
 | Date | 21 November 2026 |
 | Base plan | `ARCHIVE-INTEGRATION-PLAN.md` |
 | Scope | ContextGem, ContractNLI, OpenContracts, ten further ZIPs, and one bilingual-legislation review |
-| Constitutional boundary | Exactly B1–B9; B1–B8 vote; B9 is non-voting and advisory |
+| Constitutional boundary | Exactly B1–B9; Constitution v8 permits B1–B8 to issue findings and B9 not to do so; voting/concordance remains proposed pending NB-0 |
 
 ## 1. Scope, identity, and method
 
