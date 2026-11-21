@@ -50,9 +50,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**65 registered suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, and one Phase 4 active-graph suite. `run-all.js` is the
-registry — **a test file that is not listed in it does not run**, so register every new file
-there. What each suite guards, and the real evidence bundle behind it, is in
+**65 registered production/baseline suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, and one Phase 4 active-graph suite. `run-all.js` is that registry — **a production/baseline test file that is not listed in it does not run**. Separately gated development contracts are registered in `run-development.js`; `npm test` runs both registries. What each production/baseline suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
 
 The registry, in run order. The label is what the suite prints in its `PASS=` line.
@@ -80,7 +78,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 19 | `crop-normalize` | `crop-normalize.test.mjs` | 115 | CropBox normalisation, seal band, share ordering, certificate privacy, the voice-note path |
 | 20 | `encrypt-detect` | `encrypt-detect.test.mjs` | 9 | `voPdfIsEncrypted` |
 | 21 | `constitution-lock` | `constitution-lock.test.mjs` | 41 | `constitution.json`, `constitution.html` and the pages that cite a version agree |
-| 22 | `ai-assess-batch` | `ai-assess-batch.test.mjs` | 19 | Client batching under the `/api/v1/ai/assess` caps; the review never removes or changes a finding, and a candidate is a duplicate only when it restates one |
+| 22 | `ai-assess-batch` | `ai-assess-batch.test.mjs` | 19 | Client batching under the `/api/v1/ai/assess` caps; the review never removes or changes a finding (founder ruling, 5 October 2026; ENGINE.md §12.16); a candidate is a duplicate only when it restates one |
 | 23 | `narrate-excerpt` | `narrate-excerpt.test.mjs` | 16 | `voBuildNarrateExcerpt` |
 | 24 | `human-report` | `human-report.test.mjs` | 81 | The court-ready narrative wiring: Worker, `forensic-report.js` and page agree |
 | 25 | `site-serving` | `site-serving.test.mjs` | 56 | `worker/static-proxy.js` serving tiers and `/api/v1/site/health` |
@@ -98,15 +96,21 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 57 | `documentation-consistency` | `documentation-consistency.test.mjs` | — | Current engine/taxonomy/detector/findings values and source-derived UI counts |
 | 58 | `evaluation-metrics` | `evaluation-metrics.test.mjs` | 116 | Hand-calculated B9 development metrics, direct-call validation, bounded identifiers/diagnostics and early resource rejection, minimum-cost and scope-aware matching, distinct evidence locations, one-to-one evidence credit, UTF-16/normalization alignment, incomplete-pair exclusion, pairs, Unicode, negative documents, failures/exclusions, versioned canonical and atomic reports, strict UTF-8 and canonical-directory/symlink-safe CLI handling, and fully normalized encoded-path production isolation |
 | 59 | `evaluation-contractnli` | `evaluation-contractnli.test.mjs` | 92 | ContractNLI adapter: pinned release/hashes, UTF-16 spans, conservative mapping, provenance and input safety, annotations, collision-free IDs, bounded shards, generation publication, zip integrity, CLI pipeline |
-| 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 | ContraDoc adapter and dual metrics: verbatim evidence/ref anchoring, mapped scopes, incomplete-pair exclusion, verum_exact metrics with per-document negative-set false positives, published_comparable settings and input limits, generation publication, CLI pipeline |
+| 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 | ContraDoc adapter and dual metrics: verbatim evidence/ref anchoring, mapped scopes, incomplete-pair exclusion, verum_exact metrics with per-document negative-set false positives, published_comparable settings and input limits, generation publication, zip integrity, CLI pipeline |
 | 61 | `evaluation-eyecite` | `evaluation-eyecite.test.mjs` | 60 | Eyecite conformance spike: bounded corpus and span validation, strict citation/group/cluster comparison, fixed adapter allowlist, package-pin and resolution-state handling, optional real extraction only for exact pinned installs, portable CLI and atomic-generator guards |
-| 62 | `legal-citations` | `legal-citations.test.mjs` | 78 | Neutral citation occurrence core: registry and helper validation, exact spans and IDs, immediate-predecessor Id./exact-caption supra resolution, empty pack selection, envelope validity, engine flag on/off integration, exact failure identity and failed-page coverage |
+| 62 | `legal-citations` | `legal-citations.test.mjs` | 78 | Neutral legal-citation occurrence core: registry and helper validation, exact spans and IDs, immediate-predecessor Id./exact-caption supra resolution, empty pack selection, envelope validity, engine flag on/off integration, exact failure identity and failed-page coverage |
 | 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 98 | ZA pack fixtures: neutral/reported/docket/SAFLII forms and boundaries, multiword supra, pinpoints, captions, negatives and neutrality, verbatim round-trips, byte-identical replay |
 | 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 | Phase 3 synthetic redaction corpus: exact UTF-16 ranges, protected verbatim evidence quotes, preserved references, and a fail-closed production-module flag |
 | 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
 
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
-`run-all.js` is always the authoritative complete registry.
+`run-all.js` is always the authoritative complete production/baseline registry.
+
+The separately gated development registry is `run-development.js`:
+
+| Label | File | Checks | Exercises |
+|-------|------|--------|-----------|
+| `nine-brain-contracts` | `nine-brain-contracts.test.mjs` | 164 | NB-0 source register and unresolved concordance; NB-1 shared records, UTF-16/structural/media anchors, B9 non-voting, fail-closed promotion/certification, read-only preview, tamper/replay and immutability checks |
 
 **Writing a regression test:** use the **exact text from the real document** that caused the
 failure, not a paraphrase. Every guard in `ENGINE.md` §4 has one, and that is why they have
@@ -121,7 +125,7 @@ survived reviewers asking for them to be "simplified".
    `pass` / `fail` pair, as most suites use, works too.
 3. End by printing `[<name>] PASS=<n> FAIL=<m>` and exit non-zero on any failure. `done()` does
    both. `run-all.js` reads only the exit status.
-4. Add the file name to the `suites` array in `tests/run-all.js`.
+4. Add production/baseline files to the `suites` array in `tests/run-all.js`. Add an independently gated development contract to `tests/run-development.js` instead, leaving the production/baseline registry unchanged.
 5. Build file paths from the test's own location (`path.join(__dirname, '..', f)`, or
    `import.meta.url` in a `.mjs` file), so the suite does not depend on the working directory.
 6. Load shipped code the way the existing suites do. The root scripts load with `require`
