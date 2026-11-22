@@ -3,7 +3,7 @@
 /* NB-2–NB-6, NB-8 and NB-10 default-off development orchestration. */
 const {
   C, R, VERSION, SHA512_RE, plain, own, text, hash, id, clone, freeze,
-  completeCoverage, result, safeValidate
+  result, safeValidate
 } = require('./util.js');
 const Sources = require('../../nine-brain-source-register.js');
 const Preview = require('../../nine-brain-preview.js');
@@ -27,8 +27,10 @@ function findingEvidenceIds(finding) {
 }
 
 function candidateFromFinding(finding, index, brainId, atomsById) {
-  const evidenceIds = findingEvidenceIds(finding).filter((evidenceId) => own(atomsById, evidenceId));
-  const anchors = evidenceIds.map((evidenceId) => ({ evidence_id: evidenceId, ...clone(atomsById[evidenceId].anchor) }));
+  const evidenceIds = findingEvidenceIds(finding);
+  const unresolvedEvidenceIds = evidenceIds.filter((evidenceId) => !own(atomsById, evidenceId));
+  const resolvedEvidenceIds = evidenceIds.filter((evidenceId) => own(atomsById, evidenceId));
+  const anchors = resolvedEvidenceIds.map((evidenceId) => ({ evidence_id: evidenceId, ...clone(atomsById[evidenceId].anchor) }));
   const sourceFindingHash = hash(finding);
   const payload = { source_index: index, source_finding_sha512: sourceFindingHash, brain_id: brainId };
   return freeze({
@@ -41,30 +43,40 @@ function candidateFromFinding(finding, index, brainId, atomsById) {
       : 'The existing deterministic finding requires explicit semantic review before any development promotion.',
     source_finding: clone(finding), source_finding_sha512: sourceFindingHash,
     source_claim_ids: [], source_evidence_ids: evidenceIds, source_anchors: anchors,
+    unresolved_source_evidence_ids: unresolvedEvidenceIds,
     actors: Array.isArray(finding.actors) ? finding.actors.filter(text) : [],
     production_finding: false, semantic_review_status: 'NOT_EVALUATED'
   });
 }
 
 function supportFromFinding(finding, index, atomsById) {
-  const evidenceIds = findingEvidenceIds(finding).filter((evidenceId) => own(atomsById, evidenceId));
+  const evidenceIds = findingEvidenceIds(finding);
+  const unresolvedEvidenceIds = evidenceIds.filter((evidenceId) => !own(atomsById, evidenceId));
   return freeze({
     schema: 'vo.nine-brain-support.v1',
     support_id: id(SCHEMA, 'B4_SUPPORT', { source_index: index, finding_sha512: hash(finding) }),
     brain_id: 'B4', source_finding_sha512: hash(finding), source_evidence_ids: evidenceIds,
+    unresolved_source_evidence_ids: unresolvedEvidenceIds,
     support_only: true, independent_corroboration: false, production_finding: false
   });
 }
 
 function makeView(brain, bundle, findings, passNumber) {
+  const mediaIds = new Set(bundle.evidence_atoms.filter((atom) => atom.anchor && atom.anchor.coordinate_space === 'media-time-v1').map((atom) => atom.evidence_id));
   const ownFindings = brain.id === 'B9' ? [] : findings.filter((finding) => {
     const mapping = finding.development_brain_id === 'B8' ? { brain_id: 'B8' } : Preview.mapFindingToBrain(finding);
-    return mapping.brain_id === brain.id;
+    if (mapping.brain_id !== brain.id) return false;
+    if (brain.id !== 'B8') return true;
+    const ids = findingEvidenceIds(finding);
+    return ids.length > 0 && ids.every((evidenceId) => mediaIds.has(evidenceId));
   });
+  const evidenceAtoms = brain.id === 'B8' ? bundle.evidence_atoms.filter((atom) => mediaIds.has(atom.evidence_id)) : bundle.evidence_atoms;
+  const claims = brain.id === 'B8' ? bundle.claims.filter((claim) => Array.isArray(claim.source_evidence_ids) && claim.source_evidence_ids.length > 0 &&
+    claim.source_evidence_ids.every((evidenceId) => mediaIds.has(evidenceId))) : bundle.claims;
   const payload = {
     schema: VIEW_SCHEMA, brain_id: brain.id, pass_number: passNumber,
     evidence_bundle_sha512: hash(bundle),
-    evidence_atoms: clone(bundle.evidence_atoms), claims: clone(bundle.claims),
+    evidence_atoms: clone(evidenceAtoms), claims: clone(claims),
     existing_findings: clone(ownFindings),
     role: brain.id === 'B4' ? 'SUPPORT_ONLY' : brain.id === 'B8' ? 'MEDIA_OBSERVATIONS_ONLY' : brain.id === 'B9' ? 'RESEARCH_ADVISORY_ONLY' : 'BOUNDED_CANDIDATE_REVIEW',
     production_finding_authority: false
@@ -85,15 +97,15 @@ function makeRun(brain, view, passNumber, registers, reviewsComplete) {
   const exclusionIds = brain.id === 'B1' ? registers.exclusions.map((item) => item.exclusion_id) : [];
   const findingIds = passNumber === 2 ? registers.promotions.filter((item) => item.decision === 'PROMOTED' && item.brain_id === brain.id &&
     registers.guardianItems.some((guardianItem) => guardianItem.finding_id === item.candidate_id && guardianItem.decision === 'APPROVED')).map((item) => item.candidate_id) : [];
-  const uncertainties = [];
+  const uncertainties = ['Input mapping and shared research registers are not brain-specific analysis; no input unit is marked processed.'];
   if (brain.id === 'B4') uncertainties.push('B4 support is never independent corroboration.');
   if (brain.id === 'B8' && !engaged) uncertainties.push('No contracted rich-media input or existing B8 observation was supplied.');
   if (brain.id === 'B9') uncertainties.push('B9 is research/advisory only and cannot vote or issue findings.');
   if (passNumber === 2 && !reviewsComplete) uncertainties.push('Semantic promotion review is incomplete; no automatic promotion occurred.');
   const output = {
     brain_id: brain.id, execution_mode: 'ANALYSIS',
-    engagement_status: engaged ? 'ENGAGED' : 'NOT_ENGAGED',
-    coverage: engaged ? completeCoverage(units) : { units_total: units.length, units_processed: 0, units_skipped: units, units_failed: [] },
+    engagement_status: 'NOT_ENGAGED',
+    coverage: { units_total: units.length, units_processed: 0, units_skipped: units, units_failed: [] },
     candidate_ids: candidateIds, support_ids: supportIds, opposition_ids: oppositionIds,
     exclusion_ids: exclusionIds, recommendation_ids: recommendationIds, finding_ids: findingIds,
     rule_hits: passNumber === 2 ? registers.promotions.filter((item) => item.brain_id === brain.id).map((item) => ({ candidate_id: item.candidate_id, decision: item.decision, failed_rules: item.failed_rules })) : [],
@@ -104,7 +116,7 @@ function makeRun(brain, view, passNumber, registers, reviewsComplete) {
     run_id: id(SCHEMA, 'PASS_' + passNumber + ':' + brain.id, { view_sha512: view.view_sha512, output }),
     brain_id: brain.id, brain_version: VERSION, voting: brain.id !== 'B9', execution_mode: 'ANALYSIS',
     engagement_status: output.engagement_status,
-    engagement_reason: engaged ? 'Canonical input view processed with complete unit accounting.' : 'No contracted input for this brain; non-engagement is not agreement.',
+    engagement_reason: engaged ? 'Canonical input was mapped, but no brain-specific analysis executed; every unit remains skipped.' : 'No contracted input for this brain; non-engagement is not agreement.',
     input_view_hashes: [view.view_sha512], ...output,
     output_sha512: R.hashBrainRunOutput(output), pass_number: passNumber,
     production_finding: false
@@ -128,14 +140,27 @@ function promotionFor(candidate, review, bundle, sourceTexts, constitution) {
     });
   }
   const rules = {};
-  let p1Pass = candidate.source_evidence_ids.length > 0 && candidate.source_anchors.length > 0;
+  const anchorEvidenceIds = candidate.source_anchors.map((anchor) => anchor.evidence_id);
+  const evidenceLinksExact = candidate.source_evidence_ids.length > 0 &&
+    candidate.source_evidence_ids.length === candidate.source_anchors.length &&
+    new Set(candidate.source_evidence_ids).size === candidate.source_evidence_ids.length &&
+    new Set(anchorEvidenceIds).size === anchorEvidenceIds.length &&
+    candidate.source_evidence_ids.every((evidenceId) => anchorEvidenceIds.indexOf(evidenceId) !== -1);
+  const unresolvedEvidenceIds = candidate.unresolved_source_evidence_ids || [];
+  let p1Pass = evidenceLinksExact && unresolvedEvidenceIds.length === 0;
   const p1Reasons = [];
   for (const anchor of candidate.source_anchors) {
     const validation = R.validateAnyAnchor(anchor, own(sourceTexts, anchor.evidence_id) ? sourceTexts[anchor.evidence_id] : undefined);
     if (!validation.valid) { p1Pass = false; p1Reasons.push(validation.errors.join('; ')); }
+    if (candidate.brain_id === 'B8' && anchor.coordinate_space !== 'media-time-v1') {
+      p1Pass = false;
+      p1Reasons.push('B8 candidates require contracted media-time anchors; page-text evidence cannot become a media observation.');
+    }
   }
   if (!candidate.source_evidence_ids.length) p1Reasons.push('No evidence-linked anchor was supplied.');
-  rules.P1 = result(p1Pass ? 'PASS' : 'FAIL', p1Pass ? ['Every candidate anchor resolves against contracted source evidence.'] : p1Reasons);
+  if (!evidenceLinksExact) p1Reasons.push('Candidate evidence IDs and direct anchors must reconcile exactly without omissions or duplicates.');
+  if (unresolvedEvidenceIds.length) p1Reasons.push('Cited evidence is absent from the supplied bundle: ' + unresolvedEvidenceIds.join(', '));
+  rules.P1 = result(p1Pass ? 'PASS' : 'FAIL', p1Pass ? ['Every cited candidate evidence ID has one valid contracted source anchor.'] : p1Reasons);
   for (const key of PENDING_RULES) rules[key] = result(review[key].status, review[key].reasons);
   const provenancePass = bundle.evidence_atoms.filter((atom) => candidate.source_evidence_ids.indexOf(atom.evidence_id) !== -1)
     .every((atom) => atom.artifact_sha512 === atom.anchor.artifact_sha512 && atom.extraction && atom.handling_provenance);
@@ -276,7 +301,10 @@ function buildDevelopmentRun(spec) {
       coverage_gaps: ['No constitutional concordance rule has been selected.', 'Absence of engagement is not agreement.', 'No Triple Verification or human adjudication is asserted.']
     },
     triple_verification_status: 'NOT_EXECUTED', human_adjudication_status: 'NOT_ADJUDICATED',
-    coverage: completeCoverage(spec.bundle.evidence_atoms.map((atom) => atom.evidence_id).concat(spec.bundle.claims.map((claim) => claim.claim_id)).concat(spec.findings.map((finding, index) => 'finding:' + index))),
+    coverage: (() => {
+      const units = spec.bundle.evidence_atoms.map((atom) => atom.evidence_id).concat(spec.bundle.claims.map((claim) => claim.claim_id)).concat(spec.findings.map((finding, index) => 'finding:' + index));
+      return { units_total: units.length, units_processed: 0, units_skipped: units, units_failed: [] };
+    })(),
     limitations: [
       'Existing finding mapping is orchestration input, not proof that a canonical brain executed a new detector.',
       'B4 emits support only; B8 emits media observations only; B9 cannot vote or issue findings.',
@@ -309,12 +337,20 @@ function validateDevelopmentRunUnsafe(run) {
   if (!Array.isArray(run.candidates) || !Array.isArray(run.promotion_decisions) || run.candidates.length !== run.promotion_decisions.length) errors.push('candidate and promotion counts must reconcile');
   else run.promotion_decisions.forEach((promotion) => safeValidate(R.validatePromotionDecision, promotion).errors.forEach((error) => errors.push(error)));
   if (!Array.isArray(run.finding_audits) || !Array.isArray(run.finding_certifications)) errors.push('audit and certification registers are required');
-  const promoted = (run.promotion_decisions || []).filter((item) => item.decision === 'PROMOTED').length;
-  if (run.finding_audits && run.finding_audits.length !== promoted) errors.push('every promoted candidate requires exactly one audit');
+  const promotedIds = (run.promotion_decisions || []).filter((item) => item.decision === 'PROMOTED').map((item) => item.candidate_id);
+  const exactLineageIds = (items, key) => {
+    if (!Array.isArray(items)) return false;
+    const ids = items.map((item) => item && item[key]);
+    return ids.length === promotedIds.length && new Set(ids).size === ids.length &&
+      ids.every((item) => typeof item === 'string') &&
+      C.stableStringify(ids.slice().sort(C.compareStrings)) === C.stableStringify(promotedIds.slice().sort(C.compareStrings));
+  };
+  if (!exactLineageIds(run.finding_audits, 'original_finding_id')) errors.push('every promoted candidate requires exactly one uniquely matching audit');
   const guardianValidation = safeValidate(R.validateGuardianDecision, run.guardian_decision);
   guardianValidation.errors.forEach((error) => errors.push(error));
-  if (run.guardian_decision && run.guardian_decision.reviewed_count !== promoted) errors.push('guardian must review every promoted candidate');
-  if (run.finding_certifications && run.finding_certifications.length !== promoted) errors.push('every promoted candidate requires a certification outcome');
+  if (run.guardian_decision && run.guardian_decision.reviewed_count !== promotedIds.length) errors.push('guardian must review every promoted candidate');
+  if (!run.guardian_decision || !exactLineageIds(run.guardian_decision.items, 'finding_id')) errors.push('guardian items must uniquely and exactly match every promoted candidate');
+  if (!exactLineageIds(run.finding_certifications, 'finding_id')) errors.push('every promoted candidate requires exactly one uniquely matching certification outcome');
   for (const certification of run.finding_certifications || []) {
     safeValidate(R.validateFindingCertification, certification).errors.forEach((error) => errors.push(error));
     const candidate = (run.candidates || []).find((item) => item.candidate_id === certification.finding_id);
