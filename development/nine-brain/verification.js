@@ -30,7 +30,28 @@ const RESPONSE_INSTRUCTIONS = freeze({
   no_legal_or_truth_certification: true
 });
 const CONTEXT_WINDOW = 160;
+const MAX_PACKET_QUOTE = 2000;
 const REVIEW_TEST_STATUSES = freeze(['PASS', 'FAIL', 'INSUFFICIENT']);
+const reviewTrust = new WeakMap();
+const PROCESS_DISPOSITION_RECORDS = Object.create(null);
+const PROCESS_DISPOSITION_REVISIONS = Object.create(null);
+
+function trustReview(review, provenance) {
+  reviewTrust.set(review, provenance);
+  return review;
+}
+
+function trustedPanelReviews(reviews) {
+  const copies = clone(reviews || []);
+  copies.forEach((review, index) => {
+    if (reviews && reviewTrust.has(reviews[index]) && plain(review)) trustReview(review, reviewTrust.get(reviews[index]));
+  });
+  return copies;
+}
+
+function endpointOrigin(endpoint) {
+  try { return new URL(endpoint).origin; } catch (error) { return null; }
+}
 
 function boundedAnchor(anchor) {
   const output = clone(anchor);
@@ -71,6 +92,9 @@ function buildEvidencePacket(candidate, atoms, sourceTexts, constitution) {
     const sourceText = own(sourceTexts, evidenceId) ? sourceTexts[evidenceId] : undefined;
     const anchorValidation = R.validateAnyAnchor(atom.anchor, sourceText);
     if (!anchorValidation.valid) throw new TypeError(anchorValidation.errors.join('; '));
+    if (atom.anchor.text_space === 'page-text-v1' && atom.anchor.quote.length > MAX_PACKET_QUOTE) {
+      throw new TypeError('Packet quote exceeds the minimum-necessary limit; narrow the source anchor before provider submission');
+    }
     const anchor = boundedAnchor(atom.anchor);
     return {
       evidence_id: evidenceId, artifact_sha512: atom.artifact_sha512,
@@ -109,7 +133,7 @@ function buildEvidencePacket(candidate, atoms, sourceTexts, constitution) {
   return freeze(payload);
 }
 
-function validateEvidencePacket(packet) {
+function validateEvidencePacketUnsafe(packet) {
   const errors = [];
   if (!plain(packet) || packet.schema !== SCHEMAS.PACKET) return { valid: false, errors: ['wrong verification-packet schema'] };
   if (packet.development_only !== true || packet.original_document_bytes_included !== false || packet.original_pdf_uploaded !== false || packet.minimum_necessary_excerpts_only !== true) errors.push('packet privacy/development boundaries are mandatory');
@@ -128,6 +152,7 @@ function validateEvidencePacket(packet) {
       if (!plain(item.source_excerpt) || item.source_excerpt.quote !== item.anchor.quote || item.source_excerpt.before !== item.anchor.context_before || item.source_excerpt.after !== item.anchor.context_after) errors.push('packet excerpt must exactly match its bounded anchor');
       else {
         if (item.anchor.context_before.length > CONTEXT_WINDOW || item.anchor.context_after.length > CONTEXT_WINDOW) errors.push('packet text context exceeds the minimum-necessary window');
+        if (typeof item.anchor.quote !== 'string' || item.anchor.quote.length > MAX_PACKET_QUOTE) errors.push('packet quote exceeds the minimum-necessary limit');
         const reconstructed = item.source_excerpt.before + item.source_excerpt.quote + item.source_excerpt.after;
         const excerptAnchor = { ...clone(item.anchor), char_start: item.source_excerpt.before.length, char_end: item.source_excerpt.before.length + item.source_excerpt.quote.length };
         errors.push(...R.validateAnyAnchor(excerptAnchor, reconstructed).errors);
@@ -162,6 +187,11 @@ function validateEvidencePacket(packet) {
   if (packet.packet_id && packet.packet_id !== expectedId) errors.push('packet ID mismatch');
   if (packet.packet_sha512 && packet.packet_sha512 !== hash({ ...identityCopy, packet_id: packet.packet_id })) errors.push('packet digest mismatch');
   return { valid: errors.length === 0, errors };
+}
+
+function validateEvidencePacket(packet) {
+  try { return validateEvidencePacketUnsafe(packet); }
+  catch (error) { return { valid: false, errors: ['Verification-packet canonicalisation/validation failed closed: ' + error.message] }; }
 }
 
 function buildProviderRequest(packet, config) {
@@ -246,7 +276,10 @@ function parseReview(packet, config, raw) {
 
 async function requestIndependentReview(packet, config, transport) {
   validateProviderConfig(config);
-  if (typeof transport !== 'function') return failureReview(packet, config, 'UNAVAILABLE', ['No isolated provider transport was supplied; live fallback is prohibited.']);
+  const finish = (review) => trustReview(review, {
+    kind: 'external', provider: config.provider, model: config.model, endpoint: config.endpoint, transport
+  });
+  if (typeof transport !== 'function') return finish(failureReview(packet, config, 'UNAVAILABLE', ['No isolated provider transport was supplied; live fallback is prohibited.']));
   const request = buildProviderRequest(packet, config);
   const controller = new AbortController();
   let timeout;
@@ -260,29 +293,29 @@ async function requestIndependentReview(packet, config, transport) {
         }, config.timeout_ms);
       })
     ]);
-    if (response && response.transport_timeout) return failureReview(packet, config, 'UNAVAILABLE', ['Provider transport exceeded the configured timeout; transport cancellation was signalled.']);
+    if (response && response.transport_timeout) return finish(failureReview(packet, config, 'UNAVAILABLE', ['Provider transport exceeded the configured timeout; transport cancellation was signalled.']));
     const raw = typeof response === 'string' ? response : response && response.body;
     const statusCode = response && typeof response === 'object' ? response.status : 200;
-    if (typeof raw !== 'string') return failureReview(packet, config, 'UNAVAILABLE', ['Provider returned no bounded text response.']);
-    if (Buffer.byteLength(raw, 'utf8') > config.max_response_bytes) return failureReview(packet, config, 'MALFORMED', ['Provider response exceeded the configured byte limit.'], raw.slice(0, 256));
-    if (statusCode !== 200) return failureReview(packet, config, 'UNAVAILABLE', ['Provider returned HTTP ' + statusCode + '; no cross-provider fallback occurred.'], raw);
-    return parseReview(packet, config, raw);
+    if (typeof raw !== 'string') return finish(failureReview(packet, config, 'UNAVAILABLE', ['Provider returned no bounded text response.']));
+    if (Buffer.byteLength(raw, 'utf8') > config.max_response_bytes) return finish(failureReview(packet, config, 'MALFORMED', ['Provider response exceeded the configured byte limit.'], raw.slice(0, 256)));
+    if (statusCode !== 200) return finish(failureReview(packet, config, 'UNAVAILABLE', ['Provider returned HTTP ' + statusCode + '; no cross-provider fallback occurred.'], raw));
+    return finish(parseReview(packet, config, raw));
   } catch (error) {
-    return failureReview(packet, config, 'UNAVAILABLE', ['Provider transport failed: ' + error.message]);
+    return finish(failureReview(packet, config, 'UNAVAILABLE', ['Provider transport failed: ' + error.message]));
   } finally {
     if (timeout) clearTimeout(timeout);
   }
 }
 
 function responsibleFailure(packet, brainId, reasons) {
-  return freeze({
+  return trustReview(freeze({
     schema: SCHEMAS.REVIEW, version: VERSION, reviewer_slot: 'responsible_brain', reviewer_origin: 'brain:' + (brainId || 'INVALID'), provider: 'deterministic', model: 'source-rule-review', endpoint: null,
     packet_id: packet.packet_id, packet_sha512: packet.packet_sha512, constitution_sha512: packet.constitution.sha512,
     proposition: packet.candidate.proposition, status: 'FAIL', source_test: 'FAIL', context_test: 'INSUFFICIENT', independence_test: 'INSUFFICIENT',
     thesis: '', antithesis: '', synthesis: '', anchor_ids: [], reasons,
     raw_response: '', response_sha512: C.sha512Hex(''), cross_reviewer_context_received: false, independent_submission: true,
     deterministic_evidence: true, development_only: true
-  });
+  }), { kind: 'responsible', brain_id: brainId || null });
 }
 
 function responsibleBrainReview(packet, audit, sourceTexts, sourceContextReview) {
@@ -312,7 +345,7 @@ function responsibleBrainReview(packet, audit, sourceTexts, sourceContextReview)
     return responsibleFailure(packet, audit.brain_id, ['Explicit source/context review evidence with reasons and complete evidence coverage is required; anchor equality alone cannot pass.']);
   }
   const passed = sourceContextReview.source_test === 'PASS' && sourceContextReview.context_test === 'PASS';
-  return freeze({
+  return trustReview(freeze({
     schema: SCHEMAS.REVIEW, version: VERSION, reviewer_slot: 'responsible_brain', reviewer_origin: 'brain:' + audit.brain_id,
     provider: 'deterministic', model: 'source-rule-review', endpoint: null,
     packet_id: packet.packet_id, packet_sha512: packet.packet_sha512, constitution_sha512: packet.constitution.sha512,
@@ -324,7 +357,7 @@ function responsibleBrainReview(packet, audit, sourceTexts, sourceContextReview)
     anchor_ids: audit.source_evidence_ids.slice(), reasons: ['Trusted FindingAudit and exact packet lineage reconciled.', sourceContextReview.source_reason, sourceContextReview.context_reason],
     raw_response: '', response_sha512: C.sha512Hex(''), cross_reviewer_context_received: false, independent_submission: true,
     deterministic_evidence: true, development_only: true
-  });
+  }), { kind: 'responsible', brain_id: audit.brain_id, audit_id: audit.audit_id });
 }
 
 function validateReviewRecord(review, packet) {
@@ -393,7 +426,8 @@ function validateNarrative(narrative, packet, disposition) {
       if (new Set(statement.source_ids).size !== statement.source_ids.length || !statement.source_ids.every((sourceId) => packet.evidence.some((item) => item.evidence_id === sourceId && packetExcerpt(item) === statement.text))) errors.push('narrative statement is not grounded verbatim in its mapped packet evidence');
     }
   }
-  if (disposition && (narrative.disposition_sha512 !== disposition.disposition_sha512 || narrative.disposition_revision !== disposition.revision || narrative.candidate_id !== disposition.candidate_id || narrative.packet_sha512 !== disposition.packet_sha512)) errors.push('narrative disposition lineage does not reconcile');
+  if (disposition && (narrative.disposition_sha512 !== disposition.disposition_sha512 || narrative.disposition_revision !== disposition.revision || narrative.candidate_id !== disposition.candidate_id || narrative.packet_sha512 !== disposition.packet_sha512 ||
+      narrative.human_approval.disposition_sha512 !== disposition.disposition_sha512 || narrative.human_approval.disposition_revision !== disposition.revision)) errors.push('narrative disposition lineage and embedded human approval must bind to the same current revision and digest');
   const copy = clone(narrative);
   delete copy.narrative_sha512;
   if (!SHA512_RE.test(narrative.narrative_sha512 || '') || hash(copy) !== narrative.narrative_sha512) errors.push('narrative digest mismatch');
@@ -409,11 +443,19 @@ function evaluatePanel(reviews, packet) {
   const origins = new Set();
   const mistralReview = (reviews || []).find((item) => item && item.reviewer_slot === 'mistral');
   const deepseekReview = (reviews || []).find((item) => item && item.reviewer_slot === 'deepseek');
-  if (mistralReview && deepseekReview && mistralReview.endpoint === deepseekReview.endpoint) errors.push('Mistral and DeepSeek review records share an endpoint.');
+  if (mistralReview && deepseekReview && endpointOrigin(mistralReview.endpoint) &&
+      endpointOrigin(mistralReview.endpoint) === endpointOrigin(deepseekReview.endpoint)) errors.push('Mistral and DeepSeek review records share a provider origin.');
+  const mistralTrust = mistralReview && reviewTrust.get(mistralReview);
+  const deepseekTrust = deepseekReview && reviewTrust.get(deepseekReview);
+  if (mistralTrust && deepseekTrust && mistralTrust.transport === deepseekTrust.transport) errors.push('Mistral and DeepSeek review records share a transport subroutine.');
   for (const slot of expectedSlots) {
     const review = (reviews || []).find((item) => item.reviewer_slot === slot);
     if (!review) { errors.push('Missing review seat ' + slot + '.'); continue; }
     errors.push(...validateReviewRecord(review, packet).errors.map((error) => slot + ': ' + error));
+    const trust = reviewTrust.get(review);
+    if (!trust) errors.push(slot + ': review was not produced by the trusted development review workflow.');
+    else if (slot === 'responsible_brain' && (trust.kind !== 'responsible' || trust.brain_id !== packet.candidate.brain_id)) errors.push(slot + ': trusted responsible-brain lineage does not match the packet brain.');
+    else if (slot !== 'responsible_brain' && (trust.kind !== 'external' || trust.provider !== slot || trust.model !== review.model || trust.endpoint !== review.endpoint)) errors.push(slot + ': trusted transport/configuration provenance does not match the review record.');
     if (review.packet_sha512 !== packet.packet_sha512 || review.constitution_sha512 !== packet.constitution.sha512 || review.proposition !== packet.candidate.proposition) errors.push(slot + ' reviewed a different packet, Constitution or proposition.');
     if (origins.has(review.reviewer_origin)) errors.push('Duplicate/common-origin reviewer detected: ' + review.reviewer_origin);
     origins.add(review.reviewer_origin);
@@ -430,7 +472,7 @@ function evaluatePanel(reviews, packet) {
   }
   const output = {
     schema: SCHEMAS.PANEL, version: VERSION, packet_id: packet.packet_id, packet_sha512: packet.packet_sha512,
-    proposition: packet.candidate.proposition, reviews: clone(reviews || []),
+    proposition: packet.candidate.proposition, reviews: trustedPanelReviews(reviews),
     status: errors.length ? 'FAIL' : 'TECHNICALLY_SUPPORTED_PENDING_HUMAN_ADJUDICATION',
     errors, independent_verification_label_granted: false,
     two_of_three_accepted: false, human_adjudication_required: true,
@@ -445,8 +487,8 @@ async function runIndependentPanel(packet, responsibleReview, mistralConfig, dee
   validateProviderConfig(mistralConfig);
   validateProviderConfig(deepseekConfig);
   if (mistralConfig.provider !== 'mistral' || deepseekConfig.provider !== 'deepseek') throw new TypeError('The two external seats must be Mistral and DeepSeek respectively');
-  if (new URL(mistralConfig.endpoint).href === new URL(deepseekConfig.endpoint).href) {
-    throw new TypeError('Mistral and DeepSeek seats must not share an endpoint, regardless of provider or model labels');
+  if (endpointOrigin(mistralConfig.endpoint) === endpointOrigin(deepseekConfig.endpoint)) {
+    throw new TypeError('Mistral and DeepSeek seats must not share an endpoint, provider origin, or transport subroutine');
   }
   if (mistralTransport === deepseekTransport) throw new TypeError('Mistral and DeepSeek seats must not share a transport subroutine');
   const external = await Promise.all([
@@ -457,7 +499,13 @@ async function runIndependentPanel(packet, responsibleReview, mistralConfig, dee
 }
 
 class DispositionStore {
-  constructor() { this.records = Object.create(null); this.revisions = Object.create(null); }
+  constructor() {
+    // One explicitly non-durable process-lifetime store, shared by every instance.
+    // Production persistence requires a separately reviewed durable atomic-CAS adapter.
+    this.records = PROCESS_DISPOSITION_RECORDS;
+    this.revisions = PROCESS_DISPOSITION_REVISIONS;
+    this.storage_scope = 'PROCESS_MEMORY_ONLY_NOT_RESTART_DURABLE';
+  }
   current(candidateId) { return own(this.records, candidateId) ? this.records[candidateId] : null; }
   history(candidateId) { return freeze(own(this.revisions, candidateId) ? this.revisions[candidateId].slice() : []); }
   commit(candidateId, spec, expectedRevision) {
@@ -501,7 +549,8 @@ function buildNarrativeProvenance(spec) {
   if (!plain(spec) || !plain(spec.disposition) || spec.disposition.schema !== SCHEMAS.DISPOSITION ||
       spec.disposition.packet_sha512 !== spec.packet.packet_sha512 || !Array.isArray(spec.statements) || !plain(spec.human_approval) ||
       spec.human_approval.approved !== true || !text(spec.human_approval.adjudicator) ||
-      spec.human_approval.disposition_sha512 !== spec.disposition.disposition_sha512) {
+      spec.human_approval.disposition_sha512 !== spec.disposition.disposition_sha512 ||
+      spec.human_approval.disposition_revision !== spec.disposition.revision) {
     throw new TypeError('Narrative requires a packet-linked committed disposition, statements and separate matching human approval');
   }
   const statements = spec.statements.map((statement) => {
