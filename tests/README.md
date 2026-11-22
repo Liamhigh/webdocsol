@@ -136,7 +136,7 @@ survived reviewers asking for them to be "simplified".
 2. Count with `tests/_assert.js` (`ok`, `noThrow`, `throws`, `done('<name>')`). It is CommonJS;
    from a `.mjs` file load it with `createRequire`, as `pages-bridge.test.mjs` does. A local
    `pass` / `fail` pair, as most suites use, works too.
-3. End by printing `[<label>] PASS=<n> FAIL=<m>` and exit non-zero on any failure. `done()` does
+3. End by printing `[<name>] PASS=<n> FAIL=<m>` and exit non-zero on any failure. `done()` does
    both. `run-all.js` reads only the exit status.
 4. Add production/baseline files to the `suites` array in `tests/run-all.js`. Add an independently gated development contract to `tests/run-development.js` instead, leaving the production/baseline registry unchanged.
 5. Build file paths from the test's own location (`path.join(__dirname, '..', f)`, or
