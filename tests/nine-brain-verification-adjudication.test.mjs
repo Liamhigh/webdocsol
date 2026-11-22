@@ -5,7 +5,17 @@ const { ok, throws, done } = require('./_assert.js');
 const C = require('../analysis-contracts.js');
 const O = require('../development/nine-brain/orchestration.js');
 const V = require('../development/nine-brain/verification.js');
+const U = require('../development/nine-brain/util.js');
 const { makeBase, completeReviews, providerConfig, passingModelResponse } = require('./nine-brain-fixtures.js');
+
+function rehashPacket(value) {
+  const copy = C.canonicalClone(value);
+  delete copy.packet_id;
+  delete copy.packet_sha512;
+  copy.packet_id = U.id(V.SCHEMAS.PACKET, 'IMMUTABLE_PACKET', copy);
+  copy.packet_sha512 = U.hash(copy);
+  return copy;
+}
 
 console.log('======================================================');
 console.log('RUN  nine-brain-verification-adjudication.test.mjs');
@@ -29,19 +39,27 @@ packetTamper.constitution.text += ' Changed';
 ok(!V.validateEvidencePacket(packetTamper).valid, 'Constitution text tampering invalidates packet identity');
 const privacyTamper = C.canonicalClone(packet);
 privacyTamper.original_pdf_uploaded = true;
-ok(!V.validateEvidencePacket(privacyTamper).valid, 'Packet privacy boundary cannot be relabelled');
+ok(!V.validateEvidencePacket(rehashPacket(privacyTamper)).valid, 'Packet privacy boundary cannot be relabelled even with recomputed identity');
 const artifactTamper = C.canonicalClone(packet);
 artifactTamper.evidence[0].anchor.artifact_sha512 = 'e'.repeat(128);
-ok(!V.validateEvidencePacket(artifactTamper).valid, 'Packet evidence and anchor artifact hashes must match');
+ok(!V.validateEvidencePacket(rehashPacket(artifactTamper)).valid, 'Packet evidence and anchor artifact hashes must match even with recomputed packet identity');
 const candidateEvidenceTamper = C.canonicalClone(packet);
 candidateEvidenceTamper.candidate.source_evidence_ids = [packet.evidence[0].evidence_id];
-ok(!V.validateEvidencePacket(candidateEvidenceTamper).valid, 'Packet rejects missing candidate-to-evidence links');
+ok(!V.validateEvidencePacket(rehashPacket(candidateEvidenceTamper)).valid, 'Packet rejects missing candidate-to-evidence links even with recomputed identity');
 const extraEvidenceTamper = C.canonicalClone(packet);
 extraEvidenceTamper.candidate.source_evidence_ids.push('extra-evidence');
-ok(!V.validateEvidencePacket(extraEvidenceTamper).valid, 'Packet rejects extra candidate-to-evidence links');
+ok(!V.validateEvidencePacket(rehashPacket(extraEvidenceTamper)).valid, 'Packet rejects extra candidate-to-evidence links even with recomputed identity');
 const candidateAnchorTamper = C.canonicalClone(packet);
 candidateAnchorTamper.candidate.source_anchors[0].quote = 'changed quote';
-ok(!V.validateEvidencePacket(candidateAnchorTamper).valid, 'Candidate anchors must exactly match bounded packet evidence anchors');
+ok(!V.validateEvidencePacket(rehashPacket(candidateAnchorTamper)).valid, 'Candidate anchors must exactly match bounded packet evidence anchors even with recomputed identity');
+const cyclicPacket = C.canonicalClone(packet);
+cyclicPacket.self = cyclicPacket;
+ok(!V.validateEvidencePacket(cyclicPacket).valid, 'Cyclic packet input returns invalid instead of throwing');
+const oversizedQuoteText = 'x'.repeat(2001);
+const oversizedQuoteAtom = C.canonicalClone(base.bundle.evidence_atoms[0]);
+oversizedQuoteAtom.artifact_sha512 = C.sha512Hex(oversizedQuoteText);
+Object.assign(oversizedQuoteAtom.anchor, { artifact_sha512: oversizedQuoteAtom.artifact_sha512, char_start: 0, char_end: 2001, quote: oversizedQuoteText, context_before: '', context_after: '' });
+ok(throws(() => V.buildEvidencePacket({ candidate_id: 'oversized-quote', brain_id: 'B1', proposition: 'Bounded synthetic quote test.', candidate_class: 'TEST', source_evidence_ids: ['evidence-one'], source_anchors: [{ evidence_id: 'evidence-one' }] }, [oversizedQuoteAtom], { 'evidence-one': oversizedQuoteText }, base.constitution)), 'Oversized source quotes must be narrowed before provider packet construction');
 
 const sourceContextReview = (overrides) => ({
   source_test: 'PASS', context_test: 'PASS',
@@ -80,6 +98,12 @@ ok(panel.independent_verification_label_granted === false && panel.human_adjudic
 ok(panel.two_of_three_accepted === false && panel.deterministic_evidence === false, 'Panel preserves non-majority and non-deterministic-evidence boundaries');
 ok(seenRequests.length === 2 && seenRequests[0].provider !== seenRequests[1].provider, 'Exactly two isolated external calls occur for the two named providers');
 ok(panel.reviews[1].antithesis.includes('antithesis') && panel.reviews[1].raw_response.includes('antithesis'), 'Thesis, antithesis, synthesis and raw response are preserved');
+const selfAuthoredReviews = C.canonicalClone(panel.reviews);
+ok(V.evaluatePanel(selfAuthoredReviews, packet).errors.some((error) => error.includes('trusted development review workflow')), 'Caller-authored review records cannot acquire trusted panel provenance by copying valid fields');
+const sharedTransport = transportFor('mistral');
+const sharedTransportMistral = await V.requestIndependentReview(packet, mistral, sharedTransport);
+const sharedTransportDeepseek = await V.requestIndependentReview(packet, deepseek, sharedTransport);
+ok(V.evaluatePanel([responsible, sharedTransportMistral, sharedTransportDeepseek], packet).errors.some((error) => error.includes('share a transport subroutine')), 'Trusted reviews still fail when both external seats used the same transport');
 
 const dissentTransport = async () => ({ status: 200, body: passingModelResponse(packet, { status: 'FAIL', context_test: 'FAIL', reasons: ['Synthetic dissent preserved.'] }) });
 const dissentPanel = await V.runIndependentPanel(packet, responsible, mistral, deepseek, transportFor('mistral'), dissentTransport);
@@ -117,6 +141,10 @@ let sharedEndpointRejected = false;
 try { await V.runIndependentPanel(packet, responsible, mistral, { ...deepseek, endpoint: mistral.endpoint }, transportFor('mistral'), transportFor('deepseek')); }
 catch (error) { sharedEndpointRejected = error.message.includes('must not share an endpoint'); }
 ok(sharedEndpointRejected, 'Shared reviewer endpoint is rejected regardless of provider/model labels');
+let sharedOriginRejected = false;
+try { await V.runIndependentPanel(packet, responsible, mistral, { ...deepseek, endpoint: mistral.endpoint.replace('/review', '/other-review') }, transportFor('mistral'), transportFor('deepseek')); }
+catch (error) { sharedOriginRejected = error.message.includes('must not share an endpoint'); }
+ok(sharedOriginRejected, 'Different paths on one provider origin cannot create independent external seats');
 const duplicateReviews = C.canonicalClone(panel.reviews);
 duplicateReviews[2].reviewer_origin = duplicateReviews[1].reviewer_origin;
 ok(V.evaluatePanel(duplicateReviews, packet).errors.some((error) => error.includes('Duplicate/common-origin')), 'Duplicate/common-origin reviewers cannot occupy two seats');
@@ -133,7 +161,7 @@ ok(V.evaluatePanel(candidateAnchorReviews, packet).status === 'FAIL', 'Review an
 const sharedEndpointReviews = C.canonicalClone(panel.reviews);
 sharedEndpointReviews[2].endpoint = sharedEndpointReviews[1].endpoint;
 sharedEndpointReviews[2].reviewer_origin = 'deepseek:' + sharedEndpointReviews[2].model + ':' + sharedEndpointReviews[2].endpoint;
-ok(V.evaluatePanel(sharedEndpointReviews, packet).errors.some((error) => error.includes('share an endpoint')), 'Panel recomputation rejects a shared endpoint even when provider/model labels differ');
+ok(V.evaluatePanel(sharedEndpointReviews, packet).errors.some((error) => error.includes('share a provider origin')), 'Panel recomputation rejects a shared provider origin even when provider/model labels differ');
 const forgedPanel = C.canonicalClone(dissentPanel);
 forgedPanel.status = 'TECHNICALLY_SUPPORTED_PENDING_HUMAN_ADJUDICATION';
 forgedPanel.errors = [];
@@ -153,6 +181,10 @@ const confirmed = store.commit(candidate.candidate_id, {
   reason: 'Separate synthetic human review accepted the bounded proposition.', resolution_evidence_ids: []
 }, 0);
 ok(confirmed.revision === 1 && confirmed.disposition === 'CONFIRMED' && confirmed.human && confirmed.evidence_retained, 'Separate human adjudication creates monotonic revision one while retaining evidence');
+const sameProcessStore = new V.DispositionStore();
+ok(sameProcessStore.storage_scope === 'PROCESS_MEMORY_ONLY_NOT_RESTART_DURABLE' && sameProcessStore.current(candidate.candidate_id).disposition_sha512 === confirmed.disposition_sha512 && throws(() => sameProcessStore.commit(candidate.candidate_id, {
+  candidate_id: candidate.candidate_id, packet, panel, disposition: 'REJECTED', adjudicator: 'Synthetic human adjudicator', human: true, reason: 'Cross-instance stale update', resolution_evidence_ids: []
+}, 0)), 'All store instances share one explicitly non-durable process-lifetime compare-and-swap state');
 ok(throws(() => store.commit(candidate.candidate_id, {
   candidate_id: candidate.candidate_id, packet, panel, disposition: 'REJECTED', adjudicator: 'Synthetic human adjudicator', human: true, reason: 'Stale update', resolution_evidence_ids: []
 }, 0)), 'Compare-and-swap rejects a stale disposition revision');
@@ -174,24 +206,24 @@ const quote = packet.evidence[0].anchor.quote;
 const narrative = V.buildNarrativeProvenance({
   disposition: resolved, packet, statements: [{ text: quote, source_ids: [packet.evidence[0].evidence_id] }],
   authorized_excerpts: { [packet.evidence[0].evidence_id]: quote },
-  human_approval: { approved: true, adjudicator: 'Synthetic narrative approver', disposition_sha512: resolved.disposition_sha512 }
+  human_approval: { approved: true, adjudicator: 'Synthetic narrative approver', disposition_sha512: resolved.disposition_sha512, disposition_revision: resolved.revision }
 });
 ok(narrative.status === 'HUMAN_APPROVED_GROUNDED_NARRATIVE' && narrative.statements[0].verbatim_authorized_text, 'Grounded narrative uses verbatim authorized source text and separate human approval');
 ok(narrative.narrative_can_resolve_contradiction === false && narrative.disposition_revision === 2, 'Narrative is bound to the committed revision and cannot itself resolve a contradiction');
 ok(throws(() => V.buildNarrativeProvenance({
   disposition: resolved, packet, statements: [{ text: 'Invented new fact or law.', source_ids: [packet.evidence[0].evidence_id] }],
   authorized_excerpts: { [packet.evidence[0].evidence_id]: quote },
-  human_approval: { approved: true, adjudicator: 'Synthetic narrative approver', disposition_sha512: resolved.disposition_sha512 }
+  human_approval: { approved: true, adjudicator: 'Synthetic narrative approver', disposition_sha512: resolved.disposition_sha512, disposition_revision: resolved.revision }
 })), 'Narrative invention is blocked even with human approval metadata');
 ok(throws(() => V.buildNarrativeProvenance({
   disposition: resolved, packet, statements: [{ text: quote, source_ids: [packet.evidence[0].evidence_id] }],
   authorized_excerpts: { [packet.evidence[0].evidence_id]: quote },
-  human_approval: { approved: true, adjudicator: 'Synthetic narrative approver', disposition_sha512: confirmed.disposition_sha512 }
+  human_approval: { approved: true, adjudicator: 'Synthetic narrative approver', disposition_sha512: confirmed.disposition_sha512, disposition_revision: confirmed.revision }
 })), 'Narrative approval cannot bind to a stale disposition');
 ok(throws(() => V.buildNarrativeProvenance({
   disposition: resolved, packet, statements: [{ text: packet.evidence[1].anchor.quote, source_ids: [packet.evidence[0].evidence_id] }],
   authorized_excerpts: { [packet.evidence[0].evidence_id]: packet.evidence[1].anchor.quote },
-  human_approval: { approved: true, adjudicator: 'Synthetic narrative approver', disposition_sha512: resolved.disposition_sha512 }
+  human_approval: { approved: true, adjudicator: 'Synthetic narrative approver', disposition_sha512: resolved.disposition_sha512, disposition_revision: resolved.revision }
 })), 'Caller-supplied excerpt maps cannot override packet-evidence grounding');
 const annex = V.buildVerificationAnnex({ packet, panel, disposition: resolved, disposition_store: store, narrative });
 ok(annex.committed_disposition_revision === 2 && annex.committed_disposition_sha512 === resolved.disposition_sha512, 'VER-7 annex binds to the exact committed disposition revision and digest');
@@ -203,6 +235,17 @@ const forgedNarrative = C.canonicalClone(narrative);
 forgedNarrative.statements[0].text = 'Unrelated caller text';
 forgedNarrative.narrative_sha512 = C.sha512Hex(C.stableStringify(forgedNarrative));
 ok(throws(() => V.buildVerificationAnnex({ packet, panel, disposition: resolved, disposition_store: store, narrative: forgedNarrative })), 'Annex revalidates narrative statements against packet evidence');
+const newerDisposition = store.commit(candidate.candidate_id, {
+  candidate_id: candidate.candidate_id, packet, panel, disposition: 'REJECTED', adjudicator: 'Synthetic human adjudicator', human: true,
+  reason: 'A newer synthetic adjudication supersedes the prior narrative revision.', resolution_evidence_ids: []
+}, 2);
+const staleApprovalNarrative = C.canonicalClone(narrative);
+staleApprovalNarrative.disposition_id = newerDisposition.disposition_id;
+staleApprovalNarrative.disposition_revision = newerDisposition.revision;
+staleApprovalNarrative.disposition_sha512 = newerDisposition.disposition_sha512;
+delete staleApprovalNarrative.narrative_sha512;
+staleApprovalNarrative.narrative_sha512 = U.hash(staleApprovalNarrative);
+ok(throws(() => V.buildVerificationAnnex({ packet, panel, disposition: newerDisposition, disposition_store: store, narrative: staleApprovalNarrative })), 'Rebinding outer narrative lineage cannot reuse human approval for an older disposition revision');
 
 const handlerBody = { packet };
 const handlerDependencies = {
