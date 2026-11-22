@@ -122,8 +122,8 @@ Final local results on the isolated branch:
 - `npm test` — **all 65 production/baseline suites GREEN**.
 - `nine-brain-contracts.test.mjs` — **200 assertions passed**.
 - `nine-brain-orchestration-research-legal.test.mjs` — **251 assertions passed**.
-- `nine-brain-verification-adjudication.test.mjs` — **83 assertions passed**.
-- Development total — **534 assertions passed, 0 failed**.
+- `nine-brain-verification-adjudication.test.mjs` — **85 assertions passed**.
+- Development total — **536 assertions passed, 0 failed**.
 - Playwright — **12 tests passed** across Chromium, Firefox and WebKit.
 - `npm run check` — all shipped and development JavaScript syntax checks passed.
 - `tests/site-serving.test.mjs` — **61 assertions passed**, including `development/` exclusion/deny parity.
@@ -137,7 +137,7 @@ The automated PR review findings were addressed with fail-closed implementation 
 
 - Minimum-necessary packet/provider excerpts with substantial unrelated-text absence tests.
 - Awaited asynchronous authorization; trusted handler audit lineage; complete audit and exact packet/evidence reconciliation.
-- Explicit responsible-brain source/context review evidence; packet-evidence-only review anchors; shared-endpoint rejection; timeout cancellation.
+- Explicit responsible-brain source/context review evidence; packet-evidence-only review anchors; substantive grounded content for every passing review; shared-endpoint rejection; timeout cancellation.
 - Evidence-only context resolution, complete disposition history, packet-grounded narrative and authoritative-store annex freshness.
 - Consistent explicit B8 view/candidate mapping; guardian-approved certified-only second-pass `finding_ids`; cyclic/malformed run validation without throws.
 - Precomputed Allen set composition; unique claim/metric identities; unresolved opposite-polarity/different-object alignment; formal deduplication and RES-9 budget propagation.
