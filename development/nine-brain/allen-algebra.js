@@ -157,18 +157,25 @@ function checkPathConsistency(constraints, variableCount, budget) {
 
 function validateWitness(constraints, intervals) {
   if (!Array.isArray(intervals)) return { valid: false, errors: ['Witness intervals must be an array'] };
+  if (!Array.isArray(constraints)) return { valid: false, errors: ['Witness constraints must be an array'] };
   const errors = [];
+  const invalidIntervals = new Set();
   intervals.forEach((item, index) => {
-    try { relation(item, item); } catch (error) { errors.push('interval ' + index + ': ' + error.message); }
+    try { relation(item, item); } catch (error) { invalidIntervals.add(index); errors.push('interval ' + index + ': ' + error.message); }
   });
-  for (const constraint of constraints || []) {
+  for (const constraint of constraints) {
     if (!plain(constraint) || !intervals[constraint.from] || !intervals[constraint.to]) {
       errors.push('Constraint references a missing witness interval');
       continue;
     }
-    const actual = relation(intervals[constraint.from], intervals[constraint.to]);
-    if (!Array.isArray(constraint.allowed) || constraint.allowed.indexOf(actual) === -1) {
-      errors.push('Witness violates ' + constraint.from + '→' + constraint.to + ': actual ' + actual);
+    if (invalidIntervals.has(constraint.from) || invalidIntervals.has(constraint.to)) continue;
+    try {
+      const actual = relation(intervals[constraint.from], intervals[constraint.to]);
+      if (!Array.isArray(constraint.allowed) || constraint.allowed.indexOf(actual) === -1) {
+        errors.push('Witness violates ' + constraint.from + '→' + constraint.to + ': actual ' + actual);
+      }
+    } catch (error) {
+      errors.push('Constraint ' + constraint.from + '→' + constraint.to + ': ' + error.message);
     }
   }
   return { valid: errors.length === 0, errors };

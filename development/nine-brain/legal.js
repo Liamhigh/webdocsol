@@ -75,6 +75,10 @@ function validateCrossBorderObservation(value) {
   const expectedStatus = uncovered.length ? 'PARTIAL_EXPLICIT_GAPS' : 'SYNTAX_PACK_COVERAGE_ONLY';
   const expectedGaps = uncovered.map((code) => 'No selected syntax pack for explicitly declared jurisdiction ' + code + '.');
   if (value.coverage_status !== expectedStatus || !Array.isArray(value.coverage_gaps) || C.stableStringify(value.coverage_gaps) !== C.stableStringify(expectedGaps)) errors.push('coverage status and gaps must reconcile with declared jurisdictions and selected packs');
+  const expectedConflictsStatus = Array.isArray(value.explicit_jurisdictions) && Array.isArray(value.connecting_factors) &&
+    (value.explicit_jurisdictions.length > 1 || value.connecting_factors.some((factor) => plain(factor) && factor.foreign_element === true))
+    ? 'CROSS_BORDER_REVIEW_REQUIRED' : 'NO_CONFLICTS_CONCLUSION';
+  if (value.conflicts_status !== expectedConflictsStatus) errors.push('conflicts status must reconcile with declared jurisdictions and foreign connecting factors');
   if (Array.isArray(value.connecting_factors)) for (const factor of value.connecting_factors) {
     if (!plain(factor) || !Array.isArray(value.explicit_jurisdictions) || value.explicit_jurisdictions.indexOf(factor.jurisdiction) === -1 || !Array.isArray(factor.source_evidence_ids) || !factor.source_evidence_ids.length) errors.push('connecting factor must remain anchored to an explicit declared jurisdiction');
   } else errors.push('connecting factor register is required');

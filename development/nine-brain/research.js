@@ -34,6 +34,10 @@ function alignClaims(left, right) {
       !sameValue(left.modality, right.modality)) {
     return freeze({ ...base, status: 'UNRESOLVED_QUALIFIER_MISMATCH' });
   }
+  if (left.object === null || right.object === null ||
+      left.unresolved_fields.indexOf('object') !== -1 || right.unresolved_fields.indexOf('object') !== -1) {
+    return freeze({ ...base, status: 'INSUFFICIENT_UNKNOWN_OBJECT' });
+  }
   if (left.polarity === 'UNKNOWN' || right.polarity === 'UNKNOWN') {
     return freeze({ ...base, status: 'INSUFFICIENT_UNKNOWN_POLARITY' });
   }
@@ -46,7 +50,7 @@ function alignClaims(left, right) {
   if (left.polarity === right.polarity && !sameValue(left.object, right.object)) {
     const numeric = left.object && right.object && typeof left.object === 'object' && typeof right.object === 'object' &&
       Object.prototype.hasOwnProperty.call(left.object, 'amount') && Object.prototype.hasOwnProperty.call(right.object, 'amount') &&
-      left.object.currency === right.object.currency;
+      left.object.currency === right.object.currency && !sameValue(left.object.amount, right.object.amount);
     return freeze({
       ...base,
       status: numeric ? 'CANDIDATE_NUMERIC_DISCREPANCY' : 'VALUE_DIFFERENCE_REQUIRES_RULE_REVIEW',
@@ -159,6 +163,9 @@ function oracleMetrics(expected, actual, candidateUniverse) {
   register(actual, actualById, 'Actual');
   if (candidateUniverse !== undefined && (!Array.isArray(candidateUniverse) || candidateUniverse.some((item) => !text(item)) || new Set(candidateUniverse).size !== candidateUniverse.length)) throw new TypeError('Candidate universe must be an explicit array of unique candidate IDs');
   const ids = sortedUnique(Object.keys(expectedById).concat(Object.keys(actualById)));
+  if (candidateUniverse !== undefined && ids.some((candidateId) => candidateUniverse.indexOf(candidateId) === -1)) {
+    throw new TypeError('Candidate universe must contain every expected and actual candidate ID');
+  }
   let tp = 0, fp = 0, fn = 0, localized = 0;
   for (const candidateId of ids) {
     const wanted = own(expectedById, candidateId);
@@ -260,7 +267,9 @@ function saturateFormalFacts(facts, rules, budget) {
   const conflicts = [];
   for (let i = 0; i < values.length; i++) {
     for (let j = i + 1; j < values.length; j++) {
-      if (values[i].group && values[i].group === values[j].group && !sameValue(values[i].object, values[j].object)) {
+      if (values[i].group && values[i].group === values[j].group &&
+          values[i].subject === values[j].subject && values[i].predicate === values[j].predicate &&
+          !sameValue(values[i].object, values[j].object)) {
         conflicts.push({ group: values[i].group, fact_ids: [values[i].fact_id, values[j].fact_id] });
       }
     }
