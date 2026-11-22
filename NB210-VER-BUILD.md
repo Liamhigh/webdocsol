@@ -44,7 +44,7 @@ Updated repository controls and documentation:
 - `.assetsignore` and `worker/static-proxy.js` exclude/deny `development/`.
 - `tests/run-development.js` registers three development suites without changing the 65-suite production/baseline registry.
 - `package.json` includes every new module in `npm run check`.
-- `REFERENCE.md` and `tests/README.md` describe the implementation and verification boundaries.
+- `REFERENCE.md`, `.github/copilot-instructions.md` and `tests/README.md` describe the implementation and verification boundaries, including development-only rather than production Allen support.
 
 No archive dependency was imported or installed. No real-matter evidence was added.
 
@@ -52,7 +52,7 @@ No archive dependency was imported or installed. No real-matter evidence was add
 
 | Work package | Implemented development capability | Explicit boundary |
 |---|---|---|
-| NB-2 | Canonical B1–B9 input views, evidence/claim/finding lineage, engagement decisions and complete unit accounting | Existing-finding mapping is orchestration input, not proof of a new production detector |
+| NB-2 | Canonical B1–B9 input views, evidence/claim/finding lineage, engagement decisions and complete unit accounting | Existing-finding mapping is orchestration input, not brain execution; all units remain skipped rather than falsely marked processed |
 | NB-3 | First-pass run records plus candidate, B4 support, opposition, exclusion and B9 recommendation registers | Candidates are not production findings; B4 support is not independent corroboration |
 | NB-4 | P1–P7 promotion coordinator with exact `failed_rules` reconciliation | P2/P3/P4/P5/P7 require explicit review evidence; hashes cannot substitute for semantic review |
 | NB-5 | Finding audits, guardian decisions and technical-reproducibility certifications tied to actual second-pass runs | No truth, judicial, admissibility or human-adjudication certification |
@@ -85,9 +85,10 @@ The technical review seats are:
 The implementation enforces the following:
 
 - Both model requests contain the byte-identical immutable packet and exact Constitution text/hash.
-- Packets contain bounded minimum-necessary excerpts and original page offsets, never original PDF bytes or unrelated full-page text. Text context is limited to 160 UTF-16 code units on each side after validating the full original source anchor.
+- Packets contain bounded minimum-necessary excerpts and original page offsets, never original PDF bytes or unrelated full-page text. Text context is limited to 160 UTF-16 code units on each side and quotes to 2,000 code units after validating the full original source anchor; oversized quotes must be narrowed before submission.
 - Providers receive no other reviewer’s response.
-- Distinct Mistral/DeepSeek endpoints and transport functions are required; duplicate/common-origin seats fail.
+- Distinct Mistral/DeepSeek URL origins and transport functions are required, including different paths on one host; duplicate/common-origin seats fail.
+- Panel acceptance requires in-process trusted provenance from the responsible-brain workflow and actual configured provider transports. Caller-authored or merely rehashed review records cannot create a passing panel.
 - Strict bounded JSON, response-size limits, timeout-triggered transport abortion, HTTPS endpoints and explicit unavailable/malformed statuses are implemented.
 - No silent cross-provider fallback exists.
 - Unknown anchors, changed propositions, cross-talk, missing raw output and status/raw-response inconsistencies fail closed.
@@ -99,9 +100,9 @@ The VER-4 development handler awaits authorization and derives the responsible-b
 
 ## 6. Disposition, narrative and annex controls
 
-`DispositionStore` implements monotonic revisions and compare-and-swap commits while preserving every committed revision in history. A stale expected revision is rejected. Confirmation requires a valid, recomputed three-seat technical panel. Context resolution requires anchored qualifying evidence IDs from the immutable packet; candidate IDs do not qualify. Rejection, resolution or narrative changes never delete evidence or audit history.
+`DispositionStore` implements monotonic revisions and compare-and-swap commits while preserving every committed revision in history. All instances share one explicitly non-durable process-lifetime state, preventing divergent same-process revision-1 commits; restart persistence is intentionally not claimed. A separately reviewed durable atomic-CAS adapter is required before service deployment. A stale expected revision is rejected. Confirmation requires a valid, recomputed three-seat technical panel with trusted review provenance. Context resolution requires anchored qualifying evidence IDs from the immutable packet; candidate IDs do not qualify. Rejection, resolution or narrative changes never delete evidence or audit history.
 
-`NarrativeProvenance` requires separate human approval bound to the current disposition digest. Every material statement must be a verbatim quote reconciled directly against the linked disposition packet’s evidence IDs and anchors; caller-supplied excerpt maps cannot authorize invention. Narrative cannot itself resolve a contradiction.
+`NarrativeProvenance` requires separate human approval bound to both the current disposition digest and revision. Every material statement must be a verbatim quote reconciled directly against the linked disposition packet’s evidence IDs and anchors; caller-supplied excerpt maps cannot authorize invention. Narrative cannot itself resolve a contradiction.
 
 `VerificationAnnex` validates packet, reviews, panel, disposition and packet-grounded narrative digests and checks freshness against the authoritative disposition store, refusing stale/superseded revisions. It reports `READY_FOR_EXISTING_EXTERNAL_SEALER`, `sealed: false` and `blockchain_anchor: null`; it does not alter the existing sealer or claim blockchain anchoring.
 
@@ -111,7 +112,7 @@ Jurisdictions and pack selections must be explicit. IP address, device region, l
 
 The South African pack is pinned as `za` version `1.0.0`, authority `CITATION_SYNTAX_ONLY`. Other declared jurisdictions remain visible coverage gaps unless separately implemented and reviewed. Citation occurrences retain `semantic_support: NOT_EVALUATED`.
 
-The output always retains `governing_law: null` and empty authoritative-legal/admissibility conclusion arrays. Foreign elements produce `CROSS_BORDER_REVIEW_REQUIRED`, not an automatic conflicts rule.
+The output always retains `governing_law: null` and empty authoritative-legal/admissibility conclusion arrays. Validation derives conflicts-review status from the declared jurisdictions and foreign connecting factors, so recomputed identities cannot erase mandatory review. Foreign elements produce `CROSS_BORDER_REVIEW_REQUIRED`, not an automatic conflicts rule.
 
 Archive adapters require an explicit `APPROVED_FOR_DEVELOPMENT` licence/security review and emit default-off observations only. This build adds the adapter contract, not unreviewed third-party code.
 
@@ -121,9 +122,9 @@ Final local results on the isolated branch:
 
 - `npm test` — **all 65 production/baseline suites GREEN**.
 - `nine-brain-contracts.test.mjs` — **200 assertions passed**.
-- `nine-brain-orchestration-research-legal.test.mjs` — **251 assertions passed**.
-- `nine-brain-verification-adjudication.test.mjs` — **85 assertions passed**.
-- Development total — **536 assertions passed, 0 failed**.
+- `nine-brain-orchestration-research-legal.test.mjs` — **264 assertions passed**.
+- `nine-brain-verification-adjudication.test.mjs` — **94 assertions passed**.
+- Development total — **558 assertions passed, 0 failed**.
 - Playwright — **12 tests passed** across Chromium, Firefox and WebKit.
 - `npm run check` — all shipped and development JavaScript syntax checks passed.
 - `tests/site-serving.test.mjs` — **61 assertions passed**, including `development/` exclusion/deny parity.
@@ -143,6 +144,10 @@ The automated PR review findings were addressed with fail-closed implementation 
 - Precomputed Allen set composition; unique claim/metric identities; unresolved opposite-polarity/different-object alignment; formal deduplication and RES-9 budget propagation.
 - Recomputed B7 observation IDs/digests and exact declared-jurisdiction/pack/coverage-gap reconciliation.
 - True negatives omitted unless a candidate universe is defined.
+- Fresh final-head review remediation: trusted in-process review provenance; distinct provider origins and transports; exact audit/guardian/candidate lineage; missing-evidence preservation; B8 media-only views and promotion anchors; no processed coverage without brain execution.
+- Packet quote limits, cyclic-packet fail-closed validation, shared process-local disposition CAS state, and human narrative approval bound to both revision and digest.
+- Unknown-object and equal-amount alignment guards, consistent oracle candidate universes, subject/predicate-scoped formal conflicts, malformed-witness error returns, and B7 conflicts-status recomputation.
+- Semantic tamper regressions recompute record identities/digests so stale-hash checks alone cannot satisfy them.
 
 The proposed common production module envelope was **not** applied to RES research outputs. These functions return explicitly development-only, non-module research records; wrapping them in `ModuleEnvelope` would falsely suggest a contracted analysis module executed and would silently mix research contracts with production module semantics. Their existing `vo.nine-brain-research.v1` schemas and production-finding prohibitions remain unchanged.
 
