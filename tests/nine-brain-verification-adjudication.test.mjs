@@ -89,6 +89,10 @@ const malformed = await V.requestIndependentReview(packet, mistral, async () => 
 ok(malformed.status === 'MALFORMED' && malformed.raw_response === '{not json', 'Malformed provider JSON fails closed with bounded raw-response evidence');
 const unknownAnchor = await V.requestIndependentReview(packet, mistral, async () => ({ status: 200, body: passingModelResponse(packet, { anchor_ids: ['fabricated-anchor'] }) }));
 ok(unknownAnchor.status === 'FAIL' && unknownAnchor.reasons.some((reason) => reason.includes('outside the immutable packet')), 'Model cannot introduce an anchor outside the packet');
+const emptyPass = await V.requestIndependentReview(packet, mistral, async () => ({ status: 200, body: passingModelResponse(packet, { anchor_ids: [], thesis: '', antithesis: '', synthesis: '', reasons: [] }) }));
+ok(emptyPass.status === 'FAIL' && emptyPass.reasons.some((reason) => reason.includes('passing review requires packet evidence anchors')), 'A model PASS without evidence anchors or substantive review content fails closed');
+const incompletePass = await V.requestIndependentReview(packet, mistral, async () => ({ status: 200, body: passingModelResponse(packet, { synthesis: '' }) }));
+ok(incompletePass.status === 'FAIL' && incompletePass.reasons.some((reason) => reason.includes('substantive thesis, antithesis, synthesis and reasons')), 'Every passing model review must preserve complete substantive reasoning');
 const changedProposition = await V.requestIndependentReview(packet, mistral, async () => ({ status: 200, body: passingModelResponse(packet, { proposition: 'A broader invented proposition' }) }));
 ok(changedProposition.status === 'FAIL' && changedProposition.reasons.some((reason) => reason.includes('changed the bounded proposition')), 'Model cannot silently broaden the surviving proposition');
 const unavailable = await V.requestIndependentReview(packet, mistral, undefined);
