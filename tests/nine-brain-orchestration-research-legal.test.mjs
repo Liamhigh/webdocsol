@@ -7,10 +7,27 @@ const require = createRequire(import.meta.url);
 const { ok, throws, done } = require('./_assert.js');
 const { C, makeBase, completeReviews, passReview } = (() => ({ C: require('../analysis-contracts.js'), ...require('./nine-brain-fixtures.js') }))();
 const O = require('../development/nine-brain/orchestration.js');
+const U = require('../development/nine-brain/util.js');
 const Research = require('../development/nine-brain/research.js');
 const Allen = require('../development/nine-brain/allen-algebra.js');
 const Legal = require('../development/nine-brain/legal.js');
 const here = path.dirname(fileURLToPath(import.meta.url));
+
+function rehashRun(value) {
+  const copy = C.canonicalClone(value);
+  delete copy.run_sha512;
+  copy.run_sha512 = U.hash(copy);
+  return copy;
+}
+
+function rehashLegal(value) {
+  const copy = C.canonicalClone(value);
+  delete copy.observation_id;
+  delete copy.observation_sha512;
+  copy.observation_id = U.id(Legal.SCHEMA, 'B7_CROSS_BORDER', copy);
+  copy.observation_sha512 = U.hash(copy);
+  return copy;
+}
 
 console.log('======================================================');
 console.log('RUN  nine-brain-orchestration-research-legal.test.mjs');
@@ -37,6 +54,8 @@ const replay = O.buildDevelopmentRun(base);
 ok(C.stableStringify(initial) === C.stableStringify(replay) && initial.run_sha512 === replay.run_sha512, 'Canonical replay is byte-for-byte deterministic');
 ok(C.sha512Hex(C.stableStringify(base.bundle)) === initial.evidence_bundle_sha512 && base.sourceTexts['evidence-one'] === originalSourceText && C.stableStringify(base.bundle) === originalBundle, 'Orchestration does not mutate original evidence records or source text');
 ok(initial.input_views.first_pass[7].existing_findings.length === 1 && initial.input_views.first_pass[7].existing_findings[0].development_brain_id === 'B8' && initial.candidates.some((candidate) => candidate.brain_id === 'B8' && candidate.source_finding.development_brain_id === 'B8'), 'Explicit B8 media-register override is consistent in input views and candidate construction');
+ok(initial.first_pass.concat(initial.second_pass).every((brainRun) => brainRun.coverage.units_processed === 0 && brainRun.coverage.units_skipped.length === brainRun.coverage.units_total) && initial.coverage.units_processed === 0, 'Input mapping never marks unexecuted brain-specific analysis as processed');
+ok(initial.input_views.first_pass[7].evidence_atoms.every((atom) => atom.anchor.coordinate_space === 'media-time-v1') && initial.input_views.first_pass[7].claims.length === 0, 'B8 input views contain only contracted media evidence and media-supported claims');
 let malformedThrew = false;
 try {
   const malformedResult = O.validateDevelopmentRun({ schema: O.SCHEMA, concordance: {} });
@@ -67,6 +86,12 @@ ok(promoted.finding_certifications.every((certification) => {
   return certification.run_id === actualRun.run_id && certification.finding_sha512 === C.sha512Hex(C.stableStringify(certifiedCandidate));
 }), 'Certification binds to the exact candidate and actual second-pass brain run');
 ok(promoted.second_pass.some((run) => run.finding_ids.length > 0) && promoted.first_pass.every((run) => run.finding_ids.length === 0), 'Only the post-review pass lists development-certified candidate IDs');
+const wrongAuditLineage = C.canonicalClone(promoted);
+wrongAuditLineage.finding_audits[0].original_finding_id = 'unrelated-candidate';
+ok(!O.validateDevelopmentRun(rehashRun(wrongAuditLineage)).valid, 'Audit lineage must match exact promoted candidate IDs even with a recomputed outer digest');
+const wrongGuardianLineage = C.canonicalClone(promoted);
+wrongGuardianLineage.guardian_decision.items[0].finding_id = 'unrelated-candidate';
+ok(!O.validateDevelopmentRun(rehashRun(wrongGuardianLineage)).valid, 'Guardian lineage must match exact promoted candidate IDs even with a recomputed outer digest');
 const rejectedReviews = completeReviews(initial);
 rejectedReviews[initial.candidates[0].candidate_id] = { ...passReview(), P5: { status: 'FAIL', reasons: ['Invalidating antithesis remains unresolved.'] } };
 const rejected = O.buildDevelopmentRun({ ...base, promotionReviews: rejectedReviews });
@@ -77,6 +102,22 @@ const noAnchorRun = O.buildDevelopmentRun({ ...base, findings: noAnchorFindings 
 const noAnchorReviews = completeReviews(noAnchorRun);
 const noAnchorResult = O.buildDevelopmentRun({ ...base, findings: noAnchorFindings, promotionReviews: noAnchorReviews });
 ok(noAnchorResult.promotion_decisions.some((decision) => decision.decision === 'REJECTED' && decision.failed_rules.indexOf('P1') !== -1), 'Explicit semantic reviews cannot override missing direct evidence anchors');
+const partialEvidenceFindings = [
+  { type: 'CT23', development_source_evidence_ids: ['evidence-one', 'missing-evidence'], development_bounded_proposition: 'Bounded partial-evidence synthetic candidate.' },
+  { type: 'CT47', development_source_evidence_ids: ['evidence-one', 'missing-support-evidence'] }
+];
+const partialEvidencePreview = O.buildDevelopmentRun({ ...base, findings: partialEvidenceFindings });
+const partialCandidate = partialEvidencePreview.candidates.find((candidate) => candidate.source_finding.type === 'CT23');
+const partialSupport = partialEvidencePreview.support_register[0];
+ok(partialCandidate.unresolved_source_evidence_ids.includes('missing-evidence') && partialSupport.unresolved_source_evidence_ids.includes('missing-support-evidence'), 'Unresolved cited evidence remains explicit in candidate and support registers');
+const partialEvidenceRun = O.buildDevelopmentRun({ ...base, findings: partialEvidenceFindings, promotionReviews: completeReviews(partialEvidencePreview) });
+ok(partialEvidenceRun.promotion_decisions.find((decision) => decision.candidate_id === partialCandidate.candidate_id).failed_rules.includes('P1'), 'Partially resolved evidence cannot be silently filtered into a promotion');
+const textB8Base = { ...base, findings: [{ type: 'CT23', development_brain_id: 'B8', development_source_evidence_ids: ['evidence-one'], development_bounded_proposition: 'Synthetic text cannot become a media observation.' }] };
+const textB8Preview = O.buildDevelopmentRun(textB8Base);
+const textB8Run = O.buildDevelopmentRun({ ...textB8Base, promotionReviews: completeReviews(textB8Preview) });
+const textB8Candidate = textB8Run.candidates.find((candidate) => candidate.brain_id === 'B8' && candidate.source_finding);
+const textB8Decision = textB8Run.promotion_decisions.find((decision) => decision.candidate_id === textB8Candidate.candidate_id);
+ok(textB8Decision.decision === 'REJECTED' && textB8Decision.failed_rules.includes('P1'), 'B8 promotion rejects page-text anchors even after complete semantic review');
 const overclaimReviews = completeReviews(initial);
 const overclaimBase = { ...base, findings: [{ type: 'CT23', development_source_evidence_ids: ['evidence-one'], development_bounded_proposition: 'This proves conclusive truth and is admissible.' }] };
 const overclaimPreview = O.buildDevelopmentRun(overclaimBase);
@@ -104,6 +145,7 @@ ok(temporalConflict.status === 'INCONSISTENT', 'Temporal network detects an empt
 ok(Research.checkTemporalNetwork([{ from: 0, to: 1, allowed: ['<'] }], 3, 1).status === 'BUDGET_EXCEEDED', 'Temporal budget exhaustion fails closed without a consistency claim');
 ok(Research.validateTemporalWitness([{ from: 0, to: 1, allowed: ['<'] }], [{ start: 0, end: 1 }, { start: 2, end: 3 }]).valid, 'Concrete temporal witness independently validates');
 ok(!Research.validateTemporalWitness([{ from: 0, to: 1, allowed: ['<'] }], [{ start: 3, end: 4 }, { start: 0, end: 1 }]).valid, 'Invalid temporal witness is rejected');
+ok(!Research.validateTemporalWitness([{ from: 0, to: 1, allowed: ['<'] }], [{ start: 0, end: 0 }, { start: 2, end: 3 }]).valid, 'Malformed witness intervals return accumulated validation errors instead of throwing');
 
 const positive = base.bundle.claims[0];
 const negative = base.bundle.claims[1];
@@ -112,6 +154,9 @@ ok(Research.alignClaims(positive, negative).status === 'CANDIDATE_CONTRADICTION'
 ok(Research.alignClaims(positive, qualifierChanged).status === 'UNRESOLVED_QUALIFIER_MISMATCH', 'Different event qualifiers cannot be collapsed into a contradiction');
 ok(Research.alignClaims(positive, { ...negative, actor: 'Another actor' }).status === 'UNRESOLVED_NOT_SAME_PROPOSITION', 'Different actors do not silently form the same proposition');
 ok(Research.alignClaims(positive, { ...negative, object: { amount: '500.00', currency: 'ZAR' } }).status === 'UNRESOLVED_OPPOSITE_POLARITY_DIFFERENT_OBJECTS', 'Opposite polarity with different objects remains unresolved rather than aligned');
+const unknownObject = { ...negative, object: null, unresolved_fields: negative.unresolved_fields.concat(['object']) };
+ok(Research.alignClaims({ ...positive, object: null, unresolved_fields: positive.unresolved_fields.concat(['object']) }, unknownObject).status === 'INSUFFICIENT_UNKNOWN_OBJECT', 'Unknown or unresolved objects cannot become polarity contradictions');
+ok(Research.alignClaims(positive, { ...positive, claim_id: 'metadata-changed', object: { amount: '100.00', currency: 'ZAR', note: 'different metadata' } }).status === 'VALUE_DIFFERENCE_REQUIRES_RULE_REVIEW', 'Equal amounts with different metadata are not numeric discrepancies');
 const duplicateClaimBundle = C.canonicalClone(base.bundle);
 duplicateClaimBundle.claims.push(C.canonicalClone(duplicateClaimBundle.claims[0]));
 ok(throws(() => Research.buildEvidenceGraph(duplicateClaimBundle, base.sourceTexts)), 'Duplicate claim IDs are rejected before evidence-graph construction');
@@ -130,6 +175,7 @@ ok(metrics.localization.detected === 1 && metrics.localization.exact_anchor_matc
 ok(!Object.prototype.hasOwnProperty.call(metrics.detection, 'true_negative'), 'True negatives are omitted without a defined candidate universe');
 const universeMetrics = Research.oracleMetrics([{ candidate_id: 'a', anchors: [] }], [{ candidate_id: 'a', anchors: [] }], ['a', 'b']);
 ok(universeMetrics.detection.true_negative === 1, 'True negatives are calculated only from an explicit candidate universe');
+ok(throws(() => Research.oracleMetrics([{ candidate_id: 'a', anchors: [] }], [{ candidate_id: 'c', anchors: [] }], ['a', 'b'])), 'Candidate universe cannot omit expected or actual IDs while mixing metric populations');
 ok(throws(() => Research.oracleMetrics([{ candidate_id: 'a', anchors: [] }, { candidate_id: 'a', anchors: [] }], [])), 'Duplicate expected candidate IDs invalidate oracle metrics');
 ok(throws(() => Research.oracleMetrics([], [{ candidate_id: 'a', anchors: [] }, { candidate_id: 'a', anchors: [] }])), 'Duplicate actual candidate IDs invalidate oracle metrics');
 const disagreement = Research.reviewerRobustness([
@@ -143,6 +189,11 @@ const formal = Research.saturateFormalFacts([
   { fact_id: 'f2', predicate: 'status', subject: 's', object: 'closed', group: 'state' }
 ], [], 100);
 ok(formal.status === 'FORMAL_CONFLICT_CANDIDATES' && formal.conflicts.length === 1, 'Formal saturation reports explicit value conflicts');
+const unrelatedFormal = Research.saturateFormalFacts([
+  { fact_id: 'f1', predicate: 'status', subject: 's', object: 'open', group: 'shared-label' },
+  { fact_id: 'f2', predicate: 'other-status', subject: 'other-subject', object: 'closed', group: 'shared-label' }
+], [], 100);
+ok(unrelatedFormal.conflicts.length === 0 && unrelatedFormal.status === 'SATURATED_NO_DERIVED_CONFLICT', 'A shared group label cannot create conflicts across unrelated subjects or predicates');
 const derived = Research.saturateFormalFacts([{ fact_id: 'f1', predicate: 'premise', subject: 's', object: true }], [
   { rule_id: 'r1', when: { predicate: 'premise', subject: 's', object: true }, then: { predicate: 'result', subject: 's', object: true } }
 ]);
@@ -176,7 +227,10 @@ ok(legal.selected_packs[0].id === 'za' && legal.selected_packs[0].version === '1
 ok(Legal.validateCrossBorderObservation(legal).valid, 'Cross-border observation validates its boundaries');
 const legalCoverageTamper = C.canonicalClone(legal);
 legalCoverageTamper.explicit_jurisdictions = ['za'];
-ok(!Legal.validateCrossBorderObservation(legalCoverageTamper).valid, 'B7 validation reconciles declared jurisdictions, selected packs and explicit coverage gaps');
+ok(!Legal.validateCrossBorderObservation(rehashLegal(legalCoverageTamper)).valid, 'B7 validation reconciles declared jurisdictions, selected packs and explicit coverage gaps even with recomputed identity');
+const legalConflictTamper = C.canonicalClone(legal);
+legalConflictTamper.conflicts_status = 'NO_CONFLICTS_CONCLUSION';
+ok(!Legal.validateCrossBorderObservation(rehashLegal(legalConflictTamper)).valid, 'B7 validation derives mandatory cross-border review from jurisdictions and foreign connecting factors');
 const legalIdentityTamper = C.canonicalClone(legal);
 legalIdentityTamper.citation_occurrences[0].occurrence_id = 'changed-occurrence';
 ok(!Legal.validateCrossBorderObservation(legalIdentityTamper).valid, 'B7 validation recomputes observation identity and digest instead of accepting stale lineage');
