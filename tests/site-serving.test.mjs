@@ -36,10 +36,11 @@ const mk = (p, method = 'GET') => new Request('https://verumglobal.foundation' +
       ok(sp.SITE_DENY_RE.test(smp) && sp.repoPathFor(smp) === null, '.assetsignore pattern "' + pat + '" is also denied by the Worker: ' + smp);
     }
   }
-  for (const allowed of ['/index.html', '/seal-document.html', '/verify.html', '/images/logo-full.png', '/images/favicon.png', '/vendor/pdf-lib.min.js', '/verum-ui.css', '/robots.txt', '/llms.txt', '/sitemap.xml', '/constitution.json', '/seal-guard.js']) {
+  for (const allowed of ['/index.html', '/seal-document.html', '/verify.html', '/development-lab.html', '/development-lab.js', '/images/logo-full.png', '/images/favicon.png', '/vendor/pdf-lib.min.js', '/verum-ui.css', '/robots.txt', '/llms.txt', '/sitemap.xml', '/constitution.json', '/seal-guard.js']) {
     ok(!sp.SITE_DENY_RE.test(allowed) && sp.repoPathFor(allowed) === allowed && fs.existsSync(path.join(root, allowed)), 'site file allowed and present: ' + allowed);
   }
   ok(sp.repoPathFor('/') === '/index.html' && sp.repoPathFor('/seal-document') === '/seal-document.html', 'root and extensionless pages map to their files');
+  ok(sp.repoPathFor('/development-lab') === '/development-lab.html' && sp.repoPathFor('/development/nine-brain-console/runner.js') === null && sp.repoPathFor('/tests/nine-brain-fixtures.js') === null, 'Test Lab page is public while raw development and test sources stay denied');
   ok(sp.repoPathFor('/../wrangler.toml') === null && sp.repoPathFor('/%2e%2e/x.js') === null && sp.repoPathFor('/a//b.js') === '/a/b.js', 'traversal is refused; doubled slashes collapse');
   ok(sp.contentTypeFor('/x.html').startsWith('text/html') && sp.contentTypeFor('/x.js').startsWith('application/javascript') && sp.contentTypeFor('/x.png') === 'image/png' && sp.contentTypeFor('/vendor/eng.traineddata.gz') === 'application/gzip', 'content types come from the extension');
 }
