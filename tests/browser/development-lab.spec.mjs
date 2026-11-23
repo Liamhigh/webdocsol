@@ -42,6 +42,26 @@ async function readDownloadedJson(download) {
   return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
+async function expectViewportLayout(page, width) {
+  await page.setViewportSize({ width, height: 1000 });
+  await expect(page.locator('#runBrains')).toBeVisible();
+  await expect(page.locator('#downloadResult')).toBeVisible();
+  const dimensions = await page.evaluate(() => ({
+    viewport: window.innerWidth,
+    document: document.documentElement.scrollWidth,
+    body: document.body.scrollWidth,
+    clippedStatuses: [...document.querySelectorAll('.status')]
+      .filter((element) => element.scrollWidth > element.clientWidth + 1)
+      .map((element) => element.textContent.trim())
+  }));
+  expect(dimensions.viewport).toBe(width);
+  expect(dimensions.document, 'document overflow at ' + width + 'px').toBeLessThanOrEqual(width);
+  expect(dimensions.body, 'body overflow at ' + width + 'px').toBeLessThanOrEqual(width);
+  expect(dimensions.clippedStatuses, 'clipped status at ' + width + 'px').toEqual([]);
+  const buttonBox = await page.locator('#runBrains').boundingBox();
+  expect(buttonBox.height).toBeGreaterThanOrEqual(46);
+}
+
 test('complete all-pass workflow, real JSON export, inspector, summary and reset', async ({ page }) => {
   const external = await installOfflineGuard(page);
   const { errors, badResponses } = watchPage(page);
@@ -122,9 +142,10 @@ test('complete all-pass workflow, real JSON export, inspector, summary and reset
 });
 
 for (const scenario of ['dissent', 'unavailable', 'malformed']) {
-  test(scenario + ' fails closed through visible controls and rejects human CONFIRMED', async ({ page }) => {
+  test(scenario + ' fails closed at 375 px and rejects human CONFIRMED', async ({ page }) => {
     const external = await installOfflineGuard(page);
     const { errors, badResponses } = watchPage(page);
+    await page.setViewportSize({ width: 375, height: 1000 });
     await page.goto(PAGE);
     await runBrains(page);
     await runReview(page, scenario);
@@ -152,6 +173,7 @@ for (const scenario of ['dissent', 'unavailable', 'malformed']) {
     expect(exported.narrative).toBeNull();
     expect(exported.annex).toBeNull();
     expect(exported.live_provider_calls).toBe(0);
+    await expectViewportLayout(page, 375);
     expect(errors).toEqual([]);
     expect(badResponses).toEqual([]);
     expectNoDocumentEgress(expect, external, SYNTHETIC_TEXT);
@@ -167,22 +189,7 @@ test('responsive workflow stays inside the viewport at phone, tablet and desktop
   await runReview(page, 'all-pass');
 
   for (const width of [375, 768, 1024, 1440]) {
-    await page.setViewportSize({ width, height: 1000 });
-    await expect(page.locator('#runBrains')).toBeVisible();
-    await expect(page.locator('#downloadResult')).toBeVisible();
-    const dimensions = await page.evaluate(() => ({
-      viewport: window.innerWidth,
-      document: document.documentElement.scrollWidth,
-      body: document.body.scrollWidth,
-      clippedStatuses: [...document.querySelectorAll('.status')]
-        .filter((element) => element.scrollWidth > element.clientWidth + 1)
-        .map((element) => element.textContent.trim())
-    }));
-    expect(dimensions.document, 'document overflow at ' + width + 'px').toBeLessThanOrEqual(width);
-    expect(dimensions.body, 'body overflow at ' + width + 'px').toBeLessThanOrEqual(width);
-    expect(dimensions.clippedStatuses, 'clipped status at ' + width + 'px').toEqual([]);
-    const buttonBox = await page.locator('#runBrains').boundingBox();
-    expect(buttonBox.height).toBeGreaterThanOrEqual(46);
+    await expectViewportLayout(page, width);
   }
   expect(errors).toEqual([]);
   expect(badResponses).toEqual([]);
