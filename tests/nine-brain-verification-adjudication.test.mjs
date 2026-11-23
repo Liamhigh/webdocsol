@@ -125,6 +125,8 @@ const httpFailure = await V.requestIndependentReview(packet, mistral, async () =
 ok(httpFailure.status === 'UNAVAILABLE', 'Provider HTTP failure remains an explicit unavailable status');
 const oversized = await V.requestIndependentReview(packet, { ...mistral, max_response_bytes: 8 }, async () => ({ status: 200, body: '123456789' }));
 ok(oversized.status === 'MALFORMED' && oversized.reasons[0].includes('byte limit'), 'Provider response byte limit is enforced');
+const multibyteOversized = await V.requestIndependentReview(packet, { ...mistral, max_response_bytes: 8 }, async () => ({ status: 200, body: '€€€' }));
+ok(multibyteOversized.status === 'MALFORMED' && multibyteOversized.reasons[0].includes('byte limit'), 'Provider byte limit counts UTF-8 bytes rather than UTF-16 code units');
 const timedOut = await V.requestIndependentReview(packet, { ...mistral, timeout_ms: 5 }, () => new Promise((resolve) => setTimeout(() => resolve({ status: 200, body: passingModelResponse(packet) }), 30)));
 ok(timedOut.status === 'UNAVAILABLE' && timedOut.reasons[0].includes('timeout'), 'Provider timeout fails closed');
 let cancellationSignal;
