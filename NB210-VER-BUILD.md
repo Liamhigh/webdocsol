@@ -2,12 +2,12 @@
 
 | Document control | Value |
 |---|---|
-| Date | 22 November 2026 |
+| Date | 23 November 2026 |
 | Repository | `Liamhigh/webdocsol` |
 | Base | `438c7915d613b8727758e4b3d02c93d62894bbfd` (merged NB-0/NB-1 `main`) |
 | Branch | `feat/nine-brain-development-completion` |
-| Build status | Complete local development implementation; PR #324 review remediation applied; final-head peer review and CI remain required |
-| Production status | **Not enabled**; no production engine, report renderer, Findings JSON, Worker route, seal, QR or OpenTimestamps semantics changed |
+| Build status | Complete local development implementation and synthetic browser Test Lab; final-head peer review and CI remain required |
+| Production status | **Not enabled**; a separate public synthetic Test Lab is included, but no production engine, report renderer, Findings JSON, analysis route, seal, QR or OpenTimestamps semantics changed |
 | Canonical architecture | Exactly B1–B9; no tenth brain |
 | NB-0 governance | `OPEN_AWAITING_GOVERNANCE_DECISION` |
 | Concordance | `POLICY_UNRESOLVED` |
@@ -18,9 +18,9 @@
 
 ## 1. What “completed” means here
 
-This build completes the remaining **development system** described by NB-2–NB-10 and VER-1–VER-7. It supplies executable contracts, deterministic orchestration, research algorithms, isolated provider adapters, fail-closed panel logic, human-adjudication records, grounded narrative provenance, annexes, tests and rollback controls.
+This build completes the remaining **development system** described by NB-2–NB-10 and VER-1–VER-7. It supplies executable contracts, deterministic orchestration, research algorithms, isolated provider adapters, fail-closed panel logic, human-adjudication records, grounded narrative provenance, annexes, tests and rollback controls. It also supplies a visible **Test Lab** at `/development-lab.html` (extensionless route `/development-lab`) so a non-technical reviewer can execute the synthetic workflow through numbered buttons, inspect the real development records, and download a JSON result.
 
-It does **not** claim that the production service now performs nine-brain analysis, that NB-0 has selected a voting rule, that live AI verification is active, that legal conclusions are authoritative, or that a court has accepted or validated the software. Production promotion and deployment remain separate governance actions.
+It does **not** claim that ordinary production scans now perform nine-brain analysis, that NB-0 has selected a voting rule, that live AI verification is active, that legal conclusions are authoritative, or that a court has accepted or validated the software. The Test Lab accepts no document upload, uses local mocked Mistral/DeepSeek transports, and does not mutate production findings, reports or seals. Production promotion and deployment remain separate governance actions.
 
 ## 2. File map
 
@@ -33,20 +33,27 @@ New development modules under `development/nine-brain/`:
 - `legal.js` — B7 cross-border observation framework and separately gated archive-adapter envelope.
 - `verification.js` — VER-1–VER-7 packets, provider adapter, review/panel records, secure development handler, dispositions, narrative provenance and annexes.
 
-New synthetic tests:
+New synthetic Test Lab and tests:
 
+- `development/nine-brain-console/runner.js` — executes the actual development modules against synthetic fixtures and local mock transports, with deterministic replay and a canonical export.
+- `development/nine-brain-console/browser.js` — connects the visible controls to the runner and renders the nine brains, B7 observations, three review seats, human history, narrative/annex state, records and audit trail.
+- `development-lab.html` and generated `development-lab.js` — the only public Test Lab page and browser bundle; no raw `development/` or `tests/` source is published.
+- `scripts/build-development-lab.mjs` — pinned `esbuild@0.25.12` browser build.
 - `tests/nine-brain-fixtures.js`
 - `tests/nine-brain-orchestration-research-legal.test.mjs`
 - `tests/nine-brain-verification-adjudication.test.mjs`
+- `tests/nine-brain-console.test.mjs`
+- `tests/browser/development-lab.spec.mjs`
 
 Updated repository controls and documentation:
 
-- `.assetsignore` and `worker/static-proxy.js` exclude/deny `development/`.
-- `tests/run-development.js` registers three development suites without changing the 65-suite production/baseline registry.
-- `package.json` includes every new module in `npm run check`.
+- `.assetsignore` and `worker/static-proxy.js` exclude/deny raw `development/`; the Worker allowlist explicitly exposes only the synthetic Test Lab page/bundle and its extensionless page route.
+- `index.html` links to the Test Lab without changing scan or sealing behaviour.
+- `tests/run-development.js` registers four development suites without changing the 65-suite production/baseline registry.
+- `package.json` includes every new module in `npm run check` and provides reproducible Test Lab build/test scripts.
 - `REFERENCE.md`, `.github/copilot-instructions.md` and `tests/README.md` describe the implementation and verification boundaries, including development-only rather than production Allen support.
 
-No archive dependency was imported or installed. No real-matter evidence was added.
+No archive dependency was imported or installed. No real-matter evidence or credentials were added. The only new dependency is the pinned development-only browser bundler.
 
 ## 3. NB implementation record
 
@@ -116,23 +123,45 @@ The output always retains `governing_law: null` and empty authoritative-legal/ad
 
 Archive adapters require an explicit `APPROVED_FOR_DEVELOPMENT` licence/security review and emit default-off observations only. This build adds the adapter contract, not unreviewed third-party code.
 
-## 8. Verification evidence
+## 8. Synthetic Test Lab
+
+After the PR is merged and deployed, open `/development-lab.html` or choose **Test Lab** from the main website. Until that deployment is verified, the route is implemented on the PR but is not claimed to be available on the live main website.
+
+Run the all-pass scenario first:
+
+1. Leave **Reviewer scenario** on **All three reviews pass**.
+2. Select **Run B1–B9**. Expect a valid two-pass run and a matching deterministic replay, with exactly nine brain rows.
+3. Select **Run technical review**. Expect three distinct passing technical seats and `TECHNICALLY_SUPPORTED_PENDING_HUMAN_ADJUDICATION`; this is not yet a human-verified finding.
+4. Keep the synthetic adjudicator/reason values or enter test-only values, choose `CONFIRMED`, and select **Commit human decision**.
+5. Select **Approve narrative & prepare annex**. Expect a grounded narrative and `READY_FOR_EXISTING_EXTERNAL_SEALER`, while `sealed` remains `false` and `blockchain_anchor` remains `null`.
+6. Open the canonical-record inspector and audit trail to review the actual records.
+7. Select **Download test JSON** and send the resulting `verum-development-test-all-pass.json` file back for review.
+
+Then select **Reset test session** and repeat steps 2–4 for each failure scenario. DeepSeek dissent, provider unavailability and malformed output must each fail closed even though the deterministic and Mistral seats pass; `CONFIRMED` must be rejected and no narrative or annex may be created. Download each JSON result separately.
+
+The page uses only bundled synthetic statements. It has no upload control, credential field, database, live provider transport, production report mutation or production seal mutation. Mocked reviewer agreement is not live independent AI verification, scientific validation, a court finding or a legal conclusion.
+
+## 9. Verification evidence
 
 Final local results on the isolated branch:
 
-- `npm test` — **all 65 production/baseline suites GREEN**.
+- `npm test` — **all 65 production/baseline suites GREEN** and **all four separately gated development suites GREEN**.
 - `nine-brain-contracts.test.mjs` — **200 assertions passed**.
 - `nine-brain-orchestration-research-legal.test.mjs` — **264 assertions passed**.
-- `nine-brain-verification-adjudication.test.mjs` — **94 assertions passed**.
-- Development total — **558 assertions passed, 0 failed**.
-- Playwright — **12 tests passed** across Chromium, Firefox and WebKit.
+- `nine-brain-verification-adjudication.test.mjs` — **95 assertions passed**.
+- `nine-brain-console.test.mjs` — **48 assertions passed**.
+- Development total — **607 assertions passed, 0 failed**.
+- Playwright — **27 tests passed** across Chromium, Firefox and WebKit: 15 Test Lab tests plus the existing 12 browser tests.
+- Test Lab scenarios cover all-pass export/reset, dissent, unavailable provider, malformed response and responsive layouts at 375, 768, 1024 and 1440 pixels in every engine.
+- Offline guards confirmed no unexpected document egress or live provider calls; downloaded JSON was parsed and checked in every engine.
 - `npm run check` — all shipped and development JavaScript syntax checks passed.
-- `tests/site-serving.test.mjs` — **61 assertions passed**, including `development/` exclusion/deny parity.
+- `tests/site-serving.test.mjs` — **64 assertions passed**, including public Test Lab assets and raw development/test-source denial.
 - `tests/documentation-consistency.test.mjs` — **34 assertions passed**.
+- Final rendered phone/tablet/desktop inspections found no document overflow or clipped status labels.
 
-The first full Node attempt had one environment-only startup failure because the clean worktree lacked locked development dependencies. After installing the lockfile dependencies without lifecycle scripts or bin symlinks, the complete suite passed. The first browser attempt likewise could not launch missing browser binaries; after installing the pinned Playwright browsers, all 12 tests passed. Neither environment failure is counted as a passing test.
+Earlier environment-only dependency and missing-browser failures were repaired and rerun rather than counted as passing tests. Browser-only UTF-8 byte counting, phone overflow, Firefox reset-state restoration and download-completion synchronisation defects were fixed with regressions. The final uninterrupted browser run passed all 27 tests.
 
-## 9. PR #324 review remediation
+## 10. PR #324 review remediation
 
 The automated PR review findings were addressed with fail-closed implementation changes and regression tests rather than by weakening assertions:
 
@@ -151,23 +180,22 @@ The automated PR review findings were addressed with fail-closed implementation 
 
 The proposed common production module envelope was **not** applied to RES research outputs. These functions return explicitly development-only, non-module research records; wrapping them in `ModuleEnvelope` would falsely suggest a contracted analysis module executed and would silently mix research contracts with production module semantics. Their existing `vo.nine-brain-research.v1` schemas and production-finding prohibitions remain unchanged.
 
-## 10. Production compatibility and rollback
+## 11. Production compatibility and rollback
 
-The following production files were not edited:
+The following production analysis and sealing files were not edited:
 
 - `forensic-engine-page.js`
 - `forensic-report.js`
-- `seal-document.html`
 - `worker/verum-rules.js`
 - `analysis-config.js`
 - `analysis-contracts.js`
 - `tests/run-all.js`
 
-Findings JSON remains `1.11.0`; the production engine remains `5.7.2-web`. Existing seals and OTS proofs are untouched. The new modules are not referenced by production pages or Worker routes.
+`worker/static-proxy.js` received only the explicit synthetic Test Lab page mapping. Findings JSON remains `1.11.0`; the production engine remains `5.7.2-web`. Existing seals and OTS proofs are untouched. Ordinary production scans do not import or execute the development modules.
 
-Rollback is revert-based: revert the branch commit or remove `development/nine-brain/`, its three test files and registrations, then restore the two static-serving exclusions and documentation. There is no database migration, persisted production state, provider credential, live route or seal-format migration to unwind.
+Rollback is revert-based: revert the branch changes or remove `development/nine-brain/`, `development/nine-brain-console/`, the four development test registrations/files, `development-lab.html`, `development-lab.js`, their browser test/build script and navigation/route entries, then restore the static-serving exclusions and documentation. There is no database migration, persisted production state, provider credential, live AI route or seal-format migration to unwind.
 
-## 11. Remaining gates before any production claim
+## 12. Remaining gates before any production claim
 
 1. Technical, logical, legal and clarity peer review of the pull request.
 2. A versioned human NB-0 governance decision selecting concordance policy, agreement unit and independence test.
