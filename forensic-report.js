@@ -2406,7 +2406,7 @@ function secMethodology(ctx, data) {
   ctx.heading('METHODOLOGY & AUTHENTICATION');
 
   ctx.subHeading('Platform role');
-  ctx.para('The Verum Omnis platform organises, indexes, cross-references and preserves documents cryptographically. It does not create, alter, generate or select any item of evidence. The seal proves two things only — integrity and time. Findings are produced by the deterministic engine from the sealed text, anchored to quoted text and page references; the Court remains the arbiter of what the documents establish.', { size: 9.5, after: 10 });
+  ctx.para('The Verum Omnis platform organises, indexes, cross-references and preserves documents cryptographically. It does not create, alter, generate or select any item of evidence. The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect. Findings are produced by the deterministic engine from the sealed text, anchored to quoted text and page references; the Court remains the arbiter of what the documents establish.', { size: 9.5, after: 10 });
 
   ctx.subHeading('What ran');
   ctx.bullet('Engine: Verum Omnis Forensic Contradiction Engine v' + ENGINE_VERSION + ' - governed by Constitution v' + CONSTITUTION.governance.version + ', implementing engine operating instrument v' + CONSTITUTION_VERSION + '.', { size: 9.5 });

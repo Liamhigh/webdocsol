@@ -748,7 +748,8 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
         </div>
         <div class="reveal-item">
           <p class="lead">Every document, analysis, and report is cryptographically sealed using SHA-512 hashing and anchored to the Bitcoin blockchain via OpenTimestamps. Any alteration — even a single character — produces a completely different hash, making tampering immediately detectable.</p>
-          <p class="lead">The platform organises, indexes, cross-references and preserves documents cryptographically; the seal proves two things only — integrity and time.</p>
+          <p class="lead">The platform organises, indexes, cross-references and preserves documents cryptographically. The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect.</p>
+          <p class="lead"><strong>Photographs and location metadata.</strong> A photograph can be sealed with the device-reported GPS coordinates and sealing time when location permission is granted. These details are preserved as reported metadata, not independent proof of where the photograph was taken or who captured it. Exact GPS is kept in the PRIVATE certificate by default.</p>
           <p class="lead"><strong>Voice notes count too.</strong> Seal a WhatsApp voice note exactly as it is — the original bytes, fingerprinted and anchored, never altered — or upload a whole chat export (the <em>.zip</em> WhatsApp makes from Export chat → Include media; it is unpacked on your device and never uploaded), and every recording, image and the chat text seal together. The Voice-Note Evidence Report ties each note to its sender and time in WhatsApp's own words, records the date carried in the recording's own file name, keeps your screen grab of the note beside it as corroboration, and adds a machine transcript only if you ask for one. The sealed audio is the evidence; a transcript never is.</p>
         </div>
         <div class="chips reveal-item">
@@ -791,7 +792,7 @@ button{font:inherit;background:none;border:0;cursor:pointer;color:inherit}
         <p class="std-desc">The international standard for digital evidence collection, preservation, and processing. Verum Omnis complies at every stage — from ingestion (acquisition) to preservation to analysis. This is the gold standard for handling digital evidence across jurisdictions.</p>
         <div class="std-app">
           <h4>Verum Omnis Application</h4>
-          <p>Verum Omnis complies at all four Daubert criteria: testability, peer review, known error rates, and general acceptance. The Nine-Brain Architecture provides continuous internal peer review through voting quorums, ensuring replicable, court-admissible results.</p>
+          <p>Verum Omnis supports transparent methods, repeatable processing and human review relevant to reliability assessment. It does not claim automatic Daubert compliance, judicial acceptance, known error rates, or court-admissible results; those questions remain for the competent court.</p>
         </div>
       </article>
       <article class="card reveal-item">

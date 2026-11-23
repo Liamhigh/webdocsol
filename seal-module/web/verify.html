@@ -360,9 +360,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   <div class="share-meta" id="gpsOptInBox">
     <label class="share-meta-label" for="custodyGpsOptIn">
       <input type="checkbox" id="custodyGpsOptIn">
-      <span>Include my location in the verification record (proves where verification happened)</span>
+      <span>Include my device-reported location in the verification record (not independent proof of presence)</span>
     </label>
-    <p class="share-meta-note">Location is captured by your browser and included in the anchored custody record only &mdash; it is not uploaded anywhere else.</p>
+    <p class="share-meta-note">Your browser supplies the location. The record preserves what it reported; it does not independently prove presence. It is included in the anchored custody record only &mdash; it is not uploaded anywhere else.</p>
   </div>
 
   <!-- QR payload paste panel. Seal QR codes on phones decode to TEXT: either a
@@ -1067,7 +1067,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     }
     metaHtml += '<div class="meta-card"><h4>OTS Digest (Bitcoin)</h4><p>' + (meta.otsDigest || 'N/A') + '</p></div>';
     metaHtml += '<div class="meta-card"><h4>Sender Identity</h4><p>' + (meta.sender || meta.identity || 'N/A') + '</p></div>';
-    if (meta.gps) metaHtml += '<div class="meta-card"><h4>GPS Location</h4><p>' + meta.gps + '</p></div>';
+    if (meta.gps) metaHtml += '<div class="meta-card"><h4>GPS Location (device-reported)</h4><p>' + meta.gps + '</p></div>';
     if (meta.device) metaHtml += '<div class="meta-card"><h4>Device</h4><p>' + meta.device + '</p></div>';
     metaHtml += '<div class="meta-card"><h4>Version</h4><p>' + (meta.version || 'N/A') + '</p></div>';
     metaHtml += '</div>';
@@ -1500,8 +1500,8 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   }
 
   // ===== GPS at verification (opt-in, per-session) =====
-  // Captures the browser's geolocation fix so the custody record can prove
-  // WHERE the verification happened (e.g. "verified at the courthouse").
+  // Captures the browser's device-reported geolocation fix for the custody record.
+  // It records the reported location; it does not independently prove presence.
   // Privacy contract:
   //   * runs ONLY when the user checked the box for this session;
   //   * the fix goes ONLY into the local custody record, the OTS-anchored
@@ -1546,7 +1546,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
             fail(reason);
           },
           // 10s timeout per spec; maximumAge 0 = the fix must be fresh (the
-          // proof is about where the verification happened NOW, not a cached
+          // record is about the device-reported location at verification NOW, not a cached
           // location from earlier); no high-accuracy request -- the reported
           // accuracy field is displayed honestly alongside.
           { timeout: 10000, maximumAge: 0, enableHighAccuracy: false }
@@ -1725,8 +1725,9 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   // never faked.
   //
   // Methodology Defence: the anchor proves TIME-OF-EXISTENCE of the hash,
-  // never the truth of the document's contents. A Verum Omnis seal proves two
-  // things only — integrity and time. No court-validation claim is made.
+  // never the truth of the document's contents. The seal preserves exact
+  // document state and makes later alteration detectable. No court-validation
+  // claim is made.
 
   // Base URLs of the calendars the sealer submits to (VoOts normalizes them
   // and appends /timestamp/<digest> itself).
@@ -1857,17 +1858,17 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   // Render the OTS BLOCKCHAIN ANCHOR block. States: 'checking' (transient),
   // 'confirmed', 'pending', 'offline', 'unavailable'. Wording is deliberately
   // modest: the anchor proves time-of-existence of the hash, not truth of
-  // contents; the seal proves two things only — integrity and time.
+  // contents; the seal preserves exact state and makes later alteration detectable.
   function renderOtsAnchorBlock(view, sealId) {
     if (!otsAnchorBox) return;
     currentOtsProof = null;
     var badge = '', caption = '';
     if (view.state === 'confirmed') {
       badge = '<span class="custody-badge match">ANCHORED — Bitcoin blockchain</span>';
-      caption = 'The Bitcoin anchor proves the sealed hash existed at a point in time — it does not prove the truth of the document\'s contents. A Verum Omnis seal proves two things only: integrity and time.';
+      caption = 'The Bitcoin anchor proves the sealed hash existed at a point in time — it does not prove the truth of the document\'s contents. The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect.';
     } else if (view.state === 'pending') {
       badge = '<span class="custody-badge no_seal">PENDING — submitted to calendars, Bitcoin confirmation typically 1–2 hours</span>';
-      caption = 'The digest is with the public OpenTimestamps calendars awaiting its Bitcoin block. Re-check this seal later to upgrade to a confirmed proof. The anchor proves the sealed hash existed at a point in time — it does not prove the truth of the document\'s contents. A Verum Omnis seal proves two things only: integrity and time.';
+      caption = 'The digest is with the public OpenTimestamps calendars awaiting its Bitcoin block. Re-check this seal later to upgrade to a confirmed proof. No Bitcoin time proof is confirmed yet. The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect.';
     } else if (view.state === 'offline') {
       badge = '<span class="custody-badge seal_found">OFFLINE — could not reach calendars; the seal\'s hash integrity verdict is unaffected</span>';
       caption = 'The OpenTimestamps calendars could not be reached from this device, so the blockchain anchor status is unknown.';
@@ -2220,7 +2221,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       if (meta.id.a) idRows += row('Address', meta.id.a);
       if (meta.id.e) idRows += row('Email', meta.id.e);
     }
-    if (meta.gps) idRows += row('GPS Location', meta.gps + (meta.acc ? ' (±' + meta.acc + ' m)' : ''));
+    if (meta.gps) idRows += row('GPS Location (device-reported)', meta.gps + (meta.acc ? ' (±' + meta.acc + ' m)' : ''));
     if (meta.dev) idRows += row('Device', String(meta.dev).split('|').join(' · '));
     if (idRows) html += '<details class="qr-seal-details"><summary>Identity &amp; location</summary>' + idRows + '</details>';
 

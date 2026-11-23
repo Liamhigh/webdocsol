@@ -177,6 +177,141 @@ ok(/voNormalizeSealPageBoxes/.test(html) && /voCropHidesContent/.test(html),
     'the download area shows a visible warning when the private certificate is missing');
 }
 
+// ---- Exact-state certificate wording, GPS limits, and layout ----
+// The certificate must distinguish tamper detection from truth, authorship
+// and legal effect. Its longer canonical statement is wrapped and measured:
+// neither live nor portable builders may silently clip it. Location remains
+// device-reported sealing metadata behind the existing private/QR opt-ins.
+{
+  const canonical = 'The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect.';
+  const targeted = [
+    'seal-document.html', 'seal-module/web/seal-document.html',
+    'verify.html', 'seal-module/web/verify.html',
+    'index.html', 'preview-index.html', 'constitution.html',
+    'constitution.json', 'forensic-report.js', 'README.md'
+  ];
+  for (const name of targeted) {
+    const src = readFileSync(name, 'utf8');
+    ok(!/This seal proves two things only|The seal proves two things only|A Verum Omnis seal proves two things only/.test(src),
+      name + ': retired two-things-only seal doctrine is absent');
+    ok(!/not a verification of the document(?:’|\\?')s contents/.test(src),
+      name + ': retired contents-verification shorthand is absent');
+  }
+  for (const name of ['seal-document.html', 'seal-module/web/seal-document.html']) {
+    const src = readFileSync(name, 'utf8');
+    ok(!/Proves where and from what device|Cryptographically impossible to forge|tamper-evident and court-admissible/.test(src),
+      name + ': GPS, forgery and automatic-admissibility overstatements are absent');
+    ok(src.includes('GPS (device-reported):'), name + ': PRIVATE certificate labels GPS as device-reported');
+    ok(src.includes('do not independently prove where a photograph was taken'),
+      name + ': photograph/location limitation is visible on the sealing page');
+    const qr = src.slice(src.indexOf('function buildQrPayload'), src.indexOf('\n  return p;\n}', src.indexOf('function buildQrPayload')));
+    ok(/var optIn = document\.getElementById\('includeIdentityInQr'\)/.test(qr)
+      && /if \(optIn && optIn\.checked\)/.test(qr) && /p\.gps = meta\.gps/.test(qr),
+      name + ': exact GPS enters the public QR payload only through the explicit opt-in latch');
+    const qrFactory = (checked) => new Function('document', qr + '\n  return p;\n}\nreturn buildQrPayload;')({
+      getElementById: (id) => id === 'includeIdentityInQr' ? { checked } : null
+    });
+    const privateMeta = { v: 1, t: '2026-11-23T12:00:00Z', type: 'seal', sha512: 'ab'.repeat(64),
+      id: { n: 'Synthetic' }, gps: '-29.123456,30.654321', acc: 8.5, dev: 'SyntheticOS|8|UTC' };
+    const defaultQr = qrFactory(false)(privateMeta, []);
+    ok(!('id' in defaultQr) && !('gps' in defaultQr) && !('acc' in defaultQr) && !('dev' in defaultQr)
+      && defaultQr.sha512 === privateMeta.sha512,
+      name + ': executable QR builder omits identity/GPS/device by default while preserving the fingerprint');
+    const optedQr = qrFactory(true)(privateMeta, []);
+    ok(optedQr.gps === privateMeta.gps && optedQr.acc === privateMeta.acc
+      && optedQr.dev === privateMeta.dev && optedQr.id === privateMeta.id,
+      name + ': executable QR builder includes the existing fields only after explicit opt-in');
+  }
+  ok(html.includes('The PRIVATE certificate carries your identity, address and device-reported GPS location'),
+    'live download note keeps exact GPS in the PRIVATE certificate explanation');
+  for (const name of ['verify.html', 'seal-module/web/verify.html']) {
+    const src = readFileSync(name, 'utf8');
+    ok(src.includes('Include my device-reported location in the verification record (not independent proof of presence)'),
+      name + ': verification location is reported metadata, not proof of presence');
+    ok(src.includes('GPS Location (device-reported)'), name + ': displayed QR GPS is labelled device-reported');
+    ok(!/proves where verification happened|can see exactly where the verification happened/.test(src),
+      name + ': verification GPS no longer claims to prove physical presence');
+  }
+  for (const name of ['index.html', 'preview-index.html']) {
+    const src = readFileSync(name, 'utf8');
+    ok(src.includes(canonical), name + ': homepage carries the full exact-state statement');
+    ok(src.includes('Exact GPS is kept in the PRIVATE certificate by default.'),
+      name + ': homepage discloses private-by-default GPS handling');
+    ok(!/complies at all four Daubert criteria|voting quorums, ensuring replicable/.test(src),
+      name + ': no automatic Daubert or court-admissibility claim');
+  }
+  ok(readFileSync('forensic-report.js', 'utf8').includes(canonical),
+    'forensic-report governance paragraph uses the same exact-state statement');
+
+  const { PDFDocument, StandardFonts } = require('pdf-lib');
+  const measureDoc = await PDFDocument.create();
+  const timesItalic = await measureDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const PW = 595.28, maxW = PW - 140 - 32;
+  const wrapMeasured = (text) => {
+    const lines = [];
+    let cur = '';
+    for (const word of text.split(/\s+/)) {
+      const trial = cur ? cur + ' ' + word : word;
+      if (timesItalic.widthOfTextAtSize(trial, 10.5) > maxW && cur) {
+        lines.push(cur); cur = word;
+      } else cur = trial;
+    }
+    if (cur) lines.push(cur);
+    return lines;
+  };
+  const checkStatement = (name, src, startMarker, endMarker, boxH, hasIso) => {
+    const start = src.indexOf(startMarker), end = src.indexOf(endMarker, start);
+    ok(start !== -1 && end > start, name + ': certificate builder located');
+    const body = src.slice(start, end);
+    const match = body.match(/var canonical = '([^']+)';/);
+    ok(!!match, name + ': canonical statement is a measurable single string');
+    if (!match) return;
+    ok(match[1].includes(canonical), name + ': full canonical statement is present without truncation');
+    ok(new RegExp('var boxTop = 240, boxH = ' + boxH + ';').test(body), name + ': statement box has the reviewed depth');
+    const lines = wrapMeasured(match[1]);
+    ok(lines.length >= 3 && lines.length <= 6, name + ': wrapped statement fits the six-line rendering bound (' + lines.length + ' lines)');
+    ok(lines.every((line) => timesItalic.widthOfTextAtSize(line, 10.5) <= maxW),
+      name + ': every measured line fits the statement box width');
+    const lastBaseline = 220 - (lines.length - 1) * 13;
+    ok(lastBaseline - 10.5 > 240 - boxH, name + ': final baseline and descenders stay above the box bottom');
+    if (hasIso) {
+      ok(body.includes("var c3 = 'Aligned with the evidence-handling principles of ISO/IEC 27037:'")
+        && body.includes("var c4 = 'auditability, repeatability, reproducibility, justifiability.'"),
+        name + ': ISO/IEC alignment note is preserved');
+      ok(lastBaseline - 13 > 168 + 8, name + ': canonical statement does not collide with the ISO/IEC note');
+      ok(240 - boxH > 52 + 8, name + ': statement box stays above the footer');
+    }
+  };
+  const portable = readFileSync('seal-module/web/seal-document.html', 'utf8');
+  const portableCertStart = portable.indexOf('async function buildSealCertificate');
+  const portableCert = portable.slice(portableCertStart, portable.indexOf('async function buildAnchorCertificate', portableCertStart));
+  ok(/if \(hasIdy \|\| opts\.gps \|\| opts\.dev\)/.test(portableCert)
+    && portableCert.includes("page.drawText('SENDER IDENTITY (PRIVATE)'"),
+    'portable PRIVATE-only builder labels its identity/GPS block PRIVATE');
+  checkStatement('live Seal Certificate', html, 'async function buildSealCertificate', 'async function buildAnchorCertificate', 110, true);
+  checkStatement('portable Seal Certificate', portable, 'async function buildSealCertificate', 'async function buildAnchorCertificate', 74, false);
+  const anchorStart = portable.indexOf('async function buildAnchorCertificate');
+  const anchorEnd = portable.indexOf('// ==================== SEALING FLOW', anchorStart);
+  const portableAnchor = portable.slice(anchorStart, anchorEnd);
+  ok(!/ci < 3/.test(portableAnchor), 'portable Anchor Certificate no longer truncates after three lines');
+  // Measure the anchor separately: its submission sentence precedes the same
+  // canonical statement, and it has no ISO note or live-page flowing footer.
+  const anchorMatch = portableAnchor.match(/var canonical = '([^']+)';/);
+  ok(!!anchorMatch && anchorMatch[1].includes(canonical), 'portable Anchor Certificate retains submission and full exact-state statements');
+  if (anchorMatch) {
+    const lines = wrapMeasured(anchorMatch[1]);
+    ok(lines.length <= 6 && lines.every((line) => timesItalic.widthOfTextAtSize(line, 10.5) <= maxW),
+      'portable Anchor Certificate fits its measured six-line box');
+    ok(220 - (lines.length - 1) * 13 - 10.5 > 122, 'portable Anchor Certificate statement stays above its box bottom');
+  }
+  const liveAnchorStart = html.indexOf('async function buildAnchorCertificate');
+  const liveAnchorEnd = html.indexOf('// ==================== SEALING FLOW', liveAnchorStart);
+  ok(liveAnchorEnd > liveAnchorStart, 'live Anchor Certificate builder boundary located');
+  const liveAnchor = html.slice(liveAnchorStart, liveAnchorEnd);
+  ok(liveAnchor.includes('makes later alteration detectable') && liveAnchor.includes('the Court remains the arbiter'),
+    'live Anchor Certificate keeps alteration detection and court-arbiter governance');
+}
+
 // ---- Voice-note / audio as-is sealing ----
 // WhatsApp voice notes (.opus and friends) are sealed AS-IS, individually:
 // the audio bytes are never modified — the certificate and .ots receipt
