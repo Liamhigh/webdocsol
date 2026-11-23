@@ -5,6 +5,7 @@ export const ORIGIN = "https://verumglobal.pages.dev";
 export const PAGES = [
   "constitution",
   "dashboard",
+  "development-lab",
   "documents-resources",
   "preview-documents",
   "preview-index",
@@ -77,7 +78,7 @@ export async function serveStatic(request) {
 }
 __name(serveStatic, "serveStatic");
 export const REPO_RAW_ORIGIN = "https://raw.githubusercontent.com/Liamhigh/webdocsol/main";
-export const SITE_DENY_RE = /^\/(?:\.|worker\/|tests\/|evaluation\/|functions\/|node_modules\/|brand\/|seal-module\/|package(?:-lock)?\.json$|wrangler\.toml$|nine-brain-(?:contracts|source-register|preview)\.js$|[^/]*\.md$|.*\/[^/]*\.md$|greensky-ocr-verify\.pdf$|forensic_test_document\.pdf$)/i;
+export const SITE_DENY_RE = /^\/(?:\.|worker\/|tests\/|evaluation\/|development\/|functions\/|node_modules\/|brand\/|seal-module\/|package(?:-lock)?\.json$|wrangler\.toml$|nine-brain-(?:contracts|source-register|preview)\.js$|[^/]*\.md$|.*\/[^/]*\.md$|greensky-ocr-verify\.pdf$|forensic_test_document\.pdf$)/i;
 export const CONTENT_TYPES = {
   html: "text/html; charset=utf-8",
   htm: "text/html; charset=utf-8",

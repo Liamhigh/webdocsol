@@ -33,7 +33,8 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 - `npm run check` runs `node --check` on `seal-guard.js`, `forensic-engine-page.js`,
   `forensic-report.js`, `ots-proof.js`, `pdf-encrypt.js`, `nine-brain-contracts.js`,
-  `nine-brain-source-register.js`, `nine-brain-preview.js`, `worker/verum-rules.js`,
+  `nine-brain-source-register.js`, `nine-brain-preview.js`, every module under
+  `development/nine-brain/`, `worker/verum-rules.js`,
   `worker/static-proxy.js` and `worker/site-assets.js`. It does not cover `functions/[[path]].js`
   or the page-native scripts inside the HTML pages; `page-boot` evaluates the inline script of
   `seal-document.html` instead.
@@ -53,6 +54,16 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 **65 registered production/baseline suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, and one Phase 4 active-graph suite. `run-all.js` is that registry — **a production/baseline test file that is not listed in it does not run**. Separately gated development contracts are registered in `run-development.js`; `npm test` runs both registries. What each production/baseline suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
+
+The three development suites are:
+
+| File | Checks | Exercises |
+|---|---|---|
+| `nine-brain-contracts.test.mjs` | 200 | NB-0/NB-1 records and read-only preview |
+| `nine-brain-orchestration-research-legal.test.mjs` | 264 | Two passes, P1–P7/audit/guardian/certification, B4/B8/B9 boundaries, RES-1–RES-9, all 169 Allen compositions, B7 cross-border gaps and adapter gating |
+| `nine-brain-verification-adjudication.test.mjs` | 94 | Bounded immutable packets, trusted audit lineage, isolated mocked providers with cancellation, fail-closed panels, revision-history dispositions, packet-grounded narrative and authoritative-state annexes |
+
+These suites use synthetic fixtures only. They do not call live providers, modify production Findings JSON, or exercise a production Worker route.
 
 The registry, in run order. The label is what the suite prints in its `PASS=` line.
 
@@ -82,7 +93,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 22 | `ai-assess-batch` | `ai-assess-batch.test.mjs` | 19 | Client batching under the `/api/v1/ai/assess` caps; the review never removes or changes a finding, and a candidate is a duplicate only when it restates one |
 | 23 | `narrate-excerpt` | `narrate-excerpt.test.mjs` | 16 | `voBuildNarrateExcerpt` |
 | 24 | `human-report` | `human-report.test.mjs` | 81 | The court-ready narrative wiring: Worker, `forensic-report.js` and page agree |
-| 25 | `site-serving` | `site-serving.test.mjs` | 60 | `worker/static-proxy.js` serving tiers, `.assetsignore`/deny-list parity including nine-brain development modules, and `/api/v1/site/health` |
+| 25 | `site-serving` | `site-serving.test.mjs` | 61 | `worker/static-proxy.js` serving tiers, `.assetsignore`/deny-list parity including root and `development/nine-brain/` development modules, and `/api/v1/site/health` |
 | 26 | `pages-bridge` | `pages-bridge.test.mjs` | 18 | `functions/[[path]].js`, the www bridge; static fallback denies Markdown |
 | 27 | `zip-intake` | `zip-intake.test.mjs` | 25 | The page's ZIP reader for WhatsApp chat exports |
 | 28 | `rule-package` | `rule-package.test.mjs` | 129 | Signed rule packages on the website |
@@ -111,6 +122,8 @@ The separately gated development registry is `run-development.js`:
 | Label | File | Checks | Exercises |
 |-------|------|--------|-----------|
 | `nine-brain-contracts` | `nine-brain-contracts.test.mjs` | 200 | NB-0 source register and unresolved concordance; NB-1 shared records and bundle evidence resolution; UTF-16/structural/media anchors; semantic run/output/engagement/promotion/audit/guardian reconciliation; malformed-input safety; read-only preview identity/tamper/replay and immutability checks |
+| `nine-brain-orchestration-research-legal` | `nine-brain-orchestration-research-legal.test.mjs` | 264 | Exact promoted-candidate audit/guardian lineage; unresolved evidence preservation; B8 media-only views/anchors; unexecuted-analysis coverage; malformed Allen witnesses; unknown-object/equal-amount/formal-domain research guards; consistent oracle universes; B7 recomputed identity, coverage and conflicts reconciliation |
+| `nine-brain-verification-adjudication` | `nine-brain-verification-adjudication.test.mjs` | 94 | Bounded quotes/privacy; semantic tamper tests with recomputed identities; trusted review provenance; distinct provider origins/transports; explicit source/context review; process-local shared compare-and-swap dispositions; revision-bound narrative approval and authoritative annex freshness |
 
 **Writing a regression test:** use the **exact text from the real document** that caused the
 failure, not a paraphrase. Every guard in `ENGINE.md` §4 has one, and that is why they have

@@ -10,7 +10,7 @@
 
 ## Current planning baseline
 
-The detailed plan reviews commit `48836bc7c2f245b00e181d66b539c199d6fcaf2d`: engine `5.7.2-web`, production Findings JSON `1.11.0`, exactly nine analytical brains and eight default-off enhancement flags. Only `citations` and the bounded `pdfGraph` active-graph prototype are listed as implemented. Redaction has synthetic fixtures only. Revisions, Allen temporal algebra, image metadata, C2PA and spatial OCR are not implemented here. Signed authority packs and the ECTA note remain externally blocked.
+The detailed plan reviews commit `48836bc7c2f245b00e181d66b539c199d6fcaf2d`: engine `5.7.2-web`, production Findings JSON `1.11.0`, exactly nine analytical brains and eight default-off enhancement flags. Only `citations` and the bounded `pdfGraph` active-graph prototype are listed as implemented. Redaction has synthetic fixtures only. Revisions, production Allen temporal algebra, image metadata, C2PA and spatial OCR are not implemented here. A separate default-off development-only Allen implementation exists under `development/nine-brain/`; it is not production enablement. Signed authority packs and the ECTA note remain externally blocked.
 
 The extension contract is proposal `0.1.0`, not production-approved, with no assigned next production version. Do not assume Findings JSON `1.12.0` or enable a flag merely because the plan describes it.
 

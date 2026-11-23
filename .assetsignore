@@ -8,6 +8,7 @@
 worker/
 tests/
 evaluation/
+development/
 # The Pages bridge (functions/[[path]].js) runs on the Pages project only.
 functions/
 node_modules/

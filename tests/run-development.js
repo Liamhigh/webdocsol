@@ -3,7 +3,12 @@
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
 
-const suites = ['nine-brain-contracts.test.mjs'];
+const suites = [
+  'nine-brain-contracts.test.mjs',
+  'nine-brain-orchestration-research-legal.test.mjs',
+  'nine-brain-verification-adjudication.test.mjs',
+  'nine-brain-console.test.mjs'
+];
 let failed = 0;
 for (const suite of suites) {
   const result = spawnSync(process.execPath, [path.join(__dirname, suite)], { stdio: 'inherit' });

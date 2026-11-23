@@ -4,6 +4,8 @@
   "private": true,
   "description": "Verum Omnis Document Sealing & Verification Standard \u2014 static site, Cloudflare Worker, and forensic engine.",
   "scripts": {
+    "build:development-lab": "node scripts/build-development-lab.mjs",
+    "pretest": "npm run build:development-lab",
     "test": "node tests/run-all.js && node tests/run-development.js",
     "test:pdf-graph": "node tests/pdf-graph.test.mjs",
     "test:forensic": "node tests/forensic-engine.test.js",
@@ -16,12 +18,14 @@
     "test:find-seal": "node tests/find-seal.test.mjs",
     "test:seal-guard": "node tests/seal-guard.test.mjs",
     "test:inline-scripts": "node tests/inline-scripts.test.mjs",
+    "pretest:browser": "npm run build:development-lab",
     "test:browser": "playwright test",
-    "check": "node --check analysis-contracts.js && node --check analysis-config.js && node --check nine-brain-contracts.js && node --check nine-brain-source-register.js && node --check nine-brain-preview.js && node --check legal-citations.js && node --check legal-packs.js && node --check legal-packs/za.js && node --check pdf-graph.js && node --check pdf-graph-worker.js && node --check vendor/qpdf-wasm/qpdf.js && node --check scripts/limit-qpdf-wasm-memory.mjs && node --check seal-guard.js && node --check forensic-engine-page.js && node --check forensic-report.js && node --check ots-proof.js && node --check pdf-encrypt.js && node --check worker/verum-rules.js && node --check worker/static-proxy.js && node --check worker/site-assets.js"
+    "check": "node --check analysis-contracts.js && node --check analysis-config.js && node --check nine-brain-contracts.js && node --check nine-brain-source-register.js && node --check nine-brain-preview.js && node --check development/nine-brain/util.js && node --check development/nine-brain/allen-algebra.js && node --check development/nine-brain/research.js && node --check development/nine-brain/orchestration.js && node --check development/nine-brain/legal.js && node --check development/nine-brain/verification.js && node --check development/nine-brain-console/runner.js && node --check development/nine-brain-console/browser.js && node --check legal-citations.js && node --check legal-packs.js && node --check legal-packs/za.js && node --check pdf-graph.js && node --check pdf-graph-worker.js && node --check vendor/qpdf-wasm/qpdf.js && node --check scripts/limit-qpdf-wasm-memory.mjs && node --check seal-guard.js && node --check forensic-engine-page.js && node --check forensic-report.js && node --check ots-proof.js && node --check pdf-encrypt.js && node --check worker/verum-rules.js && node --check worker/static-proxy.js && node --check worker/site-assets.js"
   },
   "devDependencies": {
     "@neslinesli93/qpdf-wasm": "0.3.1",
     "@playwright/test": "1.65.1",
+    "esbuild": "0.25.12",
     "pdf-lib": "1.17.1"
   }
 }
