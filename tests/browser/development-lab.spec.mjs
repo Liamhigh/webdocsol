@@ -1,5 +1,4 @@
 import { test, expect } from '@playwright/test';
-import fs from 'node:fs/promises';
 import { installOfflineGuard, expectNoDocumentEgress } from './helpers.mjs';
 
 const SYNTHETIC_TEXT = 'Synthetic statement one: the amount is R100.00.';
@@ -32,17 +31,29 @@ async function runReview(page, scenario) {
 }
 
 async function readDownloadedJson(download) {
-  // A download event can precede the final file write on slower browsers or
-  // filesystems. Wait for the actual download result before parsing the bytes.
+  // The artifact path can become visible before a slower browser has flushed
+  // its contents. Consume Playwright's completed download stream instead of
+  // racing the filesystem with a one-shot read.
   expect(await download.failure()).toBeNull();
-  const path = await download.path();
-  return JSON.parse(await fs.readFile(path, 'utf8'));
+  const stream = await download.createReadStream();
+  expect(stream).not.toBeNull();
+  const chunks = [];
+  for await (const chunk of stream) chunks.push(chunk);
+  return JSON.parse(Buffer.concat(chunks).toString('utf8'));
 }
 
 test('complete all-pass workflow, real JSON export, inspector, summary and reset', async ({ page }) => {
   const external = await installOfflineGuard(page);
   const { errors, badResponses } = watchPage(page);
   await page.setViewportSize({ width: 1440, height: 1000 });
+  await page.addInitScript(() => {
+    window.__revokedObjectUrls = [];
+    const revoke = URL.revokeObjectURL.bind(URL);
+    URL.revokeObjectURL = (url) => {
+      window.__revokedObjectUrls.push(url);
+      return revoke(url);
+    };
+  });
   await page.goto(PAGE);
   await expect(page).toHaveTitle('Development Test Lab | Verum Omnis');
   await expect(page.locator('#runReview')).toBeDisabled();
@@ -76,6 +87,7 @@ test('complete all-pass workflow, real JSON export, inspector, summary and reset
   await page.locator('details').nth(1).locator('summary').click();
   await expect(page.locator('#auditTrail li')).toHaveCount(5);
 
+  const revocationsBeforeDownload = await page.evaluate(() => window.__revokedObjectUrls.length);
   const downloadEvent = page.waitForEvent('download');
   await page.locator('#downloadResult').click();
   const download = await downloadEvent;
@@ -91,6 +103,7 @@ test('complete all-pass workflow, real JSON export, inspector, summary and reset
   expect(exported.production_findings_modified).toBe(false);
   expect(exported.production_report_modified).toBe(false);
   expect(exported.production_seal_modified).toBe(false);
+  expect(await page.evaluate(() => window.__revokedObjectUrls.length)).toBe(revocationsBeforeDownload);
 
   await page.locator('#copySummary').click();
   await expect(page.locator('#message')).toContainText(/Plain-language test summary copied|Verum Omnis development test/);
