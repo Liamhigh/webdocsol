@@ -2,7 +2,7 @@
   "name": "webdocsol",
   "version": "1.2.5",
   "private": true,
-  "description": "Verum Omnis Document Sealing & Verification Standard — static site, Cloudflare Worker, and forensic engine.",
+  "description": "Verum Omnis Document Sealing & Verification Standard \u2014 static site, Cloudflare Worker, and forensic engine.",
   "scripts": {
     "build:development-lab": "node scripts/build-development-lab.mjs",
     "pretest": "npm run build:development-lab",
