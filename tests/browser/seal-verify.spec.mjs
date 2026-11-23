@@ -37,6 +37,8 @@ test('synthetic PDF seals with QR and manifest metadata, then verifies at root v
   await expect(page.locator('#downloadSealedPdf')).toHaveAttribute('download', 'synthetic-browser-fixture-sealed.pdf');
   await expect(page.locator('#sealIdDisplay')).toHaveText(/^VO-[0-9A-F]{12}$/);
   await expect(page.locator('#sha512Display')).toHaveText(/^[0-9a-f]{128}$/);
+  const expectedOriginalSha512 = createHash('sha512').update(pdf).digest('hex');
+  await expect(page.locator('#sha512Display')).toHaveText(expectedOriginalSha512);
   const qr = await page.locator('#qrPreview').evaluate((canvas) => canvas.toDataURL());
   expect(qr.length).toBeGreaterThan(1000);
   const verifyHref = await page.locator('#verifyLink').getAttribute('href');

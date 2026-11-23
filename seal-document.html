@@ -343,7 +343,7 @@
     <img src="/images/logo-full.png" alt="Verum Omnis" class="logo-main">
     <div class="label">AI FORENSICS FOR TRUTH — CLIENT-SIDE — NOTHING LEAVES YOUR DEVICE</div>
     <h1>Document Sealing Service</h1>
-    <p>Apply a forensic-grade cryptographic seal with A4 watermark, clean QR code, SHA-512 fingerprint, identity verification, GPS/device tracking, optional password protection, and Bitcoin blockchain anchoring via OpenTimestamps.</p>
+    <p>Apply a forensic-grade cryptographic seal with A4 watermark, clean QR code, SHA-512 fingerprint, optional identity recording, permission-based GPS/device metadata, optional password protection, and Bitcoin blockchain anchoring via OpenTimestamps.</p>
   </div>
 
   <!-- Prominent Law Enforcement Banner -->
@@ -529,16 +529,16 @@
   <!-- Info Section -->
   <div class="info-section">
     <h3>How Document Sealing Works</h3>
-    <p>Every document sealed by Verum Omnis receives a forensic-grade cryptographic seal that makes it tamper-evident and court-admissible.</p>
+    <p>Every document sealed by Verum Omnis receives a cryptographic seal that preserves its exact state and makes later alteration detectable. A court decides admissibility and legal effect.</p>
     <div class="grid">
       <div class="item"><h4>&#128220; A4 Watermark Background</h4><p>The full-page Verum Omnis watermark is applied at 20% opacity behind your content. Your original document text is preserved exactly — the QR code sits in the natural page margin.</p></div>
       <div class="item"><h4>&#128241; Clean QR Code</h4><p>QR sits in the top-right margin with white background panel — never covers document text. Original document layout is fully preserved. Scans instantly with any phone.</p></div>
       <div class="item"><h4>&#128274; Dual Hash</h4><p>SHA-256 fingerprints the original upload and the exact delivered file for OpenTimestamps. SHA-512 is the Verum forensic fingerprint. Two independent hashes, zero trust required.</p></div>
       <div class="item"><h4>&#9939; Bitcoin Blockchain</h4><p>OpenTimestamps anchors the SHA-256 hash into Bitcoin. Once confirmed (~1-2 hours), the timestamp is permanently and independently verifiable.</p></div>
       <div class="item"><h4>&#128100; Identity Pipeline</h4><p>Optional sender identity (name, ID, address, email) is written into your private Seal Certificate for affidavit pre-fill and chain of custody — never into the public QR code unless you explicitly opt in.</p></div>
-      <div class="item"><h4>&#128205; GPS + Device</h4><p>Automatic geolocation and device fingerprint capture. Proves where and from what device the seal was applied.</p></div>
+      <div class="item"><h4>&#128205; GPS + Device</h4><p>With browser permission, the device-reported GPS coordinates, accuracy and sealing time are recorded in the PRIVATE certificate. They record the location reported when the seal was applied; they do not independently prove where a photograph was taken, who captured it, or that the device was at that location. Exact GPS stays out of the public certificate and QR payload unless explicitly enabled.</p></div>
       <div class="item"><h4>&#128272; Password Protection</h4><p>Optional AES-256 password protection with delivery receipt cover page. Recipient must email sender for password — that email IS the read receipt.</p></div>
-      <div class="item"><h4>&#128737; Tamper Detection</h4><p>Recipient uploads document to verify page. If SHA-512 doesn't match --> "TAMPERED — DO NOT ACCEPT". Cryptographically impossible to forge.</p></div>
+      <div class="item"><h4>&#128737; Tamper Detection</h4><p>The recipient uploads the document to the verification page. A later alteration produces a different fingerprint and fails the matching check. The result does not identify who altered the file or prove fraud.</p></div>
     </div>
   </div>
 
@@ -3131,7 +3131,7 @@ function secMethodology(ctx, data) {
   ctx.heading('METHODOLOGY & AUTHENTICATION');
 
   ctx.subHeading('Platform role');
-  ctx.para('The Verum Omnis platform organises, indexes, cross-references and preserves documents cryptographically. It does not create, alter, generate or select any item of evidence. The seal proves two things only — integrity and time. Findings are produced by the deterministic engine from the sealed text, anchored to quoted text and page references; the Court remains the arbiter of what the documents establish.', { size: 9.5, after: 10 });
+  ctx.para('The Verum Omnis platform organises, indexes, cross-references and preserves documents cryptographically. It does not create, alter, generate or select any item of evidence. The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect. Findings are produced by the deterministic engine from the sealed text, anchored to quoted text and page references; the Court remains the arbiter of what the documents establish.', { size: 9.5, after: 10 });
 
   ctx.subHeading('What ran');
   ctx.bullet('Engine: Verum Omnis Forensic Contradiction Engine v' + ENGINE_VERSION + ' - governed by Constitution v' + CONSTITUTION.governance.version + ', implementing engine operating instrument v' + CONSTITUTION_VERSION + '.', { size: 9.5 });
@@ -20817,7 +20817,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
     }
 
     // PRISTINE SEAL DOCTRINE: no forensic/fraud overlays are ever drawn on the
-    // original document. The seal proves integrity and time only; all forensic
+    // original document. The seal preserves the exact document state and makes later alteration detectable; all forensic
     // characterisation lives exclusively in the separate sealed forensic report.
 
     // SEAL BANDS ON NEW SPACE. The QR panel and footer strip used to be drawn
@@ -20953,7 +20953,7 @@ async function buildSealedPDF(origBytes, qrDataURL, sealId, sha512, sha256, clie
 // ==================== SEAL CERTIFICATE (Seal Only mode) ====================
 // One-page certificate PDF, generated with the same pdf-lib tooling as the seal.
 // House style matches the forensic report cover: navy full bleed, gold rules,
-// serif wordmark. It states exactly what the seal proves — integrity and time.
+// serif wordmark. It states the exact-state, tamper-detection and verification limits.
 async function buildSealCertificate(opts) {
   opts = opts || {};
   const certDoc = await PDFDocument.create();
@@ -21069,7 +21069,7 @@ async function buildSealCertificate(opts) {
       if (idy.a) idLines.push('Addr: ' + idy.a);
       if (idy.e) idLines.push('Email: ' + idy.e);
     }
-    if (opts.gps) idLines.push('GPS: ' + opts.gps + (opts.acc ? ' (±' + opts.acc + 'm)' : ''));
+    if (opts.gps) idLines.push('GPS (device-reported): ' + opts.gps + (opts.acc ? ' (±' + opts.acc + 'm)' : ''));
     if (opts.dev) idLines.push('Device: ' + opts.dev);
     for (var ii = 0; ii < idLines.length; ii++) {
       var wl = wrap(idLines[ii], helv, 7, qrSize + 16);
@@ -21106,12 +21106,15 @@ async function buildSealCertificate(opts) {
   // Canonical statement box
   var boxTop = 240, boxH = 110;
   page.drawRectangle({ x: 70, y: boxTop - boxH, width: PW - 140, height: boxH, borderColor: GOLD, borderWidth: 1, color: rgb(1, 1, 1), opacity: 0.04 });
-  var c1 = 'This seal proves two things only — integrity and time.';
-  var c2 = 'It is not a verification of the document’s contents.';
+  var canonical = 'The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect.';
+  var cLines = wrap(canonical, timesItalic, 10.5, PW - 140 - 32);
+  var cy = boxTop - 20;
+  for (var ci = 0; ci < cLines.length && ci < 6; ci++) {
+    page.drawText(cLines[ci], { x: cx(cLines[ci], timesItalic, 10.5), y: cy, size: 10.5, font: timesItalic, color: WHITE });
+    cy -= 13;
+  }
   var c3 = 'Aligned with the evidence-handling principles of ISO/IEC 27037:';
   var c4 = 'auditability, repeatability, reproducibility, justifiability.';
-  page.drawText(c1, { x: cx(c1, timesItalic, 12), y: boxTop - 28, size: 12, font: timesItalic, color: WHITE });
-  page.drawText(c2, { x: cx(c2, timesItalic, 12), y: boxTop - 46, size: 12, font: timesItalic, color: WHITE });
   page.drawText(c3, { x: cx(c3, helv, 8), y: boxTop - 72, size: 8, font: helv, color: MUTE });
   page.drawText(c4, { x: cx(c4, helv, 8), y: boxTop - 84, size: 8, font: helv, color: MUTE });
 
@@ -21137,7 +21140,7 @@ async function buildSealCertificate(opts) {
 // digest went to which calendars, and when. Same house style as the Seal
 // Certificate (navy full bleed, gold rules, serif wordmark). It is issued only
 // when a calendar accepted the digest, and it is explicitly PENDING: the
-// canonical statement says exactly what the seal proves — integrity and time.
+// canonical statement records the exact-state, tamper-detection and verification limits.
 async function buildAnchorCertificate(opts) {
   opts = opts || {};
   const certDoc = await PDFDocument.create();
@@ -21253,9 +21256,9 @@ async function buildAnchorCertificate(opts) {
   // proves and how, in ordinary words. Fills the certificate body so the
   // reader understands tamper-evidence, SHA-512, the permanent blockchain
   // record and how to verify — without needing any technical background.
-  y -= 6;
+  y -= 3;
   page.drawText(safe('WHAT THIS CERTIFICATE PROVES'), { x: lx, y: y, size: 9.5, font: helvBold, color: GOLD });
-  y -= 17;
+  y -= 14;
   var explain = [
     // Every sentence says what the seal can truthfully claim when this
     // certificate is made: the digest is submitted and the Bitcoin
@@ -21277,11 +21280,11 @@ async function buildAnchorCertificate(opts) {
     y -= 12.5;
     var elines = wrap(explain[ei][1], helv, 8, PW - 150);
     for (var el = 0; el < elines.length; el++) { page.drawText(safe(elines[el]), { x: lx + 12, y: y, size: 8, font: helv, color: MUTE }); y -= 10.5; }
-    y -= 7;
+    y -= 4;
   }
   // Canonical governance statement (kept verbatim) closes the body.
-  y -= 2;
-  var canonical = 'The seal proves two things only — integrity and time. Findings, if any, are produced by the deterministic engine and anchored to quoted text and page references; the Court remains the arbiter of what the documents establish.';
+  y -= 0;
+  var canonical = 'The seal verifies the exact document state and makes later alteration detectable; it does not verify truth, authorship, or legal effect. Findings, if any, are produced by the deterministic engine and anchored to quoted text and page references; the Court remains the arbiter of what the documents establish.';
   var cLines = wrap(canonical, timesItalic, 9.5, PW - 150);
   for (var ci = 0; ci < cLines.length; ci++) {
     page.drawText(cLines[ci], { x: cx(cLines[ci], timesItalic, 9.5), y: y, size: 9.5, font: timesItalic, color: WHITE });
@@ -21703,7 +21706,7 @@ async function voSealAudioBatch() {
     var privUrl = URL.createObjectURL(voZipBundle(privEntries));
     out.push('<a class="download-btn" href="' + privUrl + '" download="voice-notes-PRIVATE-certificates-do-not-share.zip">⬇ Download PRIVATE certificates (your records only)</a>');
   }
-  out.push('<div style="font-size:12px;color:#8ea3b5;margin-top:8px;line-height:1.6;">Keep each audio file together with its certificate and .ots receipt — the audio bytes are the evidence and were not modified. The certificate proves integrity and time only.' +
+  out.push('<div style="font-size:12px;color:#8ea3b5;margin-top:8px;line-height:1.6;">Keep each audio file together with its certificate and .ots receipt — the audio bytes are the evidence and were not modified. The certificate preserves the exact file state and makes later alteration detectable; it does not verify truth, authorship, or legal effect.' +
     (privEntries.length ? ' The PRIVATE ZIP carries your identity details — never place it in a shared folder.' : '') +
     (anyPending ? ' One or more blockchain submissions did not reach a calendar — re-seal those files later to anchor them.' : ' Bitcoin confirmation typically completes within 1–2 hours; verify later at verumglobal.foundation/verify.html.') + '</div></div>');
   // Restore the per-file seal rows: "Building report…" must not be the last
@@ -21837,7 +21840,7 @@ async function startSealing() {
 
     // Step 1.5: Forensic Contradiction Engine — FORENSIC ANALYSIS MODE ONLY.
     // Seal Only mode performs no content analysis of any kind: the seal proves
-    // integrity and time only, and nothing about the document's contents is
+    // exact document state and tamper detection only, and nothing about the document's contents is
     // scanned, scored, or sent anywhere.
     var forensicResult = null;
     _pipelineClassification = null;
@@ -26330,7 +26333,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
       findingsHtml + serialHtml +
       '<br><em>Each finding is stated as fact, anchored to the record; the verdict on any person is for the court. ' +
       'Your original document has been sealed pristine — no forensic markings were added to its pages. ' +
-      'The seal proves integrity and time only. ' +
+      'The seal verifies the exact document state and makes later alteration detectable; it does not verify truth, authorship, or legal effect. ' +
       'Full detail is presented in the sealed forensic report (download below).</em>' +
       '</p>';
     document.getElementById('results').insertBefore(findingsPanel, document.getElementById('results').firstChild);
@@ -26541,8 +26544,8 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
     cNote.id = 'sealCertNote';
     cNote.style.cssText = 'font-size:12px;color:#8ea3b5;margin-top:10px;line-height:1.6;';
     cNote.textContent = window._voSealCertPrivate
-      ? 'This seal proves two things only — integrity and time. It is not a verification of the document\'s contents. The shareable certificate carries no personal details and is safe to file or forward. The PRIVATE certificate carries your identity, address and GPS location — keep it for your own records and never place it in a shared folder.'
-      : 'This seal proves two things only — integrity and time. It is not a verification of the document\'s contents. Keep the Seal Certificate together with the sealed PDF.';
+      ? 'The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect. The shareable certificate carries no personal details and is safe to file or forward. The PRIVATE certificate carries your identity, address and device-reported GPS location — keep it for your own records and never place it in a shared folder.'
+      : 'The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect. Keep the Seal Certificate together with the sealed PDF.';
     dg2.parentNode.insertBefore(cNote, dg2.nextSibling);
     // A failed private build must be VISIBLE, never silently absent: the
     // shareable certificate promises the identity details were "recorded

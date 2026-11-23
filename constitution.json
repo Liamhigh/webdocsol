@@ -24,7 +24,7 @@
     "pages": 22,
     "sealedPdfUrl": "https://verumglobal.foundation/constitution-v8.pdf"
   },
-  "platformPrinciple": "Verum Omnis does not depend on court validation. Evidence is human-collected and human-attested; the platform proves only integrity and time mathematically, and organises what the documents say. The sealed case file is then presented by the human to the competent authorities.",
+  "platformPrinciple": "Verum Omnis does not depend on court validation. Evidence is human-collected and human-attested; the platform verifies the exact state of the document as sealed, and any later alteration produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect. It organises what the documents say. The sealed case file is then presented by the human to the competent authorities.",
   "accessModel": {
     "privateCitizens": "free - permanently (hard-coded)",
     "lawEnforcement": "free - permanently, all agencies globally (hard-coded)",
