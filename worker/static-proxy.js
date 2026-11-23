@@ -5,6 +5,7 @@ export const ORIGIN = "https://verumglobal.pages.dev";
 export const PAGES = [
   "constitution",
   "dashboard",
+  "development-lab",
   "documents-resources",
   "preview-documents",
   "preview-index",
