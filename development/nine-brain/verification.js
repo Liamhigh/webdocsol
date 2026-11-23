@@ -35,6 +35,11 @@ const REVIEW_TEST_STATUSES = freeze(['PASS', 'FAIL', 'INSUFFICIENT']);
 const reviewTrust = new WeakMap();
 const PROCESS_DISPOSITION_RECORDS = Object.create(null);
 const PROCESS_DISPOSITION_REVISIONS = Object.create(null);
+const UTF8_ENCODER = new TextEncoder();
+
+function utf8ByteLength(value) {
+  return UTF8_ENCODER.encode(value).byteLength;
+}
 
 function trustReview(review, provenance) {
   reviewTrust.set(review, provenance);
@@ -297,7 +302,7 @@ async function requestIndependentReview(packet, config, transport) {
     const raw = typeof response === 'string' ? response : response && response.body;
     const statusCode = response && typeof response === 'object' ? response.status : 200;
     if (typeof raw !== 'string') return finish(failureReview(packet, config, 'UNAVAILABLE', ['Provider returned no bounded text response.']));
-    if (Buffer.byteLength(raw, 'utf8') > config.max_response_bytes) return finish(failureReview(packet, config, 'MALFORMED', ['Provider response exceeded the configured byte limit.'], raw.slice(0, 256)));
+    if (utf8ByteLength(raw) > config.max_response_bytes) return finish(failureReview(packet, config, 'MALFORMED', ['Provider response exceeded the configured byte limit.'], raw.slice(0, 256)));
     if (statusCode !== 200) return finish(failureReview(packet, config, 'UNAVAILABLE', ['Provider returned HTTP ' + statusCode + '; no cross-provider fallback occurred.'], raw));
     return finish(parseReview(packet, config, raw));
   } catch (error) {
@@ -613,7 +618,7 @@ async function handleIndependentReview(body, dependencies) {
         typeof dependencies.providerConfigs !== 'function' || typeof dependencies.lineageFor !== 'function') return { status: 500, body: { error: 'Handler dependencies unavailable' } };
     if (!await dependencies.authorize(body)) return { status: 401, body: { error: 'Unauthorized' } };
     if (!plain(body) || !plain(body.packet)) return { status: 400, body: { error: 'Bounded immutable packet required' } };
-    const rawSize = Buffer.byteLength(C.stableStringify(body), 'utf8');
+    const rawSize = utf8ByteLength(C.stableStringify(body));
     if (rawSize > 2097152) return { status: 413, body: { error: 'Request exceeds 2 MiB development limit' } };
     const packetValidation = validateEvidencePacket(body.packet);
     if (!packetValidation.valid) return { status: 400, body: { error: 'Invalid immutable packet', details: packetValidation.errors } };
