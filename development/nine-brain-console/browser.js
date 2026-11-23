@@ -195,7 +195,11 @@ $('downloadResult').addEventListener('click', () => {
   document.body.appendChild(link);
   link.click();
   link.remove();
-  setTimeout(() => URL.revokeObjectURL(url), 1000);
+  // A short timer can revoke the URL before Chromium finishes consuming the
+  // Blob, leaving an empty download. Retain it for this synthetic session;
+  // pagehide releases every generated URL and document teardown is the final
+  // fallback. No network or persistent storage is involved.
+  window.addEventListener('pagehide', () => URL.revokeObjectURL(url), { once: true });
   showMessage('Synthetic test JSON downloaded. You can send that file back for review.', 'success');
 });
 $('copySummary').addEventListener('click', async () => {
