@@ -67,7 +67,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.7.2-web';
+var ENGINE_VERSION = '5.7.3-web';
 var CONSTITUTION_VERSION = '6.1';
 // Counts mirror the live registry and run-list in forensic-engine-page.js.
 // The report recomputes from the registry at runtime when the engine is
@@ -4397,6 +4397,13 @@ function establishesOf(f) {
   // two different dates" under fourteen findings whose evidence was a single
   // token that exists on no calendar.
   if (f && f.type === 'CT03' && /^Impossible date/.test(String(f.evidence || ''))) return 'A date in the record cannot exist on any calendar. As written, the entry bearing it cannot be accurate; the true date has to be established from the original.';
+  // An admission is not a contradiction: the party is not asserting a fact
+  // and its negation, it is giving its own account of why the disputed
+  // transaction went ahead. Printing CT01's contradiction line under an
+  // admission misdescribes the finding (Greensky re-run, seal
+  // VO-239E0BCD382C, 23 November 2026 audit: the admission findings read as
+  // "asserts a fact and its negation" in the What this establishes column).
+  if (f && f.conductAdmission) return "The record carries a party's own account of the disputed conduct, in that party's own words. What that account settles — and by whom it was made — is for the reviewer reading the full passage in context on the cited page.";
   if (f && f.type && VO_ESTABLISHES[f.type]) return VO_ESTABLISHES[f.type];
   // The two-positions sentence only where the finding has two positions: a
   // two-statement kind, or evidence that quotes both sides.
