@@ -52,7 +52,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**65 registered production/baseline suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, and one Phase 4 active-graph suite. `run-all.js` is that registry — **a production/baseline test file that is not listed in it does not run**. Separately gated development contracts are registered in `run-development.js`; `npm test` runs both registries. What each production/baseline suite guards, and the real evidence bundle behind it, is in
+**66 registered production/baseline suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, one Phase 4 active-graph suite, and one engine-correction suite. `run-all.js` is that registry — **a production/baseline test file that is not listed in it does not run**. Separately gated development contracts are registered in `run-development.js`; `npm test` runs both registries. What each production/baseline suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
 
 The three development suites are:
@@ -114,6 +114,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 98 | ZA pack fixtures: neutral/reported/docket/SAFLII forms and boundaries, multiword supra, pinpoints, captions, negatives and neutrality, verbatim round-trips, byte-identical replay |
 | 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 | Phase 3 synthetic redaction corpus: exact UTF-16 ranges, protected verbatim evidence quotes, preserved references, and a fail-closed production-module flag |
 | 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
+| 66 | `batch7e-greensky-rerun` | `batch7e-greensky-rerun.test.mjs` | 12 | Greensky re-run corrections (23 November 2026, seal VO-239E0BCD382C): the EIB remit recital silent under CT47, letterhead/authenticity/router boilerplate silent under CT55, ledger kind ownership on a timeline page, the R100,000 demand counted once with a different-payee control, and admissions never printed as self-contradictions |
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete production/baseline registry.
 

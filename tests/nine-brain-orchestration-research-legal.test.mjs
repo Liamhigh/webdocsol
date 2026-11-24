@@ -49,7 +49,7 @@ ok(initial.opposition_register.length === 2 && initial.exclusion_register.length
 ok(initial.concordance.status === 'POLICY_UNRESOLVED' && initial.concordance.verified_conclusions.length === 0, 'NB-0 remains unresolved and cannot emit concordant verified conclusions');
 ok(initial.triple_verification_status === 'NOT_EXECUTED' && initial.human_adjudication_status === 'NOT_ADJUDICATED', 'Orchestration does not fabricate Triple Verification or human adjudication');
 ok(Object.values(O.RELEASE_FLAGS).every((value) => value === false), 'NB-10 release controls are all default-off');
-ok(initial.production_findings_json_version === '1.11.0' && initial.production_engine_version === '5.7.2-web', 'Production compatibility identities remain unchanged');
+ok(initial.production_findings_json_version === '1.11.0' && initial.production_engine_version === '5.7.3-web', 'Production compatibility identities remain unchanged');
 const replay = O.buildDevelopmentRun(base);
 ok(C.stableStringify(initial) === C.stableStringify(replay) && initial.run_sha512 === replay.run_sha512, 'Canonical replay is byte-for-byte deterministic');
 ok(C.sha512Hex(C.stableStringify(base.bundle)) === initial.evidence_bundle_sha512 && base.sourceTexts['evidence-one'] === originalSourceText && C.stableStringify(base.bundle) === originalBundle, 'Orchestration does not mutate original evidence records or source text');

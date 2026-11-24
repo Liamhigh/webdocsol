@@ -5,8 +5,8 @@
 > engine is correct** and the other surface is the one to fix. Every hard lesson from real
 > evidence bundles is encoded here and locked by tests.
 
-**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.2-web'`
-**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.2-web'`, report builder v1.3.1.
+**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.3-web'`
+**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.3-web'`, report builder v1.3.1.
 **Findings JSON:** v1.11.0, built by `buildFindingsJson` in `seal-document.html`, not by either
 script (1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
 the well-formedness gate and serial-stage trace; 1.9.0 added `cross_document_observations` with a
@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   65 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite); many exist solely to stop the regressions in §4 and §12.
+   66 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 engine-correction suite); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -465,6 +465,46 @@ corrected engine and pins the general fixes beside positive controls:
   substantive CT44 finding: the distant ownership statement names no party role and remains only a
   context-only verification note. Both CT45 findings are preserved, not suppressed.
 
+### 4.21 Greensky re-run review — remit recitals, letterhead boilerplate, ledger ownership (engine v5.7.3-web)
+
+The 451-page Greensky re-run (seal `VO-239E0BCD382C`, 23 November 2026, double-sealed over
+`VO-7D1630680FBA`) verified clean where verification had to hold: 17/17 page anchors, no
+hallucinated citation, and the hash, narrative-provenance and OTS chain all matched. Its review
+disowned five CT55 findings, one CT47 finding and one doubled ledger total instead.
+`tests/batch7e-greensky-rerun.test.mjs` reproduces each under the corrected engine and pins the
+guards beside positive controls:
+
+- **An institution's remit is not coercive conduct.** The EIB acknowledgement letter recites its
+  published remit — "ensuring that entities interacting with EU-based institutions operate without
+  fraud, coercion, or professional misconduct" — and CT47 fired on the recital (p. 374), even
+  though the advisory review disowned the passage. The guard holds only when a remit-safeguarding
+  frame surrounds a sentence whose coercion word sits beside other named harms in a list; a
+  party's own "he coerced me" report keeps its cue even on a page that recites the remit. Direct
+  ultimatum and cut-the-supply controls remain detectable.
+- **Letterhead and authenticity boilerplate is not coordinated drafting.** The Moore covering
+  letter and the CIPC notification it enclosed (pp. 120/125 and their bundle duplicates) measured
+  95% shared vocabulary because their substantive content was images: what the machine read was
+  the shared letterhead block, its disclaimer and the printout's From:/Sent:/To: router lines.
+  Router lines, the firm's published authenticity-check instruction and the letterhead fragment
+  carrying its DISCLAIMER are stripped before the near-duplicate comparison, and the closing-block
+  check now requires a distinct closing on EACH side (a reproduction inside its enclosing page
+  leaves one side without its own closing). The two-hands positive control (batch 5) still fires.
+- **A timeline entry cannot borrow a neighbouring entry's kind.** On an investigation timeline
+  ("Date: 8 Mar 2025 Event: Invoice sent and accepted … Date: 13 Mar 2025 Event: Fish shipped to
+  Hong Kong"), first-match-anywhere typed the fish shipment `invoice`. A kind cue must now own
+  its date: a glued before-cue ("Invoice SL001 dated 8 Mar 2025") names the instrument, an
+  after-cue inside the same entry qualifies it, and a cue owned by a neighbouring date token is
+  ignored.
+- **One demand is one ledger event.** The R100,000 compensation demand of 14 April 2025 read as
+  `entry` from its covering email (p. 55) and `demand` from the letter (p. 90, bundle duplicate
+  219), so the exact key counted it twice and the summary total reached R200,000. Same date +
+  same amount + compatible kinds (equal, or one side the generic `entry`) with non-conflicting
+  payees now merge, an unstated payee deferring to a stated one; two different stated payees stay
+  separate conduct, and events without an amount never core-merge.
+- **An admission is not a self-contradiction.** `establishesOf` prints the admission wording for
+  `conductAdmission` findings instead of CT01's "asserts a fact and its negation"; a plain CT01
+  contradiction keeps its line.
+
 ---
 
 ## 5. The anchor rule
@@ -880,7 +920,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**65 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite; recount assertions after any test change).
+**66 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 engine-correction suite; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -935,6 +975,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `batch7b-greensky-corrections.test.mjs` | 42 | Greensky output corrections (§4.19): calendar validity, completed-payment/payee semantics, direct-source discipline, tensions, boilerplate, behavioural deduplication, quotation boundaries and per-candidate legal-lane declarations |
 | `batch7c-court-corrections.test.mjs` | 38 | Court-bundle corrections (§4.20): whole-word admissions, date/reference discipline, legal-act nouns, actual billing, factive denial scope, existing burdens, entity status, registry fields, prior-analysis exclusion, behavioural source quality and ownership context |
 | `batch7d-ots-delivered-bytes.test.mjs` | 31 | Delivered-file OpenTimestamps receipts (§12.25): real detached-receipt digest bytes, post-seal/encrypted ordering, QR and Subject scheme markers, direct PDF+receipt compatibility, and legacy QR/metadata/ORIG resolution |
+| `batch7e-greensky-rerun.test.mjs` | 12 | Greensky re-run corrections (§4.21, §12.29): the EIB remit recital stays silent under CT47 beside a direct-pressure control; the reconstructed Moore letterhead / CIPC header pages stay silent under CT55; a timeline page no longer types a fish shipment as an invoice; the R100,000 demand seen from its covering email and from its letter is one ledger event, with a different-payee control; an admission never prints "a fact and its negation" |
 | `engine-perf.test.mjs` | 5 | Per-page extraction does not re-parse the whole PDF |
 | `evaluation-metrics.test.mjs` | 116 | B9 development-only hand-calculated detection/localization metrics, full direct-call validation, bounded identifiers/diagnostics and early resource rejection, minimum-cost and scope-aware matching, distinct evidence locations, one-to-one evidence credit, explicit UTF-16 normalization, incomplete-pair exclusion, pair/evidence/page/scope separation, failures/exclusions, versioned canonical and atomic reports, strict UTF-8 and canonical-directory/symlink-safe CLI handling, and fully normalized encoded-path production isolation |
 | `evaluation-contractnli.test.mjs` | 92 | B9 development-only ContractNLI adapter: pinned release/hash verification, code-point/UTF-16 span conversion, conservative hypothesis mapping, negative-corpus adaptation, provenance and input safety, annotations, collision-free identifiers, bounded shards and generation publication, exclusion visibility, zip integrity and the CLI pipeline on synthetic fixtures |
@@ -2971,3 +3012,20 @@ in the technical report, which retains or drops engine findings and adds no fact
 with `tag: 'NARRATIVE REPORT'` in the footer and the VO-SEAL2 subject; offered only behind
 `VoSealGuard.isSealed`; added to the share bundle (the share sheet's files, or `<name>-verum-omnis-bundle.zip` when the
 bundle is saved) and offered as its own download, as `<name>-court-ready-narrative-sealed.pdf`.
+
+
+### 12.29 The Greensky re-run corrections (2026-11-23)
+
+The second sealed Greensky re-run (451 pages, seal `VO-239E0BCD382C`, double-sealed after
+`VO-7D1630680FBA`, engine 5.7.2-web) is the platform's cleanest verification to date — 17/17 page
+anchors, no hallucinated citation, the full hash/narrative/OTS chain green — and it still produced
+reviewable defects: five CT55 findings measuring a firm's letterhead, disclaimer and email router
+lines against their covering letter's enclosure (both correspondences' substantive content was
+images), one CT47 firing on the EIB's own remit recital, one admission printed as a
+self-contradiction, a timeline fish shipment typed `invoice`, and an R100,000 demand counted twice
+because one window named its kind and the other did not. The sealed artifacts of both runs remain
+immutable historical drafts; the corrections live in the engine and report under v5.7.3-web and are
+pinned in `tests/batch7e-greensky-rerun.test.mjs` (§4.21). Deliberately out of scope and recorded in
+`ENHANCEMENT-PLAN.md`: bundle segmentation (WF6), multi-currency amounts (USD/$/AED — the
+American-sale financial spine pages carry no ledger event), and `case_id` auto-population, each of
+which needs its own findings-schema or segmentation work before a scan can rely on it.

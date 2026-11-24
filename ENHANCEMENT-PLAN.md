@@ -10,7 +10,7 @@ Last updated: **2026-11-20**.
 
 Reviewed `main` baseline: **`48836bc7c2f245b00e181d66b539c199d6fcaf2d`**.
 
-Engine: **`5.7.2-web`**. Production Findings JSON: **`1.11.0`**. Sealing standard: **VO-DSS-1.2**.
+Engine: **`5.7.3-web`**. Production Findings JSON: **`1.11.0`**. Sealing standard: **VO-DSS-1.2**.
 
 ## At a glance
 
@@ -57,7 +57,7 @@ All eight flags are default-off. `IMPLEMENTED_MODULES` contains only `citations`
 - Production `buildFindingsJson` remains **`1.11.0`**. Do **not** assume or pre-announce `1.12.0`.
 - Observations remain in `result.moduleResults` and approved development/preview surfaces until coordinated website, `1verum`, `firebase` and relevant native/client review approves an additive extension version.
 - Unknown-module and unknown-extension preservation, old-producer/new-reader, new-producer/old-reader, stable ordering and duplicate-retention behaviour require versioned golden fixtures before a cross-client release.
-- The baseline assurance record is **65 registered Node suites**, `npm run check`, `git diff --check`, and **12 Playwright tests** across Chromium, Firefox and WebKit. These establish the reviewed baseline, not proof that unimplemented modules work.
+- The baseline assurance record is **66 registered Node suites**, `npm run check`, `git diff --check`, and **12 Playwright tests** across Chromium, Firefox and WebKit. These establish the reviewed baseline, not proof that unimplemented modules work.
 
 ## Phase detail
 
@@ -112,3 +112,20 @@ No branch or implementation is recorded at the reviewed baseline for Allen tempo
 7. Run `node tests/run-all.js`, `npm run check` and `git diff --check`; add focused positive, negative, ambiguous, malformed, unsupported, budget, replay and rollback evidence for the slice.
 8. Update this file only with verified merged/open/blocked/not-started states. Keep dates, PR numbers and implementation boundaries accurate. Update suite counts wherever the repository records them when they change.
 9. Merge to `main` deploys through Cloudflare Workers Builds. Opening or pushing a documentation branch is not deployment; do not merge or deploy as a side effect of selecting or planning work.
+
+## Engine corrections outside the enhancement phases
+
+- **Greensky re-run corrections (v5.7.3-web) — in review.** Batch 7e carries the remit-recital (CT47)
+  and letterhead-boilerplate (CT55) guards, conduct-ledger kind ownership and core merge, and the
+  admission wording in `establishesOf` (ENGINE.md §4.21, §12.29;
+  `tests/batch7e-greensky-rerun.test.mjs`). Recorded here because three defects the audit found stay
+  open by design until their own slice exists:
+  - **Multi-currency amounts — Not started.** The conduct ledger reads ZA money only; the run's
+    financial spine ($28,000 base sale, 70% $19,600, $12,425) carries no ledger event. Needs a
+    findings-JSON schema decision alongside the ZA parser, not a quiet engine extension.
+  - **Bundle segmentation (WF6) — Not started.** One seal for one matter's complete record stays the
+    rule; per-document sub-seals require their own contract and review.
+  - **`case_id` auto-population — Not started.** The findings JSON carries an empty `case_ids`
+    array; auto-populating it from RAKEZ/SAPS references is a taxonomy/schema decision
+    (acceptance criteria: reviewer-visible provenance for every populated id, no guess at a court
+    equivalent, and an explicit reviewer override).

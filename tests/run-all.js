@@ -58,6 +58,7 @@ const suites = [
   'batch7d-ots-delivered-bytes.test.mjs',
   'batch7d-anchor-tolerance.test.mjs',
   'batch7d-pipeline-reliability.test.mjs',
+  'batch7e-greensky-rerun.test.mjs',
   'timeline-dates.test.mjs',
   'doc-fact-index.test.mjs',
   'cross-doc-conflicts.test.mjs',
