@@ -792,7 +792,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.7.2-web';
+var ENGINE_VERSION = '5.7.3-web';
 var CONSTITUTION_VERSION = '6.1';
 // Counts mirror the live registry and run-list in forensic-engine-page.js.
 // The report recomputes from the registry at runtime when the engine is
@@ -5122,6 +5122,13 @@ function establishesOf(f) {
   // two different dates" under fourteen findings whose evidence was a single
   // token that exists on no calendar.
   if (f && f.type === 'CT03' && /^Impossible date/.test(String(f.evidence || ''))) return 'A date in the record cannot exist on any calendar. As written, the entry bearing it cannot be accurate; the true date has to be established from the original.';
+  // An admission is not a contradiction: the party is not asserting a fact
+  // and its negation, it is giving its own account of why the disputed
+  // transaction went ahead. Printing CT01's contradiction line under an
+  // admission misdescribes the finding (Greensky re-run, seal
+  // VO-239E0BCD382C, 23 November 2026 audit: the admission findings read as
+  // "asserts a fact and its negation" in the What this establishes column).
+  if (f && f.conductAdmission) return "The record carries a party's own account of the disputed conduct, in that party's own words. What that account settles — and by whom it was made — is for the reviewer reading the full passage in context on the cited page.";
   if (f && f.type && VO_ESTABLISHES[f.type]) return VO_ESTABLISHES[f.type];
   // The two-positions sentence only where the finding has two positions: a
   // two-statement kind, or evidence that quotes both sides.
@@ -8241,13 +8248,13 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 </script>
 <script>
 /* VO-INLINE:forensic-engine-page.js:START */
-// ============== FORENSIC CONTRADICTION ENGINE v5.7.2-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.7.3-web ================
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.2-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.3-web
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
@@ -8269,7 +8276,7 @@ if (typeof module !== 'undefined' && module.exports) module.exports = api;
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.7.2-web';
+var VO_ENGINE_VERSION = '5.7.3-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
@@ -10582,12 +10589,25 @@ var DETECTORS = {
     function stripEmailBoilerplate(T) {
       // Standard confidentiality/transmission language is shared by unrelated
       // firms. It cannot supply the substantive vocabulary for coordination.
-      var parts = String(T || '').match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
+      // So do the router lines of an email printout (From:/Sent:/To:/Cc:/...),
+      // the letterhead block that carries them and the firm's published
+      // authenticity-check instruction: all of it repeats verbatim on every
+      // page carrying the letterhead, across correspondence that shares
+      // nothing else (Greensky re-run, seal VO-239E0BCD382C, 23 November
+      // 2026: the Moore covering letter and the CIPC notification enclosed
+      // with it, pp. 120/125 and their bundle duplicates, measured 95%
+      // coordinated on letterhead, authenticity-disclaimer and header text
+      // alone).
+      var src = String(T || '').replace(/^[ \t]*(?:from|to|cc|bcc|sent|subject|date|re|fwd|fw|reply)\s*:[^\n]*$/gim, ' ');
+      var parts = src.match(/[^.!?]+[.!?]+|[^.!?]+$/g) || [];
       var keep = [];
       for (var i = 0; i < parts.length; i++) {
         var p = parts[i];
         var standard = /\b(?:confidential|intended\s+solely|named\s+recipient|received\s+this\s+email\s+in\s+error|notify\s+the\s+sender|transmission\s+errors?|interception|corruption|viruses?|email\s+disclaimer)\b/i.test(p) ||
-          (/\bunauthori[sz]ed\s+(?:review|use|disclosure|copying|distribution)\b/i.test(p) && /\b(?:prohibited|delete|email|attachments?)\b/i.test(p));
+          (/\bunauthori[sz]ed\s+(?:review|use|disclosure|copying|distribution)\b/i.test(p) && /\b(?:prohibited|delete|email|attachments?)\b/i.test(p)) ||
+          /\bdoubt about the authenticity of an email\b/i.test(p) ||
+          (/\bforward the email to\b/i.test(p) && /\bsubject line\b/i.test(p)) ||
+          (/\b(?:P ?O Box|Private Bag)\b/i.test(p) && /\bDISCLAIMER\b/i.test(p));
         if (!standard) keep.push(p);
       }
       return keep.join(' ');
@@ -10649,12 +10669,16 @@ var DETECTORS = {
         var shInter = 0;
         for (var shKey in shSmall) if (Object.prototype.hasOwnProperty.call(shSmall, shKey) && shBig[shKey]) shInter++;
         if (!A.shingleCount || !B.shingleCount || shInter / Math.min(A.shingleCount, B.shingleCount) < 0.8) continue;
-        // The closing blocks must differ — same words, different hand.
-        // Identical duplicates (a page scanned twice) stay silent.
-        var diff = 0;
-        for (var u in A.tail) if (Object.prototype.hasOwnProperty.call(A.tail, u) && !B.tail[u]) diff++;
-        for (var v in B.tail) if (Object.prototype.hasOwnProperty.call(B.tail, v) && !A.tail[v]) diff++;
-        if (diff < 2) continue;
+        // The closing blocks must differ — same words, then a different
+        // closing on EACH side. Identical duplicates (a page scanned into the
+        // bundle twice) leave one side without its own closing; a quotation
+        // reproduced inside its enclosing page leaves the quoted side's
+        // words inside the enclosing text. Two independently drafted pages
+        // each leave their own tail behind.
+        var diff = 0, diffA = 0, diffB = 0;
+        for (var u in A.tail) if (Object.prototype.hasOwnProperty.call(A.tail, u) && !B.tail[u]) { diff++; diffA++; }
+        for (var v in B.tail) if (Object.prototype.hasOwnProperty.call(B.tail, v) && !A.tail[v]) { diff++; diffB++; }
+        if (diff < 2 || diffA < 1 || diffB < 1) continue;
         pairs.push({ a: profs[a].page, b: profs[c].page, sim: Math.round(jac * 100) });
       }
     }
@@ -13623,6 +13647,23 @@ var DETECTORS = {
         // passage of coercive conduct either.
         var complaintFrame = /\b(?:complaint|matter|referral|summary|allegation|charge)\b[^.]{0,160}\b(?:concerns?|reports?|alleges?|describes?|coerc(?:ion|ive))\b/i.test(sen);
         if (complaintFrame && /\bcoerc(?:ion|ive)\b/i.test(sen) && !/\b(?:coerced|pressur(?:ed|ised)|forced\s+(?:me|us|them)|under\s+duress)\b/i.test(sen)) continue;
+        // An institution's published remit names the harms it exists to guard
+        // against — "safeguarding the integrity of EU-linked financial
+        // systems, ensuring that entities interacting with EU-based
+        // institutions operate without fraud, coercion, or professional
+        // misconduct". The coercion word there is a LISTED HARM being
+        // monitored, not a party's pressure statement. Both conditions must
+        // hold: a remit-guarding frame around the sentence AND "coercion"
+        // seated beside other named harms, in either order. A party's own
+        // "he coerced me" report keeps its cue even on a page that recites
+        // an institution's remit. (Greensky re-run, seal VO-239E0BCD382C,
+        // 23 November 2026: the EIB acknowledgement letter fired CT47 on
+        // its own remit recital, p. 374, and the advisory review disowned
+        // the passage.)
+        var remitFrame = /(?:safeguard\w*|ensur\w+|protect\w*|prevent\w+|suppress\w+|combat\w+|monitor\w*|published areas of concern|areas of concern)/i.test(sen);
+        var harmBesideCoercion = (/\bcoerc(?:ion|ive)\b[^.;!?]{0,120}\b(?:or|and)\b[^.;!?]{0,80}(?:misconduct|corruption|fraud|collusion|abuse|exploitation|trafficking|money laundering)\b/i.test(sen) ||
+          /\b(?:misconduct|corruption|fraud|collusion|abuse|exploitation|trafficking|money laundering)\b[^.;!?]{0,80}\b(?:or|and)\b[^.;!?]{0,120}\bcoerc(?:ion|ive)\b/i.test(sen));
+        if (remitFrame && harmBesideCoercion) continue;
         var hit = false;
         for (var ci = 0; ci < VO_COERCE_CUES.length; ci++) { if (VO_COERCE_CUES[ci].test(sen)) { hit = true; break; } }
         if (!hit) continue;
@@ -15719,7 +15760,7 @@ function voConductSpanMonths(minKey, maxKey) {
 
 function voExtractConductLedger(textBlocks) {
   var blocks = textBlocks || [];
-  var events = [], byEvent = {};
+  var events = [], byEvent = {}, byCore = {};
   for (var i = 0; i < blocks.length; i++) {
     var s = String(blocks[i] || '').replace(VO_SEAL_BOILERPLATE_RE, ' ');
     VO_DATE_TOKEN_RE.lastIndex = 0;
@@ -15736,9 +15777,65 @@ function voExtractConductLedger(textBlocks) {
       if (/^\d/.test(m[0]) && VO_CLAUSE_CUE_RE.test(s.slice(Math.max(0, m.index - 12), m.index))) continue;
       var from = Math.max(0, m.index - 160), to = Math.min(s.length, m.index + m[0].length + 160);
       var win = s.slice(from, to);
-      var kind = null;
+      var rel = m.index - from;
+      // The kind word must belong to THIS event, not to a neighbouring entry
+      // on a timeline page. "Date: 8 Mar 2025 Event: Invoice sent and accepted
+      // … Date: 13 Mar 2025 Event: Fish shipped to Hong Kong" —
+      // first-match-anywhere typed the 13 March fish shipment as an invoice
+      // because the PREVIOUS entry's invoice sat inside the window (Greensky
+      // re-run, seal VO-239E0BCD382C, 23 November 2026: the 13 March
+      // shipment and the 6 April entry on the same timeline page both
+      // carried kind "invoice"). Ownership, applied to every cue match in
+      // the window: a cue AFTER this date owns this event when no other
+      // date token lies between it and the date; a cue BEFORE this date
+      // owns this event only when this date is the FIRST date token after
+      // the cue AND the cue sits close to it (within 60 characters —
+      // "Invoice SL001 dated 8 Mar 2025"; a cue 100+ characters back is a
+      // neighbouring entry's word). Cues owned by a neighbouring entry are
+      // ignored. Rank: a glued before-cue (the instrument) beats an
+      // after-cue (its terms) beats a bare before-cue; nearest wins
+      // within each class.
+      var winDates = [];
+      var saveDl = VO_DATE_TOKEN_RE.lastIndex;
+      VO_DATE_TOKEN_RE.lastIndex = 0;
+      var dm2;
+      while ((dm2 = VO_DATE_TOKEN_RE.exec(win)) !== null) winDates.push(dm2.index);
+      VO_DATE_TOKEN_RE.lastIndex = saveDl;
+      var kind = null, kindRank = 9, kindDist = 0;
       for (var kI = 0; kI < VO_CONDUCT_KIND_RES.length; kI++) {
-        if (VO_CONDUCT_KIND_RES[kI].re.test(win)) { kind = VO_CONDUCT_KIND_RES[kI].kind; break; }
+        var kRe = VO_CONDUCT_KIND_RES[kI].re;
+        var kG = kRe.global ? kRe : new RegExp(kRe.source, kRe.flags + 'g');
+        kG.lastIndex = 0;
+        var km2;
+        while ((km2 = kG.exec(win)) !== null) {
+          var cue = km2.index;
+          var owned = false;
+          if (cue > rel) {
+            owned = true;
+            for (var di = 0; di < winDates.length; di++) {
+              if (winDates[di] > rel && winDates[di] < cue) { owned = false; break; }
+            }
+          } else {
+            var nextAfter = -1;
+            for (var dj = 0; dj < winDates.length; dj++) {
+              if (winDates[dj] >= cue && (nextAfter === -1 || winDates[dj] < nextAfter)) nextAfter = winDates[dj];
+            }
+            owned = (nextAfter === rel && rel - cue <= 60);
+          }
+          if (!owned) continue;
+          // A cue glued to its date ("Invoice INV7 dated 3 Mar 2025") names
+          // the instrument itself; a generic mention after the date
+          // ("… dated 3 Mar 2025: … payment is due within thirty days") is
+          // only the instrument's terms. The glued-before cue settles the
+          // kind; after-date mentions qualify it, bare before-cues come
+          // last.
+          var glue = cue < rel && /\b(?:dated?|on|of|for|by|per|due)\b/i.test(win.slice(cue + km2[0].length, rel));
+          var rank = glue ? 0 : (cue > rel ? 1 : 2);
+          var dist = Math.abs(cue - rel);
+          if (rank < kindRank || (rank === kindRank && dist < kindDist)) {
+            kindRank = rank; kindDist = dist; kind = VO_CONDUCT_KIND_RES[kI].kind;
+          }
+        }
       }
       var provesPayment = voConductPaymentProved(win);
       if (provesPayment && (!kind || kind === 'invoice' || kind === 'rental' || kind === 'entry')) kind = 'payment';
@@ -15751,7 +15848,6 @@ function voExtractConductLedger(textBlocks) {
       // (invoice/rental/payment/receipt/remittance/statement) or an amount.
       if (!kind && !am) continue;
       var refM = VO_CONDUCT_REF_RE.exec(win);
-      var rel = m.index - from;
       var snippet = win.replace(/\s+/g, ' ').trim();
       if (snippet.length > 200) {
         var flat = win.replace(/\s+/g, ' ');
@@ -15765,9 +15861,41 @@ function voExtractConductLedger(textBlocks) {
       var payee = voConductPayee(win);
       var payeeKey = String(payee || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       var ekey = key + '|' + (kind || '-') + '|' + (am ? am[0].replace(/\s+/g, '') : '-') + '|' + (payeeKey || '-');
-      if (byEvent[ekey]) {
-        var ex = byEvent[ekey];
+      // Payee and kind capture is window-stochastic: the same real-world
+      // demand captured once from the demand letter and once from the
+      // covering email can name its payee in one window and not in the
+      // other, and read as generic "entry" from one page and "demand" from
+      // the next — so the exact key counted ONE demand twice (Greensky
+      // re-run, seal VO-239E0BCD382C, 23 November 2026: the R100,000
+      // compensation demand of 14 April 2025 appeared as "entry" from p. 55
+      // and "demand" from p. 90, doubling the ledger total to R200,000).
+      // A core match — same date + same amount + compatible kinds (equal,
+      // or one side the generic "entry") — is the same event while the
+      // payees do not CONFLICT: an unstated payee defers to a stated one;
+      // two different stated payees are separate conduct and never
+      // collapse. Events without an amount stay on the exact key: they
+      // carry nothing to reconcile against.
+      var amNum = am ? voParseAmountSa(am[0]) : null;
+      var clash = null;
+      if (amNum !== null && amNum === amNum) {
+        var coreK = key + '|' + amNum;
+        if (byCore[coreK]) {
+          for (var cc = 0; cc < byCore[coreK].length; cc++) {
+            var cand = byCore[coreK][cc];
+            var kindsCompatible = (cand.kind === kind ||
+              ((cand.kind === 'entry' || kind === 'entry') && (cand.kind === 'demand' || kind === 'demand')));
+            var payeesCompatible = (!cand.payee || !payee || voSameConductPayee(cand.payee, payee));
+            if (kindsCompatible && payeesCompatible) { clash = cand; break; }
+          }
+        }
+      }
+      if (byEvent[ekey] || clash) {
+        var ex = byEvent[ekey] || clash;
         if (ex.source_page !== i + 1 && ex.also_on_pages.indexOf(i + 1) === -1) ex.also_on_pages.push(i + 1);
+        if (ex === clash) {
+          if (ex.kind === 'entry' && kind && kind !== 'entry') ex.kind = kind;
+          if (!ex.payee && payee) ex.payee = payee;
+        }
         continue;
       }
       var ev = {
@@ -15788,6 +15916,11 @@ function voExtractConductLedger(textBlocks) {
         snippet: snippet
       };
       byEvent[ekey] = ev;
+      if (amNum !== null && amNum === amNum) {
+        var coreK2 = key + '|' + amNum;
+        if (!byCore[coreK2]) byCore[coreK2] = [];
+        byCore[coreK2].push(ev);
+      }
       events.push(ev);
     }
   }
