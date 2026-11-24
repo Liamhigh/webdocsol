@@ -125,6 +125,7 @@ test('complete all-pass workflow, real JSON export, inspector, summary and reset
   expect(exported.mocked_external_reviewers).toBe(true);
   expect(exported.live_provider_calls).toBe(0);
   expect(exported.technical_panel.status).toBe('TECHNICALLY_SUPPORTED_PENDING_HUMAN_ADJUDICATION');
+  expect(exported.current_disposition.disposition).toBe('CONFIRMED');
   expect(exported.disposition_history).toHaveLength(1);
   expect(exported.annex.sealed).toBe(false);
   expect(exported.production_findings_modified).toBe(false);
@@ -134,6 +135,26 @@ test('complete all-pass workflow, real JSON export, inspector, summary and reset
   expect(exported.workflow_contract.checks).toHaveLength(9);
   expect(exported.workflow_contract.transition_history).toHaveLength(4);
   expect(await page.evaluate(() => window.__revokedObjectUrls.length)).toBe(revocationsBeforeDownload);
+
+  await page.locator('#runBrains').click();
+  await expect(page.locator('#workflowResult')).toContainText('ORCHESTRATION_COMPLETE');
+  await expect(page.locator('#runReview')).toBeEnabled();
+  await expect(page.locator('#commitDisposition')).toBeDisabled();
+  await expect(page.locator('#prepareAnnex')).toBeDisabled();
+  await runReview(page, 'dissent');
+  await expect(page.locator('#workflowResult')).toContainText('Workflow contract: PASS');
+  await expect(page.locator('#workflowResult')).toContainText('TECHNICAL_REVIEW_COMPLETE');
+  const rerunDownloadEvent = page.waitForEvent('download');
+  await page.locator('#downloadResult').click();
+  const rerunExport = await readDownloadedJson(await rerunDownloadEvent);
+  expect(rerunExport.workflow_contract.workflow_generation).toBe(2);
+  expect(rerunExport.workflow_contract.transition_history).toHaveLength(6);
+  expect(rerunExport.workflow_contract.status).toBe('PASS');
+  expect(rerunExport.technical_panel.status).toBe('FAIL');
+  expect(rerunExport.current_disposition).toBeNull();
+  expect(rerunExport.disposition_history).toHaveLength(1);
+  expect(rerunExport.narrative).toBeNull();
+  expect(rerunExport.annex).toBeNull();
 
   await page.locator('#copySummary').click();
   await expect(page.locator('#message')).toContainText(/Plain-language test summary copied|Verum Omnis development test/);

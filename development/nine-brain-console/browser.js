@@ -46,7 +46,7 @@ function currentRecord() {
   const selected = $('recordSelect').value;
   if (selected === 'run') return session.run;
   if (selected === 'panel') return session.panel;
-  if (selected === 'disposition') return session.store.current(session.candidate.candidate_id);
+  if (selected === 'disposition') return session.disposition;
   if (selected === 'narrative') return session.narrative;
   if (selected === 'annex') return session.annex;
   if (selected === 'packet') return session.packet;
@@ -56,10 +56,29 @@ function currentRecord() {
 }
 function refreshInspector() {
   const workflow = Lab.getWorkflowAudit(session);
-  $('workflowResult').innerHTML =
-    '<div class="outcome ' + (workflow.status === 'PASS' ? 'pass' : 'fail') + '"><strong>Workflow contract: ' + workflow.status + '</strong>' +
-    '<p class="help">State: ' + escapeHtml(workflow.current_state) + '. Nine deterministic contract checks. This audits software workflow only; Axiom formal verification has not been executed.</p></div>' +
-    '<ul class="tests">' + workflow.checks.map((item) => '<li><span>' + escapeHtml(item.check_id) + '</span>' + badge(item.status) + '</li>').join('') + '</ul>';
+  const workflowResult = $('workflowResult');
+  workflowResult.replaceChildren();
+  const outcome = document.createElement('div');
+  outcome.className = 'outcome ' + (workflow.status === 'PASS' ? 'pass' : 'fail');
+  const heading = document.createElement('strong');
+  heading.textContent = 'Workflow contract: ' + workflow.status;
+  const detail = document.createElement('p');
+  detail.className = 'help';
+  detail.textContent = 'State: ' + workflow.current_state + '. Nine deterministic contract checks. This audits software workflow only; Axiom formal verification has not been executed.';
+  outcome.append(heading, detail);
+  const checks = document.createElement('ul');
+  checks.className = 'tests';
+  workflow.checks.forEach((item) => {
+    const row = document.createElement('li');
+    const label = document.createElement('span');
+    label.textContent = item.check_id;
+    const status = document.createElement('span');
+    status.className = 'status status-' + (item.status === 'PASS' ? 'pass' : 'fail');
+    status.textContent = item.status;
+    row.append(label, status);
+    checks.appendChild(row);
+  });
+  workflowResult.append(outcome, checks);
   $('recordJson').textContent = pretty(currentRecord());
   $('auditTrail').innerHTML = session.events.map((event) =>
     '<li><span>' + String(event.sequence).padStart(2, '0') + '</span><div>' + escapeHtml(event.event) + '</div></li>'
@@ -110,7 +129,8 @@ function renderDisposition(disposition) {
   $('dispositionResult').innerHTML =
     '<div class="outcome ' + (disposition.disposition === 'CONFIRMED' ? 'pass' : '') + '"><strong>Revision ' + disposition.revision + ': ' + escapeHtml(disposition.disposition) + '</strong><p>' + escapeHtml(disposition.reason) + '</p><p class="help">Adjudicator: ' + escapeHtml(disposition.adjudicator) + '. Evidence retained: ' + disposition.evidence_retained + '. Audit history retained: ' + disposition.audit_history_retained + '.</p></div>' +
     '<h3>Immutable disposition history</h3><ol class="record-history">' + history.map((item) =>
-      '<li>' + badge(item.disposition) + ' <span class="mono">revision ' + item.revision + ' · ' + escapeHtml(item.disposition_sha512.slice(0, 20)) + '…</span></li>'
+      '<li>' + badge(item.disposition) + ' <span class="mono">revision ' + item.revision + ' · generation ' + escapeHtml(item.workflow_generation) +
+      ' · ' + escapeHtml(item.workflow_session_id || 'legacy') + ' · ' + escapeHtml(item.disposition_sha512.slice(0, 20)) + '…</span></li>'
     ).join('') + '</ol>';
   $('prepareAnnex').disabled = false;
   $('annexResult').innerHTML = '<div class="empty">Ready for separate narrative approval and unsealed annex preparation.</div>';
@@ -129,10 +149,6 @@ function renderAnnex(result) {
   refreshInspector();
 }
 function resetDownstream() {
-  session.panel = null;
-  session.disposition = null;
-  session.narrative = null;
-  session.annex = null;
   $('commitDisposition').disabled = true;
   $('prepareAnnex').disabled = true;
   $('dispositionResult').innerHTML = '<div class="empty">Run the technical panel first.</div>';
@@ -142,9 +158,8 @@ function resetDownstream() {
 $('runBrains').addEventListener('click', () => {
   clearMessage();
   try {
-    resetDownstream();
-    $('reviewResult').innerHTML = '<div class="empty">Run the technical review next.</div>';
     const result = Lab.runOrchestration(session);
+    resetDownstream();
     orchestrationRan = true;
     renderOrchestration(result);
     showMessage('B1–B9 completed as a development run. All nine identities are present and the deterministic replay matched.', 'success');
@@ -156,7 +171,6 @@ $('runReview').addEventListener('click', async () => {
   $('runReview').disabled = true;
   $('runReview').textContent = 'Running…';
   try {
-    resetDownstream();
     const panel = await Lab.runTechnicalReview(session, $('scenario').value);
     renderPanel(panel);
     showMessage(panel.status === 'TECHNICALLY_SUPPORTED_PENDING_HUMAN_ADJUDICATION'
@@ -210,7 +224,7 @@ $('downloadResult').addEventListener('click', () => {
 });
 $('copySummary').addEventListener('click', async () => {
   clearMessage();
-  const disposition = session.store.current(session.candidate.candidate_id);
+  const disposition = session.disposition;
   const lines = [
     'Verum Omnis development test — synthetic fixtures only',
     'Nine-brain run: ' + (orchestrationRan ? 'completed; deterministic replay matched' : 'not run'),

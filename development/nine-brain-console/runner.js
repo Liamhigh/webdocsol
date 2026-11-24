@@ -15,6 +15,8 @@ const {
   makeBase, completeReviews, providerConfig, passingModelResponse
 } = require('../../tests/nine-brain-fixtures.js');
 
+let nextSessionNumber = 0;
+
 const SCENARIOS = Object.freeze({
   'all-pass': 'All three technical reviews pass',
   dissent: 'DeepSeek dissents; the panel fails closed',
@@ -23,6 +25,8 @@ const SCENARIOS = Object.freeze({
 });
 
 function createConsoleSession() {
+  nextSessionNumber += 1;
+  const sessionId = 'console-session-' + nextSessionNumber;
   const base = makeBase();
   const preview = O.buildDevelopmentRun(base);
   const run = O.buildDevelopmentRun({
@@ -52,44 +56,83 @@ function createConsoleSession() {
   return {
     base, run, candidate, audit, packet, legal,
     store: new V.DispositionStore(),
-    workflow: W.createWorkflow(),
+    workflow: { ...W.createWorkflow(), session_id: sessionId },
     panel: null,
     disposition: null,
     narrative: null,
     annex: null,
+    busy: false,
+    reviewId: null,
     scenario: 'all-pass',
     providerCalls: [],
-    events: [{ sequence: 1, event: 'Synthetic development records prepared locally; no provider, human adjudication, production report or sealing action executed.' }]
+    events: [{
+      sequence: 1,
+      kind: 'SESSION_INITIALIZED',
+      transition_sequence: 0,
+      workflow_generation: 0,
+      workflow_session_id: sessionId,
+      event: 'Synthetic development records prepared locally; no provider, human adjudication, production report or sealing action executed.'
+    }]
   };
 }
 
-function record(session, event) {
-  session.events.push({ sequence: session.events.length + 1, event });
+function beginOperation(session) {
+  if (!session || session.busy) throw new Error('Another workflow operation is already in progress');
+  session.busy = true;
+}
+
+function record(session, event, transitionEvent) {
+  const transition = session.workflow.history[session.workflow.history.length - 1];
+  if (!transition || transition.event !== transitionEvent) {
+    throw new Error('Workflow execution event does not match its committed transition');
+  }
+  session.events.push({
+    sequence: session.events.length + 1,
+    transition_sequence: transition.sequence,
+    transition_event: transition.event,
+    workflow_generation: transition.generation,
+    workflow_session_id: session.workflow.session_id,
+    event
+  });
 }
 
 function runOrchestration(session) {
-  W.assertEventAllowed(session.workflow, W.EVENTS.RUN_ORCHESTRATION);
-  const validation = O.validateDevelopmentRun(session.run);
-  if (!validation.valid) throw new Error('Development run failed validation: ' + validation.errors.join('; '));
-  const replay = O.buildDevelopmentRun({
-    ...session.base,
-    promotionReviews: completeReviews(O.buildDevelopmentRun(session.base))
-  });
-  if (C.stableStringify(replay) !== C.stableStringify(session.run)) {
-    throw new Error('Deterministic replay did not reproduce the development run');
-  }
-  W.transition(session.workflow, W.EVENTS.RUN_ORCHESTRATION);
-  record(session, 'NB-2–NB-10 two-pass run and deterministic replay completed; nine brain identities preserved.');
-  return {
-    run: session.run,
-    legal: session.legal,
-    allen: {
-      relation_count: Allen.RELATIONS.length,
-      composition_count: Object.values(Allen.COMPOSITION)
-        .reduce((sum, row) => sum + Object.keys(row).length, 0),
-      meeting_example: Allen.relation({ start: 0, end: 1 }, { start: 1, end: 2 })
+  beginOperation(session);
+  try {
+    W.assertEventAllowed(session.workflow, W.EVENTS.RUN_ORCHESTRATION);
+    const validation = O.validateDevelopmentRun(session.run);
+    if (!validation.valid) throw new Error('Development run failed validation: ' + validation.errors.join('; '));
+    const replay = O.buildDevelopmentRun({
+      ...session.base,
+      promotionReviews: completeReviews(O.buildDevelopmentRun(session.base))
+    });
+    if (C.stableStringify(replay) !== C.stableStringify(session.run)) {
+      throw new Error('Deterministic replay did not reproduce the development run');
     }
-  };
+    W.transition(session.workflow, W.EVENTS.RUN_ORCHESTRATION, {
+      run_sha512: session.run.run_sha512,
+      packet_sha512: session.packet.packet_sha512
+    });
+    session.panel = null;
+    session.disposition = null;
+    session.narrative = null;
+    session.annex = null;
+    session.reviewId = null;
+    session.providerCalls = [];
+    record(session, 'NB-2–NB-10 two-pass run and deterministic replay completed; nine brain identities preserved.', W.EVENTS.RUN_ORCHESTRATION);
+    return {
+      run: session.run,
+      legal: session.legal,
+      allen: {
+        relation_count: Allen.RELATIONS.length,
+        composition_count: Object.values(Allen.COMPOSITION)
+          .reduce((sum, row) => sum + Object.keys(row).length, 0),
+        meeting_example: Allen.relation({ start: 0, end: 1 }, { start: 1, end: 2 })
+      }
+    };
+  } finally {
+    session.busy = false;
+  }
 }
 
 function sourceContextReview(session) {
@@ -102,27 +145,30 @@ function sourceContextReview(session) {
   };
 }
 
-function mockTransport(session, provider) {
+function mockTransport(session, provider, providerCalls, reviewId, generation, scenario) {
   return async (request) => {
     if (request.raw_response || request.other_reviewer_response) {
       throw new Error('Cross-reviewer context reached an isolated mock transport');
     }
-    session.providerCalls.push({
-      sequence: session.providerCalls.length + 1,
+    providerCalls.push({
+      sequence: providerCalls.length + 1,
       provider,
       endpoint: request.endpoint,
       packet_sha512: request.packet_sha512,
+      session_id: session.workflow.session_id,
+      review_id: reviewId,
+      workflow_generation: generation,
       other_reviewer_response_received: false,
       mocked: true
     });
     if (provider === 'deepseek') {
-      if (session.scenario === 'unavailable') {
+      if (scenario === 'unavailable') {
         throw new Error('Synthetic DeepSeek outage requested by the console scenario');
       }
-      if (session.scenario === 'malformed') {
+      if (scenario === 'malformed') {
         return { status: 200, body: '{this is deliberately malformed JSON' };
       }
-      if (session.scenario === 'dissent') {
+      if (scenario === 'dissent') {
         return {
           status: 200,
           body: passingModelResponse(session.packet, {
@@ -140,87 +186,137 @@ async function runTechnicalReview(session, scenario) {
   if (!Object.prototype.hasOwnProperty.call(SCENARIOS, scenario)) {
     throw new TypeError('Unknown review scenario');
   }
-  W.assertEventAllowed(session.workflow, W.EVENTS.RUN_TECHNICAL_REVIEW);
-  session.scenario = scenario;
-  session.providerCalls = [];
-  const responsible = V.responsibleBrainReview(
-    session.packet, session.audit, session.base.sourceTexts, sourceContextReview(session)
-  );
-  const mistral = providerConfig('mistral');
-  const deepseek = providerConfig('deepseek');
-  session.panel = await V.runIndependentPanel(
-    session.packet, responsible, mistral, deepseek,
-    mockTransport(session, 'mistral'), mockTransport(session, 'deepseek')
-  );
-  session.disposition = null;
-  session.narrative = null;
-  session.annex = null;
-  W.transition(session.workflow, W.EVENTS.RUN_TECHNICAL_REVIEW);
-  record(session, 'VER-1–VER-4 panel executed with two isolated mocked providers; status ' + session.panel.status + '.');
-  return session.panel;
+  beginOperation(session);
+  try {
+    W.assertEventAllowed(session.workflow, W.EVENTS.RUN_TECHNICAL_REVIEW);
+    const generation = session.workflow.generation;
+    const reviewId = session.workflow.session_id + '-review-' + generation + '-' + session.packet.packet_sha512.slice(0, 24);
+    const providerCalls = [];
+    const responsible = V.responsibleBrainReview(
+      session.packet, session.audit, session.base.sourceTexts, sourceContextReview(session)
+    );
+    const mistral = providerConfig('mistral');
+    const deepseek = providerConfig('deepseek');
+    const panel = await V.runIndependentPanel(
+      session.packet, responsible, mistral, deepseek,
+      mockTransport(session, 'mistral', providerCalls, reviewId, generation, scenario),
+      mockTransport(session, 'deepseek', providerCalls, reviewId, generation, scenario)
+    );
+    const panelValidation = V.validatePanel(panel, session.packet);
+    if (!panelValidation.valid) throw new Error('Technical panel failed contract validation: ' + panelValidation.errors.join('; '));
+    W.transition(session.workflow, W.EVENTS.RUN_TECHNICAL_REVIEW, {
+      session_id: session.workflow.session_id,
+      review_id: reviewId,
+      packet_sha512: session.packet.packet_sha512,
+      panel_sha512: panel.panel_sha512
+    });
+    session.scenario = scenario;
+    session.reviewId = reviewId;
+    session.providerCalls = providerCalls;
+    session.panel = panel;
+    session.disposition = null;
+    session.narrative = null;
+    session.annex = null;
+    record(session, 'VER-1–VER-4 panel executed with two isolated mocked providers; status ' + panel.status + '.', W.EVENTS.RUN_TECHNICAL_REVIEW);
+    return panel;
+  } finally {
+    session.busy = false;
+  }
 }
 
 function commitHumanDisposition(session, spec) {
-  if (!session.panel) throw new Error('Run the three technical review seats first');
-  W.assertEventAllowed(session.workflow, W.EVENTS.COMMIT_HUMAN_DISPOSITION);
-  if (!spec || typeof spec.adjudicator !== 'string' || !spec.adjudicator.trim() ||
-      typeof spec.reason !== 'string' || !spec.reason.trim()) {
-    throw new TypeError('A human adjudicator identity and substantive reason are required');
+  beginOperation(session);
+  try {
+    if (!session.panel) throw new Error('Run the three technical review seats first');
+    W.assertEventAllowed(session.workflow, W.EVENTS.COMMIT_HUMAN_DISPOSITION);
+    if (!spec || typeof spec.adjudicator !== 'string' || !spec.adjudicator.trim() ||
+        typeof spec.reason !== 'string' || !spec.reason.trim()) {
+      throw new TypeError('A human adjudicator identity and substantive reason are required');
+    }
+    if (session.workflow.current.review_id !== session.reviewId ||
+        session.workflow.current.panel_sha512 !== session.panel.panel_sha512 ||
+        session.workflow.current.packet_sha512 !== session.packet.packet_sha512) {
+      throw new Error('Human disposition does not match the active workflow review');
+    }
+    const current = session.store.current(session.candidate.candidate_id);
+    const disposition = session.store.commit(session.candidate.candidate_id, {
+      candidate_id: session.candidate.candidate_id,
+      packet: session.packet,
+      panel: session.panel,
+      disposition: spec.disposition,
+      adjudicator: spec.adjudicator.trim(),
+      human: true,
+      reason: spec.reason.trim(),
+      workflow_generation: session.workflow.generation,
+      workflow_session_id: session.workflow.session_id,
+      review_id: session.reviewId,
+      resolution_evidence_ids: spec.disposition === 'RESOLVED_IN_CONTEXT'
+        ? [session.packet.evidence[0].evidence_id]
+        : []
+    }, current ? current.revision : 0);
+    W.transition(session.workflow, W.EVENTS.COMMIT_HUMAN_DISPOSITION, {
+      generation: session.workflow.generation,
+      review_id: session.reviewId,
+      panel_sha512: session.panel.panel_sha512,
+      disposition_sha512: disposition.disposition_sha512
+    });
+    session.disposition = disposition;
+    session.narrative = null;
+    session.annex = null;
+    record(session, 'VER-5 separate human disposition committed at revision ' + session.disposition.revision + '; evidence and history retained.', W.EVENTS.COMMIT_HUMAN_DISPOSITION);
+    return session.disposition;
+  } finally {
+    session.busy = false;
   }
-  const current = session.store.current(session.candidate.candidate_id);
-  session.disposition = session.store.commit(session.candidate.candidate_id, {
-    candidate_id: session.candidate.candidate_id,
-    packet: session.packet,
-    panel: session.panel,
-    disposition: spec.disposition,
-    adjudicator: spec.adjudicator.trim(),
-    human: true,
-    reason: spec.reason.trim(),
-    resolution_evidence_ids: spec.disposition === 'RESOLVED_IN_CONTEXT'
-      ? [session.packet.evidence[0].evidence_id]
-      : []
-  }, current ? current.revision : 0);
-  session.narrative = null;
-  session.annex = null;
-  W.transition(session.workflow, W.EVENTS.COMMIT_HUMAN_DISPOSITION);
-  record(session, 'VER-5 separate human disposition committed at revision ' + session.disposition.revision + '; evidence and history retained.');
-  return session.disposition;
 }
 
 function approveNarrativeAndPrepareAnnex(session, approver) {
-  if (!session.disposition) throw new Error('Commit a separate human disposition first');
-  W.assertEventAllowed(session.workflow, W.EVENTS.PREPARE_ANNEX);
-  if (typeof approver !== 'string' || !approver.trim()) {
-    throw new TypeError('A separate narrative approver identity is required');
-  }
-  const quote = session.packet.evidence[0].anchor.quote;
-  session.narrative = V.buildNarrativeProvenance({
-    disposition: session.disposition,
-    packet: session.packet,
-    statements: [{
-      text: quote,
-      source_ids: [session.packet.evidence[0].evidence_id]
-    }],
-    authorized_excerpts: {
-      [session.packet.evidence[0].evidence_id]: quote
-    },
-    human_approval: {
-      approved: true,
-      adjudicator: approver.trim(),
-      disposition_sha512: session.disposition.disposition_sha512,
-      disposition_revision: session.disposition.revision
+  beginOperation(session);
+  try {
+    if (!session.disposition) throw new Error('Commit a separate human disposition first');
+    W.assertEventAllowed(session.workflow, W.EVENTS.PREPARE_ANNEX);
+    if (typeof approver !== 'string' || !approver.trim()) {
+      throw new TypeError('A separate narrative approver identity is required');
     }
-  });
-  session.annex = V.buildVerificationAnnex({
-    packet: session.packet,
-    panel: session.panel,
-    disposition: session.disposition,
-    disposition_store: session.store,
-    narrative: session.narrative
-  });
-  W.transition(session.workflow, W.EVENTS.PREPARE_ANNEX);
-  record(session, 'VER-6–VER-7 grounded narrative approved and unsealed annex prepared; production report and seal unchanged.');
-  return { narrative: session.narrative, annex: session.annex };
+    const quote = session.packet.evidence[0].anchor.quote;
+    const narrative = V.buildNarrativeProvenance({
+      disposition: session.disposition,
+      packet: session.packet,
+      statements: [{
+        text: quote,
+        source_ids: [session.packet.evidence[0].evidence_id]
+      }],
+      authorized_excerpts: {
+        [session.packet.evidence[0].evidence_id]: quote
+      },
+      human_approval: {
+        approved: true,
+        adjudicator: approver.trim(),
+        disposition_sha512: session.disposition.disposition_sha512,
+        disposition_revision: session.disposition.revision
+      }
+    });
+    const annex = V.buildVerificationAnnex({
+      packet: session.packet,
+      panel: session.panel,
+      disposition: session.disposition,
+      disposition_store: session.store,
+      narrative
+    });
+    W.transition(session.workflow, W.EVENTS.PREPARE_ANNEX, {
+      generation: session.workflow.generation,
+      review_id: session.reviewId,
+      disposition_sha512: session.disposition.disposition_sha512,
+      narrative_sha512: narrative.narrative_sha512,
+      annex_sha512: annex.annex_sha512
+    });
+    session.narrative = narrative;
+    session.annex = annex;
+    record(session, 'VER-6–VER-7 grounded narrative approved and unsealed annex prepared; production report and seal unchanged.', W.EVENTS.PREPARE_ANNEX);
+    return { narrative, annex };
+  } finally {
+    session.busy = false;
+  }
 }
 
 function getWorkflowAudit(session) {
@@ -244,6 +340,7 @@ function exportSession(session) {
     cross_border_observation: session.legal,
     immutable_packet: session.packet,
     technical_panel: session.panel,
+    current_disposition: session.disposition,
     disposition_history: session.store.history(session.candidate.candidate_id),
     narrative: session.narrative,
     annex: session.annex,
