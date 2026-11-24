@@ -207,3 +207,15 @@ Rollback is revert-based: revert the branch changes or remove `development/nine-
 8. Separate approval for any merge, deployment or branch deletion.
 
 Until those gates are complete, this is a completed **default-off development build**, not a completed production certification.
+
+## 13. Axiom-inspired workflow contract increment — 25 November 2026
+
+This later increment applies design-by-contract and explicit legal state transitions to the synthetic Test Lab. It was informed by the supplied Axiom manual, but it does **not** install Axiom, generate or execute C++, invoke mCRL2, or claim Axiom formal verification. The implementation is native browser-safe JavaScript and remains development-only.
+
+`development/nine-brain-console/workflow-contract.js` defines the ordered states `INITIALIZED`, `ORCHESTRATION_COMPLETE`, `TECHNICAL_REVIEW_COMPLETE`, `HUMAN_DISPOSITION_COMMITTED` and `ANNEX_PREPARED`. Illegal or unknown events are rejected before execution; rejected transitions leave state and history unchanged. Successful operations append ordered transition records. This prevents the Test Lab from skipping orchestration, technical review or separate human adjudication, while leaving the underlying development records and production system unchanged.
+
+The visible and exportable audit contains nine deterministic checks covering canonical B1–B9 ordering, the development boundary, state preconditions, three-seat integrity, reviewer isolation, advisory authority, fail-closed confirmation, production immutability and ordered audit history. A passing audit means that these software workflow contracts held for the synthetic session. It does not establish forensic truth, factual authenticity, reviewer correctness, legal validity, admissibility or formal verification.
+
+Coverage is provided by `tests/nine-brain-workflow-contract.test.mjs` plus additions to the console and browser suites. Adversarial cases include skipped stages, illegal history insertion, non-contiguous sequencing, production-flag tampering, changed brain ordering, B9 authority tampering, duplicate reviewer origins, cross-reviewer context and sealed-annex misrepresentation. `tests/run-development.js` registers the new suite separately; the audited production registry remains unchanged.
+
+Final local gates for this increment passed: `npm run check`; all 65 production/baseline suites; all five development suites with **650 assertions** (200 + 264 + 95 + 50 + 41); and all **27 Playwright tests** across Chromium, Firefox and WebKit. The browser matrix exercised all-pass export, every failure scenario, workflow inspection, offline/no-egress controls and responsive layouts. Desktop and 375-pixel rendered inspections found no document overflow, clipped status labels or broken claim-boundary wording. The generated browser bundle rebuilt reproducibly, `git diff --check` passed, and the protected production analysis, report, sealing, Worker-rule, contract and production-registry files listed above remained unchanged.
