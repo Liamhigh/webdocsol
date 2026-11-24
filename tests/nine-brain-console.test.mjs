@@ -84,6 +84,8 @@ try {
   ok(exported.mocked_external_reviewers && exported.live_provider_calls === 0 && !exported.production_findings_modified && !exported.production_report_modified && !exported.production_seal_modified, 'Export records mocked reviewers, zero live calls and no production mutations');
   ok(exported.technical_panel.panel_sha512 === panel.panel_sha512 && exported.disposition_history.length === 1 && exported.annex.committed_disposition_revision === 1, 'Export includes the actual run, panel, disposition and annex records');
   ok(exported.events.length === 5 && exported.events.every((event, index) => event.sequence === index + 1), 'Export retains a complete ordered execution audit');
+  ok(exported.workflow_contract.status === 'PASS' && exported.workflow_contract.checks.length === 9 && exported.workflow_contract.current_state === 'ANNEX_PREPARED', 'Export includes a passing nine-check workflow contract in the annex-prepared state');
+  ok(exported.workflow_contract.axiom_formal_verification_executed === false && exported.workflow_contract.forensic_truth_verified === false, 'Workflow audit cannot be mistaken for Axiom formal verification or forensic truth verification');
   ok(!JSON.stringify(exported).includes('secret-value') && !JSON.stringify(exported).includes('LLM_API_KEY'), 'Export contains no provider credentials');
   ok(networkAttempts === 0, 'Complete all-pass flow and export remain entirely local');
 } finally {

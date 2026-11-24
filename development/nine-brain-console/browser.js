@@ -51,9 +51,15 @@ function currentRecord() {
   if (selected === 'annex') return session.annex;
   if (selected === 'packet') return session.packet;
   if (selected === 'legal') return session.legal;
+  if (selected === 'workflow') return Lab.getWorkflowAudit(session);
   return Lab.exportSession(session);
 }
 function refreshInspector() {
+  const workflow = Lab.getWorkflowAudit(session);
+  $('workflowResult').innerHTML =
+    '<div class="outcome ' + (workflow.status === 'PASS' ? 'pass' : 'fail') + '"><strong>Workflow contract: ' + workflow.status + '</strong>' +
+    '<p class="help">State: ' + escapeHtml(workflow.current_state) + '. Nine deterministic contract checks. This audits software workflow only; Axiom formal verification has not been executed.</p></div>' +
+    '<ul class="tests">' + workflow.checks.map((item) => '<li><span>' + escapeHtml(item.check_id) + '</span>' + badge(item.status) + '</li>').join('') + '</ul>';
   $('recordJson').textContent = pretty(currentRecord());
   $('auditTrail').innerHTML = session.events.map((event) =>
     '<li><span>' + String(event.sequence).padStart(2, '0') + '</span><div>' + escapeHtml(event.event) + '</div></li>'
@@ -213,6 +219,7 @@ $('copySummary').addEventListener('click', async () => {
     'Human disposition: ' + (disposition ? disposition.disposition + ' revision ' + disposition.revision : 'not committed'),
     'Narrative: ' + (session.narrative ? session.narrative.status : 'not generated'),
     'Annex: ' + (session.annex ? session.annex.sealing_status : 'not generated'),
+    'Workflow contract: ' + Lab.getWorkflowAudit(session).status + ' (software audit only; not Axiom formal verification)',
     'Live provider calls: 0',
     'Production findings/report/seal modified: false'
   ];

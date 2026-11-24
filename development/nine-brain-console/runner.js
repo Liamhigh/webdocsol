@@ -10,6 +10,7 @@ const O = require('../nine-brain/orchestration.js');
 const V = require('../nine-brain/verification.js');
 const Legal = require('../nine-brain/legal.js');
 const Allen = require('../nine-brain/allen-algebra.js');
+const W = require('./workflow-contract.js');
 const {
   makeBase, completeReviews, providerConfig, passingModelResponse
 } = require('../../tests/nine-brain-fixtures.js');
@@ -51,6 +52,7 @@ function createConsoleSession() {
   return {
     base, run, candidate, audit, packet, legal,
     store: new V.DispositionStore(),
+    workflow: W.createWorkflow(),
     panel: null,
     disposition: null,
     narrative: null,
@@ -66,6 +68,7 @@ function record(session, event) {
 }
 
 function runOrchestration(session) {
+  W.assertEventAllowed(session.workflow, W.EVENTS.RUN_ORCHESTRATION);
   const validation = O.validateDevelopmentRun(session.run);
   if (!validation.valid) throw new Error('Development run failed validation: ' + validation.errors.join('; '));
   const replay = O.buildDevelopmentRun({
@@ -75,6 +78,7 @@ function runOrchestration(session) {
   if (C.stableStringify(replay) !== C.stableStringify(session.run)) {
     throw new Error('Deterministic replay did not reproduce the development run');
   }
+  W.transition(session.workflow, W.EVENTS.RUN_ORCHESTRATION);
   record(session, 'NB-2–NB-10 two-pass run and deterministic replay completed; nine brain identities preserved.');
   return {
     run: session.run,
@@ -136,6 +140,7 @@ async function runTechnicalReview(session, scenario) {
   if (!Object.prototype.hasOwnProperty.call(SCENARIOS, scenario)) {
     throw new TypeError('Unknown review scenario');
   }
+  W.assertEventAllowed(session.workflow, W.EVENTS.RUN_TECHNICAL_REVIEW);
   session.scenario = scenario;
   session.providerCalls = [];
   const responsible = V.responsibleBrainReview(
@@ -150,12 +155,14 @@ async function runTechnicalReview(session, scenario) {
   session.disposition = null;
   session.narrative = null;
   session.annex = null;
+  W.transition(session.workflow, W.EVENTS.RUN_TECHNICAL_REVIEW);
   record(session, 'VER-1–VER-4 panel executed with two isolated mocked providers; status ' + session.panel.status + '.');
   return session.panel;
 }
 
 function commitHumanDisposition(session, spec) {
   if (!session.panel) throw new Error('Run the three technical review seats first');
+  W.assertEventAllowed(session.workflow, W.EVENTS.COMMIT_HUMAN_DISPOSITION);
   if (!spec || typeof spec.adjudicator !== 'string' || !spec.adjudicator.trim() ||
       typeof spec.reason !== 'string' || !spec.reason.trim()) {
     throw new TypeError('A human adjudicator identity and substantive reason are required');
@@ -175,12 +182,14 @@ function commitHumanDisposition(session, spec) {
   }, current ? current.revision : 0);
   session.narrative = null;
   session.annex = null;
+  W.transition(session.workflow, W.EVENTS.COMMIT_HUMAN_DISPOSITION);
   record(session, 'VER-5 separate human disposition committed at revision ' + session.disposition.revision + '; evidence and history retained.');
   return session.disposition;
 }
 
 function approveNarrativeAndPrepareAnnex(session, approver) {
   if (!session.disposition) throw new Error('Commit a separate human disposition first');
+  W.assertEventAllowed(session.workflow, W.EVENTS.PREPARE_ANNEX);
   if (typeof approver !== 'string' || !approver.trim()) {
     throw new TypeError('A separate narrative approver identity is required');
   }
@@ -209,8 +218,13 @@ function approveNarrativeAndPrepareAnnex(session, approver) {
     disposition_store: session.store,
     narrative: session.narrative
   });
+  W.transition(session.workflow, W.EVENTS.PREPARE_ANNEX);
   record(session, 'VER-6–VER-7 grounded narrative approved and unsealed annex prepared; production report and seal unchanged.');
   return { narrative: session.narrative, annex: session.annex };
+}
+
+function getWorkflowAudit(session) {
+  return W.auditSession(session);
 }
 
 function exportSession(session) {
@@ -224,6 +238,7 @@ function exportSession(session) {
     production_findings_modified: false,
     production_report_modified: false,
     production_seal_modified: false,
+    workflow_contract: getWorkflowAudit(session),
     scenario: session.scenario,
     run: session.run,
     cross_border_observation: session.legal,
@@ -244,5 +259,6 @@ module.exports = {
   runTechnicalReview,
   commitHumanDisposition,
   approveNarrativeAndPrepareAnnex,
+  getWorkflowAudit,
   exportSession
 };
