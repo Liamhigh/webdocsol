@@ -144,7 +144,8 @@ ok(r0.proposition_b_actor === 'unattributed', 'unlocated second party is unattri
     anchor: { who: [{ name: 'Other Holdings' }, { name: 'Example Holdings' }], where: [1, 2],
       quote: ['Example Holdings states that the agreement was signed.', 'Other Holdings states that the agreement was not signed.'] }
   }] }, 'synthetic.pdf', 'a'.repeat(128), 2, {}).contradictions[0];
-  ok(pair.proposition_a_actor === 'Example Holdings' && pair.proposition_b_actor === 'Other Holdings', 'actors follow their quoted statements rather than roster order');
+  ok(pair.proposition_a_actor === 'unattributed' && pair.proposition_b_actor === 'Other Holdings',
+    'a finding summary does not inherit the first quote actor; the quoted second proposition retains its speaker');
   const indirect = buildFindingsJson({ pageTexts: [
     'Example Holdings was copied. The agreement was not signed.',
     'The respondent stated that the agreement was signed.',
@@ -173,6 +174,10 @@ ok(r0.proposition_b_actor === 'unattributed', 'unlocated second party is unattri
     findings: [f('Example Holdings', 'Example Holdings (Pty) Ltd states that the agreement was signed.', 1)]
   }, 'synthetic.pdf', 'a'.repeat(128), 1, {}).contradictions[0];
   ok(company.proposition_a_actor === 'Example Holdings', 'a company suffix does not make its named speaker unattributed');
+  const separateSpeaker = buildFindingsJson({ pageTexts: [
+    'Example Holdings says paid, but the ledger states payment was not made.'
+  ], findings: [f('Example Holdings', 'payment was not made', 1)] }, 'synthetic.pdf', 'a'.repeat(128), 1, {}).contradictions[0];
+  ok(separateSpeaker.proposition_a_actor === 'unattributed', 'a speaker in another clause is not attributed to an anchored quote');
 }
 ok(r0.temporal_analysis === '7 Mar 2025, 13 Mar 2025', 'anchor dates flow into temporal_analysis');
 ok(Array.isArray(r0.document_cited_provisions) && r0.document_cited_provisions[0] === 'clause 4.5.2',

@@ -639,6 +639,7 @@ function voDetectDocuments(textBlocks) {
     // title ("prior verum omnis report page excluded" was printed as a
     // document's name, evidence-bundle-7-docs).
     if (/^prior verum omnis report page excluded\./.test(head)) { out[d].title = 'Verum Omnis analysis (set aside from scanning)'; continue; }
+    if (/^prior analysis page excluded\./.test(head)) { out[d].title = 'Prior analysis (set aside from scanning)'; continue; }
     if (/^analysis template boilerplate excluded\./.test(head)) { out[d].title = 'Verum Omnis analysis template (set aside from scanning)'; continue; }
     // Drop the page marker and any seal furniture before reading a title. No
     // lookbehind here: Safari before 16.4 throws on it and the whole scan dies.
@@ -4209,7 +4210,7 @@ var DETECTORS = {
     // OCR did not capture" over the 35 report pages it had excluded on
     // purpose (the AI review dropped that finding; since 5 October 2026 the
     // AI drops nothing, so the engine must not raise it).
-    var setAside = textBlocks.map(function (t) { return /^\s*(?:prior verum omnis report page excluded\.|analysis template boilerplate excluded\.)/.test(String(t || '')); });
+    var setAside = textBlocks.map(function (t) { return /^\s*(?:prior verum omnis report page excluded\.|prior analysis page excluded\.|analysis template boilerplate excluded\.)/.test(String(t || '')); });
     var lensAll = textBlocks.map(function(t){ return voContentMass(t); });
     var lens = lensAll.filter(function (x, k) { return !setAside[k]; });
     var pageOf = []; for (var pk = 0; pk < lensAll.length; pk++) if (!setAside[pk]) pageOf.push(pk);
@@ -5303,6 +5304,7 @@ var DETECTORS = {
             !/\?/.test(raw.slice(start + opening + 1, m.index + m[0].length + closing));
           if ((/\?/.test(sentence) && ((denial && !citedDeclaration) || (!denial && !quoted))) ||
               (denial && /\b(?:if|unless)\s*$/i.test(before)) ||
+              (denial && /^\s*(?:if|unless)\b/i.test(before)) ||
               (denial && /^\s+(?:if|unless)\b/i.test(after)) ||
               (denial && /^\s*["“']?[^"”']+["”']?\s+means\b/i.test(sentence)) ||
               (exclude && exclude.page === i + 1 && exclude.sentenceStart === start)) {
@@ -5323,7 +5325,7 @@ var DETECTORS = {
       var source = String(blocks[hit.page - 1] || '');
       var at = hit.quoteStart;
       var pre = source.slice(Math.max(0, at - 100), at);
-      var ref = /\b([a-z][a-z0-9'-]*)\s+(mou|agreement|contract|memorandum|lease|instrument)\s+(?:clause|paragraph)\s+(\d+(?:\.\d+)*)\s*\(\s*page\s+(\d+)\s*\)\s*["“]?$/i.exec(pre);
+      var ref = /\b([a-z][a-z0-9'-]*(?:\s+[a-z][a-z0-9'-]*){0,5})\s+(mou|agreement|contract|memorandum|lease|instrument)\s+(?:clause|paragraph)\s+(\d+(?:\.\d+)*)\s*\(\s*page\s+(\d+)\s*\)\s*["“]?$/i.exec(pre);
       if (!ref || /^(?:the|this|that|an?|their|our|your|its)$/i.test(ref[1])) return hit;
       var candidates = [];
       var clause = new RegExp('\\b(?:clause|paragraph)\\s+' + ref[3].replace(/\./g, '\\.') + '(?!\\d|\\.\\d)', 'i');
@@ -5333,7 +5335,9 @@ var DETECTORS = {
       var segments = voDetectDocuments(blocks);
       var kind = ref[2].toLowerCase();
       var kindPattern = kind === 'mou' || kind === 'memorandum' ? '(?:mou|memorandum)' : kind;
-      var titlePattern = ref[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+' + kindPattern;
+      var titlePattern = ref[1].split(/\s+/).map(function (word) {
+        return word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }).join('\\s+') + '\\s+' + kindPattern;
       for (var i = 0; i < blocks.length; i++) {
         if (i + 1 === hit.page) continue;
         var target = String(blocks[i] || '');

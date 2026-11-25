@@ -82,6 +82,11 @@ const genericAnalysis = [report.join(' '), 'The parties refer to VO-0123456789AB
 E.voExcludeSecondaryReportPages(genericAnalysis);
 check(!E.voSecondaryPages([{ start: 1, end: 2, title: 'Evidence' }], genericAnalysis).includes(2),
   'a generic analysis exclusion does not make an adjacent primary page secondary');
+const denseRecord = Array.from({ length: 60 }, (_, i) => 'documentword' + String.fromCharCode(97 + Math.floor(i / 26), 97 + i % 26)).join(' ');
+const formatPages = [denseRecord, denseRecord, report.join(' '), denseRecord, denseRecord];
+E.voExcludeSecondaryReportPages(formatPages);
+check(!E.DETECTORS.D17_DETECT_FORMAT_ANOMALY(formatPages).some(f => /Page 3\b|Pages 3\b/.test(f.location)),
+  'an excluded generic analysis page is not reported as unreadable evidence');
 check(E.voExcludeSecondaryReportPages(['Letter: Please find the report enclosed. ' + ledgerPage.join(' ')])?.pages[0] === 1,
   'a letter heading does not conceal independent analysis content');
 const blocks = [record + ' ' + footer];
@@ -124,6 +129,8 @@ check(goodwill(['Goodwill has no value but goodwill is recognised as an asset.',
   'an earlier same-sentence candidate does not hide a later recognition');
 check(goodwill(['Goodwill has no value if the clause applies.', 'Goodwill is recognised as a valuable asset.']).length === 0,
   'a conditional denial is not an unconditional denial horn');
+check(goodwill(['If the agreement applies, goodwill has no value.', 'Goodwill is recognised as a valuable asset.']).length === 0,
+  'a denial following a sentence-initial condition is not unconditional');
 const defined = goodwill([
   'Example Holdings: "Goodwill" means the goodwill of the business, a quantifiable asset.',
   'Example Holdings stated that goodwill has no value.'
@@ -148,6 +155,11 @@ const differentNamedInstrument = goodwill([namedNarrativePage, definitionPage, o
   .filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(differentNamedInstrument.length === 1 && /narrative/i.test(differentNamedInstrument[0].evidence),
   'another named instrument with identical wording does not replace the cited source');
+const multiwordInstrument = goodwill([narrativePage.replace('MOU Clause', 'Atlas Holdings MOU Clause'), definitionPage,
+  originalClause.replace('MOU clause', 'Holdings MOU clause')])
+  .filter(f => /defined as a quantifiable asset/.test(f.evidence));
+check(multiwordInstrument.length === 1 && /narrative/i.test(multiwordInstrument[0].evidence),
+  'a partial instrument name cannot replace a longer cited title');
 const resolvedPair = goodwill([namedNarrativePage, definitionPage, 'Unrelated record page.', namedOriginalClause]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(resolvedPair.length === 1 && /Page 4/.test(resolvedPair[0].location) && !/Court Cases/.test(resolvedPair[0].evidence), 'narrative quote resolves to matching original instrument and excludes table row');
 const shiftedInstrument = goodwill([namedNarrativePage, definitionPage, 'Unrelated record page.', 'Other evidence.', 'More evidence.', namedOriginalClause]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
