@@ -7,7 +7,8 @@ const suites = [
   'nine-brain-contracts.test.mjs',
   'nine-brain-orchestration-research-legal.test.mjs',
   'nine-brain-verification-adjudication.test.mjs',
-  'nine-brain-console.test.mjs'
+  'nine-brain-console.test.mjs',
+  'nine-brain-workflow-contract.test.mjs'
 ];
 let failed = 0;
 for (const suite of suites) {

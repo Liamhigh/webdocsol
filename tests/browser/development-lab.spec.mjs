@@ -79,6 +79,9 @@ test('complete all-pass workflow, real JSON export, inspector, summary and reset
   await expect(page.locator('#runReview')).toBeDisabled();
   await expect(page.locator('#commitDisposition')).toBeDisabled();
   await expect(page.locator('#prepareAnnex')).toBeDisabled();
+  await expect(page.locator('#workflowResult')).toContainText('Workflow contract: PASS');
+  await expect(page.locator('#workflowResult .tests li')).toHaveCount(9);
+  await expect(page.locator('#workflowResult')).toContainText('INITIALIZED');
 
   await runBrains(page);
   await expect(page.locator('#orchestrationResult')).toContainText('PARTIAL_EXPLICIT_GAPS');
@@ -104,6 +107,10 @@ test('complete all-pass workflow, real JSON export, inspector, summary and reset
   await expect(page.locator('#recordJson')).toContainText('CROSS_BORDER_REVIEW_REQUIRED');
   await page.locator('#recordSelect').selectOption('annex');
   await expect(page.locator('#recordJson')).toContainText('"sealed": false');
+  await page.locator('#recordSelect').selectOption('workflow');
+  await expect(page.locator('#recordJson')).toContainText('"status": "PASS"');
+  await expect(page.locator('#recordJson')).toContainText('"current_state": "ANNEX_PREPARED"');
+  await expect(page.locator('#recordJson')).toContainText('"axiom_formal_verification_executed": false');
   await page.locator('details').nth(1).locator('summary').click();
   await expect(page.locator('#auditTrail li')).toHaveCount(5);
 
@@ -118,12 +125,36 @@ test('complete all-pass workflow, real JSON export, inspector, summary and reset
   expect(exported.mocked_external_reviewers).toBe(true);
   expect(exported.live_provider_calls).toBe(0);
   expect(exported.technical_panel.status).toBe('TECHNICALLY_SUPPORTED_PENDING_HUMAN_ADJUDICATION');
+  expect(exported.current_disposition.disposition).toBe('CONFIRMED');
   expect(exported.disposition_history).toHaveLength(1);
   expect(exported.annex.sealed).toBe(false);
   expect(exported.production_findings_modified).toBe(false);
   expect(exported.production_report_modified).toBe(false);
   expect(exported.production_seal_modified).toBe(false);
+  expect(exported.workflow_contract.status).toBe('PASS');
+  expect(exported.workflow_contract.checks).toHaveLength(9);
+  expect(exported.workflow_contract.transition_history).toHaveLength(4);
   expect(await page.evaluate(() => window.__revokedObjectUrls.length)).toBe(revocationsBeforeDownload);
+
+  await page.locator('#runBrains').click();
+  await expect(page.locator('#workflowResult')).toContainText('ORCHESTRATION_COMPLETE');
+  await expect(page.locator('#runReview')).toBeEnabled();
+  await expect(page.locator('#commitDisposition')).toBeDisabled();
+  await expect(page.locator('#prepareAnnex')).toBeDisabled();
+  await runReview(page, 'dissent');
+  await expect(page.locator('#workflowResult')).toContainText('Workflow contract: PASS');
+  await expect(page.locator('#workflowResult')).toContainText('TECHNICAL_REVIEW_COMPLETE');
+  const rerunDownloadEvent = page.waitForEvent('download');
+  await page.locator('#downloadResult').click();
+  const rerunExport = await readDownloadedJson(await rerunDownloadEvent);
+  expect(rerunExport.workflow_contract.workflow_generation).toBe(2);
+  expect(rerunExport.workflow_contract.transition_history).toHaveLength(6);
+  expect(rerunExport.workflow_contract.status).toBe('PASS');
+  expect(rerunExport.technical_panel.status).toBe('FAIL');
+  expect(rerunExport.current_disposition).toBeNull();
+  expect(rerunExport.disposition_history).toHaveLength(1);
+  expect(rerunExport.narrative).toBeNull();
+  expect(rerunExport.annex).toBeNull();
 
   await page.locator('#copySummary').click();
   await expect(page.locator('#message')).toContainText(/Plain-language test summary copied|Verum Omnis development test/);
@@ -155,6 +186,8 @@ for (const scenario of ['dissent', 'unavailable', 'malformed']) {
     const expected = scenario === 'dissent' ? 'FAIL' : scenario === 'unavailable' ? 'UNAVAILABLE' : 'MALFORMED';
     await expect(page.locator('#reviewResult .seat').nth(2)).toContainText(expected);
     await expect(page.locator('#reviewResult')).toContainText('Fail-closed reasons');
+    await expect(page.locator('#workflowResult')).toContainText('Workflow contract: PASS');
+    await expect(page.locator('#workflowResult')).toContainText('TECHNICAL_REVIEW_COMPLETE');
 
     await page.locator('#disposition').selectOption('CONFIRMED');
     await page.locator('#commitDisposition').click();
@@ -173,6 +206,9 @@ for (const scenario of ['dissent', 'unavailable', 'malformed']) {
     expect(exported.narrative).toBeNull();
     expect(exported.annex).toBeNull();
     expect(exported.live_provider_calls).toBe(0);
+    expect(exported.workflow_contract.status).toBe('PASS');
+    expect(exported.workflow_contract.transition_history).toHaveLength(2);
+    expect(exported.workflow_contract.axiom_formal_verification_executed).toBe(false);
     await expectViewportLayout(page, 375);
     expect(errors).toEqual([]);
     expect(badResponses).toEqual([]);

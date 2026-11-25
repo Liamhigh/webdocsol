@@ -533,6 +533,9 @@ class DispositionStore {
       revision: revision + 1, previous_disposition_sha512: current ? current.disposition_sha512 : null,
       packet_id: spec.packet.packet_id, packet_sha512: spec.packet.packet_sha512,
       panel_id: spec.panel.panel_id, panel_sha512: spec.panel.panel_sha512,
+      workflow_generation: Number.isSafeInteger(spec.workflow_generation) ? spec.workflow_generation : null,
+      workflow_session_id: text(spec.workflow_session_id) ? spec.workflow_session_id : null,
+      review_id: text(spec.review_id) ? spec.review_id : null,
       disposition: spec.disposition, adjudicator: spec.adjudicator, human: true, reason: spec.reason,
       resolution_evidence_ids: spec.resolution_evidence_ids.slice(),
       evidence_retained: true, audit_history_retained: true, development_only: true

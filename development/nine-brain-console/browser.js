@@ -20,10 +20,19 @@ function escapeHtml(value) {
 }
 function badge(value) {
   const status = String(value || 'NOT RUN');
-  const style = /PASS|CERTIFIED|CONFIRMED|HUMAN_ADJUDICATED/.test(status) ? 'pass'
+  return '<span class="status status-' + badgeStyle(status) + '">' + escapeHtml(status) + '</span>';
+}
+function badgeStyle(status) {
+  return /PASS|CERTIFIED|CONFIRMED|HUMAN_ADJUDICATED/.test(status) ? 'pass'
     : /FAIL|REJECT|MALFORMED|UNAVAILABLE/.test(status) ? 'fail'
       : /PENDING|UNRESOLVED|INSUFFICIENT|NOT_/.test(status) ? 'pending' : 'neutral';
-  return '<span class="status status-' + style + '">' + escapeHtml(status) + '</span>';
+}
+function badgeNode(value) {
+  const status = String(value || 'NOT RUN');
+  const element = document.createElement('span');
+  element.className = 'status status-' + badgeStyle(status);
+  element.textContent = status;
+  return element;
 }
 function showMessage(text, kind) {
   const box = $('message');
@@ -46,14 +55,36 @@ function currentRecord() {
   const selected = $('recordSelect').value;
   if (selected === 'run') return session.run;
   if (selected === 'panel') return session.panel;
-  if (selected === 'disposition') return session.store.current(session.candidate.candidate_id);
+  if (selected === 'disposition') return session.disposition;
   if (selected === 'narrative') return session.narrative;
   if (selected === 'annex') return session.annex;
   if (selected === 'packet') return session.packet;
   if (selected === 'legal') return session.legal;
+  if (selected === 'workflow') return Lab.getWorkflowAudit(session);
   return Lab.exportSession(session);
 }
 function refreshInspector() {
+  const workflow = Lab.getWorkflowAudit(session);
+  const workflowResult = $('workflowResult');
+  workflowResult.replaceChildren();
+  const outcome = document.createElement('div');
+  outcome.className = 'outcome ' + (workflow.status === 'PASS' ? 'pass' : 'fail');
+  const heading = document.createElement('strong');
+  heading.textContent = 'Workflow contract: ' + workflow.status;
+  const detail = document.createElement('p');
+  detail.className = 'help';
+  detail.textContent = 'State: ' + workflow.current_state + '. Nine deterministic contract checks. This audits software workflow only; Axiom formal verification has not been executed.';
+  outcome.append(heading, detail);
+  const checks = document.createElement('ul');
+  checks.className = 'tests';
+  workflow.checks.forEach((item) => {
+    const row = document.createElement('li');
+    const label = document.createElement('span');
+    label.textContent = item.check_id;
+    row.append(label, badgeNode(item.status));
+    checks.appendChild(row);
+  });
+  workflowResult.append(outcome, checks);
   $('recordJson').textContent = pretty(currentRecord());
   $('auditTrail').innerHTML = session.events.map((event) =>
     '<li><span>' + String(event.sequence).padStart(2, '0') + '</span><div>' + escapeHtml(event.event) + '</div></li>'
@@ -101,11 +132,35 @@ function renderPanel(panel) {
 }
 function renderDisposition(disposition) {
   const history = session.store.history(session.candidate.candidate_id);
-  $('dispositionResult').innerHTML =
-    '<div class="outcome ' + (disposition.disposition === 'CONFIRMED' ? 'pass' : '') + '"><strong>Revision ' + disposition.revision + ': ' + escapeHtml(disposition.disposition) + '</strong><p>' + escapeHtml(disposition.reason) + '</p><p class="help">Adjudicator: ' + escapeHtml(disposition.adjudicator) + '. Evidence retained: ' + disposition.evidence_retained + '. Audit history retained: ' + disposition.audit_history_retained + '.</p></div>' +
-    '<h3>Immutable disposition history</h3><ol class="record-history">' + history.map((item) =>
-      '<li>' + badge(item.disposition) + ' <span class="mono">revision ' + item.revision + ' · ' + escapeHtml(item.disposition_sha512.slice(0, 20)) + '…</span></li>'
-    ).join('') + '</ol>';
+  const container = $('dispositionResult');
+  container.replaceChildren();
+  const outcome = document.createElement('div');
+  outcome.className = 'outcome' + (disposition.disposition === 'CONFIRMED' ? ' pass' : '');
+  const title = document.createElement('strong');
+  title.textContent = 'Revision ' + disposition.revision + ': ' + disposition.disposition;
+  const reason = document.createElement('p');
+  reason.textContent = disposition.reason;
+  const provenance = document.createElement('p');
+  provenance.className = 'help';
+  provenance.textContent = 'Adjudicator: ' + disposition.adjudicator + '. Evidence retained: ' +
+    disposition.evidence_retained + '. Audit history retained: ' + disposition.audit_history_retained + '.';
+  outcome.append(title, reason, provenance);
+
+  const heading = document.createElement('h3');
+  heading.textContent = 'Immutable disposition history';
+  const list = document.createElement('ol');
+  list.className = 'record-history';
+  history.forEach((item) => {
+    const row = document.createElement('li');
+    const identity = document.createElement('span');
+    identity.className = 'mono';
+    identity.textContent = 'revision ' + item.revision + ' · generation ' +
+      (item.workflow_generation === null ? 'legacy' : item.workflow_generation) + ' · ' +
+      (item.workflow_session_id || 'legacy') + ' · ' + item.disposition_sha512.slice(0, 20) + '…';
+    row.append(badgeNode(item.disposition), document.createTextNode(' '), identity);
+    list.appendChild(row);
+  });
+  container.append(outcome, heading, list);
   $('prepareAnnex').disabled = false;
   $('annexResult').innerHTML = '<div class="empty">Ready for separate narrative approval and unsealed annex preparation.</div>';
   refreshInspector();
@@ -123,10 +178,6 @@ function renderAnnex(result) {
   refreshInspector();
 }
 function resetDownstream() {
-  session.panel = null;
-  session.disposition = null;
-  session.narrative = null;
-  session.annex = null;
   $('commitDisposition').disabled = true;
   $('prepareAnnex').disabled = true;
   $('dispositionResult').innerHTML = '<div class="empty">Run the technical panel first.</div>';
@@ -136,9 +187,8 @@ function resetDownstream() {
 $('runBrains').addEventListener('click', () => {
   clearMessage();
   try {
-    resetDownstream();
-    $('reviewResult').innerHTML = '<div class="empty">Run the technical review next.</div>';
     const result = Lab.runOrchestration(session);
+    resetDownstream();
     orchestrationRan = true;
     renderOrchestration(result);
     showMessage('B1–B9 completed as a development run. All nine identities are present and the deterministic replay matched.', 'success');
@@ -150,7 +200,6 @@ $('runReview').addEventListener('click', async () => {
   $('runReview').disabled = true;
   $('runReview').textContent = 'Running…';
   try {
-    resetDownstream();
     const panel = await Lab.runTechnicalReview(session, $('scenario').value);
     renderPanel(panel);
     showMessage(panel.status === 'TECHNICALLY_SUPPORTED_PENDING_HUMAN_ADJUDICATION'
@@ -204,7 +253,7 @@ $('downloadResult').addEventListener('click', () => {
 });
 $('copySummary').addEventListener('click', async () => {
   clearMessage();
-  const disposition = session.store.current(session.candidate.candidate_id);
+  const disposition = session.disposition;
   const lines = [
     'Verum Omnis development test — synthetic fixtures only',
     'Nine-brain run: ' + (orchestrationRan ? 'completed; deterministic replay matched' : 'not run'),
@@ -213,6 +262,7 @@ $('copySummary').addEventListener('click', async () => {
     'Human disposition: ' + (disposition ? disposition.disposition + ' revision ' + disposition.revision : 'not committed'),
     'Narrative: ' + (session.narrative ? session.narrative.status : 'not generated'),
     'Annex: ' + (session.annex ? session.annex.sealing_status : 'not generated'),
+    'Workflow contract: ' + Lab.getWorkflowAudit(session).status + ' (software audit only; not Axiom formal verification)',
     'Live provider calls: 0',
     'Production findings/report/seal modified: false'
   ];
