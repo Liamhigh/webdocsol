@@ -238,8 +238,17 @@ const datedClass = [{ type: 'CT01', severity: 3, anchor: {
 } }];
 E.voApplyFindingClasses(datedClass, [datedStatement]);
 check(datedClass[0].findingClass !== 'CONTRADICTION', 'dotted dates do not split anchored statements');
+const missingSourceClass = [{ type: 'CT01', severity: 3, anchor: {
+  where: [1, 2], quote: ['The invoice was paid', 'the invoice was not paid']
+} }];
+E.voApplyFindingClasses(missingSourceClass);
+check(missingSourceClass[0].findingClass !== 'CONTRADICTION', 'missing page text cannot establish distinct statements');
 check(!E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(['The invoice was paid to Dr. Example and the invoice was not paid.']).length,
   'an abbreviated title does not split a single statement into contradiction horns');
+check(!E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(['The invoice was paid to Example Ltd. and the invoice was not paid.']).length,
+  'an abbreviated company suffix does not split a single statement into contradiction horns');
+check(E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(['The invoice was paid to Example Ltd. The invoice was not paid.']).length > 0,
+  'a company suffix at the end of a sentence does not hide a distinct statement');
 check(E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(['The invoice was paid on 12.03.2025. The invoice was not paid.']).length > 0,
   'a full stop after a dotted date still separates genuine statements');
 check(!transactionPair(['What does "no sales were made" mean when the deal happened?']).length, 'transaction denial cannot be a rhetorical question');
@@ -368,6 +377,15 @@ E.voCalibrateFindingSeverity(interiorSeverity, [
   'AFFIDAVIT. Page 1 of 3', 'Example Holdings says payment was not made. Page 2 of 3', 'End. Page 3 of 3'
 ]);
 check(interiorSeverity[0].severity === 5, 'statements on interior pages of separately identified instruments remain eligible for critical');
+const incidentalNarrative = [{
+  type: 'CT01', severity: 5, findingClass: 'CONTRADICTION',
+  anchor: { where: [1, 2], quote: ['Example Holdings says payment was made', 'Example Holdings says payment was not made'] }
+}];
+E.voCalibrateFindingSeverity(incidentalNarrative, [
+  'AGREEMENT. The advisory letter is attached. Example Holdings says payment was made.',
+  'AFFIDAVIT. The advisory letter is attached. Example Holdings says payment was not made.'
+]);
+check(incidentalNarrative[0].severity === 5, 'incidental references to an advisory letter do not turn instruments into narrative');
 const wrappedSeverity = [{
   type: 'CT01', severity: 5, findingClass: 'CONTRADICTION',
   anchor: { where: [1, 2], quote: ['Example Holdings says payment was made', 'Example Holdings says payment was not made'] }

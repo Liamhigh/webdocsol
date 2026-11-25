@@ -915,7 +915,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `digital-forensics.test.mjs` | 19 | PDF structure and digital-forensics measurements |
 | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: pinned assets, 256-MiB Wasm cap, pre-hash input limit and sentinel, input/output/object limits, worker opt-in, observations-only envelope and findings parity |
 | `narrate-excerpt.test.mjs` | 16 | AI excerpt building |
-| `findings-json.test.mjs` | 40 | JSON contract v1.9.0 (`cross_document_observations` w/ byte-faithful `quote_verbatim`); 1.8.0 `candidate_law`; 1.7.0: `display_name`, `brain`, `triple_verification`, `ai_review_note`; an AI candidate carries `INSUFFICIENT`, never a band |
+| `findings-json.test.mjs` | 43 | JSON contract v1.9.0 (`cross_document_observations` w/ byte-faithful `quote_verbatim`); 1.8.0 `candidate_law`; 1.7.0: `display_name`, `brain`, `triple_verification`, `ai_review_note`; an AI candidate carries `INSUFFICIENT`, never a band |
 | `franchise-lease.test.mjs` | 17 | D38/D39 (CT44/CT45) |
 | `wrangler-config.test.mjs` | 36 | **Deploy config drift**: the top level and `[env.production]` carry the same KV, AI, vars, observability, assets block (`./`, `ASSETS`, `/api/*` Worker-first) and trainer cron (weekly, Monday 03:00 UTC, `AUTO_CURATE = "on"`); exactly two zone routes, `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, in both environments, zone named, no `custom_domain` |
 | `role-capacity.test.mjs` | 13 | D40/CT46, no hardcoded parties |

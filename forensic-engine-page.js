@@ -741,7 +741,10 @@ function voIsSentenceBoundary(text, at) {
   if (ch === '?' || ch === '!') return true;
   if (ch !== '.') return false;
   if (/\d/.test(text.charAt(at - 1)) && /\d/.test(text.charAt(at + 1))) return false;
-  return !/(?:^|[^a-z])(?:mr|mrs|ms|dr|prof|adv|att|cl|para|no|pp)\.$/i.test(text.slice(Math.max(0, at - 5), at + 1));
+  var prefix = text.slice(Math.max(0, at - 5), at + 1);
+  if (/(?:^|[^a-z])(?:ltd|pty)\.$/i.test(prefix) &&
+      /^\s+(?:and|but|or|in|on|under|for|by|with)\b/i.test(text.slice(at + 1))) return false;
+  return !/(?:^|[^a-z])(?:mr|mrs|ms|dr|prof|adv|att|cl|para|no|pp)\.$/i.test(prefix);
 }
 function voStatementAt(text, at) {
   var s = String(text || ''), start = at, end = at;
@@ -8046,7 +8049,7 @@ function voApplyFindingClasses(findings, blocks) {
     var cls = voClassifyFinding(f);
     if (!cls) continue;
     if (cls === 'CONTRADICTION') {
-      if (blocks && !voDistinctAnchoredStatements(f, blocks)) {
+      if (!Array.isArray(blocks) || !voDistinctAnchoredStatements(f, blocks)) {
         f.findingClass = 'TENSION';
         f.classNote = 'Two distinct statements could not be established from the quoted anchors; this is recorded for review, not as a contradiction.';
         continue;
@@ -8092,8 +8095,9 @@ function voCalibrateFindingSeverity(findings, blocks) {
     var narrativeOnly = pages.length > 0;
     for (var p = 0; p < pages.length; p++) {
       var page = String(blocks[pages[p] - 1] || '');
-      if (!/^\s*(?:(?:commentary|analysis|opinion|argument|narrative|advisory letter)\b|this (?:article|report|analysis)\b|in (?:my|our) (?:view|opinion)\b|(?:i|we) (?:submit|contend|argue)\b)/i.test(page) &&
-          !/\b(?:advisory\s+letter|in\s+(?:my|our)\s+(?:view|opinion)|(?:i|we)\s+(?:submit|contend|argue))\b/i.test(page.slice(0, 250))) narrativeOnly = false;
+      if (/^\s*(?:agreement|contract|affidavit|invoice|deed|memorandum|lease|instrument)\b/i.test(voInstrumentHeading(page)) ||
+          (!/^\s*(?:(?:commentary|analysis|opinion|argument|narrative|advisory letter)\b|this (?:article|report|analysis)\b|in (?:my|our) (?:view|opinion)\b|(?:i|we) (?:submit|contend|argue)\b)/i.test(page) &&
+          !/\b(?:advisory\s+letter|in\s+(?:my|our)\s+(?:view|opinion)|(?:i|we)\s+(?:submit|contend|argue))\b/i.test(page.slice(0, 250)))) narrativeOnly = false;
     }
     if (narrativeOnly || /\bnarrative (?:quotation|provenance|source)\b/i.test(String(f.evidence || ''))) {
       f.severity = Math.min(f.severity, 3);
