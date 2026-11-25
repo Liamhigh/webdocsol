@@ -8992,6 +8992,12 @@ function voProcedureClauseAt(text, at) {
   var s = String(text || ''), start = at, end = at;
   while (start > 0 && !/[.!?;]/.test(s.charAt(start - 1))) start--;
   while (end < s.length && !/[.!?;]/.test(s.charAt(end))) end++;
+  var boundary = /,\s*(?:but|whereas|while)\s+/gi, match;
+  boundary.lastIndex = start;
+  while ((match = boundary.exec(s)) && match.index < end) {
+    if (match.index < at) start = match.index + match[0].length;
+    else { end = match.index; break; }
+  }
   return s.slice(start, end + 1).toLowerCase();
 }
 var DETECTORS = {
@@ -13554,16 +13560,17 @@ var DETECTORS = {
       var source = String(blocks[hit.page - 1] || '');
       var at = hit.quoteStart;
       var pre = source.slice(Math.max(0, at - 100), at);
-      var ref = /\b(?:(mou|agreement|contract|memorandum|lease|instrument)\s+)?(?:clause|paragraph)\s+(\d+(?:\.\d+)*)\s*\(\s*page\s+(\d+)\s*\)\s*["“]?$/i.exec(pre);
-      if (!ref) return hit;
+      var ref = /\b([a-z][a-z0-9'-]*)\s+(mou|agreement|contract|memorandum|lease|instrument)\s+(?:clause|paragraph)\s+(\d+(?:\.\d+)*)\s*\(\s*page\s+(\d+)\s*\)\s*["“]?$/i.exec(pre);
+      if (!ref || /^(?:the|this|that|an?|their|our|your|its)$/i.test(ref[1])) return hit;
       var candidates = [];
-      var clause = new RegExp('\\b(?:clause|paragraph)\\s+' + ref[2].replace(/\./g, '\\.') + '(?!\\d|\\.\\d)', 'i');
+      var clause = new RegExp('\\b(?:clause|paragraph)\\s+' + ref[3].replace(/\./g, '\\.') + '(?!\\d|\\.\\d)', 'i');
       var quotedClause = new RegExp(hit.quote.split(/\s+/).map(function (word) {
         return word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
       }).join('\\s+'), 'i');
       var segments = voDetectDocuments(blocks);
-      var kind = ref[1] && ref[1].toLowerCase();
+      var kind = ref[2].toLowerCase();
       var kindPattern = kind === 'mou' || kind === 'memorandum' ? '(?:mou|memorandum)' : kind;
+      var titlePattern = ref[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+' + kindPattern;
       function instrumentHeading(text) {
         return String(text || '').replace(/^\s*Verum\s+Omnis\s+Sealed\s+Evidence\s+Source\s*:\s*[^|]{1,200}?\.pdf\s+Page\s+\d+\s+of\s+\d+\s*/i, '');
       }
@@ -13571,19 +13578,20 @@ var DETECTORS = {
         if (i + 1 === hit.page) continue;
         var target = String(blocks[i] || '');
         var found = quotedClause.exec(target);
-        if (!found || !clause.test(target)) continue;
-        var sourceHeading = kindPattern
-          ? new RegExp('^\\s*' + kindPattern + '\\b', 'i').test(instrumentHeading(target))
-          : /^\s*(?:agreement|contract|memorandum|mou|lease|instrument)\b/i.test(instrumentHeading(target));
+        if (!found) continue;
+        var clauseMarker = /\b(?:clause|paragraph)\s+\d+(?:\.\d+)*/gi, clauseMatch, nearestClause = '';
+        while ((clauseMatch = clauseMarker.exec(target)) !== null && clauseMatch.index < found.index) nearestClause = clauseMatch[0];
+        if (!clause.test(nearestClause)) continue;
+        var sourceHeading = new RegExp('^\\s*' + titlePattern + '\\b', 'i').test(instrumentHeading(target));
         var statedPage = /\b(?:page|pg)\s*(\d+)\s*(?:of|\/)\s*\d+\b/gi, pageMatch, sourceIdentified = false;
         while (sourceHeading && (pageMatch = statedPage.exec(target)) !== null) {
-          if (Number(pageMatch[1]) === Number(ref[3])) { sourceIdentified = true; break; }
+          if (Number(pageMatch[1]) === Number(ref[4])) { sourceIdentified = true; break; }
         }
         for (var d = 0; !sourceIdentified && ref[1] && d < segments.length; d++) {
           var seg = segments[d];
-          if (i + 1 < seg.start || i + 1 > seg.end || i + 2 - seg.start !== Number(ref[3])) continue;
+          if (i + 1 < seg.start || i + 1 > seg.end || i + 2 - seg.start !== Number(ref[4])) continue;
           var title = instrumentHeading(blocks[seg.start - 1]);
-          sourceIdentified = new RegExp('^\\s*' + kindPattern + '\\b', 'i').test(title);
+          sourceIdentified = new RegExp('^\\s*' + titlePattern + '\\b', 'i').test(title);
         }
         if (!sourceIdentified) continue;
         candidates.push({ page: i + 1, quote: found[0].replace(/\s+/g, ' ').trim(), sentenceStart: found.index, narrative: false });
@@ -14585,7 +14593,7 @@ function voIsStandaloneAnalysisCover(text) {
   return false;
 }
 function voIsFrameworkAnalysisPage(text) {
-  var t = String(text || '');
+  var t = String(text || '').replace(/^\s*(?:letter|email|correspondence)\s*:\s*please\s+(?:review|read|send)\b[^.!?]*(?:[.!?]|$)/i, '');
   if (/^\s*FORENSIC\s+REPORT\s*:/i.test(t) &&
       /\bVerum\s+Omnis\s+Constitution\b|\bConstitution\s*:\s*Verum\s+Omnis\b/i.test(t) &&
       /\b(?:executive\s+summary|evidence\s+manifest|contradiction\s+ledger|triple\s+verification)\b/i.test(t)) return true;
@@ -16317,7 +16325,7 @@ function voCalibrateFindingSeverity(findings, blocks) {
     for (var p = 0; p < pages.length; p++) {
       var page = String(blocks[pages[p] - 1] || '');
       if (!/^\s*(?:(?:commentary|analysis|opinion|argument|narrative|advisory letter)\b|this (?:article|report|analysis)\b|in (?:my|our) (?:view|opinion)\b|(?:i|we) (?:submit|contend|argue)\b)/i.test(page) &&
-          !/\badvisory\s+letter\b/i.test(page.slice(0, 250))) narrativeOnly = false;
+          !/\b(?:advisory\s+letter|in\s+(?:my|our)\s+(?:view|opinion)|(?:i|we)\s+(?:submit|contend|argue))\b/i.test(page.slice(0, 250))) narrativeOnly = false;
     }
     if (narrativeOnly || /\bnarrative (?:quotation|provenance|source)\b/i.test(String(f.evidence || ''))) {
       f.severity = Math.min(f.severity, 3);

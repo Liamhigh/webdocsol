@@ -72,9 +72,12 @@ check(JSON.stringify(fourExcluded && fourExcluded.pages) === '[2,3,4,5]', 'four 
 const primary = [
   'Letter: Please review the FORENSIC REPORT: EXAMPLE MATTER. The chain of custody is discussed in the attached report.',
   'Letter: Please read the FORENSIC REPORT: EXAMPLE MATTER, prepared under Verum Omnis Constitution v5.2.7. Its executive summary is attached.',
-  'Primary evidence: the document refers to B4 linguistics and a financial brain without producing an analysis.'
+  'Primary evidence: the document refers to B4 linguistics and a financial brain without producing an analysis.',
+  'Letter: Please send the CONTRADICTION LEDGER (B1 - Contradiction Brain) and the brain outputs identified in the evidence.'
 ];
 check(E.voExcludeSecondaryReportPages(primary) === null, 'report references and isolated analytical terms do not exclude evidence');
+check(E.voExcludeSecondaryReportPages(['Letter: Please find the report enclosed. ' + ledgerPage.join(' ')])?.pages[0] === 1,
+  'a letter heading does not conceal independent analysis content');
 const blocks = [record + ' ' + footer];
 E.voStripSealFurnitureBlocks(blocks);
 const ledger = E.voExtractConductLedger(blocks);
@@ -129,12 +132,22 @@ const curlyPair = goodwill([curlyNarrative, definitionPage]).filter(f => /define
 check(curlyPair.length === 1 && /narrative/i.test(curlyPair[0].evidence) && !/Court Cases/.test(curlyPair[0].evidence),
   'curly-quoted narrative clauses retain provenance and exclude following text');
 const originalClause = 'MOU clause 7. The Operator shall not be entitled to goodwill under any circumstances, at the end of the Contract Period. Page 4 of 4';
-const resolvedPair = goodwill([narrativePage, definitionPage, 'Unrelated record page.', originalClause]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
+const genericInstrument = goodwill([narrativePage, definitionPage, originalClause])
+  .filter(f => /defined as a quantifiable asset/.test(f.evidence));
+check(genericInstrument.length === 1 && /narrative/i.test(genericInstrument[0].evidence),
+  'a generic instrument kind and matching clause do not establish source identity');
+const namedNarrativePage = narrativePage.replace('MOU Clause', 'Atlas MOU Clause');
+const namedOriginalClause = originalClause.replace('MOU clause', 'Atlas MOU clause');
+const differentNamedInstrument = goodwill([namedNarrativePage, definitionPage, originalClause.replace('MOU clause', 'Beacon MOU clause')])
+  .filter(f => /defined as a quantifiable asset/.test(f.evidence));
+check(differentNamedInstrument.length === 1 && /narrative/i.test(differentNamedInstrument[0].evidence),
+  'another named instrument with identical wording does not replace the cited source');
+const resolvedPair = goodwill([namedNarrativePage, definitionPage, 'Unrelated record page.', namedOriginalClause]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(resolvedPair.length === 1 && /Page 4/.test(resolvedPair[0].location) && !/Court Cases/.test(resolvedPair[0].evidence), 'narrative quote resolves to matching original instrument and excludes table row');
-const shiftedInstrument = goodwill([narrativePage, definitionPage, 'Unrelated record page.', 'Other evidence.', 'More evidence.', originalClause]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
+const shiftedInstrument = goodwill([namedNarrativePage, definitionPage, 'Unrelated record page.', 'Other evidence.', 'More evidence.', namedOriginalClause]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(shiftedInstrument.length === 1 && /Page 6/.test(shiftedInstrument[0].location) && !/narrative/i.test(shiftedInstrument[0].evidence), 'an instrument with its own page numbering resolves on its actual bundle page');
-const spacedInstrument = originalClause.replace('shall not be entitled', 'shall  not be entitled');
-const whitespacePair = goodwill([narrativePage, definitionPage, 'Unrelated record page.', spacedInstrument]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
+const spacedInstrument = namedOriginalClause.replace('shall not be entitled', 'shall  not be entitled');
+const whitespacePair = goodwill([namedNarrativePage, definitionPage, 'Unrelated record page.', spacedInstrument]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(whitespacePair.length === 1 && /Page 4/.test(whitespacePair[0].location) && !/narrative/i.test(whitespacePair[0].evidence), 'source resolution tolerates extraction whitespace differences');
 const pairResult = await scan([[narrativePage], [definitionPage]]);
 const pairFinding = pairResult.findings.find(f => f.type === 'CT45' && /defined as a quantifiable asset/.test(f.evidence));
@@ -158,27 +171,32 @@ check(flattenedFinding && flattenedFinding.anchor.quote.some(q => /shall not be 
   flattenedFinding.anchor.quote.every(q => !/Court Cases|Investment Margin/i.test(q)),
   'the full scan retains the flattened instrument quote without capturing an adjacent table or definition');
 const continuationPair = goodwill([
-  flattenedLetter + ' Page 1 of 3',
+  flattenedLetter.replace('MOU Clause', 'Atlas MOU Clause') + ' Page 1 of 3',
   flattenedDefinition + ' Page 2 of 3',
   'Other correspondence. Page 3 of 3',
-  'Verum Omnis Sealed Evidence Source: example.pdf Page 1 of 4 MOU. Terms agreed between the parties.',
+  'Verum Omnis Sealed Evidence Source: example.pdf Page 1 of 4 Atlas MOU. Terms agreed between the parties.',
   'Further terms. Page 2 of 4',
   'More terms. Page 3 of 4',
   'Clause 7. The Operator shall not be entitled to goodwill under any circumstances. Page 4 of 4'
 ]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(continuationPair.length === 1 && /Page 7/.test(continuationPair[0].location) && !/narrative/i.test(continuationPair[0].evidence),
   'a uniquely identified instrument continuation resolves to its original clause page');
-const wrongInstrument = goodwill([narrativePage, definitionPage,
+const wrongInstrument = goodwill([namedNarrativePage, definitionPage,
   'AGREEMENT clause 7. The Operator shall not be entitled to goodwill under any circumstances.'])
   .filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(wrongInstrument.length === 1 && /narrative/i.test(wrongInstrument[0].evidence) && /Page 1/.test(wrongInstrument[0].location),
   'matching wording in a differently identified instrument does not replace the cited source');
-const wrongInstrumentPage = goodwill([narrativePage, definitionPage,
-  'MOU clause 7. The Operator shall not be entitled to goodwill under any circumstances. Page 2 of 4'])
+const wrongInstrumentPage = goodwill([namedNarrativePage, definitionPage,
+  'Atlas MOU clause 7. The Operator shall not be entitled to goodwill under any circumstances. Page 2 of 4'])
   .filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(wrongInstrumentPage.length === 1 && /narrative/i.test(wrongInstrumentPage[0].evidence),
   'a same-kind instrument with a different stated page does not replace the cited source');
-const ambiguousInstrument = goodwill([narrativePage, definitionPage, originalClause, originalClause])
+const wrongInstrumentClause = goodwill([namedNarrativePage, definitionPage,
+  'Atlas MOU clause 7. Other terms apply. Clause 8. The Operator shall not be entitled to goodwill under any circumstances. Page 4 of 4'])
+  .filter(f => /defined as a quantifiable asset/.test(f.evidence));
+check(wrongInstrumentClause.length === 1 && /narrative/i.test(wrongInstrumentClause[0].evidence),
+  'the quoted wording under a different clause does not replace the cited source');
+const ambiguousInstrument = goodwill([namedNarrativePage, definitionPage, namedOriginalClause, namedOriginalClause])
   .filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(ambiguousInstrument.length === 1 && /narrative/i.test(ambiguousInstrument[0].evidence),
   'ambiguous matching instruments remain identified as narrative provenance');
@@ -266,6 +284,12 @@ const differentClause = await scan([
 ]);
 check(differentClause.findings.some(f => f.type === 'CT23' && f.severity >= 3),
   'an unrelated observation in a separate clause does not suppress CT23');
+const contrastingClause = await scan([
+  ['The document was not witnessed, but Example Holdings did not countersign the agreement and demanded payment.'],
+  ['Other primary correspondence follows on a separate page.']
+]);
+check(contrastingClause.findings.some(f => f.type === 'CT23' && f.severity >= 3),
+  'an unrelated observation in a contrasting clause does not suppress CT23');
 const mixedUnsigned = await scan([
   ['Example Holdings never countersigned the first agreement and demanded payment.'],
   ['Other Holdings did not countersign the second agreement and demanded payment.'],
@@ -317,6 +341,15 @@ E.voCalibrateFindingSeverity(headedNarrative, [
   'CASE OVERVIEW. ADVISORY LETTER. Example Holdings says payment was not made.'
 ]);
 check(headedNarrative[0].severity <= 3, 'narrative-only pages remain capped when a heading precedes the advisory marker');
+const headedOpinion = [{
+  type: 'CT01', severity: 5, findingClass: 'CONTRADICTION',
+  anchor: { where: [1, 2], quote: ['Example Holdings says payment was made', 'Example Holdings says payment was not made'] }
+}];
+E.voCalibrateFindingSeverity(headedOpinion, [
+  'CASE OVERVIEW. In our view, Example Holdings says payment was made.',
+  'CASE OVERVIEW. In our opinion, Example Holdings says payment was not made.'
+]);
+check(headedOpinion[0].severity <= 3, 'narrative cues following a heading retain the narrative severity cap');
 const narrativeSeverity = await scan([
   ['This article explains that there were no sales.'],
   ['In our view, the deal happened.']
