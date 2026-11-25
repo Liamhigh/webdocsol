@@ -52,10 +52,10 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**65 registered production/baseline suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, and one Phase 4 active-graph suite. `run-all.js` is that registry — **a production/baseline test file that is not listed in it does not run**. Separately gated development contracts are registered in `run-development.js`; `npm test` runs both registries. What each production/baseline suite guards, and the real evidence bundle behind it, is in
+**66 registered production/baseline suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, one Phase 4 active-graph suite, and one PR #327 review suite. `run-all.js` is that registry — **a production/baseline test file that is not listed in it does not run**. Separately gated development contracts are registered in `run-development.js`; `npm test` runs both registries. What each production/baseline suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
 
-The three development suites are:
+The five development suites are:
 
 | File | Checks | Exercises |
 |---|---|---|
@@ -101,7 +101,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 30 | `legal-analysis` | `legal-analysis.test.js` | 216 | `forensic-report.js`: parties and jurisdiction, legal subjects, **PD16 language** (no scores, no bands, no hedging), the §15.2 narrative gate, sentence splitting, page anchors, SEALED FINDINGS integrity |
 | 31 | `greensky-regression` | `greensky-regression.test.js` | 98 | The Greensky run of 7 August 2026, and its re-run of 3 October 2026 (§9; `ENGINE.md` §12.15) |
 | 32 | `allfuels-regression` | `allfuels-regression.test.js` | 59 | The AllFuels run of 14 August 2026 |
-| 33 | `annexure-eb` | `annexure-eb-regression.test.mjs` | 497 | The annexure EB run and every run after it up to the Public Protector submission (`ENGINE.md` §12.10–§12.14) |
+| 33 | `annexure-eb` | `annexure-eb-regression.test.mjs` | 502 | The annexure EB run and every run after it up to the Public Protector submission (`ENGINE.md` §12.10–§12.14) |
 | 34 | `evidence-bundle-7` | `evidence-bundle-7-regression.test.mjs` | 47 | The evidence-bundle-7-docs run of 5 October 2026, the founder's rulings and the review round (`ENGINE.md` §12.16) |
 | 35 | `combine-06-april` | `combine-06-april-regression.test.mjs` | 30 | The Combine 06 April 2026 run and its review (`ENGINE.md` §12.17) |
 | 56 | `analysis-contracts` | `analysis-contracts.test.mjs` | — | Deterministic envelopes, UTF-16/structural/OCR/pair anchors, stable ordering/IDs, disabled flags, old/new readers and fresh-process/time-zone replay |
@@ -114,6 +114,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 63 | `legal-citations-za` | `legal-citations-za.test.mjs` | 98 | ZA pack fixtures: neutral/reported/docket/SAFLII forms and boundaries, multiword supra, pinpoints, captions, negatives and neutrality, verbatim round-trips, byte-identical replay |
 | 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 | Phase 3 synthetic redaction corpus: exact UTF-16 ranges, protected verbatim evidence quotes, preserved references, and a fail-closed production-module flag |
 | 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
+| 66 | `pr327-review` | `pr327-review.test.mjs` | 40 | Synthetic review regressions for report exclusion, signed-rule masking, WF7, CT52, D02C, admissions and overlapping scans |
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete production/baseline registry.
 
@@ -124,6 +125,8 @@ The separately gated development registry is `run-development.js`:
 | `nine-brain-contracts` | `nine-brain-contracts.test.mjs` | 200 | NB-0 source register and unresolved concordance; NB-1 shared records and bundle evidence resolution; UTF-16/structural/media anchors; semantic run/output/engagement/promotion/audit/guardian reconciliation; malformed-input safety; read-only preview identity/tamper/replay and immutability checks |
 | `nine-brain-orchestration-research-legal` | `nine-brain-orchestration-research-legal.test.mjs` | 264 | Exact promoted-candidate audit/guardian lineage; unresolved evidence preservation; B8 media-only views/anchors; unexecuted-analysis coverage; malformed Allen witnesses; unknown-object/equal-amount/formal-domain research guards; consistent oracle universes; B7 recomputed identity, coverage and conflicts reconciliation |
 | `nine-brain-verification-adjudication` | `nine-brain-verification-adjudication.test.mjs` | 94 | Bounded quotes/privacy; semantic tamper tests with recomputed identities; trusted review provenance; distinct provider origins/transports; explicit source/context review; process-local shared compare-and-swap dispositions; revision-bound narrative approval and authoritative annex freshness |
+| `nine-brain-console` | `nine-brain-console.test.mjs` | 50 | Nine-brain console runner, browser UI, and reset controls |
+| `nine-brain-workflow-contract` | `nine-brain-workflow-contract.test.mjs` | 61 | Nine-brain workflow contract and output invariants |
 
 **Writing a regression test:** use the **exact text from the real document** that caused the
 failure, not a paraphrase. Every guard in `ENGINE.md` §4 has one, and that is why they have

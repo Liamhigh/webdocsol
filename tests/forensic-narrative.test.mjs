@@ -27,10 +27,13 @@ ok(/\/images\/logo-full\.png/.test(builder) && /doc\.embedPng\(logoBytes\)/.test
   'the title page embeds the existing Verum Omnis PNG logo');
 ok(/FORENSIC NARRATIVE/.test(builder) && /PART '\s*\+ roman/.test(builder) &&
   /From '\s*\+ first\.startDate/.test(builder), 'the title page and chronological PART headings are rendered');
-ok(/Source document: '\s*\+ String\(sourceDoc\.name/.test(builder) &&
+ok(/Report Reference: '\s*\+ String\(identity\.reference/.test(builder) &&
+  /Source document: '\s*\+ String\(sourceDoc\.name/.test(builder) &&
   /Source SHA-512: '\s*\+ truncHash\(sourceDoc\.sha512, 24, 12\)/.test(builder) &&
   /Advisory — the findings and their anchors are the evidence; the verdict belongs to the court\./.test(builder),
-  'the cover carries the source anchor, preparation, and advisory lines');
+  'the cover carries its report reference, source anchor, preparation, and advisory lines');
+ok(/bodyPage\.drawText\('VERUM OMNIS · FORENSIC NARRATIVE'/.test(builder),
+  'every narrative body page identifies itself as Verum Omnis analysis when resubmitted');
 ok(/PROVENANCE & CERTIFICATION/.test(builder) && /human-v1; section: forensic_narrative/.test(builder) &&
   /droppedSentences/.test(builder) && /Findings JSON SHA-512:/.test(builder) &&
   /Verify free at https:\/\/verumglobal\.foundation\/verify\.html/.test(builder),
@@ -212,6 +215,15 @@ ok(deterministicBuild.bytes instanceof Uint8Array && deterministicBuild.gateStat
   deterministicText.includes('Prepared by Verum Omnis — deterministic forensic chronology over the sealed record') &&
   deterministicText.includes('no AI-generated prose is printed'),
   'the Greensky failure shape now renders a standalone PDF with honest deterministic provenance');
+const caseReferenceStart = drawnText.length;
+await globalThis.VerumReport.buildForensicNarrative({
+  images: { logo: new Uint8Array([1]) },
+  documents: [{ name: 'record.pdf', pageCount: 3, sha512: 'd'.repeat(128), sealId: 'VO-SOURCE' }],
+  identity: { caseRefs: 'CASE-EXAMPLE' },
+  narrativeParts: fallbackParts
+});
+ok(drawnText.slice(caseReferenceStart).join(' ').includes('Report Reference: CASE-EXAMPLE'),
+  'production-shaped case reference is rendered on the narrative cover');
 const failedEngineBuild = await globalThis.VerumReport.buildForensicNarrative({
   narrativeParts: [{ index: 1, count: 1, provenance: 'engine', text: 'This proves the respondent committed fraud.' }]
 });
@@ -224,9 +236,11 @@ const failedBuild = await globalThis.VerumReport.buildForensicNarrative({
 ok(failedBuild.bytes === null && failedBuild.passingParts === 0,
   'a gate-failed part creates no PDF bytes');
 const pageCountBeforeBuilt = pages.length;
+const narrativeHeadersBeforeBuilt = drawnText.filter((text) => text === 'VERUM OMNIS · FORENSIC NARRATIVE').length;
 const built = await globalThis.VerumReport.buildForensicNarrative({
   images: { logo: new Uint8Array([1]) },
   documents: [{ name: 'record.pdf', pageCount: 12, sha512: 'a'.repeat(128), sealId: 'VO-SOURCE' }],
+  identity: { reference: 'VO-NARRATIVE-TEST' },
   generatedAt: '2026-10-17T06:25:14.548Z',
   technicalSealId: 'VO-TECHNICAL',
   technicalSha512: 'b'.repeat(128),
@@ -245,6 +259,11 @@ ok(built.bytes instanceof Uint8Array && built.passingParts === 1 && built.totalP
 ok(built.gateStats.droppedSentences === 1 && built.gateStats.workerDroppedSentences === 2,
   'the renderer returns render-time and worker gate statistics');
 const renderedText = drawnText.join(' ').replace(/\s+/g, ' ');
+ok(renderedText.includes('Report Reference: VO-NARRATIVE-TEST'),
+  'the rendered narrative cover prints its own report reference');
+const narrativeHeadersAdded = drawnText.filter((text) => text === 'VERUM OMNIS · FORENSIC NARRATIVE').length - narrativeHeadersBeforeBuilt;
+ok(narrativeHeadersAdded === pages.length - pageCountBeforeBuilt - 1,
+  'every rendered narrative page after the cover carries the analytical running header');
 ok(pages.length - pageCountBeforeBuilt === 3 && drawnText.includes('FORENSIC NARRATIVE') &&
   drawnText.some((text) => text.indexOf('PART I — WHAT THE DOCUMENTS SHOWED') === 0) &&
   drawnText.some((text) => text.indexOf('The document records a payment') === 0) &&

@@ -5,8 +5,8 @@
 > engine is correct** and the other surface is the one to fix. Every hard lesson from real
 > evidence bundles is encoded here and locked by tests.
 
-**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.2-web'`
-**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.2-web'`, report builder v1.3.1.
+**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.3-web'`
+**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.3-web'`, report builder v1.3.1.
 **Findings JSON:** v1.11.0, built by `buildFindingsJson` in `seal-document.html`, not by either
 script (1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
 the well-formedness gate and serial-stage trace; 1.9.0 added `cross_document_observations` with a
@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   65 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite); many exist solely to stop the regressions in §4 and §12.
+   66 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -880,7 +880,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**65 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite; recount assertions after any test change).
+**66 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -900,7 +900,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `ocr-rescue.test.mjs` | 44 | OCR fallback path and the **deadline helper** — no unbounded `recognize()` promise |
 | `constitution-lock.test.mjs` | 41 | Version chain, seal IDs, taxonomy renumber lock, **governance-first cover** |
 | `allfuels-regression.test.js` | 59 | The AllFuels bundle end to end, D37 clause-numbering (§4.17), oath context (§4.18) |
-| `annexure-eb-regression.test.mjs` | 497 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run, the evidence-bundle-4-docs run and the Public Protector submission run** (§12.10–§12.14): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans; and the Public Protector submission (§18, §18i, §18j): a status word inside its own negation (CT14), two government-suffix domains never a lookalike (CT37), a category plural is not one instrument and quotes are whole words (CT23), titles/addresses/headings are not parties, nesting-aware quotes with WHEN and LAW from the quote's own sentence, a party's submission citing other Verum seals read as secondary up to the first page that opens a new record, the dated-after-analysis note, attribution only to declared parties named whole or by initial and surname, the unsigned-agreement contract shape, the template's own Nine-Brain headers with a Finding line, and the technical report, court-ready narrative, Worker template, anchor certificate and verify.html read back, each confirmed defect of the verification pass pinned with the reviewer's reproduction |
+| `annexure-eb-regression.test.mjs` | 502 | **The annexure EB run, its re-run, the evidence-bundle-2-docs run, the evidence-bundle-4-docs run and the Public Protector submission run** (§12.10–§12.14): verbatim glyph extraction (R231.3, t/a, (Pty), slashes, `&`), every false CT01/CT09/CT20/CT23/CT33/CT08/CT18 finding silent beside a positive control, the OCR severity cap, footer-only pages, the honest review labels, the pre-flight and the OCR continue prompt; the embedded-report exclusion, CT44 party alignment, CT08 whole quoted terms, CT04 same-instrument link, no score/band in the template, one count, narrator provenance; the page-level closure lock; one-byte CMaps (a Chrome-printed PDF), font names with hyphens, line-end word boundaries, case numbers are not dates, the AI-compiled-summary note; sealed exhibits are never excluded, seal footers as document boundaries and as text (not CJK), CT02/CT18/CT37 precision, OCR-garbage parties, and the technical report and court-ready narrative rendered and read back: no AI candidate counted as a finding, exclusions disclosed, matched-by wording, the OCR block once; seal furniture stripped with boundaries cached, stamps are not dates, CT20 OCR variants and identity fields, CT08 quote pairs, CT44 object/side/document, CT01 pleadings, CT15/CT22 plausibility, secondary sources, finding dates from the quote's sentence, party stops, and the report read back: matrix category, dropped count, tamper-evidence wording, split counts, trimmed candidate law, rebuttals without orphans; and the Public Protector submission (§18, §18i, §18j): a status word inside its own negation (CT14), two government-suffix domains never a lookalike (CT37), a category plural is not one instrument and quotes are whole words (CT23), titles/addresses/headings are not parties, nesting-aware quotes with WHEN and LAW from the quote's own sentence, a party's submission citing other Verum seals read as secondary up to the first page that opens a new record, the dated-after-analysis note, attribution only to declared parties named whole or by initial and surname, the unsigned-agreement contract shape, the template's own Nine-Brain headers with a Finding line, and the technical report, court-ready narrative, Worker template, anchor certificate and verify.html read back, each confirmed defect of the verification pass pinned with the reviewer's reproduction |
 | `evidence-bundle-7-regression.test.mjs` | 47 | **The evidence-bundle-7-docs run** (§12.16), on a synthetic bundle of the same shape built from the bundle's own strings: the CIPC K-form and a bare "CIPC" cue (CT20), a reference to a document that records the custody (CT39), set-aside pages are not near-empty (CT54), a document ends at its stated last page, header words and possessives are not names, the count-only summary sentence, a Verum Omnis analysis's running title is secondary, the lookalike domain still fires end to end, and the technical report read back: template first, no explainer page, no "verified", severity or score words, the Thesis / Antithesis / Synthesis table, every finding under a brain; and §8, the review round: unnumbered runs keyed per run (D30, D04), a report page does not turn the evidence sealed with it into analysis, narrowed D11/D27 skips with positive controls, a clean report keeps sections 1-7, measured Finding lines, the AI-note table, the on-device summary |
 | `cross-doc-conflicts.test.mjs` | 41 | **Cross-document conflict detection** (§12.22, stage B; wording signed off): same previous owner transferring one vessel to two different people — type A (same date, both new owners named inline) and type B (different dates, chain-of-title gap), both sides quoted and paged; a same-party check (R. Louw ≈ Ritzema Louw) that avoids false conflicts; a legitimate A→B→C chain raises nothing; an analysis/secondary page can never raise one; a labelled-channel forbidden-words guard that filters engine prose only, leaving a verbatim quote (even one containing "valid title") intact; plus the shared negation gate and transfer-local date (§12.23) |
 | `scan11-findings-repair.test.mjs` | 24 | **The 368-page scan review** (§12.27): same-matter event pairs, authority versus ownership, genuine goodwill claim/counter-claim pairs, pre-expiry-sale and currency-boundary exclusions, contract-form and annexure context, complaint-summary independence, CT54 extraction limits without candidate offences, and OCR-date quarantine, each beside a positive control |
@@ -1470,7 +1470,8 @@ and what changed — every item pinned by `tests/annexure-eb-regression.test.mjs
    replaces, in place, every page carrying a Verum Omnis report masthead (`Report Reference:
    VO-`, or the brand with FORENSIC REPORT / SEALED DOCUMENT / the seal line) and every page
    carrying that report's own running title, closing one- or two-page gaps inside the run
-   (an OCR miss on the title) and never a wider one. The exclusion is disclosed in the
+   (an OCR miss on the title) and never a wider one. **Superseded by §12.29:** gaps without
+   an analysis signal are no longer excluded. The exclusion is disclosed in the
    extraction notes like template pages (§12.10 item 3, PD6). A Verum Omnis report is
    analysis, never evidence; sealing one with a forensic report says "nothing in this file
    was examined as evidence".
@@ -2832,6 +2833,36 @@ gates and deterministic fallback are unchanged. No gate threshold is loosened.
 blocks, concise token budget, anti-padding instruction and a compliant rewrite passing the same
 gate. A separate expansion control pins the retained record blocks and section token budget. Live
 acceptance remains a post-deployment check, not a unit-test claim.
+
+### 12.29 PR #327 review corrections — evidence boundaries
+
+Report exclusions require analysis-page signals; plaintext seal sequences, including a
+bundle-wide outer sequence, do not exclude pages. Unrecognised gaps remain eligible for
+scanning even if they may be report continuations; the exclusion note still names the
+pages set aside. Signed rules receive empty slots for excluded pages, retaining page
+numbers without matching placeholder text. WF7 and metadata suppression count seal
+signals only on remaining evidence pages; when none remain, WF7 says status is
+undetermined.
+
+Document boundaries are cached by the run's page array, not shared across concurrent
+scans. D07A restricts an authority-instrument search to the identified affidavit or,
+where boundaries are unavailable, a bounded nearby window that is identified as such.
+An unrelated "no dispute" clause does not negate an attached resolution; absence and
+negated attachment/production claims are checked only in the instrument's own clause.
+Report exclusion does not follow from letter-spaced "FORENSIC REPORT" wording or a
+seal footer alone. AI-compiled summary pages identified on the first two pages are
+also omitted from signed-rule matching, while remaining in the disclosed analysis.
+D02C associates a captured-entry amount with its own clause instead of the nearest
+unrelated invoice amount. Routine service admissions (including document-description
+interludes and receipt details) do not hide a separate substantive admission. The
+standalone narrative cover derives a reference from the source seal when the production
+caller supplies no case reference; that reference is not the separately sealed
+narrative's hash.
+
+`tests/pr327-review.test.mjs` exercises synthetic outer and forged seals, exclusion
+disclosures, signed-package matching, embedded-seal metadata, affidavit boundaries,
+negation, admissions, captured amounts and overlapping scans. `tests/forensic-narrative.test.mjs`
+checks the cover reference. `tests/annexure-eb-regression.test.mjs` now has 502 assertions.
 
 ## 13. The court-ready narrative (the "human report")
 

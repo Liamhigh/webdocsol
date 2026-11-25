@@ -357,7 +357,7 @@ try {
 }
 const engineFindingsBefore = C.stableStringify(engineResult.findings);
 const inputSha512 = createHash('sha512').update(engineBytes).digest('hex');
-const enginePreview = Preview.buildNineBrainPreview({ input_sha512: inputSha512, engine_version: '5.7.2-web', findings: engineResult.findings });
+const enginePreview = Preview.buildNineBrainPreview({ input_sha512: inputSha512, engine_version: '5.7.3-web', findings: engineResult.findings });
 ok(C.stableStringify(engineResult.findings) === engineFindingsBefore, 'preview over an actual synthetic engine result leaves every production finding byte-identical');
 ok(engineBytes.every((byte, i) => byte === engineBytesBefore[i]), 'actual synthetic engine/preview path preserves original PDF bytes');
 ok(enginePreview.source_findings_sha512 === C.sha512Hex(C.stableStringify(engineResult.findings)), 'preview binds to the exact canonical existing findings');

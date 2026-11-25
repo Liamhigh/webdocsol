@@ -77,7 +77,7 @@ function makeBase() {
   return {
     bundle, sourceTexts: { 'evidence-one': text1, 'evidence-two': text2, 'evidence-three': text3 },
     findings, constitution: { version: 'synthetic-constitution-v1', text: 'Synthetic Constitution fixture. Exact bytes are supplied identically to both reviewers.' },
-    rulePackVersion: 'synthetic-rules-v1', engineVersion: '5.7.2-web'
+    rulePackVersion: 'synthetic-rules-v1', engineVersion: '5.7.3-web'
   };
 }
 

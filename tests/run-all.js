@@ -37,6 +37,7 @@ const suites = [
   'zip-intake.test.mjs',
   'photo-intake.test.mjs',
   'rule-package.test.mjs',
+  'pr327-review.test.mjs',
   'inline-scripts.test.mjs',
   'legal-analysis.test.js',
   'greensky-regression.test.js',

@@ -22,8 +22,10 @@ const t = require('./_assert');
 const D04B = E.DETECTORS.D04B_DETECT_DOCUMENT_PREDATES_CONTENT;
 const D02B = E.DETECTORS.D02B_DETECT_INVOICE_IDENTITY_CONFLICT;
 const D02C = E.DETECTORS.D02C_DETECT_PAYMENT_PROOF_MISMATCH;
-t.ok(typeof D04B === 'function' && typeof D02B === 'function' && typeof D02C === 'function',
-  'batch-3 detectors are registered');
+const D07A = E.DETECTORS.D07A_DETECT_UNEVIDENCED_AUTHORITY;
+const D01 = E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION;
+t.ok(typeof D04B === 'function' && typeof D02B === 'function' && typeof D02C === 'function' && typeof D07A === 'function' && typeof D01 === 'function',
+  'batch-3 and repaired statement/authority detectors are registered');
 
 // ---- D04B: document predates its contents ----
 const annexL = [
@@ -86,11 +88,49 @@ t.ok(D02C([
   'Please find attached POP for refund for fuel in the amount of R 1 000 000 as agreed between the parties.',
   'INTERIM REPORT. THIS IS NOT A PROOF OF PAYMENT. It records a captured entry of R1,000,000.00 awaiting release by the bank.',
 ]).length === 0, 'D02C silent when the claimed amount matches the capture');
+// A road designation is not a payment amount, and an unrelated amount earlier
+// on a compiled page is not the capture qualified by the disclaimer.
+t.ok(D02C([
+  'Please find attached POP for refund for fuel in the amount of R 2 000 000 as agreed between the parties.',
+  'The R61 corridor lost supply. INTERIM REPORT. THIS IS NOT A PROOF OF PAYMENT. No captured entry is reproduced here.',
+]).length === 0, 'D02C never reads the R61 road as a disclaimed payment amount');
+const unrelated = D02C([
+  'Please find attached POP for refund for fuel in the amount of R 2 000 000 as agreed between the parties.',
+  'An unrelated historic invoice was R750,000.00. '.repeat(8) + 'INTERIM REPORT. THIS IS NOT A PROOF OF PAYMENT. It records a single captured entry of R1,000,000.00 awaiting release by the bank.',
+]);
+t.ok(unrelated.length === 1 && /R1,000,000\.00/.test(unrelated[0].evidence) && !/proof itself records R750,000/.test(unrelated[0].evidence),
+  'D02C compares against the captured entry, not an unrelated amount elsewhere on the page');
+
+// ---- D07A: the authority instrument must belong to THIS affidavit ----
+const authorityBlocks = [
+  'ANSWERING AFFIDAVIT. I am the chief executive and am duly authorised to depose to this affidavit on behalf of the respondent. Page 1 of 3',
+  'No board resolution has been produced, and no power of attorney is attached to this affidavit. Page 2 of 3',
+  'The deponent continues with the factual allegations. Page 3 of 3',
+  'ANSWERING AFFIDAVIT. I am duly authorised to depose for the second respondent. Page 1 of 3',
+  'The second deponent continues with a separate factual account. Page 2 of 3',
+  'I annex the board resolution authorising these proceedings as Annexure A. Page 3 of 3',
+];
+const authorityOut = D07A(authorityBlocks);
+t.ok(authorityOut.length === 1 && authorityOut[0].type === 'CT52' && authorityOut[0].location === 'Page 1' && /same affidavit segment, pages 1-3/.test(authorityOut[0].evidence),
+  'D07A neither counts an express absence as an instrument nor lets another affidavit\'s resolution suppress this affidavit\'s gap');
+t.ok(D07A([
+  'ANSWERING AFFIDAVIT. I am duly authorised to depose for the respondent. Page 1 of 2',
+  'A board resolution authorising the deponent is annexed as Annexure A. Page 2 of 2',
+]).length === 0, 'D07A stays silent when the same affidavit carries a positive instrument');
+t.ok(D07A([
+  'Ordinary supply contract. The signatory is authorised to institute changes to delivery dates.',
+]).length === 0, 'D07A retains its litigation gate outside affidavits');
+
+// ---- D01: routine service is not a conduct admission ----
+t.ok(D01(['ANSWERING AFFIDAVIT. AD PARAGRAPH 18. I admit that annexure “B” was sent to the Controller, in response to the applicant\'s request.']).length === 0,
+  'D01 does not seal a routine admission that a quoted annexure label was sent as a contradiction');
+t.ok(D01(['I admit that I signed the deed of suretyship and accepted personal liability for the debt.']).some(f => f.type === 'CT01' && f.conductAdmission),
+  'D01 preserves a substantive first-person admission of fact');
 
 // Robustness: no throw on edge inputs.
 for (const bad of [[], [''], ['   '], ['x'.repeat(100000)]]) {
-  t.ok(Array.isArray(D04B(bad)) && Array.isArray(D02B(bad)) && Array.isArray(D02C(bad)),
-    'batch-3 detectors robust on edge input');
+  t.ok(Array.isArray(D04B(bad)) && Array.isArray(D02B(bad)) && Array.isArray(D02C(bad)) && Array.isArray(D07A(bad)) && Array.isArray(D01(bad)),
+    'batch-3 and repaired detectors robust on edge input');
 }
 
 t.done('batch3-detectors');

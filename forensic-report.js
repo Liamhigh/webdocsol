@@ -67,7 +67,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.7.2-web';
+var ENGINE_VERSION = '5.7.3-web';
 var CONSTITUTION_VERSION = '6.1';
 // Counts mirror the live registry and run-list in forensic-engine-page.js.
 // The report recomputes from the registry at runtime when the engine is
@@ -6123,6 +6123,7 @@ async function buildForensicNarrative(opts) {
       ? 'Prepared by Verum Omnis — gated AI narrative and deterministic sealed-record chronology'
       : 'Prepared by Verum Omnis — AI forensic narrator over the sealed record');
   var coverDetails = [
+    'Report Reference: ' + String(identity.reference || identity.caseRefs || (sourceDoc.sealId ? 'VO-NARRATIVE-' + sourceDoc.sealId : 'n/a')),
     'Source document: ' + String(sourceDoc.name || 'document') + ' (' + (sourceDoc.pageCount || 'n/a') + ' pages)',
     'Source SHA-512: ' + truncHash(sourceDoc.sha512, 24, 12),
     'Source seal: ' + String(sourceDoc.sealId || 'n/a'),
@@ -6146,6 +6147,10 @@ async function buildForensicNarrative(opts) {
   function newPage() {
     bodyPage = doc.addPage([PW, PH]);
     bodyPage.drawRectangle({ x: 0, y: PH - 5, width: PW, height: 5, color: GOLD });
+    // A narrative resubmitted for scanning must recognise itself as analysis
+    // on every page, not only on its cover (the other report builders already
+    // carry an equivalent running header).
+    bodyPage.drawText('VERUM OMNIS · FORENSIC NARRATIVE', { x: left, y: PH - 44, size: 8, font: fonts.timesBold, color: NAVY2 });
     y = top;
   }
   function drawHeading(part) {
