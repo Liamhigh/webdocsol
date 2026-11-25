@@ -9,9 +9,10 @@ const PDFLib = require('pdf-lib');
 const crypto = require('node:crypto');
 globalThis.PDFLib = PDFLib;
 let failures = 0;
+let passes = 0;
 function check(value, label) {
   if (!value) { failures++; console.error('FAIL ' + label); }
-  else console.log('PASS ' + label);
+  else { passes++; console.log('PASS ' + label); }
 }
 const footer = (id, page, total) =>
   'VERUM OMNIS SEALED ORIGINAL | Seal: ' + id +
@@ -24,7 +25,8 @@ const rawPackage = { version: '1.0.0', rules: {
     marker('primary-marker', ['cobalt', 'harbour']),
     marker('placeholder-marker', ['verum', 'omnis']),
     marker('report-marker', ['amber', 'lattice']),
-    marker('template-marker', ['analysis', 'template'])
+    marker('template-marker', ['analysis', 'template']),
+    marker('summary-marker', ['compiled', 'chatgpt'])
   ]
 } };
 async function pdf(lines, xmp) {
@@ -56,6 +58,8 @@ try {
   }, { subtle: crypto.webcrypto.subtle, publicKeyB64: keys.publicKey.export({ format: 'der', type: 'spki' }).toString('base64') });
   if (!verified.ok) throw new Error('test package signature failed: ' + verified.reason);
   globalThis.voRulePackage = E.voCompileRulePackage(verified.package, { sha512: verified.sha512 });
+  check(E.voRunPackageRules(globalThis.voRulePackage, ['INSTITUTIONAL REVIEW TEMPLATE. Analysis template: instructional boilerplate.'], []).findings.some(f => f.packageRule === 'template-marker'),
+    'template package marker matches when its source page is unmasked');
   const outer = await run(await pdf([
     [cover, footer('VO-ABCDEF123456', 1, 3)],
     ['Primary evidence: cobalt harbour.', footer('VO-ABCDEF123456', 2, 3)],
@@ -71,6 +75,14 @@ try {
   ]));
   check(packageHits(forged, 'primary-marker').some(f => /Page 2/.test(f.location)), 'forged inner footer cannot exclude primary evidence');
   check(/Prior Verum Omnis report:/.test(forged.extractionNotes), 'forged-footer cover exclusion is disclosed');
+  const spacedRun = await run(await pdf([
+    ['Letterhead: F O R E N S I C R E P O R T.', 'Primary evidence: cobalt harbour.'],
+    ['Ordinary primary page.', footer('VO-DDDDDDDDDDDD', 2, 2)]
+  ]));
+  check(packageHits(spacedRun, 'primary-marker').some(f => /Page 1/.test(f.location)),
+    'spaced report wording and a lone later-page seal footer do not suppress primary evidence');
+  check(!/Prior Verum Omnis report:/.test(spacedRun.extractionNotes),
+    'spaced letterhead and a lone footer do not create an analytical-report exclusion');
 
   const ruleRun = await run(await pdf([
     ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-TEST', 'Analysis only: amber lattice.'],
@@ -79,12 +91,31 @@ try {
   check(packageHits(ruleRun, 'report-marker').length === 0, 'pipeline excludes report-only package phrase');
   check(packageHits(ruleRun, 'placeholder-marker').length === 0, 'pipeline excludes placeholder package phrase');
   check(/Prior Verum Omnis report:/.test(ruleRun.extractionNotes), 'package exclusion is disclosed');
+  const summarySeal = 'VO-CCCCCCCCCCCC';
+  const summaryRun = await run(await pdf([
+    ['ANSWERING AFFIDAVIT. I am duly authorised to depose.', footer('VO-AAAAAAAAAAAA', 1, 3)],
+    ['Compiled by: ChatGPT.', footer('VO-AAAAAAAAAAAA', 2, 3)],
+    ['The deponent describes the events.', footer('VO-AAAAAAAAAAAA', 3, 3)],
+    ['LETTER. Ordinary evidence.', footer(summarySeal, 1, 3)],
+    ['The record continues.', footer(summarySeal, 2, 3)],
+    ['A further exhibit follows.', footer(summarySeal, 3, 3)]
+  ]));
+  check(packageHits(summaryRun, 'summary-marker').length === 0, 'compiled-summary pages are excluded from signed rules');
+  check(/AI-compiled summary: page 2/.test(summaryRun.extractionNotes), 'compiled-summary page is identified for package masking');
+  check(!packageHits(summaryRun, 'primary-marker').length, 'compiled-summary masking does not affect unrelated primary-page rules');
   const templateRun = await run(await pdf([
-    ['INSTITUTIONAL REVIEW TEMPLATE', 'Instructional boilerplate.'],
+    ['INSTITUTIONAL REVIEW TEMPLATE', 'Analysis template: instructional boilerplate.'],
     ['Primary evidence is ordinary correspondence.']
   ]));
   check(packageHits(templateRun, 'template-marker').length === 0, 'pipeline excludes template placeholder from package rules');
   check(/Template boilerplate:/.test(templateRun.extractionNotes), 'template exclusion is disclosed');
+  const templateOnly = await run(await pdf([
+    ['INSTITUTIONAL REVIEW TEMPLATE', 'Analysis template boilerplate.'],
+    ['INSTITUTIONAL REVIEW TEMPLATE', 'Analysis template boilerplate.']
+  ]));
+  const templateWf7 = templateOnly.wellFormedness.checks.find(c => c.id === 'WF7');
+  check(/no evidence pages remain/.test(templateWf7.note) && !/analytical report pages were excluded/.test(templateWf7.note),
+    'WF7 explains template-only exclusions without claiming report pages were excluded');
   delete globalThis.voRulePackage;
 
   const xmp = '<x:xmpmeta><xmp:CreateDate>2018-05-01T09:00:00Z</xmp:CreateDate></x:xmpmeta>';
@@ -119,7 +150,18 @@ try {
     'postposed negation does not count an instrument');
   check(ct52(['ANSWERING AFFIDAVIT. I am duly authorised to depose. No resolution was attached; the board resolution of 3 March 2020 is cited below.']).length === 0,
     'negation does not cross a semicolon');
+  check(ct52(['ANSWERING AFFIDAVIT. I am duly authorised to depose.',
+    'UNOPPOSED AFFIDAVIT OF THE WITNESS. The board resolution is attached.']).some(f => f.location === 'Page 1'),
+  'an unrecognised affidavit heading still bounds instrument search');
+  check(ct52(['ANSWERING AFFIDAVIT. I am duly authorised to depose. There is no dispute that the board resolution is attached.']).length === 0,
+    'an unrelated no-dispute phrase does not negate an attached resolution');
   const D01 = E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION;
+  const D02C = E.DETECTORS.D02C_DETECT_PAYMENT_PROOF_MISMATCH;
+  const amountTrap = D02C([
+    'Please find attached POP for refund for fuel in the amount of R 1 000 000 as agreed between the parties.',
+    'THIS IS AN INTERIM AUDIT REPORT INTENDED FOR RECORD KEEPING PURPOSES ONLY AND IS NOT A PROOF OF PAYMENT. Captured entry status follows. Invoice total is R999.00. A single captured entry of R1,000,000.00 awaiting release by the bank.'
+  ]);
+  check(amountTrap.length === 0, 'D02C selects the captured entry amount instead of a nearby invoice');
   const admission = text => D01([text]).some(f => f.type === 'CT01' && f.conductAdmission);
   check(!admission('I admit that a copy of annexure B was sent to the Controller.'), 'copy-of routine service is not an admission finding');
   check(admission('I admit that annexure B was sent and I signed the deed.'), 'substantive admission following service survives');
@@ -127,8 +169,13 @@ try {
   check(admission('I admit that annexure B was sent and the company falsified the deed.'), 'third-party substantive admission following service survives');
   check(admission('I admit that annexure B was sent and I received a bribe.'), 'substantive receipt following service survives');
   check(admission('I admit that annexure B was sent and was received by the Controller and I signed the deed.'), 'substantive admission following procedural continuation survives');
+  check(admission('I admit that annexure B was sent; I signed the deed.'), 'substantive admission after a semicolon survives');
+  check(admission('I admit that annexure B was sent, which was received by the Controller, and I signed the deed.'), 'substantive admission after a relative service clause survives');
   check(!admission('I admit that annexure B was sent and was received by the Controller.'), 'service and receipt alone remain excluded');
   check(!admission('I admit that annexure B was sent and I received a delivery receipt.'), 'a procedural service continuation remains excluded');
+  check(!admission('I admit that a letter was sent to the Controller.'), 'an indefinite document article is procedural service');
+  check(!admission('I admit that annexure B was sent, which was received by the Controller.'), 'a relative-clause receipt remains procedural service');
+  check(!admission('I admit that a letter was sent and the Controller received it.'), 'an active recipient receipt remains procedural service');
 
   const firstScan = await pdf([
     ['ANSWERING AFFIDAVIT. I am duly authorised to depose.', footer('VO-AAAAAAAAAAAA', 1, 3)],
@@ -159,5 +206,5 @@ try {
   delete globalThis.voRulePackage;
   console.log = oldLog;
 }
-console.log('pr327-review failures: ' + failures);
+console.log('pr327-review PASS=' + passes + ' FAIL=' + failures);
 if (failures) process.exitCode = 1;

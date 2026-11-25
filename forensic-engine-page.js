@@ -915,7 +915,7 @@ var DETECTORS = {
     // A routine admission of service or transmission is not a conduct
     // admission: "I admit that annexure B was sent to the Controller" settles
     // delivery only. A substantive first-person admission remains untouched.
-    var VO_PROCEDURAL_SERVICE_ADMISSION_RE = /\b(?:i|we)\s+(?:admit|acknowledge|accept)\s+(?:that\s+)?(?:(?:a|the)\s+copy\s+of\s+)?(?:the\s+)?(?:annexure|attachment|document|letter|notice|application|affidavit|bundle)s?\s*["'“‘’]?\s*[A-Z]?\d*\s*["'“”’]?\s*(?:was|were)\s+(?:sent|served|filed|delivered|provided|attached)\b/i;
+    var VO_PROCEDURAL_SERVICE_ADMISSION_RE = /\b(?:i|we)\s+(?:admit|acknowledge|accept)\s+(?:that\s+)?(?:(?:a|the)\s+copy\s+of\s+)?(?:(?:the|a|an)\s+)?(?:annexure|attachment|document|letter|notice|application|affidavit|bundle)s?\s*["'“‘’]?\s*[A-Z]?\d*\s*["'“”’]?\s*(?:was|were)\s+(?:sent|served|filed|delivered|provided|attached)\b/i;
     // A sentence that CALLS another statement an admission is analysis, not an
     // admission: "Forensic Finding:** This is an explicit admission of guilt"
     // (an AI-written case summary bound into the Greensky bundle, pp. 5, 63,
@@ -940,7 +940,7 @@ var DETECTORS = {
         while (atA !== -1) {
           // The cue's own sentence: from the cue to the next sentence end (a
           // clause number's "13.2" has no space after its point).
-          var sentA = lowA.slice(atA, atA + 200).split(/[.;!?]\s|\n/)[0];
+          var sentA = lowA.slice(atA, atA + 200).split(/[.!?]\s|\n/)[0];
           // ...and the words reaching the cue, so a label for an admission
           // ("this is an explicit admission of guilt") is read as the
           // characterisation it is. Only the cue's own sentence is read.
@@ -965,12 +965,18 @@ var DETECTORS = {
           var service = VO_PROCEDURAL_SERVICE_ADMISSION_RE.exec(sentA);
           var serviceOnly = false;
           if (service) {
-            var continuation = sentA.slice(service.index + service[0].length).split(/\b(?:and|but)\b/i);
+            var continuation = sentA.slice(service.index + service[0].length)
+              .split(/[,;]|\b(?:and|but|which|that)\b/i);
             serviceOnly = true;
-            for (var cont = 1; cont < continuation.length; cont++) {
-              var clause = continuation[cont].trim().replace(/^that\s+/i, '');
-              if (!/^(?:(?:it|they)\s+)?(?:(?:was|were|is|are|has been|had been)\s+)?(?:sent|served|filed|delivered|provided|attached|received)\b/i.test(clause) &&
-                  !/^(?:i|we)\s+received\s+(?:a|the)\s+(?:delivery\s+)?receipt\b/i.test(clause)) {
+            for (var cont = 0; cont < continuation.length; cont++) {
+              var clause = continuation[cont].trim().replace(/^that\s+/i, '').replace(/[.!?]+\s*$/, '');
+              if (!clause) continue;
+              var serviceDetail = /^(?:(?:it|they|the\s+(?:annexure|attachment|document|letter|notice|application|affidavit|bundle))\s+)?(?:(?:was|were|is|are|has\s+been|had\s+been)\s+)?(?:sent|served|filed|delivered|provided|attached|received|acknowledged)\b/i.test(clause) ||
+                /^(?:to|by|on\s+behalf\s+of)\s+(?:the\s+)?[\w'-]+(?:\s+[\w'-]+){0,5}$/i.test(clause) ||
+                /^(?:in\s+response\s+to|at\s+the\s+request\s+of|as\s+requested\s+by|following\s+(?:the\s+)?request\s+(?:of|from))\b/i.test(clause) ||
+                /^(?:(?:i|we|the\s+[\w'-]+)\s+)?received\s+(?:a|an|the)?\s*(?:delivery\s+)?(?:receipt|proof|annexure|attachment|document|letter|notice|application|affidavit|bundle|it)\b/i.test(clause) ||
+                /^(?:the\s+)?[\w'-]+(?:\s+[\w'-]+){0,4}\s+received\s+(?:it|the\s+(?:annexure|attachment|document|letter|notice|application|affidavit|bundle))\b/i.test(clause);
+              if (!serviceDetail) {
                 serviceOnly = false;
                 break;
               }
@@ -1348,9 +1354,27 @@ var DETECTORS = {
       var captureCue = /\bcaptured?\s+(?:single\s+)?entry\b/i.exec(W);
       if (captureCue) {
         var captureAt = captureCue.index + captureCue[0].length;
-        for (var ca = 0; ca < pageAmts.length; ca++) if (Math.abs(pageAmts[ca].idx - captureAt) <= 160) disAmts.push(pageAmts[ca]);
-        disAmts.sort(function (a, b2) { return Math.abs(a.idx - captureAt) - Math.abs(b2.idx - captureAt); });
-        if (disAmts.length) disAmts = [disAmts[0]];
+        var afterCapture = W.slice(captureAt);
+        var captureClauseEnd = afterCapture.search(/[.;!?\n]/);
+        if (captureClauseEnd < 0) captureClauseEnd = afterCapture.length;
+        for (var ca = 0; ca < pageAmts.length; ca++) {
+          if (pageAmts[ca].idx < captureAt || pageAmts[ca].idx - captureAt > captureClauseEnd) continue;
+          var link = W.slice(captureAt, pageAmts[ca].idx);
+          if (/^[\s,:-]*(?:(?:is|was|of|for|in|the|amount|recorded|as|value|valued|at|shown|stated|equals|equal|totalling|totaling)\b[\s,:-]*)*$/i.test(link)) {
+            disAmts.push(pageAmts[ca]);
+            break;
+          }
+        }
+        if (!disAmts.length) {
+          for (var cb = pageAmts.length - 1; cb >= 0; cb--) {
+            if (pageAmts[cb].end > captureCue.index || captureCue.index - pageAmts[cb].end > 80) continue;
+            var priorLink = W.slice(pageAmts[cb].end, captureCue.index);
+            if (/^[\s,:-]*(?:(?:is|was|the|amount|recorded|as|value|valued|at|shown|stated|equals|equal|captured)\b[\s,:-]*)*$/i.test(priorLink)) {
+              disAmts.push(pageAmts[cb]);
+              break;
+            }
+          }
+        }
       }
       if (!captureCue) {
         for (var pa = 0; pa < pageAmts.length; pa++) {
@@ -2239,24 +2263,29 @@ var DETECTORS = {
     if (!/\b(?:affidavit|deponent|founding|answering)\b/i.test(joined)) return findings;
     var CLAIM_G = /\b(?:i\s+am\s+)?(?:duly\s+)?authori[sz]ed\s+to\s+(?:depose|bring|institute|launch)/gi;
     var INSTRUMENT_G = /\b(?:board|directors'?|members'?|shareholders'?|special|written|company)\s+resolution\b|\bresolution\b[^.;!?\n]{0,80}?\b(?:annexed|attached|furnished|provided|cited)\b|\bannexure\s+["']?[A-Z]{1,3}\d*["']?[^.;!?\n]{0,60}?\bresolution\b|\bpower\s+of\s+attorney\b/gi;
-    var NEGATED_INSTRUMENT_RE = /\b(?:no|not|never|without|zero|absence\s+of|missing)\b/i;
+    var NEGATED_INSTRUMENT_BEFORE_RE = /\b(?:no|not|never|without|zero|missing|absence\s+of)\s+(?:(?:the|any|a|an)\s+)?(?:(?:board|directors'?|members'?|shareholders'?|special|written|company)\s+)?$/i;
+    var NEGATED_INSTRUMENT_AFTER_RE = /\b(?:resolution|power\s+of\s+attorney|annexure)\b[^.;!?\n]{0,90}\b(?:not|never)\s+(?:(?:ever|been)\s+)*(?:attached|annexed|produced|provided|furnished|cited|executed)\b/i;
     var segs = voDetectDocuments(blocks) || [];
-    var affidavitHead = /^\s*(?:(?:first|second|third|founding|answering|replying|supplementary)\s+){0,3}affidavit\b/i;
+    function isAffidavitHead(text) {
+      var t = String(text || '');
+      return /^\s*(?:(?:first|second|third|fourth|further|additional|supplementary|supplemental|confirmatory|founding|answering|replying|responding|opposing|supporting|counter|joint|urgent|rejoinder|interlocutory)\s+){0,5}affidavit\b/i.test(t) ||
+        /^\s*(?:[A-Z][A-Z0-9.'&-]*\s+){1,5}AFFIDAVIT\b/.test(t);
+    }
     function segmentAt(page) {
       for (var s = 0; s < segs.length; s++) {
         if (page < segs[s].start || page > segs[s].end) continue;
         var known = { start: segs[s].start, end: segs[s].end };
         for (var prev = page; prev > known.start; prev--) {
-          if (affidavitHead.test(String(blocks[prev - 1] || ''))) { known.start = prev; break; }
+          if (isAffidavitHead(blocks[prev - 1])) { known.start = prev; break; }
         }
         for (var next = page + 1; next <= known.end; next++) {
-          if (affidavitHead.test(String(blocks[next - 1] || ''))) { known.end = next - 1; break; }
+          if (isAffidavitHead(blocks[next - 1])) { known.end = next - 1; break; }
         }
         return known;
       }
       var start = page, end = page;
-      if (page > 1 && !affidavitHead.test(String(blocks[page - 1] || ''))) start--;
-      if (page < blocks.length && !affidavitHead.test(String(blocks[page] || ''))) end++;
+      if (page > 1 && !isAffidavitHead(blocks[page - 1])) start--;
+      if (page < blocks.length && !isAffidavitHead(blocks[page])) end++;
       return { start: start, end: end, bounded: true };
     }
     function positiveInstrument(page) {
@@ -2265,12 +2294,9 @@ var DETECTORS = {
       while ((m = INSTRUMENT_G.exec(W)) !== null) {
         // "No board resolution has ever been produced" records the absence;
         // it is not itself a resolution and must not suppress the finding.
-        var left = m.index, right = m.index + m[0].length;
-        while (left > 0 && !/[.;!?\n]/.test(W.charAt(left - 1))) left--;
-        while (right < W.length && !/[.;!?\n]/.test(W.charAt(right))) right++;
-        if (NEGATED_INSTRUMENT_RE.test(m[0]) ||
-            NEGATED_INSTRUMENT_RE.test(W.slice(Math.max(left, m.index - 90), m.index)) ||
-            NEGATED_INSTRUMENT_RE.test(W.slice(m.index + m[0].length, Math.min(right, m.index + m[0].length + 90)))) continue;
+        var before = W.slice(Math.max(0, m.index - 80), m.index);
+        var attachedClause = W.slice(m.index, Math.min(W.length, m.index + 160)).split(/[.;!?\n]/)[0];
+        if (NEGATED_INSTRUMENT_BEFORE_RE.test(before) || NEGATED_INSTRUMENT_AFTER_RE.test(attachedClause)) continue;
         count++;
       }
       return count;
@@ -6190,7 +6216,11 @@ function voIsSecondaryReportPage(text) {
   if (VO_CONSTITUTION_REPORT_TEMPLATE_RE.test(t)) return false;
   if (voIsStandaloneAnalysisCover(t)) return true;
   if (VO_SECONDARY_REPORT_REF_RE.test(t)) return true;
-  return VO_SECONDARY_REPORT_MASTHEAD_RE.test(t) || VO_SECONDARY_SPACED_REPORT_RE.test(t);
+  if (VO_SECONDARY_REPORT_MASTHEAD_RE.test(t)) return true;
+  return VO_SECONDARY_SPACED_REPORT_RE.test(t) &&
+    /\bVERUM\s+OMNIS\b/i.test(t) &&
+    (/\b(?:prepared\s+by|report\s+reference|source\s+seal|documents\s+analysed|executive\s+summary)\b/i.test(t) ||
+      /P\s+R\s+E\s+P\s+A\s+R\s+E\s+D\s+B\s+Y/i.test(t));
 }
 function voIsSecondaryAnalysisContinuation(text) {
   var t = String(text || '');
@@ -9020,7 +9050,7 @@ function voWellFormedness(o) {
     id: 'WF7', name: 'Prior sealed output recognised',
     pass: true,
     note: o.selfSealUndetermined
-      ? 'no evidence pages remain to assess prior-seal status; analytical report pages were excluded from contradiction scanning'
+      ? 'no evidence pages remain to assess prior-seal status; see the extraction notes for which pages were set aside'
       : o.selfSealed
       ? (o.reportPagesExcluded > 0
         ? 'this file is itself a prior Verum Omnis sealed output; ' + o.reportPagesExcluded + ' analytical report page(s) were excluded from contradiction scanning'
@@ -9159,6 +9189,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   if (templateNote) extractionNote += ' ' + templateNote;
   var _secondary = voExcludeSecondaryReportPages(textBlocks);
   if (_secondary && _secondary.note) extractionNote += ' ' + _secondary.note;
+  var _aiCompiledPages = [];
+  for (var acp = 0; acp < Math.min(2, textBlocks.length); acp++) {
+    if (VO_AI_COMPILED_RE.test(String(textBlocks[acp] || ''))) _aiCompiledPages.push(acp + 1);
+  }
   var _aiCompiled = voNoteAiCompiledSummary(textBlocks);
   if (_aiCompiled) extractionNote += ' ' + _aiCompiled;
   var _footer = voExcludeFooterOnlyPages(textBlocks);
@@ -9179,7 +9213,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   if (_secondary && Array.isArray(_secondary.pages)) for (var exp = 0; exp < _secondary.pages.length; exp++) if (_secondaryAllPages.indexOf(_secondary.pages[exp]) === -1) _secondaryAllPages.push(_secondary.pages[exp]);
   for (var mdp = 0; mdp < _mdPages.length; mdp++) if (_secondaryAllPages.indexOf(_mdPages[mdp]) === -1) _secondaryAllPages.push(_mdPages[mdp]);
   _secondaryAllPages.sort(function (a, b) { return a - b; });
-  var _packageExcludedPages = _secondaryAllPages.concat(_templatePages, _footer.pages);
+  var _packageExcludedPages = _secondaryAllPages.concat(_templatePages, _footer.pages, _aiCompiledPages);
   var _voEvidenceCount = 0, _voEvidenceBrandCount = 0;
   for (var eb = 0; eb < _voBrandPages.length; eb++) {
     if (_packageExcludedPages.indexOf(eb + 1) !== -1) continue;

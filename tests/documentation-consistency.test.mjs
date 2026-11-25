@@ -41,8 +41,10 @@ ok(findingsVersion && findingsVersion[1] === '1.11.0', 'production findings JSON
 ok(suiteCount === 66 && suiteRegistry.includes("'pr327-review.test.mjs'") && suiteRegistry.includes("'analysis-contracts.test.mjs'") && suiteRegistry.includes("'documentation-consistency.test.mjs'") && suiteRegistry.includes("'evaluation-metrics.test.mjs'") && suiteRegistry.includes("'evaluation-contractnli.test.mjs'") && suiteRegistry.includes("'evaluation-contradoc.test.mjs'") && suiteRegistry.includes("'evaluation-eyecite.test.mjs'") && suiteRegistry.includes("'legal-citations.test.mjs'") && suiteRegistry.includes("'legal-citations-za.test.mjs'") && suiteRegistry.includes("'redaction-fixtures.test.mjs'") && suiteRegistry.includes("'pdf-graph.test.mjs'"), 'all 66 Node suites are explicitly registered');
 const testsGuide = read('tests/README.md');
 ok(testsGuide.includes('| 58 | `evaluation-metrics` | `evaluation-metrics.test.mjs` | 116 |') &&
-   testsGuide.includes('| 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 |'),
-'test guidance records actual assertions without changing the verified 60-suite registry count');
+   testsGuide.includes('| 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 |') &&
+   testsGuide.includes('**66 registered production/baseline suites**') &&
+   testsGuide.includes('| 66 | `pr327-review` | `pr327-review.test.mjs` | 40 |'),
+'test guidance records the current 66-suite registry and exact review-suite assertions');
 
 const readme = read('README.md');
 ok(readme.includes('VO_ENGINE_VERSION 5.7.3-web') && readme.includes('CT01–CT61') && readme.includes('findings JSON 1.11.0'), 'README current engine/taxonomy/findings line agrees with source');
@@ -68,9 +70,11 @@ ok(engineDoc.includes('## 2. Contradiction types (CT01–CT61)') && engineDoc.in
 ok(engineDoc.includes('**Findings JSON:** v1.11.0') && engineDoc.includes('report builder v1.3.1'), 'ENGINE header has current findings and report-builder versions');
 ok(engineDoc.includes('**66 registered suites**'), 'ENGINE test section names the current registry size');
 const testReadme = read('tests/README.md');
-ok(engineDoc.includes('| `redaction-fixtures.test.mjs` | 54 |') &&
+ok(engineDoc.includes('| `annexure-eb-regression.test.mjs` | 502 |') &&
+   testReadme.includes('| 33 | `annexure-eb` | `annexure-eb-regression.test.mjs` | 502 |') &&
+   engineDoc.includes('| `redaction-fixtures.test.mjs` | 54 |') &&
    testReadme.includes('| 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 |'),
-  'redaction fixture assertion count matches the measured suite output in both inventories');
+  'Annexure EB and redaction fixture assertion counts match the measured suite outputs in both inventories');
 
 ok(!html.includes("of 46 contradiction types triggered") && !html.includes("'/46 triggered"), 'stale 46-type user-facing totals are gone');
 const detectorProgress = html.match(/\b\d+ contradiction detectors running\.\.\./g) || [];
