@@ -1,10 +1,10 @@
-// ============== FORENSIC CONTRADICTION ENGINE v5.7.2-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.7.3-web ================
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.2-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.3-web
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
@@ -26,7 +26,7 @@
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.7.2-web';
+var VO_ENGINE_VERSION = '5.7.3-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
@@ -912,6 +912,10 @@ var DETECTORS = {
     // occurrence of a cue on a page is read, so a form sentence never hides a
     // later sentence of fact.
     var PLEADING_ADMISSION_RE = /\badmit(?:s|ted)?\s+(?:only\s+)?(?:the\s+)?(?:(?:contents?|allegations?|averments?|correctness|opening\s+sentence|first\s+sentence|remainder|balance|rest)\s+(?:of\s+the\s+(?:contents?|allegations?|averments?)\s+)?(?:contained\s+in\s+|set\s+out\s+in\s+|of\s+|in\s+)?(?:(?:this|the|these|that|said|each)\s+(?:said\s+|aforesaid\s+)?(?:sub-?)?para(?:graph)?s?\b|(?:sub-?)?para(?:graph)?s?\s+\d)|(?:contents?|allegations?|averments?)\s+(?:hereof|thereof|herein|therein)\b|(?:sub-?)?para(?:graph)?s?\s+\d)/i;
+    // A routine admission of service or transmission is not a conduct
+    // admission: "I admit that annexure B was sent to the Controller" settles
+    // delivery only. A substantive first-person admission remains untouched.
+    var VO_PROCEDURAL_SERVICE_ADMISSION_RE = /\b(?:i|we)\s+(?:admit|acknowledge|accept)\s+(?:that\s+)?(?:the\s+)?(?:annexure|attachment|document|letter|notice|application|affidavit|bundle)s?\s*["'“‘’]?\s*[A-Z]?\d*\s*["'“”’]?\s*(?:was|were)\s+(?:sent|served|filed|delivered|provided|attached)\b/i;
     // A sentence that CALLS another statement an admission is analysis, not an
     // admission: "Forensic Finding:** This is an explicit admission of guilt"
     // (an AI-written case summary bound into the Greensky bundle, pp. 5, 63,
@@ -958,7 +962,7 @@ var DETECTORS = {
             continue;
           }
           var admKey = sentA.replace(/[^a-z0-9]+/g, ' ').trim();
-          if (!PLEADING_ADMISSION_RE.test(sentA) && !admSeen[admKey]) {
+          if (!PLEADING_ADMISSION_RE.test(sentA) && !VO_PROCEDURAL_SERVICE_ADMISSION_RE.test(sentA) && !admSeen[admKey]) {
             admSeen[admKey] = true;
             admPages.push(ap + 1);
             if (!admQuote) {
@@ -1301,7 +1305,16 @@ var DETECTORS = {
     function amountsOf(W) {
       var out = [], m;
       AMT_G.lastIndex = 0;
-      while ((m = AMT_G.exec(W)) !== null) out.push({ amt: m[1], val: amtVal(m[1]), idx: m.index });
+      while ((m = AMT_G.exec(W)) !== null) {
+        // R61 is a South African road designation in "the R61 corridor",
+        // not a sixty-one-rand payment. Guard only the short, undecorated
+        // form beside an explicit road cue; R61.00 or an ordinary amount in
+        // a payment passage remains money.
+        var aroundAfter = W.slice(m.index + m[0].length, m.index + m[0].length + 35);
+        var aroundBefore = W.slice(Math.max(0, m.index - 35), m.index);
+        if (/^R\s?\d{1,3}$/i.test(m[0]) && (/^\s*(?:corridor|road|route|highway|freeway|off-?ramp|interchange)\b/i.test(aroundAfter) || /\b(?:on|along|off|from)\s+the\s*$/i.test(aroundBefore))) continue;
+        out.push({ amt: m[1], val: amtVal(m[1]), idx: m.index, end: m.index + m[0].length });
+      }
       return out;
     }
     function snip(W, i) {
@@ -1313,7 +1326,25 @@ var DETECTORS = {
       var W = String(blocks[b] || '');
       if (!/not\s+a\s+proof\s+of\s+payment/i.test(W)) continue;
       var disIdx = W.search(/not\s+a\s+proof\s+of\s+payment/i);
-      var disAmts = amountsOf(W);
+      var pageAmts = amountsOf(W), disAmts = [];
+      // The comparison is with the CAPTURED ENTRY the disclaimer qualifies,
+      // not an unrelated invoice or road number elsewhere on a compiled page.
+      // An explicit "captured entry" label selects its nearest amount. Only
+      // without that label do status cues or the local disclaimer passage apply.
+      var captureCue = /\bcaptured?\s+(?:single\s+)?entry\b/i.exec(W);
+      if (captureCue) {
+        var captureAt = captureCue.index + captureCue[0].length;
+        for (var ca = 0; ca < pageAmts.length; ca++) if (Math.abs(pageAmts[ca].idx - captureAt) <= 160) disAmts.push(pageAmts[ca]);
+        disAmts.sort(function (a, b2) { return Math.abs(a.idx - captureAt) - Math.abs(b2.idx - captureAt); });
+        if (disAmts.length) disAmts = [disAmts[0]];
+      }
+      if (!captureCue) {
+        for (var pa = 0; pa < pageAmts.length; pa++) {
+          var paWin = W.slice(Math.max(0, pageAmts[pa].idx - 100), Math.min(W.length, pageAmts[pa].end + 100));
+          if (/\b(?:awaiting\s+release|validated|processed)\b/i.test(paWin)) disAmts.push(pageAmts[pa]);
+        }
+      }
+      if (!disAmts.length && !captureCue) for (var la = 0; la < pageAmts.length; la++) if (Math.abs(pageAmts[la].idx - disIdx) <= 180) disAmts.push(pageAmts[la]);
       if (!disAmts.length) continue;
       for (var w = Math.max(0, b - 2); w <= Math.min(blocks.length - 1, b + 2); w++) {
         var V = String(blocks[w] || '');
@@ -1440,10 +1471,10 @@ var DETECTORS = {
     var d03Key = voDocKeyOf(d03Segs, textBlocks.length);
     // One stated document, or one unnumbered run within twenty pages (a
     // schedule printed without page numbers is still one document).
-    var d03SameDoc = function (pa, pb) { return pa === pb || !d03Segs.length || (d03Key(pa) === d03Key(pb) && (d03Key(pa).charAt(0) === 'd' || Math.abs(pa - pb) <= 20)); };
+    var d03SameDoc = function (pa, pb) { return pa === pb || (d03Key(pa) === d03Key(pb) && (d03Key(pa).charAt(0) === 'd' || Math.abs(pa - pb) <= 20)); };
     if (voSawDMY && voSawMDY && d03SameDoc(voSawDMY.page, voSawMDY.page)) {
       findings.push({ type: 'CT03', severity: 2,
-        evidence: 'Document mixes date formats: "' + voSawDMY.raw + '" reads as day/month/year while "' + voSawMDY.raw + '" reads as month/day/year -- numeric dates in this bundle are ambiguous; confirm the intended reading before relying on any date',
+        evidence: 'Document mixes date formats: "' + voSawDMY.raw + '" reads as day/month/year while "' + voSawMDY.raw + '" reads as month/day/year -- numeric dates in this document are ambiguous between the two conventions',
         location: 'Page ' + (voSawDMY.page + 1) + ' vs Page ' + (voSawMDY.page + 1) });
     }
 
@@ -2194,21 +2225,41 @@ var DETECTORS = {
     if (!/\b(?:affidavit|deponent|founding|answering)\b/i.test(joined)) return findings;
     var CLAIM_G = /\b(?:i\s+am\s+)?(?:duly\s+)?authori[sz]ed\s+to\s+(?:depose|bring|institute|launch)/gi;
     var INSTRUMENT_G = /\b(?:board|directors'?|members'?|shareholders'?|special|written|company)\s+resolution\b|\bresolution\b[^.\n]{0,50}?\b(?:annexed|attached|furnished|provided)\b|\bannexure\s+["']?[A-Z]{1,3}\d*["']?[^.\n]{0,60}?\bresolution\b|\bpower\s+of\s+attorney\b/gi;
-    var claims = [], instruments = 0;
+    var NEGATED_INSTRUMENT_RE = /\b(?:no|not|never|without|zero|absence\s+of|missing)\b[^.\n]{0,90}$/i;
+    var segs = voDetectDocuments(blocks) || [];
+    function segmentAt(page) {
+      for (var s = 0; s < segs.length; s++) if (page >= segs[s].start && page <= segs[s].end) return segs[s];
+      return segs.length ? { start: page, end: page } : { start: 1, end: blocks.length };
+    }
+    function positiveInstrument(page) {
+      var W = String(blocks[page - 1] || ''), m, count = 0;
+      INSTRUMENT_G.lastIndex = 0;
+      while ((m = INSTRUMENT_G.exec(W)) !== null) {
+        // "No board resolution has ever been produced" records the absence;
+        // it is not itself a resolution and must not suppress the finding.
+        if (NEGATED_INSTRUMENT_RE.test(W.slice(Math.max(0, m.index - 100), m.index))) continue;
+        count++;
+      }
+      return count;
+    }
+    var groups = {}, order = [];
     for (var b = 0; b < blocks.length; b++) {
-      var W = String(blocks[b] || '');
-      var m;
+      var W = String(blocks[b] || ''), m;
       CLAIM_G.lastIndex = 0;
       while ((m = CLAIM_G.exec(W)) !== null) {
-        claims.push({ page: b + 1, quote: W.slice(Math.max(0, m.index - 60), m.index + m[0].length + 60).replace(/\s+/g, ' ').trim() });
+        var seg = segmentAt(b + 1), key = seg.start + '|' + seg.end;
+        if (!groups[key]) { groups[key] = { seg: seg, claims: [], instruments: 0 }; order.push(key); }
+        groups[key].claims.push({ page: b + 1, quote: W.slice(Math.max(0, m.index - 60), m.index + m[0].length + 60).replace(/\s+/g, ' ').trim() });
       }
-      INSTRUMENT_G.lastIndex = 0;
-      while (INSTRUMENT_G.exec(W) !== null) instruments++;
     }
-    if (claims.length && instruments === 0) {
+    for (var gi = 0; gi < order.length; gi++) {
+      var group = groups[order[gi]], gseg = group.seg;
+      for (var p = gseg.start; p <= gseg.end; p++) group.instruments += positiveInstrument(p);
+      if (!group.claims.length || group.instruments !== 0) continue;
+      var first = group.claims[0], where = gseg.start === gseg.end ? ('page ' + gseg.start) : ('the same affidavit segment, pages ' + gseg.start + '-' + gseg.end);
       findings.push({ type: 'CT52', severity: 3,
-        evidence: 'Authority to act is claimed ("' + claims[0].quote + '", p. ' + claims[0].page + (claims.length > 1 ? ' — ' + claims.length + ' such claim(s) in all' : '') + ') but no resolution, power of attorney or written consent is cited or annexed anywhere in this record. The engine cannot know whether such an instrument exists — only that none appears here. Whether one does, and what it authorises, is for a person to establish.',
-        location: 'Page ' + claims[0].page });
+        evidence: 'Authority to act is claimed ("' + first.quote + '", p. ' + first.page + (group.claims.length > 1 ? ' — ' + group.claims.length + ' such claim(s) in this affidavit' : '') + ') but no resolution, power of attorney or written consent is cited or annexed in ' + where + '. A reference elsewhere in a combined bundle cannot supply this affidavit\'s missing instrument; an express statement that no instrument exists is not counted as the instrument. The engine cannot know whether one exists outside this record. Whether one does, and what it authorises, is for a person to establish.',
+        location: 'Page ' + first.page });
     }
     return findings;
   },
@@ -6082,13 +6133,31 @@ var VO_SECONDARY_REPORT_REF_RE = /Report\s+Reference\s*:\s*VO-/i;
 // case. The 27 Sep 2026 evidence-bundle-2-docs run excluded its first 38
 // pages (an email chain, statements, an affidavit) on those footers alone and
 // then reported that every page had been read.
-var VO_SECONDARY_REPORT_MASTHEAD_RE = /V\s?E\s?R\s?U\s?M\s+O\s?M\s?N\s?I\s?S[\s|\-–—:]{1,40}(?:FORENSIC\s+(?:EVIDENCE\s+)?REPORT|FORENSIC\s+ANALYSIS|COURT-?\s?READY\s+NARRATIVE|NARRATIVE\s+REPORT)/i;
+var VO_SECONDARY_REPORT_MASTHEAD_RE = /V\s?E\s?R\s?U\s?M\s+O\s?M\s?N\s?I\s?S[\s|\-–—:·•]{1,40}(?:FORENSIC\s+(?:EVIDENCE\s+)?REPORT|FORENSIC\s+ANALYSIS|FORENSIC\s+NARRATIVE|COURT-?\s?READY\s+NARRATIVE|NARRATIVE\s+REPORT)/i;
+var VO_SECONDARY_SPACED_REPORT_RE = /\bF\s+O\s+R\s+E\s+N\s+S\s+I\s+C\s+R\s+E\s+P\s+O\s+R\s+T\b/i;
+var VO_SECONDARY_FACTUAL_RECORD_RE = /\bComplete\s+Factual\s+Record\b/i;
+var VO_SECONDARY_CONTRADICTION_SCHEDULE_RE = /\bSchedule\s+of\s+Contradictions\b/i;
+var VO_CONSTITUTION_REPORT_TEMPLATE_RE = /\bEvery\s+forensic\s+report\s+generated\s+under\s+this\s+Constitution\s+must\s+follow\s+this\s+template\b/i;
 var VO_SECONDARY_REPORT_TITLE_RE = /\b((?:supplementary|forensic|final|interim|preliminary|investigation)\s+report\s*:\s*[^\n]{10,160})/i; // page text is space-joined, so the title is read from the cue, not from a line start
 var VO_SECONDARY_REPORT_PLACEHOLDER = new Array(11).join('prior verum omnis report page excluded. ');
+function voIsStandaloneAnalysisCover(text) {
+  var t = String(text || '');
+  // These covers introduce a complete, separately sealed analysis, rather than
+  // a report with exhibits sealed behind it. Their own seal's finite page
+  // sequence identifies the continuations without swallowing the next record.
+  if (/\bVERUM\s+OMNIS[\s|\-–—:·•]{1,40}FORENSIC\s+NARRATIVE\b/i.test(t)) return /\bPrepared\s+by\s+Verum\s+Omnis\b/i.test(t) && /\bSource\s+seal\s*:/i.test(t);
+  if (VO_SECONDARY_FACTUAL_RECORD_RE.test(t)) return /\bPrepared\s+by\s*:[^|]{0,180}\bForensic\s+Investigator\s*,\s*Verum\s+Omnis\b/i.test(t) && /\bHow\s+to\s+read\s+this\s+report\b/i.test(t);
+  if (VO_SECONDARY_CONTRADICTION_SCHEDULE_RE.test(t)) return /\bPrepared\s+by\s+Verum\s+Omnis\s+for\s+use\s+in\b/i.test(t) && /\bStatus\s*:\s*FINAL\b/i.test(t) && /\bPurpose\b/i.test(t);
+  return false;
+}
 function voIsSecondaryReportPage(text) {
   var t = String(text || '');
+  // The Constitution prints the report masthead as a REQUIRED TEMPLATE. That
+  // governance clause is not itself an earlier forensic report.
+  if (VO_CONSTITUTION_REPORT_TEMPLATE_RE.test(t)) return false;
+  if (voIsStandaloneAnalysisCover(t)) return true;
   if (VO_SECONDARY_REPORT_REF_RE.test(t)) return true;
-  return VO_SECONDARY_REPORT_MASTHEAD_RE.test(t);
+  return VO_SECONDARY_REPORT_MASTHEAD_RE.test(t) || VO_SECONDARY_SPACED_REPORT_RE.test(t);
 }
 function voIsSecondaryAnalysisContinuation(text) {
   var t = String(text || '');
@@ -6101,12 +6170,30 @@ function voIsSecondaryAnalysisContinuation(text) {
   if (distinct.length < 3) return false;
   return /\bD[1-9]\d*\b[^.]{0,80}\b(?:records?|describes?|adds?|concedes?|discloses?|asserts?|bears?|presents?)\b/i.test(t);
 }
+var VO_SEALED_SEQUENCE_G = /\bSeal:\s*(VO-[A-Z0-9]+)\b\s*\|\s*SHA-512:[\s\S]{0,240}?\|\s*(\d{1,4})\s*\/\s*(\d{1,4})(?![\d/])/gi;
+function voSealedSequences(text) {
+  var out = [], m;
+  VO_SEALED_SEQUENCE_G.lastIndex = 0;
+  while ((m = VO_SEALED_SEQUENCE_G.exec(String(text || ''))) !== null) out.push({ id: m[1].toUpperCase(), page: +m[2], total: +m[3] });
+  return out;
+}
 function voExcludeSecondaryReportPages(textBlocks) {
   if (!textBlocks || textBlocks.length < 2) return null;
-  var isReport = [], titles = [], i, m;
+  var isReport = [], titles = [], sealedReports = [], i, m;
   for (i = 0; i < textBlocks.length; i++) {
     isReport[i] = voIsSecondaryReportPage(textBlocks[i]);
     if (!isReport[i]) continue;
+    if (voIsStandaloneAnalysisCover(textBlocks[i])) {
+      var coverSeals = voSealedSequences(textBlocks[i]);
+      for (var cs = 0; cs < coverSeals.length; cs++) {
+        // The outer seal paginates the WHOLE combined bundle; an inner seal
+        // beginning at 1/N paginates the analytical document itself.
+        if (coverSeals[cs].page !== 1 || coverSeals[cs].total < 2 || coverSeals[cs].total > textBlocks.length) continue;
+        if (coverSeals.length > 1 && coverSeals[cs].total === textBlocks.length) continue;
+        var sealKey = coverSeals[cs].id + '|' + coverSeals[cs].total;
+        if (sealedReports.indexOf(sealKey) < 0) sealedReports.push(sealKey);
+      }
+    }
     // The report's own title line, so its running header on later pages can be recognised.
     m = VO_SECONDARY_REPORT_TITLE_RE.exec(String(textBlocks[i] || ''));
     if (m) {
@@ -6119,6 +6206,18 @@ function voExcludeSecondaryReportPages(textBlocks) {
       if (isReport[i]) continue;
       var flat = String(textBlocks[i] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
       for (var t = 0; t < titles.length; t++) { if (flat.indexOf(titles[t]) >= 0) { isReport[i] = true; break; } }
+    }
+  }
+  // A standalone analytical cover's INNER seal gives an exact, bounded page
+  // sequence. Match both seal id and stated total, so the outer combined-bundle
+  // seal and the differently sealed primary record that follows are untouched.
+  if (sealedReports.length) {
+    for (i = 0; i < textBlocks.length; i++) {
+      if (isReport[i]) continue;
+      var pageSeals = voSealedSequences(textBlocks[i]);
+      for (var ps = 0; ps < pageSeals.length; ps++) {
+        if (sealedReports.indexOf(pageSeals[ps].id + '|' + pageSeals[ps].total) >= 0 && pageSeals[ps].page >= 1 && pageSeals[ps].page <= pageSeals[ps].total) { isReport[i] = true; break; }
+      }
     }
   }
   // A masthead or recognised running title opens an analytical run. Continue
@@ -6145,10 +6244,10 @@ function voExcludeSecondaryReportPages(textBlocks) {
   }
   if (!pages.length) return null;
   if (pages.length === textBlocks.length) {
-    return { pages: pages, note: 'Prior Verum Omnis report: every page (' + pages.length + ') carries a Verum Omnis report masthead or its running title. A Verum Omnis report is analysis, not evidence, and is never scanned for contradictions; nothing in this file was examined as evidence.' };
+    return { pages: pages, note: 'Prior Verum Omnis report: every page (' + pages.length + ') was identified by its analytical cover, masthead, running title or sealed page sequence. A Verum Omnis report is analysis, not evidence, and is never scanned for contradictions; nothing in this file was examined as evidence.' };
   }
   var list = pages.length > 12 ? pages.slice(0, 12).join(', ') + ', … (' + pages.length + ' in total)' : pages.join(', ');
-  return { pages: pages, note: 'Prior Verum Omnis report: ' + pages.length + ' page(s) (' + list + ') carry a Verum Omnis report masthead or that report\'s running title. A Verum Omnis report bound into a bundle is analysis, not evidence, and was excluded from contradiction scanning; the exhibits that follow it were scanned.' };
+  return { pages: pages, note: 'Prior Verum Omnis report: ' + pages.length + ' page(s) (' + list + ') were identified by an analytical cover, masthead, running title or sealed page sequence. A Verum Omnis report bound into a bundle is analysis, not evidence, and was excluded from contradiction scanning; the exhibits that follow it were scanned.' };
 }
 
 // A file that says on its first pages that it is a compiled summary written by
@@ -8923,7 +9022,9 @@ function voWellFormedness(o) {
     id: 'WF7', name: 'Prior sealed output recognised',
     pass: true,
     note: o.selfSealed
-      ? 'this file is itself a prior Verum Omnis sealed output; its report pages were excluded from contradiction scanning'
+      ? (o.reportPagesExcluded > 0
+        ? 'this file is itself a prior Verum Omnis sealed output; ' + o.reportPagesExcluded + ' analytical report page(s) were excluded from contradiction scanning'
+        : 'this file is itself a prior Verum Omnis sealed output; no analytical report page was recognised or excluded, so its sealed evidence pages remain eligible for scanning')
       : 'this file is not a prior Verum Omnis sealed output'
   });
 
@@ -9044,6 +9145,14 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     textBlocks = [allTexts.join(' ')];
   }
 
+  // Recognise the outer Verum Omnis seal BEFORE report pages are replaced by
+  // placeholders; otherwise a wholly excluded report turns selfSealed false.
+  // One embedded sealed exhibit is not enough: the outer wrapper covers most pages.
+  var _voBrandFooterRe = /VERUM\s+OMNIS\s+SEALED\s+(?:ORIGINAL|DOCUMENT)|\bVO-[0-9A-F]{6,}\b/i;
+  var _voBrandPages = 0;
+  for (var bfp = 0; bfp < textBlocks.length; bfp++) if (_voBrandFooterRe.test(String(textBlocks[bfp] || ''))) _voBrandPages++;
+  var _voSelfSealed = textBlocks.length > 1 && _voBrandPages * 2 > textBlocks.length;
+
   // Template/boilerplate suppression (see voExcludeTemplatePages).
   var templateNote = voExcludeTemplatePages(textBlocks);
   if (templateNote) extractionNote += ' ' + templateNote;
@@ -9056,18 +9165,6 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // The bundle's stated boundaries are read from the seal footers, so they are
   // computed now and cached; then the furniture goes (voStripSealFurniture).
   var _docSegs = voCacheDocSegs(textBlocks);
-  // Whether THIS FILE went through this platform's sealer is judged before
-  // the furniture is stripped, from the BRAND-bearing footer alone and only
-  // when it covers most pages. The generic furniture patterns (a bare UTC
-  // timestamp, a timezone name, "VERIFY SEAL") also live on ordinary
-  // exhibits, and ONE embedded sealed exhibit — a photocopied certificate on
-  // p. 42 of an unsealed bundle — proves nothing about the outer file
-  // (Greensky rerun review). The real wrapper signs nearly every page
-  // (Greensky: 419 of 451).
-  var _voBrandFooterRe = /VERUM\s+OMNIS\s+SEALED\s+(?:ORIGINAL|DOCUMENT)|\bVO-[0-9A-F]{6,}\b/i;
-  var _voBrandPages = 0;
-  for (var bfp = 0; bfp < textBlocks.length; bfp++) if (_voBrandFooterRe.test(String(textBlocks[bfp] || ''))) _voBrandPages++;
-  var _voSelfSealed = textBlocks.length > 1 && _voBrandPages * 2 > textBlocks.length;
   var _furniture = voStripSealFurnitureBlocks(textBlocks);
   if (_furniture) extractionNote += ' Seal furniture: this platform\'s own seal footers (seal id, hash, date and time, page count) were removed from ' + _furniture + ' page(s) before detection; a seal stamp is not a statement of the record.';
   var _secondarySegs = voSecondarySegments(_docSegs, textBlocks);
@@ -9078,6 +9175,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // 143, 272 carried the same AI case summary).
   var _mdPages = voMarkdownAnalysisPages(textBlocks);
   var _secondaryAllPages = _secondaryPages.slice();
+  if (_secondary && Array.isArray(_secondary.pages)) for (var exp = 0; exp < _secondary.pages.length; exp++) if (_secondaryAllPages.indexOf(_secondary.pages[exp]) === -1) _secondaryAllPages.push(_secondary.pages[exp]);
   for (var mdp = 0; mdp < _mdPages.length; mdp++) if (_secondaryAllPages.indexOf(_mdPages[mdp]) === -1) _secondaryAllPages.push(_mdPages[mdp]);
   _secondaryAllPages.sort(function (a, b) { return a - b; });
   if (_mdPages.length) {
@@ -9409,7 +9507,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     var _gp = (typeof window !== 'undefined') ? window : (typeof globalThis !== 'undefined' ? globalThis : null);
     var _pkg = _gp && _gp.voRulePackage;
     if (_pkg && typeof _pkg === 'object' && _pkg.version && (Array.isArray(_pkg.pairs) || Array.isArray(_pkg.groups) || Array.isArray(_pkg.markers))) {
-      var _pr = voRunPackageRules(_pkg, textBlocks, allFindings);
+      var _pr = voRunPackageRules(_pkg, voPackageEvidenceBlocks(textBlocks, _secondaryAllPages), allFindings);
       allFindings = allFindings.concat(_pr.findings);
       _rulePkgInfo = {
         version: _pkg.version,
@@ -9658,6 +9756,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     docSegs: _docSegs || [],
     footerOnlyPages: _footer.pages,
     selfSealed: _voSelfSealed,
+    reportPagesExcluded: _secondary && _secondary.pages ? _secondary.pages.length : 0,
     parties: voExtractParties(_wfText),
     dates: voExtractDates(_wfText)
   });
@@ -10061,6 +10160,18 @@ function voRulePagesOf(location) {
 // of them already reports the same type on the same page. Returns
 // { findings, withheld } -- deterministic: rules in package order, pages
 // ascending, first passage per page. Never throws.
+// Signed rules obey the same source discipline as built-in detectors. Mask
+// every known secondary/analysis page before either pair or group matching;
+// otherwise a package finding added after the demotion pass could rest wholly
+// on commentary, or use commentary to complete a primary-page co-occurrence.
+function voPackageEvidenceBlocks(textBlocks, secondaryPages) {
+  var blocks = (textBlocks || []).slice(), pages = secondaryPages || [];
+  for (var i = 0; i < pages.length; i++) {
+    var p = +pages[i];
+    if (p >= 1 && p <= blocks.length) blocks[p - 1] = VO_SECONDARY_REPORT_PLACEHOLDER;
+  }
+  return blocks;
+}
 function voRunPackageRules(compiled, textBlocks, existing) {
   var out = { findings: [], withheld: 0 };
   if (!compiled) return out;
@@ -10291,6 +10402,7 @@ if (typeof module !== 'undefined' && module.exports) {
     voVerifyRulePackage: voVerifyRulePackage,
     voCompileRulePackage: voCompileRulePackage,
     voRunPackageRules: voRunPackageRules,
+    voPackageEvidenceBlocks: voPackageEvidenceBlocks,
     voRulePagesOf: voRulePagesOf,
     _voGlyphTokens: _voGlyphTokens,
     voLooksGarbled: voLooksGarbled,

@@ -12,7 +12,7 @@ const D = E.DETECTORS;
 
 // ---- CT01: an admission lead must quote complete words ----
 const admissionOut = D.D01_DETECT_DIRECT_CONTRADICTION([
-  'regard is baseless. AD PARAGRAPH 18 227. I admit that annexure B was sent to the Controller in response to the request.'
+  'regard is baseless. AD PARAGRAPH 18 227. I admit that I signed the deed of suretyship and accepted personal liability for the debt.'
 ]);
 const admissionLead = admissionOut.find(f => /explicit admission/i.test(f.evidence));
 t.ok(admissionLead && !/: "egard\b/.test(admissionLead.evidence),
@@ -29,6 +29,27 @@ t.ok(D.D03_DETECT_DATE_INCONSISTENCY([
   'A separate entry reads 12/30/2020 in the same document.'
 ]).some(f => /mixes date formats/i.test(f.evidence)),
   'two plausible but incompatible date conventions remain detectable');
+
+// Without stated document boundaries, the twenty-page proximity limit still
+// applies. Otherwise two unrelated instruments at opposite ends of a compiled
+// bundle can be paired merely because the segmentation pass found no run.
+const distantDateBlocks = Array(24).fill('Ordinary correspondence with no documentary date.');
+distantDateBlocks[0] = 'The first instrument states termination date: 1 January 2024.';
+distantDateBlocks[22] = 'A separate instrument states termination date: 2 February 2025.';
+t.ok(E.voDetectDocuments(distantDateBlocks).length === 0 &&
+  D.D03_DETECT_DATE_INCONSISTENCY(distantDateBlocks).every(f => !/termination date/i.test(f.evidence)),
+  'unrelated labelled termination dates more than twenty pages apart do not pair without document boundaries');
+t.ok(D.D03_DETECT_DATE_INCONSISTENCY([
+  'The instrument states termination date: 1 January 2024.',
+  'Its continuation records the surrounding facts.',
+  'The same instrument restates termination date: 2 February 2025.'
+]).some(f => /termination date/i.test(f.evidence)),
+  'a labelled termination-date conflict within twenty pages remains detectable without document boundaries');
+const distantFormatBlocks = Array(24).fill('Ordinary correspondence with no documentary date.');
+distantFormatBlocks[0] = 'The first instrument was filed on 26/10/2026 at the registry.';
+distantFormatBlocks[22] = 'A separate instrument was filed on 12/30/2020 at another registry.';
+t.ok(D.D03_DETECT_DATE_INCONSISTENCY(distantFormatBlocks).every(f => !/mixes date formats/i.test(f.evidence)),
+  'distant date conventions in an unsegmented bundle do not become one document mixing formats');
 
 // ---- CT06: legal positions are not ownable physical assets ----
 t.ok(D.D06B_DETECT_OWNERSHIP_ATTRIBUTION_CONFLICT([

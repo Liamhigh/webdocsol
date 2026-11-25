@@ -5,8 +5,8 @@
 > engine is correct** and the other surface is the one to fix. Every hard lesson from real
 > evidence bundles is encoded here and locked by tests.
 
-**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.2-web'`
-**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.2-web'`, report builder v1.3.1.
+**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.3-web'`
+**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.3-web'`, report builder v1.3.1.
 **Findings JSON:** v1.11.0, built by `buildFindingsJson` in `seal-document.html`, not by either
 script (1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
 the well-formedness gate and serial-stage trace; 1.9.0 added `cross_document_observations` with a

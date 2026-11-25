@@ -309,6 +309,42 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   const rf = E.voExcludeSecondaryReportPages(far);
   ok(rf && JSON.stringify(rf.pages) === '[2,3,8]', 'a gap wider than two pages is never bridged (' + (rf && rf.pages) + ')');
 
+  // 13a-i. An analytical cover need not use the old, narrow masthead. A
+  // separately sealed "Complete Factual Record" and contradiction schedule
+  // are analysis for their whole INNER seal sequence; the next differently
+  // sealed letter remains primary evidence (16 November combined-bundle review).
+  const seal = (id, n, N) => ' VERUM OMNIS SEALED ORIGINAL | Seal: ' + id + ' | SHA-512: 0123456789abcdef... | 16/11/2026 22:25:06 Africa/Johannesburg | ' + n + '/' + N;
+  const factual = 'The Example Investigation — Complete Factual Record Report date: 16 November 2026 Prepared by: Alex Example, Forensic Investigator, Verum Omnis Sources: the sealed case record. 1. How to read this report This report separates direct evidence from inferences and hypotheses.';
+  const factualBlocks = [factual + seal('VO-AAAAAAAAAAAA', 1, 3) + seal('VO-EEEEEEEEEEEE', 1, 5),
+    '2. Analysis of the source record. The reviewer draws an inference from the exhibited correspondence.' + seal('VO-AAAAAAAAAAAA', 2, 3) + seal('VO-EEEEEEEEEEEE', 2, 5),
+    '3. Conclusion. This is the reviewer\'s assessment, not a source document.' + seal('VO-AAAAAAAAAAAA', 3, 3) + seal('VO-EEEEEEEEEEEE', 3, 5),
+    'Dear Registrar, please place the attached original affidavit on the court file. This letter is primary correspondence.' + seal('VO-EEEEEEEEEEEE', 4, 5),
+    'Lease agreement between Example Lessor and Example Lessee. The parties agree to the stated rental.' + seal('VO-EEEEEEEEEEEE', 5, 5)];
+  const factualExcluded = E.voExcludeSecondaryReportPages(factualBlocks);
+  ok(factualExcluded && JSON.stringify(factualExcluded.pages) === '[1,2,3]' && /Dear Registrar/.test(factualBlocks[3]) && /Lease agreement/.test(factualBlocks[4]),
+    'the factual-record cover excludes only its sealed analysis pages, not the following letter or agreement (' + (factualExcluded && factualExcluded.pages) + ')');
+  const spaced = 'F O R E N S I C R E P O R T THE EXAMPLE RECORD P R E P A R E D B Y Alex Example — Forensic Investigator, Verum Omnis';
+  const running = 'VERUM OMNIS ·FORENSIC REPORT ·CASE 1/20 ·PRIVATE & CONFIDENTIAL 2. Executive Summary This report evaluates the source record.';
+  const spacedBlocks = [spaced, running, 'Dear Advocate, this primary letter requests the original court file.'];
+  const spacedExcluded = E.voExcludeSecondaryReportPages(spacedBlocks);
+  ok(E.voIsSecondaryReportPage(spaced) && E.voIsSecondaryReportPage(running) && spacedExcluded && JSON.stringify(spacedExcluded.pages) === '[1,2]' && /Dear Advocate/.test(spacedBlocks[2]),
+    'spaced FORENSIC REPORT lettering and a middle-dot running title are excluded without taking the following correspondence');
+  const schedule = 'Schedule of Contradictions — FINAL Prepared by Verum Omnis for use in: the example application. Status: FINAL — quote-checked. 1. Purpose This schedule compares the company\'s sworn positions.';
+  const scheduleBlocks = [schedule + seal('VO-BBBBBBBBBBBB', 1, 2) + seal('VO-EEEEEEEEEEEE', 1, 4), '3. Contradiction 1 — the reviewer\'s side-by-side analysis of the two affidavits.' + seal('VO-BBBBBBBBBBBB', 2, 2) + seal('VO-EEEEEEEEEEEE', 2, 4), 'ANSWERING AFFIDAVIT. The deponent states the facts directly.' + seal('VO-EEEEEEEEEEEE', 3, 4), 'Lease agreement. Primary record.' + seal('VO-EEEEEEEEEEEE', 4, 4)];
+  const scheduleExcluded = E.voExcludeSecondaryReportPages(scheduleBlocks);
+  ok(scheduleExcluded && JSON.stringify(scheduleExcluded.pages) === '[1,2]' && /ANSWERING AFFIDAVIT/.test(scheduleBlocks[2]), 'a sealed Schedule of Contradictions is analysis; the underlying affidavit is not swallowed');
+  const narrativeCover = 'VERUM OMNIS · FORENSIC NARRATIVE Report Reference: VO-NARRATIVE-TEST Source document: example.pdf Source seal: VO-SOURCE Prepared by Verum Omnis — deterministic forensic chronology over the sealed record.';
+  const narrativeHeader = 'VERUM OMNIS · FORENSIC NARRATIVE PART I — WHAT THE DOCUMENTS SHOWED The reviewer narrates the sealed record.';
+  const narrativeBlocks = [narrativeCover + seal('VO-CCCCCCCCCCCC', 1, 3) + seal('VO-EEEEEEEEEEEE', 1, 4),
+    narrativeHeader + seal('VO-CCCCCCCCCCCC', 2, 3) + seal('VO-EEEEEEEEEEEE', 2, 4),
+    'PROVENANCE & CERTIFICATION The reviewer records the narrative gates and source hashes.' + seal('VO-CCCCCCCCCCCC', 3, 3) + seal('VO-EEEEEEEEEEEE', 3, 4),
+    'Dear Registrar, the attached affidavit is primary evidence for the court file.' + seal('VO-EEEEEEEEEEEE', 4, 4)];
+  const narrativeExcluded = E.voExcludeSecondaryReportPages(narrativeBlocks);
+  ok(E.voIsSecondaryReportPage(narrativeCover) && E.voIsSecondaryReportPage(narrativeHeader) && narrativeExcluded && JSON.stringify(narrativeExcluded.pages) === '[1,2,3]' && /Dear Registrar/.test(narrativeBlocks[3]),
+    'a sealed FORENSIC NARRATIVE cover, running header and sealed continuations are analysis; the following primary letter remains evidence');
+  const constitutionTemplate = 'Every forensic report generated under this Constitution must follow this template exactly. VERUM OMNIS FORENSIC REPORT Seal: [SHA-512 Hash] 15.3 Required Format and Language.';
+  ok(E.voIsSecondaryReportPage(constitutionTemplate) === false, 'the Constitution\'s required report template is governance text, not a prior analytical report');
+
   // 13b. CT44: the party denied ownership must be the party shown to have become owner.
   const d38 = (b) => of(DET.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED, b, 'CT44');
   ok(d38(['3.2.3 in the event that the Franchisee is not the owner of the Premises, but is the lessee in terms of a Lease with Palmbili Properties, this agreement expires when the lease terminates.', 'All Fuels Equipment (Pty) Ltd, the supplier of fuel and the Owner/Lessor of the site from which the Operator trades.']).length === 0,

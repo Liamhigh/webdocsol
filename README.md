@@ -31,7 +31,7 @@
 
 **Repository:** `Liamhigh/webdocsol`  
 **Sealing standard:** VO-DSS-1.2 ([`seal-module/SPEC.md`](./seal-module/SPEC.md)); QR payload `v: "1.2"`; sealed PDFs carry a `VO-SEAL2|…` Subject (Producer `Verum Omnis Document Sealing Service v1.3.0`); site package version 1.2.5 (`package.json`)  
-**Engine:** `VO_ENGINE_VERSION 5.7.2-web` (report `ENGINE_VERSION` the same; report builder v1.3.1) — CT01–CT61, 63 registered detector entries; findings JSON 1.11.0<br>
+**Engine:** `VO_ENGINE_VERSION 5.7.3-web` (report `ENGINE_VERSION` the same; report builder v1.3.1) — CT01–CT61, 63 registered detector entries; findings JSON 1.11.0<br>
 **Constitution:** v8.0 (governance charter, seal `VO-9A4F3C5E825C`); v6.1 (engine operating instrument, seal `VO-9E51D3F507E6`)  
 **Updated:** 2026-11-15 — current-source reconciliation on the audited Phase 0 baseline. Constitution v8.0 was sealed on 2026-08-05.<br>
 **Integrity model:** tamper-evident (SHA-512 + OpenTimestamps) — never "immutable". **Licence:** none in the repository (open with the founder).  

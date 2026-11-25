@@ -285,7 +285,7 @@ function buildDevelopmentRun(spec) {
   const output = {
     schema: SCHEMA, version: VERSION, development_only: true, default_off: true,
     release_flags: RELEASE_FLAGS, nb0_status: 'OPEN_AWAITING_GOVERNANCE_DECISION', concordance_status: 'POLICY_UNRESOLVED',
-    production_findings_json_version: '1.11.0', production_engine_version: '5.7.2-web',
+    production_findings_json_version: '1.11.0', production_engine_version: '5.7.3-web',
     engine_version: spec.engineVersion, constitution_version: spec.constitution.version, constitution_sha512: constitutionSha512,
     evidence_bundle: clone(spec.bundle), evidence_bundle_sha512: hash(spec.bundle),
     source_texts_sha512: hash(spec.sourceTexts), source_findings_sha512: hash(spec.findings),
@@ -323,7 +323,7 @@ function validateDevelopmentRunUnsafe(run) {
   if (!plain(run) || run.schema !== SCHEMA) return { valid: false, errors: ['wrong development-run schema'] };
   if (run.development_only !== true || run.default_off !== true || run.nb0_status !== 'OPEN_AWAITING_GOVERNANCE_DECISION' || run.concordance_status !== 'POLICY_UNRESOLVED') errors.push('development and unresolved-NB-0 boundaries must be explicit');
   if (!plain(run.release_flags) || Object.keys(RELEASE_FLAGS).some((key) => run.release_flags[key] !== false)) errors.push('every release flag must remain false');
-  if (run.production_findings_json_version !== '1.11.0' || run.production_engine_version !== '5.7.2-web') errors.push('production compatibility identities changed');
+  if (run.production_findings_json_version !== '1.11.0' || run.production_engine_version !== '5.7.3-web') errors.push('production compatibility identities changed');
   if (!SHA512_RE.test(run.run_sha512 || '') || !SHA512_RE.test(run.constitution_sha512 || '') || !SHA512_RE.test(run.evidence_bundle_sha512 || '')) errors.push('run, Constitution and bundle hashes are required');
   if (run.triple_verification_status !== 'NOT_EXECUTED' || run.human_adjudication_status !== 'NOT_ADJUDICATED') errors.push('development orchestration cannot claim verification or adjudication');
   for (const key of ['first_pass', 'second_pass']) {

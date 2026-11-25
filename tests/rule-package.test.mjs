@@ -208,6 +208,17 @@ const key = makeKey();
   ok(explicit.groups[0].min === 4 && explicit.groups[1].min === 2, 'an explicit min_cooccur wins; with neither field nor prose the threshold is half the phrases, never below 2');
   ok(E.voCompileRulePackage({ version: '1.2.0', rules: { fraud_keywords: [{ id: 'FK22', groups: [['solo']] }] } }, {}).groups.length === 0, 'a one-phrase group is not a co-occurrence rule');
   ok(JSON.stringify(E.voRunPackageRules(lc, gpages, [])) === JSON.stringify(E.voRunPackageRules(lc, gpages, [])), 'group application is deterministic');
+  const maskedOne = E.voPackageEvidenceBlocks(gpages, [2]);
+  const maskedRun = E.voRunPackageRules(lc, maskedOne, []);
+  ok(maskedRun.findings.length === 1 && maskedRun.findings[0].packageRule === 'FK13' && /prior verum omnis report page excluded/.test(maskedOne[1]) && gpages[1].indexOf('guaranteed returns') >= 0,
+    'package evidence masking removes an analysis-only group without changing the source text or suppressing a primary-page group');
+  ok(E.voRunPackageRules(lc, E.voPackageEvidenceBlocks(gpages, [2, 3]), []).findings.length === 0, 'package rules cannot rest wholly on secondary/analysis pages');
+  ok(E.voRunPackageRules(lc, E.voPackageEvidenceBlocks(['We offer guaranteed returns of 12%.', 'The scheme is risk free.'], [2]), []).findings.length === 0,
+    'a secondary page cannot complete a co-occurrence threshold for a primary page');
+  const reconstructedLive = { version: '1.1.0', rules: Object.assign({}, seed.rules, { fraud_keywords: seed.rules.fraud_keywords.concat(live.rules.fraud_keywords) }) };
+  const reconstructed = E.voCompileRulePackage(reconstructedLive, {});
+  ok(reconstructed.pairs.length === 0 && reconstructed.groups.length === 2 && reconstructed.builtInGroupsSkipped.length === 22,
+    'the reported pairRules=0 / groupRules=2 / builtInGroupsSkipped=22 shape is locked to the seed plus curated v1.1.0 groups');
   ok(E.voSemverNewer('1.2.0', '1.1.9') && !E.voSemverNewer('1.1.0', '1.1.0') && !E.voSemverNewer('x', '1.0.0') && E.voSemverNewer('1.0.0', 'x'), 'semver comparison');
 }
 
@@ -216,6 +227,7 @@ const key = makeKey();
   const src = readFileSync(path.join(root, 'forensic-engine-page.js'), 'utf8');
   ok(/var _pkg = _gp && _gp\.voRulePackage;\s*if \(_pkg && typeof _pkg === 'object' && _pkg\.version && \(Array\.isArray\(_pkg\.pairs\) \|\| Array\.isArray\(_pkg\.groups\) \|\| Array\.isArray\(_pkg\.markers\)\)\)/.test(src), 'runForensicEngine reads only globalThis.voRulePackage, guarded');
   ok(/rulePackage: _rulePkgInfo,/.test(src), 'the engine result carries rulePackage (null when none applied)');
+  ok(/voRunPackageRules\(_pkg, voPackageEvidenceBlocks\(textBlocks, _secondaryAllPages\), allFindings\)/.test(src), 'the pipeline masks every secondary/analysis page before signed package application');
   ok(/if \(finding\.packageRule\) cw = Math\.min\(cw, VO_PACKAGE_RULE_CONFIDENCE\);/.test(src), 'scoring caps a package finding\'s weight');
   ok(typeof globalThis.voRulePackage === 'undefined', 'the Node harness never sets a package (regression suites run the built-in engine)');
   ok(!/Date\.now\(\)|Math\.random\(\)/.test(src.slice(src.indexOf('SIGNED RULE PACKAGES (additive engine update)'))), 'no Date.now / Math.random in the package code (determinism)');

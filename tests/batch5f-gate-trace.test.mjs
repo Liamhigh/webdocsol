@@ -17,11 +17,13 @@ const require = createRequire(import.meta.url);
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const path = require('node:path');
 const E = require(path.join(__dirname, '..', 'forensic-engine-page.js'));
+const PDFLib = require('pdf-lib');
+globalThis.PDFLib = PDFLib;
 const t = require('./_assert');
 
 t.ok(typeof E.voWellFormedness === 'function', 'voWellFormedness is exported');
 t.ok(typeof E.detectSerialPatterns === 'function', 'detectSerialPatterns is exported');
-t.ok(E.VO_ENGINE_VERSION === '5.7.2-web', 'engine version is 5.7.2-web');
+t.ok(E.VO_ENGINE_VERSION === '5.7.3-web', 'engine version is 5.7.3-web');
 
 const DATED = 'The applicant John Smith confirmed on 12 March 2026 that payment of R50,000 was made.';
 
@@ -91,6 +93,37 @@ t.ok(!byId.WF4.pass, 'no parties fails WF4');
 t.ok(!byId.WF5.pass, 'no dates fails WF5');
 t.ok(!byId.WF6.pass, 'no segments fails WF6');
 t.ok(byId.WF7.pass, 'prior-seal check never fails (disclosure only)');
+const wf7Excluded = E.voWellFormedness({ selfSealed: true, reportPagesExcluded: 53 }).checks.find(c => c.id === 'WF7');
+t.ok(/prior Verum Omnis sealed output/.test(wf7Excluded.note) && /53 analytical report page\(s\) were excluded/.test(wf7Excluded.note),
+  'WF7 reports the actual number of analytical pages excluded');
+const wf7Evidence = E.voWellFormedness({ selfSealed: true, reportPagesExcluded: 0 }).checks.find(c => c.id === 'WF7');
+t.ok(/no analytical report page was recognised or excluded/.test(wf7Evidence.note) && /sealed evidence pages remain eligible for scanning/.test(wf7Evidence.note),
+  'WF7 cannot claim an exclusion when no analytical report page was recognised');
+
+// A wholly excluded prior report still counts as self-sealed: brand recognition
+// must happen before its original text is replaced by exclusion placeholders.
+{
+  const prior = await PDFLib.PDFDocument.create();
+  const font = await prior.embedFont(PDFLib.StandardFonts.Helvetica);
+  const reportPages = [
+    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-PRIOR-REPORT', 'The reviewer analyses the source record and records conclusions.'],
+    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-PRIOR-REPORT', 'The reviewer continues the analysis and certification of the source record.']
+  ];
+  for (const lines of reportPages) {
+    const page = prior.addPage([612, 792]);
+    lines.concat(['VERUM OMNIS SEALED ORIGINAL | VO-ABCDEF123456']).forEach((line, i) => page.drawText(line, { x: 36, y: 740 - i * 18, size: 10, font }));
+  }
+  const priorBytes = await prior.save({ useObjectStreams: false });
+  const priorDoc = await PDFLib.PDFDocument.load(priorBytes, { ignoreEncryption: true });
+  const quiet = console.log; console.log = () => {};
+  let priorResult;
+  try { priorResult = await E.runForensicEngine(priorBytes, priorDoc, null, { referenceTime: '2026-11-25T00:00:00.000Z' }); }
+  finally { console.log = quiet; }
+  const priorWf7 = priorResult.wellFormedness.checks.find(c => c.id === 'WF7');
+  t.ok(/prior Verum Omnis sealed output/.test(priorWf7.note) && /2 analytical report page\(s\) were excluded/.test(priorWf7.note) &&
+    /nothing in this file was examined as evidence/.test(priorResult.extractionNotes),
+    'self-seal recognition survives replacement of every analytical page by an exclusion placeholder');
+}
 
 // ---- gate: a bundle that is ALL rendered analysis fails WF3 ----
 const allMd = E.voWellFormedness({

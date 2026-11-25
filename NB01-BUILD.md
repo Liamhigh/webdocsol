@@ -79,7 +79,7 @@ const Preview = require('./nine-brain-preview.js');
 
 const preview = Preview.buildNineBrainPreview({
   input_sha512: '<128 lowercase hexadecimal characters>',
-  engine_version: '5.7.2-web',
+  engine_version: '5.7.3-web',
   findings: existingEngineResult.findings
 });
 
@@ -114,7 +114,7 @@ This slice changes no forensic analysis, report or sealing behaviour. The only s
 - No change to `forensic-engine-page.js`, `forensic-report.js`, `seal-document.html`, `worker/verum-rules.js`, `analysis-config.js`, or `analysis-contracts.js`.
 - `worker/static-proxy.js` and `.assetsignore` exclude only `nine-brain-contracts.js`, `nine-brain-source-register.js` and `nine-brain-preview.js`; no public page or API gains access to them.
 - No new CT type, detector ID, production module flag, Findings JSON version, seal/QR/OTS semantic, route, credential, external request, or AI lane.
-- Production Findings JSON remains `1.11.0`; engine remains `5.7.2-web`.
+- Production Findings JSON remains `1.11.0`; engine remains `5.7.3-web`.
 - No new production or development dependency was installed from the supplied archives.
 - No real-matter evidence, private fixture, ZIP, model, provider response, or secret was added.
 - All new test content is synthetic.

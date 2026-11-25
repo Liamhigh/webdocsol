@@ -191,7 +191,7 @@ The following production analysis and sealing files were not edited:
 - `analysis-contracts.js`
 - `tests/run-all.js`
 
-`worker/static-proxy.js` received only the explicit synthetic Test Lab page mapping. Findings JSON remains `1.11.0`; the production engine remains `5.7.2-web`. Existing seals and OTS proofs are untouched. Ordinary production scans do not import or execute the development modules.
+`worker/static-proxy.js` received only the explicit synthetic Test Lab page mapping. Findings JSON remains `1.11.0`; the production engine remains `5.7.3-web`. Existing seals and OTS proofs are untouched. Ordinary production scans do not import or execute the development modules.
 
 Rollback is revert-based: revert the branch changes or remove `development/nine-brain/`, `development/nine-brain-console/`, the four development test registrations/files, `development-lab.html`, `development-lab.js`, their browser test/build script and navigation/route entries, then restore the static-serving exclusions and documentation. There is no database migration, persisted production state, provider credential, live AI route or seal-format migration to unwind.
 

@@ -27,8 +27,8 @@ const findingsVersion = html.match(/findings_json_version:\s*'([^']+)'/);
 const suiteRegistry = read('tests/run-all.js');
 const suiteCount = [...suiteRegistry.matchAll(/^  '[^']+\.test\.(?:mjs|js)',$/gm)].length;
 
-ok(Engine.VO_ENGINE_VERSION === '5.7.2-web', 'engine version is the audited current source version');
-ok(reportSource.includes("var ENGINE_VERSION = '5.7.2-web';"), 'report engine version agrees with engine source');
+ok(Engine.VO_ENGINE_VERSION === '5.7.3-web', 'engine version is the audited current source version');
+ok(reportSource.includes("var ENGINE_VERSION = '5.7.3-web';"), 'report engine version agrees with engine source');
 ok(builderVersion && builderVersion[1] === '1.3.1', 'report builder version comes from report source');
 ok(ctKeys.length === 61 && ctKeys.some((key) => key.startsWith('CT61_')), 'taxonomy contains CT01 through CT61');
 ok(detectorKeys.length === 63, 'detector registry contains 63 entries');
@@ -45,7 +45,7 @@ ok(testsGuide.includes('| 58 | `evaluation-metrics` | `evaluation-metrics.test.m
 'test guidance records actual assertions without changing the verified 60-suite registry count');
 
 const readme = read('README.md');
-ok(readme.includes('VO_ENGINE_VERSION 5.7.2-web') && readme.includes('CT01–CT61') && readme.includes('findings JSON 1.11.0'), 'README current engine/taxonomy/findings line agrees with source');
+ok(readme.includes('VO_ENGINE_VERSION 5.7.3-web') && readme.includes('CT01–CT61') && readme.includes('findings JSON 1.11.0'), 'README current engine/taxonomy/findings line agrees with source');
 ok(readme.includes('report builder v1.3.1'), 'README names the source-derived report builder');
 ok(readme.includes('website + Android `1verum`') && readme.includes('Android reference `cursorfu`') && readme.includes('Guardian firewall `firebase`'), 'README retains the four-system surface model');
 ok(readme.includes('`seal-module/web/` is NOT the live site') && readme.includes('Edit the root files.'), 'README distinguishes root production sources from obsolete snapshots');
