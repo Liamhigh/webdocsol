@@ -55,6 +55,10 @@ ok(readme.includes('`seal-module/web/` is NOT the live site') && readme.includes
 const agents = read('AGENTS.md');
 ok(agents.includes('46 numeric prefixes, 45 unsuffixed entries and 18 suffixed entries') && agents.includes('61 entries in the main run-list'), 'AGENTS Quick facts uses precise detector terminology');
 ok(agents.includes('**66 registered suites**'), 'AGENTS Quick facts names the current registered suite count');
+ok(agents.includes('Secondary-report exclusion is classification, not authentication:') &&
+   agents.includes('independent report-analysis content signals') &&
+   agents.includes('extraction-note disclosure whenever pages are excluded'),
+  'AGENTS preserves the report-exclusion and disclosure invariant');
 
 const architecture = read('ARCHITECTURE.md');
 ok(architecture.includes('is at v1.11.0') && architecture.includes('sealed conduct ledger'), 'ARCHITECTURE names the current website findings version and additive fields');

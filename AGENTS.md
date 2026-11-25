@@ -528,8 +528,13 @@ ever described as having adopted, endorsed or validated anything; a seal or a re
 tamper-evident, never permanent, immutable or unalterable, and "anchored to the Bitcoin
 blockchain" is written only once the OpenTimestamps proof is confirmed, and then only to say the
 file existed no later than that block (`anchorPhrase`); D16 is never revived by restoring
-newlines; the optional Case details "Parties" field never becomes a required input. Read the
-bible for the area before changing it: `ENGINE.md` (engine and reports), `DEPLOYMENT.md`
+newlines; the optional Case details "Parties" field never becomes a required input.
+Secondary-report exclusion is classification, not authentication: a plaintext seal ID or
+page total, a footer, or a letter-spaced report phrase alone never proves a page is a report
+or a seal is genuine. Exclude only pages with independent report-analysis content signals,
+and retain an extraction-note disclosure whenever pages are excluded. Never claim that a
+document authenticates its own seal. Read the bible for the area before changing it:
+`ENGINE.md` (engine and reports), `DEPLOYMENT.md`
 (shipping and serving), `REFERENCE.md` (every file and endpoint), `FORENSIC-DEBUG.md` (what a
 failure looks like).
 
