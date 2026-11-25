@@ -161,6 +161,18 @@ ok(r0.proposition_b_actor === 'unattributed', 'unlocated second party is unattri
   ok(indirect[1].proposition_a_actor === 'unattributed', 'an unnamed legal role is not a named actor');
   ok(indirect[2].proposition_a_actor === 'unattributed', 'a speaker in another sentence is not attributed to the quote');
   ok(indirect[3].proposition_a_actor === 'unattributed', 'structured role entries are not named actors');
+  const repeated = buildFindingsJson({ pageTexts: [
+    'The agreement was signed.',
+    'Example Holdings states the agreement was signed.'
+  ], findings: [{
+    type: 'CT01', severity: 3, evidence: 'The agreement was signed.', location: 'Page 1 vs Page 2',
+    anchor: { who: [{ name: 'Example Holdings', kind: 'name' }], where: [1, 2], quote: ['the agreement was signed'] }
+  }] }, 'synthetic.pdf', 'a'.repeat(128), 2, {}).contradictions[0];
+  ok(repeated.proposition_a_actor === 'unattributed', 'a repeated quote with uncertain page provenance has no attributed actor');
+  const company = buildFindingsJson({ pageTexts: ['Example Holdings (Pty) Ltd states that the agreement was signed.'],
+    findings: [f('Example Holdings', 'Example Holdings (Pty) Ltd states that the agreement was signed.', 1)]
+  }, 'synthetic.pdf', 'a'.repeat(128), 1, {}).contradictions[0];
+  ok(company.proposition_a_actor === 'Example Holdings', 'a company suffix does not make its named speaker unattributed');
 }
 ok(r0.temporal_analysis === '7 Mar 2025, 13 Mar 2025', 'anchor dates flow into temporal_analysis');
 ok(Array.isArray(r0.document_cited_provisions) && r0.document_cited_provisions[0] === 'clause 4.5.2',

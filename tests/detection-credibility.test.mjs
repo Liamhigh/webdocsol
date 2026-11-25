@@ -76,6 +76,12 @@ const primary = [
   'Letter: Please send the CONTRADICTION LEDGER (B1 - Contradiction Brain) and the brain outputs identified in the evidence.'
 ];
 check(E.voExcludeSecondaryReportPages(primary) === null, 'report references and isolated analytical terms do not exclude evidence');
+check(E.voExcludeSecondaryReportPages(['Letter: We discussed B4 linguistics, B5 multi-actor mapping and B6 financial brain at the meeting.']) === null,
+  'a primary record listing brain labels is not itself an analysis');
+const genericAnalysis = [report.join(' '), 'The parties refer to VO-0123456789AB in this primary statement.'];
+E.voExcludeSecondaryReportPages(genericAnalysis);
+check(!E.voSecondaryPages([{ start: 1, end: 2, title: 'Evidence' }], genericAnalysis).includes(2),
+  'a generic analysis exclusion does not make an adjacent primary page secondary');
 check(E.voExcludeSecondaryReportPages(['Letter: Please find the report enclosed. ' + ledgerPage.join(' ')])?.pages[0] === 1,
   'a letter heading does not conceal independent analysis content');
 const blocks = [record + ' ' + footer];

@@ -6337,6 +6337,7 @@ var VO_SECONDARY_CONTRADICTION_SCHEDULE_RE = /\bSchedule\s+of\s+Contradictions\b
 var VO_CONSTITUTION_REPORT_TEMPLATE_RE = /\bEvery\s+forensic\s+report\s+generated\s+under\s+this\s+Constitution\s+must\s+follow\s+this\s+template\b/i;
 var VO_SECONDARY_REPORT_TITLE_RE = /\b((?:supplementary|forensic|final|interim|preliminary|investigation)\s+report\s*:\s*[^\n]{10,160})/i; // page text is space-joined, so the title is read from the cue, not from a line start
 var VO_SECONDARY_REPORT_PLACEHOLDER = new Array(11).join('prior verum omnis report page excluded. ');
+var VO_GENERIC_REPORT_PLACEHOLDER = new Array(11).join('prior analysis page excluded. ');
 function voIsStandaloneAnalysisCover(text) {
   var t = String(text || '');
   // These covers introduce an analysis rather than an ordinary sealed exhibit.
@@ -6355,7 +6356,8 @@ function voIsFrameworkAnalysisPage(text) {
       /\b(?:brain\s+outputs|identified\s+in\s+the\s+evidence)\b/i.test(t)) return true;
   if (/\bB4\b[^.]{0,40}\blinguistics\b/i.test(t) &&
       /\bB5\b[^.]{0,40}\bmulti[- ]actor\b/i.test(t) &&
-      /\bB6\b[^.]{0,40}\bfinancial\s+brain\b/i.test(t)) return true;
+      /\bB6\b[^.]{0,40}\bfinancial\s+brain\b/i.test(t) &&
+      /\b(?:triple\s+verification|brain\s+outputs|contradiction\s+ledger|(?:this\s+)?report\s+analy[sz]es)\b/i.test(t)) return true;
   return /\bCourt[- ]Ready\s+Declaration\s*:\s*This\s+output\s+is\s+generated\s+under\s+Verum\s+Omnis\s+Constitution\b/i.test(t) &&
     /\b(?:synthesis|recommendations)\b/i.test(t);
 }
@@ -6388,10 +6390,12 @@ function voIsSecondaryAnalysisContinuation(text) {
 }
 function voExcludeSecondaryReportPages(textBlocks) {
   if (!textBlocks || !textBlocks.length) return null;
-  var isReport = [], titles = [], i, m;
+  var isReport = [], platformReport = [], titles = [], i, m;
   for (i = 0; i < textBlocks.length; i++) {
     isReport[i] = voIsSecondaryReportPage(textBlocks[i]);
     if (!isReport[i]) continue;
+    platformReport[i] = !VO_CONSTITUTION_REPORT_TEMPLATE_RE.test(String(textBlocks[i] || '')) &&
+      (voIsStandaloneAnalysisCover(textBlocks[i]) || VO_SECONDARY_REPORT_MASTHEAD_RE.test(String(textBlocks[i] || '')));
     // The report's own title line, so its running header on later pages can be recognised.
     m = VO_SECONDARY_REPORT_TITLE_RE.exec(String(textBlocks[i] || ''));
     if (m) {
@@ -6419,7 +6423,7 @@ function voExcludeSecondaryReportPages(textBlocks) {
   for (i = 0; i < textBlocks.length; i++) {
     if (!isReport[i]) continue;
     pages.push(i + 1);
-    textBlocks[i] = VO_SECONDARY_REPORT_PLACEHOLDER;
+    textBlocks[i] = platformReport[i] ? VO_SECONDARY_REPORT_PLACEHOLDER : VO_GENERIC_REPORT_PLACEHOLDER;
   }
   if (!pages.length) return null;
   var notePrefix = 'Prior analysis report: ';
