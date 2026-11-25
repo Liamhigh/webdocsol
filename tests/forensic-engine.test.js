@@ -47,7 +47,7 @@ const fires = (fn, input, type, name) => {
   const out = fn(input);
   t.ok(out.length > 0 && out.some(f => f.type === type), name + ' fires (' + out.length + ' findings)');
 };
-fires(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION, ['payment was paid', 'it was not paid'], 'CT01', 'D01 paid/not-paid');
+fires(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION, ['payment was paid.', 'it was not paid.'], 'CT01', 'D01 paid/not-paid');
 // D02 compares a labelled quantity against itself across the document. The
 // same "Total" stated at two different values is the contradiction; two
 // different line items that merely differ in size are not.
@@ -144,7 +144,7 @@ t.ok(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(
   ['The deposit was paid on time.', 'x'.repeat(300), 'The final invoice was not paid.']).length === 0,
   'D01 does not flag paid / not paid that are far apart');
 t.ok(DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(
-  ['The invoice was paid, yet the ledger says it was not paid.']).some(f => f.type === 'CT01'),
+  ['The invoice was paid. The ledger says it was not paid.']).some(f => f.type === 'CT01'),
   'D01 still fires when paid and not paid are in the same passage');
 
 // D17 must not flag normal page-length variation (title page vs dense page).

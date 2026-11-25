@@ -1429,7 +1429,7 @@ function makeCtx(doc, fonts, images, sourceName, ctxOpts) {
 }
 
 // ================= COVER =================
-function drawCover(ctx, data) {
+function drawCover(ctx, data, omitGps) {
   var pg = ctx.doc.addPage([PW, PH]);
   // navy full bleed
   pg.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: NAVY });
@@ -1494,7 +1494,7 @@ function drawCover(ctx, data) {
   var cjList = [(JURIS_LABEL[cj.home] || cj.home) + ' (' + cjBasis + ')'].concat(cj.foreign.map(function (c) { return (JURIS_LABEL[c] || c) + ' (named in the engine\'s findings)'; }));
   cLine('Jurisdiction(s): ' + (data.identity.jurisdiction ? data.identity.jurisdiction + ' (entered); ' : '') + cjList.join(', '), ctx.f.times, 9.5, COVER_TXT, 15);
   // The GPS fix prints on the cover — the §15.4 header a reader sees first.
-  var _gpsCover = gpsLine(data);
+  var _gpsCover = omitGps ? null : gpsLine(data);
   if (_gpsCover) cLine(_gpsCover, ctx.f.times, 9.5, COVER_TXT, 15);
   cLine('Case Reference: ' + (data.identity.caseRefs || 'none entered'), ctx.f.times, 9.5, COVER_TXT, 15);
   cLine('Report Type: ' + (data.coverReportType || 'Combined — Forensic Extraction, Contradiction Analysis, Tamper Detection'), ctx.f.times, 9.5, COVER_TXT, 15);
@@ -5749,7 +5749,7 @@ async function buildHumanReport(opts) {
     try { fn(ctx, data, o); } finally { ctx.heading = origHeading; }
   }
 
-  drawCover(ctx, data);
+  drawCover(ctx, data, true);
   // Contents placeholder page (drawn last with real page numbers), as the
   // forensic report does: the reference document opens with a table of
   // contents and so does this one.
@@ -6008,7 +6008,6 @@ async function buildHumanReport(opts) {
   var lines = [
     'Narrative report reference: ' + reference,
     'Generated: ' + generatedAt.toISOString(),
-    gpsLine(data),
     'Source document: ' + san(data.docName) + ' (' + data.pageCount + ' pages) — SHA-512 ' + truncHash(data.sha512, 24, 12),
     'Sealed technical report: ' + (prov.technicalSealId || 'n/a') + ' — SHA-512 ' + (prov.technicalSha512 ? truncHash(prov.technicalSha512, 24, 12) : 'n/a'),
     'Findings JSON (v' + (prov.findingsJsonVersion || '1.2.0') + '): SHA-512 ' + (prov.findingsJsonSha512 ? truncHash(prov.findingsJsonSha512, 24, 12) : 'n/a'),

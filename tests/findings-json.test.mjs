@@ -109,8 +109,43 @@ ok(/function voCtMapById\(\)/.test(html), 'page-native map helper renamed to voC
 // Anchors bound into the record: who -> actors, when -> temporal_analysis,
 // document-cited law -> document_cited_provisions (cite-or-stay-silent).
 const r0 = json.contradictions[0];
-ok(r0.proposition_a_actor === 'Gary Highcock', 'first party bound to proposition_a_actor');
-ok(r0.proposition_b_actor === 'Lessee', 'second party bound to proposition_b_actor');
+ok(r0.proposition_a_actor === 'unattributed', 'unlocated first party is unattributed');
+ok(r0.proposition_b_actor === 'unattributed', 'unlocated second party is unattributed');
+{
+  const pages = [
+    'Primary Artifact: example.pdf. Acme Intellectual Pr states a claim. Acme Intellectual Property states that the agreement was signed.',
+    'Elsewhere Example Holdings appears. ' + 'ordinary text '.repeat(30) + 'The agreement was not signed.',
+    'Example Holdings states that the agreement was signed.',
+    'Annexure Alpha states that the agreement was signed.'
+  ];
+  const f = (name, quote, page) => ({
+    type: 'CT01', severity: 3, evidence: quote, location: 'Page ' + page,
+    anchor: { who: [{ name, kind: 'name' }], where: [page], quote: [quote] }
+  });
+  const actors = buildFindingsJson({ pageTexts: pages, findings: [
+    f('Primary Artifact', 'Primary Artifact: example.pdf.', 1),
+    f('Acme Intellectual Pr', 'Acme Intellectual Pr states a claim.', 1),
+    f('Acme Intellectual', 'Acme Intellectual Property states that the agreement was signed.', 1),
+    f('Example Holdings', 'The agreement was not signed.', 2),
+    f('Example Holdings', 'Example Holdings states that the agreement was signed.', 3),
+    f('Annexure Alpha', 'Annexure Alpha states that the agreement was signed.', 4)
+  ] }, 'synthetic.pdf', 'a'.repeat(128), 4, {}).contradictions;
+  ok(actors[0].proposition_a_actor === 'unattributed', 'furniture label is rejected as an actor');
+  ok(actors[1].proposition_a_actor === 'unattributed', 'mid-word actor truncation is rejected');
+  ok(actors[2].proposition_a_actor === 'unattributed', 'truncation of a longer name on the page is rejected');
+  ok(actors[3].proposition_a_actor === 'unattributed', 'distant page-level name is rejected');
+  ok(actors[4].proposition_a_actor === 'Example Holdings', 'adjacent named party is retained');
+  ok(actors[5].proposition_a_actor === 'unattributed', 'numbered or named exhibit labels are not actors');
+  const pair = buildFindingsJson({ pageTexts: [
+    'Example Holdings states that the agreement was signed.',
+    'Other Holdings states that the agreement was not signed.'
+  ], findings: [{
+    type: 'CT01', severity: 3, evidence: 'Two statements', location: 'Page 1 vs Page 2',
+    anchor: { who: [{ name: 'Other Holdings' }, { name: 'Example Holdings' }], where: [1, 2],
+      quote: ['Example Holdings states that the agreement was signed.', 'Other Holdings states that the agreement was not signed.'] }
+  }] }, 'synthetic.pdf', 'a'.repeat(128), 2, {}).contradictions[0];
+  ok(pair.proposition_a_actor === 'Example Holdings' && pair.proposition_b_actor === 'Other Holdings', 'actors follow their quoted statements rather than roster order');
+}
 ok(r0.temporal_analysis === '7 Mar 2025, 13 Mar 2025', 'anchor dates flow into temporal_analysis');
 ok(Array.isArray(r0.document_cited_provisions) && r0.document_cited_provisions[0] === 'clause 4.5.2',
   'document-cited provision carried (cite-or-stay-silent)');

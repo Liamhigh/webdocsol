@@ -201,8 +201,17 @@ const E = require('../forensic-engine-page.js');
     'Schedule Part 1 — 12. Goodwill: N/A.',
     'Goodwill means the established reputation of a business regarded as a quantifiable asset.'
   ]);
-  ok(gw2.filter(x => x.type === 'CT45').length >= 2,
-    'both the commentary pair and the schedule N/A pair are reported (' + gw2.length + ')');
+  ok(gw2.some(x => x.type === 'CT45' && /N\/A/.test(x.evidence) && /Page 3 vs Page 2/.test(x.location)) &&
+    gw2.every(x => x.location !== 'Page 1'),
+    'one commentary sentence is not two horns; the separate schedule N/A pair survives (' + gw2.length + ')');
+  const distinct = E.DETECTORS.D39_DETECT_ASSET_VALUE_DENIAL([
+    'Goodwill is recognised as a valuable asset.',
+    'The respondent submitted that goodwill has no compensable value.',
+    'Schedule Part 1 — 12. Goodwill: N/A.',
+    'Goodwill means the established reputation of a business regarded as a quantifiable asset.'
+  ]);
+  ok(distinct.filter(x => x.type === 'CT45').length >= 2,
+    'distinct commentary statements and the separate schedule pair remain detectable');
 
   // 5c. Explicit admission language fires, aggregated and quoted.
   const adm = E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION([

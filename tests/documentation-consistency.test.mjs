@@ -38,13 +38,13 @@ ok(!runList.includes('D37_DETECT_INTERNAL_CONFLICT_CATCHALL') && detectorKeys.in
 ok(!runList.includes('D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT') && detectorKeys.includes('D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT'), 'D10A is retained but inactive');
 ok(reportCounts && +reportCounts[1] === runList.length && +reportCounts[2] === ctKeys.length && +reportCounts[3] === 17, 'report fallback counts match main run-list, taxonomy and serial registry');
 ok(findingsVersion && findingsVersion[1] === '1.11.0', 'production findings JSON remains at source-derived 1.11.0');
-ok(suiteCount === 66 && suiteRegistry.includes("'pr327-review.test.mjs'") && suiteRegistry.includes("'analysis-contracts.test.mjs'") && suiteRegistry.includes("'documentation-consistency.test.mjs'") && suiteRegistry.includes("'evaluation-metrics.test.mjs'") && suiteRegistry.includes("'evaluation-contractnli.test.mjs'") && suiteRegistry.includes("'evaluation-contradoc.test.mjs'") && suiteRegistry.includes("'evaluation-eyecite.test.mjs'") && suiteRegistry.includes("'legal-citations.test.mjs'") && suiteRegistry.includes("'legal-citations-za.test.mjs'") && suiteRegistry.includes("'redaction-fixtures.test.mjs'") && suiteRegistry.includes("'pdf-graph.test.mjs'"), 'all 66 Node suites are explicitly registered');
+ok(suiteCount === 67 && suiteRegistry.includes("'detection-credibility.test.mjs'") && suiteRegistry.includes("'pr327-review.test.mjs'") && suiteRegistry.includes("'analysis-contracts.test.mjs'") && suiteRegistry.includes("'documentation-consistency.test.mjs'") && suiteRegistry.includes("'evaluation-metrics.test.mjs'") && suiteRegistry.includes("'evaluation-contractnli.test.mjs'") && suiteRegistry.includes("'evaluation-contradoc.test.mjs'") && suiteRegistry.includes("'evaluation-eyecite.test.mjs'") && suiteRegistry.includes("'legal-citations.test.mjs'") && suiteRegistry.includes("'legal-citations-za.test.mjs'") && suiteRegistry.includes("'redaction-fixtures.test.mjs'") && suiteRegistry.includes("'pdf-graph.test.mjs'"), 'all 67 Node suites are explicitly registered');
 const testsGuide = read('tests/README.md');
 ok(testsGuide.includes('| 58 | `evaluation-metrics` | `evaluation-metrics.test.mjs` | 116 |') &&
    testsGuide.includes('| 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 |') &&
-   testsGuide.includes('**66 registered production/baseline suites**') &&
+   testsGuide.includes('**67 registered production/baseline suites**') &&
    testsGuide.includes('| 66 | `pr327-review` | `pr327-review.test.mjs` | 40 |'),
-'test guidance records the current 66-suite registry and exact review-suite assertions');
+'test guidance records the current 67-suite registry and exact review-suite assertions');
 
 const readme = read('README.md');
 ok(readme.includes('VO_ENGINE_VERSION 5.7.3-web') && readme.includes('CT01–CT61') && readme.includes('findings JSON 1.11.0'), 'README current engine/taxonomy/findings line agrees with source');
@@ -54,7 +54,7 @@ ok(readme.includes('`seal-module/web/` is NOT the live site') && readme.includes
 
 const agents = read('AGENTS.md');
 ok(agents.includes('46 numeric prefixes, 45 unsuffixed entries and 18 suffixed entries') && agents.includes('61 entries in the main run-list'), 'AGENTS Quick facts uses precise detector terminology');
-ok(agents.includes('**66 registered suites**'), 'AGENTS Quick facts names the current registered suite count');
+ok(agents.includes('**67 registered suites**'), 'AGENTS Quick facts names the current registered suite count');
 ok(agents.includes('Secondary-report exclusion is classification, not authentication:') &&
    agents.includes('independent report-analysis content signals') &&
    agents.includes('extraction-note disclosure whenever pages are excluded'),
@@ -67,12 +67,12 @@ ok(architecture.includes('**63 entries**') && architecture.includes('**61 entrie
 
 const reference = read('REFERENCE.md');
 ok(reference.includes('**`analysis-contracts.js`**') && reference.includes('**`analysis-config.js`**'), 'REFERENCE documents both new shared scripts');
-ok(reference.includes('**66 registered suites**') && reference.includes('QPDF-WASM and Playwright are development-only'), 'REFERENCE has current tests and dependency posture');
+ok(reference.includes('**67 registered suites**') && reference.includes('QPDF-WASM and Playwright are development-only'), 'REFERENCE has current tests and dependency posture');
 
 const engineDoc = read('ENGINE.md');
 ok(engineDoc.includes('## 2. Contradiction types (CT01–CT61)') && engineDoc.includes('## 3. Detector inventory (63 registered entries)'), 'ENGINE current taxonomy and detector headings agree with source');
 ok(engineDoc.includes('**Findings JSON:** v1.11.0') && engineDoc.includes('report builder v1.3.1'), 'ENGINE header has current findings and report-builder versions');
-ok(engineDoc.includes('**66 registered suites**'), 'ENGINE test section names the current registry size');
+ok(engineDoc.includes('**67 registered suites**'), 'ENGINE test section names the current registry size');
 const testReadme = read('tests/README.md');
 ok(engineDoc.includes('| `annexure-eb-regression.test.mjs` | 502 |') &&
    testReadme.includes('| 33 | `annexure-eb` | `annexure-eb-regression.test.mjs` | 502 |') &&
