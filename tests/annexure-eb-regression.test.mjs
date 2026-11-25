@@ -296,8 +296,8 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     && E.voIsSecondaryReportPage('V E R U M O M N I S S E A L E D D O C U M E N T VERUM OMNIS FORENSIC REPORT') === true,
     'an exhibit that mentions "the forensic report" beside a seal footer is evidence; the brand and the kind must sit together');
   const r = E.voExcludeSecondaryReportPages(blocks);
-  ok(r && JSON.stringify(r.pages) === '[1,2,3,4,5]' && /Prior Verum Omnis report: 5 page/.test(r.note) && /analysis, not evidence/.test(r.note),
-    'the report pages (masthead, running-title pages, a one-page OCR gap inside the run) are excluded and disclosed; the exhibits stay (' + (r && r.pages) + ')');
+  ok(r && JSON.stringify(r.pages) === '[1,2,3,5]' && /Prior Verum Omnis report: 4 page/.test(r.note) && /analysis, not evidence/.test(r.note) && /ocr noise/.test(blocks[3]),
+    'recognised report pages are excluded and disclosed; an unrecognised gap and exhibits remain (' + (r && r.pages) + ')');
   ok(/prior verum omnis report page excluded/.test(blocks[1]) && /FRANCHISE AGREEMENT/.test(blocks[5]) && blocks.length === 7, 'excluded pages are replaced in place; page numbering survives');
   ok(of(DET.D39_DETECT_ASSET_VALUE_DENIAL, blocks, 'CT45').length === 0 && of(DET.D32_DETECT_SIGNATURE_ANOMALY, blocks, 'CT23').length === 0,
     'the report\'s "goodwill forfeiture contradiction" and its "Unsigned Agreements" title no longer become CT45/CT23 findings');

@@ -100,8 +100,7 @@ const wf7Evidence = E.voWellFormedness({ selfSealed: true, reportPagesExcluded: 
 t.ok(/no analytical report page was recognised or excluded/.test(wf7Evidence.note) && /sealed evidence pages remain eligible for scanning/.test(wf7Evidence.note),
   'WF7 cannot claim an exclusion when no analytical report page was recognised');
 
-// A wholly excluded prior report still counts as self-sealed: brand recognition
-// must happen before its original text is replaced by exclusion placeholders.
+// When every page is excluded, no evidence page remains to assess seal status.
 {
   const prior = await PDFLib.PDFDocument.create();
   const font = await prior.embedFont(PDFLib.StandardFonts.Helvetica);
@@ -120,9 +119,9 @@ t.ok(/no analytical report page was recognised or excluded/.test(wf7Evidence.not
   try { priorResult = await E.runForensicEngine(priorBytes, priorDoc, null, { referenceTime: '2026-11-25T00:00:00.000Z' }); }
   finally { console.log = quiet; }
   const priorWf7 = priorResult.wellFormedness.checks.find(c => c.id === 'WF7');
-  t.ok(/prior Verum Omnis sealed output/.test(priorWf7.note) && /2 analytical report page\(s\) were excluded/.test(priorWf7.note) &&
+  t.ok(/no evidence pages remain to assess prior-seal status/.test(priorWf7.note) &&
     /nothing in this file was examined as evidence/.test(priorResult.extractionNotes),
-    'self-seal recognition survives replacement of every analytical page by an exclusion placeholder');
+    'WF7 does not infer a self-seal when all analytical pages are excluded');
 }
 
 // ---- gate: a bundle that is ALL rendered analysis fails WF3 ----

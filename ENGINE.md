@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   65 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite); many exist solely to stop the regressions in §4 and §12.
+   66 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -880,7 +880,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**65 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite; recount assertions after any test change).
+**66 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -1470,7 +1470,8 @@ and what changed — every item pinned by `tests/annexure-eb-regression.test.mjs
    replaces, in place, every page carrying a Verum Omnis report masthead (`Report Reference:
    VO-`, or the brand with FORENSIC REPORT / SEALED DOCUMENT / the seal line) and every page
    carrying that report's own running title, closing one- or two-page gaps inside the run
-   (an OCR miss on the title) and never a wider one. The exclusion is disclosed in the
+   (an OCR miss on the title) and never a wider one. **Superseded by §12.29:** gaps without
+   an analysis signal are no longer excluded. The exclusion is disclosed in the
    extraction notes like template pages (§12.10 item 3, PD6). A Verum Omnis report is
    analysis, never evidence; sealing one with a forensic report says "nothing in this file
    was examined as evidence".
@@ -2832,6 +2833,29 @@ gates and deterministic fallback are unchanged. No gate threshold is loosened.
 blocks, concise token budget, anti-padding instruction and a compliant rewrite passing the same
 gate. A separate expansion control pins the retained record blocks and section token budget. Live
 acceptance remains a post-deployment check, not a unit-test claim.
+
+### 12.29 PR #327 review corrections — evidence boundaries
+
+Report exclusions require analysis-page signals; plaintext seal sequences, including a
+bundle-wide outer sequence, do not exclude pages. Unrecognised gaps remain eligible for
+scanning even if they may be report continuations; the exclusion note still names the
+pages set aside. Signed rules receive empty slots for excluded pages, retaining page
+numbers without matching placeholder text. WF7 and metadata suppression count seal
+signals only on remaining evidence pages; when none remain, WF7 says status is
+undetermined.
+
+Document boundaries are cached by the run's page array, not shared across concurrent
+scans. D07A restricts an authority-instrument search to the identified affidavit or,
+where boundaries are unavailable, a bounded nearby window that is identified as such.
+Negation is confined to the instrument's clause. Routine service admissions do not
+hide a separate substantive admission. The standalone narrative cover derives a
+reference from the source seal when the production caller supplies no case reference;
+that reference is not the separately sealed narrative's hash.
+
+`tests/pr327-review.test.mjs` exercises synthetic outer and forged seals, exclusion
+disclosures, signed-package matching, embedded-seal metadata, affidavit boundaries,
+negation, admissions and overlapping scans. `tests/forensic-narrative.test.mjs`
+checks the cover reference.
 
 ## 13. The court-ready narrative (the "human report")
 

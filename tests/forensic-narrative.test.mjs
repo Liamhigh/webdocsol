@@ -215,6 +215,15 @@ ok(deterministicBuild.bytes instanceof Uint8Array && deterministicBuild.gateStat
   deterministicText.includes('Prepared by Verum Omnis — deterministic forensic chronology over the sealed record') &&
   deterministicText.includes('no AI-generated prose is printed'),
   'the Greensky failure shape now renders a standalone PDF with honest deterministic provenance');
+const caseReferenceStart = drawnText.length;
+await globalThis.VerumReport.buildForensicNarrative({
+  images: { logo: new Uint8Array([1]) },
+  documents: [{ name: 'record.pdf', pageCount: 3, sha512: 'd'.repeat(128), sealId: 'VO-SOURCE' }],
+  identity: { caseRefs: 'CASE-EXAMPLE' },
+  narrativeParts: fallbackParts
+});
+ok(drawnText.slice(caseReferenceStart).join(' ').includes('Report Reference: CASE-EXAMPLE'),
+  'production-shaped case reference is rendered on the narrative cover');
 const failedEngineBuild = await globalThis.VerumReport.buildForensicNarrative({
   narrativeParts: [{ index: 1, count: 1, provenance: 'engine', text: 'This proves the respondent committed fraud.' }]
 });

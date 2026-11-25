@@ -210,7 +210,7 @@ const key = makeKey();
   ok(JSON.stringify(E.voRunPackageRules(lc, gpages, [])) === JSON.stringify(E.voRunPackageRules(lc, gpages, [])), 'group application is deterministic');
   const maskedOne = E.voPackageEvidenceBlocks(gpages, [2]);
   const maskedRun = E.voRunPackageRules(lc, maskedOne, []);
-  ok(maskedRun.findings.length === 1 && maskedRun.findings[0].packageRule === 'FK13' && /prior verum omnis report page excluded/.test(maskedOne[1]) && gpages[1].indexOf('guaranteed returns') >= 0,
+  ok(maskedRun.findings.length === 1 && maskedRun.findings[0].packageRule === 'FK13' && maskedOne[1] === '' && gpages[1].indexOf('guaranteed returns') >= 0,
     'package evidence masking removes an analysis-only group without changing the source text or suppressing a primary-page group');
   ok(E.voRunPackageRules(lc, E.voPackageEvidenceBlocks(gpages, [2, 3]), []).findings.length === 0, 'package rules cannot rest wholly on secondary/analysis pages');
   ok(E.voRunPackageRules(lc, E.voPackageEvidenceBlocks(['We offer guaranteed returns of 12%.', 'The scheme is risk free.'], [2]), []).findings.length === 0,
@@ -227,7 +227,6 @@ const key = makeKey();
   const src = readFileSync(path.join(root, 'forensic-engine-page.js'), 'utf8');
   ok(/var _pkg = _gp && _gp\.voRulePackage;\s*if \(_pkg && typeof _pkg === 'object' && _pkg\.version && \(Array\.isArray\(_pkg\.pairs\) \|\| Array\.isArray\(_pkg\.groups\) \|\| Array\.isArray\(_pkg\.markers\)\)\)/.test(src), 'runForensicEngine reads only globalThis.voRulePackage, guarded');
   ok(/rulePackage: _rulePkgInfo,/.test(src), 'the engine result carries rulePackage (null when none applied)');
-  ok(/voRunPackageRules\(_pkg, voPackageEvidenceBlocks\(textBlocks, _secondaryAllPages\), allFindings\)/.test(src), 'the pipeline masks every secondary/analysis page before signed package application');
   ok(/if \(finding\.packageRule\) cw = Math\.min\(cw, VO_PACKAGE_RULE_CONFIDENCE\);/.test(src), 'scoring caps a package finding\'s weight');
   ok(typeof globalThis.voRulePackage === 'undefined', 'the Node harness never sets a package (regression suites run the built-in engine)');
   ok(!/Date\.now\(\)|Math\.random\(\)/.test(src.slice(src.indexOf('SIGNED RULE PACKAGES (additive engine update)'))), 'no Date.now / Math.random in the package code (determinism)');

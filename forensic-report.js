@@ -6123,7 +6123,7 @@ async function buildForensicNarrative(opts) {
       ? 'Prepared by Verum Omnis — gated AI narrative and deterministic sealed-record chronology'
       : 'Prepared by Verum Omnis — AI forensic narrator over the sealed record');
   var coverDetails = [
-    'Report Reference: ' + String(identity.reference || 'n/a'),
+    'Report Reference: ' + String(identity.reference || identity.caseRefs || (sourceDoc.sealId ? 'VO-NARRATIVE-' + sourceDoc.sealId : 'n/a')),
     'Source document: ' + String(sourceDoc.name || 'document') + ' (' + (sourceDoc.pageCount || 'n/a') + ' pages)',
     'Source SHA-512: ' + truncHash(sourceDoc.sha512, 24, 12),
     'Source seal: ' + String(sourceDoc.sealId || 'n/a'),
