@@ -60,7 +60,7 @@ The five development suites are:
 | File | Checks | Exercises |
 |---|---|---|
 | `nine-brain-contracts.test.mjs` | 200 | NB-0/NB-1 records and read-only preview |
-| `nine-brain-orchestration-research-legal.test.mjs` | 264 | Two passes, P1–P7/audit/guardian/certification, B4/B8/B9 boundaries, RES-1–RES-9, all 169 Allen compositions, B7 cross-border gaps and adapter gating |
+| `nine-brain-orchestration-research-legal.test.mjs` | 265 | Two passes, P1–P7/audit/guardian/certification, B4/B8/B9 boundaries, RES-1–RES-9, all 169 Allen compositions, B7 cross-border gaps and adapter gating |
 | `nine-brain-verification-adjudication.test.mjs` | 94 | Bounded immutable packets, trusted audit lineage, isolated mocked providers with cancellation, fail-closed panels, revision-history dispositions, packet-grounded narrative and authoritative-state annexes |
 
 These suites use synthetic fixtures only. They do not call live providers, modify production Findings JSON, or exercise a production Worker route.
@@ -115,7 +115,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 | Phase 3 synthetic redaction corpus: exact UTF-16 ranges, protected verbatim evidence quotes, preserved references, and a fail-closed production-module flag |
 | 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
 | 66 | `pr327-review` | `pr327-review.test.mjs` | 40 | Synthetic review regressions for report exclusion, signed-rule masking, WF7, CT52, D02C, admissions and overlapping scans |
-| 67 | `detection-credibility` | `detection-credibility.test.mjs` | 92 | Synthetic report exclusion, ledger furniture, contradiction, severity, coverage and narrative-privacy regressions |
+| 67 | `detection-credibility` | `detection-credibility.test.mjs` | 99 | Synthetic report exclusion, ledger furniture, contradiction, severity, coverage and narrative-privacy regressions |
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete production/baseline registry.
 
@@ -124,7 +124,7 @@ The separately gated development registry is `run-development.js`:
 | Label | File | Checks | Exercises |
 |-------|------|--------|-----------|
 | `nine-brain-contracts` | `nine-brain-contracts.test.mjs` | 200 | NB-0 source register and unresolved concordance; NB-1 shared records and bundle evidence resolution; UTF-16/structural/media anchors; semantic run/output/engagement/promotion/audit/guardian reconciliation; malformed-input safety; read-only preview identity/tamper/replay and immutability checks |
-| `nine-brain-orchestration-research-legal` | `nine-brain-orchestration-research-legal.test.mjs` | 264 | Exact promoted-candidate audit/guardian lineage; unresolved evidence preservation; B8 media-only views/anchors; unexecuted-analysis coverage; malformed Allen witnesses; unknown-object/equal-amount/formal-domain research guards; consistent oracle universes; B7 recomputed identity, coverage and conflicts reconciliation |
+| `nine-brain-orchestration-research-legal` | `nine-brain-orchestration-research-legal.test.mjs` | 265 | Exact promoted-candidate audit/guardian lineage; unresolved evidence preservation; B8 media-only views/anchors; unexecuted-analysis coverage; malformed Allen witnesses; unknown-object/equal-amount/formal-domain research guards; consistent oracle universes; B7 recomputed identity, coverage and conflicts reconciliation |
 | `nine-brain-verification-adjudication` | `nine-brain-verification-adjudication.test.mjs` | 94 | Bounded quotes/privacy; semantic tamper tests with recomputed identities; trusted review provenance; distinct provider origins/transports; explicit source/context review; process-local shared compare-and-swap dispositions; revision-bound narrative approval and authoritative annex freshness |
 | `nine-brain-console` | `nine-brain-console.test.mjs` | 50 | Nine-brain console runner, browser UI, and reset controls |
 | `nine-brain-workflow-contract` | `nine-brain-workflow-contract.test.mjs` | 61 | Nine-brain workflow contract and output invariants |

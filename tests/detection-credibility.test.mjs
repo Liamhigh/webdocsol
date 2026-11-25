@@ -218,6 +218,18 @@ const ct44Scan = await scan([
 ]);
 check(ct44Scan.findings.some(f => f.type === 'CT44' && f.findingClass === 'CONTRADICTION' && f.severity === 4), 'independent instrument conflict remains a high-ranked contradiction in the full scan');
 const transactionPair = E.DETECTORS.D01C_DETECT_DENIAL_ADMISSION_PAIR;
+const datedStatement = 'The invoice was paid on 12.03.2025 and the invoice was not paid.';
+check(!E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION([datedStatement]).length,
+  'a dotted date does not split a single statement into contradiction horns');
+const datedClass = [{ type: 'CT01', severity: 3, anchor: {
+  where: [1], quote: ['The invoice was paid', 'the invoice was not paid']
+} }];
+E.voApplyFindingClasses(datedClass, [datedStatement]);
+check(datedClass[0].findingClass !== 'CONTRADICTION', 'dotted dates do not split anchored statements');
+check(!E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(['The invoice was paid to Dr. Example and the invoice was not paid.']).length,
+  'an abbreviated title does not split a single statement into contradiction horns');
+check(E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(['The invoice was paid on 12.03.2025. The invoice was not paid.']).length > 0,
+  'a full stop after a dotted date still separates genuine statements');
 check(!transactionPair(['What does "no sales were made" mean when the deal happened?']).length, 'transaction denial cannot be a rhetorical question');
 check(!transactionPair(['There were no sales. The deal happened?']).length, 'an interrogative transaction is not an admission');
 check(transactionPair(['There were no sales. Later, the deal happened.']).length === 1, 'separate transaction statements remain detectable');
@@ -307,7 +319,13 @@ const sameStatementObservation = await scan([
   ['Other primary correspondence follows on a separate page.']
 ]);
 check(/\[CT35\].*witness/i.test(sameStatementObservation.extractionNotes), 'procedure observation is disclosed');
-check(!sameStatementObservation.findings.some(f => f.type === 'CT23' && f.severity >= 3), 'an unsigned claim in the same unanchored observation sentence is restrained');
+check(sameStatementObservation.findings.some(f => f.type === 'CT23' && f.severity >= 3), 'a witness observation does not suppress a separate unsigned assertion');
+const differentInstruments = await scan([
+  ['The first document was not witnessed and Example Holdings did not countersign the second agreement and demanded payment.'],
+  ['Other primary correspondence follows on a separate page.']
+]);
+check(differentInstruments.findings.some(f => f.type === 'CT23' && f.severity >= 3),
+  'an unrelated witness observation in a compound sentence does not suppress a different unsigned instrument');
 const severityCases = [
   { type: 'CT01', severity: 5, findingClass: 'CONTRADICTION', anchor: { where: [1, 2], quote: ['Example Holdings says the lease ended', 'Example Holdings says the lease continued'] } },
   { type: 'CT54', severity: 4, findingClass: 'EXAMINATION_LIMIT', anchor: { where: [3], quote: [] } },
@@ -338,6 +356,24 @@ E.voCalibrateFindingSeverity(interiorSeverity, [
   'AFFIDAVIT. Page 1 of 3', 'Example Holdings says payment was not made. Page 2 of 3', 'End. Page 3 of 3'
 ]);
 check(interiorSeverity[0].severity === 5, 'statements on interior pages of separately identified instruments remain eligible for critical');
+const wrappedSeverity = [{
+  type: 'CT01', severity: 5, findingClass: 'CONTRADICTION',
+  anchor: { where: [1, 2], quote: ['Example Holdings says payment was made', 'Example Holdings says payment was not made'] }
+}];
+E.voCalibrateFindingSeverity(wrappedSeverity, [
+  'AGREEMENT. Example Holdings says payment\nwas made.',
+  'AFFIDAVIT. Example Holdings says payment  was not made.'
+]);
+check(wrappedSeverity[0].severity === 5, 'wrapped documentary quotations remain eligible for critical');
+const sealedSeverity = [{
+  type: 'CT01', severity: 5, findingClass: 'CONTRADICTION',
+  anchor: { where: [1, 2], quote: ['Example Holdings says payment was made', 'Example Holdings says payment was not made'] }
+}];
+E.voCalibrateFindingSeverity(sealedSeverity, [
+  'Verum Omnis Sealed Evidence Source: example.pdf Page 1 of 1 AGREEMENT. Example Holdings says payment was made.',
+  'Verum Omnis Sealed Evidence Source: other.pdf Page 1 of 1 AFFIDAVIT. Example Holdings says payment was not made.'
+]);
+check(sealedSeverity[0].severity === 5, 'inner sealed-evidence source markers do not obscure instrument headings');
 const headedNarrative = [{
   type: 'CT01', severity: 5, findingClass: 'CONTRADICTION',
   anchor: { where: [1, 2], quote: ['Example Holdings says payment was made', 'Example Holdings says payment was not made'] }

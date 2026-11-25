@@ -8982,11 +8982,21 @@ var VO_PROCEDURE_BREACHES = [
   { re: /\b(?:unstamped|not stamped|without stamp duty|no stamp duty (?:paid|was paid))\b/, msg: 'Document indicates stamp duty was not paid' },
   { re: /\b(?:not countersigned|never countersigned|without (?:a )?countersignature|uncountersigned)\b/, msg: 'Document indicates it was never countersigned' }
 ];
+function voIsSentenceBoundary(text, at) {
+  var ch = text.charAt(at);
+  if (ch === '?' || ch === '!') return true;
+  if (ch !== '.') return false;
+  if (/\d/.test(text.charAt(at - 1)) && /\d/.test(text.charAt(at + 1))) return false;
+  return !/(?:^|[^a-z])(?:mr|mrs|ms|dr|prof|adv|att|cl|para|no|pp)\.$/i.test(text.slice(Math.max(0, at - 5), at + 1));
+}
 function voStatementAt(text, at) {
   var s = String(text || ''), start = at, end = at;
-  while (start > 0 && !/[.!?]/.test(s.charAt(start - 1))) start--;
-  while (end < s.length && !/[.!?]/.test(s.charAt(end))) end++;
+  while (start > 0 && !voIsSentenceBoundary(s, start - 1)) start--;
+  while (end < s.length && !voIsSentenceBoundary(s, end)) end++;
   return s.slice(start, end + 1).toLowerCase();
+}
+function voInstrumentHeading(text) {
+  return String(text || '').replace(/^\s*Verum\s+Omnis\s+Sealed\s+Evidence\s+Source\s*:\s*[^|]{1,200}?\.pdf\s+Page\s+\d+\s+of\s+\d+\s*/i, '');
 }
 function voProcedureClauseAt(text, at) {
   var s = String(text || ''), start = at, end = at;
@@ -9027,9 +9037,9 @@ var DETECTORS = {
         offset = next + 1;
       }
       var start = pos;
-      while (start > pageStart && !/[.!?]/.test(fullText.charAt(start - 1))) start--;
+      while (start > pageStart && !voIsSentenceBoundary(fullText, start - 1)) start--;
       var end = pos;
-      while (end < pageEnd && !/[.!?]/.test(fullText.charAt(end))) end++;
+      while (end < pageEnd && !voIsSentenceBoundary(fullText, end)) end++;
       return { start: start, text: fullText.slice(start, end + 1).trim() };
     }
     function validPair(affirmed, denied) {
@@ -13182,7 +13192,7 @@ var DETECTORS = {
         };
         while (at !== -1 && (voCategoryPlural(at, unsignedCues[q]) ||
             (Array.isArray(unanchoredProcedures) && unanchoredProcedures.some(function (re) {
-              return re.test(voProcedureClauseAt(lowU, at));
+              return re.test(unsignedCues[q]) && re.test(voProcedureClauseAt(lowU, at));
             })))) at = lowU.indexOf(unsignedCues[q], at + 1);
         if (at === -1) continue;
         unsignedPages.push(u + 1);
@@ -13571,9 +13581,6 @@ var DETECTORS = {
       var kind = ref[2].toLowerCase();
       var kindPattern = kind === 'mou' || kind === 'memorandum' ? '(?:mou|memorandum)' : kind;
       var titlePattern = ref[1].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s+' + kindPattern;
-      function instrumentHeading(text) {
-        return String(text || '').replace(/^\s*Verum\s+Omnis\s+Sealed\s+Evidence\s+Source\s*:\s*[^|]{1,200}?\.pdf\s+Page\s+\d+\s+of\s+\d+\s*/i, '');
-      }
       for (var i = 0; i < blocks.length; i++) {
         if (i + 1 === hit.page) continue;
         var target = String(blocks[i] || '');
@@ -13582,7 +13589,7 @@ var DETECTORS = {
         var clauseMarker = /\b(?:clause|paragraph)\s+\d+(?:\.\d+)*/gi, clauseMatch, nearestClause = '';
         while ((clauseMatch = clauseMarker.exec(target)) !== null && clauseMatch.index < found.index) nearestClause = clauseMatch[0];
         if (!clause.test(nearestClause)) continue;
-        var sourceHeading = new RegExp('^\\s*' + titlePattern + '\\b', 'i').test(instrumentHeading(target));
+        var sourceHeading = new RegExp('^\\s*' + titlePattern + '\\b', 'i').test(voInstrumentHeading(target));
         var statedPage = /\b(?:page|pg)\s*(\d+)\s*(?:of|\/)\s*\d+\b/gi, pageMatch, sourceIdentified = false;
         while (sourceHeading && (pageMatch = statedPage.exec(target)) !== null) {
           if (Number(pageMatch[1]) === Number(ref[4])) { sourceIdentified = true; break; }
@@ -13590,7 +13597,7 @@ var DETECTORS = {
         for (var d = 0; !sourceIdentified && ref[1] && d < segments.length; d++) {
           var seg = segments[d];
           if (i + 1 < seg.start || i + 1 > seg.end || i + 2 - seg.start !== Number(ref[4])) continue;
-          var title = instrumentHeading(blocks[seg.start - 1]);
+          var title = voInstrumentHeading(blocks[seg.start - 1]);
           sourceIdentified = new RegExp('^\\s*' + titlePattern + '\\b', 'i').test(title);
         }
         if (!sourceIdentified) continue;
@@ -16260,9 +16267,9 @@ function voDistinctAnchoredStatements(f, blocks) {
       var at = page.indexOf(needle);
       if (at < 0) continue;
       var start = at;
-      while (start > 0 && !/[.!?]/.test(page.charAt(start - 1))) start--;
+      while (start > 0 && !voIsSentenceBoundary(page, start - 1)) start--;
       var end = at + needle.length;
-      while (end < page.length && !/[.!?]/.test(page.charAt(end))) end++;
+      while (end < page.length && !voIsSentenceBoundary(page, end)) end++;
       statements.push({ quote: q, page: pages[p], start: start, from: at, to: at + needle.length, text: page.slice(start, end).trim() });
     }
   }
@@ -16339,10 +16346,10 @@ function voCalibrateFindingSeverity(findings, blocks) {
     var sides = [];
     var segments = voDetectDocuments(blocks);
     for (var q = 0; q < quotes.length; q++) {
-      var needle = String(quotes[q] || '').replace(/^[\s.…]+|[\s.…]+$/g, '').toLowerCase();
+      var needle = String(quotes[q] || '').replace(/^[\s.…]+|[\s.…]+$/g, '').replace(/\s+/g, ' ').toLowerCase();
       if (needle.length < 12 || /\?/.test(needle)) continue;
       for (var j = 0; j < pages.length; j++) {
-        var source = String(blocks[pages[j] - 1] || '');
+        var source = String(blocks[pages[j] - 1] || '').replace(/\s+/g, ' ');
         var headingSource = source;
         for (var seg = 0; seg < segments.length; seg++) {
           if (pages[j] >= segments[seg].start && pages[j] <= segments[seg].end) {
@@ -16350,7 +16357,7 @@ function voCalibrateFindingSeverity(findings, blocks) {
             break;
           }
         }
-        var docHeading = /^\s*(agreement|contract|affidavit|invoice|deed|memorandum|lease|instrument)\b/i.exec(headingSource);
+        var docHeading = /^\s*(agreement|contract|affidavit|invoice|deed|memorandum|lease|instrument)\b/i.exec(voInstrumentHeading(headingSource));
         if (!docHeading) continue;
         var at = source.toLowerCase().indexOf(needle);
         if (at < 0 || /\?/.test(voStatementAt(source, at))) continue;
