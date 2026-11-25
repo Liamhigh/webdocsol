@@ -208,7 +208,7 @@ Rollback is revert-based: revert the branch changes or remove `development/nine-
 
 Until those gates are complete, this is a completed **default-off development build**, not a completed production certification.
 
-## 13. Axiom-inspired workflow contract increment — 24 November 2026
+## 13. Axiom-inspired workflow contract increment — 25 November 2026
 
 This later increment applies design-by-contract and explicit legal state transitions to the synthetic Test Lab. It was informed by the supplied Axiom manual, but it does **not** install Axiom, generate or execute C++, invoke mCRL2, or claim Axiom formal verification. The implementation is native browser-safe JavaScript and remains development-only.
 

@@ -20,10 +20,19 @@ function escapeHtml(value) {
 }
 function badge(value) {
   const status = String(value || 'NOT RUN');
-  const style = /PASS|CERTIFIED|CONFIRMED|HUMAN_ADJUDICATED/.test(status) ? 'pass'
+  return '<span class="status status-' + badgeStyle(status) + '">' + escapeHtml(status) + '</span>';
+}
+function badgeStyle(status) {
+  return /PASS|CERTIFIED|CONFIRMED|HUMAN_ADJUDICATED/.test(status) ? 'pass'
     : /FAIL|REJECT|MALFORMED|UNAVAILABLE/.test(status) ? 'fail'
       : /PENDING|UNRESOLVED|INSUFFICIENT|NOT_/.test(status) ? 'pending' : 'neutral';
-  return '<span class="status status-' + style + '">' + escapeHtml(status) + '</span>';
+}
+function badgeNode(value) {
+  const status = String(value || 'NOT RUN');
+  const element = document.createElement('span');
+  element.className = 'status status-' + badgeStyle(status);
+  element.textContent = status;
+  return element;
 }
 function showMessage(text, kind) {
   const box = $('message');
@@ -72,10 +81,7 @@ function refreshInspector() {
     const row = document.createElement('li');
     const label = document.createElement('span');
     label.textContent = item.check_id;
-    const status = document.createElement('span');
-    status.className = 'status status-' + (item.status === 'PASS' ? 'pass' : 'fail');
-    status.textContent = item.status;
-    row.append(label, status);
+    row.append(label, badgeNode(item.status));
     checks.appendChild(row);
   });
   workflowResult.append(outcome, checks);
@@ -126,12 +132,35 @@ function renderPanel(panel) {
 }
 function renderDisposition(disposition) {
   const history = session.store.history(session.candidate.candidate_id);
-  $('dispositionResult').innerHTML =
-    '<div class="outcome ' + (disposition.disposition === 'CONFIRMED' ? 'pass' : '') + '"><strong>Revision ' + disposition.revision + ': ' + escapeHtml(disposition.disposition) + '</strong><p>' + escapeHtml(disposition.reason) + '</p><p class="help">Adjudicator: ' + escapeHtml(disposition.adjudicator) + '. Evidence retained: ' + disposition.evidence_retained + '. Audit history retained: ' + disposition.audit_history_retained + '.</p></div>' +
-    '<h3>Immutable disposition history</h3><ol class="record-history">' + history.map((item) =>
-      '<li>' + badge(item.disposition) + ' <span class="mono">revision ' + item.revision + ' · generation ' + escapeHtml(item.workflow_generation) +
-      ' · ' + escapeHtml(item.workflow_session_id || 'legacy') + ' · ' + escapeHtml(item.disposition_sha512.slice(0, 20)) + '…</span></li>'
-    ).join('') + '</ol>';
+  const container = $('dispositionResult');
+  container.replaceChildren();
+  const outcome = document.createElement('div');
+  outcome.className = 'outcome' + (disposition.disposition === 'CONFIRMED' ? ' pass' : '');
+  const title = document.createElement('strong');
+  title.textContent = 'Revision ' + disposition.revision + ': ' + disposition.disposition;
+  const reason = document.createElement('p');
+  reason.textContent = disposition.reason;
+  const provenance = document.createElement('p');
+  provenance.className = 'help';
+  provenance.textContent = 'Adjudicator: ' + disposition.adjudicator + '. Evidence retained: ' +
+    disposition.evidence_retained + '. Audit history retained: ' + disposition.audit_history_retained + '.';
+  outcome.append(title, reason, provenance);
+
+  const heading = document.createElement('h3');
+  heading.textContent = 'Immutable disposition history';
+  const list = document.createElement('ol');
+  list.className = 'record-history';
+  history.forEach((item) => {
+    const row = document.createElement('li');
+    const identity = document.createElement('span');
+    identity.className = 'mono';
+    identity.textContent = 'revision ' + item.revision + ' · generation ' +
+      (item.workflow_generation === null ? 'legacy' : item.workflow_generation) + ' · ' +
+      (item.workflow_session_id || 'legacy') + ' · ' + item.disposition_sha512.slice(0, 20) + '…';
+    row.append(badgeNode(item.disposition), document.createTextNode(' '), identity);
+    list.appendChild(row);
+  });
+  container.append(outcome, heading, list);
   $('prepareAnnex').disabled = false;
   $('annexResult').innerHTML = '<div class="empty">Ready for separate narrative approval and unsealed annex preparation.</div>';
   refreshInspector();
