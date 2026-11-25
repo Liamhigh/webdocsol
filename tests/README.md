@@ -84,7 +84,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 13 | `digital-forensics` | `digital-forensics.test.mjs` | 16 | `voDigitalForensicsScan` (raw PDF structure) |
 | 14 | `ocr-rescue` | `ocr-rescue.test.mjs` | 44 | The page's OCR fallback, loader and deadline helper |
 | 15 | `rule-classify` | `rule-classify.test.mjs` | 9 | The deterministic classification fallback in `seal-document.html` |
-| 16 | `findings-json` | `findings-json.test.mjs` | 29 | `buildFindingsJson`, findings JSON contract 1.9.0 |
+| 16 | `findings-json` | `findings-json.test.mjs` | 40 | `buildFindingsJson`, findings JSON contract 1.9.0 |
 | 17 | `finding-anchors` | `finding-anchors.test.mjs` | 87 | WHO / WHERE / WHAT / WHEN anchoring per finding |
 | 18 | `wrangler-config` | `wrangler-config.test.mjs` | 34 | `wrangler.toml` drift lock |
 | 19 | `crop-normalize` | `crop-normalize.test.mjs` | 115 | CropBox normalisation, seal band, share ordering, certificate privacy, the voice-note path |
@@ -115,7 +115,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 64 | `redaction-fixtures` | `redaction-fixtures.test.mjs` | 54 | Phase 3 synthetic redaction corpus: exact UTF-16 ranges, protected verbatim evidence quotes, preserved references, and a fail-closed production-module flag |
 | 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
 | 66 | `pr327-review` | `pr327-review.test.mjs` | 40 | Synthetic review regressions for report exclusion, signed-rule masking, WF7, CT52, D02C, admissions and overlapping scans |
-| 67 | `detection-credibility` | `detection-credibility.test.mjs` | 66 | Synthetic report exclusion, ledger furniture, contradiction, severity, coverage and narrative-privacy regressions |
+| 67 | `detection-credibility` | `detection-credibility.test.mjs` | 84 | Synthetic report exclusion, ledger furniture, contradiction, severity, coverage and narrative-privacy regressions |
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete production/baseline registry.
 

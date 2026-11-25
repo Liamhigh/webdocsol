@@ -66,7 +66,7 @@ try {
     ['Another primary exhibit is present.', footer('VO-ABCDEF123456', 3, 3)]
   ]));
   check(packageHits(outer, 'primary-marker').some(f => /Page 2/.test(f.location)), 'outer-seal primary evidence is scanned');
-  check(/Prior Verum Omnis report:/.test(outer.extractionNotes), 'outer-seal exclusion is disclosed');
+  check(/Prior analysis report:/.test(outer.extractionNotes), 'outer-seal exclusion is disclosed');
 
   const forged = await run(await pdf([
     [cover, footer('VO-123456ABCDEF', 1, 2)],
@@ -74,14 +74,14 @@ try {
     ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-TEST', 'Independent analysis page.']
   ]));
   check(packageHits(forged, 'primary-marker').some(f => /Page 2/.test(f.location)), 'forged inner footer cannot exclude primary evidence');
-  check(/Prior Verum Omnis report:/.test(forged.extractionNotes), 'forged-footer cover exclusion is disclosed');
+  check(/Prior analysis report:/.test(forged.extractionNotes), 'forged-footer cover exclusion is disclosed');
   const spacedRun = await run(await pdf([
     ['Letterhead: F O R E N S I C R E P O R T.', 'Primary evidence: cobalt harbour.'],
     ['Ordinary primary page.', footer('VO-DDDDDDDDDDDD', 2, 2)]
   ]));
   check(packageHits(spacedRun, 'primary-marker').some(f => /Page 1/.test(f.location)),
     'spaced report wording and a lone later-page seal footer do not suppress primary evidence');
-  check(!/Prior Verum Omnis report:/.test(spacedRun.extractionNotes),
+  check(!/Prior analysis report:/.test(spacedRun.extractionNotes),
     'spaced letterhead and a lone footer do not create an analytical-report exclusion');
 
   const ruleRun = await run(await pdf([
@@ -90,7 +90,7 @@ try {
   ]));
   check(packageHits(ruleRun, 'report-marker').length === 0, 'pipeline excludes report-only package phrase');
   check(packageHits(ruleRun, 'placeholder-marker').length === 0, 'pipeline excludes placeholder package phrase');
-  check(/Prior Verum Omnis report:/.test(ruleRun.extractionNotes), 'package exclusion is disclosed');
+  check(/Prior analysis report:/.test(ruleRun.extractionNotes), 'package exclusion is disclosed');
   const summarySeal = 'VO-CCCCCCCCCCCC';
   const summaryRun = await run(await pdf([
     ['ANSWERING AFFIDAVIT. I am duly authorised to depose.', footer('VO-AAAAAAAAAAAA', 1, 3)],
@@ -126,7 +126,7 @@ try {
   ], xmp));
   check(embedded.findings.some(f => f.type === 'CT29' && /metadata stores disagree/.test(f.evidence)), 'embedded seal does not suppress metadata comparison');
   check(!/this file is itself a prior Verum Omnis sealed output/.test(embedded.wellFormedness.checks.find(c => c.id === 'WF7').note), 'WF7 does not describe unsealed bundle as self-sealed');
-  check(/Prior Verum Omnis report:/.test(embedded.extractionNotes), 'embedded report exclusion is disclosed');
+  check(/Prior analysis report:/.test(embedded.extractionNotes), 'embedded report exclusion is disclosed');
 
   const D07A = E.DETECTORS.D07A_DETECT_UNEVIDENCED_AUTHORITY;
   const ct52 = blocks => D07A(blocks).filter(f => f.type === 'CT52');

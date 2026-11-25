@@ -1,10 +1,10 @@
-// ============== FORENSIC CONTRADICTION ENGINE v5.7.3-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.7.4-web ================
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.3-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.4-web
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
@@ -26,7 +26,7 @@
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.7.3-web';
+var VO_ENGINE_VERSION = '5.7.4-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
@@ -741,6 +741,12 @@ function voStatementAt(text, at) {
   while (end < s.length && !/[.!?]/.test(s.charAt(end))) end++;
   return s.slice(start, end + 1).toLowerCase();
 }
+function voProcedureClauseAt(text, at) {
+  var s = String(text || ''), start = at, end = at;
+  while (start > 0 && !/[.!?;]/.test(s.charAt(start - 1))) start--;
+  while (end < s.length && !/[.!?;]/.test(s.charAt(end))) end++;
+  return s.slice(start, end + 1).toLowerCase();
+}
 var DETECTORS = {
 
   // D01-D05: Statemental detectors
@@ -761,15 +767,21 @@ var DETECTORS = {
     var fullText = textBlocks.join(' ').toLowerCase();
     var WINDOW = 80; // ~one clause; both terms must sit this close to be a local contradiction
     function sentenceAt(pos) {
+      var pageStart = 0, pageEnd = fullText.length;
+      for (var pg = 0, offset = 0; pg < textBlocks.length; pg++) {
+        var next = offset + String(textBlocks[pg] || '').length;
+        if (pos >= offset && pos < next) { pageStart = offset; pageEnd = next; break; }
+        offset = next + 1;
+      }
       var start = pos;
-      while (start > 0 && !/[.!?]/.test(fullText.charAt(start - 1))) start--;
+      while (start > pageStart && !/[.!?]/.test(fullText.charAt(start - 1))) start--;
       var end = pos;
-      while (end < fullText.length && !/[.!?]/.test(fullText.charAt(end))) end++;
+      while (end < pageEnd && !/[.!?]/.test(fullText.charAt(end))) end++;
       return { start: start, text: fullText.slice(start, end + 1).trim() };
     }
     function validPair(affirmed, denied) {
       var a = sentenceAt(affirmed), b = sentenceAt(denied);
-      return a.start !== b.start && !/\?/.test(b.text) &&
+      return a.start !== b.start && !/\?/.test(a.text) && !/\?/.test(b.text) &&
         !/^\s*["“']?[^"”']+["”']?\s+means\b/i.test(b.text);
     }
     function positions(term) {
@@ -2037,7 +2049,7 @@ var DETECTORS = {
         // The admission must be direct too: both sides of this pair need the
         // same source-quality discipline.
         var admissionQuote = occurrenceSentence(W, m);
-        if (reportedPosition(W, m.index, admissionQuote)) continue;
+        if (/\?/.test(admissionQuote) || reportedPosition(W, m.index, admissionQuote)) continue;
         admissions.push({ page: b + 1, quote: admissionQuote });
       }
     }
@@ -2768,7 +2780,7 @@ var DETECTORS = {
         if (frame.length < 6) continue;
         var key = frame.join(' ');
         var pk = poles.slice().sort().join('+');
-        var invalidDenial = (/\?/.test(raw) || /^\s*["“']?[^"”']+["”']?\s+means\b/i.test(raw)) && poles.some(function (p) { return p === 'NEG' || /^A\d+b$/.test(p); });
+        var invalidDenial = /\?/.test(raw) || (/^\s*["“']?[^"”']+["”']?\s+means\b/i.test(raw) && poles.some(function (p) { return p === 'NEG' || /^A\d+b$/.test(p); }));
         if (!byFrame[key]) byFrame[key] = [];
         var dup = false;
         for (var ri = 0; ri < byFrame[key].length; ri++) if (byFrame[key][ri].pk === pk && (!byFrame[key][ri].invalidDenial || invalidDenial)) { dup = true; break; }
@@ -4917,7 +4929,7 @@ var DETECTORS = {
         };
         while (at !== -1 && (voCategoryPlural(at, unsignedCues[q]) ||
             (Array.isArray(unanchoredProcedures) && unanchoredProcedures.some(function (re) {
-              return re.test(voStatementAt(lowU, at));
+              return re.test(voProcedureClauseAt(lowU, at));
             })))) at = lowU.indexOf(unsignedCues[q], at + 1);
         if (at === -1) continue;
         unsignedPages.push(u + 1);
@@ -5263,7 +5275,9 @@ var DETECTORS = {
             else { end = boundary.index + 1; break; }
           }
           var before = raw.slice(start, m.index), after = raw.slice(m.index + m[0].length, end);
-          var opening = before.lastIndexOf('"'), closing = after.indexOf('"');
+          var straightOpening = before.lastIndexOf('"'), curlyOpening = before.lastIndexOf('“');
+          var opening = Math.max(straightOpening, curlyOpening);
+          var closing = after.indexOf(opening === curlyOpening && curlyOpening >= 0 ? '”' : '"');
           var quoted = opening !== -1 && closing !== -1 &&
             !/^[^"“”]{1,60}['’"]\s+means\b/i.test(raw.slice(start + opening + 1, m.index + m[0].length));
           var sentence = raw.slice(start, end);
@@ -5273,6 +5287,7 @@ var DETECTORS = {
             !/\?/.test(raw.slice(start + opening + 1, m.index + m[0].length + closing));
           if ((/\?/.test(sentence) && ((denial && !citedDeclaration) || (!denial && !quoted))) ||
               (denial && /\b(?:if|unless)\s*$/i.test(before)) ||
+              (denial && /^\s+(?:if|unless)\b/i.test(after)) ||
               (denial && /^\s*["“']?[^"”']+["”']?\s+means\b/i.test(sentence)) ||
               (exclude && exclude.page === i + 1 && exclude.sentenceStart === start)) {
             matches.lastIndex = m.index + 1;
@@ -5310,9 +5325,13 @@ var DETECTORS = {
         var target = String(blocks[i] || '');
         var found = quotedClause.exec(target);
         if (!found || !clause.test(target)) continue;
-        var sourceIdentified = kindPattern
+        var sourceHeading = kindPattern
           ? new RegExp('^\\s*' + kindPattern + '\\b', 'i').test(instrumentHeading(target))
           : /^\s*(?:agreement|contract|memorandum|mou|lease|instrument)\b/i.test(instrumentHeading(target));
+        var statedPage = /\b(?:page|pg)\s*(\d+)\s*(?:of|\/)\s*\d+\b/gi, pageMatch, sourceIdentified = false;
+        while (sourceHeading && (pageMatch = statedPage.exec(target)) !== null) {
+          if (Number(pageMatch[1]) === Number(ref[3])) { sourceIdentified = true; break; }
+        }
         for (var d = 0; !sourceIdentified && ref[1] && d < segments.length; d++) {
           var seg = segments[d];
           if (i + 1 < seg.start || i + 1 > seg.end || i + 2 - seg.start !== Number(ref[3])) continue;
@@ -6336,7 +6355,7 @@ function voIsSecondaryReportPage(text) {
   var t = String(text || '');
   // The Constitution prints the report masthead as a REQUIRED TEMPLATE. That
   // governance clause is not itself an earlier forensic report.
-  if (VO_CONSTITUTION_REPORT_TEMPLATE_RE.test(t)) return false;
+  if (VO_CONSTITUTION_REPORT_TEMPLATE_RE.test(t)) return voIsFrameworkAnalysisPage(t);
   if (voIsStandaloneAnalysisCover(t)) return true;
   if (VO_SECONDARY_REPORT_REF_RE.test(t)) return true;
   if (VO_SECONDARY_REPORT_MASTHEAD_RE.test(t)) return true;
@@ -6360,12 +6379,11 @@ function voIsSecondaryAnalysisContinuation(text) {
   return /\bD[1-9]\d*\b[^.]{0,80}\b(?:records?|describes?|adds?|concedes?|discloses?|asserts?|bears?|presents?)\b/i.test(t);
 }
 function voExcludeSecondaryReportPages(textBlocks) {
-  if (!textBlocks || textBlocks.length < 2) return null;
-  var isReport = [], titles = [], i, m, frameworkAnalysis = false;
+  if (!textBlocks || !textBlocks.length) return null;
+  var isReport = [], titles = [], i, m;
   for (i = 0; i < textBlocks.length; i++) {
     isReport[i] = voIsSecondaryReportPage(textBlocks[i]);
     if (!isReport[i]) continue;
-    if (voIsFrameworkAnalysisPage(textBlocks[i])) frameworkAnalysis = true;
     // The report's own title line, so its running header on later pages can be recognised.
     m = VO_SECONDARY_REPORT_TITLE_RE.exec(String(textBlocks[i] || ''));
     if (m) {
@@ -6396,7 +6414,7 @@ function voExcludeSecondaryReportPages(textBlocks) {
     textBlocks[i] = VO_SECONDARY_REPORT_PLACEHOLDER;
   }
   if (!pages.length) return null;
-  var notePrefix = frameworkAnalysis ? 'Prior analysis report: ' : 'Prior Verum Omnis report: ';
+  var notePrefix = 'Prior analysis report: ';
   var pageNotes = pages.map(function (p) { return 'Prior analysis excluded: page ' + p + '.'; }).join(' ');
   if (pages.length === textBlocks.length) {
     return { pages: pages, note: notePrefix + 'every page (' + pages.length + ') was identified by its analytical cover, masthead, running title or analysis content. A prior report is analysis, not evidence, and is never scanned for contradictions; nothing in this file was examined as evidence. ' + pageNotes };
@@ -7976,10 +7994,10 @@ function voDistinctAnchoredStatements(f, blocks) {
   var pages = (f.anchor && f.anchor.where) || [];
   var statements = [];
   for (var q = 0; q < quotes.length; q++) {
-    var needle = String(quotes[q] || '').replace(/^[\s.…]+|[\s.…]+$/g, '').toLowerCase();
+    var needle = String(quotes[q] || '').replace(/^[\s.…]+|[\s.…]+$/g, '').replace(/\s+/g, ' ').toLowerCase();
     if (needle.length < 12) continue;
     for (var p = 0; p < pages.length; p++) {
-      var page = String(blocks[pages[p] - 1] || '').toLowerCase();
+      var page = String(blocks[pages[p] - 1] || '').replace(/\s+/g, ' ').toLowerCase();
       var at = page.indexOf(needle);
       if (at < 0) continue;
       var start = at;
@@ -8051,7 +8069,8 @@ function voCalibrateFindingSeverity(findings, blocks) {
     var narrativeOnly = pages.length > 0;
     for (var p = 0; p < pages.length; p++) {
       var page = String(blocks[pages[p] - 1] || '');
-      if (!/^\s*(?:(?:commentary|analysis|opinion|argument|narrative|advisory letter)\b|this (?:article|report|analysis)\b|in (?:my|our) (?:view|opinion)\b|(?:i|we) (?:submit|contend|argue)\b)/i.test(page)) narrativeOnly = false;
+      if (!/^\s*(?:(?:commentary|analysis|opinion|argument|narrative|advisory letter)\b|this (?:article|report|analysis)\b|in (?:my|our) (?:view|opinion)\b|(?:i|we) (?:submit|contend|argue)\b)/i.test(page) &&
+          !/\badvisory\s+letter\b/i.test(page.slice(0, 250))) narrativeOnly = false;
     }
     if (narrativeOnly || /\bnarrative (?:quotation|provenance|source)\b/i.test(String(f.evidence || ''))) {
       f.severity = Math.min(f.severity, 3);
@@ -8059,12 +8078,20 @@ function voCalibrateFindingSeverity(findings, blocks) {
     }
     if (f.severity < 5) continue;
     var sides = [];
+    var segments = voDetectDocuments(blocks);
     for (var q = 0; q < quotes.length; q++) {
       var needle = String(quotes[q] || '').replace(/^[\s.…]+|[\s.…]+$/g, '').toLowerCase();
       if (needle.length < 12 || /\?/.test(needle)) continue;
       for (var j = 0; j < pages.length; j++) {
         var source = String(blocks[pages[j] - 1] || '');
-        var docHeading = /^\s*(agreement|contract|affidavit|invoice|deed|memorandum|lease|instrument)\b/i.exec(source);
+        var headingSource = source;
+        for (var seg = 0; seg < segments.length; seg++) {
+          if (pages[j] >= segments[seg].start && pages[j] <= segments[seg].end) {
+            headingSource = String(blocks[segments[seg].start - 1] || '');
+            break;
+          }
+        }
+        var docHeading = /^\s*(agreement|contract|affidavit|invoice|deed|memorandum|lease|instrument)\b/i.exec(headingSource);
         if (!docHeading) continue;
         var at = source.toLowerCase().indexOf(needle);
         if (at < 0 || /\?/.test(voStatementAt(source, at))) continue;

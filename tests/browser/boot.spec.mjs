@@ -83,7 +83,7 @@ test('local PDF analysis is deterministic and all new flags stay off', async ({ 
     };
   }, { bytes: [...pdf], referenceTime: '2026-11-15T00:00:00.000Z' });
   expect(result.same).toBeTruthy();
-  expect(result.version).toBe('5.7.3-web');
+  expect(result.version).toBe('5.7.4-web');
   expect(result.findings).toBeGreaterThanOrEqual(0);
   expect(result.flags).toEqual({
     citations: false,

@@ -67,7 +67,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.7.3-web';
+var ENGINE_VERSION = '5.7.4-web';
 var CONSTITUTION_VERSION = '6.1';
 // Counts mirror the live registry and run-list in forensic-engine-page.js.
 // The report recomputes from the registry at runtime when the engine is
@@ -4878,12 +4878,12 @@ function secUnreadPages(ctx, data) {
       // the bundle: analysis, not evidence), and some may have been read
       // through OCR. Both are disclosed here (PD6); "every page of this bundle
       // was read" is never printed beside an exclusion.
-      var exNotes = notes.match(/(?:Prior Verum Omnis report|Template boilerplate)[^.]*\./g) || [];
+      var exNotes = notes.match(/(?:Prior Verum Omnis report|Prior analysis report|Prior analysis excluded|Template boilerplate)[^.]*\./g) || [];
       if (exNotes.length || (data.ocrPages && data.ocrPages.length)) {
         ctx.newBodyPage();
         ctx.heading('PAGES THE ENGINE COULD NOT READ');
         if (exNotes.length) {
-          ctx.para('Every page of this bundle was text-extracted. The following pages were set aside before contradiction scanning — a prior Verum Omnis report or the analysis template bound into the bundle is analysis, not evidence — and no finding was sought on them:', { size: 10.5, after: 6 });
+          ctx.para('Every page of this bundle was text-extracted. The following pages were set aside before contradiction scanning — prior analysis or the analysis template bound into the bundle is not evidence — and no finding was sought on them:', { size: 10.5, after: 6 });
           for (var xn = 0; xn < exNotes.length; xn++) ctx.bullet(exNotes[xn].trim(), { size: 10, after: 4 });
           ctx.gap(2);
         } else {

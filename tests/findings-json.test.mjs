@@ -145,6 +145,22 @@ ok(r0.proposition_b_actor === 'unattributed', 'unlocated second party is unattri
       quote: ['Example Holdings states that the agreement was signed.', 'Other Holdings states that the agreement was not signed.'] }
   }] }, 'synthetic.pdf', 'a'.repeat(128), 2, {}).contradictions[0];
   ok(pair.proposition_a_actor === 'Example Holdings' && pair.proposition_b_actor === 'Other Holdings', 'actors follow their quoted statements rather than roster order');
+  const indirect = buildFindingsJson({ pageTexts: [
+    'Example Holdings was copied. The agreement was not signed.',
+    'The respondent stated that the agreement was signed.',
+    'Example Holdings states it maintains a website. The agreement was not signed.',
+    'Director states that the agreement was signed.'
+  ], findings: [
+    f('Example Holdings', 'The agreement was not signed.', 1),
+    f('respondent', 'The respondent stated that the agreement was signed.', 2),
+    f('Example Holdings', 'The agreement was not signed.', 3),
+    { type: 'CT01', severity: 3, evidence: 'Director states that the agreement was signed.', location: 'Page 4',
+      anchor: { who: [{ name: 'Director', kind: 'role' }], where: [4], quote: ['Director states that the agreement was signed.'] } }
+  ] }, 'synthetic.pdf', 'a'.repeat(128), 4, {}).contradictions;
+  ok(indirect[0].proposition_a_actor === 'unattributed', 'a nearby party who is not the speaker is not attributed');
+  ok(indirect[1].proposition_a_actor === 'unattributed', 'an unnamed legal role is not a named actor');
+  ok(indirect[2].proposition_a_actor === 'unattributed', 'a speaker in another sentence is not attributed to the quote');
+  ok(indirect[3].proposition_a_actor === 'unattributed', 'structured role entries are not named actors');
 }
 ok(r0.temporal_analysis === '7 Mar 2025, 13 Mar 2025', 'anchor dates flow into temporal_analysis');
 ok(Array.isArray(r0.document_cited_provisions) && r0.document_cited_provisions[0] === 'clause 4.5.2',
