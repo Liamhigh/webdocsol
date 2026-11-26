@@ -166,25 +166,28 @@ t.ok(D.D38_DETECT_CONDITIONAL_CLAUSE_MISINVOKED([
 // ---- Prior analyses: a Verum Omnis analysis is not primary evidence ----
 const priorAnalysisBlocks = [
   'V E R U M O M N I S — FORENSIC ANALYSIS — What the Court Was Not Shown',
-  '1. Documents Analysed. D1 is the submission, D2 is the affidavit and D3 is the agreement.',
+  '1. Executive Summary. This analysis compares D1 and D2 and identifies a conflict with D3.',
   'Primary evidence that remains in the record.'
 ];
 const priorAnalysisExclusion = E.voExcludeSecondaryReportPages(priorAnalysisBlocks);
-t.ok(priorAnalysisExclusion && priorAnalysisExclusion.pages.length === 2 &&
-  priorAnalysisExclusion.pages[0] === 1 && priorAnalysisExclusion.pages[1] === 2 && /Primary evidence/.test(priorAnalysisBlocks[2]),
-  'a FORENSIC ANALYSIS masthead and its analytical continuation are excluded, not primary evidence');
+t.ok(priorAnalysisExclusion && priorAnalysisExclusion.pages.length === 1 &&
+  priorAnalysisExclusion.pages[0] === 2 && /FORENSIC ANALYSIS/.test(priorAnalysisBlocks[0]) &&
+  /Primary evidence/.test(priorAnalysisBlocks[2]),
+  'a bare FORENSIC ANALYSIS masthead remains available while independently signalled analysis content is excluded');
 const repeatedExhibitBlocks = [
   'V E R U M O M N I S — FORENSIC ANALYSIS — What the Court Was Not Shown',
   'Primary evidence: Exhibit D1, Exhibit D1 and again Exhibit D1 are reproduced below.'
 ];
-t.ok(E.voExcludeSecondaryReportPages(repeatedExhibitBlocks).pages.length === 1 && /Primary evidence/.test(repeatedExhibitBlocks[1]),
-  'repeated exhibit D1 labels do not turn a primary-evidence page into analysis');
+t.ok(E.voExcludeSecondaryReportPages(repeatedExhibitBlocks) === null &&
+  /FORENSIC ANALYSIS/.test(repeatedExhibitBlocks[0]) && /Primary evidence/.test(repeatedExhibitBlocks[1]),
+  'a bare masthead and repeated exhibit D1 labels do not turn primary pages into analysis');
 const distinctExhibitBlocks = [
   'V E R U M O M N I S — FORENSIC ANALYSIS — What the Court Was Not Shown',
   'Primary evidence: Exhibits D1, D2 and D3 are reproduced below without analytical attribution.'
 ];
-t.ok(E.voExcludeSecondaryReportPages(distinctExhibitBlocks).pages.length === 1 && /Primary evidence/.test(distinctExhibitBlocks[1]),
-  'distinct exhibit labels without analytical attribution do not hide primary evidence');
+t.ok(E.voExcludeSecondaryReportPages(distinctExhibitBlocks) === null &&
+  /FORENSIC ANALYSIS/.test(distinctExhibitBlocks[0]) && /Primary evidence/.test(distinctExhibitBlocks[1]),
+  'a bare masthead and distinct exhibit labels do not turn primary pages into analysis');
 
 // ---- CT47: legal redress, statutes and consent clauses are not coercion ----
 t.ok(D.D41_DETECT_COERCIVE_CONDUCT([

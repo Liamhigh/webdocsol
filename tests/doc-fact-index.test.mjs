@@ -32,7 +32,7 @@ ok(E.voClassifyPage('Dear Sir, please find attached the records. Yours faithfull
 ok(E.voClassifyPage('Random page of notes with nothing in particular on it.') === 'other', 'an unmatched page is "other"');
 // secondary / analysis pages
 ok(E.voClassifyPage('Notice of Change of Ownership of a Vessel.', true) === 'analysis-secondary', 'a page flagged secondary is analysis-secondary regardless of its words');
-ok(E.voClassifyPage('Verum Omnis — Forensic Narrative • page 4 of 14 the applicant alleges the sale') === 'analysis-secondary', 'a Verum Omnis analysis page is analysis-secondary');
+ok(E.voClassifyPage('Verum Omnis — Forensic Narrative • page 4 of 14 Executive Summary: This report analyzes the record. The applicant alleges the sale.') === 'analysis-secondary', 'a Verum Omnis analysis page with independent analysis content is analysis-secondary');
 
 // ---- 2. fact extraction ----------------------------------------------------
 const vals = (a) => a.map(x => x.value);
@@ -74,7 +74,7 @@ const pages = [
   'Notice of Change of Ownership of a Vessel. Vessel DTD 782 C. previous owner T.F. Hardouin new owner R. Louw. Dated 21 June 2024.',
   'Notice of Change of Ownership of a Vessel. Vessel DTD782C. previous owner T.F. Hardouin new owner Niven Naidoo. Dated 21 June 2024.',
   'Deed of sale. The seller hereby sells DTD782C to Niven Naidoo for R300,000 on 13 September 2024.',
-  'Verum Omnis — Forensic Narrative • page 4 of 14 the applicant alleges the vessel was sold on 1 April 2030.',
+  'Verum Omnis — Forensic Narrative • page 4 of 14 Executive Summary: This report analyzes the record. The applicant alleges the vessel was sold on 1 April 2030.',
   'Just a cover page.'
 ];
 const idx = E.voBuildFactIndex(pages, []);

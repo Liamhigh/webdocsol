@@ -76,7 +76,7 @@ ok(vv.length === 1 && vv[0].subject === 'DTD782C', 'DTD 782 C and DTD782 C are m
 // ---- an analysis/secondary page can NEVER raise or join a conflict ---------
 ok(conflicts([
   'previous owner T.F. Hardouin new owner A. Person. Vessel DTD111A. Dated 1 May 2024.',
-  'Verum Omnis — Forensic Narrative • page 3 of 14 the applicant alleges T.F. Hardouin transferred DTD111A to B. Other.'
+  'Verum Omnis — Forensic Narrative • page 3 of 14 Executive Summary: This report analyzes the record. The applicant alleges T.F. Hardouin transferred DTD111A to B. Other.'
 ]).length === 0, 'a record page and a Verum Omnis analysis page do not raise a conflict');
 ok(conflicts([
   'previous owner T.F. Hardouin new owner A. Person. Vessel DTD222B. Dated 1 May 2024.',

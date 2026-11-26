@@ -117,8 +117,11 @@ ok(E.generateSummary([{}, {}, {}, {}], 15) === E.generateSummary([{}, {}, {}, {}
   'the engine summary is the same count sentence at every internal score');
 
 // ===== 6. A Verum Omnis analysis is secondary wherever it sits ===============
-ok(E.voIsVerumAnalysisPage('Part B — Large sealed bundles … Verum Omnis — CCT 19/20 Google Drive Index • Page 4 of 9') && !E.voIsVerumAnalysisPage('VERUM OMNIS SEALED ORIGINAL | Seal: VO-3C28D1DEA47F | 4/65 The lease agreement'),
-  'a page whose running title names a Verum Omnis analysis is recognised; the seal footer on evidence is not');
+const indexTitle = 'Part B — Large sealed bundles … Verum Omnis — CCT 19/20 Google Drive Index • Page 4 of 9';
+ok(!E.voIsVerumAnalysisPage(indexTitle) &&
+  E.voIsVerumAnalysisPage(indexTitle + ' Executive Summary: This report analyzes the evidence and identifies a conflict.') &&
+  !E.voIsVerumAnalysisPage('VERUM OMNIS SEALED ORIGINAL | Seal: VO-3C28D1DEA47F | 4/65 The lease agreement'),
+  'a running title corroborates independent analysis content but cannot classify a page by itself; a seal footer on evidence is not analysis');
 
 // ===== 6b. Evidence sealed after a report page is still the record ===========
 // The first version of rule (a) read every page after a set-aside Verum Omnis
@@ -167,11 +170,11 @@ const PAGES = [
   'Public Protector South Africa. Please quote this reference in your reply: CMS-88494/2026 Enquiries: Thomas Mogoba Email: thomasm@pprotect.org Tel: (012) 366 7210 Dear Mr Highcock NOTICE IN TERMS OF SECTION 6(4)(b)(ii) OF THE PUBLIC PROTECTOR ACT. Page 1 of 3',
   'The Public Protector has considered the complaint and the documents submitted with it, and refers the matter as set out below for further handling by the appropriate office. Page 2 of 3',
   'For any further enquiries you are at liberty to approach the Lead Investigator, Mr Thomas Mogoba, at 012 366 7210 alternatively at thomasm@pprotect.org. Yours sincerely. Page 3 of 3',
-  'VERUM OMNIS FORENSIC NARRATIVE — FROM DES SMITH TO THE PRESENT. Prepared by Liam Anthony Highcock, read with the Verum Omnis Forensic Report (Ninth Edition). In the Constitutional Court, Case No CCT 19/20.' + inner(1, 5),
-  'Goodwill does not terminate: the respondent was selling it, buying it back, and forfeiting it under any circumstances (CB6). The MOU was never countersigned by All Fuels. He signed it, and paid under it, before the Constitutional Court heard the matter.' + inner(2, 5),
-  'The rescission application was filed with the Registrar on the night of 2 October 2026, with the founding affidavit of Mr Bester (VO-E543924CB79B), my supporting affidavit recording the forensic collection and the chain of custody (VO-0D93BB2C1B46), and the Notice of Motion.' + inner(3, 5),
-  'GOOGLE DRIVE EVIDENCE INDEX CCT 19/20. Contents: CIPC portal screenshots for Sanarth Fuels (K2016392549) and its annual return; an email "LA Highcock CIPC Search 20260907" from Port Edward Garage. Verum Omnis — CCT 19/20 Google Drive Index • Page 1 of 2' + inner(4, 5),
-  'CB13 CIPC searches conducted 7 September 2026. Cipc compilation (VO35E910616402, 31 pp; shared with allfuelsfinal). The MOU was never countersigned. Verum Omnis — CCT 19/20 Google Drive Index • Page 2 of 2' + inner(5, 5),
+  'VERUM OMNIS FORENSIC NARRATIVE — FROM DES SMITH TO THE PRESENT. Executive Summary: This report analyzes the record and identifies a conflict between two statements. Prepared by Liam Anthony Highcock, read with the Verum Omnis Forensic Report (Ninth Edition). In the Constitutional Court, Case No CCT 19/20. Page 1 of 5.' + inner(1, 5),
+  'Goodwill does not terminate: the respondent was selling it, buying it back, and forfeiting it under any circumstances (CB6). The MOU was never countersigned by All Fuels. He signed it, and paid under it, before the Constitutional Court heard the matter. Page 2 of 5.' + inner(2, 5),
+  'The rescission application was filed with the Registrar on the night of 2 October 2026, with the founding affidavit of Mr Bester (VO-E543924CB79B), my supporting affidavit recording the forensic collection and the chain of custody (VO-0D93BB2C1B46), and the Notice of Motion. Page 3 of 5.' + inner(3, 5),
+  'Page 4 of 5. GOOGLE DRIVE EVIDENCE INDEX CCT 19/20. Contents: CIPC portal screenshots for Sanarth Fuels (K2016392549) and its annual return; an email "LA Highcock CIPC Search 20260907" from Port Edward Garage. Verum Omnis — CCT 19/20 Google Drive Index.' + inner(4, 5),
+  'Page 5 of 5. CB13 CIPC searches conducted 7 September 2026. Cipc compilation (VO35E910616402, 31 pp; shared with allfuelsfinal). The MOU was never countersigned. Verum Omnis — CCT 19/20 Google Drive Index.' + inner(5, 5),
   'Reply chaos2captain@gmail.com To Astron Energy Re: Chat Bot created for Calling request (#48999006547) Hi Dean, many residents here rely on fuel from the two stations on the R61 and ask when supply resumes.'
 ];
 const buildBundle = async () => {
@@ -209,11 +212,12 @@ const run = async () => {
     'the real finding stands: the email went to protect.org, the Protector\'s investigator is at pprotect.org (' + JSON.stringify(types) + ')');
   ok(!types.includes('CT20') && !types.includes('CT39') && !types.includes('CT26') && !types.includes('CT23'),
     'no registration, custody, near-empty or signature finding rests on the founder\'s own analysis pages (' + JSON.stringify(res.findings.map(f => f.type + ' ' + f.location)) + ')');
-  ok(/Secondary-source lead, not a finding: The record states a signature is missing \("never countersigned"\)/.test(res.extractionNotes) && /a Verum Omnis analysis/.test(res.extractionNotes),
-    'the narrative\'s "never countersigned" is a lead to verify against the primary record, and the disclosure names a Verum Omnis analysis');
+  ok(/Prior analysis report:/.test(res.extractionNotes) && !/Prior Verum Omnis report:/.test(res.extractionNotes) &&
+    /Prior analysis excluded: page 5\./.test(res.extractionNotes),
+    'the analysis run is excluded and disclosed neutrally because its text does not establish platform authorship (' + JSON.stringify(res.extractionNotes) + ')');
   const dm = res.documentMap || [];
   const ex = dm.find(x => x.statedTotal === 5);
-  ok(ex && ex.start === 5 && ex.end <= 9 && ex.title === 'Verum Omnis analysis (set aside from scanning)', 'the exhibit never takes in the printed email after it, and is named for what it is, never by a placeholder (' + JSON.stringify(dm) + ')');
+  ok(ex && ex.start === 5 && ex.end <= 9 && ex.title === 'Prior analysis (set aside from scanning)', 'the excluded analysis keeps its original five-page boundary and a neutral document label (' + JSON.stringify(dm) + ')');
   ok(!/prior verum omnis report page excluded/i.test(JSON.stringify(dm)), 'no document is named "prior verum omnis report page excluded"');
 
   // ---- the technical report, read back --------------------------------------

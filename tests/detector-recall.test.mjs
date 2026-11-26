@@ -515,7 +515,7 @@ ok(!fires(DET.D01_DETECT_DIRECT_CONTRADICTION, [
   ]),
   'D01 fixed pairs do NOT pair different subjects (invoice paid / deposit unpaid)');
 ok(fires(DET.D01_DETECT_DIRECT_CONTRADICTION, [
-    'the invoice was paid on monday yet the invoice was not paid according to the ledger'
+    'the invoice was paid on monday. The invoice was not paid according to the ledger.'
   ]),
   'D01 fixed pairs still fire on the SAME subject affirmed and negated');
 

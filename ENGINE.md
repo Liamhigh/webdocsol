@@ -5,8 +5,8 @@
 > engine is correct** and the other surface is the one to fix. Every hard lesson from real
 > evidence bundles is encoded here and locked by tests.
 
-**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.3-web'`
-**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.3-web'`, report builder v1.3.1.
+**Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.4-web'`
+**Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.4-web'`, report builder v1.3.1.
 **Findings JSON:** v1.11.0, built by `buildFindingsJson` in `seal-document.html`, not by either
 script (1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
 the well-formedness gate and serial-stage trace; 1.9.0 added `cross_document_observations` with a
@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   66 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite); many exist solely to stop the regressions in §4 and §12.
+   67 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -59,12 +59,12 @@ PDF bytes + pdf-lib PDFDocument (+ opts.referenceTime from the seal page)
   ├─ extractPageText()               text per page: pdf-lib content-stream decoding with ToUnicode CMaps
   ├─ window.voOcrRescuePages()       seal-page hook: on-device OCR (pdf.js render + tesseract.js) for image-only pages
   │                                  (whole-document raw scan, extractPdfText, if per-page text fails)
+  ├─ voCacheDocSegs()                source document boundaries read before any page is replaced by a placeholder
   ├─ voExcludeTemplatePages()        pages carrying the Verum Omnis analysis-template masthead, excluded in place
   ├─ voExcludeSecondaryReportPages() a prior Verum Omnis report bound into the bundle, excluded in place
   ├─ voNoteAiCompiledSummary()       an AI-compiled summary is scanned but disclosed as secondary
   ├─ voExcludeFooterOnlyPages()      pages whose only text is a seal footer
-  ├─ voCacheDocSegs()                document boundaries (voDetectDocuments, §8) read before the furniture goes
-  ├─ voStripSealFurnitureBlocks()    this platform's own seal footers removed before detection
+  ├─ voStripSealFurnitureBlocks()    this platform's own seal footers and manifest blocks removed before detection
   ├─ voSecondaryPages()              pages of extracts, commentaries and a party's submission about other sealed records
   ├─ voMarkdownAnalysisPages()       pages carrying chat-style markdown (bold runs, ## headings): a rendered AI or chat analysis (§12.15)
   ├─ citations module (flagged)      only when opts.modules.citations is true: the neutral occurrence core
@@ -729,6 +729,11 @@ result: `engineVersion`, `rulePackage`, `clean`, `unreadable`, `overallScore` /
 `extractionNotes`, `contextNotes`, `referenceTime` (null when none; recorded in findings JSON
 v1.6.0 as `analysis_reference_utc`), `ocrPages`, `ocrConfidence`, `footerOnlyPages`, `summary`.
 
+`voApplyFindingClasses(findings, blocks)` requires the source page blocks to verify that two
+distinct statements support a `CONTRADICTION` classification. The second argument is required
+for that classification; a legacy one-argument call intentionally demotes candidate contradictions
+to `TENSION` rather than restoring the former unguarded behavior.
+
 `voDetectDocuments(textBlocks)` recovers document boundaries inside a consolidated bundle from
 each document's own numbering: `Page N of M` markers and this platform's own seal footers
 (`VO-… | n/N`). A new segment starts when the total changes or the number restarts; the
@@ -880,7 +885,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**66 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite; recount assertions after any test change).
+**67 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -915,7 +920,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `digital-forensics.test.mjs` | 19 | PDF structure and digital-forensics measurements |
 | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: pinned assets, 256-MiB Wasm cap, pre-hash input limit and sentinel, input/output/object limits, worker opt-in, observations-only envelope and findings parity |
 | `narrate-excerpt.test.mjs` | 16 | AI excerpt building |
-| `findings-json.test.mjs` | 29 | JSON contract v1.9.0 (`cross_document_observations` w/ byte-faithful `quote_verbatim`); 1.8.0 `candidate_law`; 1.7.0: `display_name`, `brain`, `triple_verification`, `ai_review_note`; an AI candidate carries `INSUFFICIENT`, never a band |
+| `findings-json.test.mjs` | 43 | JSON contract v1.9.0 (`cross_document_observations` w/ byte-faithful `quote_verbatim`); 1.8.0 `candidate_law`; 1.7.0: `display_name`, `brain`, `triple_verification`, `ai_review_note`; an AI candidate carries `INSUFFICIENT`, never a band |
 | `franchise-lease.test.mjs` | 17 | D38/D39 (CT44/CT45) |
 | `wrangler-config.test.mjs` | 36 | **Deploy config drift**: the top level and `[env.production]` carry the same KV, AI, vars, observability, assets block (`./`, `ASSETS`, `/api/*` Worker-first) and trainer cron (weekly, Monday 03:00 UTC, `AUTO_CURATE = "on"`); exactly two zone routes, `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, in both environments, zone named, no `custom_domain` |
 | `role-capacity.test.mjs` | 13 | D40/CT46, no hardcoded parties |
@@ -1674,15 +1679,20 @@ sealed four days after §12.12 shipped, so everything there held; what follows i
    Africa/Johannesburg"); OCR read the stamp as "0/09/2026" on 25 scanned pages and D03
    sealed each as an impossible date, while the timeline pinned other findings to the seal
    date. `voStripSealFurniture` now removes the platform's own footers from every block (text
-   layer and OCR, the `[OCR]` prefix kept) before any detector runs — AFTER the document
-   boundaries have been read from those footers (`voCacheDocSegs`, returned from a cache for
-   the same array) and after footer-only pages are recognised. Backstops for a mangled footer:
+   layer and OCR, the `[OCR]` prefix kept) before any detector runs. Document boundaries are
+   cached from the source text before report/template placeholders or furniture are removed.
+   Backstops for a mangled footer:
    the brand line as OCR renders it (E as 3, I as 1 or l) is stripped through to the page
    marker; a date followed by a clock time is a stamp only in the company of the footer's other
    words (hash, seal id, zone name, page marker — `voIsStampContext`), so a bank line, an email
    header or a till slip keeps its own timestamp and D03/D04 still read it; and a date with a
    zero day or month ("0/09/2026") is a digit OCR lost, never an impossible date — not a claim
    of the record.
+   The same bounded removal recognises platform-output evidence manifests by the combined
+   "EVIDENCE MANIFEST & CHAIN OF CUSTODY", "Primary Artifact" and "Artifact SHA-512" labels.
+   It leaves adjacent party-authored custody statements intact, names every affected page in
+   the extraction note, and runs before `voExtractConductLedger`, so platform furniture cannot
+   enter a ledger snippet.
 2. **Nine registration numbers were OCR readings of three clean ones** ("20121226353/07" for
    2012/226353/07, "1811100115407" for 1911/001154/07, "200205930923" for 2002/059909/23),
    plus "ID/Registration number of complainant 510209 5091087" — a person's identity number
@@ -2863,6 +2873,27 @@ narrative's hash.
 disclosures, signed-package matching, embedded-seal metadata, affidavit boundaries,
 negation, admissions, captured amounts and overlapping scans. `tests/forensic-narrative.test.mjs`
 checks the cover reference. `tests/annexure-eb-regression.test.mjs` now has 502 assertions.
+
+### Prior framework-analysis pages and seal furniture
+
+Prior analysis written against the Verum Omnis framework can be produced by another tool.
+Independently recognisable report, contradiction-ledger, brain-output and declaration pages are
+excluded in place, each disclosed in extraction notes; neighbouring primary evidence stays in the
+scan. WF3 reports excluded analysis instead of claiming none was found. Recognisable sealed-evidence
+source footers are stripped before conduct-ledger extraction; their text is not an event.
+An inner sealed-bundle source and page marker remain record content. A declarative quoted
+instrument clause is kept apart from a following flattened table or question; conditional
+glosses are not denials. A uniquely identified, segmented instrument continuation may supply
+the original clause; ambiguous sources remain identified as narrative.
+Contradiction classification requires distinct quoted statements; questions and definitions cannot
+serve as denial horns in the guarded detectors. An unsigned claim sharing a sentence with an
+unanchored procedural observation is withheld or narrowed. Severity is capped for narrative-only
+and single-page examination-limit findings; the highest rank requires independently sourced
+documentary statements attributed to one party. Overlapping CT54 coverage findings are combined.
+Findings JSON actor fields are bound to nearby names in the quoted passages or say "unattributed".
+The court-ready narrative omits GPS coordinates while retaining the location-derived jurisdiction;
+seal metadata is unchanged. `tests/detection-credibility.test.mjs` and
+`tests/findings-json.test.mjs` cover these boundaries with synthetic records.
 
 ## 13. The court-ready narrative (the "human report")
 

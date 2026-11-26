@@ -27,6 +27,14 @@ const R = require('../forensic-report.js');
 
 let pass = 0, fail = 0;
 const ok = (c, n) => { if (c) pass++; else { fail++; console.error('  FAIL: ' + n); } };
+const pagesFor = finding => {
+  const pages = [];
+  finding[0].anchor.quote.forEach((quote, i) => {
+    const page = finding[0].anchor.where[i] || finding[0].anchor.where[0];
+    pages[page - 1] = (pages[page - 1] || '') + quote + '. ';
+  });
+  return pages;
+};
 
 console.log('======================================================');
 console.log('RUN  batch6-finding-classes.test.mjs');
@@ -75,44 +83,43 @@ ok(E.voClassifyFinding({ type: 'SERIAL' }) === null, 'serial patterns are not cl
   // CT01 is pair-capable; one anchored side only -> TENSION with a reason.
   const one = [{ type: 'CT01', severity: 5, evidence: 'the letter states "paid in full"',
     anchor: { who: [], where: [4], quote: ['paid in full'], when: [], law: [], clauses: [] } }];
-  E.voApplyFindingClasses(one);
-  ok(one[0].findingClass === 'TENSION' && /Only one side/.test(one[0].classNote || ''),
+  E.voApplyFindingClasses(one, pagesFor(one));
+  ok(one[0].findingClass === 'TENSION' && /Two distinct statements/.test(one[0].classNote || ''),
     'pair-scoped finding with one anchored side demotes to tension');
   // The same finding with both sides anchored stays a contradiction.
   const two = [{ type: 'CT01', severity: 5, evidence: '"paid in full" vs "no payment received"',
     anchor: { who: [], where: [4, 9], quote: ['paid in full', 'no payment received'], when: [], law: [], clauses: [] } }];
-  E.voApplyFindingClasses(two);
+  E.voApplyFindingClasses(two, pagesFor(two));
   ok(two[0].findingClass === 'CONTRADICTION', 'two anchored sides stay a contradiction');
   // A fragment under twelve characters is not a counter-proposition (the
   // evidence-bundle-6 "Conduct Admission": "i admit" beside a full passage).
   const frag = [{ type: 'CT01', severity: 5, evidence: '"i admit" beside the passage',
     anchor: { who: [], where: [4], quote: ['i admit', 'I admit that annexure B was sent to the Controller'], when: [], law: [], clauses: [] } }];
-  E.voApplyFindingClasses(frag);
+  E.voApplyFindingClasses(frag, pagesFor(frag));
   ok(frag[0].findingClass === 'TENSION',
     'a quoted fragment under twelve characters does not count as a second side');
-  // A rule-verified single-sided type (registration fails the registry check)
-  // is self-scoped and stays a contradiction on one quote.
+  // A single-sided validity check cannot establish a two-statement contradiction.
   const self = [{ type: 'CT20', severity: 5, evidence: 'registration "ABC123" fails validation',
     anchor: { who: [], where: [2], quote: ['ABC123'], when: [], law: [], clauses: [] } }];
-  E.voApplyFindingClasses(self);
-  ok(self[0].findingClass === 'CONTRADICTION', 'self-scoped validity check keeps its class on one anchor');
+  E.voApplyFindingClasses(self, pagesFor(self));
+  ok(self[0].findingClass === 'TENSION', 'self-scoped validity check is not a two-statement contradiction');
 }
 
 // ---- 3. Actor-mismatch gate (same-actor types only) -------------------------
 {
   const mismatched = [{ type: 'CT06', severity: 5, evidence: '"the order was granted" vs "no order exists"',
     anchor: { who: [], where: [4, 9], quote: ['Rayhaan Khan told the court the order was granted', 'Crompton Motors holds no order'], when: [], law: [], clauses: [] } }];
-  E.voApplyFindingClasses(mismatched);
+  E.voApplyFindingClasses(mismatched, pagesFor(mismatched));
   ok(mismatched[0].findingClass === 'TENSION' && mismatched[0].actorMismatch === true && /different parties/.test(mismatched[0].classNote || ''),
     'CT06 with differently-named parties demotes to tension with actorMismatch');
   const sameActor = [{ type: 'CT06', severity: 5, evidence: '"I never signed" vs "I signed"',
     anchor: { who: [], where: [4, 9], quote: ['Gary Highcock never signed the addendum', 'Gary Highcock signed the addendum on that day'], when: [], law: [], clauses: [] } }];
-  E.voApplyFindingClasses(sameActor);
+  E.voApplyFindingClasses(sameActor, pagesFor(sameActor));
   ok(sameActor[0].findingClass === 'CONTRADICTION', 'CT06 on one party stays a contradiction');
   // Witness-statement conflict is DESIGNED for two actors: never gated.
   const witnesses = [{ type: 'CT40', severity: 4, evidence: '"the car was red" vs "the car was blue"',
     anchor: { who: [], where: [4, 9], quote: ['James Nkosi saw a red car', 'Pieter Botha saw a blue car'], when: [], law: [], clauses: [] } }];
-  E.voApplyFindingClasses(witnesses);
+  E.voApplyFindingClasses(witnesses, pagesFor(witnesses));
   ok(witnesses[0].findingClass === 'CONTRADICTION', 'CT40 between two witnesses is a contradiction, not gated');
 }
 

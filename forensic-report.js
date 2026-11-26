@@ -67,7 +67,7 @@ var BODY_BOTTOM = 70;             // above seal footer zone
 // findings JSON stamped with a stale engine version breaks the Seal's bond
 // to its ruleset version (Constitution v6.0). constitution-lock.test.mjs
 // enforces the cross-file equality.
-var ENGINE_VERSION = '5.7.3-web';
+var ENGINE_VERSION = '5.7.4-web';
 var CONSTITUTION_VERSION = '6.1';
 // Counts mirror the live registry and run-list in forensic-engine-page.js.
 // The report recomputes from the registry at runtime when the engine is
@@ -1429,7 +1429,7 @@ function makeCtx(doc, fonts, images, sourceName, ctxOpts) {
 }
 
 // ================= COVER =================
-function drawCover(ctx, data) {
+function drawCover(ctx, data, omitGps) {
   var pg = ctx.doc.addPage([PW, PH]);
   // navy full bleed
   pg.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: NAVY });
@@ -1494,7 +1494,7 @@ function drawCover(ctx, data) {
   var cjList = [(JURIS_LABEL[cj.home] || cj.home) + ' (' + cjBasis + ')'].concat(cj.foreign.map(function (c) { return (JURIS_LABEL[c] || c) + ' (named in the engine\'s findings)'; }));
   cLine('Jurisdiction(s): ' + (data.identity.jurisdiction ? data.identity.jurisdiction + ' (entered); ' : '') + cjList.join(', '), ctx.f.times, 9.5, COVER_TXT, 15);
   // The GPS fix prints on the cover — the §15.4 header a reader sees first.
-  var _gpsCover = gpsLine(data);
+  var _gpsCover = omitGps ? null : gpsLine(data);
   if (_gpsCover) cLine(_gpsCover, ctx.f.times, 9.5, COVER_TXT, 15);
   cLine('Case Reference: ' + (data.identity.caseRefs || 'none entered'), ctx.f.times, 9.5, COVER_TXT, 15);
   cLine('Report Type: ' + (data.coverReportType || 'Combined — Forensic Extraction, Contradiction Analysis, Tamper Detection'), ctx.f.times, 9.5, COVER_TXT, 15);
@@ -4878,12 +4878,12 @@ function secUnreadPages(ctx, data) {
       // the bundle: analysis, not evidence), and some may have been read
       // through OCR. Both are disclosed here (PD6); "every page of this bundle
       // was read" is never printed beside an exclusion.
-      var exNotes = notes.match(/(?:Prior Verum Omnis report|Template boilerplate)[^.]*\./g) || [];
+      var exNotes = notes.match(/(?:Prior Verum Omnis report|Prior analysis report|Prior analysis excluded|Template boilerplate)[^.]*\./g) || [];
       if (exNotes.length || (data.ocrPages && data.ocrPages.length)) {
         ctx.newBodyPage();
         ctx.heading('PAGES THE ENGINE COULD NOT READ');
         if (exNotes.length) {
-          ctx.para('Every page of this bundle was text-extracted. The following pages were set aside before contradiction scanning — a prior Verum Omnis report or the analysis template bound into the bundle is analysis, not evidence — and no finding was sought on them:', { size: 10.5, after: 6 });
+          ctx.para('Every page of this bundle was text-extracted. The following pages were set aside before contradiction scanning — prior analysis or the analysis template bound into the bundle is not evidence — and no finding was sought on them:', { size: 10.5, after: 6 });
           for (var xn = 0; xn < exNotes.length; xn++) ctx.bullet(exNotes[xn].trim(), { size: 10, after: 4 });
           ctx.gap(2);
         } else {
@@ -5749,7 +5749,7 @@ async function buildHumanReport(opts) {
     try { fn(ctx, data, o); } finally { ctx.heading = origHeading; }
   }
 
-  drawCover(ctx, data);
+  drawCover(ctx, data, true);
   // Contents placeholder page (drawn last with real page numbers), as the
   // forensic report does: the reference document opens with a table of
   // contents and so does this one.
@@ -6008,7 +6008,6 @@ async function buildHumanReport(opts) {
   var lines = [
     'Narrative report reference: ' + reference,
     'Generated: ' + generatedAt.toISOString(),
-    gpsLine(data),
     'Source document: ' + san(data.docName) + ' (' + data.pageCount + ' pages) — SHA-512 ' + truncHash(data.sha512, 24, 12),
     'Sealed technical report: ' + (prov.technicalSealId || 'n/a') + ' — SHA-512 ' + (prov.technicalSha512 ? truncHash(prov.technicalSha512, 24, 12) : 'n/a'),
     'Findings JSON (v' + (prov.findingsJsonVersion || '1.2.0') + '): SHA-512 ' + (prov.findingsJsonSha512 ? truncHash(prov.findingsJsonSha512, 24, 12) : 'n/a'),

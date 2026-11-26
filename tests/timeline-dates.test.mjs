@@ -93,7 +93,7 @@ const withSecondary = E.voBuildTimeline([], [
 ], [2]); // page 2 flagged secondary
 ok(withSecondary.events.some(e => e.date === '22 May 2024') && !withSecondary.events.some(e => /2099/.test(e.date)),
   'a date on a page flagged secondary/analysis is not presented as a record event');
-const analysisPage = 'Verum Omnis — Forensic Narrative • page 3 of 20 the review dated 1 April 2030 notes';
+const analysisPage = 'Verum Omnis — Forensic Narrative • page 3 of 20 Executive Summary: This report analyzes the record. The review dated 1 April 2030 notes';
 ok(!E.voBuildTimeline([], [analysisPage]).events.some(e => /2030/.test(e.date)),
   'a date on a Verum Omnis analysis page is not a record event');
 

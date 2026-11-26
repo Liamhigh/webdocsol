@@ -529,20 +529,25 @@ tamper-evident, never permanent, immutable or unalterable, and "anchored to the 
 blockchain" is written only once the OpenTimestamps proof is confirmed, and then only to say the
 file existed no later than that block (`anchorPhrase`); D16 is never revived by restoring
 newlines; the optional Case details "Parties" field never becomes a required input.
-Secondary-report exclusion is classification, not authentication: a plaintext seal ID or
-page total, a footer, or a letter-spaced report phrase alone never proves a page is a report
-or a seal is genuine. Exclude only pages with independent report-analysis content signals,
-and retain an extraction-note disclosure whenever pages are excluded. Never claim that a
-document authenticates its own seal. Read the bible for the area before changing it:
+Secondary-report exclusion is classification, not authentication: platform output — report
+pages, seal footers, and manifest blocks — is never evidence, and every exclusion is disclosed.
+A plaintext seal ID or page total, footer, letter-spaced report phrase, report masthead or
+reference, cover claim, seal ID, or page-total cue alone never proves that a page is prior
+analysis or that a seal is genuine. Exclude only pages with independent report-analysis content
+signals; metadata cues corroborate an independently established report but never establish it.
+This includes prior analysis output from this platform or another tool, including reports
+written against Verum Omnis frameworks; such analysis is never evidence. Retain an
+extraction-note disclosure for each affected page. Never claim that a document authenticates
+its own seal. Read the bible for the area before changing it:
 `ENGINE.md` (engine and reports), `DEPLOYMENT.md`
 (shipping and serving), `REFERENCE.md` (every file and endpoint), `FORENSIC-DEBUG.md` (what a
 failure looks like).
 
 ## Quick facts
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets. A Pages Function, `functions/[[path]].js`, runs only on the Pages project and has been dormant since 27 September.
-- Forensic engine: `forensic-engine-page.js` (CT01–CT61, 63 registered detector entries, `VO_ENGINE_VERSION 5.7.3-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.7.3-web`, report builder v1.3.1); findings JSON 1.11.0. Detector terminology: 46 numeric prefixes, 45 unsuffixed entries and 18 suffixed entries; 61 entries in the main run-list, D37 runs separately, and D10A is retained but inactive.
+- Forensic engine: `forensic-engine-page.js` (CT01–CT61, 63 registered detector entries, `VO_ENGINE_VERSION 5.7.4-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.7.4-web`, report builder v1.3.1); findings JSON 1.11.0. Detector terminology: 46 numeric prefixes, 45 unsuffixed entries and 18 suffixed entries; 61 entries in the main run-list, D37 runs separately, and D10A is retained but inactive.
 - The ten existing forensic scripts are inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing one, re-splice its inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module. The QPDF active-graph adapter is deliberately external and opt-in.
-- Tests: `node tests/run-all.js` — **66 registered suites** (55 audited baseline plus 2 Phase 0 suites, 4 Phase 1 evaluation suites, 2 Phase 2 citation suites, 1 Phase 3 redaction-fixture suite, 1 Phase 4 active-graph suite and 1 PR #327 review suite), **must be green before any push**. Ordinary CI also runs syntax checks and Chromium/Firefox/WebKit gates. Many exist solely to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **67 registered suites** (55 audited baseline plus 2 Phase 0 suites, 4 Phase 1 evaluation suites, 2 Phase 2 citation suites, 1 Phase 3 redaction-fixture suite, 1 Phase 4 active-graph suite, 1 PR #327 review suite and 1 detection-credibility suite), **must be green before any push**. Ordinary CI also runs syntax checks and Chromium/Firefox/WebKit gates. Many exist solely to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.

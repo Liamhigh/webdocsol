@@ -1,10 +1,10 @@
-// ============== FORENSIC CONTRADICTION ENGINE v5.7.3-web ================
+// ============== FORENSIC CONTRADICTION ENGINE v5.7.4-web ================
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // ========================================================================
 
 
 // ========================================================================
-// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.3-web
+// VERUM OMNIS FORENSIC CONTRADICTION ENGINE v5.7.4-web
 // 61 Contradiction Types | 63 Detectors | 17 Serial Patterns
 // + signed rule packages, applied additively (see SIGNED RULE PACKAGES below)
 // ========================================================================
@@ -26,7 +26,7 @@
 // threads this version into the findings JSON and report stamps, which
 // previously carried a hard-coded "v2.0".
 // ========================================================================
-var VO_ENGINE_VERSION = '5.7.3-web';
+var VO_ENGINE_VERSION = '5.7.4-web';
 
 // Content mass: how much DISTINCT content a page carries, for page-emptiness
 // statistics only (never for the detectors, which see the full text). Raw
@@ -639,6 +639,7 @@ function voDetectDocuments(textBlocks) {
     // title ("prior verum omnis report page excluded" was printed as a
     // document's name, evidence-bundle-7-docs).
     if (/^prior verum omnis report page excluded\./.test(head)) { out[d].title = 'Verum Omnis analysis (set aside from scanning)'; continue; }
+    if (/^prior analysis page excluded\./.test(head)) { out[d].title = 'Prior analysis (set aside from scanning)'; continue; }
     if (/^analysis template boilerplate excluded\./.test(head)) { out[d].title = 'Verum Omnis analysis template (set aside from scanning)'; continue; }
     // Drop the page marker and any seal furniture before reading a title. No
     // lookbehind here: Safari before 16.4 throws on it and the whole scan dies.
@@ -728,6 +729,46 @@ function voBehaviouralKey(sen) {
   return String(sen || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
 }
 
+var VO_PROCEDURE_BREACHES = [
+  { re: /\b(?:not witnessed|without (?:a |any )?witness(?:es)?|no witness(?:es)?)\b/, msg: 'Document indicates it was executed without a witness' },
+  { re: /\b(?:not notaris(?:ed|zed)|without notaris(?:ation|ing)|un-?notaris(?:ed|zed)|not certified)\b/, msg: 'Document indicates it was not notarised/certified' },
+  { re: /\b(?:no board resolution|without (?:a )?(?:board |shareholder )?resolution|no resolution was (?:passed|taken|adopted))\b/, msg: 'Document indicates no board/shareholder resolution authorised the act' },
+  { re: /\b(?:unstamped|not stamped|without stamp duty|no stamp duty (?:paid|was paid))\b/, msg: 'Document indicates stamp duty was not paid' },
+  { re: /\b(?:not countersigned|never countersigned|without (?:a )?countersignature|uncountersigned)\b/, msg: 'Document indicates it was never countersigned' }
+];
+function voIsSentenceBoundary(text, at) {
+  var ch = text.charAt(at);
+  if (ch === '?' || ch === '!') return true;
+  if (ch !== '.') return false;
+  if (/\d/.test(text.charAt(at - 1)) && /\d/.test(text.charAt(at + 1))) return false;
+  var prefix = text.slice(Math.max(0, at - 20), at + 1);
+  if (/(?:^|[^a-z])(?:ltd|pty|inc|corp|co|llc|llp|plc)\.$/i.test(prefix) &&
+      /^\s+(?:and|but|or|nor|yet|in|on|under|for|by|with|was|were|is|are|has|had|shall|will|may|must)\b/i.test(text.slice(at + 1))) return false;
+  return !/(?:^|[^a-z])(?:mr|mrs|ms|dr|prof|adv|att|cl|para|no|pp)\.$/i.test(prefix);
+}
+function voStatementAt(text, at) {
+  var s = String(text || ''), start = at, end = at;
+  while (start > 0 && !voIsSentenceBoundary(s, start - 1)) start--;
+  while (end < s.length && !voIsSentenceBoundary(s, end)) end++;
+  return s.slice(start, end + 1).toLowerCase();
+}
+function voInstrumentHeading(text) {
+  return String(text || '')
+    .replace(/^\s*\[OCR\]\s*/i, '')
+    .replace(/^\s*Verum\s+Omnis\s+Sealed\s+Evidence\s+Source\s*:\s*[^|]{1,200}?\.pdf\s+Page\s+\d+\s+of\s+\d+\s*/i, '');
+}
+function voProcedureClauseAt(text, at) {
+  var s = String(text || ''), start = at, end = at;
+  while (start > 0 && !/[.!?;]/.test(s.charAt(start - 1))) start--;
+  while (end < s.length && !/[.!?;]/.test(s.charAt(end))) end++;
+  var boundary = /,\s*(?:but|whereas|while)\s+/gi, match;
+  boundary.lastIndex = start;
+  while ((match = boundary.exec(s)) && match.index < end) {
+    if (match.index < at) start = match.index + match[0].length;
+    else { end = match.index; break; }
+  }
+  return s.slice(start, end + 1).toLowerCase();
+}
 var DETECTORS = {
 
   // D01-D05: Statemental detectors
@@ -745,10 +786,31 @@ var DETECTORS = {
       ['accepted','declined'],['completed','incomplete'],['submitted','not submitted'],
       ['confirmed','denied'],['registered','deregistered']
     ];
-    var fullText = textBlocks.join(' ').toLowerCase();
+    var fullText = textBlocks.join(' ');
     var WINDOW = 80; // ~one clause; both terms must sit this close to be a local contradiction
+    function sentenceAt(pos) {
+      var pageStart = 0, pageEnd = fullText.length;
+      for (var pg = 0, offset = 0; pg < textBlocks.length; pg++) {
+        var next = offset + String(textBlocks[pg] || '').length;
+        if (pos >= offset && pos < next) { pageStart = offset; pageEnd = next; break; }
+        offset = next + 1;
+      }
+      var start = pos;
+      while (start > pageStart && !voIsSentenceBoundary(fullText, start - 1)) start--;
+      var end = pos;
+      while (end < pageEnd && !voIsSentenceBoundary(fullText, end)) end++;
+      return { start: start, text: fullText.slice(start, end + 1).trim() };
+    }
+    function definitionStatement(text) {
+      return /^\s*(?!this\b|that\b|it\b|what\b)(?:(?:the\s+)?(?:term|word|phrase|concept)\s+)?(?:["“'][^"”']+["”']|[a-z][^.!?]{0,120}?)\s+means\b/i.test(text);
+    }
+    function validPair(affirmed, denied) {
+      var a = sentenceAt(affirmed), b = sentenceAt(denied);
+      return a.start !== b.start && !/\?/.test(a.text) && !/\?/.test(b.text) &&
+        !definitionStatement(a.text) && !definitionStatement(b.text);
+    }
     function positions(term) {
-      var re = new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'g');
+      var re = new RegExp('\\b' + term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\b', 'gi');
       var m, out = [];
       while ((m = re.exec(fullText)) !== null) out.push(m.index);
       return out;
@@ -762,7 +824,7 @@ var DETECTORS = {
     var SUBJ_PRONOUN = /^(?:it|its|same|such|this|these|those|they|them|he|she|matter|latter|former|aforesaid|said)$/;
     function subjectBefore(pos) {
       var pre = fullText.slice(Math.max(0, pos - 48), pos);
-      var words = pre.replace(/[^a-z' -]/g, ' ').split(/\s+/).filter(Boolean);
+      var words = pre.toLowerCase().replace(/[^a-z' -]/g, ' ').split(/\s+/).filter(Boolean);
       for (var w = words.length - 1; w >= 0; w--) {
         if (SUBJ_PRONOUN.test(words[w])) return '*'; // refers back: aligns with anything
         if (!SUBJ_STOP.test(words[w]) && words[w].length > 2) return words[w];
@@ -782,7 +844,7 @@ var DETECTORS = {
       var hit = null;
       for (var hp = 0; hp < aPos.length && !hit; hp++) {
         for (var hq = 0; hq < bPos.length; hq++) {
-          if (Math.abs(aPos[hp] - bPos[hq]) <= WINDOW && subjectsAligned(aPos[hp], bPos[hq])) { hit = [aPos[hp], bPos[hq]]; break; }
+          if (Math.abs(aPos[hp] - bPos[hq]) <= WINDOW && validPair(aPos[hp], bPos[hq]) && subjectsAligned(aPos[hp], bPos[hq])) { hit = [aPos[hp], bPos[hq]]; break; }
         }
       }
       if (hit) {
@@ -879,7 +941,7 @@ var DETECTORS = {
       var pair = null;
       for (var ai = 0; ai < asserts.length && !pair; ai++) {
         for (var ni = 0; ni < negs.length; ni++) {
-          if (Math.abs(asserts[ai] - negs[ni]) <= 240 && subjectsAligned(asserts[ai], negs[ni]) && objectsAligned(asserts[ai], negs[ni], cw)) { pair = [asserts[ai], negs[ni]]; break; }
+          if (Math.abs(asserts[ai] - negs[ni]) <= 240 && validPair(asserts[ai], negs[ni]) && subjectsAligned(asserts[ai], negs[ni]) && objectsAligned(asserts[ai], negs[ni], cw)) { pair = [asserts[ai], negs[ni]]; break; }
         }
       }
       if (!pair) continue;
@@ -1983,6 +2045,11 @@ var DETECTORS = {
     var DENY_G = /\b(?:there were no sales|no sales were (?:made|recorded)|never invoiced|nothing was sold|the deal fell through|the deal did not happen|the deal didn't happen|order (?:did not|didn't) happen)\b/gi;
     var ADMIT_G = /\b(?:proceeded with the deal|the deal happened|the deal went ahead|sale was made|sales were made|invoiced and exported)\b/gi;
     var denials = [], admissions = [];
+    function occurrenceSentence(text, m) {
+      var pre = text.slice(0, m.index);
+      var start = Math.max(pre.lastIndexOf('. '), pre.lastIndexOf('? '), pre.lastIndexOf('! ')) + 1;
+      return (voSentenceAround(text.slice(start), m[0]) || m[0]).replace(/\s+/g, ' ').trim();
+    }
     function reportedPosition(W, idx, quote) {
       // Generic speaker attribution only — never a party-name list. An express
       // quotation remains reviewable; narrative attribution is not a direct
@@ -1998,24 +2065,26 @@ var DETECTORS = {
       while ((m = DENY_G.exec(W)) !== null) {
         // A narrator's report that someone else denied a transaction is not
         // paired with a third party's conduct as if one actor contradicted himself.
-        var denialQuote = (voSentenceAround(W, m[0]) || m[0]).replace(/\s+/g, ' ').trim();
-        if (reportedPosition(W, m.index, denialQuote)) continue;
+        var denialQuote = occurrenceSentence(W, m);
+        if (/\?/.test(denialQuote) || /^\s*["“']?[^"”']+["”']?\s+means\b/i.test(denialQuote) || reportedPosition(W, m.index, denialQuote)) continue;
         denials.push({ page: b + 1, quote: denialQuote });
       }
       ADMIT_G.lastIndex = 0;
       while ((m = ADMIT_G.exec(W)) !== null) {
         // The admission must be direct too: both sides of this pair need the
         // same source-quality discipline.
-        var admissionQuote = (voSentenceAround(W, m[0]) || m[0]).replace(/\s+/g, ' ').trim();
-        if (reportedPosition(W, m.index, admissionQuote)) continue;
+        var admissionQuote = occurrenceSentence(W, m);
+        if (/\?/.test(admissionQuote) || reportedPosition(W, m.index, admissionQuote)) continue;
         admissions.push({ page: b + 1, quote: admissionQuote });
       }
     }
     if (denials.length && admissions.length) {
-      var dn = denials[0], ad = admissions[0];
+      var dn = null, ad = null;
       for (var di = 0; di < denials.length; di++) for (var ai = 0; ai < admissions.length; ai++) {
-        if (denials[di].page !== admissions[ai].page) { dn = denials[di]; ad = admissions[ai]; break; }
+        if (denials[di].page === admissions[ai].page && denials[di].quote === admissions[ai].quote) continue;
+        if (!dn || denials[di].page !== admissions[ai].page) { dn = denials[di]; ad = admissions[ai]; }
       }
+      if (!dn) return findings;
       findings.push({ type: 'CT01', severity: 4,
         evidence: 'The record carries both a denial of the transaction ("' + dn.quote + '", p. ' + dn.page + ') and an admission that it went ahead ("' + ad.quote + '", p. ' + ad.page + '). A transaction that never happened cannot later be admitted to have proceeded; which statement was true when made is for the record, not the engine.',
         location: 'Page ' + dn.page + ' vs Page ' + ad.page });
@@ -2379,10 +2448,32 @@ var DETECTORS = {
     var findings = [];
     var blocks = textBlocks || [];
     if (!blocks.length) return findings;
-    var lens = [];
-    for (var b = 0; b < blocks.length; b++) lens.push(String(blocks[b] || '').replace(/\s+/g, ' ').trim().length);
+    var lens = [], recordPages = 0, excludedPages = 0;
+    for (var b = 0; b < blocks.length; b++) {
+      var blockText = String(blocks[b] || '');
+      if (/^\s*(?:prior analysis page excluded|prior verum omnis report page excluded)\./i.test(blockText)) {
+        lens.push(null);
+        excludedPages++;
+      } else {
+        lens.push(blockText.replace(/\s+/g, ' ').trim().length);
+        recordPages++;
+      }
+    }
+    if (!recordPages) return findings;
     var nonzero = lens.filter(function(l) { return l > 0; }).sort(function(a, b) { return a - b; });
     if (!nonzero.length) {
+      if (excludedPages) {
+        var unreadableRecordPages = [];
+        for (var ep = 0; ep < lens.length; ep++) if (lens[ep] !== null) unreadableRecordPages.push(ep + 1);
+        var unreadablePageList = unreadableRecordPages.length > 12
+          ? unreadableRecordPages.slice(0, 12).join(', ') + ', … (' + unreadableRecordPages.length + ' in total)'
+          : unreadableRecordPages.join(', ');
+        findings.push({ type: 'CT54', severity: 2,
+          evidence: 'No page remaining for examination carries machine-readable text. Prior-analysis pages were set aside and are not included in this examination limit. OCR the remaining pages and re-run before this record is treated as examined.',
+          location: 'Pages ' + unreadablePageList,
+          ocrAttempted: !!(ocrInfo && ocrInfo.ocrRan) });
+        return findings;
+      }
       // Every page is empty: the whole document is an image-only scan (or
       // extraction failed entirely) — the single most important case in the
       // defamation record, where the pleaded filings carry no text layer.
@@ -2398,7 +2489,7 @@ var DETECTORS = {
     }
     // A mixed short document stays silent: with fewer than three pages a
     // thin page is not statistically anomalous against its neighbours.
-    if (blocks.length < 3) return findings;
+    if (recordPages < 3) return findings;
     var median = nonzero[Math.floor(nonzero.length / 2)];
     if (median < 400) return findings; // a short document: thin pages are not anomalous
     // Batch 6 (evidence-bundle-6 review, 5 November 2026): a thin page the OCR
@@ -2408,14 +2499,14 @@ var DETECTORS = {
     // provenance so the finding says which of the two limits it records.
     var runs = [], cur = null;
     for (var p = 0; p < lens.length; p++) {
-      if (lens[p] < 40) {
+      if (lens[p] !== null && lens[p] < 40) {
         var _oc = /^\s*\[OCR\]/.test(String(blocks[p] || '')) || !!(ocrInfo && ocrInfo.ocrPages && ocrInfo.ocrPages.indexOf(p + 1) !== -1);
         if (!cur || cur.ocr !== _oc) { if (cur) runs.push(cur); cur = { from: p + 1, to: p + 1, ocr: _oc }; }
         else cur.to = p + 1;
       } else if (cur) { runs.push(cur); cur = null; }
     }
     if (cur) runs.push(cur);
-    var wholeDoc = runs.length === 1 && runs[0].from === 1 && runs[0].to === lens.length;
+    var wholeDoc = !excludedPages && runs.length === 1 && runs[0].from === 1 && runs[0].to === lens.length;
     for (var r = 0; r < runs.length && findings.length < 4; r++) {
       var run = runs[r];
       var _pg = run.from === run.to ? 'Page ' + run.from : 'Pages ' + run.from + '–' + run.to;
@@ -2659,9 +2750,10 @@ var DETECTORS = {
       var t2 = voStripSealFurniture(String(blocks[b2] || ''));
       // Keep numbered clauses and semicolon-separated propositions apart. A
       // "not limited" clause must not swallow the next affirmative definition.
-      var sents = t2.split(/[.!?]+\s|;\s*|(?=\b\d+(?:\.\d+)+\s+)/);
+      var sents = t2.replace(/([.!?]+)\s|;\s*|(?=\b\d+(?:\.\d+)+\s+)/g, '$1\n').split('\n');
       for (var si = 0; si < sents.length && findings.length < 3; si++) {
         var s = sents[si];
+        if (/\?/.test(s) || /^\s*["“']?[^"”']+["”']?\s+means\b/i.test(s)) continue;
         // A parenthetical aside denies the clause it glosses, not the
         // sentence's proposition ("(a proposition that is vehemently
         // denied)", b3/b4) — test and read the sentence without its asides.
@@ -2720,7 +2812,7 @@ var DETECTORS = {
     var byFrame = {};
     for (var b = 0; b < blocks.length; b++) {
       var t = String(blocks[b] || '');
-      var sents = t.split(/[.!?]+\s+/);
+      var sents = t.replace(/([.!?]+)\s+/g, '$1\n').split('\n');
       for (var si = 0; si < sents.length; si++) {
         var raw = sents[si];
         if (raw.length < 25 || raw.length > 400) continue;
@@ -2735,17 +2827,24 @@ var DETECTORS = {
         if (frame.length < 6) continue;
         var key = frame.join(' ');
         var pk = poles.slice().sort().join('+');
+        var invalidDenial = /\?/.test(raw) || (/^\s*["“']?[^"”']+["”']?\s+means\b/i.test(raw) && poles.some(function (p) { return p === 'NEG' || /^A\d+b$/.test(p); }));
         if (!byFrame[key]) byFrame[key] = [];
         var dup = false;
-        for (var ri = 0; ri < byFrame[key].length; ri++) if (byFrame[key][ri].pk === pk) { dup = true; break; }
-        if (!dup) byFrame[key].push({ page: b + 1, pk: pk, snippet: raw.replace(/\s+/g, ' ').trim().slice(0, 150) });
+        for (var ri = 0; ri < byFrame[key].length; ri++) if (byFrame[key][ri].pk === pk && (!byFrame[key][ri].invalidDenial || invalidDenial)) { dup = true; break; }
+        if (!dup) byFrame[key].push({ page: b + 1, pk: pk, invalidDenial: invalidDenial, snippet: raw.replace(/\s+/g, ' ').trim().slice(0, 150) });
       }
     }
     for (var key in byFrame) {
       if (findings.length >= 3) break;
       var recs = byFrame[key];
       if (recs.length < 2) continue;
-      var a = recs[0], c = recs[1];
+      var a = null, c = null;
+      for (var x = 0; x < recs.length && !a; x++) {
+        for (var y = x + 1; y < recs.length; y++) {
+          if (!recs[x].invalidDenial && !recs[y].invalidDenial) { a = recs[x]; c = recs[y]; break; }
+        }
+      }
+      if (!a) continue;
       findings.push({ type: 'CT58', severity: 4,
         evidence: 'Two statements share one frame and differ only in polarity: "' + a.snippet + '" (p. ' + a.page + ') versus "' + c.snippet + '" (p. ' + c.page + '). Identical framing with opposite polarity is a direct conflict between the statements; an indicator for legal review, not a determination of which is true.',
         location: a.page === c.page ? 'Page ' + a.page : 'Page ' + a.page + ' vs Page ' + c.page });
@@ -4141,7 +4240,7 @@ var DETECTORS = {
     // OCR did not capture" over the 35 report pages it had excluded on
     // purpose (the AI review dropped that finding; since 5 October 2026 the
     // AI drops nothing, so the engine must not raise it).
-    var setAside = textBlocks.map(function (t) { return /^\s*(?:prior verum omnis report page excluded\.|analysis template boilerplate excluded\.)/.test(String(t || '')); });
+    var setAside = textBlocks.map(function (t) { return /^\s*(?:prior verum omnis report page excluded\.|prior analysis page excluded\.|analysis template boilerplate excluded\.)/.test(String(t || '')); });
     var lensAll = textBlocks.map(function(t){ return voContentMass(t); });
     var lens = lensAll.filter(function (x, k) { return !setAside[k]; });
     var pageOf = []; for (var pk = 0; pk < lensAll.length; pk++) if (!setAside[pk]) pageOf.push(pk);
@@ -4334,24 +4433,21 @@ var DETECTORS = {
 
   D23_DETECT_PROCEDURE_BREACH: function(textBlocks) {
     var findings = [];
-    var fullText = textBlocks.join(' ').toLowerCase();
+    var lowerBlocks = textBlocks.map(function (t) { return String(t || '').toLowerCase(); });
+    var fullText = lowerBlocks.join(' ');
     // Only flag an EXPLICIT statement that a required procedure was NOT followed.
     // The previous version flagged "may require witness but none found" whenever
     // the word "agreement" appeared without "witness" -- absence of a keyword is
     // not evidence of a breach, and it fired on clean documents. Inventing a
     // procedural breach is a fabricated allegation, the worst thing a forensic
     // detector can do, so this now keys on the breach being stated in the text.
-    var breaches = [
-      { re: /\b(?:not witnessed|without (?:a |any )?witness(?:es)?|no witness(?:es)?)\b/, msg: 'Document indicates it was executed without a witness' },
-      { re: /\b(?:not notaris(?:ed|zed)|without notaris(?:ation|ing)|un-?notaris(?:ed|zed)|not certified)\b/, msg: 'Document indicates it was not notarised/certified' },
-      { re: /\b(?:no board resolution|without (?:a )?(?:board |shareholder )?resolution|no resolution was (?:passed|taken|adopted))\b/, msg: 'Document indicates no board/shareholder resolution authorised the act' },
-      { re: /\b(?:unstamped|not stamped|without stamp duty|no stamp duty (?:paid|was paid))\b/, msg: 'Document indicates stamp duty was not paid' },
-      { re: /\b(?:not countersigned|never countersigned|without (?:a )?countersignature|uncountersigned)\b/, msg: 'Document indicates it was never countersigned' }
-    ];
+    var breaches = VO_PROCEDURE_BREACHES;
     for (var i = 0; i < breaches.length; i++) {
-      if (breaches[i].re.test(fullText)) {
+      var occurrence = breaches[i].re.exec(fullText);
+      if (occurrence) {
         findings.push({ type: 'CT35', severity: 4,
-          evidence: breaches[i].msg, location: 'Full document' });
+          evidence: breaches[i].msg, location: 'Full document',
+          procedureOccurrence: { offset: occurrence.index, length: occurrence[0].length } });
       }
     }
     return findings;
@@ -4810,7 +4906,7 @@ var DETECTORS = {
     return findings;
   },
 
-  D32_DETECT_SIGNATURE_ANOMALY: function(textBlocks) {
+  D32_DETECT_SIGNATURE_ANOMALY: function(textBlocks, unanchoredProcedures) {
     var findings = [];
     // A signature-METHOD anomaly means the document was executed by an unusual
     // mechanism -- a conformed "/s/" mark, a per-procurationem (p.p.) surrogate
@@ -4881,7 +4977,21 @@ var DETECTORS = {
           if (/\b(?:dated|annexures?|marked|signed\s+on)\b/.test(lowU.slice(pos + cue.length + 1, pos + cue.length + 61))) return false;
           return true;
         };
-        while (at !== -1 && voCategoryPlural(at, unsignedCues[q])) at = lowU.indexOf(unsignedCues[q], at + 1);
+        while (at !== -1 && (voCategoryPlural(at, unsignedCues[q]) ||
+            (Array.isArray(unanchoredProcedures) && unanchoredProcedures.some(function (observation) {
+              if (observation && observation.re && typeof observation.page === 'number') {
+                return observation.page === u + 1 && observation.index === at &&
+                  observation.re.test(unsignedCues[q]);
+              }
+              if (!(observation instanceof RegExp) || !observation.test(unsignedCues[q])) return false;
+              var exact = new RegExp(observation.source, observation.flags.replace(/[gy]/g, ''));
+              var match;
+              while ((match = exact.exec(lowU)) !== null) {
+                if (match.index === at) return true;
+                if (!match[0].length) exact.lastIndex++;
+              }
+              return false;
+            })))) at = lowU.indexOf(unsignedCues[q], at + 1);
         if (at === -1) continue;
         unsignedPages.push(u + 1);
         if (!unsignedQuote) {
@@ -5215,29 +5325,125 @@ var DETECTORS = {
     // Anchor to the PAGE + quote of each half (recognition, denial), so the
     // finding names a real WHERE instead of a pseudo-location the anchor rule
     // demotes. Case-insensitive match; quote from the original text.
-    function pageOf(re) {
+    function pageOf(re, denial, exclude) {
       for (var i = 0; i < blocks.length; i++) {
         var raw = String(blocks[i] || '');
-        var m = re.exec(raw.toLowerCase());
-        if (m) {
-          var q = voSnapWindow(raw, m.index - 10, m.index + m[0].length + 40);
-          return { page: i + 1, quote: q };
+        var matches = new RegExp(re.source, 'gi'), m;
+        while ((m = matches.exec(raw)) !== null) {
+          var start = 0, end = raw.length, sep = /[!?](?:\s|$)|\.(?:\s|$)/g, boundary;
+          while ((boundary = sep.exec(raw)) !== null) {
+            if (boundary.index < m.index) start = boundary.index + 1;
+            else { end = boundary.index + 1; break; }
+          }
+          var before = raw.slice(start, m.index), after = raw.slice(m.index + m[0].length, end);
+          var straightOpening = before.lastIndexOf('"'), curlyOpening = before.lastIndexOf('“');
+          var opening = Math.max(straightOpening, curlyOpening);
+          var closing = after.indexOf(opening === curlyOpening && curlyOpening >= 0 ? '”' : '"');
+          var quoted = opening !== -1 && closing !== -1 &&
+            !/^[^"“”]{1,60}['’"]\s+means\b/i.test(raw.slice(start + opening + 1, m.index + m[0].length));
+          var sentence = raw.slice(start, end);
+          var citationPrefix = quoted && before.slice(0, opening);
+          var citation = citationPrefix && /\b(?:clause|paragraph)\s+\d+(?:\.\d+)*(?:\s*\(\s*page\s+\d+\s*\))?\s*$/i.exec(citationPrefix);
+          var citedDeclaration = citation && !/\b(?:if|why|whether|how|what|would|could|does|did|is|are|was|were|can|should|will|has|have|had|do|shall|may|might)\b/i.test(citationPrefix.slice(Math.max(0, citation.index - 80), citation.index)) &&
+            !/\?/.test(raw.slice(start + opening + 1, m.index + m[0].length + closing));
+          if ((/\?/.test(sentence) && !citedDeclaration) ||
+              (denial && /\b(?:if|unless)\s*$/i.test(before)) ||
+              (denial && /^\s*(?:if|unless)\b/i.test(before)) ||
+              (denial && /^\s+(?:if|unless)\b/i.test(after)) ||
+              (denial && /^\s*["“']?[^"”']+["”']?\s+means\b/i.test(sentence)) ||
+              (exclude && exclude.page === i + 1 && exclude.sentenceStart === start)) {
+            matches.lastIndex = m.index + 1;
+            continue;
+          }
+          var q = quoted
+            ? raw.slice(start + opening + 1, m.index + m[0].length + closing)
+            : raw.slice(m.index, m.index + m[0].length);
+          return { page: i + 1, quote: q.replace(/\s+/g, ' ').trim(), quoteStart: quoted ? start + opening + 1 : m.index, sentenceStart: start, narrative: quoted };
         }
       }
       return null;
+    }
+    function independent(a, b) { return a && b && (a.page !== b.page || a.sentenceStart !== b.sentenceStart); }
+    function resolveQuotedInstrument(hit) {
+      if (!hit || !hit.narrative) return hit;
+      var source = String(blocks[hit.page - 1] || '');
+      var at = hit.quoteStart;
+      var pre = source.slice(Math.max(0, at - 100), at);
+      var ref = /\b([a-z][a-z0-9'-]*(?:\s+[a-z][a-z0-9'-]*){0,5})\s+(mou|agreement|contract|memorandum|lease|instrument)\s+(?:clause|paragraph)\s+(\d+(?:\.\d+)*)\s*\(\s*page\s+(\d+)\s*\)\s*["“]?$/i.exec(pre);
+      if (!ref || /^(?:the|this|that|an?|their|our|your|its)$/i.test(ref[1])) return hit;
+      var candidates = [];
+      var clause = new RegExp('\\b(?:clause|paragraph)\\s+' + ref[3].replace(/\./g, '\\.') + '(?!\\d|\\.\\d)', 'i');
+      var quotedClause = new RegExp(hit.quote.split(/\s+/).map(function (word) {
+        return word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }).join('\\s+'), 'gi');
+      var segments = voDetectDocuments(blocks);
+      var kind = ref[2].toLowerCase();
+      var kindPattern = kind === 'mou' || kind === 'memorandum' ? '(?:mou|memorandum)' : kind;
+      var titlePattern = ref[1].split(/\s+/).map(function (word) {
+        return word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      }).join('\\s+') + '\\s+' + kindPattern;
+      for (var i = 0; i < blocks.length; i++) {
+        if (i + 1 === hit.page) continue;
+        var target = String(blocks[i] || '');
+        var sourceHeading = new RegExp('^\\s*' + titlePattern + '\\b', 'i').test(voInstrumentHeading(target));
+        var statedPage = /\b(?:page|pg)\s*(\d+)\s*(?:of|\/)\s*\d+\b/gi, pageMatch, statedPageMatches = false;
+        while (sourceHeading && (pageMatch = statedPage.exec(target)) !== null) {
+          if (Number(pageMatch[1]) === Number(ref[4])) { statedPageMatches = true; break; }
+        }
+        var segmentMatches = false;
+        for (var d = 0; !segmentMatches && ref[1] && d < segments.length; d++) {
+          var seg = segments[d];
+          if (i + 1 < seg.start || i + 1 > seg.end || i + 2 - seg.start !== Number(ref[4])) continue;
+          var title = voInstrumentHeading(blocks[seg.start - 1]);
+          segmentMatches = new RegExp('^\\s*' + titlePattern + '\\b', 'i').test(title);
+        }
+        var sourceStrength = statedPageMatches ? 2 : (segmentMatches ? 1 : 0);
+        if (!sourceStrength) continue;
+        var clauseMarker = /\b(?:clause|paragraph)\s+\d+(?:\.\d+)*/gi, clauseMatch, found;
+        quotedClause.lastIndex = 0;
+        while ((found = quotedClause.exec(target)) !== null) {
+          var nearestClause = '';
+          clauseMarker.lastIndex = 0;
+          while ((clauseMatch = clauseMarker.exec(target)) !== null && clauseMatch.index < found.index) nearestClause = clauseMatch[0];
+          if (!clause.test(nearestClause)) continue;
+          var existing = null;
+          for (var ec = 0; ec < candidates.length; ec++) if (candidates[ec].page === i + 1) existing = candidates[ec];
+          if (!existing || sourceStrength > existing.strength) {
+            if (existing) candidates.splice(candidates.indexOf(existing), 1);
+            candidates.push({ page: i + 1, quote: found[0].replace(/\s+/g, ' ').trim(),
+              sentenceStart: found.index, narrative: false, strength: sourceStrength });
+          }
+          break;
+        }
+      }
+      if (candidates.length) {
+        var strongest = candidates.reduce(function (max, candidate) { return Math.max(max, candidate.strength); }, 0);
+        var best = candidates.filter(function (candidate) { return candidate.strength === strongest; });
+        if (best.length === 1) return best[0];
+      }
+      return hit;
     }
     var loc = function (a, c) { return a.page === c.page ? 'Page ' + a.page : 'Page ' + a.page + ' vs Page ' + c.page; };
     // Path A — explicit goodwill recognised then denied. "forfeit" counts as
     // recognition (nothing to forfeit unless the asset exists); the denial may
     // be phrased negation-before ("held no compensable goodwill") or -after.
-    var recog = pageOf(/(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis|forfeit)/) ||
-                pageOf(/(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/);
+    function recognition(exclude) {
+      return pageOf(/(goodwill|value of the business)[^.]{0,120}(clawback|inure|percentage|value|means|quantif|recognis|forfeit)/, false, exclude) ||
+        pageOf(/(clawback|percentage of the value)[^.]{0,80}(goodwill|value of the business)/, false, exclude);
+    }
+    var recog = recognition();
     // "Goodwill: N/A" in a schedule is a denial in table form — the AllFuels
     // franchise agreement declares goodwill N/A on one page while defining it
     // as a quantifiable asset on another.
-    var denies = pageOf(/goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)|goodwill\s*[:\-]?\s*n\s*\/\s*a\b|goodwill\s*[:\-]\s*n\/?a\b/);
-    if (recog && denies) {
-      findings.push({ type: 'CT45', severity: 5,
+    var denyPattern = /goodwill[^.]{0,40}(no|not)[^.]{0,20}(compensable|value)|no compensable value|goodwill has no value|(goodwill|value of the business)[^.]{0,40}(no value|not compensable)|(no|not|without)\s+(any\s+)?compensable\s+goodwill|goodwill\s+(is|was)\s+(valueless|worthless)|goodwill\s*[:\-]?\s*n\s*\/\s*a\b|goodwill\s*[:\-]\s*n\/?a\b/;
+    var denies = pageOf(denyPattern, true, recog);
+    if (!denies && recog) {
+      var firstDenial = pageOf(denyPattern, true);
+      var laterRecognition = firstDenial && recognition(firstDenial);
+      if (laterRecognition) { recog = laterRecognition; denies = firstDenial; }
+    }
+    if (independent(recog, denies)) {
+      findings.push({ type: 'CT45', severity: 3,
         evidence: 'Goodwill / value of the business is recognised: "' + recog.quote + '" — yet denied or said to have no compensable value: "' + denies.quote + '". The forfeiture/clawback is itself an admission the asset exists. Its legal characterisation is for the court.',
         location: loc(recog, denies) });
     }
@@ -5247,11 +5453,11 @@ var DETECTORS = {
     // recognition/denial pair (AllFuels p.2/3), the schedule-level N/A pair
     // deeper in the agreement (p.89 vs p.104) went unreported. A distinct
     // page-pair is a distinct fact of the record.
-    var naDeny = pageOf(/goodwill\s*[:\-]?\s*n\s*\/\s*a\b|goodwill\s*[:\-]\s*n\/?a\b/);
     var defRecog = pageOf(/goodwill[^.]{0,80}means[^.]{0,120}(quantifiable|asset|reputation)/);
-    if (naDeny && defRecog &&
+    var naDeny = pageOf(/goodwill\s*[:\-]?\s*n\s*\/\s*a\b|goodwill\s*[:\-]\s*n\/?a\b/, true, defRecog);
+    if (independent(naDeny, defRecog) &&
         !(recog && denies && recog.page === defRecog.page && denies.page === naDeny.page)) {
-      findings.push({ type: 'CT45', severity: 5,
+      findings.push({ type: 'CT45', severity: 3,
         evidence: 'A schedule states "Goodwill: N/A": "' + naDeny.quote + '" — while the agreement itself defines goodwill as an asset: "' + defRecog.quote + '". The definition and the N/A declaration cannot both hold. Its legal characterisation is for the court.',
         location: loc(defRecog, naDeny) });
     }
@@ -5276,15 +5482,15 @@ var DETECTORS = {
     // goodwill ending at expiry (368-page scan review, 14 Nov 2026, paras 261
     // vs 274), so it is expressly excluded. Both halves must sit in one stated
     // document, so two different parties' affidavits are not fused.
-    var extinct = pageOf(/goodwill[^.]{0,100}(terminates?|ceases?|extinguish(?:es|ed)?|dies\b)[^.]{0,80}(never|remain|survive|exist)|goodwill[^.]{0,100}can\s+never[^.]{0,60}(remain|survive|exist|argued)/);
-    var priced = pageOf(/(?:sell|sale of|sold)[^.]{0,100}(?:tenure|franchise|business)[^.]{0,90}\br\s?\d|would not recover (?:his|the|their|its) investment/);
+    var extinct = pageOf(/goodwill[^.]{0,100}(terminates?|ceases?|extinguish(?:es|ed)?|dies\b)[^.]{0,80}(never|remain|survive|exist)|goodwill[^.]{0,100}can\s+never[^.]{0,60}(remain|survive|exist|argued)/, true);
+    var priced = pageOf(/(?:sell|sale of|sold)[^.]{0,100}(?:tenure|franchise|business)[^.]{0,90}\br\s?\d|would not recover (?:his|the|their|its) investment/, false, extinct);
     // A sale before expiry — including a sale of the remaining term — is
     // compatible with goodwill ending at expiry. Require the pricing passage
     // itself to place the sale after extinction or beyond the term.
     var remainingTerm = pageOf(/(?:remaining|balance of the)\s+(?:six\s+months|\d+\s+(?:days?|months?|years?)|term|tenure)|six\s+months\s+remaining|months\s+remaining\s+in\s+the\s+(?:franchise\s+)?agreement/);
     var postExtinction = pageOf(/(?:after|following|once)[^.]{0,80}(?:agreement|franchise|tenure|term)[^.]{0,40}(?:expir\w*|terminat\w*)|(?:sell|sale of|sold)[^.]{0,120}(?:expired|terminated)/);
-    if (extinct && priced && postExtinction && postExtinction.page === priced.page && !(remainingTerm && remainingTerm.page === priced.page) && d39OneAgreement(extinct, priced)) {
-      findings.push({ type: 'CT45', severity: 5,
+    if (independent(extinct, priced) && postExtinction && postExtinction.page === priced.page && !(remainingTerm && remainingTerm.page === priced.page) && d39OneAgreement(extinct, priced)) {
+      findings.push({ type: 'CT45', severity: 3,
         evidence: 'Goodwill is said to die with the agreement: "' + extinct.quote + '" — yet the same record prices that goodwill after extinction or beyond the remaining term: "' + priced.quote + '". Those propositions cannot both stand; a sale confined to the remaining term is not this finding. Its legal characterisation is for the court.',
         location: loc(extinct, priced) });
     }
@@ -5297,10 +5503,11 @@ var DETECTORS = {
     // one-agreement guard does not apply; both phrases are distinctive
     // enough that they never appear in ordinary prose.
     var defAsset = pageOf(/goodwill[^.]{0,40}means[^.]{0,200}quantifiable\s+asset/);
-    var barred = pageOf(/shall\s+not\s+be\s+entitled\s+to\s+(?:any\s+)?goodwill[^.]{0,80}(under\s+any\s+circumstances?|in\s+any\s+circumstances?|whatsoever)/);
-    if (defAsset && barred) {
-      findings.push({ type: 'CT45', severity: 5,
-        evidence: 'Goodwill is defined as a quantifiable asset: "' + defAsset.quote + '" — yet the same record bars any entitlement to it: "' + barred.quote + '". A party cannot define goodwill into the sale value of every business it franchises while contracting that the operator can never be entitled to it. Its legal characterisation is for the court.',
+    var barred = pageOf(/shall\s+not\s+be\s+entitled\s+to\s+(?:any\s+)?goodwill[^.]{0,80}(under\s+any\s+circumstances?|in\s+any\s+circumstances?|whatsoever)/, true, defAsset);
+    barred = resolveQuotedInstrument(barred);
+    if (independent(defAsset, barred)) {
+      findings.push({ type: 'CT45', severity: 3,
+        evidence: 'Goodwill is defined as a quantifiable asset: "' + defAsset.quote + '" — yet the record bars entitlement to it: "' + barred.quote + '".' + (barred.narrative ? ' The latter clause is quoted in narrative; its original instrument was not resolved.' : '') + ' Its legal characterisation is for the court.',
         location: loc(defAsset, barred) });
     }
     return findings;
@@ -6201,32 +6408,61 @@ var VO_SECONDARY_CONTRADICTION_SCHEDULE_RE = /\bSchedule\s+of\s+Contradictions\b
 var VO_CONSTITUTION_REPORT_TEMPLATE_RE = /\bEvery\s+forensic\s+report\s+generated\s+under\s+this\s+Constitution\s+must\s+follow\s+this\s+template\b/i;
 var VO_SECONDARY_REPORT_TITLE_RE = /\b((?:supplementary|forensic|final|interim|preliminary|investigation)\s+report\s*:\s*[^\n]{10,160})/i; // page text is space-joined, so the title is read from the cue, not from a line start
 var VO_SECONDARY_REPORT_PLACEHOLDER = new Array(11).join('prior verum omnis report page excluded. ');
+var VO_GENERIC_REPORT_PLACEHOLDER = new Array(11).join('prior analysis page excluded. ');
+var VO_GENERIC_REPORT_PLACEHOLDER_HEAD_RE = /^\s*prior analysis page excluded\./i;
+var VO_ANALYSIS_SECTION_RE = /\b(?:executive\s+summary|findings?|analysis|conclusion|recommendations?|contradictions?|contradiction\s+ledger|narrative|chronology|triple\s+verification|thesis|antithesis|synthesis|court[- ]ready\s+declaration|provenance(?:\s*(?:&|and)\s*certification)?)\b/i;
+var VO_ANALYTICAL_PROSE_RE = /\b(?:this|the|these|our)\s+(?:report|assessment|analysis|review|schedule|findings?|evidence|record|statements?|documents?)\b[^.!?]{0,120}\b(?:finds?|concludes?|compares?|analy[sz](?:e|es|ed|ing)|assesses?|reviews?|identifies?|states?|shows?|supports?|contradicts?|conflicts?|establishes?|records?|reveals?|indicates?|separates?|draws?)\b|\b(?:report|assessment|analysis|review)\s+(?:finds?|concludes?|compares?|analy[sz](?:e|es|ed|ing)|assesses?|reviews?|identifies?|states?|shows?|supports?|contradicts?|conflicts?|establishes?|records?|reveals?|indicates?|separates?|draws?)\b|\b(?:primary\s+)?(?:contradictions?|findings?|statements?)\s+(?:were|are|have\s+been)\s+(?:identified|found|compared|reviewed)\b|\b(?:the\s+)?reviewer\b[^.!?]{0,100}\b(?:finds?|concludes?|compares?|analy[sz](?:e|es|ed|ing)|assesses?|reviews?|identifies?|states?|shows?|supports?|contradicts?|conflicts?|records?|reveals?|indicates?|narrates?|draws?)\b|\b(?:two|both|these)\s+(?:statements?|accounts?|documents?)\b[^.!?]{0,80}\b(?:conflict|contradict|cannot\s+both)\b/i;
+var VO_PRIMARY_RECORD_PREFIX_RE = /^\s*(?:letter\b|email\b|correspondence\b|affidavit\b|answering\s+affidavit\b|agreement\b|contract\b|invoice\b|memorandum\b|mou\b|lease\b|deed\b|notice\b|statement\b|certificate\b|court\s+order\b|judgment\b|minutes\b|resolution\b|record\b|primary\s+record\b|from\s*:|sent\s*:|dear\s+(?:sir|madam|registrar|advocate|court)\b|in\s+the\s+(?:high|magistrates?'?|constitutional|labour|supreme|regional|district|land|equality|tax|competition)\s+court\b)/i;
+var VO_PRIMARY_RECORD_HEAD_RE = /^\s*(?:letter\b|email\b|correspondence\b|affidavit\b|answering\s+affidavit\b|agreement\b|contract\b|invoice\b|memorandum\b|mou\b|lease\b|deed\b|notice\b|statement\b|certificate\b|court\s+order\b|judgment\b|minutes\b|resolution\b|record\b|primary\s+record\b|from\s*:|sent\s*:|dear\s+(?:sir|madam|registrar|advocate|court)\b)|\bIN\s+THE\s+(?:HIGH|MAGISTRATES?'?|CONSTITUTIONAL|LABOUR|SUPREME|REGIONAL|DISTRICT|LAND|EQUALITY|TAX|COMPETITION)\s+COURT\b/i;
+function voHasStructuredAnalysisContent(t) {
+  var structuredLedger = /\bcontradiction\s+ledger\b/i.test(t) &&
+    /\bB1\b[^.]{0,60}\bcontradiction\s+brain\b/i.test(t) &&
+    /\b(?:brain\s+outputs|identified\s+in\s+the\s+evidence)\b/i.test(t) &&
+    VO_ANALYTICAL_PROSE_RE.test(t);
+  var brainAnalysis = /\bB4\b[^.]{0,40}\blinguistics\b/i.test(t) &&
+    /\bB5\b[^.]{0,40}\bmulti[- ]actor\b/i.test(t) &&
+    /\bB6\b[^.]{0,40}\bfinancial\s+brain\b/i.test(t) &&
+    /\b(?:triple\s+verification|brain\s+outputs|contradiction\s+ledger)\b/i.test(t) &&
+    VO_ANALYTICAL_PROSE_RE.test(t);
+  return structuredLedger || brainAnalysis;
+}
+function voHasIndependentAnalysisContent(text) {
+  var t = String(text || '');
+  return (VO_ANALYSIS_SECTION_RE.test(t) && VO_ANALYTICAL_PROSE_RE.test(t)) ||
+    voHasStructuredAnalysisContent(t);
+}
 function voIsStandaloneAnalysisCover(text) {
   var t = String(text || '');
   // These covers introduce an analysis rather than an ordinary sealed exhibit.
+  if (!voHasIndependentAnalysisContent(t)) return false;
   if (/\bVERUM\s+OMNIS[\s|\-–—:·•]{1,40}FORENSIC\s+NARRATIVE\b/i.test(t)) return /\bPrepared\s+by\s+Verum\s+Omnis\b/i.test(t) && /\bSource\s+seal\s*:/i.test(t);
   if (VO_SECONDARY_FACTUAL_RECORD_RE.test(t)) return /\bPrepared\s+by\s*:[^|]{0,180}\bForensic\s+Investigator\s*,\s*Verum\s+Omnis\b/i.test(t) && /\bHow\s+to\s+read\s+this\s+report\b/i.test(t);
   if (VO_SECONDARY_CONTRADICTION_SCHEDULE_RE.test(t)) return /\bPrepared\s+by\s+Verum\s+Omnis\s+for\s+use\s+in\b/i.test(t) && /\bStatus\s*:\s*FINAL\b/i.test(t) && /\bPurpose\b/i.test(t);
   return false;
 }
+function voIsFrameworkAnalysisPage(text) {
+  var t = String(text || '').replace(/\s+/g, ' ');
+  var primaryRecord = VO_PRIMARY_RECORD_PREFIX_RE.test(t.slice(0, 300));
+  // Generic report discussion inside a letter or affidavit remains evidence;
+  // a complete analytical ledger/brain structure still identifies embedded analysis.
+  return (!primaryRecord || voHasStructuredAnalysisContent(t)) && voHasIndependentAnalysisContent(t);
+}
+function voIsPlatformAnalysisPage(text) {
+  var t = String(text || '');
+  return voIsFrameworkAnalysisPage(t) &&
+    /\bPrepared\s+by\s*:?\s*(?:(?:the\s+)?Forensic\s+Investigator\s*,?\s*)?(?:the\s+)?Verum\s+Omnis\b/i.test(t);
+}
 function voIsSecondaryReportPage(text) {
   var t = String(text || '');
-  // The Constitution prints the report masthead as a REQUIRED TEMPLATE. That
-  // governance clause is not itself an earlier forensic report.
-  if (VO_CONSTITUTION_REPORT_TEMPLATE_RE.test(t)) return false;
-  if (voIsStandaloneAnalysisCover(t)) return true;
-  if (VO_SECONDARY_REPORT_REF_RE.test(t)) return true;
-  if (VO_SECONDARY_REPORT_MASTHEAD_RE.test(t)) return true;
-  return VO_SECONDARY_SPACED_REPORT_RE.test(t) &&
-    /\bVERUM\s+OMNIS\b/i.test(t) &&
-    (/\b(?:prepared\s+by|report\s+reference|source\s+seal|documents\s+analysed|executive\s+summary)\b/i.test(t) ||
-      /P\s+R\s+E\s+P\s+A\s+R\s+E\s+D\s+B\s+Y/i.test(t));
+  // The Constitution's required-template sentence, a masthead, report
+  // reference, cover claim, seal ID or page total is corroboration only.
+  return voIsFrameworkAnalysisPage(t);
 }
 function voIsSecondaryAnalysisContinuation(text) {
   var t = String(text || '');
-  if (/\bDocuments\s+Analysed\b/i.test(t)) return true;
-  if (/^\s*(?:\d+(?:\.\d+)*\.?\s*)?(?:analysis|conclusion|contradiction|provenance|certification)\b/i.test(t) &&
-      /\bthe\s+reviewer\b/i.test(t)) return true;
+  if (voHasIndependentAnalysisContent(t) || /\bDocuments\s+Analysed\b/i.test(t)) return true;
+  if (/^\s*(?:\d+(?:\.\d+)*\.?\s*)?(?:analysis|conclusion|contradiction|provenance|certification|findings?)\b/i.test(t) &&
+      /\b(?:the\s+)?(?:reviewer|report|analysis)\b/i.test(t)) return true;
   // An analytical D1/D2/D3 source key is the continuation of the analysis,
   // not fresh primary evidence. Exhibit labels alone are common in primary
   // court pages: require three DISTINCT keys and analytical attribution.
@@ -6235,47 +6471,64 @@ function voIsSecondaryAnalysisContinuation(text) {
   if (distinct.length < 3) return false;
   return /\bD[1-9]\d*\b[^.]{0,80}\b(?:records?|describes?|adds?|concedes?|discloses?|asserts?|bears?|presents?)\b/i.test(t);
 }
+function voReportPageMarker(text) {
+  var m = /\b(?:page|p\.?)\s*(\d{1,4})\s*(?:of|\/)\s*(\d{1,4})\b/i.exec(String(text || ''));
+  return m ? { page: Number(m[1]), total: Number(m[2]) } : null;
+}
+function voReportPageContinues(previous, current) {
+  return !!previous && !!current && current.page === previous.page + 1 &&
+    (current.total === previous.total || (previous.page === 1 && previous.total === null && current.page === 2));
+}
 function voExcludeSecondaryReportPages(textBlocks) {
-  if (!textBlocks || textBlocks.length < 2) return null;
-  var isReport = [], titles = [], i, m;
+  if (!textBlocks || !textBlocks.length) return null;
+  var isReport = [], platformReport = [], i;
   for (i = 0; i < textBlocks.length; i++) {
     isReport[i] = voIsSecondaryReportPage(textBlocks[i]);
     if (!isReport[i]) continue;
-    // The report's own title line, so its running header on later pages can be recognised.
-    m = VO_SECONDARY_REPORT_TITLE_RE.exec(String(textBlocks[i] || ''));
-    if (m) {
-      var key = m[1].toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 48);
-      if (key.length >= 16 && titles.indexOf(key) < 0) titles.push(key);
-    }
+    platformReport[i] = voIsPlatformAnalysisPage(textBlocks[i]);
   }
-  if (titles.length) {
-    for (i = 0; i < textBlocks.length; i++) {
-      if (isReport[i]) continue;
-      var flat = String(textBlocks[i] || '').toLowerCase().replace(/[^a-z0-9]/g, '');
-      for (var t = 0; t < titles.length; t++) { if (flat.indexOf(titles[t]) >= 0) { isReport[i] = true; break; } }
-    }
-  }
-  // A masthead or recognised running title opens an analytical run. Continue
-  // through pages carrying its analytical source key, and stop at the first page that
-  // does not: primary exhibits sealed behind the analysis remain evidence.
-  var analysisOpen = false;
+  // Independent analysis content opens a run. Matching sequential page markers
+  // corroborate continuations, but primary-record heads and page-number resets
+  // end it; a report reference or seal ID alone never extends the run.
+  var analysisOpen = false, previousMarker = null;
   for (i = 0; i < textBlocks.length; i++) {
-    if (isReport[i]) { analysisOpen = true; continue; }
-    if (analysisOpen && voIsSecondaryAnalysisContinuation(textBlocks[i])) { isReport[i] = true; continue; }
+    var currentText = String(textBlocks[i] || ''), currentMarker = voReportPageMarker(currentText);
+    if (isReport[i]) {
+      analysisOpen = true;
+      previousMarker = currentMarker || { page: 1, total: null };
+      continue;
+    }
+    if (analysisOpen && (VO_PRIMARY_RECORD_HEAD_RE.test(currentText.slice(0, 300)) ||
+        VO_NEW_RECORD_HEAD_RE.test(currentText.slice(0, 300)) ||
+        (currentMarker && currentMarker.page === 1))) {
+      analysisOpen = false;
+      previousMarker = null;
+      continue;
+    }
+    if (analysisOpen && (voIsSecondaryAnalysisContinuation(currentText) ||
+        voReportPageContinues(previousMarker, currentMarker))) {
+      isReport[i] = true;
+      platformReport[i] = false;
+      previousMarker = currentMarker || previousMarker;
+      continue;
+    }
     analysisOpen = false;
+    previousMarker = null;
   }
   var pages = [];
   for (i = 0; i < textBlocks.length; i++) {
     if (!isReport[i]) continue;
     pages.push(i + 1);
-    textBlocks[i] = VO_SECONDARY_REPORT_PLACEHOLDER;
+    textBlocks[i] = platformReport[i] ? VO_SECONDARY_REPORT_PLACEHOLDER : VO_GENERIC_REPORT_PLACEHOLDER;
   }
   if (!pages.length) return null;
+  var notePrefix = 'Prior analysis report: ';
+  var pageNotes = pages.map(function (p) { return 'Prior analysis excluded: page ' + p + '.'; }).join(' ');
   if (pages.length === textBlocks.length) {
-    return { pages: pages, note: 'Prior Verum Omnis report: every page (' + pages.length + ') was identified by its analytical cover, masthead, running title or analysis content. A Verum Omnis report is analysis, not evidence, and is never scanned for contradictions; nothing in this file was examined as evidence.' };
+    return { pages: pages, note: notePrefix + 'every page (' + pages.length + ') was identified by independent analysis-content signals or a sequential continuation of that analysis. A prior report is analysis, not evidence, and is never scanned for contradictions; nothing in this file was examined as evidence. ' + pageNotes };
   }
   var list = pages.length > 12 ? pages.slice(0, 12).join(', ') + ', … (' + pages.length + ' in total)' : pages.join(', ');
-  return { pages: pages, note: 'Prior Verum Omnis report: ' + pages.length + ' page(s) (' + list + ') were identified by an analytical cover, masthead, running title or analysis content. A Verum Omnis report bound into a bundle is analysis, not evidence, and was excluded from contradiction scanning; the exhibits that follow it were scanned.' };
+  return { pages: pages, note: notePrefix + pages.length + ' page(s) (' + list + ') were identified by independent analysis-content signals or a sequential continuation of that analysis. Prior analysis bound into a bundle is analysis, not evidence, and was excluded from contradiction scanning; the exhibits that follow it were scanned. ' + pageNotes };
 }
 
 // A file that says on its first pages that it is a compiled summary written by
@@ -6366,8 +6619,10 @@ function voExcludeFooterOnlyPages(textBlocks) {
 // footer-only pages have been recognised (voExcludeFooterOnlyPages). The
 // "[OCR] " provenance prefix is kept. The last two patterns are backstops for
 // a footer the recogniser mangled: a date-shaped token followed by a clock
-// time is a stamp, never a stated date.
+// time is a stamp, never a stated date. Only the bounded platform manifest
+// signature fields are stripped; text between them remains evidence.
 var VO_SEAL_FURNITURE_RES = [
+  /(?:VERUM\s+OMNIS\s+)?SHA-?512\s*\(\s*partial\s*\)\s*:\s*[0-9a-f]{12,}\s+(?:Verum\s+Omnis\s+)?Sealed\s+Evidence\s+Source\s*:\s*[^|]{1,120}?\.pdf(?:\s+Page\s+\d+\s+of\s+\d+)?/gi,
   /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL\s*(?:[|—–-]\s*)?(?:Seal:\s*)?VO-[0-9A-F]{6,}[\s\S]{0,220}?\|\s*\d{1,4}\s*\/\s*\d{1,4}(?![\/\d])(?:\s*\|\s*Chain:\s*\d+\s*prev)?/gi,
   /VERUM\s+OMNIS\s+SEALED\s+ORIGINAL\s*[—–-]*\s*scan\s+the\s+code\s+or\s+verify\s+at\s+verumglobal\.foundation\/verify\.html/gi,
   /Verum\s+Omnis\s+Sealed\s+Document\s+Source:[\s\S]{0,160}?Page\s+\d+\s+of\s+\d+\s+VERIFY\s+SEAL\s+VERUM\s+OMNIS\s+SEAL\s*\|[\s\S]{0,240}?\|\s*Constitution\s*\|\s*\d+/gi,
@@ -6397,19 +6652,30 @@ function voIsStampContext(text, idx, len) {
 }
 function voStripSealFurniture(text) {
   var s = String(text == null ? '' : text);
+  var manifestSignature = /\bEVIDENCE\s+MANIFEST\s*&\s*CHAIN\s+OF\s+CUSTODY\b[\s\S]{0,600}?\bPrimary\s+Artifact\s*:[\s\S]{0,240}?\bArtifact\s+SHA-?512(?:\s*\([^)]{0,30}\))?\s*:\s*(?:[0-9a-f]{8,}(?:\.{2,})?)?/gi;
+  s = s.replace(manifestSignature, function (block) {
+    return block
+      .replace(/\bEVIDENCE\s+MANIFEST\s*&\s*CHAIN\s+OF\s+CUSTODY\b/i, ' ')
+      .replace(/\bPrimary\s+Artifact\s*:\s*[A-Za-z0-9._ -]{1,120}?\.pdf\b/i, ' ')
+      .replace(/\bArtifact\s+SHA-?512(?:\s*\([^)]{0,30}\))?\s*:\s*(?:[0-9a-f]{8,}(?:\.{2,})?)?/i, ' ');
+  });
   for (var i = 0; i < VO_SEAL_FURNITURE_RES.length; i++) s = s.replace(VO_SEAL_FURNITURE_RES[i], ' ');
   s = s.replace(VO_STAMP_RE, function (m, pre, stamp, offset) {
     return voIsStampContext(s, offset + pre.length, stamp.length) ? pre + ' ' : m;
   });
   return s;
 }
-function voStripSealFurnitureBlocks(textBlocks) {
+function voStripSealFurnitureBlocks(textBlocks, affectedPages) {
   var changed = 0;
   if (!textBlocks) return 0;
   for (var i = 0; i < textBlocks.length; i++) {
     var before = String(textBlocks[i] || '');
     var after = voStripSealFurniture(before);
-    if (after !== before) { textBlocks[i] = after; changed++; }
+    if (after !== before) {
+      textBlocks[i] = after;
+      changed++;
+      if (Array.isArray(affectedPages)) affectedPages.push(i + 1);
+    }
   }
   return changed;
 }
@@ -6515,13 +6781,17 @@ var VO_SECONDARY_NOTE = function (pages) { return ' [secondary source on p. ' + 
 // ("Verum Omnis — <title> Index/Narrative/Report… • Page N of M") is
 // secondary. Their findings become leads to verify against the primary record.
 var VO_REPORT_PLACEHOLDER_HEAD_RE = /^\s*prior verum omnis report page excluded\./;
+var VO_GENERIC_ANALYSIS_PLACEHOLDER_HEAD_RE = /^\s*prior analysis page excluded\./i;
 // Marks of a page written about the record rather than being it: this
 // platform's name, a Verum Omnis seal id cited in the text (the seal footers
 // are stripped before this runs), a bundle-page citation ("bundle pp 290") or
 // a compiled-bundle exhibit label ("CB9").
 var VO_ANALYSIS_SIGNAL_RE = /\bVerum\s+Omnis\b|\bVO-\s?[0-9A-F]{12}\b|\bCB\s?\d{1,3}\b|\bbundle\s+pp?\.?\s*\d/i;
 var VO_ANALYSIS_RUNNING_TITLE_RE = /\bVerum\s+Omnis\s*[—–-]\s*[^•|]{3,90}?\b(?:index|narrative|report|summary|analysis|chronology|brief|submission|timeline)\b[^•|]{0,40}•\s*page\s+\d{1,4}\s+of\s+\d{1,4}\b/i;
-function voIsVerumAnalysisPage(text) { return VO_ANALYSIS_RUNNING_TITLE_RE.test(String(text || '').replace(/\s+/g, ' ')); }
+function voIsVerumAnalysisPage(text) {
+  var t = String(text || '').replace(/\s+/g, ' ');
+  return VO_ANALYSIS_RUNNING_TITLE_RE.test(t) && voHasIndependentAnalysisContent(t);
+}
 function voSecondarySegments(segs, textBlocks) {
   var out = [], list = segs || [], blocks = textBlocks || [], covered = {};
   var headOf = function (p) { return String(blocks[p - 1] || '').replace(/\s+/g, ' ').slice(0, 300); };
@@ -6529,6 +6799,24 @@ function voSecondarySegments(segs, textBlocks) {
     var seg = list[d];
     for (var c = seg.start; c <= seg.end; c++) covered[c] = true;
     var head = headOf(seg.start);
+    if (VO_GENERIC_ANALYSIS_PLACEHOLDER_HEAD_RE.test(head)) {
+      var genericEnd = seg.start;
+      for (var gp = seg.start + 1; gp <= seg.end; gp++) {
+        var genericText = String(blocks[gp - 1] || '');
+        var genericHead = headOf(gp);
+        if (VO_PRIMARY_RECORD_HEAD_RE.test(genericHead) || VO_NEW_RECORD_HEAD_RE.test(genericHead)) break;
+        if (VO_GENERIC_ANALYSIS_PLACEHOLDER_HEAD_RE.test(genericHead) ||
+            VO_REPORT_PLACEHOLDER_HEAD_RE.test(genericHead) ||
+            voIsSecondaryAnalysisContinuation(genericText)) {
+          genericEnd = gp;
+          continue;
+        }
+        break;
+      }
+      out.push({ start: seg.start, end: genericEnd, title: 'Prior analysis report', analysis: true });
+      for (var gr = genericEnd + 1; gr <= seg.end; gr++) delete covered[gr];
+      continue;
+    }
     if (VO_REPORT_PLACEHOLDER_HEAD_RE.test(head)) {
       // A continuation page must carry its own mark of being written about
       // the record (VO_ANALYSIS_SIGNAL_RE): the narrative's pages 10-18 each
@@ -6575,6 +6863,26 @@ function voSecondarySegments(segs, textBlocks) {
   // A page carrying a Verum Omnis analysis's running title is secondary
   // wherever it sits (b); consecutive pages join one segment.
   var inOut = function (p) { for (var k = 0; k < out.length; k++) if (p >= out[k].start && p <= out[k].end) return true; return false; };
+  for (var genericPage = 1; genericPage <= blocks.length; genericPage++) {
+    if (covered[genericPage] || inOut(genericPage) ||
+        !VO_GENERIC_ANALYSIS_PLACEHOLDER_HEAD_RE.test(headOf(genericPage))) continue;
+    var genericRunEnd = genericPage;
+    for (var genericNext = genericPage + 1; genericNext <= blocks.length; genericNext++) {
+      var nextText = String(blocks[genericNext - 1] || '');
+      var nextHead = headOf(genericNext);
+      if (VO_PRIMARY_RECORD_HEAD_RE.test(nextHead) || VO_NEW_RECORD_HEAD_RE.test(nextHead)) break;
+      if (VO_GENERIC_ANALYSIS_PLACEHOLDER_HEAD_RE.test(nextHead) ||
+          VO_REPORT_PLACEHOLDER_HEAD_RE.test(nextHead) ||
+          voIsSecondaryAnalysisContinuation(nextText)) {
+        genericRunEnd = genericNext;
+        continue;
+      }
+      break;
+    }
+    out.push({ start: genericPage, end: genericRunEnd, title: 'Prior analysis report', analysis: true });
+    for (var genericCovered = genericPage; genericCovered <= genericRunEnd; genericCovered++) covered[genericCovered] = true;
+    genericPage = genericRunEnd;
+  }
   for (var vpg = 1; vpg <= blocks.length; vpg++) {
     if (inOut(vpg) || !voIsVerumAnalysisPage(blocks[vpg - 1])) continue;
     covered[vpg] = true;
@@ -7804,6 +8112,48 @@ function voFindingTwoSides(f) {
   return /\s(?:vs\.?|versus)\s/i.test(String(f.evidence || ''));
 }
 
+function voQuotedOccurrences(blocks, pageNumber, needle, visitOccurrence) {
+  var page = String(blocks[pageNumber - 1] || '').replace(/\s+/g, ' ');
+  var pattern = String(needle || '').split(/\s+/).map(function (word) {
+    return word.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  }).join('\\s+');
+  if (!pattern) return [];
+  var matcher = new RegExp(pattern, 'gi'), occurrences = visitOccurrence ? null : [], ranges = [], start = 0;
+  var lastRangeKey = null, lastRangeText = '';
+  var punctuation = /[.!?]/g, boundary;
+  while ((boundary = punctuation.exec(page)) !== null) {
+    var pos = boundary.index;
+    if (voIsSentenceBoundary(page, pos)) {
+      ranges.push({ start: start, end: pos + 1 });
+      start = pos + 1;
+    }
+  }
+  if (start < page.length) ranges.push({ start: start, end: page.length });
+  var match;
+  while ((match = matcher.exec(page)) !== null) {
+    var low = 0, high = ranges.length - 1, range = null;
+    while (low <= high) {
+      var mid = Math.floor((low + high) / 2), candidate = ranges[mid];
+      if (match.index < candidate.start) high = mid - 1;
+      else if (match.index >= candidate.end) low = mid + 1;
+      else { range = candidate; break; }
+    }
+    if (!range) continue;
+    var rangeKey = range.start + ':' + range.end;
+    if (lastRangeKey !== rangeKey) {
+      lastRangeKey = rangeKey;
+      lastRangeText = page.slice(range.start, range.end).trim().toLowerCase();
+    }
+    var occurrence = { page: pageNumber, start: range.start, from: match.index,
+      to: match.index + match[0].length, crossesStatement: match.index + match[0].length > range.end,
+      text: lastRangeText };
+    if (visitOccurrence) {
+      if (visitOccurrence(occurrence) === false) break;
+    } else occurrences.push(occurrence);
+  }
+  return occurrences || [];
+}
+
 // Same-actor types assert ONE party cannot square its own record with itself.
 // When the two quoted sides name different parties that is a dispute, not an
 // impossibility (the review's example: a CT06 "Logical Impossibility" whose
@@ -7843,12 +8193,48 @@ function voClassifyFinding(f) {
 // (a gate can only move CONTRADICTION down to TENSION — never up, and no
 // finding is removed: the measurement stands, its label is made honest).
 // Runs after voAnchorEnrich because both gates read the anchors.
-function voApplyFindingClasses(findings) {
+function voDistinctAnchoredStatements(f, blocks) {
+  var quotes = (f.anchor && f.anchor.quote) || [];
+  var pages = (f.anchor && f.anchor.where) || [];
+  var statementsByQuote = [];
+  for (var q = 0; q < quotes.length; q++) {
+    var quoteStatements = [];
+    var needle = String(quotes[q] || '').replace(/^[\s.…]+|[\s.…]+$/g, '').replace(/\s+/g, ' ').toLowerCase();
+    if (needle.length < 12) continue;
+    for (var p = 0; p < pages.length; p++) {
+      voQuotedOccurrences(blocks, Number(pages[p]), needle, function (occurrence) {
+        if (occurrence.crossesStatement) return true;
+        if (quoteStatements.indexOf(occurrence.text) === -1) {
+          quoteStatements.push(occurrence.text);
+          return quoteStatements.length < 2;
+        }
+        return true;
+      });
+      if (quoteStatements.length > 1) break;
+    }
+    statementsByQuote[q] = quoteStatements;
+  }
+  for (var a = 0; a < statementsByQuote.length; a++) {
+    if (!statementsByQuote[a] || !statementsByQuote[a].length) continue;
+    for (var b = a + 1; b < statementsByQuote.length; b++) {
+      if (!statementsByQuote[b] || !statementsByQuote[b].length) continue;
+      if (statementsByQuote[a].length > 1 || statementsByQuote[b].length > 1 ||
+          statementsByQuote[a][0] !== statementsByQuote[b][0]) return true;
+    }
+  }
+  return false;
+}
+function voApplyFindingClasses(findings, blocks) {
   for (var i = 0; i < findings.length; i++) {
     var f = findings[i];
     var cls = voClassifyFinding(f);
     if (!cls) continue;
     if (cls === 'CONTRADICTION') {
+      if (!Array.isArray(blocks) || !voDistinctAnchoredStatements(f, blocks)) {
+        f.findingClass = 'TENSION';
+        f.classNote = 'Two distinct statements could not be established from the quoted anchors; this is recorded for review, not as a contradiction.';
+        continue;
+      }
       var scope = null;
       for (var ck in CONTRADICTION_TYPES) {
         if (CONTRADICTION_TYPES[ck].id === f.type) { scope = CONTRADICTION_TYPES[ck].scope || []; break; }
@@ -7878,6 +8264,118 @@ function voApplyFindingClasses(findings) {
     f.findingClass = cls;
   }
   return findings;
+}
+
+function voCalibrateFindingSeverity(findings, blocks) {
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i], anchor = f.anchor || {}, pages = anchor.where || [], quotes = anchor.quote || [];
+    if ((f.findingClass === 'COMPLETENESS' || f.findingClass === 'EXAMINATION_LIMIT') && pages.length <= 1) {
+      f.severity = Math.min(f.severity, 2);
+    }
+    if (!(f.severity > 3)) continue;
+    var narrativeOnly = pages.length > 0;
+    for (var p = 0; p < pages.length; p++) {
+      var page = String(blocks[pages[p] - 1] || '');
+      if (/^\s*(?:agreement|contract|affidavit|invoice|deed|memorandum|lease|instrument)\b/i.test(voInstrumentHeading(page)) ||
+          (!/^\s*(?:(?:commentary|analysis|opinion|argument|narrative|advisory letter)\b|this (?:article|report|analysis)\b|in (?:my|our) (?:view|opinion)\b|(?:i|we) (?:submit|contend|argue)\b)/i.test(page) &&
+          !/\b(?:advisory\s+letter|in\s+(?:my|our)\s+(?:view|opinion)|(?:i|we)\s+(?:submit|contend|argue))\b/i.test(page.slice(0, 250)))) narrativeOnly = false;
+    }
+    if (narrativeOnly || /\bnarrative (?:quotation|provenance|source)\b/i.test(String(f.evidence || ''))) {
+      f.severity = Math.min(f.severity, 3);
+      continue;
+    }
+    if (f.severity < 5) continue;
+    var sides = [];
+    var segments = voDetectDocuments(blocks);
+    for (var q = 0; q < quotes.length; q++) {
+      var needle = String(quotes[q] || '').replace(/^[\s.…]+|[\s.…]+$/g, '').replace(/\s+/g, ' ').toLowerCase();
+      if (needle.length < 12 || /\?/.test(needle)) continue;
+      for (var j = 0; j < pages.length; j++) {
+        var source = String(blocks[pages[j] - 1] || '').replace(/\s+/g, ' ');
+        var headingSource = source;
+        for (var seg = 0; seg < segments.length; seg++) {
+          if (pages[j] >= segments[seg].start && pages[j] <= segments[seg].end) {
+            headingSource = String(blocks[segments[seg].start - 1] || '');
+            break;
+          }
+        }
+        var docHeading = /^\s*(agreement|contract|affidavit|invoice|deed|memorandum|lease|instrument)\b/i.exec(voInstrumentHeading(headingSource));
+        if (!docHeading) continue;
+        var parties = voQuoteParties(String(quotes[q] || ''));
+        parties = parties.filter(function (name) {
+          var escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+          return new RegExp('\\b' + escaped + '\\s+(?:says|said|states|stated|declares|declared|agrees|agreed|deposes|confirms|confirmed)\\b', 'i').test(needle);
+        });
+        var declarativeOccurrence = false;
+        voQuotedOccurrences(blocks, Number(pages[j]), needle, function (occurrence) {
+          if (!occurrence.crossesStatement && !/\?/.test(occurrence.text)) {
+            declarativeOccurrence = true;
+            return false;
+          }
+          return true;
+        });
+        if (declarativeOccurrence) sides.push({ quote: q, page: Number(pages[j]), parties: parties });
+      }
+    }
+    var eligible = false;
+    for (var a = 0; a < sides.length && !eligible; a++) {
+      for (var b = a + 1; b < sides.length; b++) {
+        if (sides[a].quote === sides[b].quote) continue;
+        var segs = voDetectDocuments(blocks), docA = -1, docB = -1;
+        for (var sg = 0; sg < segs.length; sg++) {
+          if (sides[a].page >= segs[sg].start && sides[a].page <= segs[sg].end) docA = sg;
+          if (sides[b].page >= segs[sg].start && sides[b].page <= segs[sg].end) docB = sg;
+        }
+        var differentPage = sides[a].page !== sides[b].page;
+        var differentDocument = docA >= 0 && docB >= 0 && docA !== docB;
+        if (!differentPage && !differentDocument) continue;
+        for (var n = 0; n < sides[a].parties.length; n++) {
+          if (sides[b].parties.indexOf(sides[a].parties[n]) !== -1) { eligible = true; break; }
+        }
+      }
+    }
+    if (!eligible || !voDistinctAnchoredStatements(f, blocks)) f.severity = 4;
+  }
+  return findings;
+}
+
+function voMergeCoverageFindings(findings, pageCount) {
+  var groups = [], output = [];
+  for (var i = 0; i < findings.length; i++) {
+    var f = findings[i];
+    if (!f || f.type !== 'CT54') { output.push({ index: i, finding: f }); continue; }
+    var pages = Array.isArray(f.pages) && f.pages.length
+      ? f.pages.map(Number).filter(function (n) { return n > 0; })
+      : voRulePagesOf(f.location || '');
+    if (!pages.length && /^entire document$/i.test(String(f.location || ''))) {
+      for (var pg = 1; pg <= pageCount; pg++) pages.push(pg);
+    }
+    if (!pages.length) { output.push({ index: i, finding: f }); continue; }
+    var group = { finding: f, index: i, pages: pages.slice(), evidence: [String(f.evidence || '')], merged: false };
+    for (var g = groups.length - 1; g >= 0; g--) {
+      if (!groups[g].pages.some(function (n) { return group.pages.indexOf(n) !== -1; })) continue;
+      var prior = groups.splice(g, 1)[0];
+      prior.pages.forEach(function (n) { if (group.pages.indexOf(n) === -1) group.pages.push(n); });
+      group.evidence = prior.evidence.concat(group.evidence);
+      group.finding = prior.finding;
+      group.index = prior.index;
+      group.merged = true;
+      g = groups.length;
+    }
+    groups.push(group);
+  }
+  for (var k = 0; k < groups.length; k++) {
+    var item = groups[k];
+    if (item.merged) {
+      item.pages.sort(function (a, b) { return a - b; });
+      item.finding.pages = item.pages;
+      item.finding.location = (item.pages.length === 1 ? 'Page ' : 'Pages ') + item.pages.join(', ');
+      item.finding.evidence = item.evidence.filter(function (e, n, all) { return e && all.indexOf(e) === n; }).join(' ');
+    }
+    output.push({ index: item.index, finding: item.finding });
+  }
+  output.sort(function (a, b) { return a.index - b.index; });
+  return output.map(function (item) { return item.finding; });
 }
 
 function voAnchorEnrich(findings, textBlocks, secondaryPages) {
@@ -9000,11 +9498,15 @@ function voWellFormedness(o) {
   // fail the gate; a bundle that is ALL rendered analysis has no underlying
   // record to examine.
   var md = o.markdownPages || [];
+  var reports = o.reportPages || [];
   var allMd = nPages > 0 && md.length >= nPages;
   checks.push({
     id: 'WF3', name: 'Record is the record, not an analysis of it',
-    pass: !allMd,
-    note: md.length === 0
+    pass: !allMd && reports.length === 0,
+    note: reports.length
+      ? 'prior analysis found and excluded on ' + reports.length + ' page(s) (p. ' + capList(reports) + '); see extraction notes' +
+        (md.length ? '; ' + md.length + ' rendered AI or chat analysis page(s) (p. ' + capList(md) + ') were quarantined as a secondary source' : '')
+      : md.length === 0
       ? 'no rendered AI or chat analysis pages found'
       : (allMd
         ? 'every page reads as a rendered AI or chat analysis — there is no underlying record to examine'
@@ -9180,6 +9682,10 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   var _voBrandPages = [];
   for (var bfp = 0; bfp < textBlocks.length; bfp++) _voBrandPages.push(_voBrandFooterRe.test(String(textBlocks[bfp] || '')));
 
+  // Cache source document boundaries before any analysis/template page is
+  // replaced by a placeholder; the later detectors use this original map.
+  var _docSegs = voCacheDocSegs(textBlocks);
+
   // Template/boilerplate suppression (see voExcludeTemplatePages).
   var _templatePages = [];
   for (var tpi = 0; tpi < textBlocks.length; tpi++) {
@@ -9189,6 +9695,12 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   if (templateNote) extractionNote += ' ' + templateNote;
   var _secondary = voExcludeSecondaryReportPages(textBlocks);
   if (_secondary && _secondary.note) extractionNote += ' ' + _secondary.note;
+  for (var sdi = 0; sdi < _docSegs.length; sdi++) {
+    var segmentHead = String(textBlocks[_docSegs[sdi].start - 1] || '');
+    if (VO_REPORT_PLACEHOLDER_HEAD_RE.test(segmentHead)) _docSegs[sdi].title = 'Verum Omnis analysis (set aside from scanning)';
+    else if (VO_GENERIC_REPORT_PLACEHOLDER_HEAD_RE.test(segmentHead) ||
+        VO_GENERIC_ANALYSIS_PLACEHOLDER_HEAD_RE.test(segmentHead)) _docSegs[sdi].title = 'Prior analysis (set aside from scanning)';
+  }
   var _aiCompiledPages = [];
   for (var acp = 0; acp < Math.min(2, textBlocks.length); acp++) {
     if (VO_AI_COMPILED_RE.test(String(textBlocks[acp] || ''))) _aiCompiledPages.push(acp + 1);
@@ -9197,11 +9709,11 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   if (_aiCompiled) extractionNote += ' ' + _aiCompiled;
   var _footer = voExcludeFooterOnlyPages(textBlocks);
   if (_footer.note) extractionNote += ' ' + _footer.note;
-  // The bundle's stated boundaries are read from the seal footers, so they are
-  // computed now and cached; then the furniture goes (voStripSealFurniture).
-  var _docSegs = voCacheDocSegs(textBlocks);
-  var _furniture = voStripSealFurnitureBlocks(textBlocks);
-  if (_furniture) extractionNote += ' Seal furniture: this platform\'s own seal footers (seal id, hash, date and time, page count) were removed from ' + _furniture + ' page(s) before detection; a seal stamp is not a statement of the record.';
+  var _furniturePages = [];
+  var _furniture = voStripSealFurnitureBlocks(textBlocks, _furniturePages);
+  if (_furniture) extractionNote += ' Platform output: this platform\'s own seal footers and evidence-manifest blocks (manifest heading, primary-artifact label and artifact SHA-512 label) were removed before detection. ' +
+    _furniturePages.map(function (p) { return 'Platform output excluded from page ' + p + '.'; }).join(' ') +
+    ' A platform seal or manifest is not a statement in the record.';
   var _secondarySegs = voSecondarySegments(_docSegs, textBlocks);
   var _secondaryPages = voSecondaryPages(_docSegs, textBlocks);
   // Markdown-formatted analysis pages (a pasted AI transcript or compiled
@@ -9584,6 +10096,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     allFindings = allFindings.concat(_dfFindings);
   } catch(e) {}
 
+  allFindings = voMergeCoverageFindings(allFindings, textBlocks.length);
+
   // Drop findings that repeat an earlier one verbatim, and bound how many any
   // single contradiction type may contribute. A detector that misfires
   // otherwise buries the real findings -- D02 alone once produced 739 of 742.
@@ -9657,13 +10171,55 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     allFindings = anchored.kept;
     if (anchored.unanchored.length) {
       var uaTexts = [];
+      var unanchoredProcedures = [];
       for (var un = 0; un < anchored.unanchored.length; un++) {
         var uif = anchored.unanchored[un];
         uaTexts.push('[' + uif.type + '] ' + (uif.evidence || ''));
+        if (uif.type === 'CT35') {
+          for (var ub = 0; ub < VO_PROCEDURE_BREACHES.length; ub++) {
+            if (VO_PROCEDURE_BREACHES[ub].msg !== uif.evidence || !uif.procedureOccurrence) continue;
+            var procedureBase = 0, procedureOffset = uif.procedureOccurrence.offset;
+            for (var procedurePage = 0; procedurePage < textBlocks.length; procedurePage++) {
+              var procedurePageLength = String(textBlocks[procedurePage] || '').toLowerCase().length;
+              if (procedureOffset >= procedureBase && procedureOffset < procedureBase + procedurePageLength) {
+                unanchoredProcedures.push({
+                  re: VO_PROCEDURE_BREACHES[ub].re,
+                  page: procedurePage + 1,
+                  index: procedureOffset - procedureBase
+                });
+                break;
+              }
+              procedureBase += procedurePageLength + 1;
+            }
+          }
+        }
       }
       extractionNote += ' Anchor rule: ' + anchored.unanchored.length +
         ' observation(s) could not be pinned to a page and are recorded here as unanchored observations, NOT as findings' +
         ' (no anchor, no sentence): ' + uaTexts.join(' | ');
+      if (unanchoredProcedures.length) {
+        var _retained = [], _suppressed = [];
+        var _remainingSignature = DETECTORS.D32_DETECT_SIGNATURE_ANOMALY(textBlocks, unanchoredProcedures).filter(function (f) {
+          return /^The record states a signature is missing /.test(String(f.evidence || ''));
+        });
+        voCapOcrFormatFindings(_remainingSignature, _ocrPages);
+        for (var ui = 0; ui < allFindings.length; ui++) {
+          var candidate = allFindings[ui];
+          if (candidate.type === 'CT23' && candidate.severity >= 3 &&
+              /^The record states a signature is missing /.test(String(candidate.evidence || ''))) {
+            var replacement = _remainingSignature.shift();
+            if (!replacement || replacement.evidence !== candidate.evidence || replacement.location !== candidate.location) {
+              _suppressed.push(candidate.location);
+            }
+            if (replacement) {
+              replacement.severity = Math.min(candidate.severity, replacement.severity);
+              _retained.push(replacement);
+            }
+          } else _retained.push(candidate);
+        }
+        allFindings = _retained;
+        if (_suppressed.length) extractionNote += ' CT23 candidate(s) at ' + _suppressed.join(', ') + ' suppressed or narrowed: the same statement was also recorded as an unanchored CT35 observation.';
+      }
     }
   }
 
@@ -9675,7 +10231,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
   // Batch 6: bind each finding's epistemic class (CONTRADICTION / TENSION /
   // COMPLETENESS / EXAMINATION_LIMIT / BEHAVIORAL). Runs here because both
   // demotion gates read the anchors voAnchorEnrich just bound.
-  voApplyFindingClasses(allFindings);
+  voApplyFindingClasses(allFindings, textBlocks);
+  voCalibrateFindingSeverity(allFindings, textBlocks);
 
   // Oath-context tagging: where a finding's anchor page carries the language
   // of a sworn instrument, record that FACT on the finding. The tag drives a
@@ -9796,6 +10353,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     ocrRan: _ocrRan,
     ocrPages: _ocrPages,
     markdownPages: _mdPages,
+    reportPages: _secondary ? _secondary.pages : [],
     docSegs: _docSegs || [],
     footerOnlyPages: _footer.pages,
     selfSealed: _voSelfSealed,
@@ -10419,6 +10977,7 @@ if (typeof module !== 'undefined' && module.exports) {
     voAnchorEnrich: voAnchorEnrich,
     voClassifyFinding: voClassifyFinding,
     voApplyFindingClasses: voApplyFindingClasses,
+    voCalibrateFindingSeverity: voCalibrateFindingSeverity,
     VO_FINDING_CLASS: VO_FINDING_CLASS,
     voExtractClauseRefs: voExtractClauseRefs,
     voClauseContextOf: voClauseContextOf,
