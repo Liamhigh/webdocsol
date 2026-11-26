@@ -1005,6 +1005,16 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   const userMsg = JSON.parse(calls[0].opts.messages[1].content);
   ok(userMsg.known.length === 1 && userMsg.known[0].type === 'CT15' && userMsg.pages.length === 2 && !('norm' in userMsg.pages[0]), 'the model receives the pages and the known types, nothing else');
   ok(calls[0].model === '@cf/meta/llama-3.3-70b-instruct-fp8-fast' && calls[0].opts.temperature === 0, 'strong model, temperature 0');
+  const quotes = ['See pages 12-15', 'Section 4.1', 'analysis-output.json', 'SHA-512: ' + 'a'.repeat(128), 'The agreement was signed on 12 March 2020', 'The agreement was signed on 15 March 2020'];
+  r = await sweepPost({ pages: [{ page: 1, text: quotes.join('\n') }] }, modelSays(quotes.map(quote => ({ type: 'CT01', severity: 3, rationale: 'Dates differ in the record.', quote, page: 1 }))));
+  const filtered = await r.json();
+  ok(filtered.discarded['non-evidentiary'] === 4 && filtered.unverified === 0, 'locators, sections, filenames and hashes are rejected as non-evidentiary');
+  ok(filtered.recommendations.length === 2 && filtered.recommendations.every(x => /signed on/.test(x.quote)) && filtered.evidentiaryGate === '1', 'dated statements in a genuine inconsistency cluster survive the evidence gate');
+  const variants = ['analysis-output.json.', '“analysis-output.json”', 'SHA-512 hash: ' + 'b'.repeat(128), 'The agreement was signed on 12 March 2020 and filed as contract.pdf'];
+  r = await sweepPost({ pages: [{ page: 1, text: variants.join('\n') }] }, modelSays(variants.map(quote => ({ type: 'CT01', severity: 3, rationale: 'Dates differ in the record.', quote, page: 1 }))));
+  const variantResult = await r.json();
+  ok(variantResult.discarded['non-evidentiary'] === 3 && variantResult.recommendations.length === 1 &&
+    variantResult.recommendations[0].quote === variants[3], 'punctuated filenames and labelled hashes are rejected without discarding statements ending in filenames');
 
   r = await sweepPost({ pages, known: [] }, async () => { throw new Error('model down'); });
   sw = await r.json();
@@ -1054,9 +1064,9 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     ok(r.status === 200, 'seed published for the trainer test (' + r.status + ')');
     // 2. anonymous feedback: one tactic recurring over three days, one below the bar, and noise
     const rec = (patterns) => ({ received_at: '2026-09-01T00:00:00Z', count: patterns.length, patterns });
-    store['feedback:2026-09-01'] = JSON.stringify([rec([{ detectorId: 'AI_IDENTIFIED', type: 'INVOICE_SPLITTING', severity: 4, pageCount: 12 }, { detectorId: 'B9_RECOMMENDATION', type: 'INVOICE_SPLITTING', severity: 3, pageCount: 12 }, { detectorId: 'CT01', type: 'CT01', severity: 5, pageCount: 12 }])]);
+    store['feedback:2026-09-01'] = JSON.stringify([rec([{ detectorId: 'AI_IDENTIFIED', type: 'INVOICE_SPLITTING', severity: 4, pageCount: 12 }, { detectorId: 'B9_EVIDENTIARY_RECOMMENDATION', type: 'INVOICE_SPLITTING', severity: 3, pageCount: 12 }, { detectorId: 'B9_RECOMMENDATION', type: 'LEGACY_NOISE', severity: 3, pageCount: 12 }, { detectorId: 'CT01', type: 'CT01', severity: 5, pageCount: 12 }])]);
     store['feedback:2026-09-03'] = JSON.stringify([rec([{ detectorId: 'AI_IDENTIFIED', type: 'INVOICE_SPLITTING', severity: 4, pageCount: 40 }, { detectorId: 'AI_IDENTIFIED', type: 'CT11', severity: 3, pageCount: 40 }, { detectorId: 'AI_IDENTIFIED', type: 'CT11', severity: 3, pageCount: 41 }, { detectorId: 'AI_IDENTIFIED', type: 'SERIAL', severity: 3, pageCount: 40 }])]);
-    store['feedback:2026-09-05'] = JSON.stringify([rec([{ detectorId: 'B9_RECOMMENDATION', type: 'INVOICE_SPLITTING', severity: 3, pageCount: 8 }, { detectorId: 'AI_IDENTIFIED', type: 'CT11', severity: 3, pageCount: 8 }, { detectorId: 'CLEAN_SCAN', type: 'CLEAN_SCAN', severity: 1, pageCount: 3 }])]);
+    store['feedback:2026-09-05'] = JSON.stringify([rec([{ detectorId: 'B9_EVIDENTIARY_RECOMMENDATION', type: 'INVOICE_SPLITTING', severity: 3, pageCount: 8 }, { detectorId: 'B9_RECOMMENDATION', type: 'LEGACY_NOISE', severity: 3, pageCount: 8 }, { detectorId: 'B9_RECOMMENDATION', type: 'LEGACY_NOISE', severity: 3, pageCount: 8 }, { detectorId: 'AI_IDENTIFIED', type: 'CT11', severity: 3, pageCount: 8 }, { detectorId: 'CLEAN_SCAN', type: 'CLEAN_SCAN', severity: 1, pageCount: 3 }])]);
     let promptSeen = null;
     const modelDrafts = async (model, opts) => {
       promptSeen = opts.messages;
@@ -1072,7 +1082,7 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
     ok(r.status === 200 && out.ok === true && out.run && out.run.status === 'published', 'the trainer published (' + r.status + ' ' + (out.run && out.run.status) + ': ' + (out.run && out.run.reason) + ')');
     ok(out.run.signals === 2, 'two learning signals reached the bar: INVOICE_SPLITTING (support 4 over 3 days, both detector ids merged) and CT11 (support 3 over 2 days); CT01 engine findings, SERIAL and CLEAN_SCAN are not signals (' + out.run.signals + ')');
     const sigMsg = promptSeen ? JSON.parse(promptSeen[1].content) : { signals: [] };
-    ok(sigMsg.signals.length === 2 && sigMsg.signals[0].type === 'INVOICE_SPLITTING' && sigMsg.signals[0].support === 4 && sigMsg.signals[0].days === 3 && sigMsg.signals[0].detectorId === 'AI_IDENTIFIED+B9_RECOMMENDATION' && sigMsg.signals[1].type === 'CT11' && sigMsg.signals[1].support === 3 && sigMsg.signals[1].name === 'Authority Contradiction', 'the model sees types, support, days and the CT name only — never content (' + JSON.stringify(sigMsg.signals).slice(0, 160) + ')');
+    ok(sigMsg.signals.length === 2 && sigMsg.signals[0].type === 'INVOICE_SPLITTING' && sigMsg.signals[0].support === 4 && sigMsg.signals[0].days === 3 && sigMsg.signals[0].detectorId === 'AI_IDENTIFIED+B9_EVIDENTIARY_RECOMMENDATION' && sigMsg.signals[1].type === 'CT11' && sigMsg.signals[1].support === 3 && sigMsg.signals[1].name === 'Authority Contradiction', 'only gated B9 signals count; legacy unclassified B9 noise does not reach support (' + JSON.stringify(sigMsg.signals).slice(0, 160) + ')');
     ok(/You are Brain 9/.test(promptSeen[0].content) && /never names, numbers, dates, places/.test(promptSeen[0].content), 'the trainer prompt is Brain 9 and forbids identifying data');
     ok(out.run.accepted === 2 && out.run.published && out.run.published.version === '1.0.1' && out.run.published.previous === '1.0.0', 'two rules accepted, version 1.0.0 -> 1.0.1 (' + JSON.stringify(out.run.published && out.run.published.version) + '; rejected: ' + JSON.stringify(out.run.rejected) + ')');
     const added = out.run.published.added;

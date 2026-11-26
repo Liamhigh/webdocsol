@@ -358,19 +358,19 @@ const key = makeKey();
 // ---- 9. Brain 9 (R&D) reads the sealed text: recommendations, verified verbatim, never sealed findings ----
 {
   const html = readFileSync(path.join(root, 'seal-document.html'), 'utf8');
-  ok(/async function aiBrain9Sweep\(textBlocks, engineFindings, onProgress\)/.test(html) && /function voBuildSweepWindows\(textBlocks, engineFindings\)/.test(html), 'the sweep and its window builder exist');
+  ok(/async function aiBrain9Sweep\(textBlocks, engineFindings, onProgress, options\)/.test(html) && /function voBuildSweepWindows\(textBlocks, engineFindings, options\)/.test(html), 'the sweep and its window builder exist');
   ok(/var AI_SWEEP_WINDOW_CHARS = 11000;/.test(html) && /var AI_SWEEP_MAX_PAGES_PER_WINDOW = 8;/.test(html) && /var AI_SWEEP_MAX_WINDOWS = 16;/.test(html) && /var AI_SWEEP_BUDGET_MS = 180000;/.test(html) && /var AI_SWEEP_MIN_PAGE_CHARS = 40;/.test(html), 'window, page, count, budget and near-empty caps as documented');
   ok(/aiApiPost\('\/api\/v1\/ai\/sweep', \{ pages: win\.map/.test(html), 'each window goes to /api/v1/ai/sweep');
-  ok(/var anchor = voAnchorAiQuote\(it\.quote, it\.page\);\s*if \(!anchor\.found\) \{ local\.unverified\+\+; continue; \}/.test(html), 'the device verifies every quote again and discards the unverifiable in the lane-local result');
+  ok(/var anchor = voAnchorSweepQuote\(it\.quote, it\.page, textBlocks\);\s*if \(!anchor\.found\) \{ local\.unverified\+\+; continue; \}/.test(html), 'the device verifies every quote again on its reported page and discards the unverifiable in the lane-local result');
   ok(/if \(\(knownByPage\[page\] \|\| \[\]\)\.indexOf\(type\) >= 0\) \{ local\.duplicates\+\+; continue; \}/.test(html), 'a recommendation duplicating an engine finding on that page is dropped in the lane-local result');
-  ok(/var sweep = await aiBrain9Sweep\(_pipelineTextBlocks, fraudResult\.findings,/.test(html) && html.indexOf('var sweep = await aiBrain9Sweep(') > html.indexOf('_pipelineAiAddedFindings = assessRes.added;') && html.indexOf('var sweep = await aiBrain9Sweep(') < html.indexOf('aiNarrativeText = await aiNarrateReport('), 'the sweep runs after assess and before the narrative');
+  ok(/var sweep = await aiBrain9Sweep\(fraudResult\.sweepPageTexts, fraudResult\.findings,/.test(html) && html.indexOf('var sweep = await aiBrain9Sweep(') > html.indexOf('_pipelineAiAddedFindings = assessRes.added;') && html.indexOf('var sweep = await aiBrain9Sweep(') < html.indexOf('aiNarrativeText = await aiNarrateReport('), 'the sweep runs after assess and before the narrative');
   ok(/_pipelineB9Recs = sweep\.recommendations;\s*_pipelineB9Info = sweep\.info;/.test(html) && /aiReviewInfo\.sweep = sweep\.info;/.test(html), 'the sweep result is kept apart and its coverage rides with the AI-review info');
   ok(!/mergedFindings = assessRes\.findings\.concat\(assessRes\.added\)\.concat\(_pipelineB9Recs/.test(html) && !/_pipelineB9Recs\)[^\n]*totalFindings/.test(html), 'recommendations are NEVER merged into the report findings');
   const fj = html.slice(html.indexOf('function buildFindingsJson('), html.indexOf('function buildFindingsJson(') + 9000);
   ok(fj.indexOf('_pipelineB9Recs') < 0 && fj.indexOf('brain9') < 0, 'the findings JSON carries no Brain 9 output');
   ok(/function voRenderBrain9Recommendations\(\)/.test(html) && /voRenderBrain9Recommendations\(\);\s*\n\s*\/\/ Opt-in anonymous pattern feedback/.test(html), 'the results panel states the sweep and its recommendations');
   ok(/-brain9-recommendations\.json'/.test(html) && /Not part of any sealed report/.test(html), 'recommendations are offered as a separate, unsealed JSON');
-  ok(/patterns\.push\(\{ detectorId: 'B9_RECOMMENDATION', type: bType, severity: bSev, pageCount: pageCount \}\);/.test(html), 'recommendations feed the loop as B9_RECOMMENDATION with the four anonymous fields');
+  ok(/patterns\.push\(\{ detectorId: 'B9_EVIDENTIARY_RECOMMENDATION', type: bType, severity: bSev, pageCount: pageCount \}\);/.test(html), 'eligible recommendations feed the loop with four anonymous fields');
   ok(/Brain 9 reads the sealed page text/.test(html) && /every suggestion must quote the text verbatim or it is discarded/.test(html) && /the sealed page text in windows of about 11,000 characters for the Brain 9 sweep/.test(html), 'the consent copy says the sealed page text leaves the device for the sweep and how it is gated');
   ok(/_pipelineB9Recs = \[\];\s*_pipelineB9Info = null;\s*try \{/.test(html), 'sweep state is reset before every AI review');
 
@@ -380,7 +380,7 @@ const key = makeKey();
   ok(R._brain9SweepLine({}) === 'Brain 9 (R&D) sweep of the sealed text: not run.', 'no sweep info -> not run');
   ok(R._brain9SweepLine({ aiReview: { applied: true, sweep: { ran: false, reason: 'service unavailable' } } }) === 'Brain 9 (R&D) sweep of the sealed text: NOT RUN (service unavailable).', 'a failed sweep names its reason');
   const line = R._brain9SweepLine({ aiReview: { applied: true, sweep: { ran: true, pagesReadText: '1-9, 14-20', pagesTotal: 332, windows: 3, budgetHit: true, recommendations: 2, unverified: 1 } } });
-  ok(line === 'Brain 9 (R&D) sweep of the sealed text: read pages 1-9, 14-20 of 332 (3 windows, time budget reached); 2 anchored recommendations logged and 1 suggestion discarded as not found in the sealed text. Recommendations are not findings and are held outside this sealed report (Constitution v8 §2.10); they train the engine.', 'coverage line: ' + line);
+  ok(line === 'Brain 9 (R&D) sweep of the sealed text: read pages 1-9, 14-20 of 332 (3 windows, time budget reached); 2 anchored recommendations logged and 1 suggestion discarded as not found in the sealed text. Recommendations are not findings and are held outside this sealed report (Constitution v8 §2.10); eligible recommendations train the engine.', 'coverage line: ' + line);
   const rsrc = readFileSync(path.join(root, 'forensic-report.js'), 'utf8');
   ok(/ctx\.bullet\(brain9SweepLine\(data\), \{ size: 9\.5 \}\);/.test(rsrc) && /rulePackageLine\(data\),\s*brain9SweepLine\(data\),/.test(rsrc), 'the line prints in Methodology and in the narrative\'s provenance record');
   ok(!/sweep\.recommendations|\.recommendations\[/.test(rsrc), 'the report never prints a recommendation itself (Constitution v8 §2.10)');

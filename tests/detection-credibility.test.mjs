@@ -262,6 +262,10 @@ E.voStripSealFurnitureBlocks(innerFooter);
 check(/Verum Omnis Sealed Evidence Source: example\.pdf Page 1 of 1/.test(innerFooter[0]) && /A genuine statement follows/.test(innerFooter[0]),
   'an inner sealed-bundle source and page marker remain record content');
 const result = await scan([[evidence], report, ledgerPage, [partyClaim]]);
+check(JSON.stringify(result.sweepExcludedPages) === '[2,3]', 'the sweep receives the engine quarantine page numbers without changing the findings');
+check(/FORENSIC REPORT: EXAMPLE MATTER/.test(result.sweepPageTexts[1]) &&
+  /prior analysis page excluded/i.test(result.pageTexts[1]),
+  'explicit sweep inclusion can use original quarantined text, not the engine placeholder');
 check(/2 page\(s\) \(2, 3\)/.test(result.extractionNotes), 'extraction note discloses exactly the two excluded pages');
 check(/Prior analysis excluded: page 2\./.test(result.extractionNotes) && /Prior analysis excluded: page 3\./.test(result.extractionNotes), 'each excluded page has its own disclosure');
 check(!/Prior Verum Omnis report:/.test(result.extractionNotes), 'third-party analysis is not attributed to the platform');

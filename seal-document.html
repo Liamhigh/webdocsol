@@ -3099,7 +3099,7 @@ function brain9SweepLine(data) {
   return 'Brain 9 (R&D) sweep of the sealed text: read pages ' + (sw.pagesReadText || '—') + ' of ' + (sw.pagesTotal | 0) +
     ' (' + w + ' window' + (w === 1 ? '' : 's') + (sw.budgetHit ? ', time budget reached' : '') + '); ' +
     n + ' anchored recommendation' + (n === 1 ? '' : 's') + ' logged and ' + u + ' suggestion' + (u === 1 ? '' : 's') +
-    ' discarded as not found in the sealed text. Recommendations are not findings and are held outside this sealed report (Constitution v8 §2.10); they train the engine.';
+    ' discarded as not found in the sealed text. Recommendations are not findings and are held outside this sealed report (Constitution v8 §2.10); eligible recommendations train the engine.';
 }
 
 // ================= SECTION: CONSTITUTION & AI GOVERNANCE =================
@@ -18126,6 +18126,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     textBlocks = [allTexts.join(' ')];
   }
 
+  var _sweepOriginalPages = textBlocks.slice();
   // Capture footer signals before exclusions replace page text.
   var _voBrandFooterRe = /VERUM\s+OMNIS\s+SEALED\s+(?:ORIGINAL|DOCUMENT)|\bVO-[0-9A-F]{6,}\b/i;
   var _voBrandPages = [];
@@ -18835,6 +18836,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     // is deliberately NOT part of the findings JSON export (buildFindingsJson
     // whitelists fields) and is dropped after the narrate call.
     pageTexts: textBlocks,
+    sweepExcludedPages: _packageExcludedPages.filter(function (p, i, a) { return a.indexOf(p) === i; }).sort(function (a, b) { return a - b; }),
+    sweepPageTexts: textBlocks.map(function (text, i) { return _packageExcludedPages.indexOf(i + 1) !== -1 ? _sweepOriginalPages[i] : text; }),
     documentMap: voDetectDocuments(textBlocks),
     factIndex: _factIndex,
     crossDocConflicts: voCrossDocConflicts(_factIndex),
@@ -23134,6 +23137,16 @@ function voSweepPagesOf(location) {
   return (typeof voRulePagesOf === 'function') ? voRulePagesOf(location) : [];
 }
 
+function voAnchorSweepQuote(quote, page, textBlocks) {
+  function norm(s) {
+    return String(s || '').toLowerCase().replace(/[\u2018\u2019\u02bc]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u00a0\s]+/g, ' ').trim();
+  }
+  var n = Number(page);
+  if (!Number.isInteger(n) || n < 1 || n > textBlocks.length || norm(quote).length < 12 ||
+      norm(textBlocks[n - 1]).indexOf(norm(quote)) < 0) return { found: false };
+  return { found: true, quote: String(quote).replace(/\s+/g, ' ').trim().slice(0, 160), location: textBlocks.length <= 1 ? 'Full document' : 'Page ' + n };
+}
+
 // "1-9, 14, 17-20" from a list of page numbers.
 function voB9PageRanges(pages) {
   var s = (pages || []).slice().sort(function (a, b) { return a - b; });
@@ -23149,7 +23162,9 @@ function voB9PageRanges(pages) {
 // Windows: pages the engine flagged nothing on come first (a miss can only be
 // there), then flagged pages; consecutive pages are grouped; every window
 // stays under the size caps. A page too long for one window is read in part.
-function voBuildSweepWindows(textBlocks, engineFindings) {
+function voBuildSweepWindows(textBlocks, engineFindings, options) {
+  options = options || {};
+  var quarantined = Array.isArray(options.quarantinedPages) ? options.quarantinedPages : [];
   var flagged = {};
   var list = Array.isArray(engineFindings) ? engineFindings : [];
   for (var i = 0; i < list.length; i++) {
@@ -23158,6 +23173,7 @@ function voBuildSweepWindows(textBlocks, engineFindings) {
   }
   var eligible = [];
   for (var p = 0; p < textBlocks.length; p++) {
+    if (!options.includeQuarantined && quarantined.indexOf(p + 1) !== -1) continue;
     var t = String(textBlocks[p] || '');
     var mass = (typeof voContentMass === 'function') ? voContentMass(t) : t.replace(/\s+/g, '').length;
     if (mass < AI_SWEEP_MIN_PAGE_CHARS) continue;
@@ -23177,11 +23193,13 @@ function voBuildSweepWindows(textBlocks, engineFindings) {
   return { windows: windows, eligiblePages: eligible.length };
 }
 
-async function aiBrain9Sweep(textBlocks, engineFindings, onProgress) {
-  var info = { ran: false, reason: null, windows: 0, windowsPlanned: 0, pagesRead: [], pagesReadText: '', pagesTotal: Array.isArray(textBlocks) ? textBlocks.length : 0, eligiblePages: 0, recommendations: 0, unverified: 0, duplicates: 0, budgetHit: false, failedWindows: 0 };
+async function aiBrain9Sweep(textBlocks, engineFindings, onProgress, options) {
+  options = options || {};
+  var quarantined = Array.isArray(options.quarantinedPages) ? options.quarantinedPages : [];
+  var info = { ran: false, reason: null, windows: 0, windowsPlanned: 0, pagesRead: [], pagesReadText: '', pagesTotal: Array.isArray(textBlocks) ? textBlocks.length : 0, eligiblePages: 0, recommendations: 0, unverified: 0, nonEvidentiary: 0, duplicates: 0, budgetHit: false, failedWindows: 0 };
   var recs = [];
   if (!Array.isArray(textBlocks) || textBlocks.length === 0) { info.reason = 'no page text'; return { info: info, recommendations: recs }; }
-  var built = voBuildSweepWindows(textBlocks, engineFindings);
+  var built = voBuildSweepWindows(textBlocks, engineFindings, options);
   info.eligiblePages = built.eligiblePages;
   info.windowsPlanned = built.windows.length;
   var windows = built.windows.slice(0, AI_SWEEP_MAX_WINDOWS);
@@ -23210,20 +23228,22 @@ async function aiBrain9Sweep(textBlocks, engineFindings, onProgress) {
     try {
       res = await aiApiPost('/api/v1/ai/sweep', { pages: win.map(function (x) { return { page: x.page, text: x.text }; }), known: known.slice(0, 200) }, AI_SWEEP_CALL_TIMEOUT_MS);
     } catch (e) { res = null; }
-    var local = { index: w, ok: false, pageNos: pageNos, unverified: 0, duplicates: 0, recommendations: [] };
+    var local = { index: w, ok: false, pageNos: pageNos, unverified: 0, nonEvidentiary: 0, duplicates: 0, recommendations: [] };
     if (!res || res.reviewed !== true || !Array.isArray(res.recommendations)) return local;
     local.ok = true;
     local.unverified = res.unverified | 0;
+    local.nonEvidentiary = res.discarded ? (res.discarded['non-evidentiary'] | 0) : 0;
     for (var r = 0; r < res.recommendations.length; r++) {
       var it = res.recommendations[r] || {};
       // The second verification: against this device's copy of the sealed text.
-      var anchor = voAnchorAiQuote(it.quote, it.page);
+      var anchor = voAnchorSweepQuote(it.quote, it.page, textBlocks);
       if (!anchor.found) { local.unverified++; continue; }
       var type = (typeof it.type === 'string' && it.type.trim()) ? it.type.trim().slice(0, 64) : 'B9_RECOMMENDATION';
-      var page = parseInt(String(anchor.location).replace(/\D+/g, ''), 10) || (parseInt(it.page, 10) || 0);
+      var page = Number(it.page);
+      if (pageNos.indexOf(page) === -1) { local.unverified++; continue; }
       if ((knownByPage[page] || []).indexOf(type) >= 0) { local.duplicates++; continue; }
       var sev = parseInt(it.severity, 10); if (!isFinite(sev) || sev < 1 || sev > 5) sev = 3;
-      local.recommendations.push({ type: type, severity: sev, rationale: String(it.rationale || '').slice(0, 300), quote: anchor.quote, page: page, location: anchor.location, brain: 'B9', source: 'ai', anchored: true });
+      local.recommendations.push({ type: type, severity: sev, rationale: String(it.rationale || '').slice(0, 300), quote: anchor.quote, page: page, location: anchor.location, brain: 'B9', source: 'ai', anchored: true, fromQuarantinedPage: quarantined.indexOf(page) !== -1, evidentiaryGatePassed: res.evidentiaryGate === '1' });
     }
     return local;
   }
@@ -23242,6 +23262,7 @@ async function aiBrain9Sweep(textBlocks, engineFindings, onProgress) {
       info.windows++;
       info.pagesRead = info.pagesRead.concat(local.pageNos);
       info.unverified += local.unverified;
+      info.nonEvidentiary += local.nonEvidentiary;
       info.duplicates += local.duplicates;
       for (var lr = 0; lr < local.recommendations.length; lr++) {
         var recommendation = local.recommendations[lr];
@@ -23280,7 +23301,7 @@ function voRenderBrain9Recommendations() {
     para.textContent = info.ran
       ? ('Read pages ' + (info.pagesReadText || '—') + ' of ' + info.pagesTotal + ' (' + info.windows + ' window' + (info.windows === 1 ? '' : 's') + (info.budgetHit ? ', time budget reached' : '') + '). ' +
          recs.length + ' anchored recommendation' + (recs.length === 1 ? '' : 's') + '; ' + (info.unverified | 0) + ' suggestion' + ((info.unverified | 0) === 1 ? '' : 's') +
-         ' discarded as not found in the sealed text. Recommendations are not findings and are held outside the sealed report (Constitution v8 §2.10); they train the engine.')
+         ' discarded as not found in the sealed text; ' + (info.nonEvidentiary | 0) + ' discarded as non-evidentiary. Recommendations are not findings and are held outside the sealed report (Constitution v8 §2.10); eligible recommendations train the engine.')
       : ('Not run — ' + (info.reason || 'service unavailable') + '.');
     box.appendChild(para);
     if (recs.length) {
@@ -23289,7 +23310,7 @@ function voRenderBrain9Recommendations() {
       for (var i = 0; i < recs.length; i++) {
         var li = document.createElement('li');
         li.style.marginBottom = '6px';
-        li.textContent = recs[i].type + ' · severity ' + recs[i].severity + ' · ' + recs[i].location + ' — “' + recs[i].quote + '” — ' + recs[i].rationale;
+        li.textContent = recs[i].type + ' · severity ' + recs[i].severity + ' · ' + recs[i].location + (recs[i].fromQuarantinedPage ? ' · from quarantined pages' : '') + ' — “' + recs[i].quote + '” — ' + recs[i].rationale;
         ul.appendChild(li);
       }
       box.appendChild(ul);
@@ -26368,10 +26389,10 @@ function shareAnonymousPatterns(fraudResult) {
     for (var b = 0; b < b9.length && patterns.length < 200; b++) {
       var br = b9[b] || {};
       var bType = (typeof br.type === 'string' ? br.type.trim() : '').slice(0, 64);
-      if (!bType || bType === 'SERIAL') continue;
+      if (!bType || bType === 'SERIAL' || br.fromQuarantinedPage !== false || br.anchored !== true || br.evidentiaryGatePassed !== true) continue;
       var bSev = parseInt(br.severity, 10);
       if (!isFinite(bSev) || bSev < 1) bSev = 1; else if (bSev > 5) bSev = 5;
-      patterns.push({ detectorId: 'B9_RECOMMENDATION', type: bType, severity: bSev, pageCount: pageCount });
+      patterns.push({ detectorId: 'B9_EVIDENTIARY_RECOMMENDATION', type: bType, severity: bSev, pageCount: pageCount });
     }
     var ctrl = new AbortController();
     var timer = setTimeout(function() { ctrl.abort(); }, 8000);
@@ -26668,11 +26689,11 @@ async function runSealingPipeline() {
       // (Constitution v8 §2.10). Runs whether or not assess ran; its output is
       // kept OUT of reportFraudResult; the report states coverage and counts.
       try {
-        if (Array.isArray(_pipelineTextBlocks) && _pipelineTextBlocks.length) {
+        if (Array.isArray(fraudResult.sweepPageTexts) && fraudResult.sweepPageTexts.length && Array.isArray(fraudResult.sweepExcludedPages)) {
           updateStep(7, 'processing', 'Brain 9 sweep: reading the sealed text for what the engine missed...');
-          var sweep = await aiBrain9Sweep(_pipelineTextBlocks, fraudResult.findings, function (i, n, pages) {
+          var sweep = await aiBrain9Sweep(fraudResult.sweepPageTexts, fraudResult.findings, function (i, n, pages) {
             updateStep(7, 'processing', 'Brain 9 sweep: pages ' + pages + ' (window ' + i + ' of ' + n + ')...');
-          });
+          }, { quarantinedPages: fraudResult.sweepExcludedPages });
           _pipelineB9Recs = sweep.recommendations;
           _pipelineB9Info = sweep.info;
           if (!aiReviewInfo) aiReviewInfo = { applied: false, reason: voAiErrorMessage(window._voLastAiError) || 'service unavailable' };
@@ -26680,6 +26701,10 @@ async function runSealingPipeline() {
           updateStep(7, 'processing', sweep.info.ran
             ? ('Brain 9 sweep read pages ' + sweep.info.pagesReadText + ' of ' + sweep.info.pagesTotal + ' — ' + sweep.recommendations.length + ' anchored recommendation(s)')
             : 'Brain 9 sweep unavailable — the engine findings stand without it');
+        } else if (Array.isArray(_pipelineTextBlocks) && _pipelineTextBlocks.length) {
+          _pipelineB9Info = { ran: false, reason: 'engine quarantine information unavailable' };
+          if (!aiReviewInfo) aiReviewInfo = { applied: false, reason: 'engine quarantine information unavailable' };
+          aiReviewInfo.sweep = _pipelineB9Info;
         }
       } catch (sweepErr) {
         console.warn('[VO-AI] Brain 9 sweep failed (sealing unaffected):', sweepErr && sweepErr.message ? sweepErr.message : sweepErr);

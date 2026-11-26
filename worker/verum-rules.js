@@ -1384,6 +1384,14 @@ function sweepNorm(s) {
   return String(s || "").toLowerCase().replace(/[\u2018\u2019\u02bc]/g, "'").replace(/[\u201c\u201d]/g, '"').replace(/[\u00a0\s]+/g, " ").trim();
 }
 __name(sweepNorm, "sweepNorm");
+function sweepNonEvidentiary(quote) {
+  const s = quote.trim().replace(/^[\s"'`\u2018\u2019\u201c\u201d([{]+|[\s"'`\u2018\u2019\u201c\u201d)\]},;:.]+$/g, "");
+  if (/^(?:(?:sha[- ]?(?:256|512)(?:\s+hash)?|hash|digest|fingerprint)(?:\s*\(partial\))?\s*[:=]\s*)?(?:[a-f0-9]{12,})$/i.test(s)) return true;
+  if (/^(?:(?:file(?:name)?|attachment|document)\s*[:=]\s*)?[\w./\\-]+\.(?:pdf|json|txt|docx?|xlsx?|csv|png|jpe?g|zip|html?|md)$/i.test(s)) return true;
+  if (/^(?:(?:see|refer(?:ence)? to|cf\.?)\s+)?(?:page|pages|p{1,2}\.?|section|sections|sec\.?|paragraph|paragraphs|para\.?|clause|clauses|article|articles|annex(?:ure)?|appendix|exhibit)\s*(?:\d+(?:\.\d+)*(?:\([a-z0-9]+\))*|[a-z])(?:\s*(?:[-–—,&/]|and|to|of)\s*(?:\d+(?:\.\d+)*(?:\([a-z0-9]+\))*|[a-z]))*\.?$/i.test(s)) return true;
+  return false;
+}
+__name(sweepNonEvidentiary, "sweepNonEvidentiary");
 function verifySweepItem(item, pages) {
   if (!item || typeof item !== "object" || Array.isArray(item)) return null;
   const type = asStr(item.type, 64).trim().toUpperCase().replace(/[^A-Z0-9_]/g, "_").replace(/^_+|_+$/g, "");
@@ -1395,6 +1403,7 @@ function verifySweepItem(item, pages) {
   if (!rationale) return null;
   if (SWEEP_VERDICT_RE.test(type.replace(/_/g, " ")) || SWEEP_VERDICT_RE.test(rationale)) return null;
   const quote = asStr(item.quote, 160).trim();
+  if (quote && sweepNonEvidentiary(quote)) return { reason: "non-evidentiary" };
   if (quote.length < MIN_SWEEP_QUOTE_CHARS) return null;
   const needle = sweepNorm(quote);
   if (needle.length < MIN_SWEEP_QUOTE_CHARS) return null;
@@ -1473,9 +1482,14 @@ async function handleAiSweep(request, env2) {
     }
     const recommendations = [];
     let unverified = 0;
+    let nonEvidentiary = 0;
     const seen = /* @__PURE__ */ new Set();
     for (const item of parsed.recommendations) {
       const v = verifySweepItem(item, pages);
+      if (v && v.reason === "non-evidentiary") {
+        nonEvidentiary++;
+        continue;
+      }
       if (!v) {
         unverified++;
         continue;
@@ -1494,7 +1508,9 @@ async function handleAiSweep(request, env2) {
       pagesRead,
       recommendations,
       unverified,
-      note: "Recommendations, not findings (Constitution v8 \xA72.10): each quote was verified against the supplied text; unverifiable items were discarded."
+      discarded: { "non-evidentiary": nonEvidentiary },
+      evidentiaryGate: "1",
+      note: "Recommendations, not findings (Constitution v8 \xA72.10): quotes were checked against the supplied text; unverifiable and non-evidentiary items were discarded."
     });
   } catch (e) {
     return json({
@@ -3119,7 +3135,7 @@ var AUTO_CURATE_MIN_SUPPORT = 3;
 var AUTO_CURATE_MIN_DAYS = 2;
 var AUTO_CURATE_MAX_NEW_RULES = 3;
 var AUTO_CURATE_MAX_SIGNALS = 6;
-var AUTO_CURATE_SIGNAL_DETECTORS = ["AI_IDENTIFIED", "B9_RECOMMENDATION"];
+var AUTO_CURATE_SIGNAL_DETECTORS = ["AI_IDENTIFIED", "B9_EVIDENTIARY_RECOMMENDATION"];
 var AUTO_CURATE_SKIP_TYPE_RE = /^(SERIAL|CLEAN_SCAN|VERIFICATION_OUTCOME|VERIFY_|OTS_|SEAL_FORMAT|UNKNOWN|AI_CANDIDATE|AI_INDICATOR|B9_RECOMMENDATION)/;
 var CHANGELOG_KEY = "rules:changelog";
 var LAST_RUN_KEY = "rules:auto-curate:last-run";

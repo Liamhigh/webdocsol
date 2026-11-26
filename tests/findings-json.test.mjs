@@ -48,6 +48,13 @@ ok(buildFindingsJson(Object.assign({}, result, { referenceTime: '2026-10-02T20:1
   'analysis_reference_utc records the instant the engine was given (null when none), so the dated-after note is reproducible');
 ok(json.findings_json_version === '1.11.0', 'production Findings JSON remains v1.11.0');
 {
+  const withSweep = buildFindingsJson(Object.assign({}, result, { sweepExcludedPages: [1], sweepPageTexts: ['synthetic sweep text'] }), 'bundle.pdf', 'a'.repeat(128), 100, { caseName: 'Greensky' });
+  const withoutSweep = { ...json };
+  delete withSweep.generated_utc;
+  delete withoutSweep.generated_utc;
+  ok(JSON.stringify(withSweep) === JSON.stringify(withoutSweep), 'sweep quarantine and original page text never change or enter the sealed Findings JSON');
+}
+{
   const refs = buildFindingsJson({ findings: [], pageTexts: [
     'The file cites CCT 42/23 and CAS 987/6/2024.',
     'The same cct 42 / 23 is repeated. H333/24 and CMS-12345/2023 are referenced. Case No: 2025-123456.',
