@@ -237,20 +237,36 @@ const run = async () => {
   try { T = await pageText(await R.build(opts)); } finally { console.log = quiet; }
   const t = T.replace(/\s+/g, ' ');
   const at = s => t.lastIndexOf(s);
-  ok(at('1. CRITICAL LEGAL SUBJECTS') > 0 && at('1. CRITICAL LEGAL SUBJECTS') < at('7. CERTIFICATION') && at('7. CERTIFICATION') < at('ANNEXES') && at('ANNEXES') < at('EXECUTIVE SUMMARY') && at('EXECUTIVE SUMMARY') < at('THE STORY IN PLAIN LANGUAGE'),
+  const sectionHeads = ['1. CRITICAL LEGAL SUBJECTS', '2. DISHONESTY DETECTION MATRIX', '3. NINE-BRAIN EXTRACTION FINDINGS',
+    '4. TRIPLE VERIFICATION SUMMARY', '5. SEALED FINDINGS', '6. VERDICT RESERVATION', '7. CERTIFICATION'].map(at);
+  ok(sectionHeads.every((p, i) => p > 0 && (i === 0 || p > sectionHeads[i - 1])) &&
+     at('7. CERTIFICATION') < at('ANNEXES') && at('ANNEXES') < at('EXECUTIVE SUMMARY') && at('EXECUTIVE SUMMARY') < at('THE STORY IN PLAIN LANGUAGE'),
     'the §15.4 sections 1-7 come first; the one-page summary and the story follow as annexes (PD19)');
   ok(/Timestamp: 2026-10-04T23:00:43\.844Z/.test(t) && /Jurisdiction\(s\): South Africa \(default home jurisdiction\)/.test(t) && !/detected: South Africa/.test(t) && /Case Reference: none entered/.test(t) && /Report Type: Combined/.test(t), 'the cover carries the §15.4 header: timestamp, jurisdictions, case reference and report type');
   ok(!/HOW ANY CHANGE TO THIS RECORD IS DETECTED/.test(t) && /The seal check alone cannot show that a copy was not altered and re-sealed with its own hash/.test(t), 'no user-manual explainer (PD20); Section 7 keeps the re-seal limit');
+  const verdict = t.slice(at('6. VERDICT RESERVATION'), at('7. CERTIFICATION'));
+  ok(verdict.includes('The verdict on any named person is reserved for the court.'), 'Section 6 carries the exact required verdict-reservation sentence');
+  const certification = t.slice(at('7. CERTIFICATION'), at('ANNEXES'));
+  ok(certification.includes('Report provenance and authentication') &&
+     certification.includes('OpenTimestamps status') &&
+     certification.includes('Source document delivered-file digest'),
+    'Section 7 retains provenance, seal fingerprints and timestamp status');
+  ok(!/\b(?:appears to|possibly|might suggest|is guilty of|are guilty of)\b/i.test(t),
+    'rendered report contains no §15.2 hedging or guilt conclusion in this fixture');
+  const integrity = t.slice(at('Pre-analysis integrity checks (WF1–WF7)'), at('5. SEALED FINDINGS'));
+  ok(at('Pre-analysis integrity checks (WF1–WF7)') > at('4. TRIPLE VERIFICATION SUMMARY') &&
+     ['WF1', 'WF2', 'WF3', 'WF4', 'WF5', 'WF6', 'WF7'].every(id => integrity.includes(id)),
+    'all seven well-formedness checks are re-homed under Section 4');
   ok(!/\bserious\b|\bminor\b|largely consistent|by severity|Score calibration|scoring weight|\/ 46\b|Contradiction types triggered|\bverified findings?\b|AI REVIEW NOT RUN/i.test(t), 'no severity word, score, ratio, calibration, "verified" count or AI-review cover warning anywhere in the report (PD1, §15.2)');
   ok(/contains 4 findings\. The following are established\./.test(t), 'the count is the Constitution\'s own §15.3 sentence, without "verified"');
   const tv = t.slice(at('4. TRIPLE VERIFICATION SUMMARY'), at('5. SEALED FINDINGS'));
-  ok(/Thesis/.test(tv) && /Antithesis/.test(tv) && /Synthesis/.test(tv) && /PASS — quoted text on p\. 1/.test(tv) && /ACCEPTED/.test(tv) && /internal checks, not three independent reviewers/.test(tv) && /appended Independent Model Assessment section/.test(tv) && !/RETAINED|NOT REVIEWED/.test(tv),
-    'the Triple Verification table keeps engine legs distinct from model outcomes, which use the additive section (' + tv.slice(0, 300) + ')');
+  ok(/Thesis/.test(tv) && /Antithesis/.test(tv) && /Synthesis/.test(tv) && /PASS — quoted text on p\. 1/.test(tv) && /ACCEPTED/.test(tv) && /internal checks, not three independent reviewers/.test(tv) && /Independent Model Assessment below/.test(tv) && !/RETAINED|NOT REVIEWED/.test(tv),
+    'the Triple Verification table keeps engine legs distinct from model outcomes, which are nested in Section 4 (' + tv.slice(0, 300) + ')');
   ok((tv.match(/ACCEPTED/g) || []).length === 4, 'every engine finding is in the table: none was removed by the AI (four rows)');
   const nb = t.slice(at('3. NINE-BRAIN EXTRACTION FINDINGS'), at('4. TRIPLE VERIFICATION SUMMARY'));
   ok(/B3 — Communications Brain FINDING RECORDED: - Type: Lookalike Email Domain \(CT37\)/.test(nb) && /B2 — Document Brain FINDING RECORDED: - Type: Chain-of-Custody Steps Not Documented \(CT39\)/.test(nb) && /B2 — Document Brain[^]*FINDING RECORDED: - Type: Unsigned Agreement Stated \(CT23\)/.test(nb) && /B6 — Financial Brain FINANCIAL IRREGULARITY FOUND: - Type: Registration Number Format Invalid \(CT20\)/.test(nb) && !/Not rendered under a brain/.test(nb),
     'every finding renders under its brain, with the measured label (' + nb.slice(0, 500) + ')');
-  ok(!/Registration Number Fake|Chain of Custody Break|Signature Mismatch/.test(t.slice(0, at('METHODOLOGY & AUTHENTICATION'))), 'no section prints a taxonomy name that says more than the detector measured');
+  ok(!/Registration Number Fake|Chain of Custody Break|Signature Mismatch/.test(t.slice(0, at('ANNEXES'))), 'no template section prints a taxonomy name that says more than the detector measured');
   ok(/AI Review Notes on Engine Findings/.test(t) && /a CIPC number written without its slashes/.test(t) && /it removed and changed none/.test(t) && /1 further item it raised restated an engine finding/.test(t),
     'the AI\'s doubt is an advisory note beside the unchanged finding, the trailer says it removed and changed nothing, and a candidate repeating an engine finding is counted, not listed');
   const law = t.slice(at('STATUTORY ANCHORING'), at('RECOMMENDED ACTIONS'));
