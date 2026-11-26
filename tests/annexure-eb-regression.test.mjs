@@ -1386,6 +1386,41 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
   await run18j();
 }
 
+// The cover, checklist and unread-pages section must agree on OCR timeouts.
+{
+  const fs = require('fs'), path = require('path');
+  const g = globalThis; g.window = g; g.self = g;
+  if (!g.PDFLib) new Function('window', 'self', 'globalThis', fs.readFileSync(path.join(process.cwd(), 'vendor/pdf-lib.min.js'), 'utf8'))(g, g, g);
+  const R = require('../forensic-report.js');
+  for (const [unreadPages, expected] of [
+    [{ timedOut: [337, 339, 340], renderFailed: [288] }, 4],
+    [{ timedOut: [337] }, 1]
+  ]) {
+    const quiet = console.log; console.log = () => {};
+    let bytes;
+    try {
+      bytes = await R.build({ documents: [], findings: { findings: [], totalFindings: 0 },
+        unreadPages, images: {}, generatedAt: '2026-11-26T00:00:00.000Z' });
+    } finally { console.log = quiet; }
+    const pdf = await g.PDFLib.PDFDocument.load(bytes);
+    const pages = [];
+    for (let i = 0; i < pdf.getPageCount(); i++) {
+      pages.push((await E.extractPageText(bytes, i, pdf)).join(' ').replace(/\s+/g, ' '));
+    }
+    const cover = pages[0].match(/INCOMPLETE READ: (\d+) pages? not read/);
+    const checklist = pages.join(' ').match(/Have the (\d+) unread pages? listed in "Pages the engine could not read" reviewed by a person/);
+    const section = pages.find(p => /PAGES THE ENGINE COULD NOT READ/.test(p) && /The following pages of this bundle were NOT read/.test(p)) || '';
+    ok(cover && checklist && Number(cover[1]) === expected && checklist[1] === cover[1],
+      'cover and checklist count all unread pages (' + expected + ')');
+    ok(/Pages? 337(?:, 339-340)?\s+\(\d+ pages?\): exceeded the per-page OCR time limit/.test(section),
+      'unread-pages section lists timed-out pages (' + expected + ')');
+    if (unreadPages.renderFailed) {
+      ok(/Page 288\s+\(1 page\): could not be rendered for OCR at all/.test(section),
+        'unread-pages section lists render-failed pages alongside timeouts');
+    }
+  }
+}
+
 console.log(`\n[annexure-eb] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[annexure-eb] FAILURES'); process.exit(1); }
 console.log('[annexure-eb] ALL GREEN');
