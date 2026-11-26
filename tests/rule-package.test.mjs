@@ -195,7 +195,7 @@ const key = makeKey();
   const gr = E.voRunPackageRules(lc, gpages, []);
   ok(gr.findings.length === 2 && gr.withheld === 0, 'both groups fire on a document that carries their phrases (' + gr.findings.length + ')');
   const g14 = gr.findings.find(f => f.packageRule === 'FK14'), g13 = gr.findings.find(f => f.packageRule === 'FK13');
-  ok(g14 && g14.type === 'CT43' && g14.severity === 3 && g14.location === 'Page 2' && /"guaranteed returns" \(p\. 2\), "risk free" \(p\. 2\)/.test(g14.evidence), 'FK14: CT43, severity 3, anchored to the page its phrases sit on, both phrases quoted (' + (g14 && g14.location) + ')');
+  ok(g14 && g14.type === 'CT43' && g14.severity === 3 && g14.location === 'Page 2' && /"guaranteed returns" \(p\. 2\), "risk-free" \(p\. 2\)/.test(g14.evidence), 'FK14: CT43, severity 3, anchored to the page its phrases sit on, both source phrases quoted (' + (g14 && g14.location) + ')');
   ok(g14 && /2 of 5 phrases of the "guaranteed_return_language" group co-occur \(threshold 2\)/.test(g14.evidence), 'FK14 evidence states the count and the threshold');
   ok(g13 && g13.location === 'Page 3' && /4 of 5 phrases/.test(g13.evidence), 'FK13: four phrases on page 3 clear the threshold of 3 (' + (g13 && g13.location) + ')');
   ok(E.voRunPackageRules(lc, ['We offer guaranteed returns of 12%.', 'Unrelated page.'], []).findings.length === 0, 'one phrase alone never fires (each term is benign alone)');
@@ -220,6 +220,66 @@ const key = makeKey();
   ok(reconstructed.pairs.length === 0 && reconstructed.groups.length === 2 && reconstructed.builtInGroupsSkipped.length === 22,
     'the reported pairRules=0 / groupRules=2 / builtInGroupsSkipped=22 shape is locked to the seed plus curated v1.1.0 groups');
   ok(E.voSemverNewer('1.2.0', '1.1.9') && !E.voSemverNewer('1.1.0', '1.1.0') && !E.voSemverNewer('x', '1.0.0') && E.voSemverNewer('1.0.0', 'x'), 'semver comparison');
+}
+
+// ---- 5c. Signed synthetic translation and per-rule matching audit ----
+{
+  const pkg = {
+    version: '1.2.0',
+    rules: {
+      contradiction_patterns: seed.rules.contradiction_patterns,
+      fraud_keywords: seed.rules.fraud_keywords.concat([
+        { id: 'FK13', produces: 'CT01', pairs: [['delivered', 'never delivered']], terms: ['standalone marker'], items: ['unused item'] },
+        { id: 'FK14', produces: 'CT43', min_cooccur: 3, groups: [['commission', 'investment', 'trust account', 'offshore', 'intermediary']] },
+        { id: 'FK15', produces: 'CT43', min_cooccur: 2, groups: [['guaranteed returns', 'risk free', 'capital guaranteed', 'fixed returns', 'high yield']] }
+      ]),
+      behavioral_markers: seed.rules.behavioral_markers.concat([
+        { id: 'BM11', name: 'Synthetic marker', min_cooccur: 2, keywords: ['urgent action', 'keep secret'] }
+      ]),
+      serial_patterns: seed.rules.serial_patterns,
+      case_configs: []
+    }
+  };
+  const verified = await E.voVerifyRulePackage(signManifest(pkg, key.privateKey), { subtle, publicKeyB64: key.publicB64 });
+  ok(verified.ok, 'synthetic audit package is signed and verified before compilation');
+  const compiled = E.voCompileRulePackage(verified.package, { sha512: verified.sha512 });
+  ok(compiled.pairs.length === 1 && compiled.groups.length === 2 && compiled.markers.length === 1 &&
+    compiled.terms.length === 1 && compiled.builtInGroupsSkipped.length === 22,
+    'audit fixture compiles one pair, two groups, a marker and a counted term while skipping 22 seed entries');
+  const hits = (pages) => {
+    const findings = E.voRunPackageRules(compiled, pages, []).findings;
+    return ['FK13', 'FK14', 'FK15', 'BM11'].map(id => findings.filter(f => f.packageRule === id).length);
+  };
+  ok(JSON.stringify(hits([
+    'DELIVERED yesterday; never delivered today.',
+    'COMMISSION and TRUST ACCOUNT via OFFSHORE.',
+    '“Guaranteed returns” are RISK-FREE.',
+    'URGENT\nACTION and KEEP SECRET.'
+  ])) === '[1,1,1,1]', 'each synthetic rule fires once across case, hyphen, line breaks and surrounding Unicode quotes');
+  ok(JSON.stringify(hits([
+    'The delivery was completed.',
+    'commission and trust\naccount via offshore',
+    'guaranteed\nreturns with risk free'
+  ])) === '[0,1,1,0]', 'line breaks between phrase words match as spaces without changing page offsets');
+  const exact = E.voRunPackageRules(compiled, ['İ GUARANTEED\nRETURNS and RISK-FREE'], []).findings;
+  ok(exact.length === 1 && exact[0].evidence.includes('"GUARANTEED\nRETURNS"') &&
+    exact[0].evidence.includes('"RISK-FREE"'), 'group quotations preserve source case, line breaks and hyphens even after an expanding Unicode case fold');
+  const marker = E.voRunPackageRules(compiled, ['İ URGENT\nACTION and KEEP SECRET'], []).findings;
+  ok(marker.length === 1 && marker[0].packageRule === 'BM11' &&
+    marker[0].evidence.includes('"URGENT\nACTION"') && marker[0].evidence.includes('"KEEP SECRET"'),
+    'curated marker quotations preserve their actual source spelling and offsets');
+  ok(JSON.stringify(hits([
+    'The delivery was completed.',
+    'commission and trust acc0unt via offshore',
+    'guaranteed returns with r1sk free'
+  ])) === '[0,0,0,0]', 'OCR substitutions are not guessed as signed phrases');
+  ok(JSON.stringify(hits(['standalone marker and unused item'])) === '[0,0,0,0]',
+    'a compiled standalone term and an item do not become executable findings');
+  const signedHyphen = E.voCompileRulePackage({ rules: { fraud_keywords: [
+    { id: 'FK20', min_cooccur: 2, groups: [['risk-free', 'capital-guaranteed']] }
+  ] } }, {});
+  ok(E.voRunPackageRules(signedHyphen, ['risk free and capital guaranteed'], []).findings.length === 1,
+    'hyphen normalization is symmetric between package phrases and page text');
 }
 
 // ---- 6. the engine is inert without a package ----

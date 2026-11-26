@@ -258,6 +258,8 @@ Main configuration for Cloudflare Workers deployment:
     are configured; unset providers are reported as unreachable. The verifier
     bases must be HTTPS. `LLM2_*` and `LLM3_*` are verifier-only and never
     select the court-ready narrator; narrative routing uses only `LLM_*`.
+    The DeepSeek lane pins non-thinking mode for PD4 determinism; thinking tokens also consume `max_tokens`.
+    `LLM3_MODEL` may be configured as `deepseek-flash` (`deepseek-chat` is a legacy alias).
 
 **Domains**: `wrangler.toml` declares two zone routes,
 `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, each with

@@ -48,6 +48,24 @@ ok(buildFindingsJson(Object.assign({}, result, { referenceTime: '2026-10-02T20:1
   'analysis_reference_utc records the instant the engine was given (null when none), so the dated-after note is reproducible');
 ok(json.findings_json_version === '1.11.0', 'production Findings JSON remains v1.11.0');
 {
+  const refs = buildFindingsJson({ findings: [], pageTexts: [
+    'The file cites CCT 42/23 and CAS 987/6/2024.',
+    'The same cct 42 / 23 is repeated. H333/24 and CMS-12345/2023 are referenced. Case No: 2025-123456.',
+    'This has CCT 42/20230 and XH333/24, not complete identifiers.'
+  ] }, 'bundle.pdf', '', 3, {});
+  ok(refs.case_id === 'CCT 42/23' && JSON.stringify(refs.case_ids) ===
+    JSON.stringify(['CCT 42/23', 'CAS 987/6/2024', 'H333/24', 'CMS-12345/2023', '2025-123456']),
+    'case identifiers are normalized, deduplicated and ordered by first occurrence');
+  ok(refs.integrity_findings.length === 5 && /page 1.*"CCT 42\/23"/.test(refs.integrity_findings[0]) &&
+    /page 2.*"CMS-12345\/2023"/.test(refs.integrity_findings[3]) &&
+    /page 2.*"Case No: 2025-123456"/.test(refs.integrity_findings[4]),
+    'each exported identifier has a page and unchanged source quotation in the existing extraction notes');
+  const absent = buildFindingsJson({ findings: [], pageTexts: ['No case identifier here.'] },
+    'bundle.pdf', '', 1, { caseName: 'Unanchored matter', caseRefs: 'CAS 1/2/2025' });
+  ok(absent.case_id === '' && absent.case_ids.length === 0,
+    'unanchored user-supplied names and references do not create case identifiers');
+}
+{
   const legacy = JSON.parse(JSON.stringify(json));
   ok(legacy.findings_json_version === '1.11.0' && !Object.hasOwn(legacy, 'verification') &&
     legacy.contradictions.every((finding) => !Object.hasOwn(finding, 'verification')),
@@ -272,6 +290,36 @@ for (const t of Object.values(ENGINE.CONTRADICTION_TYPES)) {
   if (!g || g.name !== t.name || g.category !== t.category || g.definition !== t.desc) mismatches++;
 }
 ok(mismatches === 0, 'every glossary entry byte-matches the engine map (' + mismatches + ' mismatches)');
+
+{
+  const PDFLib = require('pdf-lib');
+  const previousPdfLib = globalThis.PDFLib;
+  globalThis.PDFLib = PDFLib;
+  const doc = await PDFLib.PDFDocument.create();
+  const font = await doc.embedFont(PDFLib.StandardFonts.Helvetica);
+  const pages = [
+    'FRANCHISE AGREEMENT. Terms between the parties.',
+    'Case No: 2025-123456. Terms continued.',
+    'Signature: signed by the parties.',
+    'MEMORANDUM OF UNDERSTANDING. H333/24.',
+    'The terms continue.',
+    'Signed by the parties.'
+  ];
+  for (const text of pages) doc.addPage([612, 792]).drawText(text, { x: 40, y: 740, size: 12, font });
+  const bytes = await doc.save({ useObjectStreams: false });
+  const loaded = await PDFLib.PDFDocument.load(bytes);
+  const savedLog = console.log;
+  console.log = () => {};
+  let scanned;
+  try { scanned = await ENGINE.runForensicEngine(bytes, loaded, null, { referenceTime: '2026-11-25T00:00:00.000Z' }); }
+  finally { console.log = savedLog; globalThis.PDFLib = previousPdfLib; }
+  const exported = buildFindingsJson(scanned, 'synthetic.pdf', 'a'.repeat(128), pages.length, {});
+  ok(exported.case_id === '2025-123456' && exported.case_ids.includes('H333/24') &&
+    exported.integrity_findings.some(note => /page 2.*Case No: 2025-123456/.test(note)),
+    'the real PDF extraction and export pipeline preserves anchored case references');
+  ok(scanned.wellFormedness.checks.find(check => check.id === 'WF6').pass &&
+    scanned.documentMap.length === 2, 'the real PDF extraction pipeline detects the synthetic instrument boundaries');
+}
 
 console.log(`\n[findings-json] PASS=${pass} FAIL=${fail}`);
 if (fail > 0) { console.log('[findings-json] FAILURES'); process.exit(1); }
