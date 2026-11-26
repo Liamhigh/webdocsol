@@ -278,8 +278,7 @@ for (const file of ['analysis-contracts.js', 'analysis-config.js']) {
 const html = readFileSync(path.join(root, 'seal-document.html'), 'utf8');
 ok(/findings_json_version:\s*'1\.11\.0'/.test(html) && !/verification:\s*f\.verification/.test(html),
   'production Findings JSON remains v1.11.0 with no per-finding verifier field');
-ok(/analysis_extensions:\s*verificationExtension\s*\?\s*\{\s*'vo\.verifier-adjudication':\s*verificationExtension/.test(html) &&
-  /draft_only:\s*true/.test(html) && /PROPOSED_ONLY_NOT_APPROVED_FOR_PRODUCTION/.test(html),
-  'verifier provenance is isolated in the explicitly draft v0.1.0 namespaced extension');
+ok(!/analysis_extensions\s*:/.test(html.slice(html.indexOf('function buildFindingsJson'), html.indexOf('function buildLocalNarrative'))),
+  'production Findings JSON does not emit the proposed analysis_extensions block');
 
 done('analysis-contracts');

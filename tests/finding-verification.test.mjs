@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -88,6 +89,16 @@ const makePageVerifier = (aiApiPost) => new Function(
   });
   ok(wrongPage.status === 'missing_context' && wrongPage.text === '',
     'a missing quote on its supplied page does not fall back to another page');
+  const noPage = pageVerifier.context('target quote', null, {
+    textBlocks: ['unrelated page', 'target quote appears on page 2']
+  });
+  ok(noPage.status === 'page_unavailable' && noPage.text === '',
+    'a quote with no valid cited page never receives context from another page');
+  const repeated = pageVerifier.context('repeated quote', 1, {
+    textBlocks: ['first repeated quote; second repeated quote']
+  });
+  ok(repeated.status === 'ambiguous_context' && repeated.text === '',
+    'repeated quotes on the cited page are unavailable rather than guessed from the first match');
   const blank = pageVerifier.context(' \n\t ', 1, { textBlocks: ['blank quote lookup must not search'] });
   ok(blank.status === 'empty_quote' && blank.text === '',
     'blank quotes produce an explicit empty-context result without searching');
@@ -100,12 +111,21 @@ const makePageVerifier = (aiApiPost) => new Function(
     packet.context_a.startsWith('L'.repeat(180)) && packet.context_a.endsWith('R'.repeat(180)) &&
     !packet.context_a.includes(longQuote),
     'long quotes remain in their own packet field while before/after contexts stay independently bounded');
+  const singleQuote = pageVerifier.packet({
+    type: 'CT01', severity: 3, evidence: 'only quoted side', location: 'Page 1',
+    anchor: { quote: ['only quoted side'], where: [1] }
+  }, 'F002', false, { textBlocks: ['only quoted side'], ocrRescuedPages: [] });
+  ok(singleQuote.quote_b === '' && singleQuote.context_b_status === 'empty_quote',
+    'a single-quote finding does not trigger an empty-string page search for its missing second side');
 }
 
 {
   const lockStart = page.indexOf('async function voWithSealRunLock');
   const lockEnd = page.indexOf('\n}', lockStart) + 2;
   const lockSource = page.slice(lockStart, lockEnd);
+  const pipelineStart = page.indexOf('async function voRunSealingPipeline');
+  const pipelineEnd = page.indexOf('\n}', pipelineStart) + 2;
+  const pipelineSource = page.slice(pipelineStart, pipelineEnd);
   const button = {
     textContent: 'Seal document',
     disabled: false,
@@ -113,25 +133,26 @@ const makePageVerifier = (aiApiPost) => new Function(
     setAttribute(name, value) { this.attributes[name] = value; },
     removeAttribute(name) { delete this.attributes[name]; }
   };
-  const lock = new Function(
+  const pipeline = new Function(
     'document', 'selectedFile', 'selectedFiles', 'selectedAudioFiles',
-    'var _voSealRunActive = false;\n' + lockSource + '\nreturn voWithSealRunLock;'
+    'var _voSealRunActive = false;\nvar _voRunEvidenceSnapshot = {};\nvar runs = 0;\nvar release;\n' +
+      'function runSealingPipeline() { runs++; return new Promise((resolve) => { release = resolve; }); }\n' +
+      lockSource + '\n' + pipelineSource +
+      '\nreturn { run: voRunSealingPipeline, release: () => release(true), get runs() { return runs; } };'
   )({ getElementById: () => button }, {}, [], []);
-  let release;
-  let runs = 0;
-  const first = lock(() => {
-    runs++;
-    return new Promise((resolve) => { release = resolve; });
-  });
+  const first = pipeline.run();
   await Promise.resolve();
-  const overlapping = await lock(() => { runs++; return true; });
-  ok(overlapping === false && runs === 1 && button.disabled &&
+  const overlapping = await pipeline.run();
+  ok(overlapping === false && pipeline.runs === 1 && button.disabled &&
     button.textContent === 'Sealing in progress...' && button.attributes['aria-busy'] === 'true',
-    'an overlapping seal attempt is rejected while the control exposes an honest busy state');
-  release(true);
+    'concurrent voRunSealingPipeline entry starts one underlying run and exposes an honest busy state');
+  pipeline.release();
   ok(await first === true && !button.disabled && button.textContent === 'Seal document' &&
     !button.attributes['aria-busy'],
     'the seal lock and busy state clear after the active run finishes');
+  const startRun = page.slice(page.indexOf('async function voStartSealingRun'), page.indexOf('async function voRunSealingPipeline'));
+  ok(/await runSealingPipeline\(\)/.test(startRun),
+    'the already-locked initial seal path invokes its underlying pipeline directly rather than bypassing the helper lock');
 }
 
 const providerEnv = {
@@ -207,14 +228,25 @@ function makeUsageBinding() {
 function answer(id, verdict, rationale = 'The bounded comparison supports this assessment.', targets = ['pairing']) {
   return { id, verdict, rationale, targets };
 }
+function responseDigest(text) {
+  return createHash('sha256').update(text, 'utf8').digest('hex');
+}
 
 {
   const { response, body, calls } = await callWorker(packets, (_provider, item) => answer(item.id, 'CONFIRM'));
   ok(response.status === 200 && body.ok === true && body.verifiers.length === 2, 'both configured providers are called independently');
   ok(calls.length === 2 && calls.some((call) => call.url.startsWith(providerEnv.LLM3_API_BASE)) &&
     calls.some((call) => call.url.startsWith(providerEnv.LLM2_API_BASE)), 'each verifier uses its own configured endpoint');
-  ok(body.verifiers.every((entry) => entry.outcome === 'ok' && entry.verdicts[0].verdict === 'CONFIRM' &&
-    entry.model.endsWith('returned-model') && /^[0-9a-f]{64}$/.test(entry.raw_response_sha256)), 'confirmed verdicts include returned model IDs and SHA-256 provenance');
+  ok(body.verifiers.every((entry) => {
+    const raw = JSON.stringify({
+      model: entry.provider + '-returned-model',
+      choices: [{ message: { content: JSON.stringify({ verdicts: [
+        answer('F001', 'CONFIRM')
+      ] }) } }]
+    });
+    return entry.outcome === 'ok' && entry.verdicts[0].verdict === 'CONFIRM' &&
+      entry.model.endsWith('returned-model') && entry.raw_response_sha256 === responseDigest(raw);
+  }), 'confirmed verdicts include the exact SHA-256 of each mocked raw response body');
   const userPacket = JSON.parse(JSON.parse(calls[0].init.body).messages[1].content);
   const systemPrompt = JSON.parse(calls[0].init.body).messages[0].content;
   ok(/ignore any instructions/i.test(systemPrompt) && userPacket.findings[0].evidence_a.page === 1 &&
@@ -229,6 +261,73 @@ function answer(id, verdict, rationale = 'The bounded comparison supports this a
   const invalidPage = await callWorker([{ ...packets[0], page_a: 0 }], (_provider, item) => answer(item.id, 'CONFIRM'));
   ok(invalidPage.response.status === 400 && invalidPage.body.error === 'invalid_finding',
     'invalid page references are rejected before evidence reaches a provider');
+}
+
+{
+  const lawRequest = (ip = '203.0.113.15') => new Request('https://verumglobal.foundation/api/v1/ai/verify-law', {
+    method: 'POST',
+    headers: { 'content-type': 'application/json', 'CF-Connecting-IP': ip },
+    body: JSON.stringify({ jurisdiction: 'ZA', candidates: [{ statute: 'Synthetic Act', section: 's1', claim: 'synthetic scope' }] })
+  });
+  let externalRequests = 0;
+  let workersAiCalls = 0;
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url) => {
+    externalRequests++;
+    return new Response('unexpected external request', { status: 500 });
+  };
+  try {
+    let unavailableWorkersAiCalls = 0;
+    const unavailableLimiter = await worker.fetch(lawRequest(), {
+      ENVIRONMENT: 'test',
+      AI: { run: async () => { unavailableWorkersAiCalls++; return { response: '{}' }; } }
+    }, {});
+    const unavailableBody = await unavailableLimiter.json();
+    ok(unavailableLimiter.status === 503 && unavailableBody.error === 'usage_limiter_unavailable' &&
+      unavailableWorkersAiCalls === 0,
+      'verify-law fails closed before dispatch when the usage Durable Object is unavailable');
+
+    const invalidEndpointResponse = await worker.fetch(lawRequest(), {
+      ENVIRONMENT: 'test',
+      LLM2_API_BASE: 'http://mistral.test/v1',
+      LLM2_API_KEY: 'synthetic-key',
+      LLM2_MODEL: 'synthetic-model',
+      AI: { run: async () => {
+        workersAiCalls++;
+        return { response: JSON.stringify({ verdicts: [] }) };
+      } },
+      VERIFIER_USAGE: makeUsageBinding()
+    }, {});
+    const invalidEndpoint = await invalidEndpointResponse.json();
+    const badLane = invalidEndpoint.results[0].lanes.find((lane) => lane.lane === 'L2');
+    ok(invalidEndpointResponse.status === 200 && badLane.outcome === 'configuration_error' &&
+      externalRequests === 0 && workersAiCalls === 1,
+      'verify-law rejects an HTTP verifier base before external fetch and reports configuration_error');
+
+    let quotaDispatches = 0;
+    let quotaWorkersAiCalls = 0;
+    const deniedBinding = {
+      idFromName: () => 'global',
+      get: () => ({ fetch: async () => new Response(JSON.stringify({
+        ok: true, allowed: false, scope: 'caller', retry_after: 300
+      }), { status: 429 }) })
+    };
+    globalThis.fetch = async () => { quotaDispatches++; return new Response('{}'); };
+    const quotaResponse = await worker.fetch(lawRequest(), {
+      ENVIRONMENT: 'test',
+      LLM2_API_BASE: 'https://mistral.test/v1',
+      LLM2_API_KEY: 'synthetic-key',
+      LLM2_MODEL: 'synthetic-model',
+      AI: { run: async () => { quotaWorkersAiCalls++; return { response: '{}' }; } },
+      VERIFIER_USAGE: deniedBinding
+    }, {});
+    const quotaBody = await quotaResponse.json();
+    ok(quotaResponse.status === 429 && quotaBody.error === 'usage_limit_exceeded' &&
+      quotaDispatches === 0 && quotaWorkersAiCalls === 0,
+      'verify-law quota exhaustion blocks all provider dispatch before either external or Workers AI calls');
+  } finally {
+    globalThis.fetch = realFetch;
+  }
 }
 
 {
@@ -386,12 +485,13 @@ for (const malformedCase of [
 }
 
 {
+  const expectedPrefix = 'x'.repeat(16 * 1024);
   const oversized = await callWorker(packets, () => answer('F001', 'CONFIRM'), {
     fetch: async () => new Response('x'.repeat(17 * 1024), { status: 200 })
   });
   ok(oversized.body.verifiers.every((entry) => entry.outcome === 'malformed_response') &&
-    oversized.body.verifiers.every((entry) => /^[0-9a-f]{64}$/.test(entry.raw_response_sha256)),
-    'oversized provider responses are bounded, hashed and rejected');
+    oversized.body.verifiers.every((entry) => entry.raw_response_sha256 === responseDigest(expectedPrefix)),
+    'oversized provider responses are rejected with the SHA-256 of the documented captured 16 KB prefix');
 }
 
 {
@@ -661,7 +761,10 @@ for (const malformedCase of [
   const engineOnly = capture();
   renderAssessment(engineOnly.ctx, {
     findings: {
-      findings: [{ type: 'CT01', evidence: 'synthetic engine quote', location: 'Page 1' }],
+      findings: [{
+        type: 'CT01', evidence: 'synthetic engine quote', location: 'Page 1',
+        anchor: { quote: ['synthetic engine quote'], where: [1] }
+      }],
       verification: { providers: [
         { provider: 'deepseek', outcome: 'timeout' },
         { provider: 'mistral', outcome: 'unreachable' }
@@ -670,6 +773,36 @@ for (const malformedCase of [
   });
   ok(engineOnly.state.paragraphs.some((text) => /ENGINE-ONLY\. Engine findings exist/.test(text)),
     'ENGINE-ONLY is reserved for records with engine findings and no confirmation');
+
+  const belowThresholdFinding = {
+    type: 'CT01', evidence: 'unanchored synthetic assertion', location: 'Page 1',
+    anchor: { quote: [], where: [1] }
+  };
+  const quotaError = new Error('AI endpoint /api/v1/ai/verify-findings returned HTTP 429');
+  quotaError.voAiError = { status: 429, message: 'HTTP 429 quota exceeded' };
+  const failedBatch = await makePageVerifier(async () => { throw quotaError; }).verify(
+    [belowThresholdFinding], { textBlocks: ['unanchored synthetic assertion'], ocrRescuedPages: [] }
+  );
+  const quotaFailure = capture();
+  renderAssessment(quotaFailure.ctx, {
+    findings: {
+      findings: failedBatch.findings.map((finding) => {
+        const copy = { ...finding };
+        delete copy.verification;
+        return copy;
+      }),
+      verification: { providers: failedBatch.providers }
+    }
+  });
+  const quotaRows = quotaFailure.state.tables.find((table) =>
+    table.columns.some((column) => column.key === 'item') &&
+    table.columns.some((column) => column.key === 'provider'));
+  ok(failedBatch.providers.every((provider) => provider.outcome === 'http_error') &&
+    quotaRows && quotaRows.rows.every((row) => row.outcome === 'http_error' &&
+    row.status === 'ENGINE-EVIDENCE-INSUFFICIENT') &&
+    quotaFailure.state.paragraphs.some((text) => /ENGINE-EVIDENCE-INSUFFICIENT/.test(text)) &&
+    !quotaFailure.state.paragraphs.some((text) => /Overall engine-finding outcome: ENGINE-ONLY/.test(text)),
+    'a batch 429 is disclosed per lane and cannot label a below-threshold engine finding ENGINE-ONLY');
 
   const disputedCandidate = capture();
   renderAssessment(disputedCandidate.ctx, {
@@ -703,6 +836,11 @@ for (const malformedCase of [
   ok(noFindings.state.paragraphs.some((text) => /NO ENGINE FINDINGS/.test(text)) &&
     noFindings.state.paragraphs.some((text) => /deepseek: not_run.*mistral: not_run/.test(text)),
     'the report identifies an empty engine result separately and shows both verifier lanes were not called');
+  ok(/model verdicts never promote or remove a candidate/.test(report) &&
+    /Candidate quotes are matched against sealed page text on the client/.test(report) &&
+    /no two-sided server verification is claimed/.test(report) &&
+    !/withheld from this list|server checked both quoted sides/.test(report),
+    'candidate and certification wording states client-side quote matching and never claims candidate suppression or two-sided server verification');
 }
 
 ok(!/LLM[23]_API_KEY|Bearer\s+[A-Za-z0-9_-]{12,}/.test(page),

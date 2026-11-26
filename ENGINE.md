@@ -8,7 +8,7 @@
 **Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.4-web'`
 **Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.4-web'`, report builder v1.3.1.
 **Findings JSON:** v1.11.0, built by `buildFindingsJson` in `seal-document.html`, not by either
-script (the optional draft `analysis_extensions` v0.1.0 carries verifier provenance without adding finding fields; 1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
+script (verifier provenance is report-only; the proposed `analysis_extensions` v0.1.0 is not emitted in production; 1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
 the well-formedness gate and serial-stage trace; 1.9.0 added `cross_document_observations` with a
 byte-faithful `quote_verbatim`; 1.8.0 added `candidate_law`)
 **Host page:** `seal-document.html` (the engine, the report, two analysis contracts and three helper scripts are
@@ -89,7 +89,7 @@ PDF bytes + pdf-lib PDFDocument (+ opts.referenceTime from the seal page)
   ├─ false-clean guard               zero findings at < 200 characters a page over >= 3 pages is UNREADABLE, never clean
   └─ generateSummary()               the count and a read-against-the-page instruction, or the clean sentence (never the score, §12.16)
         ↓
-   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 / bounded DeepSeek and Mistral adjudication → buildFindingsJson (v1.11.0 + optional draft extension)
+   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 / bounded DeepSeek and Mistral adjudication → buildFindingsJson (v1.11.0; verifier provenance is report-only)
           → forensic-report.js build() → seal()
 ```
 
@@ -920,12 +920,12 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `digital-forensics.test.mjs` | 19 | PDF structure and digital-forensics measurements |
 | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: pinned assets, 256-MiB Wasm cap, pre-hash input limit and sentinel, input/output/object limits, worker opt-in, observations-only envelope and findings parity |
 | `narrate-excerpt.test.mjs` | 16 | AI excerpt building |
-| `findings-json.test.mjs` | 55 | Production Findings JSON v1.11.0, unchanged finding shape and legacy `independent_verifiers` semantics, optional draft verifier-provenance extension; cross-document observations, candidate law and structured conduct payloads |
+| `findings-json.test.mjs` | 54 | Production Findings JSON v1.11.0, unchanged finding shape and legacy `independent_verifiers` semantics, no verifier fields or `analysis_extensions`; cross-document observations, candidate law and structured conduct payloads |
 | `franchise-lease.test.mjs` | 17 | D38/D39 (CT44/CT45) |
 | `wrangler-config.test.mjs` | 39 | **Deploy config drift**: top-level and `[env.production]` bindings match, including the verifier usage Durable Object and SQLite migration; exactly two zone routes, `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, in both environments, zone named, no `custom_domain` |
 | `role-capacity.test.mjs` | 13 | D40/CT46, no hardcoded parties |
 | `ai-assess-batch.test.mjs` | 19 | Client batching under the worker's body limit; **the AI review never removes or changes a finding** (notes only, original evidence returned, an unreviewed batch adds nothing; §12.16) |
-| `finding-verification.test.mjs` | 446 | DeepSeek/Mistral advisory verdicts, strict bounded packets, status mapping, stream and hourly quotas, connect-only retry, injection confinement, duplicate-lane normalization, narrative isolation, report provenance and G3-candidate retention |
+| `finding-verification.test.mjs` | 455 | DeepSeek/Mistral advisory verdicts, strict bounded packets, status mapping, stream and hourly quotas, connect-only retry, injection confinement, duplicate-lane normalization, narrative isolation, report provenance and G3-candidate retention |
 | `encrypt-detect.test.mjs` / `rule-classify.test.mjs` | 9 each | Encryption detection · deterministic classify fallback |
 | `find-seal.test.mjs` / `pdf-encrypt.test.mjs` | 8 each | Seal discovery · real password protection |
 | `voice-crypto.test.mjs` | 7 | `.voice` cross-page encryption |

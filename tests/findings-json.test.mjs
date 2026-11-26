@@ -125,27 +125,18 @@ ok(json.findings_json_version === '1.11.0', 'production Findings JSON remains v1
   const legacyEquivalent = withWin({ findings: [{ ...sourceFinding, verification: undefined }] }, 'b.pdf', 'a'.repeat(128), 65, {});
   const verifiedRecord = verifiedJson.contradictions[0];
   const legacyRecord = legacyEquivalent.contradictions[0];
-  const verificationExtension = verifiedJson.analysis_extensions['vo.verifier-adjudication'];
   const verifiedBase = JSON.parse(JSON.stringify(verifiedJson));
   const legacyBase = JSON.parse(JSON.stringify(legacyEquivalent));
-  delete verifiedBase.analysis_extensions;
-  delete legacyBase.analysis_extensions;
   delete verifiedBase.generated_utc;
   delete legacyBase.generated_utc;
   ok(verifiedJson.findings_json_version === '1.11.0' && !Object.hasOwn(verifiedRecord, 'verification') &&
-    verificationExtension.module_version === '0.1.0' && verificationExtension.draft_only === true &&
-    verificationExtension.contract_status === 'PROPOSED_ONLY_NOT_APPROVED_FOR_PRODUCTION' &&
-    verificationExtension.observations[0].verifiers[0].model === 'mock-model-returned-by-api' &&
-    verificationExtension.observations[0].verifiers[0].raw_response_sha256 === 'a'.repeat(64) &&
-    !Object.hasOwn(verificationExtension.observations[0].verifiers[0], 'called_at') &&
+    !Object.hasOwn(verifiedJson, 'verification') && !Object.hasOwn(verifiedJson, 'analysis_extensions') &&
     verifiedRecord.triple_verification.independent_verifiers === 1,
-    'v1.11.0 keeps model provenance only in the explicitly draft analysis_extensions block while legacy counts remain untouched');
-  ok(!Object.hasOwn(JSON.parse(JSON.stringify(legacyEquivalent)), 'analysis_extensions'),
-    'no-verifier output omits the optional draft extension');
+    'production v1.11.0 exports no verifier fields or analysis_extensions, even when verifier metadata is supplied');
   ok(JSON.stringify(verifiedRecord) === JSON.stringify(legacyRecord),
     'model adjudication leaves every existing v1.11.0 finding field byte-identical');
   ok(JSON.stringify(verifiedBase) === JSON.stringify(legacyBase),
-    'the draft extension is the only top-level export difference');
+    'the complete v1.11.0 export shape is byte-identical with and without verifier metadata');
 }
 
 // The page block must not redeclare the engine's voCtById(id): two same-named

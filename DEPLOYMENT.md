@@ -342,6 +342,7 @@ POST /api/v1/ai/gatekeep          — advisory licensing banner, sent only when 
 POST /api/v1/ai/classify          — document triage (forensic mode)
 POST /api/v1/ai/assess            — AI review of candidate findings (forensic mode)
 POST /api/v1/ai/verify-findings   — bounded DeepSeek + Mistral assessments (forensic mode)
+POST /api/v1/ai/verify-law        — bounded legal-citation checks (forensic mode)
 POST /api/v1/ai/sweep             — Brain 9 sweep of the sealed text: anchored recommendations, never findings (forensic mode)
 POST /api/v1/ai/narrate           — AI narrative (forensic mode)
 POST /api/v1/ai/human-report      — court-ready narrative, one gated section per call (forensic mode)
@@ -350,16 +351,18 @@ GET  /constitution.pdf, /docs/constitution.pdf — constitution PDF from KV
 GET  /images/logo-full.png, /images/watermark_portrait.png — reach the Worker only when the asset is missing
 ```
 
-`/api/v1/ai/verify-findings` is protected before any paid provider request by
-the `VERIFIER_USAGE` Durable Object: at most 100 verifier-item units per
-Cloudflare source IP and 2,000 globally per UTC hour. One unit is one finding
-packet sent to one independently configured provider; the caller address is
-SHA-256 hashed before storage. The request is capped at eight findings and
-48 KB. This verifier-specific limiter does not implicitly protect the other public
-AI routes (`gatekeep`, `classify`, `transcribe`, `assess`, `narrate`, `human-report`,
-`sweep` and `verify-law`): those currently have no caller authentication or
-per-caller/global usage limiter, though their individual request and handler
-checks remain. This change does not extend protection to those routes. Configure
+`/api/v1/ai/verify-findings` and `/api/v1/ai/verify-law` reserve usage through
+the `VERIFIER_USAGE` Durable Object before provider dispatch: at most 100
+verifier-item units per Cloudflare source IP and 2,000 globally per UTC hour.
+One unit is one finding packet or legal candidate sent to one active verifier
+lane, including the Workers AI lane; the caller address is SHA-256 hashed
+before storage. The finding request is capped at eight packets and 48 KB; the
+law request is capped at 12 candidates. Both routes fail closed when the
+limiter is unavailable and reject non-HTTPS external verifier endpoints before
+dispatch. The other public AI
+routes (`gatekeep`, `classify`, `transcribe`, `assess`, `narrate`, `human-report`
+and `sweep`) retain their existing request and handler checks but have no
+caller authentication or equivalent per-caller/global usage limiter. Configure
 no real verifier keys until this Durable Object binding and its migration are
 deployed and confirmed.
 

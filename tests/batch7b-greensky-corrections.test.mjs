@@ -181,9 +181,16 @@ t.ok(q && !/^\s*[a-z]{1,4}\s/.test(q) && !/\b[a-z]{1,3}$/.test(q),
 // ---- Legal-lane state and defensive rendering ----
 const worker = (await import(path.join(__dirname, '..', 'worker', 'verum-rules.js'))).default;
 const req = body => new Request('https://verumglobal.foundation/api/v1/ai/verify-law', {
-  method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body)
+  method: 'POST', headers: { 'content-type': 'application/json', 'CF-Connecting-IP': '203.0.113.15' }, body: JSON.stringify(body)
 });
-const baseEnv = { RULES_KV: { get: async () => null, list: async () => ({ keys: [] }) }, ENVIRONMENT: 'test' };
+const baseEnv = {
+  RULES_KV: { get: async () => null, list: async () => ({ keys: [] }) },
+  ENVIRONMENT: 'test',
+  VERIFIER_USAGE: {
+    idFromName: () => 'global',
+    get: () => ({ fetch: async () => new Response(JSON.stringify({ ok: true, allowed: true }), { status: 200 }) })
+  }
+};
 async function lawRun(aiVerdicts, externalVerdicts, thirdVerdicts) {
   const realFetch = globalThis.fetch;
   globalThis.fetch = async (url) => {

@@ -1083,8 +1083,8 @@ function sanitizeVerifierItem(item) {
   const quoteB = asStr(item.quote_b, 1000).trim();
   const contextA = asStr(item.context_a, 400);
   const contextB = asStr(item.context_b, 400);
-  const contextStatusA = ["available", "missing_context", "empty_quote", "page_unavailable"].includes(item.context_a_status) ? item.context_a_status : "unknown";
-  const contextStatusB = ["available", "missing_context", "empty_quote", "page_unavailable"].includes(item.context_b_status) ? item.context_b_status : "unknown";
+  const contextStatusA = ["available", "missing_context", "empty_quote", "page_unavailable", "ambiguous_context"].includes(item.context_a_status) ? item.context_a_status : "unknown";
+  const contextStatusB = ["available", "missing_context", "empty_quote", "page_unavailable", "ambiguous_context"].includes(item.context_b_status) ? item.context_b_status : "unknown";
   const pageA = item.page_a == null ? null : typeof item.page_a === "number" ? item.page_a : NaN;
   const pageB = item.page_b == null ? null : typeof item.page_b === "number" ? item.page_b : NaN;
   const counterCheck = asStr(item.counter_check, 300).trim();
@@ -1321,12 +1321,17 @@ async function reserveFindingVerifierUsage(request, env2, items, configs) {
     return { error: err(503, "usage_limiter_unavailable", "Verifier usage limiting is not configured; no provider request was made.") };
   }
   const callerHash = await verifierSha256(ip);
-  const stub = binding.get(binding.idFromName("global"));
-  const response = await stub.fetch("https://verifier-usage.internal/reserve", {
-    method: "POST",
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify({ callerHash, units: items.length * active.length })
-  });
+  let response;
+  try {
+    const stub = binding.get(binding.idFromName("global"));
+    response = await stub.fetch("https://verifier-usage.internal/reserve", {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({ callerHash, units: items.length * active.length })
+    });
+  } catch {
+    return { error: err(503, "usage_limiter_unavailable", "Verifier usage limiting failed; no provider request was made.") };
+  }
   let result;
   try { result = await response.json(); } catch { result = null; }
   if ((!response.ok && response.status !== 429) || !result || result.ok !== true) {
@@ -2763,25 +2768,50 @@ async function callExternalLane(base, key, model, system, user, timeoutMs) {
 }
 __name(callExternalLane, "callExternalLane");
 function lawLanes(env2) {
+  const settings = verifierSettings(env2);
+  const byProvider = Object.fromEntries(settings.map((config) => [config.provider, config]));
   const raw = [
     { lane: "L1", kind: "workers-ai", provider: "cloudflare-workers-ai", model: AI_MODEL_FAST },
-    { lane: "L2", kind: "external", provider: String(env2.LLM2_API_BASE || "").trim(), model: String(env2.LLM2_MODEL || "").trim(), key: String(env2.LLM2_API_KEY || "").trim() },
-    { lane: "L3", kind: "external", provider: String(env2.LLM3_API_BASE || "").trim(), model: String(env2.LLM3_MODEL || "").trim(), key: String(env2.LLM3_API_KEY || "").trim() }
+    { lane: "L2", kind: "external", config: byProvider.mistral },
+    { lane: "L3", kind: "external", config: byProvider.deepseek }
   ];
   const out = [];
   const seen = /* @__PURE__ */ new Set();
   for (const l of raw) {
-    if (l.kind === "external" && (!l.provider || !l.model || !l.key)) {
+    if (l.kind === "workers-ai") {
+      out.push(l);
+      seen.add(l.provider.toLowerCase() + "|" + l.model.toLowerCase());
+      continue;
+    }
+    const config = l.config;
+    if (!config.base && !config.model && !config.key) {
       out.push(null);
       continue;
     }
-    const sig = l.provider.replace(/\/+$/, "").toLowerCase() + "|" + l.model.toLowerCase();
+    if (config.configError) {
+      out.push({
+        lane: l.lane, kind: l.kind, provider: config.normalizedBase || config.base,
+        model: config.model, key: config.key, configurationError: config.configError
+      });
+      continue;
+    }
+    const sig = config.normalizedBase.toLowerCase() + "|" + config.model.toLowerCase();
     if (seen.has(sig)) {
-      out.push(null);
+      out.push({
+        lane: l.lane, kind: l.kind, provider: config.normalizedBase, model: config.model,
+        key: config.key, duplicateOf: raw.find((candidate) =>
+          candidate.kind === "workers-ai"
+            ? candidate.provider.toLowerCase() + "|" + candidate.model.toLowerCase() === sig
+            : candidate.config && candidate.config.normalizedBase.toLowerCase() + "|" + candidate.config.model.toLowerCase() === sig
+        )?.lane || null
+      });
       continue;
     }
     seen.add(sig);
-    out.push(l);
+    out.push({
+      lane: l.lane, kind: l.kind, provider: config.normalizedBase,
+      model: config.model, key: config.key
+    });
   }
   return out;
 }
@@ -2859,6 +2889,20 @@ async function handleAiVerifyLaw(request, env2) {
     return err(400, "invalid_context_hash", "contextHash must be a 128-hex-character SHA-512 of the findings block.");
   }
   const lanes = lawLanes(env2);
+  const reservation = await reserveFindingVerifierUsage(
+    request,
+    env2,
+    candidates,
+    lanes.filter((lane) => lane && !lane.configurationError && !lane.duplicateOf).map((lane) => ({
+      provider: lane.provider,
+      normalizedBase: lane.kind === "workers-ai" ? "cloudflare-workers-ai" : lane.provider,
+      model: lane.model,
+      key: lane.key || (lane.kind === "workers-ai" ? "workers-ai" : ""),
+      configError: null,
+      duplicateOf: null
+    }))
+  );
+  if (reservation.error) return reservation.error;
   const lawAllow = [];
   for (const c of candidates) {
     lawAllow.push(c.statute, c.section, c.claim);
@@ -2871,22 +2915,36 @@ async function handleAiVerifyLaw(request, env2) {
   lawAllow.sort((a, b) => String(b).length - String(a).length);
   const userPayload = JSON.stringify({ jurisdiction, candidates, contextHash: contextHash || null });
   const laneReplies = await withTimeout(
-    Promise.all(lanes.map((l) => l ? runLawLane(env2, l, userPayload).then((t) => ({ ok: true, text: t }), (e) => ({ ok: false, reason: String(e && e.message || "lane failed").slice(0, 120) })) : Promise.resolve(null))),
+    Promise.all(lanes.map((l) => {
+      if (!l) return Promise.resolve(null);
+      if (l.configurationError) return Promise.resolve({ ok: false, outcome: "configuration_error", reason: l.configurationError });
+      if (l.duplicateOf) return Promise.resolve({ ok: false, outcome: "duplicate_lane", reason: "same normalized endpoint and model as " + l.duplicateOf });
+      return runLawLane(env2, l, userPayload)
+        .then((t) => ({ ok: true, text: t }))
+        .catch((e) => ({ ok: false, outcome: "unreachable", reason: String(e && e.message || "lane failed").slice(0, 120) }));
+    })),
     VERIFY_LAW_BUDGET_MS,
     "verify-law"
   ).catch(() => null);
   const settled = laneReplies || lanes.map(() => null);
   const laneVerdicts = settled.map((s, i) => {
-    if (!s || !s.ok) return { parsed: null, note: s && !s.ok ? s.reason : lanes[i] ? "lane failed" : "no provider configured for this lane" };
+    if (!s || !s.ok) return {
+      parsed: null,
+      outcome: s && s.outcome || null,
+      note: s && !s.ok ? s.reason : lanes[i] ? "lane failed" : "no provider configured for this lane"
+    };
     const parsed = parseLawLaneReply(s.text, lawAllow);
-    return { parsed, note: parsed ? null : "reply unusable (wrong shape or verdict language) \u2014 lane discarded" };
+    return { parsed, outcome: null, note: parsed ? null : "reply unusable (wrong shape or verdict language) \u2014 lane discarded" };
   });
   const results = candidates.map((c) => {
     const key = c.statute.toLowerCase();
     const laneOut = lanes.map((l, i) => {
       const laneId = l ? l.lane : "L" + (i + 1);
       const lv = laneVerdicts[i];
-      if (!lv.parsed) return { lane: laneId, verdict: "NOT_RUN", note: lv.note };
+      if (!lv.parsed) return {
+        lane: laneId, verdict: "NOT_RUN", note: lv.note,
+        ...(lv.outcome ? { outcome: lv.outcome } : {})
+      };
       const hit = lv.parsed.get(key);
       if (!hit) return { lane: laneId, verdict: "NOT_RUN", note: "lane returned no verdict for this statute" };
       return { lane: laneId, verdict: hit.verdict, note: hit.note };
@@ -2912,7 +2970,7 @@ async function handleAiVerifyLaw(request, env2) {
     ok: true,
     jurisdiction,
     contextHash: contextHash || null,
-    lanesConfigured: lanes.filter(Boolean).map((l) => l.lane),
+    lanesConfigured: lanes.filter((l) => l && !l.configurationError && !l.duplicateOf).map((l) => l.lane),
     declaration,
     disclaimer: LAW_DISCLAIMER,
     direction: anyExcluded ? results.some((r) => r.status === "DISPUTED") ? LAW_DISPUTED_DIRECTION : LAW_UNVERIFIED_DIRECTION : null,

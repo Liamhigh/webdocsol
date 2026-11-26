@@ -63,7 +63,7 @@ ok(normalizedAgents.includes('Secondary-report exclusion is classification, not 
   'AGENTS preserves the report-exclusion and disclosure invariant');
 
 const architecture = read('ARCHITECTURE.md');
-ok(architecture.includes('remains at v1.11.0') && architecture.includes('optional draft `analysis_extensions` v0.1.0'), 'ARCHITECTURE names the current website findings version and draft provenance extension');
+ok(architecture.includes('remains at v1.11.0') && architecture.includes('provenance appears only in the printed report'), 'ARCHITECTURE names the current findings version and report-only verifier provenance');
 ok(architecture.includes('authoritative') || architecture.includes('`FINDINGS_JSON_SCHEMA.json` is kept in `1verum` and `firebase`'), 'ARCHITECTURE retains the external authoritative findings schema boundary');
 ok(architecture.includes('**63 entries**') && architecture.includes('**61 entries**'), 'ARCHITECTURE distinguishes total registry and main run-list');
 
@@ -93,7 +93,7 @@ const enginePosition = html.indexOf('/* VO-INLINE:forensic-engine-page.js:START 
 ok(configPosition >= 0 && configPosition < enginePosition, 'configuration loads before the engine that consumes it');
 ok(/findings_json_version:\s*'1\.11\.0'/.test(html) &&
    !/verification:\s*f\.verification/.test(html) &&
-   /analysis_extensions:\s*verificationExtension/.test(html),
-  'production Findings JSON stays v1.11.0, with verifier provenance isolated from finding records');
+   !/analysis_extensions\s*:/.test(html.slice(html.indexOf('function buildFindingsJson'), html.indexOf('function buildLocalNarrative'))),
+  'production Findings JSON stays v1.11.0 and adds no verifier fields or analysis_extensions');
 
 done('documentation-consistency');
