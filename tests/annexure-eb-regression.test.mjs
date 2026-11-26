@@ -1217,7 +1217,8 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
           critical_evidence: { provenance: 'none', reason: 'gate_failed', gate: { kept: 1, dropped: 3 } },
           legal_framework: { provenance: 'none', reason: 'gate_failed', gate: { kept: 0, dropped: 2 } }
         },
-        humanProvenance: { sectionsAttempted: 3, model: 'test-narrator' }
+        humanProvenance: { sectionsAttempted: 3, model: 'test-narrator',
+          diagnostics: ['part 1: model_error, HTTP 200, 42 ms', 'earlier narrate call: timeout, 31 ms'] }
       })));
       // Declared, and named in the finding's own words: the party it concerns.
       D = await pageText(await R.build(Object.assign({}, opts, { identity: { parties: 'Sanarth Fuels (Respondent)' },
@@ -1225,6 +1226,8 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
       L = await pageText(await R.build(Object.assign({}, opts, { aiNarrative: 'Finding F1 (CT14), recorded at Page 13, states the status twice [F1]. The findings quoted above are the highest-ranked of the findings supplied for narrative reporting [F1].', aiNarrativeSource: 'local' })));
     } finally { console.log = quiet; }
     const TN = T + N;
+    ok(/Advisory narrator diagnostics \(not findings\):\s*part 1: model_error, HTTP 200, 42 ms; earlier narrate call: timeout, 31 ms/.test(N.replace(/\s+/g, ' ')),
+      'court-ready provenance prints advisory narrator failure codes and timing');
     ok(!/It concerns Sanarth/.test(TN) && /Named on the cited page[s]? \(descriptive, not an attribution\):[^.]{0,80}Sanarth Fuels/.test(T), 'a company the engine found on the page is named descriptively, never as the party a finding concerns (' + ((T.match(/Named on the cited page[^.]{0,120}/) || [''])[0]) + ')');
     ok(/It concerns Sanarth Fuels/.test(D) && (D.match(/It concerns Sanarth Fuels/g) || []).length === 1, 'a party the case details declare is the party a finding concerns only when the finding\'s own words name it (once here: the CT14 naming Sanarth Fuels, not the findings that only share its page)');
     ok(!/Sanarth Fuels — the record states/.test(N), 'the counter-narratives never quote the author\'s words as a named company\'s own statement');

@@ -5890,6 +5890,7 @@ async function buildHumanReport(opts) {
         gate_failed: 'the narrator\'s draft did not pass the anchor and language gate on the server and was discarded',
         no_json: 'the narrator did not answer in the agreed format',
         empty: 'the narrator returned nothing',
+        model_error: 'the AI service answered with an error',
         time_budget: 'the five-minute limit for the whole narrative passed before this section',
         invalid_response: 'the AI service answered in an unexpected shape',
         not_generated: 'the narrator was not run for this section'
@@ -6181,6 +6182,8 @@ async function buildHumanReport(opts) {
       ? 'asked for ' + prov.sectionsAttempted + ' section' + (prov.sectionsAttempted === 1 ? '' : 's') + '; no draft passed the server\'s anchor and language gate, so nothing AI-written is printed'
       : 'not run'))) + '  |  contract ' + san(String(prov.contract || 'human-v1')) + '  |  temperature 0' + (prov.modelAttempts ? '  |  model drafts attempted: ' + prov.modelAttempts : ''),
     narratorContextLine,
+    Array.isArray(prov.diagnostics) && prov.diagnostics.length
+      ? 'Advisory narrator diagnostics (not findings): ' + san(prov.diagnostics.join('; ')) : null,
     'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the server\'s anchor and language gate: ' + gateDroppedServer + '  |  by the render-time §15.2 gate: ' + gateDroppedClient + (draftsDiscarded ? '  |  drafts discarded before printing: ' + draftsDiscarded : '') + (gateOrphaned ? '  |  rebuttal sentences dropped with a removed claim: ' + gateOrphaned : ''),
     anchorTolerant ? voAnchorToleranceDisclosure(anchorTolerant, anchorTolerantPages) : null,
     'Engine: Forensic Contradiction Engine v' + ENGINE_VERSION + ' — deterministic mode',
@@ -6399,6 +6402,8 @@ async function buildForensicNarrative(opts) {
     (workerGateStatsAvailable ? 'The worker gates removed ' + workerDroppedSentences +
       (workerDroppedSentences === 1 ? ' sentence. ' : ' sentences. ') : '') +
       'Parts withheld by the render-time gates: ' + gateStats.droppedParts + '.',
+    Array.isArray(opts.diagnostics) && opts.diagnostics.length
+      ? 'Advisory narrator diagnostics (not findings): ' + san(opts.diagnostics.join('; ')) : '',
     anchorTolerant ? voAnchorToleranceDisclosure(anchorTolerant, anchorTolerantPages) : '',
     'Source document SHA-512: ' + truncHash(sourceDoc.sha512, 24, 12) + '; seal id: ' + String(sourceDoc.sealId || 'n/a') + '.',
     'Sealed technical report SHA-512: ' + truncHash(opts.technicalSha512, 24, 12) + '; seal id: ' + String(opts.technicalSealId || 'n/a') + '.',
