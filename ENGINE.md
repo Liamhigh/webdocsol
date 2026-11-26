@@ -7,8 +7,8 @@
 
 **Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.4-web'`
 **Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.4-web'`, report builder v1.3.1.
-**Findings JSON:** v1.11.0, built by `buildFindingsJson` in `seal-document.html`, not by either
-script (1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
+**Findings JSON:** v1.12.0, built by `buildFindingsJson` in `seal-document.html`, not by either
+script (1.12.0 adds optional per-finding independent-verifier provenance; 1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
 the well-formedness gate and serial-stage trace; 1.9.0 added `cross_document_observations` with a
 byte-faithful `quote_verbatim`; 1.8.0 added `candidate_law`)
 **Host page:** `seal-document.html` (the engine, the report, two analysis contracts and three helper scripts are
@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   67 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite); many exist solely to stop the regressions in §4 and §12.
+   68 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite + 1 verifier-adjudication suite); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -89,7 +89,7 @@ PDF bytes + pdf-lib PDFDocument (+ opts.referenceTime from the seal page)
   ├─ false-clean guard               zero findings at < 200 characters a page over >= 3 pages is UNREADABLE, never clean
   └─ generateSummary()               the count and a read-against-the-page instruction, or the clean sentence (never the score, §12.16)
         ↓
-   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 → buildFindingsJson (v1.11.0)
+   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 / bounded independent finding assessment → buildFindingsJson (v1.12.0)
           → forensic-report.js build() → seal()
 ```
 
@@ -497,9 +497,9 @@ breathalyzer prints a reading without pronouncing a conviction.
 
 **Required:**
 - Opening: `The sealed record of "<doc>" (N pages) contains <count>. The following are established.` — the count
-  is `voCountPhrase`'s: `N findings`, whether or not the advisory AI review ran. A finding is never called
-  "verified": Prime Directive 13 asks for three independent verifiers, and the platform has one deterministic
-  engine and at most one advisory model (founder ruling, 5 October 2026, §12.16). Where some findings are
+  is `voCountPhrase`'s: `N findings`, whether or not advisory review ran. A finding is never called
+  "verified": Prime Directive 13 asks for three independent verifiers; external model assessments are disclosed
+  separately and do not replace the engine's evidence requirements or establish a legal conclusion. Where some findings are
   anchored only on OCR-recovered pages or on a secondary source: `N findings: K at full weight, and M anchored
   only on OCR-recovered pages or on a secondary source, whose quoted wording is to be verified against the page
   image or the primary document before it is relied on (C of them held at reduced weight by the engine)`.
@@ -631,7 +631,7 @@ annexes now, numbered like the rest.
 | 1 | `secCriticalSubjects` | CRITICAL LEGAL SUBJECTS |
 | 2 | `secDishonestyMatrix` | DISHONESTY DETECTION MATRIX |
 | 3 | `secNineBrain` | NINE-BRAIN EXTRACTION FINDINGS: every engine finding under exactly one of B1–B7 (`brainOf`, `VO_BRAIN_OF_CT`; v8.0 §2 puts each detector in one brain). The block keeps the template's header ("TAMPER FOUND", "COMMUNICATION GAP FOUND", …) with a Finding line stating the measured fact; a kind no header describes prints as FINDING RECORDED under its brain (`VO_NEUTRAL_BLOCK_CT`: CT23, CT31, CT32 and CT39 in B2, CT37 in B3, CT33 and CT35 in B7, CT07 in B1). Each block's Finding line is `establishesOf`: a measured sentence per kind, the two-positions sentence only for a two-statement kind or two-sided evidence. No finding is set apart "not rendered under a brain"; structural notes of a compiled bundle are named as listed in the matrix. A section with nothing to show (a clean record) still prints its heading and says so; consecutive empty sections share a page (`voEmptyTemplateSection`) |
-| 4 | `secTripleVerification` | TRIPLE VERIFICATION SUMMARY: one row per finding (the first 16), Thesis / Antithesis / Synthesis / Status (`tripleVerificationOf`: the Thesis passes on the anchored quote; the Antithesis is INSUFFICIENT when the finding rests on a secondary source or an OCR-recovered page, PASS otherwise; the Synthesis says what survives; the Status is ACCEPTED under the v8.0 §3 consensus rule and REJECTED on any FAIL, each leg with its reason), and the statement that Prime Directive 13's three independent verifiers are not met, so the report does not call its findings verified |
+| 4 | `secTripleVerification` | TRIPLE VERIFICATION SUMMARY: one row per finding (the first 16), Thesis / Antithesis / Synthesis / Status (`tripleVerificationOf`: the Thesis passes on the anchored quote; the Antithesis is INSUFFICIENT when the finding rests on a secondary source or an OCR-recovered page, PASS otherwise; the Synthesis says what survives; the Status is ACCEPTED under the v8.0 §3 consensus rule and REJECTED on any FAIL, each leg with its reason). External model outcomes are never placed in these engine-check rows; configured DeepSeek/Mistral results and unavailable-provider outcomes use the appended `INDEPENDENT MODEL ASSESSMENT` section, and no report calls a finding verified |
 | 5 | `secSealedFindings` | SEALED FINDINGS: "The record contains N findings… The following are established" (§6), file-level findings counted beside the page-anchored list |
 | 6 | `secVerdictReservation` | VERDICT RESERVATION |
 | 7 | `secDeclaration` | CERTIFICATION, with what the AI review did (it read N engine findings, removed and changed none, noted K as unsupported, raised C candidates) and what the seal check alone cannot show (a copy altered and re-sealed with its own hash; compare the delivered file's SHA-512 with the one the sender recorded) |
@@ -885,7 +885,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**67 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite; recount assertions after any test change).
+**68 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite + 1 verifier-adjudication suite; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -913,7 +913,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `timeline-dates.test.mjs` | 17 | **Timeline date extraction** (§12.20): dates in the page text (text layer and OCR) become ordered, page-anchored events, not only dates a finding carries; impossible dates are excluded and never guessed; a finding date and the same calendar date in the text on one page are one event; finding-only when no page text is passed |
 | `louw-naidoo-regression.test.mjs` | 14 | **The Louw v Naidoo run** (§12.19): D06/CT09 identifier-type classification (an SA ID typed solid and spaced is one id; a fishing right `LF…`, a vessel `DTD…` and a company registration are not identities; a `said` pair fires only for the same resolved person) and D25/CT37 cluster de-duplication (one finding per lookalike cluster; a two-domain cluster keeps the original wording), each beside a positive control |
 | `combine-06-april-regression.test.mjs` | 31 | **The Combine 06 April 2026 run** (§12.17): the late secondary-source pass (lead only when every page is secondary; a record page keeps full weight), OCR pages from the `[OCR]` prefix, rule (a) page by page, per-instrument dates and one-document comparisons (D03, D04), scanned pages OCR could barely read (D17 CT54 hand-over, with D08A CT54 preserved), person and company registration fields (D11), two properties, OCR re-reads and longer terms (D30), conditional ownership (D38), one agreement per trap (D39), each beside a positive control |
-| `rule-package.test.mjs` | 129 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
+| `rule-package.test.mjs` | 133 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
 | `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, transcription consent (follows the sealing mode since 2026-09-07), ordering and honesty |
 | `inline-scripts.test.mjs` | 25 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.js` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |

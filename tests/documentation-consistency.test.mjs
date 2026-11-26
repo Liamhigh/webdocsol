@@ -37,17 +37,17 @@ ok(runStart >= 0 && runEnd > runStart && runList.length === 61 && new Set(runLis
 ok(!runList.includes('D37_DETECT_INTERNAL_CONFLICT_CATCHALL') && detectorKeys.includes('D37_DETECT_INTERNAL_CONFLICT_CATCHALL'), 'D37 is registered and runs separately from the main run-list');
 ok(!runList.includes('D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT') && detectorKeys.includes('D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT'), 'D10A is retained but inactive');
 ok(reportCounts && +reportCounts[1] === runList.length && +reportCounts[2] === ctKeys.length && +reportCounts[3] === 17, 'report fallback counts match main run-list, taxonomy and serial registry');
-ok(findingsVersion && findingsVersion[1] === '1.11.0', 'production findings JSON remains at source-derived 1.11.0');
-ok(suiteCount === 67 && suiteRegistry.includes("'detection-credibility.test.mjs'") && suiteRegistry.includes("'pr327-review.test.mjs'") && suiteRegistry.includes("'analysis-contracts.test.mjs'") && suiteRegistry.includes("'documentation-consistency.test.mjs'") && suiteRegistry.includes("'evaluation-metrics.test.mjs'") && suiteRegistry.includes("'evaluation-contractnli.test.mjs'") && suiteRegistry.includes("'evaluation-contradoc.test.mjs'") && suiteRegistry.includes("'evaluation-eyecite.test.mjs'") && suiteRegistry.includes("'legal-citations.test.mjs'") && suiteRegistry.includes("'legal-citations-za.test.mjs'") && suiteRegistry.includes("'redaction-fixtures.test.mjs'") && suiteRegistry.includes("'pdf-graph.test.mjs'"), 'all 67 Node suites are explicitly registered');
+ok(findingsVersion && findingsVersion[1] === '1.12.0', 'production findings JSON version is source-derived 1.12.0');
+ok(suiteCount === 68 && suiteRegistry.includes("'finding-verification.test.mjs'") && suiteRegistry.includes("'detection-credibility.test.mjs'") && suiteRegistry.includes("'pr327-review.test.mjs'") && suiteRegistry.includes("'analysis-contracts.test.mjs'") && suiteRegistry.includes("'documentation-consistency.test.mjs'") && suiteRegistry.includes("'evaluation-metrics.test.mjs'") && suiteRegistry.includes("'evaluation-contractnli.test.mjs'") && suiteRegistry.includes("'evaluation-contradoc.test.mjs'") && suiteRegistry.includes("'evaluation-eyecite.test.mjs'") && suiteRegistry.includes("'legal-citations.test.mjs'") && suiteRegistry.includes("'legal-citations-za.test.mjs'") && suiteRegistry.includes("'redaction-fixtures.test.mjs'") && suiteRegistry.includes("'pdf-graph.test.mjs'"), 'all 68 Node suites are explicitly registered');
 const testsGuide = read('tests/README.md');
 ok(testsGuide.includes('| 58 | `evaluation-metrics` | `evaluation-metrics.test.mjs` | 116 |') &&
    testsGuide.includes('| 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 |') &&
-   testsGuide.includes('**67 registered production/baseline suites**') &&
+   testsGuide.includes('**68 registered production/baseline suites**') &&
    testsGuide.includes('| 66 | `pr327-review` | `pr327-review.test.mjs` | 40 |'),
-'test guidance records the current 67-suite registry and exact review-suite assertions');
+'test guidance records the current 68-suite registry and exact review-suite assertions');
 
 const readme = read('README.md');
-ok(readme.includes('VO_ENGINE_VERSION 5.7.4-web') && readme.includes('CT01–CT61') && readme.includes('findings JSON 1.11.0'), 'README current engine/taxonomy/findings line agrees with source');
+ok(readme.includes('VO_ENGINE_VERSION 5.7.4-web') && readme.includes('CT01–CT61') && readme.includes('findings JSON 1.12.0'), 'README current engine/taxonomy/findings line agrees with source');
 ok(readme.includes('report builder v1.3.1'), 'README names the source-derived report builder');
 ok(readme.includes('website + Android `1verum`') && readme.includes('Android reference `cursorfu`') && readme.includes('Guardian firewall `firebase`'), 'README retains the four-system surface model');
 ok(readme.includes('`seal-module/web/` is NOT the live site') && readme.includes('Edit the root files.'), 'README distinguishes root production sources from obsolete snapshots');
@@ -55,7 +55,7 @@ ok(readme.includes('`seal-module/web/` is NOT the live site') && readme.includes
 const agents = read('AGENTS.md');
 const normalizedAgents = agents.replace(/\s+/g, ' ');
 ok(agents.includes('46 numeric prefixes, 45 unsuffixed entries and 18 suffixed entries') && agents.includes('61 entries in the main run-list'), 'AGENTS Quick facts uses precise detector terminology');
-ok(agents.includes('**67 registered suites**'), 'AGENTS Quick facts names the current registered suite count');
+ok(agents.includes('**68 registered suites**'), 'AGENTS Quick facts names the current registered suite count');
 ok(normalizedAgents.includes('Secondary-report exclusion is classification, not authentication:') &&
    normalizedAgents.includes('platform output — report pages, seal footers, and manifest blocks — is never evidence') &&
    normalizedAgents.includes('metadata cues corroborate an independently established report but never establish it') &&
@@ -63,18 +63,18 @@ ok(normalizedAgents.includes('Secondary-report exclusion is classification, not 
   'AGENTS preserves the report-exclusion and disclosure invariant');
 
 const architecture = read('ARCHITECTURE.md');
-ok(architecture.includes('is at v1.11.0') && architecture.includes('sealed conduct ledger'), 'ARCHITECTURE names the current website findings version and additive fields');
+ok(architecture.includes('is at v1.12.0') && architecture.includes('optional per-finding independent-verifier provenance'), 'ARCHITECTURE names the current website findings version and additive fields');
 ok(architecture.includes('authoritative') || architecture.includes('`FINDINGS_JSON_SCHEMA.json` is kept in `1verum` and `firebase`'), 'ARCHITECTURE retains the external authoritative findings schema boundary');
 ok(architecture.includes('**63 entries**') && architecture.includes('**61 entries**'), 'ARCHITECTURE distinguishes total registry and main run-list');
 
 const reference = read('REFERENCE.md');
 ok(reference.includes('**`analysis-contracts.js`**') && reference.includes('**`analysis-config.js`**'), 'REFERENCE documents both new shared scripts');
-ok(reference.includes('**67 registered suites**') && reference.includes('QPDF-WASM and Playwright are development-only'), 'REFERENCE has current tests and dependency posture');
+ok(reference.includes('**68 registered suites**') && reference.includes('QPDF-WASM and Playwright are development-only'), 'REFERENCE has current tests and dependency posture');
 
 const engineDoc = read('ENGINE.md');
 ok(engineDoc.includes('## 2. Contradiction types (CT01–CT61)') && engineDoc.includes('## 3. Detector inventory (63 registered entries)'), 'ENGINE current taxonomy and detector headings agree with source');
-ok(engineDoc.includes('**Findings JSON:** v1.11.0') && engineDoc.includes('report builder v1.3.1'), 'ENGINE header has current findings and report-builder versions');
-ok(engineDoc.includes('**67 registered suites**'), 'ENGINE test section names the current registry size');
+ok(engineDoc.includes('**Findings JSON:** v1.12.0') && engineDoc.includes('report builder v1.3.1'), 'ENGINE header has current findings and report-builder versions');
+ok(engineDoc.includes('**68 registered suites**'), 'ENGINE test section names the current registry size');
 const testReadme = read('tests/README.md');
 ok(engineDoc.includes('| `annexure-eb-regression.test.mjs` | 502 |') &&
    testReadme.includes('| 33 | `annexure-eb` | `annexure-eb-regression.test.mjs` | 502 |') &&
@@ -91,6 +91,6 @@ ok(html.includes('/* VO-INLINE:analysis-contracts.js:START */') && html.includes
 const configPosition = html.indexOf('/* VO-INLINE:analysis-config.js:START */');
 const enginePosition = html.indexOf('/* VO-INLINE:forensic-engine-page.js:START */');
 ok(configPosition >= 0 && configPosition < enginePosition, 'configuration loads before the engine that consumes it');
-ok(!/findings_json_version:\s*'1\.12\.0'/.test(html), 'no unapproved findings version is assumed');
+ok(/findings_json_version:\s*'1\.12\.0'/.test(html), 'the owner-approved additive verifier provenance schema is Findings JSON v1.12.0');
 
 done('documentation-consistency');

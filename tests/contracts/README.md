@@ -2,7 +2,7 @@
 
 These files are **synthetic, redistributable test fixtures**, not an authoritative schema and not production findings. The authoritative cross-client schema remains outside this repository, as documented in `ARCHITECTURE.md`.
 
-`findings-extension-proposal.json` proposes an optional namespaced `analysis_extensions` object for deterministic module envelopes. It does not approve a version after findings JSON 1.11.0. Production `buildFindingsJson` remains unchanged until `1verum`, `firebase`, and relevant Android reference-client behavior have been reviewed together.
+`findings-extension-proposal.json` proposes an optional namespaced `analysis_extensions` object for deterministic module envelopes; it does not approve that development-module contract or a production version. The owner-directed verifier-adjudication change separately adds an optional per-finding `verification` block in local Findings JSON v1.12.0 without changing v1.11.0 fields. The shared Findings JSON schema in `1verum` and `firebase` has not been changed in this repository; cross-client schema validation and compatibility remain a coordinated follow-up.
 
 The versioned fixtures cover:
 

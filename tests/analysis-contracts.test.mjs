@@ -276,7 +276,7 @@ for (const file of ['analysis-contracts.js', 'analysis-config.js']) {
   ok(!/\(\?<[=!]/.test(source), file + ' contains no regex lookbehind');
 }
 const html = readFileSync(path.join(root, 'seal-document.html'), 'utf8');
-ok(/findings_json_version:\s*'1\.11\.0'/.test(html) && !/findings_json_version:\s*'1\.12\.0'/.test(html), 'production findings JSON remains at 1.11.0');
+ok(/findings_json_version:\s*'1\.12\.0'/.test(html) && /verification: f\.verification \|\| undefined/.test(html), 'production findings JSON v1.12.0 adds optional verifier provenance without replacing existing fields');
 ok(!html.includes('analysis_extensions:'), 'unapproved analysis_extensions field is absent from production findings builder');
 
 done('analysis-contracts');

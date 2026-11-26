@@ -249,8 +249,12 @@ Main configuration for Cloudflare Workers deployment:
   - **triggers**: the weekly trainer cron
   - **secrets** (names only; set in the Cloudflare dashboard or with
     `wrangler secret put`, never in this file): `ADMIN_TOKEN`,
-    `RULE_PRIVATE_KEY`, and the optional `LLM_API_BASE` / `LLM_API_KEY` /
-    `LLM_MODEL` for an external court-ready-narrative provider
+    `RULE_PRIVATE_KEY`, optional `LLM_API_BASE` / `LLM_API_KEY` /
+    `LLM_MODEL` for an external court-ready-narrative provider, and
+    `LLM3_API_BASE` / `LLM3_API_KEY` / `LLM3_MODEL` (DeepSeek) plus
+    `LLM2_API_BASE` / `LLM2_API_KEY` / `LLM2_MODEL` (Mistral) for finding
+    adjudication. Each provider is called only when all three of its values
+    are configured; unset providers are reported as unreachable.
 
 **Domains**: `wrangler.toml` declares two zone routes,
 `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, each with
@@ -334,6 +338,7 @@ POST /api/v1/ai/curate            — AI-drafted rule candidates from the feedba
 POST /api/v1/ai/gatekeep          — advisory licensing banner, sent only when a tier is chosen; never blocks sealing
 POST /api/v1/ai/classify          — document triage (forensic mode)
 POST /api/v1/ai/assess            — AI review of candidate findings (forensic mode)
+POST /api/v1/ai/verify-findings   — bounded DeepSeek + Mistral assessments (forensic mode)
 POST /api/v1/ai/sweep             — Brain 9 sweep of the sealed text: anchored recommendations, never findings (forensic mode)
 POST /api/v1/ai/narrate           — AI narrative (forensic mode)
 POST /api/v1/ai/human-report      — court-ready narrative, one gated section per call (forensic mode)
@@ -385,8 +390,9 @@ for gatekeep, classify and narrate, and as the fallback model for assess, the sw
 trainer and the court-ready narrative; `@cf/meta/llama-3.3-70b-instruct-fp8-fast` for assess,
 the Brain 9 sweep, curate and the trainer; `HUMAN_REPORT_MODEL` (default `@cf/meta/llama-4-scout-17b-16e-instruct`) for the
 court-ready narrative, or an external OpenAI-compatible provider when the `LLM_*` secrets are
-set; `@cf/openai/whisper` for transcription. No Mistral model is used; the word survives only in
-the `SERVICE_VERSION` label.
+set; `@cf/openai/whisper` for transcription. The finding-verifier route uses the separate
+`LLM3_*` DeepSeek and `LLM2_*` Mistral secret lanes; it does not use a Workers AI model as a
+substitute when either lane is absent.
 
 ## Debugging Deployments
 
