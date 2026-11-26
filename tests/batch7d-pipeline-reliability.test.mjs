@@ -98,7 +98,10 @@ ok(!/VO_HUMAN_LIGHT_SECTIONS[\s\S]*critical_evidence: 1/.test(html), 'critical e
 
 // N4: Worker template fallback carries the actual class over HTTP 200.
 {
-  workerSource = workerSource.replace(/^import .*$/gm, '').replace(/export default verum_rules_default;\s*$/, 'this.workerDefault = verum_rules_default;');
+  workerSource = workerSource
+    .replace(/^import .*$/gm, '')
+    .replace(/^export \{ VerifierUsageLimiter \};\s*$/m, '')
+    .replace(/export default verum_rules_default;\s*$/, 'this.workerDefault = verum_rules_default;');
   const context = {
     console, URL, URLSearchParams, Response, Request, Headers, TextEncoder, TextDecoder,
     Uint8Array, ArrayBuffer, Blob, FormData, setTimeout, clearTimeout,

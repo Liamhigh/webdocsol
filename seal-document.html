@@ -386,7 +386,7 @@
       </button>
       <button type="button" class="mode-card" id="modeForensic" onclick="setSealMode('forensic')">
         <strong>&#128270; Seal document with forensic report</strong>
-        <span>Everything in Seal document, plus the on-device forensic scan (anchored findings, stated as fact), the AI review, the Brain 9 sweep of the sealed text, transcription of voice notes, and two sealed reports: the technical forensic report and the court-ready narrative. For the AI steps, finding metadata, bounded sealed page text, the findings JSON, bounded technical-report text and voice-note audio leave this device to Cloudflare Workers AI; nothing is stored there.</span>
+        <span>Everything in Seal document, plus the on-device forensic scan, the AI review, the Brain 9 sweep, independent finding reviews, voice-note transcription, and two sealed reports. Bounded finding evidence and context are sent through this Worker to configured DeepSeek and Mistral endpoints; other AI payloads go to Cloudflare Workers AI. Provider retention is governed by those services. Do not use this mode for privileged or sensitive matters.</span>
       </button>
     </div>
   </div>
@@ -438,8 +438,8 @@
 
   <!-- Forensic-report disclosure — forensic mode only. No switches: choosing "Seal document with forensic report" IS the choice. -->
   <div id="aiReviewSection" style="margin-bottom:24px;background:rgba(15,52,96,0.08);border:1px solid rgba(26,46,82,0.5);border-radius:12px;padding:20px;display:none;">
-    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">What "Seal document with forensic report" does.</strong> Your document is analysed entirely on this device, in your browser, by the deterministic engine; its findings are stated as fact and anchored to quoted text on cited pages. Then the AI review runs on Cloudflare Workers AI: a short excerpt is classified for context, the findings are assessed before the report is built, <strong style="color:#F8F9FA;">Brain 9 reads the sealed page text</strong> (up to 16 windows of about 11,000 characters, pages without findings first) for anything the engine missed — every suggestion must quote the text verbatim or it is discarded — and the court-ready narrative is written section by section beside the technical report from the sealed page text, the findings JSON and the sealed technical report. The engine is the first extractor, not the limit of the narrative: a contradiction the engine missed can print only when both quoted sides verify against the cited sealed pages. Large bundles are supplied in a bounded, declared page set; the printed provenance states exactly what the narrator received. Brain 9 recommendations are shown here and held outside the sealed reports; the verdict on any person is for the court.</p>
-    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;"><strong style="color:#F8F9FA;">What leaves this device for those steps:</strong> finding metadata — the type, severity and a short quote for each finding — plus bounded text context (up to 4,000 characters from the first pages for classification, up to 24,000 characters around each narrative section's findings, up to 64,000 characters of page-tagged sealed bundle text, the findings JSON up to 32,000 characters, the technical report text up to 32,000 characters, and the sealed page text in windows of about 11,000 characters for the Brain 9 sweep); voice-note audio for transcription. Nothing is stored server-side; GPS, device and sealer identity are never sent. For privileged or sensitive matters choose <strong style="color:#F8F9FA;">Seal document</strong> instead: nothing leaves the device.</p>
+    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;">&#129302; <strong style="color:#F8F9FA;">What "Seal document with forensic report" does.</strong> Your document is analysed on this device by the deterministic engine. Its findings remain engine-owned and anchored to quoted text; AI providers cannot create, remove, or promote findings. The Worker sends bounded finding packets and nearby quote context to the configured DeepSeek and Mistral endpoints for separate CONFIRM / REFUTE / UNCLEAR assessments. Other AI steps use the existing server-side AI path, which may call Cloudflare Workers AI or a configured external provider. The court-ready narrative is written section by section beside the technical report. <strong style="color:#F8F9FA;">Brain 9 reads the sealed page text</strong> in bounded windows (about 11,000 characters, at most 16 windows); every suggestion must quote the text verbatim or it is discarded, and recommendations remain separate from engine findings. The reports record provider outcomes and unavailable or malformed responses; any verdict on a person belongs to the court. Providers may retain submitted text under their own service terms; do not use this mode for privileged or sensitive matters.</p>
+    <p style="font-size:13px;color:#D5D8DD;line-height:1.7;margin-bottom:14px;"><strong style="color:#F8F9FA;">What leaves this device for those steps:</strong> finding metadata — the type, severity and a short quote for each finding — plus bounded text context (up to 4,000 characters from the first pages for classification, up to 24,000 characters around each narrative section's findings, up to 64,000 characters of page-tagged sealed bundle text, the findings JSON up to 32,000 characters, the technical report text up to 32,000 characters, and the sealed page text in windows of about 11,000 characters for the Brain 9 sweep); voice-note audio for transcription. These inputs leave this device; the Worker does not persist them, while downstream provider retention follows each service's terms. GPS, device and sealer identity are never sent. For privileged or sensitive matters choose <strong style="color:#F8F9FA;">Seal document</strong> instead: nothing leaves the device.</p>
     <label style="display:block;font-size:11px;color:#4A7EC7;font-family:'Courier New',monospace;text-transform:uppercase;letter-spacing:0.05em;margin-bottom:6px;">I am sealing as (optional)</label>
     <select id="tierSelector" style="width:100%;padding:12px 16px;border:1px solid #1A2E52;border-radius:10px;background:rgba(15,52,96,0.15);color:#F8F9FA;font-size:14px;font-family:inherit;">
       <option value="">Prefer not to say</option>
@@ -867,7 +867,7 @@ var VO_CHECK_HINTS = {
   DIGITAL: 'Compare the file\'s digital traces (hashes, creating tool, timestamps) with the claimed origin of the document.',
   FRANCHISE_LEASE: 'Check the title deed and head-lease records for the property, and the ownership sequence, against the clause being invoked.',
   BEHAVIOUR: 'Read each cited passage in full on its page — pressure language (threats, ultimatums, consequences for refusal) is an indicator for human review; whether it amounts to coercion in law is for the court to decide.',
-  AI_IDENTIFIED: 'This is a candidate raised by the AI review layer, whose job is to surface leads the fixed rules do not cover. To promote it to evidence: locate the quoted passage on its cited page, confirm the quote is accurate in context, and verify the inconsistency it describes against the surrounding documents. Once verified by a human it stands like any other anchored fact.'
+  AI_IDENTIFIED: 'This is a candidate raised by the AI review layer, not an engine finding. Its quoted passage can be checked on the cited page, but provider confirmation does not promote it; only the deterministic engine meeting its own evidence thresholds can produce a finding.'
 };
 // Per-type overrides where the category hint would misdirect the reader (a
 // registration-number finding is checked at the companies register, not
@@ -1686,16 +1686,13 @@ function isCappedWeight(f) {
 }
 // The count tells apart findings anchored only on OCR-recovered pages or on
 // a secondary source, and says what the engine did: their quoted wording is
-// to be verified, and only those whose severity was lowered are "held at
+// to be checked, and only those whose severity was lowered are "held at
 // reduced weight" (a contradiction anchored only on OCR pages is held at
 // severity 3 by the engine, a format check at Low; a severity-3 finding on
 // OCR pages is counted apart without any claim about its weight).
-// Founder ruling (5 October 2026): no count says "verified". The Constitution
-// (PD13) calls a finding verified after three independent verifiers; this
-// platform has the deterministic engine, so the count says "findings" and the
-// Constitution's own sentence follows it: "The following are established."
-// The AI review no longer touches a finding, so whether it ran changes nothing
-// here; the second argument is kept for callers.
+// Founder ruling (5 October 2026): no report count says "verified". This
+// general count names engine findings; independent model assessments and their
+// outcomes are disclosed separately in the Independent Model Assessment section.
 function voCountPhrase(list, _reviewed, ocrPages) {
   var n = list.length, reduced = 0, capped = 0;
   for (var i = 0; i < n; i++) { if (isReducedWeight(list[i], ocrPages)) { reduced++; if (isCappedWeight(list[i])) capped++; } }
@@ -2729,7 +2726,7 @@ function secMatrix(ctx, data) {
   if (aiList && aiList.length > 0) {
     aiList.sort(function (a, b) { return (b.severity || 0) - (a.severity || 0); });
     ctx.subHeading(ctx.sectionNo + '.' + (subNo + 1) + ' AI-Identified Candidates  (' + aiList.length + ' candidate' + (aiList.length === 1 ? '' : 's') + ')', { toc: true });
-    ctx.para('Generated by the candidate-generation layer (optional AI review, Cloudflare Workers AI): its job is to surface leads the deterministic rules do not cover, for human verification. Candidate tier — pending engine or human verification; never presented as an engine finding. To verify a candidate, locate its quote on the cited page and confirm the inconsistency it describes against the surrounding record; verified, it stands as evidence like any anchored finding. Since engine v5.6.0 a candidate the review could not anchor to a quote in the sealed text is not recorded at all — an unanchored claim is a question, not a lead.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+    ctx.para('Generated by the candidate-generation layer (Cloudflare Workers AI), these items remain separate from engine findings. DeepSeek and Mistral assess each bounded candidate packet independently; model verdicts never promote or remove a candidate. A REFUTE is shown as dissent beside the retained candidate; presentation changes only through the engine\'s own evidence thresholds or explicit human review. Candidate quotes are matched against sealed page text on the client. A candidate the review could not anchor to a quote in the sealed text is not recorded at all.', { size: 9, font: ctx.f.timesItalic, color: GRAY, after: 8 });
     var aiRows = [];
     for (var ar = 0; ar < aiList.length; ar++) {
       var af = aiList[ar];
@@ -3475,7 +3472,7 @@ function secTripleVerification(ctx, data) {
   ctx.newBodyPage();
   ctx.heading('4. TRIPLE VERIFICATION SUMMARY');
   ctx.para('Thesis: the detector\'s reading and its anchor (page and quoted text; unanchored observations are moved to the engine notes and never appear here). Antithesis: the engine\'s own counter-checks — a finding resting on a secondary source (an analysis, extract or commentary bound into the bundle) or on an OCR-recovered page is INSUFFICIENT until the primary document or the page image is checked. Synthesis: what survives both. Consensus rule (Constitution v8.0 §3): accepted when all three pass, or two pass and the third is INSUFFICIENT; any FAIL rejects.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 4 });
-  ctx.para('All three checks are made by the one deterministic engine. Prime Directive 13 requires three independent verifiers; this report does not have them, so it does not call its findings verified. The advisory AI review is not a verifier: it cannot remove or change a finding, and any note it makes is printed under AI Review Notes on Engine Findings in the Findings & Contradiction Matrix.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
+  ctx.para('The Thesis, Antithesis and Synthesis legs are the deterministic engine\'s internal checks, not three independent reviewers. Separate DeepSeek and Mistral assessments, when configured, are disclosed in the appended Independent Model Assessment section; their responses cannot create, remove or change engine findings. The earlier advisory AI review remains note-only, and any note is printed under AI Review Notes on Engine Findings in the Findings & Contradiction Matrix.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 8 });
   var rows = [];
   var CAP = 16;
   for (var i = 0; i < Math.min(subst.length, CAP); i++) {
@@ -3502,6 +3499,174 @@ function secTripleVerification(ctx, data) {
   );
   if (subst.length > CAP) {
     ctx.para('+ ' + (subst.length - CAP) + ' further finding(s): their three legs are in the findings JSON (triple_verification); each finding is set out in the Findings in Detail annex.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 6 });
+  }
+}
+
+function secIndependentModelAssessment(ctx, data) {
+  var fr = data.findings || {};
+  var findings = Array.isArray(fr.findings) ? fr.findings : [];
+  var providerSummary = Array.isArray(fr.verification && fr.verification.providers) ? fr.verification.providers : [];
+  var disputedCandidates = Array.isArray(fr.verification && fr.verification.disputed_candidates) ? fr.verification.disputed_candidates : [];
+  var assessed = findings.filter(function (finding) { return finding && finding.verification && Array.isArray(finding.verification.verifiers); });
+  var noEngineFindings = fr.verification && fr.verification.status === 'NO_ENGINE_FINDINGS';
+  if (!providerSummary.length && !assessed.length && !disputedCandidates.length && !noEngineFindings) return;
+  ctx.newBodyPage();
+  ctx.heading('INDEPENDENT MODEL ASSESSMENT');
+  ctx.para('This additive section records bounded DeepSeek and Mistral assessments. CONFIRM, REFUTE and UNCLEAR are model responses, not findings or legal conclusions. A confirmation never supplies missing anchors or engine thresholds; every engine finding remains in the engine output, and a REFUTE is shown as dissent rather than suppression.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 7 });
+
+  var rows = [];
+  var engineFindings = findings.filter(function (finding) { return finding && finding.source !== 'ai'; });
+  var engineEvidencePass = function (finding) {
+    var anchor = finding && finding.anchor || {};
+    var quotes = Array.isArray(anchor.quote) ? anchor.quote.filter(function (quote) {
+      return typeof quote === 'string' && quote.trim().length > 0;
+    }) : [];
+    if (!finding || !finding.evidence || !finding.location || !quotes.length) return false;
+    var legs = tripleVerificationOf(finding, fr.ocrRescuedPages || fr.ocrPages || []);
+    return !!(legs.status === 'ACCEPTED' && legs.thesis.result === 'PASS' && legs.synthesis.result === 'PASS');
+  };
+  var findingStatus = function (finding, candidate, verifiers) {
+    if (candidate) return (verifiers || []).some(function (verifier) {
+      return verifier && verifier.outcome === 'ok' && verifier.verdict === 'REFUTE';
+    }) ? 'DISPUTED-ADVISORY' : 'PENDING VERIFICATION';
+    var records = Array.isArray(verifiers) ? verifiers : [];
+    if (records.some(function (verifier) { return verifier && verifier.outcome === 'ok' && verifier.verdict === 'REFUTE'; })) return 'DISPUTED';
+    if (!engineEvidencePass(finding)) return 'ENGINE-EVIDENCE-INSUFFICIENT';
+    var confirmations = records.filter(function (verifier) {
+      return verifier && verifier.outcome === 'ok' && verifier.verdict === 'CONFIRM';
+    });
+    if (confirmations.length === 2) return 'TRIPLE-CONFIRMATION';
+    if (confirmations.length === 1) return 'PARTIAL-CONFIRMATION-' + String(confirmations[0].provider || 'PROVIDER').toUpperCase();
+    return 'ENGINE-ONLY';
+  };
+  var appendFindingRows = function (finding, candidate) {
+    var verifierList = finding && finding.verification && finding.verification.verifiers;
+    var label = candidate
+      ? String(finding.type || 'G3 candidate') + ' — ' + capText(String(finding.evidence || finding.rationale || ''), 70, '...')
+      : findingName(finding) + ' — ' + fmtLocation(finding.location);
+    if (!Array.isArray(verifierList) || !verifierList.length) {
+      for (var pi = 0; pi < providerSummary.length; pi++) {
+        var fallbackProvider = providerSummary[pi] || {};
+        rows.push({
+          item: capText(label, 68, '...'),
+          provider: String(fallbackProvider.provider || 'unknown'),
+          model: String(fallbackProvider.model || 'not configured'),
+          outcome: String(fallbackProvider.outcome || 'unreachable'),
+          called_at: 'not recorded',
+          verdict: 'NO RESPONSE',
+          rationale: '',
+          targets: '',
+          status: findingStatus(finding, candidate, [])
+        });
+      }
+      return;
+    }
+    for (var vi = 0; vi < verifierList.length; vi++) {
+      var verifier = verifierList[vi] || {};
+      rows.push({
+        item: capText(label, 68, '...'),
+        provider: String(verifier.provider || 'unknown'),
+        model: String(verifier.model || 'not configured'),
+        outcome: String(verifier.outcome || 'unreachable'),
+        called_at: String(verifier.called_at || 'not recorded'),
+        verdict: String(verifier.verdict || 'NO RESPONSE'),
+        rationale: verifier.rationale == null ? '' : String(verifier.rationale),
+        targets: Array.isArray(verifier.targets) ? verifier.targets.join(', ') : '',
+        status: findingStatus(finding, candidate, verifierList)
+      });
+    }
+  };
+  for (var fi = 0; fi < findings.length; fi++) {
+    var finding = findings[fi];
+    if (finding && finding.source === 'ai') appendFindingRows(finding, true);
+    else if (finding) appendFindingRows(finding, false);
+  }
+
+  if (rows.length) {
+    ctx.table(
+      [
+        { key: 'item', title: 'Finding or candidate', w: 118 },
+        { key: 'provider', title: 'Provider', w: 55 },
+        { key: 'model', title: 'Model', w: 78 },
+        { key: 'outcome', title: 'Outcome', w: 58 },
+        { key: 'verdict', title: 'Verdict', w: 54 },
+        { key: 'status', title: 'Status', w: 68 },
+        { key: 'called_at', title: 'Called (UTC)', w: 75 }
+      ],
+      rows,
+      { size: 7 }
+    );
+  }
+
+  if (providerSummary.length) {
+    ctx.subHeading('Provider availability', { toc: false });
+    ctx.table(
+      [
+        { key: 'provider', title: 'Provider', w: 80 },
+        { key: 'model', title: 'Model', w: 140 },
+        { key: 'outcome', title: 'Outcome', w: 90 },
+        { key: 'detail', title: 'Operational detail', w: 194 }
+      ],
+      providerSummary.map(function (provider) {
+        return {
+          provider: String(provider.provider || 'unknown'),
+          model: String(provider.model || 'not configured'),
+          outcome: String(provider.outcome || 'unreachable'),
+          detail: provider.error_detail ? capText(String(provider.error_detail), 100, '...') : 'Per-item verdicts appear above'
+        };
+      }),
+      { size: 7 }
+    );
+  }
+
+  var dissentRows = rows.filter(function (row) { return row.verdict === 'REFUTE' && row.rationale; });
+  if (dissentRows.length) {
+    ctx.subHeading('Recorded REFUTE dissent', { toc: false });
+    ctx.para('The following model rationales are reproduced as returned, without altering or suppressing the engine finding.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 5 });
+    ctx.table(
+      [
+        { key: 'item', title: 'Finding or candidate', w: 105 },
+        { key: 'provider', title: 'Provider', w: 58 },
+        { key: 'model', title: 'Model', w: 75 },
+        { key: 'targets', title: 'Target', w: 68 },
+        { key: 'rationale', title: 'Returned rationale', w: 211 }
+      ],
+      dissentRows,
+      { size: 7 }
+    );
+  }
+
+  var engineHasConfirmation = engineFindings.some(function (finding) {
+    return finding.verification && Array.isArray(finding.verification.verifiers) && finding.verification.verifiers.some(function (verifier) {
+      return verifier && verifier.outcome === 'ok' && verifier.verdict === 'CONFIRM';
+    });
+  });
+  var engineHasRefutation = engineFindings.some(function (finding) {
+    return finding.verification && Array.isArray(finding.verification.verifiers) && finding.verification.verifiers.some(function (verifier) {
+      return verifier && verifier.outcome === 'ok' && verifier.verdict === 'REFUTE';
+    });
+  });
+  if (noEngineFindings || !engineFindings.length) {
+    ctx.para('Overall engine-finding outcome: NO ENGINE FINDINGS. No model verdict can create or promote a finding.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
+  } else if (engineHasRefutation) {
+    ctx.para('Overall engine-finding outcome: DISPUTED. The engine findings are retained; REFUTE responses are recorded above as dissent.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
+  } else if (engineFindings.length && engineFindings.every(function (finding) { return !engineEvidencePass(finding); })) {
+    ctx.para('Overall engine-finding outcome: ENGINE-EVIDENCE-INSUFFICIENT. Findings are present but do not meet the engine evidence threshold; verifier availability does not change that status.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
+  } else if (!engineHasConfirmation) {
+    ctx.para('Overall engine-finding outcome: ENGINE-ONLY. Engine findings exist; no independent model confirmation was received.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
+  } else {
+    ctx.para('Independent model confirmations are recorded per finding above; any finding without an engine evidence threshold remains unpromoted.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
+  }
+  ctx.para('Provider outcomes: ' + (providerSummary.length
+    ? providerSummary.map(function (provider) {
+      return String(provider.provider || 'Provider') + ': ' + String(provider.outcome || 'unreachable') +
+        (provider.error_detail ? ' — ' + capText(String(provider.error_detail), 100, '...') : '');
+    }).join('; ') + '.'
+    : 'No independent model-verifier response was recorded.'), { size: 8.5, font: ctx.f.times, color: NAVY2, after: 6 });
+
+  if (disputedCandidates.length) {
+    ctx.subHeading('Disputed advisory candidates retained', { toc: false });
+    ctx.para(disputedCandidates.length + ' G3 candidate' + (disputedCandidates.length === 1 ? ' remains' : 's remain') + ' visible as advisory material. Model REFUTE responses and their rationales are recorded above; only engine thresholds or explicit human review can remove a candidate from presentation.', { size: 8.5, font: ctx.f.times, color: NAVY2, after: 6 });
   }
 }
 
@@ -5860,6 +6025,7 @@ async function build(opts) {
   secEvidenceMap(ctx, data);     // Annexure A: every indicator ordered by page
   secConstitution(ctx, data);
   secMethodology(ctx, data);
+  secIndependentModelAssessment(ctx, data);
   // draw TOC now that section page numbers are known
   drawToc(ctx, tocPage);
 
@@ -6705,7 +6871,7 @@ async function buildHumanReport(opts) {
   } else {
     certAuthorship = 'No AI-written section passed the gates; it is the deterministic record built from the sealed technical forensic report, its findings JSON and the supplied sealed bundle text';
   }
-  var certText = 'This narrative report is sealed under SHA-512 and ' + anchorPhrase(data) + '. ' + certAuthorship + ', under the Verum Omnis Constitution v' + CONSTITUTION.governance.version + ' (engine instrument v' + CONSTITUTION_VERSION + '). It adds no engine findings; every table is deterministic engine output, and any AI-identified contradiction was verified against both quoted source pages before printing' + (sectionsAi ? '; the prose in the AI-written sections is machine-written and advisory.' : '.') + ' The sealed technical report remains the audit record. No language-model verification of the findings is claimed' + aiReviewQualifier(data) + '.';
+  var certText = 'This narrative report is sealed under SHA-512 and ' + anchorPhrase(data) + '. ' + certAuthorship + ', under the Verum Omnis Constitution v' + CONSTITUTION.governance.version + ' (engine instrument v' + CONSTITUTION_VERSION + '). It adds no engine findings; every table is deterministic engine output. Independent model assessments are advisory and do not determine whether a finding is correct, true or legally established' + (sectionsAi ? '; the prose in the AI-written sections is machine-written and advisory.' : '.') + ' The sealed technical report remains the audit record, including the provider outcomes for any bounded finding assessments' + aiReviewQualifier(data) + '.';
   // The law-lane declaration is part of the certification when the lanes ran:
   // the report states exactly how many independent lanes verified its legal
   // citations, and escalates every excluded statute to a human lawyer.
@@ -6749,7 +6915,7 @@ async function buildHumanReport(opts) {
   ];
   ctx.box('Provenance record', lines.filter(function (x) { return Boolean(x); }), { size: 9 });
   ctx.gap(6);
-  ctx.para((sectionsAi ? 'The prose in this document is machine-written. ' : 'No section of this document is machine-written prose: every AI draft was gated out or not generated. ') + 'The engine findings are not the opinion of a generative AI: they are the output of deterministic forensic software, sealed in the technical report named above. No language-model verification of the findings is claimed' + aiReviewQualifier(data) + '; the narrator was handed the declared sealed-record context, the findings JSON and the technical-report text and wrote under the Constitution. An AI-identified contradiction is printed only when the server verified both quoted sides against the cited source pages. Every sentence that failed the anchor or language gate was removed, and every draft that failed it as a whole was discarded; both are counted in the provenance record above.', { size: 9.5, after: 6 });
+  ctx.para((sectionsAi ? 'The prose in this document is machine-written. ' : 'No section of this document is machine-written prose: every AI draft was gated out or not generated. ') + 'The engine findings are not the opinion of a generative AI: they are the output of deterministic forensic software, sealed in the technical report named above. The independent model assessments recorded in the technical report are advisory only; they do not determine whether a finding is correct, true or legally established' + aiReviewQualifier(data) + '; the narrator was handed the declared sealed-record context, the findings JSON and the technical-report text and wrote under the Constitution. Candidate quotes are matched against sealed page text on the client; a candidate may have one quoted side, and no two-sided server verification is claimed. A model verdict never promotes or removes a candidate. Every sentence that failed the anchor or language gate was removed, and every draft that failed it as a whole was discarded; both are counted in the provenance record above.', { size: 9.5, after: 6 });
 
   // ---- 15. ANNEXURES (engine) ---------------------------------------------
   ctx.newBodyPage();
@@ -21273,7 +21439,7 @@ async function proceedAsPrivate() {
   document.getElementById('clientField').classList.remove('visible');
   document.getElementById('paymentGate').classList.remove('visible');
   try {
-    await runSealingPipeline();
+    await voRunSealingPipeline();
   } catch (err) {
     console.error('Pipeline error:', err);
     for (var i = 5; i <= 8; i++) updateStep(i, 'error', '');
@@ -21289,7 +21455,7 @@ async function proceedAsPrivate() {
 async function proceedWithSealing() {
   document.getElementById('paymentGate').classList.remove('visible');
   try {
-    await runSealingPipeline();
+    await voRunSealingPipeline();
   } catch (err) {
     console.error('Pipeline error:', err);
     for (var i = 5; i <= 8; i++) updateStep(i, 'error', '');
@@ -21377,6 +21543,30 @@ let _pipelineTextSample = '';
 // so the narrator excerpt can be built AROUND the pages the findings anchor to
 // rather than the document's opening pages. Dropped on reset.
 let _pipelineTextBlocks = null;
+var _voSealRunActive = false;
+var _voRunEvidenceSnapshot = null;
+
+async function voWithSealRunLock(task) {
+  if (_voSealRunActive) return false;
+  _voSealRunActive = true;
+  var button = document.getElementById('sealBtn');
+  var buttonText = button ? button.textContent : '';
+  if (button) {
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'Sealing in progress...';
+  }
+  try {
+    return await task();
+  } finally {
+    _voSealRunActive = false;
+    if (button) {
+      button.removeAttribute('aria-busy');
+      button.textContent = buttonText;
+      button.disabled = !(selectedFile || (selectedFiles && selectedFiles.length) || (selectedAudioFiles && selectedAudioFiles.length));
+    }
+  }
+}
 
 // ==================== BUILD SEALED PDF ====================
 
@@ -22490,9 +22680,20 @@ function voShowPreflightBlock(msg) {
 }
 
 async function startSealing() {
-  if (selectedAudioFiles.length) { return voSealAudioBatch(); }
+  if (_voSealRunActive) return false;
+  if (document.getElementById('paymentGate') && document.getElementById('paymentGate').classList.contains('visible')) return false;
+  if (selectedAudioFiles.length) return await voWithSealRunLock(voSealAudioBatch);
   if (!selectedFile && selectedFiles.length === 0) return;
+  _voRunEvidenceSnapshot = { textBlocks: null, ocrRescuedPages: [] };
+  try {
+    return await voWithSealRunLock(voStartSealingRun);
+  } finally {
+    var paymentGate = document.getElementById('paymentGate');
+    if (!paymentGate || !paymentGate.classList.contains('visible')) _voRunEvidenceSnapshot = null;
+  }
+}
 
+async function voStartSealingRun() {
   // Free any blob: URLs from a previous seal/retry before we build a large new
   // one — otherwise each attempt on a big document piles tens of MB of
   // un-revoked object URLs onto the tab until downloads/share start failing.
@@ -22608,7 +22809,13 @@ async function startSealing() {
           updateStep('Fraud', 'processing', 'Scanning page ' + done + ' of ' + total + ' - 61 contradiction detectors running...');
         }, { referenceTime: new Date().toISOString() }); // the analysis instant is an input, never read by the engine (determinism): it dates the "dated after its analysis" note
         // Keep the per-page text for the finding-anchored narrator excerpt.
-        try { _pipelineTextBlocks = (forensicResult && Array.isArray(forensicResult.pageTexts)) ? forensicResult.pageTexts : null; } catch (ePT) { _pipelineTextBlocks = null; }
+        try {
+          _pipelineTextBlocks = (forensicResult && Array.isArray(forensicResult.pageTexts)) ? forensicResult.pageTexts : null;
+          if (_voRunEvidenceSnapshot) _voRunEvidenceSnapshot.textBlocks = _pipelineTextBlocks ? _pipelineTextBlocks.slice() : null;
+        } catch (ePT) {
+          _pipelineTextBlocks = null;
+          if (_voRunEvidenceSnapshot) _voRunEvidenceSnapshot.textBlocks = null;
+        }
       } catch(e) {
         console.warn('Forensic engine error:', e);
         forensicResult = { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], scanFailed: true, scanError: (e && e.message ? e.message : 'unknown'), extractionNotes: 'Forensic engine error: ' + (e && e.message ? e.message : 'unknown') + '. The scan could not complete; absence of findings here is NOT a clean result.', summary: 'Forensic scan could not complete' };
@@ -22717,6 +22924,13 @@ async function startSealing() {
   } finally {
     document.getElementById('sealBtn').disabled = false;
   }
+}
+
+async function voRunSealingPipeline() {
+  return await voWithSealRunLock(async function () {
+    try { return await runSealingPipeline(); }
+    finally { _voRunEvidenceSnapshot = null; }
+  });
 }
 
 // ==================== OPTIONAL AI REVIEW (CLOUDFLARE WORKERS AI) ====================
@@ -23208,6 +23422,261 @@ async function aiAssessFindings(findings) {
     all.push(Object.assign({}, findings[j], extra));
   }
   return { ran: true, findings: all, added: added, assessed: assessed.length, noted: noted, duplicates: duplicates, droppedUnanchored: droppedUnanchored };
+}
+
+function voVerifierContext(quote, page, runSnapshot) {
+  var blocks = runSnapshot && Array.isArray(runSnapshot.textBlocks) ? runSnapshot.textBlocks : [];
+  var sourceQuote = String(quote || '').trim();
+  if (!sourceQuote) return { text: '', status: 'empty_quote' };
+  if (page == null) return { text: '', status: 'page_unavailable' };
+  var pageNumber = Number(page);
+  var pageIndex = pageNumber - 1;
+  if (!Number.isSafeInteger(pageNumber) || pageNumber < 1 || pageIndex >= blocks.length) {
+    return { text: '', status: 'page_unavailable' };
+  }
+  var needleParts = sourceQuote.split(/\s+/).filter(Boolean);
+  if (!needleParts.length) return { text: '', status: 'empty_quote' };
+  var escaped = needleParts.map(function (part) {
+    return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  });
+  var matcher;
+  try { matcher = new RegExp(escaped.join('\\s+'), 'ig'); } catch (e) { return { text: '', status: 'missing_context' }; }
+  var text = String(blocks[pageIndex] || '');
+  var match = matcher.exec(text);
+  if (!match) return { text: '', status: 'missing_context' };
+  var start = match.index;
+  var end = match.index + match[0].length;
+  if (matcher.exec(text)) return { text: '', status: 'ambiguous_context' };
+  var before = text.slice(Math.max(0, start - 180), start);
+  var after = text.slice(end, Math.min(text.length, end + 180));
+  var context = before + (before && after ? ' … ' : '') + after;
+  return { text: context, status: 'available' };
+}
+
+function voFindingVerificationPacket(finding, id, candidate, runSnapshot) {
+  var anchor = finding && finding.anchor || {};
+  var quotes = Array.isArray(anchor.quote) ? anchor.quote : [];
+  var pages = Array.isArray(anchor.where) ? anchor.where : [];
+  var locationPages = (typeof voRulePagesOf === 'function') ? voRulePagesOf(String(finding && finding.location || '')) : [];
+  var quoteA = String(quotes[0] || (finding && finding.evidence) || '').slice(0, 1000);
+  var quoteB = String(quotes[1] || '').slice(0, 1000);
+  var sourcePageA = pages.length ? pages[0] : locationPages.length ? locationPages[0] : null;
+  var sourcePageB = pages.length > 1 ? pages[1] : locationPages.length > 1 ? locationPages[1] : sourcePageA;
+  var pageAValue = Number(sourcePageA);
+  var pageBValue = Number(sourcePageB);
+  var pageA = Number.isSafeInteger(pageAValue) && pageAValue > 0 ? pageAValue : null;
+  var pageB = Number.isSafeInteger(pageBValue) && pageBValue > 0 ? pageBValue : null;
+  var contextA = voVerifierContext(quoteA, sourcePageA, runSnapshot);
+  var contextB = voVerifierContext(quoteB, sourcePageB, runSnapshot);
+  var counterCheck = '';
+  try {
+    var legs = window.VerumReport && window.VerumReport._tripleVerificationOf
+      ? window.VerumReport._tripleVerificationOf(finding,
+        runSnapshot && Array.isArray(runSnapshot.ocrRescuedPages) ? runSnapshot.ocrRescuedPages : []) : null;
+    counterCheck = legs && legs.antithesis ? String(legs.antithesis.reason || '') : '';
+  } catch (e) { counterCheck = ''; }
+  var type = String(finding && finding.type || 'UNKNOWN');
+  var typeName = type;
+  try {
+    var def = CONTRADICTION_TYPES[type] || Object.keys(CONTRADICTION_TYPES).map(function (key) { return CONTRADICTION_TYPES[key]; })
+      .filter(function (entry) { return entry && entry.id === type; })[0];
+    if (def && def.name) typeName = def.name;
+  } catch (e) {}
+  return {
+    id: id,
+    type: type,
+    name: typeName,
+    severity: candidate ? null : Number(finding && finding.severity) || null,
+    rationale: String((finding && (finding.rationale || finding.evidence)) || 'No engine rationale supplied').slice(0, 500),
+    quote_a: quoteA,
+    quote_b: quoteB,
+    page_a: pageA || null,
+    page_b: pageB || null,
+    context_a: contextA.text,
+    context_a_status: contextA.status,
+    context_b: contextB.text,
+    context_b_status: contextB.status,
+    counter_check: counterCheck.slice(0, 300),
+    candidate: candidate
+  };
+}
+
+function voVerifierFailureOutcome(error) {
+  if (error && error.name === 'AbortError') return 'timeout';
+  var status = error && error.voAiError ? Number(error.voAiError.status) : 0;
+  if (status) return 'http_error';
+  if (error && error.name === 'SyntaxError') return 'malformed_response';
+  return 'unreachable';
+}
+
+function voEngineEvidencePass(finding, runSnapshot) {
+  if (!finding || finding.source === 'ai' || !finding.evidence || !finding.location ||
+      !finding.anchor || !Array.isArray(finding.anchor.quote) || !finding.anchor.quote.length) return false;
+  var anchoredQuotes = finding.anchor.quote.filter(function (quote) {
+    return typeof quote === 'string' && quote.trim().length > 0;
+  });
+  if (!anchoredQuotes.length) return false;
+  try {
+    var legs = window.VerumReport && window.VerumReport._tripleVerificationOf
+      ? window.VerumReport._tripleVerificationOf(finding,
+        runSnapshot && Array.isArray(runSnapshot.ocrRescuedPages) ? runSnapshot.ocrRescuedPages : []) : null;
+    return !!(legs && legs.status === 'ACCEPTED' && legs.thesis && legs.thesis.result === 'PASS' &&
+      legs.synthesis && legs.synthesis.result === 'PASS');
+  } catch (e) {
+    return false;
+  }
+}
+
+function voFindingVerificationStatus(verifiers, enginePass, candidate) {
+  var list = Array.isArray(verifiers) ? verifiers : [];
+  var confirms = list.filter(function (record) { return record && record.outcome === 'ok' && record.verdict === 'CONFIRM'; });
+  var refutes = list.filter(function (record) { return record && record.outcome === 'ok' && record.verdict === 'REFUTE'; });
+  if (candidate) return refutes.length ? 'DISPUTED-ADVISORY' : 'PENDING VERIFICATION';
+  if (refutes.length) return 'DISPUTED';
+  if (!enginePass) return 'ENGINE-EVIDENCE-INSUFFICIENT';
+  if (confirms.length === 2) return 'TRIPLE-CONFIRMATION';
+  if (confirms.length === 1) return 'PARTIAL-CONFIRMATION-' + String(confirms[0].provider || 'PROVIDER').toUpperCase();
+  return 'ENGINE-ONLY';
+}
+
+async function aiVerifyFindings(findings, runSnapshot) {
+  var list = Array.isArray(findings) ? findings : [];
+  var engineFindingCount = list.filter(function (finding) { return finding && finding.source !== 'ai'; }).length;
+  var packets = [], byId = Object.create(null), findingIndex = 0, candidateIndex = 0;
+  for (var i = 0; i < list.length; i++) {
+    var f = list[i];
+    if (!f) continue;
+    var candidate = f.source === 'ai';
+    var id = (candidate ? 'C' + String(++candidateIndex).padStart(3, '0') : 'F' + String(++findingIndex).padStart(3, '0'));
+    var packet = voFindingVerificationPacket(f, id, candidate, runSnapshot);
+    packets.push(packet);
+    byId[id] = f;
+  }
+  if (!packets.length) return {
+    findings: list, providers: [], disputedCandidates: [], called: 0,
+    engineFindings: 0, status: 'NO_ENGINE_FINDINGS'
+  };
+  var emptyHash = '';
+  try {
+    var emptyDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(''));
+    emptyHash = Array.from(new Uint8Array(emptyDigest)).map(function (value) { return value.toString(16).padStart(2, '0'); }).join('');
+  } catch (e) {}
+  var batches = [], currentBatch = [];
+  for (var packetIndex = 0; packetIndex < packets.length; packetIndex++) {
+    var proposedBatch = currentBatch.concat([packets[packetIndex]]);
+    var proposedBody = JSON.stringify({ findings: proposedBatch });
+    if (currentBatch.length && (proposedBatch.length > 8 || new TextEncoder().encode(proposedBody).byteLength > 44 * 1024)) {
+      batches.push(currentBatch);
+      currentBatch = [packets[packetIndex]];
+    } else {
+      currentBatch = proposedBatch;
+    }
+  }
+  if (currentBatch.length) batches.push(currentBatch);
+  var calls = [];
+  for (var start = 0; start < batches.length; start++) {
+    var batch = batches[start];
+    try {
+      var res = await aiApiPost('/api/v1/ai/verify-findings', { findings: batch }, 25000);
+      if (!res || !Array.isArray(res.verifiers)) {
+        var malformedEndpointResponse = new Error('Verifier endpoint returned an invalid response');
+        malformedEndpointResponse.name = 'SyntaxError';
+        throw malformedEndpointResponse;
+      }
+      calls.push({ ids: batch.map(function (item) { return item.id; }), verifiers: res.verifiers });
+    } catch (error) {
+      var outcome = voVerifierFailureOutcome(error);
+      calls.push({
+        ids: batch.map(function (item) { return item.id; }),
+        verifiers: ['deepseek', 'mistral'].map(function (provider) {
+          return {
+            provider: provider, model: null, called_at: new Date().toISOString(), outcome: outcome,
+            error_detail: String(error && error.message || 'verifier endpoint unavailable').slice(0, 160),
+            raw_response_sha256: emptyHash,
+            verdicts: batch.map(function (item) {
+              return { id: item.id, verdict: null, rationale: null, targets: [], outcome: outcome, error_detail: 'verifier endpoint unavailable' };
+            })
+          };
+        })
+      });
+    }
+  }
+  var providerSummaries = { deepseek: [], mistral: [] };
+  var disputedCandidates = [];
+  for (var ci = 0; ci < calls.length; ci++) {
+    var call = calls[ci];
+    var responders = ['deepseek', 'mistral'].map(function (provider) {
+      var report = (call.verifiers || []).filter(function (entry) { return entry && entry.provider === provider; })[0];
+      return report || {
+        provider: provider, model: null, called_at: new Date().toISOString(), outcome: 'unreachable',
+        error_detail: 'provider result missing', raw_response_sha256: emptyHash,
+        verdicts: call.ids.map(function (id) { return { id: id, verdict: null, rationale: null, targets: [], outcome: 'unreachable', error_detail: 'provider result missing' }; })
+      };
+    });
+    for (var ri = 0; ri < call.ids.length; ri++) {
+      var id = call.ids[ri], finding = byId[id];
+      var verifierRecords = responders.map(function (providerResult) {
+        var verdictRecord = (providerResult.verdicts || []).filter(function (entry) { return entry && entry.id === id; })[0] || {};
+        return {
+          provider: providerResult.provider,
+          model: providerResult.model || null,
+          called_at: providerResult.called_at || null,
+          verdict: verdictRecord.verdict || null,
+          rationale: verdictRecord.rationale || null,
+          raw_response_sha256: providerResult.raw_response_sha256 || emptyHash,
+          outcome: verdictRecord.outcome || providerResult.outcome || 'unreachable',
+          error_detail: verdictRecord.error_detail || providerResult.error_detail || null,
+          targets: Array.isArray(verdictRecord.targets) ? verdictRecord.targets : []
+        };
+      });
+      var confirms = verifierRecords.filter(function (record) { return record.verdict === 'CONFIRM' && record.outcome === 'ok'; });
+      var refutes = verifierRecords.filter(function (record) { return record.verdict === 'REFUTE' && record.outcome === 'ok'; });
+      var sourceFinding = finding;
+      var enginePass = voEngineEvidencePass(sourceFinding, runSnapshot);
+      var status = voFindingVerificationStatus(verifierRecords, enginePass, sourceFinding.source === 'ai');
+      var verification = {
+        status: status,
+        verifiers: verifierRecords
+      };
+      if (finding.source === 'ai') {
+        verification.candidate_status = status;
+        if (verification.candidate_status === 'DISPUTED-ADVISORY') {
+          disputedCandidates.push({ id: id, type: finding.type, rationale: finding.rationale, quote: finding.evidence, location: finding.location, verification: verification });
+        }
+      }
+      finding.verification = verification;
+      responders.forEach(function (providerResult) { providerSummaries[providerResult.provider].push({
+        id: id,
+        model: providerResult.model || null,
+        outcome: providerResult.outcome || 'unreachable',
+        verdict: ((providerResult.verdicts || []).filter(function (entry) { return entry && entry.id === id; })[0] || {}).verdict || null,
+        error_detail: providerResult.error_detail || (((providerResult.verdicts || []).filter(function (entry) { return entry && entry.id === id; })[0] || {}).error_detail || null)
+      }); });
+    }
+  }
+  return {
+    findings: list,
+    providers: ['deepseek', 'mistral'].map(function (provider) {
+      var rows = providerSummaries[provider];
+      var outcomes = rows.map(function (row) { return row.outcome; });
+      return {
+        provider: provider,
+        outcome: outcomes.length && outcomes.every(function (value) { return value === 'ok'; }) ? 'ok'
+          : outcomes.indexOf('timeout') >= 0 ? 'timeout'
+            : outcomes.indexOf('http_error') >= 0 ? 'http_error'
+              : outcomes.indexOf('malformed_response') >= 0 ? 'malformed_response'
+                : outcomes.indexOf('configuration_error') >= 0 ? 'configuration_error'
+                  : outcomes.indexOf('duplicate_lane') >= 0 ? 'duplicate_lane' : 'unreachable',
+        model: rows.filter(function (row) { return !!row.model; }).map(function (row) { return row.model; })[0] || null,
+        error_detail: rows.filter(function (row) { return !!row.error_detail; }).map(function (row) { return row.error_detail; })[0] || null,
+        findings: rows.length
+      };
+    }),
+    disputedCandidates: disputedCandidates,
+    called: packets.length,
+    engineFindings: engineFindingCount,
+    status: engineFindingCount ? null : 'NO_ENGINE_FINDINGS'
+  };
 }
 
 // Narrate: returns the AI-drafted narrative string, or null on any failure
@@ -25596,6 +26065,7 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   // pages so a reader knows the quoted characters came through OCR and must
   // be verified against the page image before exact wording is relied on.
   _voOcrRescuedPages = rescued.slice();
+  if (_voRunEvidenceSnapshot) _voRunEvidenceSnapshot.ocrRescuedPages = rescued.slice();
   _voOcrConfidence = ocrConf;
   // Full per-page accounting: every candidate page ends up in exactly one of
   // rescued / noText / renderFailed, so the extraction note states precisely
@@ -26146,6 +26616,36 @@ async function runSealingPipeline() {
       } catch (sweepErr) {
         console.warn('[VO-AI] Brain 9 sweep failed (sealing unaffected):', sweepErr && sweepErr.message ? sweepErr.message : sweepErr);
       }
+      updateStep(7, 'processing', 'Independent finding review (DeepSeek and Mistral)...');
+      try {
+        var verificationResult = await aiVerifyFindings(reportFraudResult.findings, _voRunEvidenceSnapshot);
+        _pipelineAiAddedFindings = verificationResult.findings.filter(function (finding) { return finding && finding.source === 'ai'; });
+        reportFraudResult = Object.assign({}, reportFraudResult, {
+          findings: verificationResult.findings,
+          totalFindings: verificationResult.findings.length,
+          verification: {
+            status: verificationResult.status,
+            engine_findings: verificationResult.engineFindings,
+            providers: verificationResult.providers,
+            disputed_candidates: verificationResult.disputedCandidates
+          }
+        });
+        if (aiReviewInfo && aiReviewInfo.applied) {
+          aiReviewInfo.added = verificationResult.findings.filter(function (finding) { return finding && finding.source === 'ai'; }).length;
+        }
+      } catch (verificationError) {
+        console.warn('[VO-AI] independent finding review failed:', verificationError && verificationError.message ? verificationError.message : verificationError);
+        reportFraudResult = Object.assign({}, reportFraudResult, {
+          verification: {
+            engine_findings: reportFraudResult && Array.isArray(reportFraudResult.findings)
+              ? reportFraudResult.findings.filter(function (finding) { return finding && finding.source !== 'ai'; }).length : 0,
+            providers: ['deepseek', 'mistral'].map(function (provider) {
+              return { provider: provider, model: null, outcome: 'unreachable', error_detail: 'verification request failed before a provider result was received' };
+            }),
+            disputed_candidates: []
+          }
+        });
+      }
       // Draft the narrative whether or not the assess step ran — it used to be
       // nested inside the assess-success block, so any assess failure (e.g. the
       // 70B model being throttled) silently produced NO narrative at all. The
@@ -26191,6 +26691,20 @@ async function runSealingPipeline() {
     _pipelineAiNotes = [];
     _pipelineB9Recs = [];
     _pipelineB9Info = null;
+  }
+  if (sealMode === 'forensic' && reportFraudResult && !reportFraudResult.scanFailed &&
+      (!Array.isArray(reportFraudResult.findings) || reportFraudResult.findings.length === 0) &&
+      !reportFraudResult.verification) {
+    reportFraudResult = Object.assign({}, reportFraudResult, {
+      verification: {
+        status: 'NO_ENGINE_FINDINGS',
+        engine_findings: 0,
+        providers: ['deepseek', 'mistral'].map(function (provider) {
+          return { provider: provider, model: null, outcome: 'not_run', error_detail: 'no engine findings to adjudicate' };
+        }),
+        disputed_candidates: []
+      }
+    });
   }
 
   // Seal Only mode: one-page Seal Certificate — NEVER breaks the seal flow.
@@ -27492,6 +28006,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
 }
 
 function resetSealing() {
+  if (_voSealRunActive) return;
   document.getElementById('results').classList.remove('visible');
   document.getElementById('pipeline').classList.remove('visible');
   for (let i = 1; i <= 8; i++) updateStep(i, 'pending', '');
@@ -27504,6 +28019,7 @@ function resetSealing() {
   _pipelineClassification = null;
   _pipelineTextSample = '';
   _pipelineTextBlocks = null;
+  _voRunEvidenceSnapshot = null;
   _voUnreadPages = null;
   _voOcrRescuedPages = null;
   _voOcrConfidence = null;

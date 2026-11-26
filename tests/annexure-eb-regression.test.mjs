@@ -244,18 +244,16 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
 {
   const src = require('fs').readFileSync(require('path').join(process.cwd(), 'forensic-report.js'), 'utf8');
   const tv = src.slice(src.indexOf('function secTripleVerification'), src.indexOf('function secSealedFindings'));
-  // 5 October 2026: the advisory AI review is not a verification leg (founder
-  // ruling: it cannot remove or change a finding); the legs are the
-  // Constitution's Thesis / Antithesis / Synthesis, and the table says PD13's
-  // three independent verifiers are not met.
-  ok(/Thesis/.test(tv) && /Antithesis/.test(tv) && /Synthesis/.test(tv) && !/'RETAINED'|'NOT REVIEWED'|: 'ENGINE-VERIFIED'/.test(tv) && /three independent verifiers/.test(tv), 'the Triple Verification table carries the Constitution\'s three legs, no AI review leg, and says PD13\'s independence is not met');
+  // The three legs are internal engine checks; the new model assessments are
+  // disclosed separately and never alter the sealed findings.
+  ok(/Thesis/.test(tv) && /Antithesis/.test(tv) && /Synthesis/.test(tv) && !/'RETAINED'|'NOT REVIEWED'|: 'ENGINE-VERIFIED'/.test(tv) && /internal checks, not three independent reviewers/.test(tv) && /appended Independent Model Assessment section/.test(tv), 'the Triple Verification table retains its engine-only legs and directs model outcomes to the additive section');
   const cover = src.slice(src.indexOf('function drawCover'), src.indexOf('function drawCover') + 9000);
   ok(/INCOMPLETE READ: /.test(cover) && !/AI REVIEW NOT RUN/.test(cover) && /Jurisdiction\(s\): /.test(cover) && /Report Type: /.test(cover) && /Case Reference: /.test(cover) && /Timestamp: /.test(cover), 'the cover carries the §15.4 header and the incomplete-read banner; the AI review, which touches no finding, is not a cover warning');
   const page = require('fs').readFileSync(require('path').join(process.cwd(), 'seal-document.html'), 'utf8');
   ok(/async function voPreflightForensicService/.test(page) && /var _pre = await voPreflightForensicService\(\);/.test(page) && /no forensic report was produced and nothing was sealed/.test(page),
     'forensic mode pre-flights the service and refuses to produce an unreviewed forensic report on a host with no API');
   ok(/function voOcrAskToContinue/.test(page) && /candidates = candidates\.concat\(cappedIdx\);/.test(page), 'the OCR cap asks once whether to read the remaining scanned pages');
-  ok(/findings_json_version: '1\.11\.0'/.test(page) && /candidate_law: candidateLawOf\(f\)/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page) && /secondary_capped: /.test(page) && /ocr_anchored: /.test(page) && /ocr_held: /.test(page) && /triple_verification: /.test(page) && /ai_review_note: /.test(page) && /brain: /.test(page) && /display_name: /.test(page) && /cross_document_observations: /.test(page) && /wellformedness: /.test(page) && /serial_trace: /.test(page) && /conduct_ledger: /.test(page) && /conduct_vs_pleading: /.test(page) && /benefit_burden: /.test(page) && /horns: /.test(page), 'findings JSON v1.11.0 carries review_status, ocr_provenance, secondary_capped, ocr_anchored, ocr_held, brain, display_name, triple_verification, ai_review_note, cross_document_observations, wellformedness + serial_trace, and (new) the sealed conduct_ledger plus the conduct_vs_pleading / benefit_burden / horns structured payloads');
+  ok(/findings_json_version: '1\.11\.0'/.test(page) && !/verification:\s*f\.verification/.test(page) && !/analysis_extensions\s*:/.test(page.slice(page.indexOf('function buildFindingsJson'), page.indexOf('function buildLocalNarrative'))) && /candidate_law: candidateLawOf\(f\)/.test(page) && /review_status: /.test(page) && /ocr_provenance: /.test(page) && /secondary_capped: /.test(page) && /ocr_anchored: /.test(page) && /ocr_held: /.test(page) && /triple_verification: /.test(page) && /ai_review_note: /.test(page) && /brain: /.test(page) && /display_name: /.test(page) && /cross_document_observations: /.test(page) && /wellformedness: /.test(page) && /serial_trace: /.test(page) && /conduct_ledger: /.test(page) && /conduct_vs_pleading: /.test(page) && /benefit_burden: /.test(page) && /horns: /.test(page), 'Findings JSON stays v1.11.0 with no verifier fields or analysis_extensions');
   // Behavioural: the pre-flight against stubbed answers.
   const preSrc = page.slice(page.indexOf('var VO_PREFLIGHT_TIMEOUT_MS'), page.indexOf('function voShowPreflightBlock'));
   const mk = new Function('AbortController', 'setTimeout', 'clearTimeout', preSrc + '\nreturn { voPreflightForensicService, voPreflightMessage };');
@@ -1239,7 +1237,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ok(!/Behavioural Scorecard|Top liabilities|top liabilities/.test(TN) && /Parties named on the pages carrying findings/.test(T) && /Leading findings:/.test(T) && !/Most serious findings/.test(T), 'no "scorecard" over the people a record names, no "liabilities", and no severity word in the actionable output');
     ok(!/\(confidence:/.test(TN) && /Document classification \(AI, advisory\): Other/.test(T), 'the classification prints no confidence band');
     ok(!/Highest severity/.test(T) && !/\bSev\.\s/.test(T), 'no severity column in the matrix, for engine findings or AI candidates');
-    ok(/a candidate the review could not anchor to a quote in the sealed text is not recorded at all/.test(T), 'an unanchored AI candidate is not recorded at all (batch 6: a question, not a lead)');
+    ok(/[Aa] candidate the review could not anchor to a quote in the sealed text is not recorded at all/.test(T), 'an unanchored AI candidate is not recorded at all (batch 6: a question, not a lead)');
     ok(/The operator is "errant" and non-compliant/.test(T), 'the evidence prints the record\'s own word in its quotation marks');
     const dish = T.slice(T.lastIndexOf('2. DISHONESTY DETECTION MATRIX'), T.indexOf('3. NINE-BRAIN', T.lastIndexOf('2. DISHONESTY DETECTION MATRIX')));
     ok(dish.length > 50 && !/Evasion \/ Deflection/.test(dish) && dish.indexOf('Contradictions') !== -1 && (dish.indexOf('Selective Omissions') === -1 || dish.indexOf('Contradictions') < dish.indexOf('Selective Omissions')), 'a contact conflict is a contradiction, not evasion, and rows are ordered by their most serious finding (' + dish.slice(0, 300).replace(/\s+/g, ' ') + ')');
@@ -1255,7 +1253,9 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ok(!/fix when (?:they|it) existed|fixes the moment/.test(TN) && /the latest time by which/.test(TN), 'OpenTimestamps fixes the latest time by which the files existed, never "when"');
     ok(!/the only place a Verum seal is verified/.test(N) && /an OpenTimestamps client can check the Bitcoin block independently/.test(N), 'the provenance record says what verify.html checks and how to check Bitcoin independently');
     ok(/drafts discarded before printing: 2/.test(N) && /server's anchor and language gate: 5/.test(N) && !/removed and counted\./.test(N), 'the provenance record counts drafts the server\'s gate discarded whole and their dropped sentences (' + ((N.match(/Sections written by the AI narrator[^\n]{0,260}/) || [''])[0]) + ')');
-    ok(/No language-model verification of the findings is claimed; the advisory AI review recorded in the technical report read the findings, removed and changed none/.test(N), 'with the AI review applied, the narrative says what the review is and that it removed and changed no finding');
+    ok(/independent model assessments recorded in the technical report are advisory only; they do not determine whether a finding is correct, true or legally established/.test(N) &&
+      /advisory AI review recorded in the technical report read the findings, removed and changed none/.test(N),
+      'the narrative distinguishes advisory model assessments from the AI review and states that neither changes engine findings');
     const one = await pageText(await (async () => { const q = console.log; console.log = () => {}; try { return await R.build(Object.assign({}, opts, { findings: Object.assign({}, opts.findings, { findings: [findings[1], findings[2]], totalFindings: 2 }) })); } finally { console.log = q; } })());
     ok(!/cannot all be true at the same time/.test(one) && /cannot all be true at the same time/.test(T), '"the documents cannot all be true at once" is printed only when a finding has two sides');
   };

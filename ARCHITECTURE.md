@@ -136,11 +136,13 @@ The website is the centre of gravity: **all document verification happens at the
   which defines CT01–CT61 and 63 registered detector entries, and is never merged over the engine's taxonomy.
   (2) **The findings JSON.** `FINDINGS_JSON_SCHEMA.json` is kept in `1verum` and `firebase` at
   v1.0.0 (`findings_json_version` fixed at "1.0.0"); this repository has no copy. The website
-  builds its file in `seal-document.html` (`buildFindingsJson`) and is at v1.11.0, extended
+  builds its file in `seal-document.html` (`buildFindingsJson`) and remains at v1.11.0, extended
   additively: `review_status` (1.3.0), `secondary_capped` and `ocr_anchored` (1.4.0), `ocr_held`
   (1.5.0), `analysis_reference_utc` (1.6.0), `display_name`, `brain`, `triple_verification` and
-  `ai_review_note` (1.7.0), `candidate_law` (1.8.0), `cross_document_observations` with a byte-faithful `quote_verbatim` (1.9.0), the well-formedness gate and serial-stage trace (1.10.0), and the sealed conduct ledger and structured conduct-finding payloads (1.11.0). A validator that enforces the schema's version constant would refuse
-  the website's file. That drift is open with the founder, and so is the schema's vocabulary: it
+  `ai_review_note` (1.7.0), `candidate_law` (1.8.0), `cross_document_observations` with a byte-faithful `quote_verbatim` (1.9.0), the well-formedness gate and serial-stage trace (1.10.0), and the   sealed conduct ledger and structured conduct-finding payloads (1.11.0). A validator that enforces the schema's version constant would refuse
+  the website's file. Verifier provenance appears only in the printed report; the proposed
+  `analysis_extensions` v0.1.0 is not emitted in production. The shared schema in the Android and firewall repositories has
+  not been changed here. That drift is open with the founder, and so is the schema's vocabulary: it
   requires `verification_status: "ENGINE-VERIFIED"`, band-word severity and confidence enums, and
   AI candidates inside `contradictions`, which the founder's 5 October 2026 rulings (no
   "verified"; no bands) would change in all three repositories together (`ENGINE.md` §12.16).

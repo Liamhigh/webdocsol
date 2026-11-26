@@ -52,7 +52,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**67 registered production/baseline suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, one Phase 4 active-graph suite, one PR #327 review suite, and one detection-credibility suite. `run-all.js` is that registry — **a production/baseline test file that is not listed in it does not run**. Separately gated development contracts are registered in `run-development.js`; `npm test` runs both registries. What each production/baseline suite guards, and the real evidence bundle behind it, is in
+**68 registered production/baseline suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, one Phase 4 active-graph suite, one PR #327 review suite, one detection-credibility suite and one verifier-adjudication suite. `run-all.js` is that registry — **a production/baseline test file that is not listed in it does not run**. Separately gated development contracts are registered in `run-development.js`; `npm test` runs both registries. What each production/baseline suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
 
 The five development suites are:
@@ -84,20 +84,20 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 13 | `digital-forensics` | `digital-forensics.test.mjs` | 16 | `voDigitalForensicsScan` (raw PDF structure) |
 | 14 | `ocr-rescue` | `ocr-rescue.test.mjs` | 44 | The page's OCR fallback, loader and deadline helper |
 | 15 | `rule-classify` | `rule-classify.test.mjs` | 9 | The deterministic classification fallback in `seal-document.html` |
-| 16 | `findings-json` | `findings-json.test.mjs` | 43 | `buildFindingsJson`, findings JSON contract 1.9.0 |
+| 16 | `findings-json` | `findings-json.test.mjs` | 54 | `buildFindingsJson`, Findings JSON v1.11.0, unchanged finding shape and legacy compatibility; verifier metadata is excluded from production exports |
 | 17 | `finding-anchors` | `finding-anchors.test.mjs` | 87 | WHO / WHERE / WHAT / WHEN anchoring per finding |
-| 18 | `wrangler-config` | `wrangler-config.test.mjs` | 34 | `wrangler.toml` drift lock |
-| 19 | `crop-normalize` | `crop-normalize.test.mjs` | 115 | CropBox normalisation, seal band, share ordering, certificate privacy, the voice-note path |
+| 18 | `wrangler-config` | `wrangler-config.test.mjs` | 39 | `wrangler.toml` drift lock, including the verifier usage Durable Object and migrations |
+| 19 | `crop-normalize` | `crop-normalize.test.mjs` | 185 | CropBox normalisation, seal band, share ordering, certificate privacy, the voice-note path |
 | 20 | `encrypt-detect` | `encrypt-detect.test.mjs` | 9 | `voPdfIsEncrypted` |
 | 21 | `constitution-lock` | `constitution-lock.test.mjs` | 41 | `constitution.json`, `constitution.html` and the pages that cite a version agree |
 | 22 | `ai-assess-batch` | `ai-assess-batch.test.mjs` | 19 | Client batching under the `/api/v1/ai/assess` caps; the review never removes or changes a finding, and a candidate is a duplicate only when it restates one |
 | 23 | `narrate-excerpt` | `narrate-excerpt.test.mjs` | 16 | `voBuildNarrateExcerpt` |
-| 24 | `human-report` | `human-report.test.mjs` | 81 | The court-ready narrative wiring: Worker, `forensic-report.js` and page agree |
+| 24 | `human-report` | `human-report.test.mjs` | 93 | The court-ready narrative wiring: Worker, `forensic-report.js` and page agree |
 | 25 | `site-serving` | `site-serving.test.mjs` | 61 | `worker/static-proxy.js` serving tiers, `.assetsignore`/deny-list parity including root and `development/nine-brain/` development modules, and `/api/v1/site/health` |
 | 26 | `pages-bridge` | `pages-bridge.test.mjs` | 18 | `functions/[[path]].js`, the www bridge; static fallback denies Markdown |
 | 27 | `zip-intake` | `zip-intake.test.mjs` | 25 | The page's ZIP reader for WhatsApp chat exports |
-| 28 | `rule-package` | `rule-package.test.mjs` | 129 | Signed rule packages on the website |
-| 29 | `inline-scripts` | `inline-scripts.test.mjs` | 25+ | The ten inline copies in `seal-document.html` are byte-identical to their sources |
+| 28 | `rule-package` | `rule-package.test.mjs` | 133 | Signed rule packages on the website |
+| 29 | `inline-scripts` | `inline-scripts.test.mjs` | 40 | The ten inline copies in `seal-document.html` are byte-identical to their sources |
 | 30 | `legal-analysis` | `legal-analysis.test.js` | 216 | `forensic-report.js`: parties and jurisdiction, legal subjects, **PD16 language** (no scores, no bands, no hedging), the §15.2 narrative gate, sentence splitting, page anchors, SEALED FINDINGS integrity |
 | 31 | `greensky-regression` | `greensky-regression.test.js` | 98 | The Greensky run of 7 August 2026, and its re-run of 3 October 2026 (§9; `ENGINE.md` §12.15) |
 | 32 | `allfuels-regression` | `allfuels-regression.test.js` | 59 | The AllFuels run of 14 August 2026 |
@@ -116,6 +116,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
 | 66 | `pr327-review` | `pr327-review.test.mjs` | 40 | Synthetic review regressions for report exclusion, signed-rule masking, WF7, CT52, D02C, admissions and overlapping scans |
 | 67 | `detection-credibility` | `detection-credibility.test.mjs` | 106 | Synthetic report exclusion, ledger furniture, contradiction, severity, coverage and narrative-privacy regressions |
+| 68 | `finding-verification` | `finding-verification.test.mjs` | 455 | Strict mocked verifier contract, exhaustive status mapping, page-bounded context, quota/retry safeguards, prompt injection, narrative isolation, report outcomes and retained G3 candidates |
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete production/baseline registry.
 

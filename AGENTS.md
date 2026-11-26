@@ -545,9 +545,10 @@ failure looks like).
 
 ## Quick facts
 - Static site + one Cloudflare Worker (`worker/verum-rules.js`, `static-proxy.js`, `site-assets.js`). No servers, no database, no build step; the site ships as the Worker's static assets. A Pages Function, `functions/[[path]].js`, runs only on the Pages project and has been dormant since 27 September.
-- Forensic engine: `forensic-engine-page.js` (CT01–CT61, 63 registered detector entries, `VO_ENGINE_VERSION 5.7.4-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.7.4-web`, report builder v1.3.1); findings JSON 1.11.0. Detector terminology: 46 numeric prefixes, 45 unsuffixed entries and 18 suffixed entries; 61 entries in the main run-list, D37 runs separately, and D10A is retained but inactive.
+- Forensic engine: `forensic-engine-page.js` (CT01–CT61, 63 registered detector entries, `VO_ENGINE_VERSION 5.7.4-web`); report generator: `forensic-report.js` (`ENGINE_VERSION 5.7.4-web`, report builder v1.3.1); production findings JSON remains 1.11.0 with verifier provenance confined to the printed report. The proposed `analysis_extensions` v0.1.0 is not emitted in production. Detector terminology: 46 numeric prefixes, 45 unsuffixed entries and 18 suffixed entries; 61 entries in the main run-list, D37 runs separately, and D10A is retained but inactive.
+- Adjudication: one deterministic engine plus two named advisory verifiers, DeepSeek and Mistral. Their verdicts can confirm, refute or abstain on existing engine output, but can never create, promote, remove or alter a finding or candidate; missing or failed providers are reported explicitly.
 - The ten existing forensic scripts are inlined into `seal-document.html` between `/* VO-INLINE:<file>:START/END */` markers. After editing one, re-splice its inline copy — `tests/inline-scripts.test.mjs` byte-compares them and fails on drift. Do NOT "de-duplicate" them into a shared module. The QPDF active-graph adapter is deliberately external and opt-in.
-- Tests: `node tests/run-all.js` — **67 registered suites** (55 audited baseline plus 2 Phase 0 suites, 4 Phase 1 evaluation suites, 2 Phase 2 citation suites, 1 Phase 3 redaction-fixture suite, 1 Phase 4 active-graph suite, 1 PR #327 review suite and 1 detection-credibility suite), **must be green before any push**. Ordinary CI also runs syntax checks and Chromium/Firefox/WebKit gates. Many exist solely to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
+- Tests: `node tests/run-all.js` — **68 registered suites** (55 audited baseline plus 2 Phase 0 suites, 4 Phase 1 evaluation suites, 2 Phase 2 citation suites, 1 Phase 3 redaction-fixture suite, 1 Phase 4 active-graph suite, 1 PR #327 review suite, 1 detection-credibility suite and 1 verifier-adjudication suite), **must be green before any push**. Ordinary CI also runs syntax checks and Chromium/Firefox/WebKit gates. Many exist solely to stop specific regressions; the per-suite counts and what each guards are in `ENGINE.md` §10.
 - Report language is constitutional (PD16): findings stated as fact and anchored — no scores, no confidence bands, no hedging; the verdict on any named person is for the court.
 - Deterministic: no `Date.now()` / `Math.random()` in analysis paths. (`setTimeout` for an OCR deadline is a deadline, not a clock reading — permitted and disclosed.)
 - **No regex lookbehind in new code.** Safari < 16.4 throws at parse time and the whole scan dies silently. See `ENGINE.md` §4.16.
@@ -808,11 +809,15 @@ and in `ENGINE.md` §12.12–§12.15.
    advice, fed to the loop) and raise candidates the engine missed. An engine finding the model
    thinks wrong is fixed by a detector guard with a regression test, never by the model's
    verdict. `ENGINE.md` §4.10, §12.16.
-17. **No "verified" (2026-10-05).** Prime Directive 13 asks for three independent verifiers;
-   the platform has one deterministic engine and at most one advisory model, so no report calls
-   a finding verified. The Triple Verification Summary is a Thesis / Antithesis / Synthesis table
-   that says so. (The findings JSON keeps the shared schema's `ENGINE-VERIFIED` until the
-   cross-repository schema changes; Open today.)
+17. **No "verified" (2026-10-05; adjudicating verifiers added later).** The configured
+   adjudication path is one deterministic engine plus DeepSeek and Mistral. Both model verifiers
+   are advisory only: they never create, promote, remove or alter findings or candidates, and
+   never substitute for engine evidence requirements or establish a legal conclusion. The §15.4
+   Triple Verification Summary remains the engine's Thesis / Antithesis / Synthesis table;
+   per-finding model outcomes and provider failures appear only in the appended Independent
+   Model Assessment section. No report calls a finding verified. Production Findings JSON stays
+   at 1.11.0; verifier provenance is in the printed report only. The proposed
+   `analysis_extensions` object v0.1.0 is not part of production exports.
 18. **Template first (2026-10-05, replaces ruling 5's order).** The report opens with the
    §15.4 sections 1–7 after the cover and contents; the plain-language pages follow as annexes;
    the "How any change is detected" page is gone (PD20: no manuals; section 7 states what the seal

@@ -31,7 +31,7 @@
 
 **Repository:** `Liamhigh/webdocsol`  
 **Sealing standard:** VO-DSS-1.2 ([`seal-module/SPEC.md`](./seal-module/SPEC.md)); QR payload `v: "1.2"`; sealed PDFs carry a `VO-SEAL2|…` Subject (Producer `Verum Omnis Document Sealing Service v1.3.0`); site package version 1.2.5 (`package.json`)  
-**Engine:** `VO_ENGINE_VERSION 5.7.4-web` (report `ENGINE_VERSION` the same; report builder v1.3.1) — CT01–CT61, 63 registered detector entries; findings JSON 1.11.0<br>
+**Engine:** `VO_ENGINE_VERSION 5.7.4-web` (report `ENGINE_VERSION` the same; report builder v1.3.1) — CT01–CT61, 63 registered detector entries; production Findings JSON 1.11.0 (verifier provenance is report-only; proposed `analysis_extensions` v0.1.0 is not emitted)<br>
 **Constitution:** v8.0 (governance charter, seal `VO-9A4F3C5E825C`); v6.1 (engine operating instrument, seal `VO-9E51D3F507E6`)  
 **Updated:** 2026-11-15 — current-source reconciliation on the audited Phase 0 baseline. Constitution v8.0 was sealed on 2026-08-05.<br>
 **Integrity model:** tamper-evident (SHA-512 + OpenTimestamps) — never "immutable". **Licence:** none in the repository (open with the founder).  
@@ -302,7 +302,7 @@ webdocsol/
 |   |-- static-proxy.js                # the site-serving chain (assets -> main branch on GitHub -> legacy Pages -> embedded images)
 |   |-- site-assets.js                 # embedded last-resort copies of the logo and watermark
 |   |-- rule-format.md, public-key.der.b64, seed-rules.json
-|-- tests/                             # 67 registered suites (55 audited baseline + 2 Phase 0 + 4 Phase 1 + 2 Phase 2 + 1 Phase 3 + 1 Phase 4 + 1 PR #327 review + 1 detection-credibility) — node tests/run-all.js
+|-- tests/                             # 68 registered suites (55 audited baseline + 2 Phase 0 + 4 Phase 1 + 2 Phase 2 + 1 Phase 3 + 1 Phase 4 + 1 PR #327 review + 1 detection-credibility + 1 verifier-adjudication) — node tests/run-all.js
 |   |-- run-all.js                     # the registry — an unregistered file does not run
 |   |-- README.md                      # the short guide to the suites
 |-- evaluation/                        # B9 development/CI metrics only; never imported by production/browser analysis
@@ -372,7 +372,7 @@ operating instrument remains v6.1 (seal `VO-9E51D3F507E6`). All implementations 
 ## Working on this repository
 
 ```
-node tests/run-all.js   # or npm test — 67 registered suites; every suite green
+node tests/run-all.js   # or npm test — 68 registered suites; every suite green
 npm run check          # node --check on the source scripts and workers
 ```
 

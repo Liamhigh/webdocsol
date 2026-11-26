@@ -46,7 +46,13 @@ const json = buildFindingsJson(result, 'bundle.pdf', 'a'.repeat(128), 100, { cas
 
 ok(buildFindingsJson(Object.assign({}, result, { referenceTime: '2026-10-02T20:11:36.233Z' }), 'bundle.pdf', 'a'.repeat(128), 100, {}).analysis_reference_utc === '2026-10-02T20:11:36.233Z' && json.analysis_reference_utc === null,
   'analysis_reference_utc records the instant the engine was given (null when none), so the dated-after note is reproducible');
-ok(json.findings_json_version === '1.11.0', 'contract version bumped to 1.11.0 (batch 7a: conduct_ledger sealed in-band + conduct_vs_pleading / benefit_burden / horns structured payloads; 1.10.0 wellformedness gate + serial_trace; 1.9.0 cross_document_observations w/ byte-faithful quote_verbatim; 1.8.0 candidate_law; 1.7.0 added brain, display_name, triple_verification, ai_review_note; candidates carry INSUFFICIENT, not a band; 1.6.0 added analysis_reference_utc; 1.5.0 ocr_held; 1.4.0 secondary_capped / ocr_anchored; 1.3.0 review_status / ocr_provenance / ocr_confidence / severity_capped_for_ocr)');
+ok(json.findings_json_version === '1.11.0', 'production Findings JSON remains v1.11.0');
+{
+  const legacy = JSON.parse(JSON.stringify(json));
+  ok(legacy.findings_json_version === '1.11.0' && !Object.hasOwn(legacy, 'verification') &&
+    legacy.contradictions.every((finding) => !Object.hasOwn(finding, 'verification')),
+    'v1.11.0 export retains its legacy top-level and per-finding shape without verifier fields');
+}
 
 // v1.9.0 (Sourcery #5, 10 October 2026): cross-document observations are exported
 // to the JSON, each carrying BOTH the display quote and the byte-faithful passage
@@ -89,7 +95,7 @@ ok(json.findings_json_version === '1.11.0', 'contract version bumped to 1.11.0 (
   const [a, c, d] = j7.contradictions;
   ok(a.brain === 'B6' && c.brain === 'B2' && d.brain === null, 'every engine record names its brain (B6 for a registration number, B2 for a custody record); a candidate names none');
   ok(a.display_name === 'Registration Number Format Invalid' && a.ct_name === 'Registration Number Fake' && c.display_name === 'Chain-of-Custody Steps Not Documented', 'the measured label travels beside the sealed taxonomy name');
-  ok(a.triple_verification && a.triple_verification.thesis.result === 'PASS' && a.triple_verification.status === 'ACCEPTED' && a.triple_verification.independent_verifiers === 1 && d.triple_verification === null, 'each engine record carries its Thesis / Antithesis / Synthesis legs and says one independent verifier made them');
+  ok(a.triple_verification && a.triple_verification.thesis.result === 'PASS' && a.triple_verification.status === 'ACCEPTED' && a.triple_verification.independent_verifiers === 1 && d.triple_verification === null, 'v1.11.0 retains the legacy independent_verifiers value and does not repurpose it for model confirmations');
   ok(a.ai_review_note === 'reference to a portal number' && c.ai_review_note === null && a.verification_status === 'ENGINE-VERIFIED', 'the AI\'s note rides beside the unchanged finding (the schema\'s enum value is unchanged)');
   ok(d.severity === 'INSUFFICIENT' && d.confidence === 'INSUFFICIENT' && d.detected_fact.confidence === 'INSUFFICIENT' && !/MODERATE|HIGH/.test(JSON.stringify(d)), 'an AI candidate carries no severity and no confidence band (PD1): the schema\'s INSUFFICIENT');
   ok(j7.engine_verified_count === 2 && j7.g3_candidate_count === 1, 'the candidate is never counted with the engine findings');
@@ -97,6 +103,40 @@ ok(json.findings_json_version === '1.11.0', 'contract version bumped to 1.11.0 (
   ok(Array.isArray(a.candidate_law) && a.candidate_law.length >= 1 && a.candidate_law[0].jurisdiction === 'ZA' && a.candidate_law[0].provisions.length >= 1 && a.legal_hypothesis === null && Array.isArray(d.candidate_law) && d.candidate_law.length === 0,
     'each engine record carries the report\'s candidate law by jurisdiction (legal_hypothesis stays null: no legal conclusion); a candidate carries none (' + JSON.stringify(a.candidate_law) + ')');
   ok(!/perj/i.test(JSON.stringify(c.candidate_law)), 'the custody-steps record carries no perjury candidate law, as in the report');
+
+  const verification = {
+    status: 'PARTIAL-CONFIRMATION-DEEPSEEK',
+    verifiers: [{
+      provider: 'deepseek', model: 'mock-model-returned-by-api', called_at: '2026-10-10T12:00:00.000Z',
+      verdict: 'CONFIRM', rationale: 'Synthetic bounded comparison.', raw_response_sha256: 'a'.repeat(64),
+      outcome: 'ok', error_detail: null, targets: ['pairing']
+    }]
+  };
+  const sourceFinding = { type: 'CT20', severity: 3, evidence: 'synthetic evidence', location: 'Page 54',
+    anchor: { who: [], where: [54], quote: ['synthetic evidence'] }, verification };
+  const verifiedJson = withWin({
+    findings: [sourceFinding],
+    verification: {
+      status: null, engine_findings: 1,
+      providers: [{ provider: 'deepseek', model: 'mock-model-returned-by-api', outcome: 'ok' }],
+      disputed_candidates: []
+    }
+  }, 'b.pdf', 'a'.repeat(128), 65, {});
+  const legacyEquivalent = withWin({ findings: [{ ...sourceFinding, verification: undefined }] }, 'b.pdf', 'a'.repeat(128), 65, {});
+  const verifiedRecord = verifiedJson.contradictions[0];
+  const legacyRecord = legacyEquivalent.contradictions[0];
+  const verifiedBase = JSON.parse(JSON.stringify(verifiedJson));
+  const legacyBase = JSON.parse(JSON.stringify(legacyEquivalent));
+  delete verifiedBase.generated_utc;
+  delete legacyBase.generated_utc;
+  ok(verifiedJson.findings_json_version === '1.11.0' && !Object.hasOwn(verifiedRecord, 'verification') &&
+    !Object.hasOwn(verifiedJson, 'verification') && !Object.hasOwn(verifiedJson, 'analysis_extensions') &&
+    verifiedRecord.triple_verification.independent_verifiers === 1,
+    'production v1.11.0 exports no verifier fields or analysis_extensions, even when verifier metadata is supplied');
+  ok(JSON.stringify(verifiedRecord) === JSON.stringify(legacyRecord),
+    'model adjudication leaves every existing v1.11.0 finding field byte-identical');
+  ok(JSON.stringify(verifiedBase) === JSON.stringify(legacyBase),
+    'the complete v1.11.0 export shape is byte-identical with and without verifier metadata');
 }
 
 // The page block must not redeclare the engine's voCtById(id): two same-named

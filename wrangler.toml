@@ -102,6 +102,14 @@ binding = "RULES_KV"
 # "verum-rules-kv" -- the namespace that actually exists in the account.
 id = "3e032b900b5344bd8785371cd1fd1810"
 
+[[durable_objects.bindings]]
+name = "VERIFIER_USAGE"
+class_name = "VerifierUsageLimiter"
+
+[[migrations]]
+tag = "verifier-usage-v1"
+new_sqlite_classes = ["VerifierUsageLimiter"]
+
 [ai]
 binding = "AI"
 
@@ -160,6 +168,14 @@ run_worker_first = ["/api/*"]
 [[env.production.kv_namespaces]]
 binding = "RULES_KV"
 id = "3e032b900b5344bd8785371cd1fd1810"
+
+[[env.production.durable_objects.bindings]]
+name = "VERIFIER_USAGE"
+class_name = "VerifierUsageLimiter"
+
+[[env.production.migrations]]
+tag = "verifier-usage-v1"
+new_sqlite_classes = ["VerifierUsageLimiter"]
 
 [env.production.ai]
 binding = "AI"

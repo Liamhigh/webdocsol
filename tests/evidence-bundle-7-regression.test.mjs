@@ -244,8 +244,8 @@ const run = async () => {
   ok(!/\bserious\b|\bminor\b|largely consistent|by severity|Score calibration|scoring weight|\/ 46\b|Contradiction types triggered|\bverified findings?\b|AI REVIEW NOT RUN/i.test(t), 'no severity word, score, ratio, calibration, "verified" count or AI-review cover warning anywhere in the report (PD1, §15.2)');
   ok(/contains 4 findings\. The following are established\./.test(t), 'the count is the Constitution\'s own §15.3 sentence, without "verified"');
   const tv = t.slice(at('4. TRIPLE VERIFICATION SUMMARY'), at('5. SEALED FINDINGS'));
-  ok(/Thesis/.test(tv) && /Antithesis/.test(tv) && /Synthesis/.test(tv) && /PASS — quoted text on p\. 1/.test(tv) && /ACCEPTED/.test(tv) && /requires three independent verifiers; this report does not have them/.test(tv) && !/RETAINED|NOT REVIEWED/.test(tv),
-    'the Triple Verification table is Thesis / Antithesis / Synthesis with reasons, says PD13\'s independence is not met, and carries no AI leg (' + tv.slice(0, 300) + ')');
+  ok(/Thesis/.test(tv) && /Antithesis/.test(tv) && /Synthesis/.test(tv) && /PASS — quoted text on p\. 1/.test(tv) && /ACCEPTED/.test(tv) && /internal checks, not three independent reviewers/.test(tv) && /appended Independent Model Assessment section/.test(tv) && !/RETAINED|NOT REVIEWED/.test(tv),
+    'the Triple Verification table keeps engine legs distinct from model outcomes, which use the additive section (' + tv.slice(0, 300) + ')');
   ok((tv.match(/ACCEPTED/g) || []).length === 4, 'every engine finding is in the table: none was removed by the AI (four rows)');
   const nb = t.slice(at('3. NINE-BRAIN EXTRACTION FINDINGS'), at('4. TRIPLE VERIFICATION SUMMARY'));
   ok(/B3 — Communications Brain FINDING RECORDED: - Type: Lookalike Email Domain \(CT37\)/.test(nb) && /B2 — Document Brain FINDING RECORDED: - Type: Chain-of-Custody Steps Not Documented \(CT39\)/.test(nb) && /B2 — Document Brain[^]*FINDING RECORDED: - Type: Unsigned Agreement Stated \(CT23\)/.test(nb) && /B6 — Financial Brain FINANCIAL IRREGULARITY FOUND: - Type: Registration Number Format Invalid \(CT20\)/.test(nb) && !/Not rendered under a brain/.test(nb),

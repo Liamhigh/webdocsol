@@ -60,6 +60,18 @@ ok(kv(topKv, 'binding') === 'RULES_KV', 'top-level KV binding is RULES_KV');
 ok(kv(envKv, 'binding') === kv(topKv, 'binding'), 'env.production KV binding matches top level');
 ok(kv(envKv, 'id') === kv(topKv, 'id'), 'env.production KV namespace id matches top level (no divergence)');
 
+const topVerifierUsage = section('durable_objects.bindings');
+const envVerifierUsage = section('env.production.durable_objects.bindings');
+ok(topVerifierUsage && envVerifierUsage, 'verifier usage limiter Durable Object is bound in both environments');
+ok(kv(topVerifierUsage, 'name') === 'VERIFIER_USAGE' &&
+  kv(topVerifierUsage, 'class_name') === 'VerifierUsageLimiter' &&
+  kv(envVerifierUsage, 'name') === kv(topVerifierUsage, 'name') &&
+  kv(envVerifierUsage, 'class_name') === kv(topVerifierUsage, 'class_name'),
+  'production and top-level deployments share the same verifier usage limiter binding');
+ok(/^\[\[migrations\]\]\s*\ntag\s*=\s*"verifier-usage-v1"\s*\nnew_sqlite_classes\s*=\s*\["VerifierUsageLimiter"\]/m.test(toml) &&
+  /^\[\[env\.production\.migrations\]\]\s*\ntag\s*=\s*"verifier-usage-v1"\s*\nnew_sqlite_classes\s*=\s*\["VerifierUsageLimiter"\]/m.test(toml),
+  'the verifier usage Durable Object has matching SQLite migrations for both environments');
+
 const topAi = section('ai');
 const envAi = section('env.production.ai');
 ok(topAi && envAi, 'both top-level and env.production AI sections exist');
