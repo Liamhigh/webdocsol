@@ -6615,6 +6615,7 @@ async function buildHumanReport(opts) {
         gate_failed: 'the narrator\'s draft did not pass the anchor and language gate on the server and was discarded',
         no_json: 'the narrator did not answer in the agreed format',
         empty: 'the narrator returned nothing',
+        model_error: 'the AI service answered with an error',
         time_budget: 'the five-minute limit for the whole narrative passed before this section',
         invalid_response: 'the AI service answered in an unexpected shape',
         not_generated: 'the narrator was not run for this section'
@@ -6906,6 +6907,8 @@ async function buildHumanReport(opts) {
       ? 'asked for ' + prov.sectionsAttempted + ' section' + (prov.sectionsAttempted === 1 ? '' : 's') + '; no draft passed the server\'s anchor and language gate, so nothing AI-written is printed'
       : 'not run'))) + '  |  contract ' + san(String(prov.contract || 'human-v1')) + '  |  temperature 0' + (prov.modelAttempts ? '  |  model drafts attempted: ' + prov.modelAttempts : ''),
     narratorContextLine,
+    Array.isArray(prov.diagnostics) && prov.diagnostics.length
+      ? 'Advisory narrator diagnostics (not findings): ' + san(prov.diagnostics.join('; ')) : null,
     'Sections written by the AI narrator and printed: ' + sectionsAi + ' of ' + sectionsAll + '  |  sentences removed by the server\'s anchor and language gate: ' + gateDroppedServer + '  |  by the render-time §15.2 gate: ' + gateDroppedClient + (draftsDiscarded ? '  |  drafts discarded before printing: ' + draftsDiscarded : '') + (gateOrphaned ? '  |  rebuttal sentences dropped with a removed claim: ' + gateOrphaned : ''),
     anchorTolerant ? voAnchorToleranceDisclosure(anchorTolerant, anchorTolerantPages) : null,
     'Engine: Forensic Contradiction Engine v' + ENGINE_VERSION + ' — deterministic mode',
@@ -7124,6 +7127,8 @@ async function buildForensicNarrative(opts) {
     (workerGateStatsAvailable ? 'The worker gates removed ' + workerDroppedSentences +
       (workerDroppedSentences === 1 ? ' sentence. ' : ' sentences. ') : '') +
       'Parts withheld by the render-time gates: ' + gateStats.droppedParts + '.',
+    Array.isArray(opts.diagnostics) && opts.diagnostics.length
+      ? 'Advisory narrator diagnostics (not findings): ' + san(opts.diagnostics.join('; ')) : '',
     anchorTolerant ? voAnchorToleranceDisclosure(anchorTolerant, anchorTolerantPages) : '',
     'Source document SHA-512: ' + truncHash(sourceDoc.sha512, 24, 12) + '; seal id: ' + String(sourceDoc.sealId || 'n/a') + '.',
     'Sealed technical report SHA-512: ' + truncHash(opts.technicalSha512, 24, 12) + '; seal id: ' + String(opts.technicalSealId || 'n/a') + '.',
@@ -22996,7 +23001,7 @@ function isAiReviewEnabled() {
 // is self-diagnosing instead of a silent "service unavailable".
 window._voLastAiError = null;
 
-async function aiApiPost(path, payload, timeoutMs) {
+async function aiApiPost(path, payload, timeoutMs, diagnostic) {
   var ctrl = new AbortController();
   var startedAt = Date.now();
   var status = null;
@@ -23032,6 +23037,10 @@ async function aiApiPost(path, payload, timeoutMs) {
     if (e && typeof e === 'object') e.voAiError = window._voLastAiError;
     throw e;
   } finally {
+    if (diagnostic) {
+      diagnostic.status = status;
+      diagnostic.elapsedMs = Date.now() - startedAt;
+    }
     clearTimeout(timer);
   }
 }
@@ -23051,6 +23060,38 @@ function voAiFailureReason(error) {
   var message = String((error && error.message) || '');
   if ((error && error.name === 'SyntaxError') || status === 404 || status === 405 || /JSON|Unexpected token|returned HTTP 404|returned HTTP 405/.test(message)) return 'no_api_at_this_address';
   return 'network';
+}
+
+function voNarrativeDiagnosticReason(reason) {
+  var known = ['ai_unavailable', 'no_json', 'invalid_response', 'empty', 'model_error', 'seal_required',
+    'timeout', 'time_budget', 'no_api_at_this_address', 'network', 'gate_failed', 'not_generated'];
+  return known.indexOf(reason) >= 0 ? reason : 'not_generated';
+}
+
+function voNarrativeDiagnostic(error) {
+  if (!error) return '';
+  var text = voNarrativeDiagnosticReason(error.error || error.reason);
+  if (Number.isInteger(error.status) && error.status >= 100 && error.status <= 599) text += ', HTTP ' + error.status;
+  if (Number.isFinite(error.elapsedMs) && error.elapsedMs >= 0) text += ', ' + Math.round(error.elapsedMs) + ' ms';
+  return text;
+}
+
+async function voWriterSectionPost(section, payload, diagnostic) {
+  var endpoint = '/api/v1/ai/human-report', reason = 'not_generated';
+  try {
+    var res = await aiApiPost(endpoint, payload, VO_HUMAN_CALL_TIMEOUT_MS, diagnostic);
+    reason = !res || typeof res !== 'object' || res.contract !== 'human-v1' ? 'invalid_response'
+      : (res.generated === true && res.machineGenerated === true && typeof res.text === 'string' && res.text.trim())
+        ? '' : voNarrativeDiagnosticReason(res.reason);
+    return res;
+  } catch (error) {
+    reason = voAiFailureReason(error);
+    throw error;
+  } finally {
+    diagnostic.reason = reason;
+    console.log('[VO-WRITER-SECTION]', { section: section, endpoint: endpoint, status: diagnostic.status == null ? null : diagnostic.status,
+      elapsedMs: diagnostic.elapsedMs == null ? null : diagnostic.elapsedMs, reason: reason });
+  }
 }
 
 // Gatekeep advisory: shows a non-blocking banner when the declared tier looks
@@ -24583,9 +24624,9 @@ async function aiNarrateReport(findings, score, verdict) {
   // but does not hang far past the point the server itself would have given up.
   window._voNarrateTemplate = false;
   window._voNarrateError = null;
-  var res;
+  var res, narrateDiagnostic = {};
   try {
-    res = await aiApiPost('/api/v1/ai/narrate', metadata, 38000);
+    res = await aiApiPost('/api/v1/ai/narrate', metadata, 38000, narrateDiagnostic);
   } catch (narrateTransportError) {
     var transport = narrateTransportError && narrateTransportError.voAiError ? narrateTransportError.voAiError : window._voLastAiError;
     var transportReason = voAiFailureReason(narrateTransportError);
@@ -24606,7 +24647,8 @@ async function aiNarrateReport(findings, score, verdict) {
   if (res && typeof res === 'object' && res.error) {
     window._voNarrateError = {
       error: String(res.error),
-      detail: String(res.detail || ('AI narrator call failed: ' + res.error))
+      detail: String(res.detail || ('AI narrator call failed: ' + res.error)),
+      endpoint: '/api/v1/ai/narrate', status: narrateDiagnostic.status, elapsedMs: narrateDiagnostic.elapsedMs
     };
   }
   console.log('[VO-AI-NARRATE] Received response:', {
@@ -24617,7 +24659,8 @@ async function aiNarrateReport(findings, score, verdict) {
   });
   if (!res || typeof res !== 'object') {
     console.warn('[VO-AI-NARRATE] Invalid response, returning null');
-    window._voNarrateError = { error: 'empty', detail: 'AI narrator call failed: the service returned no response object' };
+    window._voNarrateError = { error: 'empty', detail: 'AI narrator call failed: the service returned no response object',
+      endpoint: '/api/v1/ai/narrate', status: narrateDiagnostic.status, elapsedMs: narrateDiagnostic.elapsedMs };
     return null;
   }
 
@@ -24656,7 +24699,8 @@ async function aiNarrateReport(findings, score, verdict) {
     return (res.executiveSummary || '') + '\n\n' + res.criticalEvidence;
   }
 
-  if (!window._voNarrateError) window._voNarrateError = { error: 'empty', detail: 'AI narrator call failed: the service returned no narrative sections' };
+  if (!window._voNarrateError) window._voNarrateError = { error: 'empty', detail: 'AI narrator call failed: the service returned no narrative sections',
+    endpoint: '/api/v1/ai/narrate', status: narrateDiagnostic.status, elapsedMs: narrateDiagnostic.elapsedMs };
   return null;
 }
 
@@ -25115,8 +25159,10 @@ async function aiHumanReport(findings, ctxIn) {
     if (caseInfo.caseName || caseInfo.caseRefs || caseInfo.parties || caseInfo.jurisdiction) payload.caseContext = caseInfo;
     if (section === 'legal_framework') payload.lawVerified = lawVerified;
     calls++;
-    var res = await aiApiPost('/api/v1/ai/human-report', payload, VO_HUMAN_CALL_TIMEOUT_MS);
-    if (!res || typeof res !== 'object' || res.contract !== 'human-v1') return { provenance: 'none', reason: 'invalid_response' };
+    var diagnostic = {}, res;
+    try { res = await voWriterSectionPost(section, payload, diagnostic); }
+    catch (error) { if (error && typeof error === 'object') error.voWriterDiagnostic = diagnostic; throw error; }
+    if (!res || typeof res !== 'object' || res.contract !== 'human-v1') return { provenance: 'none', reason: 'invalid_response', diagnostic: diagnostic };
     // attempts are model drafts inside the endpoint call (the worker can run
     // one bounded repair/expansion pass); calls stay section requests.
     var resAttempts = Math.max(1, Math.min(2, parseInt(res.attempts, 10) || 1));
@@ -25130,7 +25176,7 @@ async function aiHumanReport(findings, ctxIn) {
         pageContradictions: Array.isArray(res.pageContradictions) ? res.pageContradictions.slice(0, 40).map(function (s) { return String(s || '').slice(0, 500); }).filter(Boolean) : [],
         attempts: resAttempts, discarded: resDiscarded, discardedDropped: resDiscardedDropped, repair: res.repair || null };
     }
-    return { provenance: 'none', reason: res.reason || 'not_generated', gate: res.gate || null, model: res.model || null,
+    return { provenance: 'none', reason: res.reason || 'not_generated', diagnostic: diagnostic, gate: res.gate || null, model: res.model || null,
       attempts: resAttempts, discarded: resDiscarded, discardedDropped: resDiscardedDropped, repair: res.repair || null };
   }
 
@@ -25155,7 +25201,7 @@ async function aiHumanReport(findings, ctxIn) {
         var r;
         // one failed batch never discards the batches already written
         try { r = await callSection(section, batch); }
-        catch (bErr) { console.warn('[VO-HUMAN] batch failed:', section, b, bErr && bErr.message ? bErr.message : bErr); r = { provenance: 'none', reason: failReason(bErr) }; }
+        catch (bErr) { console.warn('[VO-HUMAN] batch failed:', section, b, bErr && bErr.message ? bErr.message : bErr); r = { provenance: 'none', reason: failReason(bErr), diagnostic: bErr && bErr.voWriterDiagnostic }; }
         if (r.provenance === 'ai') {
           anyAi = true;
           texts.push(r.text);
@@ -25188,7 +25234,7 @@ async function aiHumanReport(findings, ctxIn) {
           merged.attempts += r.attempts || 0;
           merged.discarded += disc;
           merged.discardedDropped += (r.discardedDropped || 0) + (disc && !r.discardedDropped && r.gate ? (r.gate.dropped || 0) : 0);
-          if (!merged.reason || merged.reason === 'not_generated') merged.reason = r.reason;
+          if (!merged.reason || merged.reason === 'not_generated') { merged.reason = r.reason; merged.diagnostic = r.diagnostic; }
         }
       }
       if (anyAi) { merged.provenance = 'ai'; merged.text = texts.join('\n\n'); delete merged.reason; }
@@ -25205,7 +25251,7 @@ async function aiHumanReport(findings, ctxIn) {
       if (section === 'executive_summary' && one.provenance === 'ai') priorSummary = String(one.text).slice(0, 1500);
     } catch (secErr) {
       console.warn('[VO-HUMAN] section failed:', section, secErr && secErr.message ? secErr.message : secErr);
-      sections[section] = { provenance: 'none', reason: failReason(secErr) };
+      sections[section] = { provenance: 'none', reason: failReason(secErr), diagnostic: secErr && secErr.voWriterDiagnostic };
     }
   }
   return {
@@ -25294,8 +25340,9 @@ async function aiHumanForensicNarrative(findings, ctxIn, plan) {
     };
     if (caseInfo.caseName || caseInfo.caseRefs || caseInfo.parties || caseInfo.jurisdiction) payload.caseContext = caseInfo;
     calls++;
+    var diagnostic = {};
     try {
-      var res = await aiApiPost('/api/v1/ai/human-report', payload, VO_HUMAN_CALL_TIMEOUT_MS);
+      var res = await voWriterSectionPost('forensic_narrative:' + part.index, payload, diagnostic);
       if (res && res.contract === 'human-v1' && res.generated === true && res.machineGenerated === true &&
           typeof res.text === 'string' && res.text.trim()) {
         var accepted = Object.assign({}, part, {
@@ -25307,7 +25354,8 @@ async function aiHumanForensicNarrative(findings, ctxIn, plan) {
         if (!model) model = res.model || null;
       } else {
         output.push(Object.assign({}, part, {
-          provenance: 'none', reason: (res && res.reason) || 'not_generated',
+          provenance: 'none', reason: (!res || typeof res !== 'object' || res.contract !== 'human-v1') ? 'invalid_response' : (res.reason || 'not_generated'),
+          diagnostic: diagnostic,
           gate: (res && res.gate) || null
         }));
       }
@@ -25316,7 +25364,7 @@ async function aiHumanForensicNarrative(findings, ctxIn, plan) {
       var reason = e && e.name === 'AbortError' ? 'timeout'
         : ((e && e.name === 'SyntaxError') || /JSON|Unexpected token|returned HTTP 404|returned HTTP 405/.test(message))
           ? 'no_api_at_this_address' : 'network';
-      output.push(Object.assign({}, part, { provenance: 'none', reason: reason }));
+      output.push(Object.assign({}, part, { provenance: 'none', reason: reason, diagnostic: diagnostic }));
     }
   }
   return { parts: output, calls: calls, model: model };
@@ -25448,17 +25496,39 @@ function voNarrativePartReason(part) {
   }
   if (reason === 'timeout' || reason === 'no_api_at_this_address' || reason === 'network' || reason === 'time_budget') return reason;
   if (reason === 'render_gate') return 'render-time gate';
-  if (reason === 'ai_unavailable' || reason === 'no_json' || reason === 'invalid_response' || reason === 'empty' || reason === 'model_error' || reason === 'seal_required') return 'not_generated';
+  var descriptions = {
+    ai_unavailable: 'the AI service was unavailable',
+    no_json: 'the AI answer was not in the agreed format',
+    invalid_response: 'the AI service answered in an unexpected shape',
+    empty: 'the AI service returned no narrative',
+    model_error: 'the AI service answered with an error',
+    seal_required: 'the sealed technical report was unavailable'
+  };
+  if (descriptions[reason]) return reason + ' — ' + descriptions[reason];
   return reason === 'not_generated' ? reason : 'not_generated';
 }
 
-function voNarrativeIncompleteBanner(parts, totalParts, fallbackCount, error) {
+function voNarrativeDiagnosticLines(parts, narrateError) {
+  var lines = [];
+  (Array.isArray(parts) ? parts : []).forEach(function (part, index) {
+    if (part && part.reason && part.reason !== 'not_applicable') {
+      lines.push('part ' + (index + 1) + ': ' + voNarrativeDiagnostic(Object.assign({}, part.diagnostic || {}, { reason: part.reason })));
+    }
+  });
+  if (narrateError) lines.push('earlier narrate call: ' + voNarrativeDiagnostic(narrateError));
+  return lines;
+}
+
+function voNarrativeIncompleteBanner(parts, totalParts, fallbackCount, error, narrateError) {
   var list = Array.isArray(parts) ? parts : [];
   var reasons = [];
   for (var i = 0; i < list.length; i++) {
     var part = list[i] || {};
     var reason = voNarrativePartReason(part);
-    if (reason) reasons.push('part ' + (i + 1) + ': ' + reason);
+    if (reason) {
+      var detail = part.diagnostic ? voNarrativeDiagnostic(part.diagnostic) : '';
+      reasons.push('part ' + (i + 1) + ': ' + reason + (detail ? ' (' + detail + ')' : ''));
+    }
   }
   if (error) reasons.push(String(error.name || error.error || 'Error') + (error.stage ? ' during ' + error.stage : '') + ': ' + String(error.message || error.detail || 'narrative failed'));
   fallbackCount = Number(fallbackCount) || 0;
@@ -25474,6 +25544,7 @@ function voNarrativeIncompleteBanner(parts, totalParts, fallbackCount, error) {
     reasons.push(unclassified + ' part' + (unclassified === 1 ? '' : 's') +
       ' replaced by the render-time gate after worker acceptance');
   }
+  if (narrateError) reasons.push('Advisory — earlier narrate call: ' + voNarrativeDiagnostic(narrateError));
   return { headline: headline, reasons: reasons };
 }
 
@@ -27100,7 +27171,8 @@ async function runSealingPipeline() {
               technicalSealId: reportPack.sealId, technicalSha512: reportPack.sha512,
               findingsJsonSha512: fjSha, findingsJsonVersion: runPacks.findingsJson ? runPacks.findingsJson.findings_json_version : null,
               sectionsGenerated: hr.generated, sectionsWriter: hr.writerSections, sectionsAttempted: hr.calls, modelAttempts: hr.modelAttempts || 0,
-              recordContext: hr.recordContext || null
+              recordContext: hr.recordContext || null,
+              diagnostics: voNarrativeDiagnosticLines(runPacks.humanNarrativeParts, window._voNarrateError)
             }
           });
           var hSha512 = await computeSHA512(hBytes);
@@ -27175,6 +27247,7 @@ async function runSealingPipeline() {
               findingsJsonSha512: forensicFindingsJsonSha512,
               model: forensicDraft.model,
               gateStats: forensicDraft.parts.map(function (part) { return part && part.gate ? part.gate : null; }),
+              diagnostics: voNarrativeDiagnosticLines(forensicDraft.parts, window._voNarrateError),
               identity: {
                 reference: 'VO-NARRATIVE-' + sealId,
                 caseName: runPacks.forensicNarrativeInput.caseContext.caseName || undefined,
@@ -27794,7 +27867,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   var oldHumanNarrativeNote = document.getElementById('humanNarrativeNote');
   if (oldHumanNarrativeNote) oldHumanNarrativeNote.remove();
   var humanIncomplete = voNarrativeIncompleteBanner(runPacks.humanNarrativeParts,
-    runPacks.humanNarrativeTotal, runPacks.humanNarrativeFallbacks, runPacks.humanNarrativeError);
+    runPacks.humanNarrativeTotal, runPacks.humanNarrativeFallbacks, runPacks.humanNarrativeError, window._voNarrateError);
   if (humanIncomplete) {
     var humanNote = document.createElement('div');
     humanNote.id = 'humanNarrativeNote';
@@ -27816,7 +27889,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
   var standaloneIncomplete = voNarrativeIncompleteBanner(runPacks.forensicNarrativeParts,
     runPacks.forensicNarrativePack ? runPacks.forensicNarrativePack.totalParts : (runPacks.forensicNarrativeParts || []).length,
     runPacks.forensicNarrativePack ? runPacks.forensicNarrativePack.deterministicParts : 0,
-    standaloneError);
+    standaloneError, window._voNarrateError);
   if (runPacks.forensicNarrativeStatus) {
     var fnNote = document.createElement('div');
     fnNote.id = 'forensicNarrativeNote';

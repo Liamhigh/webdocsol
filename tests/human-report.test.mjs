@@ -106,7 +106,8 @@ ok(/For privileged or sensitive matters choose <strong[^>]*>Seal document<\/stro
 ok(!/maximum 4,000 characters from the document's first pages, sent for classification\) leave this device/.test(html),
   'the stale "4,000 characters" disclosure was rewritten');
 ok(/async function aiHumanReport\(/.test(html), 'aiHumanReport orchestrator is present');
-ok(/aiApiPost\('\/api\/v1\/ai\/human-report'/.test(html), 'the page posts to the human-report endpoint (same-origin, relative)');
+ok(/endpoint = '\/api\/v1\/ai\/human-report'/.test(html) && /aiApiPost\(endpoint, payload, VO_HUMAN_CALL_TIMEOUT_MS, diagnostic\)/.test(html),
+  'the page posts to the human-report endpoint (same-origin, relative)');
 ok(/res\.machineGenerated === true/.test(html), 'the page accepts a section only when the worker marks it machine-generated');
 ok(/VerumReport\.buildHumanReport\(/.test(html), 'the seal flow calls buildHumanReport');
 ok(/window\._voHumanReportPack = null/.test(html), 'the human-report pack is reset');

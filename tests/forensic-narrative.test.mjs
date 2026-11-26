@@ -208,13 +208,18 @@ const deterministicBuild = await globalThis.VerumReport.buildForensicNarrative({
   images: { logo: new Uint8Array([1]) },
   documents: [{ name: 'record.pdf', pageCount: 3, sha512: 'd'.repeat(128), sealId: 'VO-SOURCE' }],
   narrativeParts: fallbackParts,
-  gateStats: [{ kept: 1, dropped: 8 }]
+  gateStats: [{ kept: 1, dropped: 8 }],
+  diagnostics: ['part 1: model_error, HTTP 200, 42 ms', 'earlier narrate call: timeout, 31 ms']
 });
 const deterministicText = drawnText.join(' ').replace(/\s+/g, ' ');
 ok(deterministicBuild.bytes instanceof Uint8Array && deterministicBuild.gateStats.deterministicParts === 1 &&
   deterministicText.includes('Prepared by Verum Omnis — deterministic forensic chronology over the sealed record') &&
   deterministicText.includes('no AI-generated prose is printed'),
   'the Greensky failure shape now renders a standalone PDF with honest deterministic provenance');
+ok(deterministicText.includes('Advisory narrator diagnostics (not findings):') &&
+  deterministicText.includes('part 1: model_error, HTTP 200, 42 ms') &&
+  deterministicText.includes('earlier narrate call: timeout, 31 ms'),
+  'the sealed narrative provenance renders advisory failure causes and timing');
 const caseReferenceStart = drawnText.length;
 await globalThis.VerumReport.buildForensicNarrative({
   images: { logo: new Uint8Array([1]) },

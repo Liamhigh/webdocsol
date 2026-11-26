@@ -129,7 +129,8 @@ ok(!/VO_HUMAN_LIGHT_SECTIONS[\s\S]*critical_evidence: 1/.test(html), 'critical e
 {
   const context = { console };
   vm.createContext(context);
-  vm.runInContext(slice('function voNarrativePartReason(', '// B7 triple legal verification') + '\nthis.banner = voNarrativeIncompleteBanner;', context);
+  vm.runInContext(slice('function voNarrativeDiagnosticReason(', 'async function voWriterSectionPost(') +
+    slice('function voNarrativePartReason(', '// B7 triple legal verification') + '\nthis.banner = voNarrativeIncompleteBanner; this.lines = voNarrativeDiagnosticLines;', context);
   const banner = context.banner([
     { provenance: 'ai', text: 'compliant' },
     { provenance: 'none', reason: 'timeout' },
@@ -151,6 +152,36 @@ ok(!/VO_HUMAN_LIGHT_SECTIONS[\s\S]*critical_evidence: 1/.test(html), 'critical e
   const hard = context.banner(null, 0, 0, { name: 'TypeError', message: 'render failed', stage: 'rendering' });
   ok(hard.headline === 'AI narrative incomplete. Reasons:' && /TypeError during rendering: render failed/.test(hard.reasons.join(';')),
     'hard failure retains its class without inventing a section count');
+  for (const reason of ['ai_unavailable', 'no_json', 'invalid_response', 'empty', 'model_error', 'seal_required']) {
+    const specific = context.banner([{ provenance: 'none', reason, diagnostic: { reason, status: 200, elapsedMs: 42 } }], 1, 1, null,
+      { error: 'model_error', status: 503, elapsedMs: 31, detail: 'private detail' });
+    const text = specific.reasons.join('; ');
+    ok(text.includes(reason + ' — ') && text.includes('HTTP 200') && text.includes('42 ms') &&
+       text.includes('earlier narrate call: model_error, HTTP 503, 31 ms') && !text.includes('private detail'),
+      reason + ' remains distinct with safe status and timing');
+  }
+  ok(context.lines([{ reason: 'model_error', diagnostic: { status: 200, elapsedMs: 42 } }],
+    { error: 'timeout', status: null, elapsedMs: 31 }).join('; ') ===
+    'part 1: model_error, HTTP 200, 42 ms; earlier narrate call: timeout, 31 ms',
+    'provenance receives bounded section and earlier-call diagnostics');
+}
+
+// Each actual writer request logs only fixed metadata, including HTTP 200 model errors.
+{
+  const logs = [];
+  const context = { console: { log: (...args) => logs.push(args) }, Date, setTimeout, clearTimeout, AbortController,
+    window: {}, VO_HUMAN_CALL_TIMEOUT_MS: 100,
+    fetch: async () => ({ ok: true, status: 200, json: async () =>
+      ({ contract: 'human-v1', generated: false, reason: 'model_error', detail: 'private response text' }) }) };
+  vm.createContext(context);
+  vm.runInContext(slice('async function aiApiPost(', '// Gatekeep advisory:') + '\nthis.write = voWriterSectionPost;', context);
+  const diagnostic = {};
+  const result = await context.write('executive_summary', { excerpt: 'private input text' }, diagnostic);
+  ok(result.reason === 'model_error' && diagnostic.status === 200 && diagnostic.elapsedMs >= 0 &&
+    logs.length === 1 && logs[0][1].section === 'executive_summary' &&
+    logs[0][1].endpoint === '/api/v1/ai/human-report' && logs[0][1].reason === 'model_error' &&
+    !JSON.stringify(logs).includes('private'),
+    'a failed model response logs one metadata-only line with HTTP status and elapsed time');
 }
 
 {
