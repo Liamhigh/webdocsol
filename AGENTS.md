@@ -529,13 +529,16 @@ tamper-evident, never permanent, immutable or unalterable, and "anchored to the 
 blockchain" is written only once the OpenTimestamps proof is confirmed, and then only to say the
 file existed no later than that block (`anchorPhrase`); D16 is never revived by restoring
 newlines; the optional Case details "Parties" field never becomes a required input.
-Secondary-report exclusion is classification, not authentication: a plaintext seal ID or
-page total, a footer, or a letter-spaced report phrase alone never proves a page is a report
-or a seal is genuine. Exclude only pages with independent report-analysis content signals,
-including prior analysis output from this platform or another tool, including reports written
-against Verum Omnis frameworks; such analysis is never evidence. Retain an
-extraction-note disclosure whenever pages are excluded, with one disclosure for each affected page. Never claim that a
-document authenticates its own seal. Read the bible for the area before changing it:
+Secondary-report exclusion is classification, not authentication: platform output — report
+pages, seal footers, and manifest blocks — is never evidence, and every exclusion is disclosed.
+A plaintext seal ID or page total, footer, letter-spaced report phrase, report masthead or
+reference, cover claim, seal ID, or page-total cue alone never proves that a page is prior
+analysis or that a seal is genuine. Exclude only pages with independent report-analysis content
+signals; metadata cues corroborate an independently established report but never establish it.
+This includes prior analysis output from this platform or another tool, including reports
+written against Verum Omnis frameworks; such analysis is never evidence. Retain an
+extraction-note disclosure for each affected page. Never claim that a document authenticates
+its own seal. Read the bible for the area before changing it:
 `ENGINE.md` (engine and reports), `DEPLOYMENT.md`
 (shipping and serving), `REFERENCE.md` (every file and endpoint), `FORENSIC-DEBUG.md` (what a
 failure looks like).

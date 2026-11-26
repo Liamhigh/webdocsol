@@ -105,8 +105,8 @@ t.ok(/no analytical report page was recognised or excluded/.test(wf7Evidence.not
   const prior = await PDFLib.PDFDocument.create();
   const font = await prior.embedFont(PDFLib.StandardFonts.Helvetica);
   const reportPages = [
-    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-PRIOR-REPORT', 'The reviewer analyses the source record and records conclusions.'],
-    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-PRIOR-REPORT', 'The reviewer continues the analysis and certification of the source record.']
+    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-PRIOR-REPORT', 'Executive Summary: The reviewer analyses the source record and records conclusions. Page 1 of 2.'],
+    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-PRIOR-REPORT', 'The reviewer continues the analysis and certification of the source record. Page 2 of 2.']
   ];
   for (const lines of reportPages) {
     const page = prior.addPage([612, 792]);

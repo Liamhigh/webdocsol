@@ -53,11 +53,13 @@ ok(readme.includes('website + Android `1verum`') && readme.includes('Android ref
 ok(readme.includes('`seal-module/web/` is NOT the live site') && readme.includes('Edit the root files.'), 'README distinguishes root production sources from obsolete snapshots');
 
 const agents = read('AGENTS.md');
+const normalizedAgents = agents.replace(/\s+/g, ' ');
 ok(agents.includes('46 numeric prefixes, 45 unsuffixed entries and 18 suffixed entries') && agents.includes('61 entries in the main run-list'), 'AGENTS Quick facts uses precise detector terminology');
 ok(agents.includes('**67 registered suites**'), 'AGENTS Quick facts names the current registered suite count');
-ok(agents.includes('Secondary-report exclusion is classification, not authentication:') &&
-   agents.includes('independent report-analysis content signals') &&
-   agents.includes('extraction-note disclosure whenever pages are excluded'),
+ok(normalizedAgents.includes('Secondary-report exclusion is classification, not authentication:') &&
+   normalizedAgents.includes('platform output — report pages, seal footers, and manifest blocks — is never evidence') &&
+   normalizedAgents.includes('metadata cues corroborate an independently established report but never establish it') &&
+   normalizedAgents.includes('Retain an extraction-note disclosure for each affected page'),
   'AGENTS preserves the report-exclusion and disclosure invariant');
 
 const architecture = read('ARCHITECTURE.md');

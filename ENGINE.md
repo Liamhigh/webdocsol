@@ -59,12 +59,12 @@ PDF bytes + pdf-lib PDFDocument (+ opts.referenceTime from the seal page)
   ├─ extractPageText()               text per page: pdf-lib content-stream decoding with ToUnicode CMaps
   ├─ window.voOcrRescuePages()       seal-page hook: on-device OCR (pdf.js render + tesseract.js) for image-only pages
   │                                  (whole-document raw scan, extractPdfText, if per-page text fails)
+  ├─ voCacheDocSegs()                source document boundaries read before any page is replaced by a placeholder
   ├─ voExcludeTemplatePages()        pages carrying the Verum Omnis analysis-template masthead, excluded in place
   ├─ voExcludeSecondaryReportPages() a prior Verum Omnis report bound into the bundle, excluded in place
   ├─ voNoteAiCompiledSummary()       an AI-compiled summary is scanned but disclosed as secondary
   ├─ voExcludeFooterOnlyPages()      pages whose only text is a seal footer
-  ├─ voCacheDocSegs()                document boundaries (voDetectDocuments, §8) read before the furniture goes
-  ├─ voStripSealFurnitureBlocks()    this platform's own seal footers removed before detection
+  ├─ voStripSealFurnitureBlocks()    this platform's own seal footers and manifest blocks removed before detection
   ├─ voSecondaryPages()              pages of extracts, commentaries and a party's submission about other sealed records
   ├─ voMarkdownAnalysisPages()       pages carrying chat-style markdown (bold runs, ## headings): a rendered AI or chat analysis (§12.15)
   ├─ citations module (flagged)      only when opts.modules.citations is true: the neutral occurrence core
@@ -728,6 +728,11 @@ result: `engineVersion`, `rulePackage`, `clean`, `unreadable`, `overallScore` /
 `findingsByType`, `findingsByCategory`, `contradictionTypesUsed`, `serialPatternsDetected`,
 `extractionNotes`, `contextNotes`, `referenceTime` (null when none; recorded in findings JSON
 v1.6.0 as `analysis_reference_utc`), `ocrPages`, `ocrConfidence`, `footerOnlyPages`, `summary`.
+
+`voApplyFindingClasses(findings, blocks)` requires the source page blocks to verify that two
+distinct statements support a `CONTRADICTION` classification. The second argument is required
+for that classification; a legacy one-argument call intentionally demotes candidate contradictions
+to `TENSION` rather than restoring the former unguarded behavior.
 
 `voDetectDocuments(textBlocks)` recovers document boundaries inside a consolidated bundle from
 each document's own numbering: `Page N of M` markers and this platform's own seal footers
@@ -1674,15 +1679,20 @@ sealed four days after §12.12 shipped, so everything there held; what follows i
    Africa/Johannesburg"); OCR read the stamp as "0/09/2026" on 25 scanned pages and D03
    sealed each as an impossible date, while the timeline pinned other findings to the seal
    date. `voStripSealFurniture` now removes the platform's own footers from every block (text
-   layer and OCR, the `[OCR]` prefix kept) before any detector runs — AFTER the document
-   boundaries have been read from those footers (`voCacheDocSegs`, returned from a cache for
-   the same array) and after footer-only pages are recognised. Backstops for a mangled footer:
+   layer and OCR, the `[OCR]` prefix kept) before any detector runs. Document boundaries are
+   cached from the source text before report/template placeholders or furniture are removed.
+   Backstops for a mangled footer:
    the brand line as OCR renders it (E as 3, I as 1 or l) is stripped through to the page
    marker; a date followed by a clock time is a stamp only in the company of the footer's other
    words (hash, seal id, zone name, page marker — `voIsStampContext`), so a bank line, an email
    header or a till slip keeps its own timestamp and D03/D04 still read it; and a date with a
    zero day or month ("0/09/2026") is a digit OCR lost, never an impossible date — not a claim
    of the record.
+   The same bounded removal recognises platform-output evidence manifests by the combined
+   "EVIDENCE MANIFEST & CHAIN OF CUSTODY", "Primary Artifact" and "Artifact SHA-512" labels.
+   It leaves adjacent party-authored custody statements intact, names every affected page in
+   the extraction note, and runs before `voExtractConductLedger`, so platform furniture cannot
+   enter a ledger snippet.
 2. **Nine registration numbers were OCR readings of three clean ones** ("20121226353/07" for
    2012/226353/07, "1811100115407" for 1911/001154/07, "200205930923" for 2002/059909/23),
    plus "ID/Registration number of complainant 510209 5091087" — a person's identity number

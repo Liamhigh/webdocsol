@@ -178,6 +178,16 @@ ok(r0.proposition_b_actor === 'unattributed', 'unlocated second party is unattri
     'Example Holdings says paid, but the ledger states payment was not made.'
   ], findings: [f('Example Holdings', 'payment was not made', 1)] }, 'synthetic.pdf', 'a'.repeat(128), 1, {}).contradictions[0];
   ok(separateSpeaker.proposition_a_actor === 'unattributed', 'a speaker in another clause is not attributed to an anchored quote');
+  const coordinatedSpeaker = buildFindingsJson({ pageTexts: [
+    'Example Holdings stated "payment made" and the agreement provides "payment not made".'
+  ], findings: [f('Example Holdings', 'payment not made', 1)] }, 'synthetic.pdf', 'a'.repeat(128), 1, {}).contradictions[0];
+  ok(coordinatedSpeaker.proposition_a_actor === 'unattributed',
+    'the agreement quote in a coordinated and-clause is not attributed to the speaker in the prior clause');
+  const sameClauseSpeaker = buildFindingsJson({ pageTexts: [
+    'Example Holdings said "payment not made".'
+  ], findings: [f('Example Holdings', 'payment not made', 1)] }, 'synthetic.pdf', 'a'.repeat(128), 1, {}).contradictions[0];
+  ok(sameClauseSpeaker.proposition_a_actor === 'Example Holdings',
+    'a named speaker cue in the quote\'s own clause remains attributable');
 }
 ok(r0.temporal_analysis === '7 Mar 2025, 13 Mar 2025', 'anchor dates flow into temporal_analysis');
 ok(Array.isArray(r0.document_cited_provisions) && r0.document_cited_provisions[0] === 'clause 4.5.2',

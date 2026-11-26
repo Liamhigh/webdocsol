@@ -49,7 +49,22 @@ const conclusionPage = [
 const partyClaim = 'This affidavit records the chain of custody of the exhibit. Item received by the clerk.';
 const footer = 'VERUM OMNIS SHA-512 (partial): 0123456789abcdef01234567 Sealed Evidence Source: example.pdf';
 const record = 'Invoice dated 12 March 2025: rental payment received R100.00.';
-
+const manifest = '2. EVIDENCE MANIFEST & CHAIN OF CUSTODY · Primary Artifact: example.pdf · Artifact SHA-512 (Partial): abcdef0123456789abcdef0123456789';
+const manifestPage = partyClaim + ' ' + manifest + ' The clerk recorded custody in the affidavit.';
+const manifestBlocks = [manifestPage];
+const manifestAffectedPages = [];
+const manifestChanged = E.voStripSealFurnitureBlocks(manifestBlocks, manifestAffectedPages);
+check(manifestChanged === 1 && !/EVIDENCE MANIFEST|Primary Artifact|Artifact SHA-512/i.test(manifestBlocks[0]) &&
+  /This affidavit records the chain of custody/.test(manifestBlocks[0]) &&
+  /The clerk recorded custody/.test(manifestBlocks[0]) &&
+  JSON.stringify(manifestAffectedPages) === '[1]',
+  'platform manifest furniture is stripped without removing adjacent party-authored custody statements');
+const manifestLedgerBlocks = [record + ' ' + footer + ' ' + manifest];
+E.voStripSealFurnitureBlocks(manifestLedgerBlocks);
+const manifestLedger = E.voExtractConductLedger(manifestLedgerBlocks);
+check(manifestLedger.events.length === 1 && /rental payment received R100\.00/.test(manifestLedger.events[0].snippet) &&
+  !/SHA-512|Sealed Evidence Source|EVIDENCE MANIFEST|Primary Artifact|Artifact SHA-512/i.test(manifestLedger.events[0].snippet),
+  'conduct-ledger snippets omit stripped footer and manifest furniture');
 const twoPages = [evidence, report.join(' '), ledgerPage.join(' '), partyClaim];
 check(E.DETECTORS.D01C_DETECT_DENIAL_ADMISSION_PAIR([report.join(' ')]).length > 0,
   'the synthetic prior-analysis page would produce a finding if scanned');
@@ -58,14 +73,71 @@ check(JSON.stringify(twoExcluded && twoExcluded.pages) === '[2,3]', 'exactly the
 const singleReport = [report.join(' ')];
 const singleExcluded = E.voExcludeSecondaryReportPages(singleReport);
 check(JSON.stringify(singleExcluded && singleExcluded.pages) === '[1]', 'a single-page prior analysis is excluded and disclosed');
+const primaryReference = 'Letter: There were no sales. The deal happened. Report Reference: VO-TEST-1.';
+check(E.voIsSecondaryReportPage(primaryReference) === false &&
+  E.voExcludeSecondaryReportPages([primaryReference]) === null &&
+  E.DETECTORS.D01C_DETECT_DENIAL_ADMISSION_PAIR([primaryReference]).length > 0,
+  'a one-page primary letter with only a report reference remains scannable evidence');
+const primaryMasthead = 'Letter: There were no sales. The deal happened. VERUM OMNIS FORENSIC REPORT.';
+check(E.voIsSecondaryReportPage(primaryMasthead) === false &&
+  E.voExcludeSecondaryReportPages([primaryMasthead]) === null &&
+  E.DETECTORS.D01C_DETECT_DENIAL_ADMISSION_PAIR([primaryMasthead]).length > 0,
+  'a one-page primary letter is not excluded by a report masthead alone');
+const unauthenticatedPlatformCues =
+  'VERUM OMNIS FORENSIC REPORT. Report Reference: VO-TEST. Prepared by Verum Omnis. ' +
+  'Cover claim: report generated under Constitution. Seal: VO-0123456789AB. Page 1 of 1.';
+check(E.voExcludeSecondaryReportPages([unauthenticatedPlatformCues]) === null,
+  'platform branding, report reference, cover claim, seal ID and page total without analysis content do not exclude evidence');
+const runningTitleOnly = 'Part B — Large sealed bundles … Verum Omnis — CCT 19/20 Google Drive Index • Page 4 of 9';
+check(!E.voIsVerumAnalysisPage(runningTitleOnly) &&
+  E.voIsVerumAnalysisPage(runningTitleOnly + ' Executive Summary: This report analyzes the evidence and identifies a conflict.'),
+  'a Verum Omnis running title corroborates but cannot replace independent analysis content');
+const platformAnalysis = [
+  'VERUM OMNIS FORENSIC REPORT. Prepared by Verum Omnis. Executive Summary: This report analyzes the record and identifies a conflict.'
+];
+const platformAnalysisResult = E.voExcludeSecondaryReportPages(platformAnalysis);
+check(platformAnalysisResult && /prior verum omnis report page excluded\./i.test(platformAnalysis[0]) &&
+  /Prior analysis excluded: page 1\./.test(platformAnalysisResult.note),
+  'independently signalled platform-authored analysis uses the platform placeholder and is disclosed');
+const unauthoredAnalysis = [
+  'VERUM OMNIS FORENSIC REPORT. Prepared by Liam Highcock; read with the Verum Omnis report. Executive Summary: This report analyzes the evidence and identifies a conflict.'
+];
+const unauthoredAnalysisResult = E.voExcludeSecondaryReportPages(unauthoredAnalysis);
+check(unauthoredAnalysisResult && /prior analysis page excluded\./i.test(unauthoredAnalysis[0]) &&
+  /Prior analysis report:/.test(unauthoredAnalysisResult.note) &&
+  !/prior verum omnis report page excluded\./i.test(unauthoredAnalysis[0]),
+  'a third-party preparer who merely references Verum Omnis receives the generic placeholder and neutral disclosure');
+const standaloneAnalysisText =
+  'Analysis. Findings: report finds fraud. '.repeat(30);
+const standaloneAnalysis = [standaloneAnalysisText];
+const standaloneAnalysisScan = await scan([[standaloneAnalysisText]]);
+const standaloneAnalysisResult = E.voExcludeSecondaryReportPages(standaloneAnalysis);
+check(JSON.stringify(standaloneAnalysisResult && standaloneAnalysisResult.pages) === '[1]' &&
+  /Prior analysis excluded: page 1\./.test(standaloneAnalysisResult.note) &&
+  E.voSecondaryPages([], standaloneAnalysis).includes(1) &&
+  /Prior analysis excluded: page 1\./.test(standaloneAnalysisScan.extractionNotes) &&
+  !standaloneAnalysisScan.wellFormedness.checks.find(c => c.id === 'WF3').pass,
+  'a one-page framework analysis without a masthead is excluded and disclosed');
+const thirdPartyRun = [
+  'Independent Review. Executive Summary: this assessment compares the payment statements and finds a conflict. Page 1 of 3.',
+  'Page 2 of 3. Payment was made.',
+  'Page 3 of 3. No further comment.'
+];
+const thirdPartyRunResult = E.voExcludeSecondaryReportPages(thirdPartyRun);
+check(JSON.stringify(thirdPartyRunResult && thirdPartyRunResult.pages) === '[1,2,3]' &&
+  thirdPartyRun.every(page => /prior analysis page excluded\./i.test(page)) &&
+  [1, 2, 3].every(page => new RegExp('Prior analysis excluded: page ' + page + '\\.').test(thirdPartyRunResult.note)),
+  'analysis continuations without independent page signals are excluded and disclosed as one run');
 const quotedTemplateReport = [report.join(' ') + ' Every forensic report generated under this Constitution must follow this template.'];
 check(E.voExcludeSecondaryReportPages(quotedTemplateReport)?.pages[0] === 1,
   'an independently identified analysis stays excluded when it quotes the report template');
 const legacyMasthead = ['VERUM OMNIS FORENSIC REPORT. Report Reference: VO-TEST. Prepared by an independent tool.'];
 const legacyExclusion = E.voExcludeSecondaryReportPages(legacyMasthead);
-check(legacyExclusion && /Prior analysis report:/.test(legacyExclusion.note) && !/Prior Verum Omnis report:/.test(legacyExclusion.note),
-  'an unauthenticated report masthead does not attribute analysis to the platform');
+check(E.voIsSecondaryReportPage(legacyMasthead[0]) === false && legacyExclusion === null,
+  'an unauthenticated report masthead and reference alone do not classify a page as analysis');
 check(twoPages[0] === evidence && twoPages[3] === partyClaim, 'preceding and subsequent record pages remain unchanged');
+check(/prior analysis page excluded\./i.test(twoPages[1]) && /Prior analysis report:/.test(twoExcluded.note),
+  'independently signalled third-party analysis uses the generic placeholder and neutral disclosure');
 const fourPages = [evidence, report.join(' '), ledgerPage.join(' '), brainsPage.join(' '), conclusionPage.join(' '), partyClaim];
 const fourExcluded = E.voExcludeSecondaryReportPages(fourPages);
 check(JSON.stringify(fourExcluded && fourExcluded.pages) === '[2,3,4,5]', 'four differently signalled report pages are excluded, not adjacent evidence');
@@ -82,11 +154,25 @@ const genericAnalysis = [report.join(' '), 'The parties refer to VO-0123456789AB
 E.voExcludeSecondaryReportPages(genericAnalysis);
 check(!E.voSecondaryPages([{ start: 1, end: 2, title: 'Evidence' }], genericAnalysis).includes(2),
   'a generic analysis exclusion does not make an adjacent primary page secondary');
+const primaryAfterAnalysis = [
+  'Independent Review. Executive Summary: this assessment compares the payment statements and finds a conflict.',
+  '2. Findings: the report records the two payment statements.',
+  'Letter: Primary evidence follows. The party refers to VO-0123456789AB in this letter.'
+];
+const primaryAfterAnalysisResult = E.voExcludeSecondaryReportPages(primaryAfterAnalysis);
+const postExcludedPages = E.voSecondaryPages([{ start: 1, end: 3, title: 'Evidence' }], primaryAfterAnalysis);
+check(JSON.stringify(primaryAfterAnalysisResult && primaryAfterAnalysisResult.pages) === '[1,2]' &&
+  JSON.stringify(postExcludedPages) === '[1,2]' &&
+  /Letter: Primary evidence/.test(primaryAfterAnalysis[2]),
+  'generic analysis placeholders retain the report run but do not absorb a primary page carrying a VO reference');
 const denseRecord = Array.from({ length: 60 }, (_, i) => 'documentword' + String.fromCharCode(97 + Math.floor(i / 26), 97 + i % 26)).join(' ');
-const formatPages = [denseRecord, denseRecord, report.join(' '), denseRecord, denseRecord];
+const lowMassAnalysisPage = 'Analysis. Findings: report finds fraud. '.repeat(30);
+const formatPages = [denseRecord, denseRecord, lowMassAnalysisPage, denseRecord, denseRecord];
+check(E.DETECTORS.D17_DETECT_FORMAT_ANOMALY(formatPages).some(f => /Page 3\b|Pages 3\b/.test(f.location)),
+  'D17 fires on the unmodified synthetic analysis page before exclusion');
 E.voExcludeSecondaryReportPages(formatPages);
 check(!E.DETECTORS.D17_DETECT_FORMAT_ANOMALY(formatPages).some(f => /Page 3\b|Pages 3\b/.test(f.location)),
-  'an excluded generic analysis page is not reported as unreadable evidence');
+  'D17 no longer reports the excluded analysis page as unreadable evidence');
 check(E.voExcludeSecondaryReportPages(['Letter: Please find the report enclosed. ' + ledgerPage.join(' ')])?.pages[0] === 1,
   'a letter heading does not conceal independent analysis content');
 const blocks = [record + ' ' + footer];
@@ -94,7 +180,18 @@ E.voStripSealFurnitureBlocks(blocks);
 const ledger = E.voExtractConductLedger(blocks);
 check(ledger.events.length === 1 && !/SHA-512|Sealed Evidence Source/i.test(ledger.events[0].snippet), 'post-strip ledger snippet excludes seal footer');
 const footerScan = await scan([[record + ' ' + footer], [evidence]]);
-check(/Seal furniture:.*removed from 1 page/i.test(footerScan.extractionNotes), 'seal-furniture exclusion is disclosed in the full scan');
+check(/Platform output:.*seal footers.*Platform output excluded from page 1/i.test(footerScan.extractionNotes),
+  'seal-furniture exclusion is disclosed by affected page in the full scan');
+const manifestScan = await scan([[partyClaim, manifest, 'The clerk recorded custody in the affidavit.']]);
+check(/Platform output:.*manifest.*page 1/i.test(manifestScan.extractionNotes) &&
+  !/EVIDENCE MANIFEST|Primary Artifact|Artifact SHA-512/i.test(manifestScan.pageTexts.join(' ')) &&
+  manifestScan.findings.some(f => f.type === 'CT39' && /This affidavit records/.test(f.evidence)),
+  'the full scan discloses manifest removal by page and still evaluates the party-authored custody statement');
+const manifestLedgerScan = await scan([[record, footer, manifest]]);
+check(manifestLedgerScan.conductLedger.events.length === 1 &&
+  /rental payment received R100\.00/.test(manifestLedgerScan.conductLedger.events[0].snippet) &&
+  !/SHA-512|Sealed Evidence Source|EVIDENCE MANIFEST|Primary Artifact|Artifact SHA-512/i.test(manifestLedgerScan.conductLedger.events[0].snippet),
+  'the full engine builds ledger snippets after removing both footer and manifest furniture');
 check(footerScan.conductLedger.events.length === 1 && !/SHA-512|Sealed Evidence Source/i.test(footerScan.conductLedger.events[0].snippet),
   'the full engine ledger is built from post-strip text');
 const innerFooter = [record + ' Verum Omnis Sealed Evidence Source: example.pdf Page 1 of 1 A genuine statement follows.'];
@@ -162,6 +259,17 @@ check(multiwordInstrument.length === 1 && /narrative/i.test(multiwordInstrument[
   'a partial instrument name cannot replace a longer cited title');
 const resolvedPair = goodwill([namedNarrativePage, definitionPage, 'Unrelated record page.', namedOriginalClause]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(resolvedPair.length === 1 && /Page 4/.test(resolvedPair[0].location) && !/Court Cases/.test(resolvedPair[0].evidence), 'narrative quote resolves to matching original instrument and excludes table row');
+const repeatedInstrumentQuote = 'The Operator shall not be entitled to goodwill under any circumstances';
+const repeatedInstrumentSource = 'Atlas MOU. Clause 8 states "' + repeatedInstrumentQuote +
+  '". Clause 7 states "' + repeatedInstrumentQuote + '". Page 4 of 4.';
+const repeatedInstrumentPair = goodwill([
+  'Atlas MOU Clause 7 (Page 4) "' + repeatedInstrumentQuote + '"',
+  definitionPage,
+  repeatedInstrumentSource
+]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
+check(repeatedInstrumentPair.length === 1 && /Page 3/.test(repeatedInstrumentPair[0].location) &&
+  !/original instrument was not resolved/i.test(repeatedInstrumentPair[0].evidence),
+  'a later occurrence under the cited clause resolves despite an earlier identical quote under another clause');
 const shiftedInstrument = goodwill([namedNarrativePage, definitionPage, 'Unrelated record page.', 'Other evidence.', 'More evidence.', namedOriginalClause]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(shiftedInstrument.length === 1 && /Page 6/.test(shiftedInstrument[0].location) && !/narrative/i.test(shiftedInstrument[0].evidence), 'an instrument with its own page numbering resolves on its actual bundle page');
 const spacedInstrument = namedOriginalClause.replace('shall not be entitled', 'shall  not be entitled');
@@ -287,6 +395,15 @@ const distinctSentenceClass = [{
 }];
 E.voApplyFindingClasses(distinctSentenceClass, ['The invoice was paid. The invoice was not paid.']);
 check(distinctSentenceClass[0].findingClass === 'CONTRADICTION', 'two distinct anchored sentences remain a contradiction');
+const repeatedAnchorsClass = [{
+  type: 'CT01', severity: 4, evidence: 'Later quote occurrences are in separate statements',
+  anchor: { where: [1], quote: ['the invoice was paid', 'the invoice was not paid'] }
+}];
+E.voApplyFindingClasses(repeatedAnchorsClass, [
+  'The invoice was paid and the invoice was not paid. The invoice was paid. The invoice was not paid.'
+]);
+check(repeatedAnchorsClass[0].findingClass === 'CONTRADICTION',
+  'later occurrences of repeated anchors establish distinct statements when the first occurrences share a sentence');
 const wrappedClass = [{
   type: 'CT01', severity: 4, evidence: 'Two conflicting statements.', location: 'Page 1 vs Page 2',
   anchor: { where: [1, 2], quote: ['Example Holdings says payment was made', 'Example Holdings says payment was not made'] }
@@ -335,6 +452,13 @@ const mixedUnsigned = await scan([
   ['Other primary correspondence follows on a separate page.']
 ]);
 check(mixedUnsigned.findings.some(f => f.type === 'CT23' && /second agreement/i.test(f.evidence)), 'independent unsigned claim survives when another claim is unanchored');
+const repeatedUnsigned = await scan([
+  ['Example Holdings never countersigned the first agreement and Example Holdings never countersigned the second agreement. Payment was demanded.'],
+  ['Other primary correspondence follows on a separate page.']
+]);
+check(repeatedUnsigned.findings.some(f => f.type === 'CT23' && /second agreement/i.test(f.evidence)) &&
+  /CT23.*(?:suppressed|narrowed)|(?:suppressed|narrowed).*CT23/i.test(repeatedUnsigned.extractionNotes),
+  'CT35 restraint applies to its exact countersignature occurrence while the separate instrument remains a CT23 finding');
 const sameStatementObservation = await scan([
   ['The agreement was not witnessed and was never signed, and Example Holdings demanded payment.'],
   ['Other primary correspondence follows on a separate page.']
@@ -367,7 +491,20 @@ check(severityCases[0].severity <= 3, 'narrative-only anchors are capped at mode
 check(severityCases[1].severity <= 2, 'single-page examination limits are capped at low');
 check(severityCases[2].severity === 5, 'independent documentary statements by one party remain eligible for critical');
 check(severityCases[3].severity < 5, 'two statements on one page do not qualify for critical');
-check(severityCases[4].severity < 5, 'unproven independence of two agreement pages cannot qualify for critical');
+check(severityCases[4].severity === 5, 'distinct pages qualify for critical severity even without a detected document boundary');
+const repeatedSeverity = [{
+  type: 'CT01', severity: 5, findingClass: 'CONTRADICTION',
+  anchor: { where: [1, 2], quote: [
+    'Example Holdings states the payment was made',
+    'Example Holdings states the payment was not made'
+  ] }
+}];
+E.voCalibrateFindingSeverity(repeatedSeverity, [
+  'Agreement. Is it true that Example Holdings states the payment was made? Example Holdings states the payment was made.',
+  'Affidavit. Example Holdings states the payment was not made.'
+]);
+check(repeatedSeverity[0].severity === 5,
+  'a later declarative occurrence of a repeated anchor qualifies when its first occurrence is interrogative');
 const interiorSeverity = [{
   type: 'CT01', severity: 5, findingClass: 'CONTRADICTION',
   anchor: { where: [2, 5], quote: ['Example Holdings says payment was made', 'Example Holdings says payment was not made'] }

@@ -17,7 +17,7 @@ function check(value, label) {
 const footer = (id, page, total) =>
   'VERUM OMNIS SEALED ORIGINAL | Seal: ' + id +
   ' | SHA-512: 0123456789abcdef | 16/11/2026 22:25:06 Africa/Johannesburg | ' + page + '/' + total;
-const cover = 'VERUM OMNIS FORENSIC NARRATIVE Source seal: VO-SOURCE Prepared by Verum Omnis';
+const cover = 'VERUM OMNIS FORENSIC NARRATIVE Source seal: VO-SOURCE Prepared by Verum Omnis. Executive Summary: This report analyzes the evidence and identifies a conflict.';
 const marker = (id, words) => ({ id, name: id, keywords: words, min_cooccur: words.length });
 const rawPackage = { version: '1.0.0', rules: {
   contradiction_patterns: [], fraud_keywords: [], serial_patterns: [], case_configs: [],
@@ -71,7 +71,7 @@ try {
   const forged = await run(await pdf([
     [cover, footer('VO-123456ABCDEF', 1, 2)],
     ['Primary evidence: cobalt harbour.', footer('VO-123456ABCDEF', 2, 2)],
-    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-TEST', 'Independent analysis page.']
+    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-TEST', 'Executive Summary: This report analyzes the evidence and identifies a conflict.']
   ]));
   check(packageHits(forged, 'primary-marker').some(f => /Page 2/.test(f.location)), 'forged inner footer cannot exclude primary evidence');
   check(/Prior analysis report:/.test(forged.extractionNotes), 'forged-footer cover exclusion is disclosed');
@@ -85,7 +85,7 @@ try {
     'spaced letterhead and a lone footer do not create an analytical-report exclusion');
 
   const ruleRun = await run(await pdf([
-    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-TEST', 'Analysis only: amber lattice.'],
+    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-TEST', 'Analysis: This report analyzes the evidence and identifies a conflict. Amber lattice.'],
     ['Primary evidence is ordinary correspondence.']
   ]));
   check(packageHits(ruleRun, 'report-marker').length === 0, 'pipeline excludes report-only package phrase');
@@ -120,8 +120,8 @@ try {
 
   const xmp = '<x:xmpmeta><xmp:CreateDate>2018-05-01T09:00:00Z</xmp:CreateDate></x:xmpmeta>';
   const embedded = await run(await pdf([
-    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-TEST', 'Analysis page one.', 'VERUM OMNIS SEALED ORIGINAL | VO-ABCDEF123456'],
-    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-TEST', 'Analysis page two.', 'VERUM OMNIS SEALED ORIGINAL | VO-ABCDEF123456'],
+    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-TEST', 'Executive Summary: This report analyzes the evidence and identifies a conflict.', 'VERUM OMNIS SEALED ORIGINAL | VO-ABCDEF123456'],
+    ['VERUM OMNIS FORENSIC REPORT', 'Report Reference: VO-TEST', 'Findings: The report records both statements and explains the conflict.', 'VERUM OMNIS SEALED ORIGINAL | VO-ABCDEF123456'],
     ['Primary evidence is ordinary correspondence.']
   ], xmp));
   check(embedded.findings.some(f => f.type === 'CT29' && /metadata stores disagree/.test(f.evidence)), 'embedded seal does not suppress metadata comparison');
