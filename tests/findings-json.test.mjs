@@ -183,11 +183,23 @@ ok(r0.proposition_b_actor === 'unattributed', 'unlocated second party is unattri
   ], findings: [f('Example Holdings', 'payment not made', 1)] }, 'synthetic.pdf', 'a'.repeat(128), 1, {}).contradictions[0];
   ok(coordinatedSpeaker.proposition_a_actor === 'unattributed',
     'the agreement quote in a coordinated and-clause is not attributed to the speaker in the prior clause');
+  for (const connector of ['but', 'or', 'nor', 'yet']) {
+    const coordinated = buildFindingsJson({ pageTexts: [
+      'Example Holdings stated "payment made" ' + connector + ' the agreement provides "payment not made".'
+    ], findings: [f('Example Holdings', 'payment not made', 1)] }, 'synthetic.pdf', 'a'.repeat(128), 1, {}).contradictions[0];
+    ok(coordinated.proposition_a_actor === 'unattributed',
+      'a quote after an uncommaed ' + connector + '-clause does not inherit the earlier speaker');
+  }
   const sameClauseSpeaker = buildFindingsJson({ pageTexts: [
     'Example Holdings said "payment not made".'
   ], findings: [f('Example Holdings', 'payment not made', 1)] }, 'synthetic.pdf', 'a'.repeat(128), 1, {}).contradictions[0];
   ok(sameClauseSpeaker.proposition_a_actor === 'Example Holdings',
     'a named speaker cue in the quote\'s own clause remains attributable');
+  const unicodeBoundary = buildFindingsJson({ pageTexts: [
+    'İstanbul is relevant. Example Holdings stated under the agreement terms in force "payment made".'
+  ], findings: [f('Example Holdings', 'payment made', 1)] }, 'synthetic.pdf', 'a'.repeat(128), 1, {}).contradictions[0];
+  ok(unicodeBoundary.proposition_a_actor === 'Example Holdings',
+    'Unicode lowercasing before a quote does not shift speaker-window offsets');
 }
 ok(r0.temporal_analysis === '7 Mar 2025, 13 Mar 2025', 'anchor dates flow into temporal_analysis');
 ok(Array.isArray(r0.document_cited_provisions) && r0.document_cited_provisions[0] === 'clause 4.5.2',

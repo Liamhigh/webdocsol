@@ -59,6 +59,13 @@ check(manifestChanged === 1 && !/EVIDENCE MANIFEST|Primary Artifact|Artifact SHA
   /The clerk recorded custody/.test(manifestBlocks[0]) &&
   JSON.stringify(manifestAffectedPages) === '[1]',
   'platform manifest furniture is stripped without removing adjacent party-authored custody statements');
+const interstitialCustodyText = 'EVIDENCE MANIFEST & CHAIN OF CUSTODY Primary Artifact: example.pdf ' +
+  'This affidavit records the chain of custody of the exhibit. The clerk received it from the applicant and entered the transfer in the register. ' +
+  'Artifact SHA-512 (Partial): abcdef0123456789';
+const interstitialCustody = [interstitialCustodyText];
+E.voStripSealFurnitureBlocks(interstitialCustody);
+check(/The clerk received it from the applicant and entered the transfer in the register/.test(interstitialCustody[0]),
+  'party-authored custody text between manifest signatures survives furniture removal');
 const manifestLedgerBlocks = [record + ' ' + footer + ' ' + manifest];
 E.voStripSealFurnitureBlocks(manifestLedgerBlocks);
 const manifestLedger = E.voExtractConductLedger(manifestLedgerBlocks);
@@ -128,6 +135,14 @@ check(JSON.stringify(thirdPartyRunResult && thirdPartyRunResult.pages) === '[1,2
   thirdPartyRun.every(page => /prior analysis page excluded\./i.test(page)) &&
   [1, 2, 3].every(page => new RegExp('Prior analysis excluded: page ' + page + '\\.').test(thirdPartyRunResult.note)),
   'analysis continuations without independent page signals are excluded and disclosed as one run');
+const unnumberedLeadRun = [
+  'Independent Review. Executive Summary: this assessment compares the payment statements and finds a conflict.',
+  'Page 2 of 3. Payment was made.',
+  'Page 3 of 3. No further comment.'
+];
+const unnumberedLeadResult = E.voExcludeSecondaryReportPages(unnumberedLeadRun);
+check(JSON.stringify(unnumberedLeadResult && unnumberedLeadResult.pages) === '[1,2,3]',
+  'a report lead without its own page marker still anchors numbered continuation pages');
 const quotedTemplateReport = [report.join(' ') + ' Every forensic report generated under this Constitution must follow this template.'];
 check(E.voExcludeSecondaryReportPages(quotedTemplateReport)?.pages[0] === 1,
   'an independently identified analysis stays excluded when it quotes the report template');
@@ -165,6 +180,37 @@ check(JSON.stringify(primaryAfterAnalysisResult && primaryAfterAnalysisResult.pa
   JSON.stringify(postExcludedPages) === '[1,2]' &&
   /Letter: Primary evidence/.test(primaryAfterAnalysis[2]),
   'generic analysis placeholders retain the report run but do not absorb a primary page carrying a VO reference');
+const primaryRecordAfterReport = [
+  'Independent Review. Executive Summary: this assessment compares the payment statements and finds a conflict. Page 1 of 3.',
+  'Record: the applicant received the signed agreement. The record cites VO-0123456789AB. Page 2 of 3.',
+  'Record: the witness kept the original. Page 3 of 3.'
+];
+const primaryRecordResult = E.voExcludeSecondaryReportPages(primaryRecordAfterReport);
+const primaryRecordSegments = E.voSecondarySegments([{ start: 1, end: 3, title: 'Evidence' }], primaryRecordAfterReport);
+check(JSON.stringify(primaryRecordResult && primaryRecordResult.pages) === '[1]' &&
+  primaryRecordSegments.length === 1 && primaryRecordSegments[0].end === 1 &&
+  /Record: the applicant received/.test(primaryRecordAfterReport[1]) &&
+  !/prior analysis page excluded\./i.test(primaryRecordAfterReport[1]),
+  'a numbered primary-record boundary remains evidence and ends the placeholder run even when it cites a VO seal');
+const newRecordAfterReport = [
+  'Independent Review. Executive Summary: this assessment compares the payment statements and finds a conflict. Page 1 of 3.',
+  '2. Findings: the report records the two payment statements. Page 2 of 3.',
+  'Exhibit A: the applicant received the signed agreement. The record cites VO-0123456789AB. Page 3 of 3.'
+];
+const newRecordResult = E.voExcludeSecondaryReportPages(newRecordAfterReport);
+check(JSON.stringify(newRecordResult && newRecordResult.pages) === '[1,2]' &&
+  /Exhibit A: the applicant received/.test(newRecordAfterReport[2]) &&
+  !/prior analysis page excluded\./i.test(newRecordAfterReport[2]),
+  'a new exhibit boundary stops sequential report continuation and preserves its primary evidence');
+const reportLanguageInAffidavit =
+  'Affidavit: The deponent asks the Court to review the report findings. The report concludes that the record contains conflicting payment statements.';
+check(E.voIsSecondaryReportPage(reportLanguageInAffidavit) === false &&
+  E.voExcludeSecondaryReportPages([reportLanguageInAffidavit]) === null,
+  'an affidavit remains primary evidence when it discusses a report and its findings');
+const analysisWithCourtCaption =
+  'Independent Review. Executive Summary: this report analyzes the evidence and identifies a conflict. The cited order is headed IN THE HIGH COURT OF SOUTH AFRICA.';
+check(E.voIsSecondaryReportPage(analysisWithCourtCaption) === true,
+  'a court-caption citation inside report content does not turn the report page into a primary court record');
 const denseRecord = Array.from({ length: 60 }, (_, i) => 'documentword' + String.fromCharCode(97 + Math.floor(i / 26), 97 + i % 26)).join(' ');
 const lowMassAnalysisPage = 'Analysis. Findings: report finds fraud. '.repeat(30);
 const formatPages = [denseRecord, denseRecord, lowMassAnalysisPage, denseRecord, denseRecord];
@@ -173,6 +219,19 @@ check(E.DETECTORS.D17_DETECT_FORMAT_ANOMALY(formatPages).some(f => /Page 3\b|Pag
 E.voExcludeSecondaryReportPages(formatPages);
 check(!E.DETECTORS.D17_DETECT_FORMAT_ANOMALY(formatPages).some(f => /Page 3\b|Pages 3\b/.test(f.location)),
   'D17 no longer reports the excluded analysis page as unreadable evidence');
+const d08aWithExcluded = E.DETECTORS.D08A_DETECT_SCAN_ONLY_PAGE([
+  ...Array(10).fill('prior analysis page excluded. '.repeat(11)),
+  denseRecord, denseRecord, ''
+]);
+check(d08aWithExcluded.some(f => /\bPage 13\b/.test(f.location)) &&
+  !d08aWithExcluded.some(f => /\bPage (?:1|2|3|4|5|6|7|8|9|10|11|12)\b/.test(f.location)),
+  'excluded analysis placeholders do not distort the unreadable-page baseline or become unreadable findings');
+const allUnreadableWithExcluded = E.DETECTORS.D08A_DETECT_SCAN_ONLY_PAGE([
+  'prior analysis page excluded. '.repeat(11), '', 'prior verum omnis report page excluded. '.repeat(11)
+]);
+check(allUnreadableWithExcluded.length === 1 && /Pages 2/.test(allUnreadableWithExcluded[0].location) &&
+  /Prior-analysis pages were set aside/.test(allUnreadableWithExcluded[0].evidence),
+  'an unreadable record remaining beside excluded analysis is reported only for the record page');
 check(E.voExcludeSecondaryReportPages(['Letter: Please find the report enclosed. ' + ledgerPage.join(' ')])?.pages[0] === 1,
   'a letter heading does not conceal independent analysis content');
 const blocks = [record + ' ' + footer];
@@ -187,6 +246,10 @@ check(/Platform output:.*manifest.*page 1/i.test(manifestScan.extractionNotes) &
   !/EVIDENCE MANIFEST|Primary Artifact|Artifact SHA-512/i.test(manifestScan.pageTexts.join(' ')) &&
   manifestScan.findings.some(f => f.type === 'CT39' && /This affidavit records/.test(f.evidence)),
   'the full scan discloses manifest removal by page and still evaluates the party-authored custody statement');
+const interstitialCustodyScan = await scan([[interstitialCustodyText]]);
+check(/Platform output:.*manifest.*page 1/i.test(interstitialCustodyScan.extractionNotes) &&
+  interstitialCustodyScan.findings.some(f => f.type === 'CT39' && /This affidavit records the chain of custody/.test(f.evidence)),
+  'the full scan discloses the manifest and still evaluates custody text between its signatures');
 const manifestLedgerScan = await scan([[record, footer, manifest]]);
 check(manifestLedgerScan.conductLedger.events.length === 1 &&
   /rental payment received R100\.00/.test(manifestLedgerScan.conductLedger.events[0].snippet) &&
@@ -241,6 +304,12 @@ const curlyNarrative = 'MOU Clause 7 (Page 4) “The Operator shall not be entit
 const curlyPair = goodwill([curlyNarrative, definitionPage]).filter(f => /defined as a quantifiable asset/.test(f.evidence));
 check(curlyPair.length === 1 && /narrative/i.test(curlyPair[0].evidence) && !/Court Cases/.test(curlyPair[0].evidence),
   'curly-quoted narrative clauses retain provenance and exclude following text');
+const questionRecognition = goodwill([
+  'Why did the agreement say "goodwill is a quantifiable asset"?',
+  'The agreement states that goodwill has no value.'
+]);
+check(questionRecognition.length === 0,
+  'a rhetorical question cannot provide a goodwill-recognition horn for a later denial');
 const originalClause = 'MOU clause 7. The Operator shall not be entitled to goodwill under any circumstances, at the end of the Contract Period. Page 4 of 4';
 const genericInstrument = goodwill([narrativePage, definitionPage, originalClause])
   .filter(f => /defined as a quantifiable asset/.test(f.evidence));
@@ -355,8 +424,13 @@ check(!E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(['The invoice was paid to Dr.
   'an abbreviated title does not split a single statement into contradiction horns');
 check(!E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(['The invoice was paid to Example Ltd. and the invoice was not paid.']).length,
   'an abbreviated company suffix does not split a single statement into contradiction horns');
+check(!E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(['The invoice was paid to Acme Inc. and the invoice was not paid.']).length,
+  'an Inc. suffix does not split a single sentence into contradiction horns');
 check(E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(['The invoice was paid to Example Ltd. The invoice was not paid.']).length > 0,
   'a company suffix at the end of a sentence does not hide a distinct statement');
+check(!E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION([
+  'The phrase "invoice paid" means the invoice has been paid. The invoice was not paid.'
+]).length, 'a definition clause cannot provide a positive contradiction horn');
 check(E.DETECTORS.D01_DETECT_DIRECT_CONTRADICTION(['The invoice was paid on 12.03.2025. The invoice was not paid.']).length > 0,
   'a full stop after a dotted date still separates genuine statements');
 check(!transactionPair(['What does "no sales were made" mean when the deal happened?']).length, 'transaction denial cannot be a rhetorical question');
@@ -404,6 +478,27 @@ E.voApplyFindingClasses(repeatedAnchorsClass, [
 ]);
 check(repeatedAnchorsClass[0].findingClass === 'CONTRADICTION',
   'later occurrences of repeated anchors establish distinct statements when the first occurrences share a sentence');
+{
+  const page = 'The invoice was paid and '.repeat(800) +
+    'The invoice was paid. The invoice was not paid.';
+  const repeatedFinding = [{
+    type: 'CT01', severity: 3,
+    anchor: { where: [1], quote: ['The invoice was paid', 'The invoice was not paid'] }
+  }];
+  const originalCharAt = String.prototype.charAt;
+  let charAtCalls = 0;
+  String.prototype.charAt = function(index) {
+    charAtCalls++;
+    return originalCharAt.call(this, index);
+  };
+  try {
+    E.voApplyFindingClasses(repeatedFinding, [page]);
+  } finally {
+    String.prototype.charAt = originalCharAt;
+  }
+  check(repeatedFinding[0].findingClass === 'CONTRADICTION' && charAtCalls < 10000,
+    'repeated anchors scan sentence boundaries within a linear resource budget');
+}
 const wrappedClass = [{
   type: 'CT01', severity: 4, evidence: 'Two conflicting statements.', location: 'Page 1 vs Page 2',
   anchor: { where: [1, 2], quote: ['Example Holdings says payment was made', 'Example Holdings says payment was not made'] }
@@ -537,10 +632,10 @@ const sealedSeverity = [{
   anchor: { where: [1, 2], quote: ['Example Holdings says payment was made', 'Example Holdings says payment was not made'] }
 }];
 E.voCalibrateFindingSeverity(sealedSeverity, [
-  'Verum Omnis Sealed Evidence Source: example.pdf Page 1 of 1 AGREEMENT. Example Holdings says payment was made.',
-  'Verum Omnis Sealed Evidence Source: other.pdf Page 1 of 1 AFFIDAVIT. Example Holdings says payment was not made.'
+  '[OCR] Verum Omnis Sealed Evidence Source: example.pdf Page 1 of 1 AGREEMENT. Example Holdings says payment was made.',
+  '[OCR] Verum Omnis Sealed Evidence Source: other.pdf Page 1 of 1 AFFIDAVIT. Example Holdings says payment was not made.'
 ]);
-check(sealedSeverity[0].severity === 5, 'inner sealed-evidence source markers do not obscure instrument headings');
+check(sealedSeverity[0].severity === 5, 'OCR and inner sealed-evidence prefixes do not obscure instrument headings');
 const headedNarrative = [{
   type: 'CT01', severity: 5, findingClass: 'CONTRADICTION',
   anchor: { where: [1, 2], quote: ['Example Holdings says payment was made', 'Example Holdings says payment was not made'] }
@@ -594,7 +689,7 @@ const narrativeBytes = await R.buildHumanReport({
 const narrativeDoc = await PDFDocument.load(narrativeBytes);
 const narrativeText = [];
 for (let p = 0; p < narrativeDoc.getPageCount(); p++) narrativeText.push((await E.extractPageText(narrativeBytes, p, narrativeDoc)).join(' '));
-check(!/-29\.123456|30\.234567/.test(narrativeText.join(' ')), 'court-ready narrative excludes GPS coordinates');
+check(!/-29\.123456|30\.234567|20\s*m\b/.test(narrativeText.join(' ')), 'court-ready narrative excludes GPS coordinates and accuracy');
 check(/South Africa \(sealing location\)/.test(narrativeText.join(' ')), 'narrative retains location-derived jurisdiction');
 const html = readFileSync('seal-document.html', 'utf8');
 const metaStart = html.indexOf('function collectSealMetadata()');
