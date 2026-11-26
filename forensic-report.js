@@ -4638,7 +4638,7 @@ function secExecutiveSummary(ctx, data) {
   ctx.bullet('Preserve the sealed originals unaltered. They are SHA-512 fingerprinted and ' + anchorPhrase(data) + ', and anyone can verify them at verumglobal.foundation/verify.html without an account.', { size: 9.4, after: 3 });
   ctx.bullet('Open the cited pages and check each contradiction against the original documents. Every finding in this report names the page it came from.', { size: 9.4, after: 3 });
   var up = data.unreadPages || {};
-  var unreadN = ((up.capped || []).length + (up.noText || []).length + (up.renderFailed || []).length);
+  var unreadN = ((up.capped || []).length + (up.noText || []).length + (up.renderFailed || []).length + (up.timedOut || []).length);
   if (unreadN > 0) {
     ctx.bullet('Have the ' + unreadN + ' unread page' + (unreadN === 1 ? '' : 's') + ' listed in "Pages the engine could not read" reviewed by a person. Nothing on ' + (unreadN === 1 ? 'it' : 'them') + ' was examined.', { size: 9.4, after: 3 });
   }
