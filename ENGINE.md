@@ -7,8 +7,8 @@
 
 **Engine:** `forensic-engine-page.js` — `VO_ENGINE_VERSION = '5.7.4-web'`
 **Report:** `forensic-report.js` — `ENGINE_VERSION = '5.7.4-web'`, report builder v1.3.1.
-**Findings JSON:** v1.12.0, built by `buildFindingsJson` in `seal-document.html`, not by either
-script (1.12.0 adds optional per-finding independent-verifier provenance; 1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
+**Findings JSON:** v1.11.0, built by `buildFindingsJson` in `seal-document.html`, not by either
+script (the optional draft `analysis_extensions` v0.1.0 carries verifier provenance without adding finding fields; 1.11.0 adds the sealed conduct ledger and structured conduct-finding payloads; 1.10.0 added
 the well-formedness gate and serial-stage trace; 1.9.0 added `cross_document_observations` with a
 byte-faithful `quote_verbatim`; 1.8.0 added `candidate_law`)
 **Host page:** `seal-document.html` (the engine, the report, two analysis contracts and three helper scripts are
@@ -89,7 +89,7 @@ PDF bytes + pdf-lib PDFDocument (+ opts.referenceTime from the seal page)
   ├─ false-clean guard               zero findings at < 200 characters a page over >= 3 pages is UNREADABLE, never clean
   └─ generateSummary()               the count and a read-against-the-page instruction, or the clean sentence (never the score, §12.16)
         ↓
-   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 / bounded independent finding assessment → buildFindingsJson (v1.12.0)
+   result → seal page: applyBundleMode (§4.8) → AI review / Brain 9 / bounded DeepSeek and Mistral adjudication → buildFindingsJson (v1.11.0 + optional draft extension)
           → forensic-report.js build() → seal()
 ```
 
@@ -914,17 +914,18 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `louw-naidoo-regression.test.mjs` | 14 | **The Louw v Naidoo run** (§12.19): D06/CT09 identifier-type classification (an SA ID typed solid and spaced is one id; a fishing right `LF…`, a vessel `DTD…` and a company registration are not identities; a `said` pair fires only for the same resolved person) and D25/CT37 cluster de-duplication (one finding per lookalike cluster; a two-domain cluster keeps the original wording), each beside a positive control |
 | `combine-06-april-regression.test.mjs` | 31 | **The Combine 06 April 2026 run** (§12.17): the late secondary-source pass (lead only when every page is secondary; a record page keeps full weight), OCR pages from the `[OCR]` prefix, rule (a) page by page, per-instrument dates and one-document comparisons (D03, D04), scanned pages OCR could barely read (D17 CT54 hand-over, with D08A CT54 preserved), person and company registration fields (D11), two properties, OCR re-reads and longer terms (D30), conditional ownership (D38), one agreement per trap (D39), each beside a positive control |
 | `rule-package.test.mjs` | 133 | **Signed rule packages on the website** (§12.7): canonical JSON byte-equal to the Worker's, the pinned key equals `worker/public-key.der.b64`, sign/verify with every refusal reason, compilation skips the engine's own vocabulary, additive page-local application with withholding and caps, the engine inert without a package, the page's fetch/cache/await/report wiring, and the hybrid fixes (verdict shape, anchored AI candidates, feedback). |
-| `crop-normalize.test.mjs` | 115 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, transcription consent (follows the sealing mode since 2026-09-07), ordering and honesty |
+| `crop-normalize.test.mjs` | 185 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, transcription consent (follows the sealing mode since 2026-09-07), ordering and honesty |
 | `inline-scripts.test.mjs` | 25 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.js` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
 | `digital-forensics.test.mjs` | 19 | PDF structure and digital-forensics measurements |
 | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: pinned assets, 256-MiB Wasm cap, pre-hash input limit and sentinel, input/output/object limits, worker opt-in, observations-only envelope and findings parity |
 | `narrate-excerpt.test.mjs` | 16 | AI excerpt building |
-| `findings-json.test.mjs` | 43 | JSON contract v1.9.0 (`cross_document_observations` w/ byte-faithful `quote_verbatim`); 1.8.0 `candidate_law`; 1.7.0: `display_name`, `brain`, `triple_verification`, `ai_review_note`; an AI candidate carries `INSUFFICIENT`, never a band |
+| `findings-json.test.mjs` | 55 | Production Findings JSON v1.11.0, unchanged finding shape and legacy `independent_verifiers` semantics, optional draft verifier-provenance extension; cross-document observations, candidate law and structured conduct payloads |
 | `franchise-lease.test.mjs` | 17 | D38/D39 (CT44/CT45) |
-| `wrangler-config.test.mjs` | 36 | **Deploy config drift**: the top level and `[env.production]` carry the same KV, AI, vars, observability, assets block (`./`, `ASSETS`, `/api/*` Worker-first) and trainer cron (weekly, Monday 03:00 UTC, `AUTO_CURATE = "on"`); exactly two zone routes, `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, in both environments, zone named, no `custom_domain` |
+| `wrangler-config.test.mjs` | 39 | **Deploy config drift**: top-level and `[env.production]` bindings match, including the verifier usage Durable Object and SQLite migration; exactly two zone routes, `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, in both environments, zone named, no `custom_domain` |
 | `role-capacity.test.mjs` | 13 | D40/CT46, no hardcoded parties |
 | `ai-assess-batch.test.mjs` | 19 | Client batching under the worker's body limit; **the AI review never removes or changes a finding** (notes only, original evidence returned, an unreviewed batch adds nothing; §12.16) |
+| `finding-verification.test.mjs` | 446 | DeepSeek/Mistral advisory verdicts, strict bounded packets, status mapping, stream and hourly quotas, connect-only retry, injection confinement, duplicate-lane normalization, narrative isolation, report provenance and G3-candidate retention |
 | `encrypt-detect.test.mjs` / `rule-classify.test.mjs` | 9 each | Encryption detection · deterministic classify fallback |
 | `find-seal.test.mjs` / `pdf-encrypt.test.mjs` | 8 each | Seal discovery · real password protection |
 | `voice-crypto.test.mjs` | 7 | `.voice` cross-page encryption |

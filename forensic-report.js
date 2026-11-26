@@ -2737,7 +2737,7 @@ function tripleVerificationOf(f, ocrPages) {
   var pass = 0, fail = 0;
   for (var i = 0; i < legs.length; i++) { if (legs[i] === 'PASS') pass++; else if (legs[i] === 'FAIL') fail++; }
   var status = (!fail && (pass === 3 || pass === 2)) ? 'ACCEPTED' : 'REJECTED';
-  return { thesis: thesis, antithesis: antithesis, synthesis: synthesis, status: status, independent_verifiers: 0 };
+  return { thesis: thesis, antithesis: antithesis, synthesis: synthesis, status: status, independent_verifiers: 1 };
 }
 function secTripleVerification(ctx, data) {
   var fr = data.findings || {};
@@ -2781,16 +2781,17 @@ function secIndependentModelAssessment(ctx, data) {
   var fr = data.findings || {};
   var findings = Array.isArray(fr.findings) ? fr.findings : [];
   var providerSummary = Array.isArray(fr.verification && fr.verification.providers) ? fr.verification.providers : [];
-  var rejectedCandidates = Array.isArray(fr.verification && fr.verification.rejected_candidates) ? fr.verification.rejected_candidates : [];
+  var disputedCandidates = Array.isArray(fr.verification && fr.verification.disputed_candidates) ? fr.verification.disputed_candidates : [];
   var assessed = findings.filter(function (finding) { return finding && finding.verification && Array.isArray(finding.verification.verifiers); });
-  if (!providerSummary.length && !assessed.length && !rejectedCandidates.length) return;
+  var noEngineFindings = fr.verification && fr.verification.status === 'NO_ENGINE_FINDINGS';
+  if (!providerSummary.length && !assessed.length && !disputedCandidates.length && !noEngineFindings) return;
   ctx.newBodyPage();
   ctx.heading('INDEPENDENT MODEL ASSESSMENT');
   ctx.para('This additive section records bounded DeepSeek and Mistral assessments. CONFIRM, REFUTE and UNCLEAR are model responses, not findings or legal conclusions. A confirmation never supplies missing anchors or engine thresholds; every engine finding remains in the engine output, and a REFUTE is shown as dissent rather than suppression.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 7 });
 
   var rows = [];
   var engineFindings = findings.filter(function (finding) { return finding && finding.source !== 'ai'; });
-  var appendFindingRows = function (finding, candidate, rejected) {
+  var appendFindingRows = function (finding, candidate) {
     var verifierList = finding && finding.verification && finding.verification.verifiers;
     var label = candidate
       ? String(finding.type || 'G3 candidate') + ' — ' + capText(String(finding.evidence || finding.rationale || ''), 70, '...')
@@ -2803,10 +2804,11 @@ function secIndependentModelAssessment(ctx, data) {
           provider: String(fallbackProvider.provider || 'unknown'),
           model: String(fallbackProvider.model || 'not configured'),
           outcome: String(fallbackProvider.outcome || 'unreachable'),
+          called_at: 'not recorded',
           verdict: 'NO RESPONSE',
           rationale: '',
           targets: '',
-          status: rejected ? 'REJECTED' : (candidate ? 'PENDING VERIFICATION' : 'ENGINE-ONLY')
+          status: candidate ? 'PENDING VERIFICATION' : 'ENGINE-ONLY'
         });
       }
       return;
@@ -2818,31 +2820,32 @@ function secIndependentModelAssessment(ctx, data) {
         provider: String(verifier.provider || 'unknown'),
         model: String(verifier.model || 'not configured'),
         outcome: String(verifier.outcome || 'unreachable'),
+        called_at: String(verifier.called_at || 'not recorded'),
         verdict: String(verifier.verdict || 'NO RESPONSE'),
         rationale: verifier.rationale == null ? '' : String(verifier.rationale),
         targets: Array.isArray(verifier.targets) ? verifier.targets.join(', ') : '',
-        status: rejected ? 'REJECTED' : (candidate
+        status: candidate
           ? String(finding.verification.candidate_status || 'PENDING VERIFICATION')
-          : String(finding.verification.status || 'ENGINE-ONLY'))
+          : String(finding.verification.status || 'ENGINE-ONLY')
       });
     }
   };
   for (var fi = 0; fi < findings.length; fi++) {
     var finding = findings[fi];
-    if (finding && finding.source === 'ai') appendFindingRows(finding, true, false);
-    else if (finding) appendFindingRows(finding, false, false);
+    if (finding && finding.source === 'ai') appendFindingRows(finding, true);
+    else if (finding) appendFindingRows(finding, false);
   }
-  for (var ri = 0; ri < rejectedCandidates.length; ri++) appendFindingRows(rejectedCandidates[ri], true, true);
 
   if (rows.length) {
     ctx.table(
       [
-        { key: 'item', title: 'Finding or candidate', w: 140 },
-        { key: 'provider', title: 'Provider', w: 60 },
-        { key: 'model', title: 'Model', w: 95 },
-        { key: 'outcome', title: 'Outcome', w: 70 },
-        { key: 'verdict', title: 'Verdict', w: 65 },
-        { key: 'status', title: 'Status', w: 74 }
+        { key: 'item', title: 'Finding or candidate', w: 118 },
+        { key: 'provider', title: 'Provider', w: 55 },
+        { key: 'model', title: 'Model', w: 78 },
+        { key: 'outcome', title: 'Outcome', w: 58 },
+        { key: 'verdict', title: 'Verdict', w: 54 },
+        { key: 'status', title: 'Status', w: 68 },
+        { key: 'called_at', title: 'Called (UTC)', w: 75 }
       ],
       rows,
       { size: 7 }
@@ -2897,10 +2900,12 @@ function secIndependentModelAssessment(ctx, data) {
       return verifier && verifier.outcome === 'ok' && verifier.verdict === 'REFUTE';
     });
   });
-  if (engineHasRefutation) {
+  if (noEngineFindings || !engineFindings.length) {
+    ctx.para('Overall engine-finding outcome: NO ENGINE FINDINGS. No model verdict can create or promote a finding.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
+  } else if (engineHasRefutation) {
     ctx.para('Overall engine-finding outcome: DISPUTED. The engine findings are retained; REFUTE responses are recorded above as dissent.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
   } else if (!engineHasConfirmation) {
-    ctx.para('Overall engine-finding outcome: ENGINE-ONLY.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
+    ctx.para('Overall engine-finding outcome: ENGINE-ONLY. Engine findings exist; no independent model confirmation was received.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
   } else {
     ctx.para('Independent model confirmations are recorded per finding above; any finding without an engine evidence threshold remains unpromoted.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
   }
@@ -2911,27 +2916,9 @@ function secIndependentModelAssessment(ctx, data) {
     }).join('; ') + '.'
     : 'No independent model-verifier response was recorded.'), { size: 8.5, font: ctx.f.times, color: NAVY2, after: 6 });
 
-  if (rejectedCandidates.length) {
-    ctx.subHeading('Rejected G3 candidates retained for audit', { toc: false });
-    ctx.table(
-      [
-        { key: 'candidate', title: 'Candidate / quoted fragment', w: 185 },
-        { key: 'disposition', title: 'Disposition', w: 78 },
-        { key: 'outcomes', title: 'Provider outcomes', w: 221 }
-      ],
-      rejectedCandidates.map(function (candidate) {
-        var verifiers = candidate.verification && candidate.verification.verifiers || [];
-        return {
-          candidate: capText(String(candidate.type || 'AI candidate') + ' — ' + String(candidate.location || '') + ' — ' + String(candidate.quote || candidate.rationale || ''), 90, '...'),
-          disposition: 'REJECTED',
-          outcomes: verifiers.map(function (verifier) {
-            return String(verifier.provider || 'unknown') + ': ' + String(verifier.verdict || 'NO RESPONSE') +
-              ' (' + String(verifier.outcome || 'unreachable') + ')';
-          }).join('; ')
-        };
-      }),
-      { size: 7 }
-    );
+  if (disputedCandidates.length) {
+    ctx.subHeading('Disputed advisory candidates retained', { toc: false });
+    ctx.para(disputedCandidates.length + ' G3 candidate' + (disputedCandidates.length === 1 ? ' remains' : 's remain') + ' visible as advisory material. Model REFUTE responses and their rationales are recorded above; only engine thresholds or explicit human review can remove a candidate from presentation.', { size: 8.5, font: ctx.f.times, color: NAVY2, after: 6 });
   }
 }
 

@@ -276,7 +276,10 @@ for (const file of ['analysis-contracts.js', 'analysis-config.js']) {
   ok(!/\(\?<[=!]/.test(source), file + ' contains no regex lookbehind');
 }
 const html = readFileSync(path.join(root, 'seal-document.html'), 'utf8');
-ok(/findings_json_version:\s*'1\.12\.0'/.test(html) && /verification: f\.verification \|\| undefined/.test(html), 'production findings JSON v1.12.0 adds optional verifier provenance without replacing existing fields');
-ok(!html.includes('analysis_extensions:'), 'unapproved analysis_extensions field is absent from production findings builder');
+ok(/findings_json_version:\s*'1\.11\.0'/.test(html) && !/verification:\s*f\.verification/.test(html),
+  'production Findings JSON remains v1.11.0 with no per-finding verifier field');
+ok(/analysis_extensions:\s*verificationExtension\s*\?\s*\{\s*'vo\.verifier-adjudication':\s*verificationExtension/.test(html) &&
+  /draft_only:\s*true/.test(html) && /PROPOSED_ONLY_NOT_APPROVED_FOR_PRODUCTION/.test(html),
+  'verifier provenance is isolated in the explicitly draft v0.1.0 namespaced extension');
 
 done('analysis-contracts');

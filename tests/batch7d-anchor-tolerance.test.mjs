@@ -17,6 +17,7 @@ const workerPath = path.join(__dirname, '..', 'worker', 'verum-rules.js');
 let source = fs.readFileSync(workerPath, 'utf8');
 source = source
   .replace(/^import .*$/gm, '')
+  .replace(/^export \{ VerifierUsageLimiter \};\s*$/m, '')
   .replace(/export default verum_rules_default;\s*$/, 'this.workerDefault = verum_rules_default;');
 const sandbox = {
   console, URL, URLSearchParams, Response, Request, Headers,

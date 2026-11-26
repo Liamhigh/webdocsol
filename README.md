@@ -31,7 +31,7 @@
 
 **Repository:** `Liamhigh/webdocsol`  
 **Sealing standard:** VO-DSS-1.2 ([`seal-module/SPEC.md`](./seal-module/SPEC.md)); QR payload `v: "1.2"`; sealed PDFs carry a `VO-SEAL2|…` Subject (Producer `Verum Omnis Document Sealing Service v1.3.0`); site package version 1.2.5 (`package.json`)  
-**Engine:** `VO_ENGINE_VERSION 5.7.4-web` (report `ENGINE_VERSION` the same; report builder v1.3.1) — CT01–CT61, 63 registered detector entries; findings JSON 1.12.0 (optional independent-verifier provenance)<br>
+**Engine:** `VO_ENGINE_VERSION 5.7.4-web` (report `ENGINE_VERSION` the same; report builder v1.3.1) — CT01–CT61, 63 registered detector entries; production Findings JSON 1.11.0 (verifier provenance is report-only and in the optional draft `analysis_extensions` v0.1.0)<br>
 **Constitution:** v8.0 (governance charter, seal `VO-9A4F3C5E825C`); v6.1 (engine operating instrument, seal `VO-9E51D3F507E6`)  
 **Updated:** 2026-11-15 — current-source reconciliation on the audited Phase 0 baseline. Constitution v8.0 was sealed on 2026-08-05.<br>
 **Integrity model:** tamper-evident (SHA-512 + OpenTimestamps) — never "immutable". **Licence:** none in the repository (open with the founder).  
@@ -111,7 +111,7 @@ User chooses a PDF (or voice notes / a WhatsApp chat export .zip)
        |
        +--> forensic mode only: AI review through the Worker (assess, Brain 9 sweep,
        |    court-ready narrative), then the sealed technical report, the sealed
-       |    court-ready narrative and findings JSON 1.12.0; each report's OTS digest
+       |    court-ready narrative and findings JSON 1.11.0; each report's OTS digest
        |    is likewise computed after its own sealing
        v
 [Out]  both modes: sealed PDF, .ots receipt, anchor certificate (if a calendar accepted)

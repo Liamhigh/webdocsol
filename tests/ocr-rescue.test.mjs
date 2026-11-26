@@ -68,13 +68,13 @@ ok(/tesseract\.js@5\.1\.1\/dist\/worker\.min\.js/.test(src), 'tesseract worker C
 
 function build(env) {
   const fn = new Function(
-    'document', 'updateStep', 'pdfjsLib', 'Tesseract', 'window', 'navigator',
+    'document', 'updateStep', 'pdfjsLib', 'Tesseract', 'window', 'navigator', '_voRunEvidenceSnapshot',
     '"use strict";' + src + '\nreturn { voOcrLoadScript, voOcrRescuePages };'
   );
   // navigator is injectable so the worker-pool sizing (hardwareConcurrency)
   // is deterministic in tests regardless of the machine running them.
   return fn(env.document, env.updateStep || (() => {}), env.pdfjsLib, env.Tesseract, env.window || {},
-    env.navigator || { hardwareConcurrency: 2 });
+    env.navigator || { hardwareConcurrency: 2 }, env.runEvidenceSnapshot || null);
 }
 
 // Fake DOM whose appendChild simulates one behaviour per URL.

@@ -242,6 +242,7 @@ Main configuration for Cloudflare Workers deployment:
   the same two routes in both; `workers_dev = true` is mirrored by hand (the
   test does not check it):
   - **kv_namespaces**: `RULES_KV` (see KV Namespace)
+  - **durable_objects**: `VERIFIER_USAGE` (`VerifierUsageLimiter`, SQLite migration in both deploy environments)
   - **ai**: `AI`, Workers AI (gatekeep, classify, assess, sweep, narrate,
     human-report, transcribe, curate and the trainer)
   - **vars**: `ENVIRONMENT`, `SERVICE_VERSION`, `HUMAN_REPORT_MODEL`, `AUTO_CURATE`
@@ -254,7 +255,9 @@ Main configuration for Cloudflare Workers deployment:
     `LLM3_API_BASE` / `LLM3_API_KEY` / `LLM3_MODEL` (DeepSeek) plus
     `LLM2_API_BASE` / `LLM2_API_KEY` / `LLM2_MODEL` (Mistral) for finding
     adjudication. Each provider is called only when all three of its values
-    are configured; unset providers are reported as unreachable.
+    are configured; unset providers are reported as unreachable. The verifier
+    bases must be HTTPS. `LLM2_*` and `LLM3_*` are verifier-only and never
+    select the court-ready narrator; narrative routing uses only `LLM_*`.
 
 **Domains**: `wrangler.toml` declares two zone routes,
 `verumglobal.foundation/*` and `www.verumglobal.foundation/*`, each with
@@ -347,6 +350,26 @@ GET  /constitution.pdf, /docs/constitution.pdf — constitution PDF from KV
 GET  /images/logo-full.png, /images/watermark_portrait.png — reach the Worker only when the asset is missing
 ```
 
+`/api/v1/ai/verify-findings` is protected before any paid provider request by
+the `VERIFIER_USAGE` Durable Object: at most 100 verifier-item units per
+Cloudflare source IP and 2,000 globally per UTC hour. One unit is one finding
+packet sent to one independently configured provider; the caller address is
+SHA-256 hashed before storage. The request is capped at eight findings and
+48 KB. This verifier-specific limiter does not implicitly protect the other public
+AI routes (`gatekeep`, `classify`, `transcribe`, `assess`, `narrate`, `human-report`,
+`sweep` and `verify-law`): those currently have no caller authentication or
+per-caller/global usage limiter, though their individual request and handler
+checks remain. This change does not extend protection to those routes. Configure
+no real verifier keys until this Durable Object binding and its migration are
+deployed and confirmed.
+
+Verifier retries avoid ambiguous duplicate charges. A provider request is
+retried at most once only for a connect-class error proving the request did
+not leave the Worker; timeouts and other ambiguous network errors are not
+retried. No provider idempotency support is assumed or emulated. A provider
+HTTP error, malformed response, timeout, duplicate lane or invalid endpoint is
+reported as its distinct outcome and never as a confirmation.
+
 Forensic mode is "Seal document with forensic report". Since 2026-09-07 (#200) it runs every AI
 step automatically, after a pre-flight that reads `/api/v1/site/health` and refuses to start a
 forensic report when the forensic service does not answer. "Seal document" makes no review,
@@ -379,7 +402,9 @@ Used for: `rules:current` (the signed rule package the manifest serves; serial p
 of it), `rules:history:<version>`, `rules:changelog` and `rules:auto-curate:last-run`;
 `feedback:<day>` (anonymous pattern feedback, with a time-to-live); `pdf:constitution-v6:meta`
 and `pdf:constitution-v6:chunk:<n>` (served at `/constitution.pdf`); `img:logo-full:b64` and
-`img:watermark-portrait:b64` (legacy image copies). The Worker keeps no rate-limiting state.
+`img:watermark-portrait:b64` (legacy image copies). The verifier Durable Object stores only
+hourly quota counters keyed by a SHA-256 hash of the Cloudflare source IP; it stores no raw IP
+address or evidence packet.
 (Until 2026-10-03 this section gave the ID `3ecf5dc4e00c45b89f3e2d7c1b4a2e9f`, which was never
 in `wrangler.toml`.)
 
@@ -392,7 +417,8 @@ the Brain 9 sweep, curate and the trainer; `HUMAN_REPORT_MODEL` (default `@cf/me
 court-ready narrative, or an external OpenAI-compatible provider when the `LLM_*` secrets are
 set; `@cf/openai/whisper` for transcription. The finding-verifier route uses the separate
 `LLM3_*` DeepSeek and `LLM2_*` Mistral secret lanes; it does not use a Workers AI model as a
-substitute when either lane is absent.
+substitute when either lane is absent. The court-ready narrator uses only `LLM_*` for an
+external provider and is not rerouted by verifier credentials.
 
 ## Debugging Deployments
 

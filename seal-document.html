@@ -3462,7 +3462,7 @@ function tripleVerificationOf(f, ocrPages) {
   var pass = 0, fail = 0;
   for (var i = 0; i < legs.length; i++) { if (legs[i] === 'PASS') pass++; else if (legs[i] === 'FAIL') fail++; }
   var status = (!fail && (pass === 3 || pass === 2)) ? 'ACCEPTED' : 'REJECTED';
-  return { thesis: thesis, antithesis: antithesis, synthesis: synthesis, status: status, independent_verifiers: 0 };
+  return { thesis: thesis, antithesis: antithesis, synthesis: synthesis, status: status, independent_verifiers: 1 };
 }
 function secTripleVerification(ctx, data) {
   var fr = data.findings || {};
@@ -3506,16 +3506,17 @@ function secIndependentModelAssessment(ctx, data) {
   var fr = data.findings || {};
   var findings = Array.isArray(fr.findings) ? fr.findings : [];
   var providerSummary = Array.isArray(fr.verification && fr.verification.providers) ? fr.verification.providers : [];
-  var rejectedCandidates = Array.isArray(fr.verification && fr.verification.rejected_candidates) ? fr.verification.rejected_candidates : [];
+  var disputedCandidates = Array.isArray(fr.verification && fr.verification.disputed_candidates) ? fr.verification.disputed_candidates : [];
   var assessed = findings.filter(function (finding) { return finding && finding.verification && Array.isArray(finding.verification.verifiers); });
-  if (!providerSummary.length && !assessed.length && !rejectedCandidates.length) return;
+  var noEngineFindings = fr.verification && fr.verification.status === 'NO_ENGINE_FINDINGS';
+  if (!providerSummary.length && !assessed.length && !disputedCandidates.length && !noEngineFindings) return;
   ctx.newBodyPage();
   ctx.heading('INDEPENDENT MODEL ASSESSMENT');
   ctx.para('This additive section records bounded DeepSeek and Mistral assessments. CONFIRM, REFUTE and UNCLEAR are model responses, not findings or legal conclusions. A confirmation never supplies missing anchors or engine thresholds; every engine finding remains in the engine output, and a REFUTE is shown as dissent rather than suppression.', { size: 8.5, font: ctx.f.timesItalic, color: GRAY, after: 7 });
 
   var rows = [];
   var engineFindings = findings.filter(function (finding) { return finding && finding.source !== 'ai'; });
-  var appendFindingRows = function (finding, candidate, rejected) {
+  var appendFindingRows = function (finding, candidate) {
     var verifierList = finding && finding.verification && finding.verification.verifiers;
     var label = candidate
       ? String(finding.type || 'G3 candidate') + ' — ' + capText(String(finding.evidence || finding.rationale || ''), 70, '...')
@@ -3528,10 +3529,11 @@ function secIndependentModelAssessment(ctx, data) {
           provider: String(fallbackProvider.provider || 'unknown'),
           model: String(fallbackProvider.model || 'not configured'),
           outcome: String(fallbackProvider.outcome || 'unreachable'),
+          called_at: 'not recorded',
           verdict: 'NO RESPONSE',
           rationale: '',
           targets: '',
-          status: rejected ? 'REJECTED' : (candidate ? 'PENDING VERIFICATION' : 'ENGINE-ONLY')
+          status: candidate ? 'PENDING VERIFICATION' : 'ENGINE-ONLY'
         });
       }
       return;
@@ -3543,31 +3545,32 @@ function secIndependentModelAssessment(ctx, data) {
         provider: String(verifier.provider || 'unknown'),
         model: String(verifier.model || 'not configured'),
         outcome: String(verifier.outcome || 'unreachable'),
+        called_at: String(verifier.called_at || 'not recorded'),
         verdict: String(verifier.verdict || 'NO RESPONSE'),
         rationale: verifier.rationale == null ? '' : String(verifier.rationale),
         targets: Array.isArray(verifier.targets) ? verifier.targets.join(', ') : '',
-        status: rejected ? 'REJECTED' : (candidate
+        status: candidate
           ? String(finding.verification.candidate_status || 'PENDING VERIFICATION')
-          : String(finding.verification.status || 'ENGINE-ONLY'))
+          : String(finding.verification.status || 'ENGINE-ONLY')
       });
     }
   };
   for (var fi = 0; fi < findings.length; fi++) {
     var finding = findings[fi];
-    if (finding && finding.source === 'ai') appendFindingRows(finding, true, false);
-    else if (finding) appendFindingRows(finding, false, false);
+    if (finding && finding.source === 'ai') appendFindingRows(finding, true);
+    else if (finding) appendFindingRows(finding, false);
   }
-  for (var ri = 0; ri < rejectedCandidates.length; ri++) appendFindingRows(rejectedCandidates[ri], true, true);
 
   if (rows.length) {
     ctx.table(
       [
-        { key: 'item', title: 'Finding or candidate', w: 140 },
-        { key: 'provider', title: 'Provider', w: 60 },
-        { key: 'model', title: 'Model', w: 95 },
-        { key: 'outcome', title: 'Outcome', w: 70 },
-        { key: 'verdict', title: 'Verdict', w: 65 },
-        { key: 'status', title: 'Status', w: 74 }
+        { key: 'item', title: 'Finding or candidate', w: 118 },
+        { key: 'provider', title: 'Provider', w: 55 },
+        { key: 'model', title: 'Model', w: 78 },
+        { key: 'outcome', title: 'Outcome', w: 58 },
+        { key: 'verdict', title: 'Verdict', w: 54 },
+        { key: 'status', title: 'Status', w: 68 },
+        { key: 'called_at', title: 'Called (UTC)', w: 75 }
       ],
       rows,
       { size: 7 }
@@ -3622,10 +3625,12 @@ function secIndependentModelAssessment(ctx, data) {
       return verifier && verifier.outcome === 'ok' && verifier.verdict === 'REFUTE';
     });
   });
-  if (engineHasRefutation) {
+  if (noEngineFindings || !engineFindings.length) {
+    ctx.para('Overall engine-finding outcome: NO ENGINE FINDINGS. No model verdict can create or promote a finding.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
+  } else if (engineHasRefutation) {
     ctx.para('Overall engine-finding outcome: DISPUTED. The engine findings are retained; REFUTE responses are recorded above as dissent.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
   } else if (!engineHasConfirmation) {
-    ctx.para('Overall engine-finding outcome: ENGINE-ONLY.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
+    ctx.para('Overall engine-finding outcome: ENGINE-ONLY. Engine findings exist; no independent model confirmation was received.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
   } else {
     ctx.para('Independent model confirmations are recorded per finding above; any finding without an engine evidence threshold remains unpromoted.', { size: 8.5, font: ctx.f.timesBold, color: NAVY2, after: 6 });
   }
@@ -3636,27 +3641,9 @@ function secIndependentModelAssessment(ctx, data) {
     }).join('; ') + '.'
     : 'No independent model-verifier response was recorded.'), { size: 8.5, font: ctx.f.times, color: NAVY2, after: 6 });
 
-  if (rejectedCandidates.length) {
-    ctx.subHeading('Rejected G3 candidates retained for audit', { toc: false });
-    ctx.table(
-      [
-        { key: 'candidate', title: 'Candidate / quoted fragment', w: 185 },
-        { key: 'disposition', title: 'Disposition', w: 78 },
-        { key: 'outcomes', title: 'Provider outcomes', w: 221 }
-      ],
-      rejectedCandidates.map(function (candidate) {
-        var verifiers = candidate.verification && candidate.verification.verifiers || [];
-        return {
-          candidate: capText(String(candidate.type || 'AI candidate') + ' — ' + String(candidate.location || '') + ' — ' + String(candidate.quote || candidate.rationale || ''), 90, '...'),
-          disposition: 'REJECTED',
-          outcomes: verifiers.map(function (verifier) {
-            return String(verifier.provider || 'unknown') + ': ' + String(verifier.verdict || 'NO RESPONSE') +
-              ' (' + String(verifier.outcome || 'unreachable') + ')';
-          }).join('; ')
-        };
-      }),
-      { size: 7 }
-    );
+  if (disputedCandidates.length) {
+    ctx.subHeading('Disputed advisory candidates retained', { toc: false });
+    ctx.para(disputedCandidates.length + ' G3 candidate' + (disputedCandidates.length === 1 ? ' remains' : 's remain') + ' visible as advisory material. Model REFUTE responses and their rationales are recorded above; only engine thresholds or explicit human review can remove a candidate from presentation.', { size: 8.5, font: ctx.f.times, color: NAVY2, after: 6 });
   }
 }
 
@@ -21429,7 +21416,7 @@ async function proceedAsPrivate() {
   document.getElementById('clientField').classList.remove('visible');
   document.getElementById('paymentGate').classList.remove('visible');
   try {
-    await runSealingPipeline();
+    await voRunSealingPipeline();
   } catch (err) {
     console.error('Pipeline error:', err);
     for (var i = 5; i <= 8; i++) updateStep(i, 'error', '');
@@ -21445,7 +21432,7 @@ async function proceedAsPrivate() {
 async function proceedWithSealing() {
   document.getElementById('paymentGate').classList.remove('visible');
   try {
-    await runSealingPipeline();
+    await voRunSealingPipeline();
   } catch (err) {
     console.error('Pipeline error:', err);
     for (var i = 5; i <= 8; i++) updateStep(i, 'error', '');
@@ -21533,6 +21520,30 @@ let _pipelineTextSample = '';
 // so the narrator excerpt can be built AROUND the pages the findings anchor to
 // rather than the document's opening pages. Dropped on reset.
 let _pipelineTextBlocks = null;
+var _voSealRunActive = false;
+var _voRunEvidenceSnapshot = null;
+
+async function voWithSealRunLock(task) {
+  if (_voSealRunActive) return false;
+  _voSealRunActive = true;
+  var button = document.getElementById('sealBtn');
+  var buttonText = button ? button.textContent : '';
+  if (button) {
+    button.disabled = true;
+    button.setAttribute('aria-busy', 'true');
+    button.textContent = 'Sealing in progress...';
+  }
+  try {
+    return await task();
+  } finally {
+    _voSealRunActive = false;
+    if (button) {
+      button.removeAttribute('aria-busy');
+      button.textContent = buttonText;
+      button.disabled = !(selectedFile || (selectedFiles && selectedFiles.length) || (selectedAudioFiles && selectedAudioFiles.length));
+    }
+  }
+}
 
 // ==================== BUILD SEALED PDF ====================
 
@@ -22646,9 +22657,20 @@ function voShowPreflightBlock(msg) {
 }
 
 async function startSealing() {
-  if (selectedAudioFiles.length) { return voSealAudioBatch(); }
+  if (_voSealRunActive) return false;
+  if (document.getElementById('paymentGate') && document.getElementById('paymentGate').classList.contains('visible')) return false;
+  if (selectedAudioFiles.length) return await voWithSealRunLock(voSealAudioBatch);
   if (!selectedFile && selectedFiles.length === 0) return;
+  _voRunEvidenceSnapshot = { textBlocks: null, ocrRescuedPages: [] };
+  try {
+    return await voWithSealRunLock(voStartSealingRun);
+  } finally {
+    var paymentGate = document.getElementById('paymentGate');
+    if (!paymentGate || !paymentGate.classList.contains('visible')) _voRunEvidenceSnapshot = null;
+  }
+}
 
+async function voStartSealingRun() {
   // Free any blob: URLs from a previous seal/retry before we build a large new
   // one — otherwise each attempt on a big document piles tens of MB of
   // un-revoked object URLs onto the tab until downloads/share start failing.
@@ -22764,7 +22786,13 @@ async function startSealing() {
           updateStep('Fraud', 'processing', 'Scanning page ' + done + ' of ' + total + ' - 61 contradiction detectors running...');
         }, { referenceTime: new Date().toISOString() }); // the analysis instant is an input, never read by the engine (determinism): it dates the "dated after its analysis" note
         // Keep the per-page text for the finding-anchored narrator excerpt.
-        try { _pipelineTextBlocks = (forensicResult && Array.isArray(forensicResult.pageTexts)) ? forensicResult.pageTexts : null; } catch (ePT) { _pipelineTextBlocks = null; }
+        try {
+          _pipelineTextBlocks = (forensicResult && Array.isArray(forensicResult.pageTexts)) ? forensicResult.pageTexts : null;
+          if (_voRunEvidenceSnapshot) _voRunEvidenceSnapshot.textBlocks = _pipelineTextBlocks ? _pipelineTextBlocks.slice() : null;
+        } catch (ePT) {
+          _pipelineTextBlocks = null;
+          if (_voRunEvidenceSnapshot) _voRunEvidenceSnapshot.textBlocks = null;
+        }
       } catch(e) {
         console.warn('Forensic engine error:', e);
         forensicResult = { clean: true, overallScore: 0, confidence: 'CLEAN', totalFindings: 0, findings: [], scanFailed: true, scanError: (e && e.message ? e.message : 'unknown'), extractionNotes: 'Forensic engine error: ' + (e && e.message ? e.message : 'unknown') + '. The scan could not complete; absence of findings here is NOT a clean result.', summary: 'Forensic scan could not complete' };
@@ -22843,7 +22871,7 @@ async function startSealing() {
     }
 
     // Continue with sealing pipeline
-    await runSealingPipeline();
+    await voRunSealingPipeline();
 
   } catch (err) {
     console.error('SEALING ERROR:', err);
@@ -22873,6 +22901,14 @@ async function startSealing() {
   } finally {
     document.getElementById('sealBtn').disabled = false;
   }
+}
+
+async function voRunSealingPipeline() {
+  if (_voSealRunActive) return await runSealingPipeline();
+  return await voWithSealRunLock(async function () {
+    try { return await runSealingPipeline(); }
+    finally { _voRunEvidenceSnapshot = null; }
+  });
 }
 
 // ==================== OPTIONAL AI REVIEW (CLOUDFLARE WORKERS AI) ====================
@@ -23366,33 +23402,57 @@ async function aiAssessFindings(findings) {
   return { ran: true, findings: all, added: added, assessed: assessed.length, noted: noted, duplicates: duplicates, droppedUnanchored: droppedUnanchored };
 }
 
-function voVerifierContext(quote, page) {
-  var blocks = Array.isArray(_pipelineTextBlocks) ? _pipelineTextBlocks : [];
-  var pageIndex = (Number(page) > 0 && Number(page) <= blocks.length) ? Number(page) - 1 : -1;
-  var candidates = pageIndex >= 0 ? [pageIndex] : blocks.map(function (_, index) { return index; });
-  var needle = String(quote || '').replace(/\s+/g, ' ').trim().toLowerCase();
+function voVerifierContext(quote, page, runSnapshot) {
+  var blocks = runSnapshot && Array.isArray(runSnapshot.textBlocks) ? runSnapshot.textBlocks : [];
+  var sourceQuote = String(quote || '').trim();
+  if (!sourceQuote) return { text: '', status: 'empty_quote' };
+  var hasPage = page != null;
+  var pageNumber = hasPage ? Number(page) : null;
+  var pageIndex = hasPage ? pageNumber - 1 : -1;
+  if (hasPage && (!Number.isSafeInteger(pageNumber) || pageNumber < 1 || pageIndex >= blocks.length)) {
+    return { text: '', status: 'page_unavailable' };
+  }
+  var candidates = hasPage ? [pageIndex] : blocks.map(function (_, index) { return index; });
+  var needleParts = sourceQuote.split(/\s+/).filter(Boolean);
+  if (!needleParts.length) return { text: '', status: 'empty_quote' };
+  var escaped = needleParts.map(function (part) {
+    return part.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  });
+  var matcher;
+  try { matcher = new RegExp(escaped.join('\\s+'), 'i'); } catch (e) { return { text: '', status: 'missing_context' }; }
   for (var i = 0; i < candidates.length; i++) {
     var text = String(blocks[candidates[i]] || '');
-    var normalized = text.replace(/\s+/g, ' ').toLowerCase();
-    var at = normalized.indexOf(needle);
-    if (at >= 0) return text.slice(Math.max(0, at - 180), Math.min(text.length, at + needle.length + 180));
+    var match = matcher.exec(text);
+    if (!match) continue;
+    var before = text.slice(Math.max(0, match.index - 180), match.index);
+    var afterStart = match.index + match[0].length;
+    var after = text.slice(afterStart, Math.min(text.length, afterStart + 180));
+    var context = before + (before && after ? ' … ' : '') + after;
+    return { text: context, status: 'available' };
   }
-  return '';
+  return { text: '', status: hasPage ? 'missing_context' : 'page_unavailable' };
 }
 
-function voFindingVerificationPacket(finding, id, candidate) {
+function voFindingVerificationPacket(finding, id, candidate, runSnapshot) {
   var anchor = finding && finding.anchor || {};
   var quotes = Array.isArray(anchor.quote) ? anchor.quote : [];
   var pages = Array.isArray(anchor.where) ? anchor.where : [];
   var locationPages = (typeof voRulePagesOf === 'function') ? voRulePagesOf(String(finding && finding.location || '')) : [];
   var quoteA = String(quotes[0] || (finding && finding.evidence) || '').slice(0, 1000);
   var quoteB = String(quotes[1] || '').slice(0, 1000);
-  var pageA = Number(pages[0]) || Number(locationPages[0]) || 0;
-  var pageB = Number(pages[1]) || Number(locationPages[1]) || pageA;
+  var sourcePageA = pages.length ? pages[0] : locationPages.length ? locationPages[0] : null;
+  var sourcePageB = pages.length > 1 ? pages[1] : locationPages.length > 1 ? locationPages[1] : sourcePageA;
+  var pageAValue = Number(sourcePageA);
+  var pageBValue = Number(sourcePageB);
+  var pageA = Number.isSafeInteger(pageAValue) && pageAValue > 0 ? pageAValue : null;
+  var pageB = Number.isSafeInteger(pageBValue) && pageBValue > 0 ? pageBValue : null;
+  var contextA = voVerifierContext(quoteA, sourcePageA, runSnapshot);
+  var contextB = voVerifierContext(quoteB, sourcePageB, runSnapshot);
   var counterCheck = '';
   try {
     var legs = window.VerumReport && window.VerumReport._tripleVerificationOf
-      ? window.VerumReport._tripleVerificationOf(finding, _voOcrRescuedPages || []) : null;
+      ? window.VerumReport._tripleVerificationOf(finding,
+        runSnapshot && Array.isArray(runSnapshot.ocrRescuedPages) ? runSnapshot.ocrRescuedPages : []) : null;
     counterCheck = legs && legs.antithesis ? String(legs.antithesis.reason || '') : '';
   } catch (e) { counterCheck = ''; }
   var type = String(finding && finding.type || 'UNKNOWN');
@@ -23412,8 +23472,10 @@ function voFindingVerificationPacket(finding, id, candidate) {
     quote_b: quoteB,
     page_a: pageA || null,
     page_b: pageB || null,
-    context_a: voVerifierContext(quoteA, pageA),
-    context_b: voVerifierContext(quoteB, pageB),
+    context_a: contextA.text,
+    context_a_status: contextA.status,
+    context_b: contextB.text,
+    context_b_status: contextB.status,
     counter_check: counterCheck.slice(0, 300),
     candidate: candidate
   };
@@ -23427,7 +23489,7 @@ function voVerifierFailureOutcome(error) {
   return 'unreachable';
 }
 
-function voEngineEvidencePass(finding) {
+function voEngineEvidencePass(finding, runSnapshot) {
   if (!finding || finding.source === 'ai' || !finding.evidence || !finding.location ||
       !finding.anchor || !Array.isArray(finding.anchor.quote) || !finding.anchor.quote.length) return false;
   var anchoredQuotes = finding.anchor.quote.filter(function (quote) {
@@ -23436,7 +23498,8 @@ function voEngineEvidencePass(finding) {
   if (!anchoredQuotes.length) return false;
   try {
     var legs = window.VerumReport && window.VerumReport._tripleVerificationOf
-      ? window.VerumReport._tripleVerificationOf(finding, _voOcrRescuedPages || []) : null;
+      ? window.VerumReport._tripleVerificationOf(finding,
+        runSnapshot && Array.isArray(runSnapshot.ocrRescuedPages) ? runSnapshot.ocrRescuedPages : []) : null;
     return !!(legs && legs.status === 'ACCEPTED' && legs.thesis && legs.thesis.result === 'PASS' &&
       legs.synthesis && legs.synthesis.result === 'PASS');
   } catch (e) {
@@ -23448,7 +23511,7 @@ function voFindingVerificationStatus(verifiers, enginePass, candidate) {
   var list = Array.isArray(verifiers) ? verifiers : [];
   var confirms = list.filter(function (record) { return record && record.outcome === 'ok' && record.verdict === 'CONFIRM'; });
   var refutes = list.filter(function (record) { return record && record.outcome === 'ok' && record.verdict === 'REFUTE'; });
-  if (candidate) return refutes.length === 2 ? 'REJECTED' : 'PENDING VERIFICATION';
+  if (candidate) return refutes.length ? 'DISPUTED-ADVISORY' : 'PENDING VERIFICATION';
   if (refutes.length) return 'DISPUTED';
   if (!enginePass) return 'ENGINE-EVIDENCE-INSUFFICIENT';
   if (confirms.length === 2) return 'TRIPLE-CONFIRMATION';
@@ -23456,19 +23519,23 @@ function voFindingVerificationStatus(verifiers, enginePass, candidate) {
   return 'ENGINE-ONLY';
 }
 
-async function aiVerifyFindings(findings) {
+async function aiVerifyFindings(findings, runSnapshot) {
   var list = Array.isArray(findings) ? findings : [];
+  var engineFindingCount = list.filter(function (finding) { return finding && finding.source !== 'ai'; }).length;
   var packets = [], byId = Object.create(null), findingIndex = 0, candidateIndex = 0;
   for (var i = 0; i < list.length; i++) {
     var f = list[i];
     if (!f) continue;
     var candidate = f.source === 'ai';
     var id = (candidate ? 'C' + String(++candidateIndex).padStart(3, '0') : 'F' + String(++findingIndex).padStart(3, '0'));
-    var packet = voFindingVerificationPacket(f, id, candidate);
+    var packet = voFindingVerificationPacket(f, id, candidate, runSnapshot);
     packets.push(packet);
     byId[id] = f;
   }
-  if (!packets.length) return { providers: [], rejectedCandidates: [], called: 0 };
+  if (!packets.length) return {
+    findings: list, providers: [], disputedCandidates: [], called: 0,
+    engineFindings: 0, status: 'NO_ENGINE_FINDINGS'
+  };
   var emptyHash = '';
   try {
     var emptyDigest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(''));
@@ -23478,7 +23545,7 @@ async function aiVerifyFindings(findings) {
   for (var packetIndex = 0; packetIndex < packets.length; packetIndex++) {
     var proposedBatch = currentBatch.concat([packets[packetIndex]]);
     var proposedBody = JSON.stringify({ findings: proposedBatch });
-    if (currentBatch.length && (proposedBatch.length > 20 || new TextEncoder().encode(proposedBody).byteLength > 44 * 1024)) {
+    if (currentBatch.length && (proposedBatch.length > 8 || new TextEncoder().encode(proposedBody).byteLength > 44 * 1024)) {
       batches.push(currentBatch);
       currentBatch = [packets[packetIndex]];
     } else {
@@ -23491,7 +23558,11 @@ async function aiVerifyFindings(findings) {
     var batch = batches[start];
     try {
       var res = await aiApiPost('/api/v1/ai/verify-findings', { findings: batch }, 25000);
-      if (!res || !Array.isArray(res.verifiers)) throw new Error('Verifier endpoint returned an invalid response');
+      if (!res || !Array.isArray(res.verifiers)) {
+        var malformedEndpointResponse = new Error('Verifier endpoint returned an invalid response');
+        malformedEndpointResponse.name = 'SyntaxError';
+        throw malformedEndpointResponse;
+      }
       calls.push({ ids: batch.map(function (item) { return item.id; }), verifiers: res.verifiers });
     } catch (error) {
       var outcome = voVerifierFailureOutcome(error);
@@ -23511,7 +23582,7 @@ async function aiVerifyFindings(findings) {
     }
   }
   var providerSummaries = { deepseek: [], mistral: [] };
-  var rejectedCandidates = [];
+  var disputedCandidates = [];
   for (var ci = 0; ci < calls.length; ci++) {
     var call = calls[ci];
     var responders = ['deepseek', 'mistral'].map(function (provider) {
@@ -23541,26 +23612,19 @@ async function aiVerifyFindings(findings) {
       var confirms = verifierRecords.filter(function (record) { return record.verdict === 'CONFIRM' && record.outcome === 'ok'; });
       var refutes = verifierRecords.filter(function (record) { return record.verdict === 'REFUTE' && record.outcome === 'ok'; });
       var sourceFinding = finding;
-      var enginePass = voEngineEvidencePass(sourceFinding);
+      var enginePass = voEngineEvidencePass(sourceFinding, runSnapshot);
       var status = voFindingVerificationStatus(verifierRecords, enginePass, sourceFinding.source === 'ai');
       var verification = {
-        schema_note: 'additive, v1.12.0',
         status: status,
-        independent_verifiers: confirms.length,
         verifiers: verifierRecords
       };
       if (finding.source === 'ai') {
         verification.candidate_status = status;
-        if (verification.candidate_status === 'REJECTED') {
-          rejectedCandidates.push({ id: id, type: finding.type, rationale: finding.rationale, quote: finding.evidence, location: finding.location, verification: verification });
+        if (verification.candidate_status === 'DISPUTED-ADVISORY') {
+          disputedCandidates.push({ id: id, type: finding.type, rationale: finding.rationale, quote: finding.evidence, location: finding.location, verification: verification });
         }
       }
       finding.verification = verification;
-      if (!finding.source || finding.source !== 'ai') {
-        if (finding.triple_verification && typeof finding.triple_verification === 'object') {
-          finding.triple_verification.independent_verifiers = confirms.length;
-        }
-      }
       responders.forEach(function (providerResult) { providerSummaries[providerResult.provider].push({
         id: id,
         model: providerResult.model || null,
@@ -23570,9 +23634,8 @@ async function aiVerifyFindings(findings) {
       }); });
     }
   }
-  var activeFindings = list.filter(function (f) { return !(f && f.source === 'ai' && f.verification && f.verification.candidate_status === 'REJECTED'); });
   return {
-    findings: activeFindings,
+    findings: list,
     providers: ['deepseek', 'mistral'].map(function (provider) {
       var rows = providerSummaries[provider];
       var outcomes = rows.map(function (row) { return row.outcome; });
@@ -23581,14 +23644,18 @@ async function aiVerifyFindings(findings) {
         outcome: outcomes.length && outcomes.every(function (value) { return value === 'ok'; }) ? 'ok'
           : outcomes.indexOf('timeout') >= 0 ? 'timeout'
             : outcomes.indexOf('http_error') >= 0 ? 'http_error'
-              : outcomes.indexOf('malformed_response') >= 0 ? 'malformed_response' : 'unreachable',
+              : outcomes.indexOf('malformed_response') >= 0 ? 'malformed_response'
+                : outcomes.indexOf('configuration_error') >= 0 ? 'configuration_error'
+                  : outcomes.indexOf('duplicate_lane') >= 0 ? 'duplicate_lane' : 'unreachable',
         model: rows.filter(function (row) { return !!row.model; }).map(function (row) { return row.model; })[0] || null,
         error_detail: rows.filter(function (row) { return !!row.error_detail; }).map(function (row) { return row.error_detail; })[0] || null,
         findings: rows.length
       };
     }),
-    rejectedCandidates: rejectedCandidates,
-    called: packets.length
+    disputedCandidates: disputedCandidates,
+    called: packets.length,
+    engineFindings: engineFindingCount,
+    status: engineFindingCount ? null : 'NO_ENGINE_FINDINGS'
   };
 }
 
@@ -23846,14 +23913,10 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
         ? 'G3-RAISED CANDIDATE - PENDING VERIFICATION'
         : 'ENGINE-VERIFIED',
       triple_verification: (!fromAi && f.type !== 'SERIAL' && typeof window !== 'undefined' && window.VerumReport && window.VerumReport._tripleVerificationOf)
-        ? Object.assign({}, window.VerumReport._tripleVerificationOf(f, (typeof _voOcrRescuedPages !== 'undefined' && _voOcrRescuedPages) ? _voOcrRescuedPages : []),
-            f.verification ? { independent_verifiers: f.verification.independent_verifiers || 0 } : { independent_verifiers: 0 }) : null,
+        ? window.VerumReport._tripleVerificationOf(f, (typeof _voOcrRescuedPages !== 'undefined' && _voOcrRescuedPages) ? _voOcrRescuedPages : []) : null,
       // The advisory AI review's note, when it doubted the finding. The
       // finding itself is unchanged: the AI removes and changes nothing.
       ai_review_note: (!fromAi && f.aiReviewNote) ? String(f.aiReviewNote) : null,
-      // v1.12.0 adds model adjudication provenance without changing the
-      // legacy verification_status or engine finding fields.
-      verification: f.verification || undefined,
       // v1.3.0 (annexure EB, 11 Sep 2026): what "verified" meant here is
       // spelled out. review_status says whether the advisory AI review ran;
       // ocr_provenance says whether the quoted characters came through OCR,
@@ -23886,6 +23949,47 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
   var candidates = records.filter(function (r) {
     return r.verification_status !== 'ENGINE-VERIFIED';
   }).length;
+  var verificationExtension = null;
+  if (result && result.verification) {
+    verificationExtension = {
+      module_version: '0.1.0',
+      draft_only: true,
+      contract_status: 'PROPOSED_ONLY_NOT_APPROVED_FOR_PRODUCTION',
+      status: result.verification.status || 'completed',
+      engine_findings: Number(result.verification.engine_findings) || 0,
+      providers: (Array.isArray(result.verification.providers) ? result.verification.providers : []).map(function (provider) {
+        return {
+          provider: provider.provider || null,
+          model: provider.model || null,
+          outcome: provider.outcome || 'unreachable',
+          error_detail: provider.error_detail || null
+        };
+      }),
+      observations: list.filter(function (finding) {
+        return finding && finding.verification && Array.isArray(finding.verification.verifiers);
+      }).map(function (finding) {
+        var index = list.indexOf(finding);
+        var record = records[index];
+        return {
+          observation_id: record ? record.contradiction_id : null,
+          status: finding.verification.status || finding.verification.candidate_status || null,
+          candidate: finding.source === 'ai',
+          verifiers: finding.verification.verifiers.map(function (verifier) {
+            return {
+              provider: verifier.provider || null,
+              model: verifier.model || null,
+              verdict: verifier.verdict || null,
+              rationale: verifier.rationale == null ? null : String(verifier.rationale),
+              targets: Array.isArray(verifier.targets) ? verifier.targets : [],
+              raw_response_sha256: verifier.raw_response_sha256 || null,
+              outcome: verifier.outcome || 'unreachable',
+              error_detail: verifier.error_detail || null
+            };
+          })
+        };
+      })
+    };
+  }
   return {
     engine_version: VO_ENGINE_VERSION,
     // The signed rule package the scan applied (version, key id, canonical
@@ -23896,7 +24000,7 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
     // v1.9.0 (Sourcery #5, 10 Oct 2026): cross_document_observations are exported,
     // each carrying the byte-faithful passage (quote_verbatim) as well as the
     // display quote — so the record, not only the PDF, holds the unedited text.
-    findings_json_version: '1.12.0',
+    findings_json_version: '1.11.0',
     generated_utc: new Date().toISOString(),
     analysis_reference_utc: (result && result.referenceTime) || null,
     source_bundle: docName,
@@ -23945,6 +24049,10 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
         };
       });
     })(),
+    // Owner-directed draft extension only: keep the production Findings JSON
+    // version and every v1.11.0 field unchanged. Older readers ignore this
+    // namespaced observation object; it is not a production schema approval.
+    analysis_extensions: verificationExtension ? { 'vo.verifier-adjudication': verificationExtension } : undefined,
     // v1.11.0 (batch 7a, v6.1 §6): the dated conduct ledger the findings were
     // measured against — invoices, receipts, payments, statements, each with
     // its page. The ledger is sealed INSIDE this file (findingsJsonSha512):
@@ -23952,7 +24060,6 @@ function buildFindingsJson(result, docName, docSha512, pageCount, caseInfo) {
     // the fingerprint. span_months, event_count and total_value are exposed
     // on the face of the summary.
     conduct_ledger: (result && result.conductLedger) ? result.conductLedger : null,
-    verification: (result && result.verification) ? result.verification : undefined,
     contradictions: records
   };
 }
@@ -25983,6 +26090,7 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   // pages so a reader knows the quoted characters came through OCR and must
   // be verified against the page image before exact wording is relied on.
   _voOcrRescuedPages = rescued.slice();
+  if (_voRunEvidenceSnapshot) _voRunEvidenceSnapshot.ocrRescuedPages = rescued.slice();
   _voOcrConfidence = ocrConf;
   // Full per-page accounting: every candidate page ends up in exactly one of
   // rescued / noText / renderFailed, so the extraction note states precisely
@@ -26535,30 +26643,31 @@ async function runSealingPipeline() {
       }
       updateStep(7, 'processing', 'Independent finding review (DeepSeek and Mistral)...');
       try {
-        var verificationResult = await aiVerifyFindings(reportFraudResult.findings);
+        var verificationResult = await aiVerifyFindings(reportFraudResult.findings, _voRunEvidenceSnapshot);
         _pipelineAiAddedFindings = verificationResult.findings.filter(function (finding) { return finding && finding.source === 'ai'; });
         reportFraudResult = Object.assign({}, reportFraudResult, {
           findings: verificationResult.findings,
           totalFindings: verificationResult.findings.length,
           verification: {
-            schema_note: 'additive, v1.12.0',
+            status: verificationResult.status,
+            engine_findings: verificationResult.engineFindings,
             providers: verificationResult.providers,
-            rejected_candidates: verificationResult.rejectedCandidates
+            disputed_candidates: verificationResult.disputedCandidates
           }
         });
         if (aiReviewInfo && aiReviewInfo.applied) {
-          aiReviewInfo.rejected = verificationResult.rejectedCandidates.length;
           aiReviewInfo.added = verificationResult.findings.filter(function (finding) { return finding && finding.source === 'ai'; }).length;
         }
       } catch (verificationError) {
         console.warn('[VO-AI] independent finding review failed:', verificationError && verificationError.message ? verificationError.message : verificationError);
         reportFraudResult = Object.assign({}, reportFraudResult, {
           verification: {
-            schema_note: 'additive, v1.12.0',
+            engine_findings: reportFraudResult && Array.isArray(reportFraudResult.findings)
+              ? reportFraudResult.findings.filter(function (finding) { return finding && finding.source !== 'ai'; }).length : 0,
             providers: ['deepseek', 'mistral'].map(function (provider) {
               return { provider: provider, model: null, outcome: 'unreachable', error_detail: 'verification request failed before a provider result was received' };
             }),
-            rejected_candidates: []
+            disputed_candidates: []
           }
         });
       }
@@ -26607,6 +26716,20 @@ async function runSealingPipeline() {
     _pipelineAiNotes = [];
     _pipelineB9Recs = [];
     _pipelineB9Info = null;
+  }
+  if (sealMode === 'forensic' && reportFraudResult && !reportFraudResult.scanFailed &&
+      (!Array.isArray(reportFraudResult.findings) || reportFraudResult.findings.length === 0) &&
+      !reportFraudResult.verification) {
+    reportFraudResult = Object.assign({}, reportFraudResult, {
+      verification: {
+        status: 'NO_ENGINE_FINDINGS',
+        engine_findings: 0,
+        providers: ['deepseek', 'mistral'].map(function (provider) {
+          return { provider: provider, model: null, outcome: 'not_run', error_detail: 'no engine findings to adjudicate' };
+        }),
+        disputed_candidates: []
+      }
+    });
   }
 
   // Seal Only mode: one-page Seal Certificate — NEVER breaks the seal flow.
@@ -27908,6 +28031,7 @@ function showResults(sha256, sha512, sealId, otsResult, sealedBytes, meta, passw
 }
 
 function resetSealing() {
+  if (_voSealRunActive) return;
   document.getElementById('results').classList.remove('visible');
   document.getElementById('pipeline').classList.remove('visible');
   for (let i = 1; i <= 8; i++) updateStep(i, 'pending', '');
@@ -27920,6 +28044,7 @@ function resetSealing() {
   _pipelineClassification = null;
   _pipelineTextSample = '';
   _pipelineTextBlocks = null;
+  _voRunEvidenceSnapshot = null;
   _voUnreadPages = null;
   _voOcrRescuedPages = null;
   _voOcrConfidence = null;

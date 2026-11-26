@@ -37,7 +37,7 @@ ok(runStart >= 0 && runEnd > runStart && runList.length === 61 && new Set(runLis
 ok(!runList.includes('D37_DETECT_INTERNAL_CONFLICT_CATCHALL') && detectorKeys.includes('D37_DETECT_INTERNAL_CONFLICT_CATCHALL'), 'D37 is registered and runs separately from the main run-list');
 ok(!runList.includes('D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT') && detectorKeys.includes('D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT'), 'D10A is retained but inactive');
 ok(reportCounts && +reportCounts[1] === runList.length && +reportCounts[2] === ctKeys.length && +reportCounts[3] === 17, 'report fallback counts match main run-list, taxonomy and serial registry');
-ok(findingsVersion && findingsVersion[1] === '1.12.0', 'production findings JSON version is source-derived 1.12.0');
+ok(findingsVersion && findingsVersion[1] === '1.11.0', 'production Findings JSON version remains source-derived 1.11.0');
 ok(suiteCount === 68 && suiteRegistry.includes("'finding-verification.test.mjs'") && suiteRegistry.includes("'detection-credibility.test.mjs'") && suiteRegistry.includes("'pr327-review.test.mjs'") && suiteRegistry.includes("'analysis-contracts.test.mjs'") && suiteRegistry.includes("'documentation-consistency.test.mjs'") && suiteRegistry.includes("'evaluation-metrics.test.mjs'") && suiteRegistry.includes("'evaluation-contractnli.test.mjs'") && suiteRegistry.includes("'evaluation-contradoc.test.mjs'") && suiteRegistry.includes("'evaluation-eyecite.test.mjs'") && suiteRegistry.includes("'legal-citations.test.mjs'") && suiteRegistry.includes("'legal-citations-za.test.mjs'") && suiteRegistry.includes("'redaction-fixtures.test.mjs'") && suiteRegistry.includes("'pdf-graph.test.mjs'"), 'all 68 Node suites are explicitly registered');
 const testsGuide = read('tests/README.md');
 ok(testsGuide.includes('| 58 | `evaluation-metrics` | `evaluation-metrics.test.mjs` | 116 |') &&
@@ -47,7 +47,7 @@ ok(testsGuide.includes('| 58 | `evaluation-metrics` | `evaluation-metrics.test.m
 'test guidance records the current 68-suite registry and exact review-suite assertions');
 
 const readme = read('README.md');
-ok(readme.includes('VO_ENGINE_VERSION 5.7.4-web') && readme.includes('CT01–CT61') && readme.includes('findings JSON 1.12.0'), 'README current engine/taxonomy/findings line agrees with source');
+ok(readme.includes('VO_ENGINE_VERSION 5.7.4-web') && readme.includes('CT01–CT61') && readme.includes('Findings JSON 1.11.0'), 'README current engine/taxonomy/findings line agrees with source');
 ok(readme.includes('report builder v1.3.1'), 'README names the source-derived report builder');
 ok(readme.includes('website + Android `1verum`') && readme.includes('Android reference `cursorfu`') && readme.includes('Guardian firewall `firebase`'), 'README retains the four-system surface model');
 ok(readme.includes('`seal-module/web/` is NOT the live site') && readme.includes('Edit the root files.'), 'README distinguishes root production sources from obsolete snapshots');
@@ -63,7 +63,7 @@ ok(normalizedAgents.includes('Secondary-report exclusion is classification, not 
   'AGENTS preserves the report-exclusion and disclosure invariant');
 
 const architecture = read('ARCHITECTURE.md');
-ok(architecture.includes('is at v1.12.0') && architecture.includes('optional per-finding independent-verifier provenance'), 'ARCHITECTURE names the current website findings version and additive fields');
+ok(architecture.includes('remains at v1.11.0') && architecture.includes('optional draft `analysis_extensions` v0.1.0'), 'ARCHITECTURE names the current website findings version and draft provenance extension');
 ok(architecture.includes('authoritative') || architecture.includes('`FINDINGS_JSON_SCHEMA.json` is kept in `1verum` and `firebase`'), 'ARCHITECTURE retains the external authoritative findings schema boundary');
 ok(architecture.includes('**63 entries**') && architecture.includes('**61 entries**'), 'ARCHITECTURE distinguishes total registry and main run-list');
 
@@ -73,7 +73,7 @@ ok(reference.includes('**68 registered suites**') && reference.includes('QPDF-WA
 
 const engineDoc = read('ENGINE.md');
 ok(engineDoc.includes('## 2. Contradiction types (CT01–CT61)') && engineDoc.includes('## 3. Detector inventory (63 registered entries)'), 'ENGINE current taxonomy and detector headings agree with source');
-ok(engineDoc.includes('**Findings JSON:** v1.12.0') && engineDoc.includes('report builder v1.3.1'), 'ENGINE header has current findings and report-builder versions');
+ok(engineDoc.includes('**Findings JSON:** v1.11.0') && engineDoc.includes('report builder v1.3.1'), 'ENGINE header has current findings and report-builder versions');
 ok(engineDoc.includes('**68 registered suites**'), 'ENGINE test section names the current registry size');
 const testReadme = read('tests/README.md');
 ok(engineDoc.includes('| `annexure-eb-regression.test.mjs` | 502 |') &&
@@ -91,6 +91,9 @@ ok(html.includes('/* VO-INLINE:analysis-contracts.js:START */') && html.includes
 const configPosition = html.indexOf('/* VO-INLINE:analysis-config.js:START */');
 const enginePosition = html.indexOf('/* VO-INLINE:forensic-engine-page.js:START */');
 ok(configPosition >= 0 && configPosition < enginePosition, 'configuration loads before the engine that consumes it');
-ok(/findings_json_version:\s*'1\.12\.0'/.test(html), 'the owner-approved additive verifier provenance schema is Findings JSON v1.12.0');
+ok(/findings_json_version:\s*'1\.11\.0'/.test(html) &&
+   !/verification:\s*f\.verification/.test(html) &&
+   /analysis_extensions:\s*verificationExtension/.test(html),
+  'production Findings JSON stays v1.11.0, with verifier provenance isolated from finding records');
 
 done('documentation-consistency');

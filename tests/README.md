@@ -84,10 +84,10 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 13 | `digital-forensics` | `digital-forensics.test.mjs` | 16 | `voDigitalForensicsScan` (raw PDF structure) |
 | 14 | `ocr-rescue` | `ocr-rescue.test.mjs` | 44 | The page's OCR fallback, loader and deadline helper |
 | 15 | `rule-classify` | `rule-classify.test.mjs` | 9 | The deterministic classification fallback in `seal-document.html` |
-| 16 | `findings-json` | `findings-json.test.mjs` | 53 | `buildFindingsJson`, findings JSON contract v1.12.0, optional verifier provenance and legacy compatibility |
+| 16 | `findings-json` | `findings-json.test.mjs` | 55 | `buildFindingsJson`, Findings JSON v1.11.0, unchanged finding shape, draft verifier extension and legacy compatibility |
 | 17 | `finding-anchors` | `finding-anchors.test.mjs` | 87 | WHO / WHERE / WHAT / WHEN anchoring per finding |
-| 18 | `wrangler-config` | `wrangler-config.test.mjs` | 34 | `wrangler.toml` drift lock |
-| 19 | `crop-normalize` | `crop-normalize.test.mjs` | 115 | CropBox normalisation, seal band, share ordering, certificate privacy, the voice-note path |
+| 18 | `wrangler-config` | `wrangler-config.test.mjs` | 39 | `wrangler.toml` drift lock, including the verifier usage Durable Object and migrations |
+| 19 | `crop-normalize` | `crop-normalize.test.mjs` | 185 | CropBox normalisation, seal band, share ordering, certificate privacy, the voice-note path |
 | 20 | `encrypt-detect` | `encrypt-detect.test.mjs` | 9 | `voPdfIsEncrypted` |
 | 21 | `constitution-lock` | `constitution-lock.test.mjs` | 41 | `constitution.json`, `constitution.html` and the pages that cite a version agree |
 | 22 | `ai-assess-batch` | `ai-assess-batch.test.mjs` | 19 | Client batching under the `/api/v1/ai/assess` caps; the review never removes or changes a finding, and a candidate is a duplicate only when it restates one |
@@ -116,7 +116,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
 | 66 | `pr327-review` | `pr327-review.test.mjs` | 40 | Synthetic review regressions for report exclusion, signed-rule masking, WF7, CT52, D02C, admissions and overlapping scans |
 | 67 | `detection-credibility` | `detection-credibility.test.mjs` | 106 | Synthetic report exclusion, ledger furniture, contradiction, severity, coverage and narrative-privacy regressions |
-| 68 | `finding-verification` | `finding-verification.test.mjs` | 226 | Strict mocked verifier contract, exhaustive status mapping, page-referenced evidence packets, provider failure classes, prompt injection, server-side secrets, appended report outcomes and G3-candidate disposition |
+| 68 | `finding-verification` | `finding-verification.test.mjs` | 446 | Strict mocked verifier contract, exhaustive status mapping, page-bounded context, quota/retry safeguards, prompt injection, narrative isolation, report outcomes and retained G3 candidates |
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete production/baseline registry.
 
