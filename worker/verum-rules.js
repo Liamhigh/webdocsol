@@ -1385,9 +1385,13 @@ function sweepNorm(s) {
 }
 __name(sweepNorm, "sweepNorm");
 function sweepNonEvidentiary(quote) {
-  const s = quote.trim().replace(/^[\s"'`\u2018\u2019\u201c\u201d([{]+|[\s"'`\u2018\u2019\u201c\u201d)\]},;:.]+$/g, "");
+  let s = quote.trim().replace(/^[\s"'`\u2018\u2019\u201c\u201d[{]+|[\s"'`\u2018\u2019\u201c\u201d\]},;:.]+$/g, "");
+  if (s[0] === "(" && s[s.length - 1] === ")") s = s.slice(1, -1).trim();
   if (/^(?:(?:sha[- ]?(?:256|512)(?:\s+hash)?|hash|digest|fingerprint)(?:\s*\(partial\))?\s*[:=]\s*)?(?:[a-f0-9]{12,})$/i.test(s)) return true;
   if (/^(?:(?:file(?:name)?|attachment|document)\s*[:=]\s*)?[\w./\\-]+\.(?:pdf|json|txt|docx?|xlsx?|csv|png|jpe?g|zip|html?|md)$/i.test(s)) return true;
+  const file = s.replace(/^(?:file(?:name)?|attachment|document)\s*[:=]\s*/i, "");
+  if (/^[\w./\\-]+(?:\s+[\w./\\-]+){1,3}\.(?:pdf|json|txt|docx?|xlsx?|csv|png|jpe?g|zip|html?|md)$/i.test(file) &&
+      !/\b(?:is|are|was|were|be|been|being|has|have|had|does|did|will|shall|signed|filed|paid|sold|dated|received|sent|attached)\b/i.test(file)) return true;
   if (/^(?:(?:see|refer(?:ence)? to|cf\.?)\s+)?(?:page|pages|p{1,2}\.?|section|sections|sec\.?|paragraph|paragraphs|para\.?|clause|clauses|article|articles|annex(?:ure)?|appendix|exhibit)\s*(?:\d+(?:\.\d+)*(?:\([a-z0-9]+\))*|[a-z])(?:\s*(?:[-–—,&/]|and|to|of)\s*(?:\d+(?:\.\d+)*(?:\([a-z0-9]+\))*|[a-z]))*\.?$/i.test(s)) return true;
   return false;
 }

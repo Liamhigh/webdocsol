@@ -1010,11 +1010,12 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   const filtered = await r.json();
   ok(filtered.discarded['non-evidentiary'] === 4 && filtered.unverified === 0, 'locators, sections, filenames and hashes are rejected as non-evidentiary');
   ok(filtered.recommendations.length === 2 && filtered.recommendations.every(x => /signed on/.test(x.quote)) && filtered.evidentiaryGate === '1', 'dated statements in a genuine inconsistency cluster survive the evidence gate');
-  const variants = ['analysis-output.json.', '“analysis-output.json”', 'SHA-512 hash: ' + 'b'.repeat(128), 'The agreement was signed on 12 March 2020 and filed as contract.pdf'];
+  const variants = ['analysis-output.json.', '“analysis-output.json”', 'analysis output.json', 'File: evidence bundle.pdf', 'Section 4.1(a)', 'SHA-512 hash: ' + 'b'.repeat(128), 'The agreement was signed on 12 March 2020 and filed as contract.pdf', 'Signed contract.pdf'];
   r = await sweepPost({ pages: [{ page: 1, text: variants.join('\n') }] }, modelSays(variants.map(quote => ({ type: 'CT01', severity: 3, rationale: 'Dates differ in the record.', quote, page: 1 }))));
   const variantResult = await r.json();
-  ok(variantResult.discarded['non-evidentiary'] === 3 && variantResult.recommendations.length === 1 &&
-    variantResult.recommendations[0].quote === variants[3], 'punctuated filenames and labelled hashes are rejected without discarding statements ending in filenames');
+  ok(variantResult.discarded['non-evidentiary'] === 6 && variantResult.recommendations.length === 2 &&
+    variantResult.recommendations[0].quote === variants[6] && variantResult.recommendations[1].quote === variants[7],
+    'filename, subsection and hash variants are rejected without discarding statements ending in filenames');
 
   r = await sweepPost({ pages, known: [] }, async () => { throw new Error('model down'); });
   sw = await r.json();
