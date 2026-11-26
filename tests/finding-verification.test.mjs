@@ -659,9 +659,13 @@ for (const malformedCase of [
 
 {
   const buildSource = report.slice(report.indexOf('async function build(opts)'));
-  ok(/secMethodology\(ctx, data\);[\s\S]*secIndependentModelAssessment\(ctx, data\);[\s\S]*drawToc\(ctx, tocPage\)/.test(buildSource),
-    'the model assessment is appended after existing report sections and included in final pagination');
-  const start = report.indexOf('function secTripleVerification(ctx, data)');
+  const section4 = report.slice(report.indexOf('function secTripleVerification(ctx, data)'), report.indexOf('function secIndependentModelAssessment(ctx, data)'));
+  const certification = report.slice(report.indexOf('function secDeclaration(ctx, data)'), report.indexOf('// The signed rule package'));
+  ok(/secTripleVerification\(ctx, data\);[\s\S]*secSealedFindings\(ctx, data\);[\s\S]*secDeclaration\(ctx, data\);[\s\S]*drawToc\(ctx, tocPage\)/.test(buildSource) &&
+    /secIndependentModelAssessment\(ctx, data\);[\s\S]*secWellFormedness\(ctx, data\);/.test(section4) &&
+    /secMethodology\(ctx, data\)/.test(certification),
+    'model assessment and WF1–WF7 are inside Section 4; provenance and authentication are inside Section 7');
+  const start = report.indexOf('function secWellFormedness(ctx, data)');
   const end = report.indexOf('// ---- §15.4 section 5', start);
   const renderSections = new Function(
     'isEngineFinding', 'tripleVerificationOf', 'findingName', 'fmtLocation', 'capText',
@@ -700,9 +704,20 @@ for (const malformedCase of [
     type: 'CT01', evidence: 'synthetic quote', location: 'Page 1', severity: 3
   }] } });
   ok(originalSection.state.headings.includes('4. TRIPLE VERIFICATION SUMMARY') &&
-    !originalSection.state.headings.includes('INDEPENDENT MODEL ASSESSMENT') &&
+    !originalSection.state.headings.includes('Independent Model Assessment') &&
     !originalSection.state.tables.some((table) => table.columns.some((column) => column.key === 'provider')),
-    'the existing §15.4 Triple Verification section keeps its engine-only table; model outcomes use the appended section');
+    'the §15.4 Triple Verification section remains engine-only when no model outcome exists');
+  const combined = capture();
+  renderTriple(combined.ctx, { findings: {
+    findings: [{ type: 'CT01', evidence: 'synthetic quote', location: 'Page 1', severity: 3,
+      verification: { verifiers: [{ provider: 'deepseek', verdict: 'CONFIRM', outcome: 'ok' }] } }],
+    verification: { providers: [{ provider: 'deepseek', model: 'deepseek-model', outcome: 'ok' }] }
+  } });
+  ok(combined.state.headings.indexOf('4. TRIPLE VERIFICATION SUMMARY') <
+    combined.state.headings.indexOf('Independent Model Assessment') &&
+    combined.state.headings.indexOf('Independent Model Assessment') <
+    combined.state.headings.indexOf('Pre-analysis integrity checks (WF1–WF7)'),
+    'Section 4 renders independent model outcomes and the WF1–WF7 checks after the engine table');
 
   const partialData = {
     findings: {
@@ -839,7 +854,7 @@ for (const malformedCase of [
       }
     }
   });
-  ok(disputedCandidate.state.headings.includes('INDEPENDENT MODEL ASSESSMENT') &&
+  ok(disputedCandidate.state.headings.includes('Independent Model Assessment') &&
     disputedCandidate.state.headings.includes('Disputed advisory candidates retained') &&
     disputedCandidate.state.tables.some((table) => table.rows.some((row) => row.status === 'DISPUTED-ADVISORY' && /REFUTE/.test(row.verdict))) &&
     disputedCandidate.state.paragraphs.some((text) => /only engine thresholds or explicit human review can remove/.test(text)),

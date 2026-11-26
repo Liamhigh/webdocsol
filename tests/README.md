@@ -102,7 +102,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 31 | `greensky-regression` | `greensky-regression.test.js` | 98 | The Greensky run of 7 August 2026, and its re-run of 3 October 2026 (§9; `ENGINE.md` §12.15) |
 | 32 | `allfuels-regression` | `allfuels-regression.test.js` | 59 | The AllFuels run of 14 August 2026 |
 | 33 | `annexure-eb` | `annexure-eb-regression.test.mjs` | 502 | The annexure EB run and every run after it up to the Public Protector submission (`ENGINE.md` §12.10–§12.14) |
-| 34 | `evidence-bundle-7` | `evidence-bundle-7-regression.test.mjs` | 47 | The evidence-bundle-7-docs run of 5 October 2026, the founder's rulings and the review round (`ENGINE.md` §12.16) |
+| 34 | `evidence-bundle-7` | `evidence-bundle-7-regression.test.mjs` | 51 | The evidence-bundle-7-docs run of 5 October 2026, the founder's rulings, the §15.4 report sections and the review round (`ENGINE.md` §12.16) |
 | 35 | `combine-06-april` | `combine-06-april-regression.test.mjs` | 30 | The Combine 06 April 2026 run and its review (`ENGINE.md` §12.17) |
 | 56 | `analysis-contracts` | `analysis-contracts.test.mjs` | — | Deterministic envelopes, UTF-16/structural/OCR/pair anchors, stable ordering/IDs, disabled flags, old/new readers and fresh-process/time-zone replay |
 | 57 | `documentation-consistency` | `documentation-consistency.test.mjs` | — | Current engine/taxonomy/detector/findings values and source-derived UI counts |
@@ -116,7 +116,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 65 | `pdf-graph` | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: asset provenance, 256-MiB memory cap, pre-hash input limit and sentinel, resource limits, opt-in Worker, observations-only module and detector-finding parity |
 | 66 | `pr327-review` | `pr327-review.test.mjs` | 40 | Synthetic review regressions for report exclusion, signed-rule masking, WF7, CT52, D02C, admissions and overlapping scans |
 | 67 | `detection-credibility` | `detection-credibility.test.mjs` | 106 | Synthetic report exclusion, ledger furniture, contradiction, severity, coverage and narrative-privacy regressions |
-| 68 | `finding-verification` | `finding-verification.test.mjs` | 455 | Strict mocked verifier contract, exhaustive status mapping, page-bounded context, quota/retry safeguards, prompt injection, narrative isolation, report outcomes and retained G3 candidates |
+| 68 | `finding-verification` | `finding-verification.test.mjs` | 460 | Strict mocked verifier contract, exhaustive status mapping, page-bounded context, quota/retry safeguards, prompt injection, narrative isolation, Section 4 placement, report outcomes and retained G3 candidates |
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete production/baseline registry.
 
