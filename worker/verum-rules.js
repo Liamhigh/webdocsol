@@ -1209,7 +1209,8 @@ async function requestFindingVerifier(config, items) {
           ],
           temperature: 0,
           max_tokens: FINDING_VERIFIER_MAX_TOKENS,
-          response_format: { type: "json_object" }
+          response_format: { type: "json_object" },
+          ...(config.provider === "deepseek" ? { thinking: { type: "disabled" } } : {})
         }),
         signal: controller.signal
       });

@@ -743,8 +743,23 @@ total wins. It needs at least six pages, and is computed once on the unstripped 
 requires **≥ 2 runs, ≥ 3 pages each, and ≥ 50 % page coverage** before it reports anything —
 below that it returns nothing rather than guess. Titles come from each document's *own* first
 page (marker and seal furniture stripped, capped at 58 characters; a title shorter than four
-characters is dropped). `runForensicEngine` attaches the result to its output as
+characters is dropped). When numbering does not establish a map, distinct recognised
+instrument headings beginning at page 1 can establish estimated ranges of at least three
+pages each when a later heading follows an execution block or recurs as a running header;
+an annexure marker following an execution block may also start a range. Repeated headings
+are not restarts. WF6 labels and discloses those estimated ranges.
+`runForensicEngine` attaches the result to its output as
 `documentMap`.
+
+The deterministic triple-verification antithesis has no type-specific counter-check:
+for every CT it reports secondary-source or OCR limitations when applicable, otherwise
+the existing honest "no engine counter-check applies" statement. A detector's own
+measurement is not an independent counter-check of itself.
+
+Findings JSON `case_ids` retains its existing string-array shape. Identifiers are
+normalized and deduplicated from the extracted page text in reading order; `case_id`
+is the first. Each identifier's first source page and exact extracted spelling are
+disclosed in the existing `integrity_findings` extraction notes. No match leaves both empty.
 
 **`voDetectSwornPages(textBlocks)`** returns the 1-based pages carrying oath language (guards in
 §4.18). `runForensicEngine` attaches the list to its output as `swornPages` and sets
@@ -1234,9 +1249,9 @@ the same thing the app applies:
   `min` distinct phrases co-occur inside the serial detector's 3-page window — `min` from an
   explicit `min_cooccur`, else the description's ">= N", else half the phrases and never
   below 2 — anchored to the pages the phrases sit on ("Page 3" / "Pages 1-3") with every
-  matched phrase and its page quoted; hyphenated spellings meet the phrase ("risk-free" =
-  "risk free"). Terms and markers are never executed: a single keyword is not a
-  contradiction.
+  matched phrase and its page quoted; hyphenated spellings and individual whitespace characters
+  meet a space ("risk-free" = "risk free"). OCR substitutions are not guessed. Terms are
+  not executed; seed markers are skipped, while curated markers use their keyword threshold.
 - **Provenance**: the engine result carries `rulePackage` (version, key id, canonical SHA-512,
   counts, applied/withheld) or `null`; the extraction note says what applied; the report
   prints one line on the cover, in Methodology and in the court-ready narrative's provenance

@@ -92,6 +92,13 @@ t.ok(wf2clean.pass && /no image-only pages/.test(wf2clean.note), 'clean record k
 t.ok(!byId.WF4.pass, 'no parties fails WF4');
 t.ok(!byId.WF5.pass, 'no dates fails WF5');
 t.ok(!byId.WF6.pass, 'no segments fails WF6');
+const wf6Segments = E.voDetectDocuments([
+  'FRANCHISE AGREEMENT. Terms.', 'Clause one.', 'Signed by the parties.',
+  'MEMORANDUM OF UNDERSTANDING. Terms.', 'Clause two.', 'Signed.'
+]);
+const wf6 = E.voWellFormedness({ docSegs: wf6Segments }).checks.find(c => c.id === 'WF6');
+t.ok(wf6.pass && /FRANCHISE AGREEMENT \(heading-estimated, p\. 1-3\)/.test(wf6.note) &&
+  /MEMORANDUM OF UNDERSTANDING \(heading-estimated, p\. 4-6\)/.test(wf6.note), 'WF6 discloses both estimated ranges');
 t.ok(byId.WF7.pass, 'prior-seal check never fails (disclosure only)');
 const wf7Excluded = E.voWellFormedness({ selfSealed: true, reportPagesExcluded: 53 }).checks.find(c => c.id === 'WF7');
 t.ok(/prior Verum Omnis sealed output/.test(wf7Excluded.note) && /53 analytical report page\(s\) were excluded/.test(wf7Excluded.note),

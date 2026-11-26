@@ -189,6 +189,39 @@ const E = require('../forensic-engine-page.js');
   ok(E.voDetectDocuments(mk('One Document', 12)).length === 0, 'a single document reports no boundaries');
   ok(E.voDetectDocuments(['plain', 'text', 'with', 'no', 'markers', 'at all']).length === 0,
     'no page markers means no claim about boundaries');
+  const headings = [
+    'FRANCHISE AGREEMENT. Terms between the parties.', 'Terms continued.', 'Signed by the parties.',
+    'MEMORANDUM OF UNDERSTANDING. Terms between the parties.', 'Terms continued.', 'Signed by the parties.'
+  ];
+  const headingDocs = E.voDetectDocuments(headings);
+  ok(headingDocs.length === 2 && headingDocs[0].start === 1 && headingDocs[0].end === 3 &&
+    headingDocs[1].start === 4 && headingDocs[1].end === 6,
+    'distinct instrument front headings identify the two document ranges without page counters');
+  ok(E.voDetectDocuments(Array(6).fill('FRANCHISE AGREEMENT. Ordinary continuing terms.')).length === 0,
+    'a repeated running heading is not a document boundary');
+  ok(E.voDetectDocuments(['intro', ...headings.slice(1)]).length === 0,
+    'a later heading without an established first instrument does not invent the preceding boundary');
+  ok(E.voDetectDocuments(['FRANCHISE AGREEMENT. Terms.', 'Clause one.', 'Discussion.',
+    'WITNESS STATEMENT referred to in the clause.', 'Terms continued.', 'Terms continued.']).length === 0,
+    'a lone reference at a page start without a signature or running header is not a boundary');
+  ok(E.voDetectDocuments(['FRANCHISE AGREEMENT. Terms.', 'Clause one.', 'It was never signed by either party.',
+    'MEMORANDUM OF UNDERSTANDING. Terms.', 'Terms continued.', 'Terms continued.']).length === 0,
+    'a narrative denial of signing is not an execution block');
+  const headerChange = E.voDetectDocuments([
+    'FRANCHISE AGREEMENT. Terms.', 'FRANCHISE AGREEMENT. Terms continued.', 'FRANCHISE AGREEMENT. Terms continued.',
+    'BANK STATEMENT. Account.', 'BANK STATEMENT. Transactions.', 'BANK STATEMENT. Transactions.'
+  ]);
+  ok(headerChange.length === 2 && headerChange[1].start === 4, 'a sustained change of instrument running heading establishes a boundary');
+  const annex = E.voDetectDocuments([
+    'FRANCHISE AGREEMENT. Terms.', 'Clause one.', 'Signed by the parties.',
+    'ANNEXURE A. Schedule.', 'Schedule continued.', 'Schedule continued.'
+  ]);
+  ok(annex.length === 2 && annex[1].start === 4, 'a new annexure after an execution block establishes a boundary');
+  ok(E.voDetectDocuments([
+    'FRANCHISE AGREEMENT. Terms.', 'Clause one.', 'Signed by the parties.',
+    'MEMORANDUM OF UNDERSTANDING. Terms.', 'Terms continued.', 'Signed by the parties.',
+    'FRANCHISE AGREEMENT. New terms.', 'Other terms.', 'Signed by the parties.'
+  ]).length === 0, 'a repeated instrument title after another instrument does not get merged into the preceding range');
   ok(E.voDetectDocuments([]).length === 0 && E.voDetectDocuments(null).length === 0,
     'empty input is safe');
   // A two-page stub must not be promoted to a "document".

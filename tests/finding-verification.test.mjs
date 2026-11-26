@@ -237,6 +237,14 @@ function responseDigest(text) {
   ok(response.status === 200 && body.ok === true && body.verifiers.length === 2, 'both configured providers are called independently');
   ok(calls.length === 2 && calls.some((call) => call.url.startsWith(providerEnv.LLM3_API_BASE)) &&
     calls.some((call) => call.url.startsWith(providerEnv.LLM2_API_BASE)), 'each verifier uses its own configured endpoint');
+  const deepseekBody = JSON.parse(calls.find((call) => call.url.startsWith(providerEnv.LLM3_API_BASE)).init.body);
+  const mistralBody = JSON.parse(calls.find((call) => call.url.startsWith(providerEnv.LLM2_API_BASE)).init.body);
+  ok(JSON.stringify(deepseekBody.thinking) === '{"type":"disabled"}' && !Object.hasOwn(mistralBody, 'thinking'),
+    'only DeepSeek pins non-thinking mode; Mistral receives no thinking key');
+  ok(calls.find((call) => call.url.startsWith(providerEnv.LLM2_API_BASE)).init.body === JSON.stringify({
+    model: mistralBody.model, messages: mistralBody.messages, temperature: 0, max_tokens: 6000,
+    response_format: { type: 'json_object' }
+  }), 'the Mistral request body retains the original OpenAI-compatible serialized shape');
   ok(body.verifiers.every((entry) => {
     const raw = JSON.stringify({
       model: entry.provider + '-returned-model',
@@ -255,6 +263,17 @@ function responseDigest(text) {
     userPacket.findings[0].bounded_context_a.page === 1 &&
     userPacket.findings[0].bounded_context_a.text.includes('<CONTEXT_A>'),
     'each delimited quote and context carries its source page and explicit instruction-conflict handling');
+}
+
+for (const [content, finishReason] of [[' \n\t ', 'stop'], ['{"verdicts":[', 'length']]) {
+  const { body } = await callWorker(packets, () => answer('F001', 'CONFIRM'), {
+    fetch: async () => new Response(JSON.stringify({
+      choices: [{ finish_reason: finishReason, message: { content } }]
+    }), { status: 200, headers: { 'content-type': 'application/json' } })
+  });
+  ok(body.verifiers.every((entry) => entry.outcome === 'malformed_response' &&
+    entry.verdicts[0].verdict === 'UNCLEAR'),
+    finishReason + ' with invalid content fails closed as UNCLEAR');
 }
 
 {

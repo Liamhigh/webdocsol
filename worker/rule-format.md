@@ -133,9 +133,10 @@ package yields different findings on different clients — by design, and disclo
 The Android and fraud-firewall rows describe other repositories: last checked 2026-10-03,
 when `RuleProvider.kt` was last changed in 1verum `5c7fda9` and `rules.ts` in firebase `397e705`.
 
-On the website and the app, `fraud_keywords[].terms` and `[].items`, `behavioral_markers`,
-`contradiction_patterns`, `serial_patterns` and `case_configs` are parsed and counted, but not
-executed: a single keyword is not a contradiction. The app also skips `groups`.
+On the website, `fraud_keywords[].terms` and `[].items`, `contradiction_patterns`,
+`serial_patterns` and `case_configs` are not executed from the package. Seed behavioural
+markers BM01–BM10 are skipped as built-in vocabulary; other markers' `keywords` can run
+with their co-occurrence threshold. The app applies pairs only and skips `groups`.
 
 ### `groups` — co-occurrence sets
 
@@ -153,7 +154,8 @@ built-in finding of the same type reports the lowest of them). Publish
 ">= N", "≥ N", "at least N", "minimum of N" or "no fewer than N" from `description`; failing
 that it uses half the phrases, never below 2. The threshold never exceeds the number of
 phrases. Phrases under three characters and duplicates are dropped, and a set left with fewer
-than two phrases is ignored. Hyphens match spaces ("risk-free" = "risk free").
+than two phrases is ignored. Hyphens and individual text whitespace characters match spaces
+("risk-free" = "risk free"); OCR substitutions are not guessed.
 
 ## Auto-curated entries and the changelog
 

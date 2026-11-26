@@ -568,6 +568,39 @@ function voDocKeyOf(segs, pageCount) {
   return function (pageIdx) { return ids[pageIdx] !== undefined ? ids[pageIdx] : 'u' + pageIdx; };
 }
 
+function voDetectHeadingDocuments(textBlocks) {
+  var starts = [], seen = {};
+  var heading = /^\s*(?:\[OCR\]\s*)?(franchise agreement|memorandum of understanding|mou|lease agreement|deed of lease|bank statement|witness statement|founding affidavit|opposing affidavit|supplementary affidavit)\b(?=\s|[.:;,\-]|$)/i;
+  var annexure = /^\s*(?:\[OCR\]\s*)?(annexure\s+[A-Z0-9]{1,4})(?=\s|[.:;\-]|$)/i;
+  for (var i = 0; i < textBlocks.length; i++) {
+    var match = heading.exec(String(textBlocks[i] || '')) || annexure.exec(String(textBlocks[i] || ''));
+    if (!match) continue;
+    var title = match[1].replace(/\s+/g, ' ');
+    var key = title.toLowerCase();
+    if (seen[key]) {
+      if (starts.length && starts[starts.length - 1].key !== key) return [];
+      continue;
+    }
+    if (i > 0) {
+      var previous = String(textBlocks[i - 1] || '').slice(-500);
+      var next = i + 1 < textBlocks.length ? heading.exec(String(textBlocks[i + 1] || '')) : null;
+      var signed = /(?:^|[.!?]\s+)(?:signed\s+(?:by|at|on)\b|signature\s*(?:of\b|:)|commissioner\s+of\s+oaths\b)/i.test(previous);
+      var runningHeader = next && next[1].replace(/\s+/g, ' ').toLowerCase() === key;
+      if (!signed && !runningHeader) return [];
+    }
+    seen[key] = true;
+    starts.push({ page: i + 1, title: title, key: key });
+  }
+  if (starts.length < 2 || starts[0].page !== 1) return [];
+  var out = [];
+  for (var j = 0; j < starts.length; j++) {
+    var end = j + 1 < starts.length ? starts[j + 1].page - 1 : textBlocks.length;
+    if (end - starts[j].page + 1 < 3) return [];
+    out.push({ start: starts[j].page, end: end, pages: end - starts[j].page + 1, statedTotal: null, title: starts[j].title });
+  }
+  return out;
+}
+
 function voDetectDocuments(textBlocks) {
   if (textBlocks && _voDocSegsCache.has(textBlocks)) return _voDocSegsCache.get(textBlocks);
   if (!textBlocks || textBlocks.length < 6) return [];
@@ -620,7 +653,7 @@ function voDetectDocuments(textBlocks) {
       cur.lastN = mk.n;
     }
   }
-  if (segs.length < 2) return [];
+  if (segs.length < 2) return voDetectHeadingDocuments(textBlocks);
   // A run must be substantial to count as a document, and the runs must cover
   // enough of the bundle to be worth stating at all.
   var out = [], covered = 0;
@@ -630,7 +663,7 @@ function voDetectDocuments(textBlocks) {
     covered += len;
     out.push({ start: segs[s].start + 1, end: segs[s].end + 1, pages: len, statedTotal: segs[s].total });
   }
-  if (out.length < 2 || covered < textBlocks.length * 0.5) return [];
+  if (out.length < 2 || covered < textBlocks.length * 0.5) return voDetectHeadingDocuments(textBlocks);
   // Name each document from the first line of its own first page, so the
   // reader sees "Caltex Franchise Agreement", not just a page range.
   for (var d = 0; d < out.length; d++) {
@@ -9541,7 +9574,10 @@ function voWellFormedness(o) {
     id: 'WF6', name: 'Bundle structure segmented',
     pass: segs.length >= 1,
     note: segs.length >= 1
-      ? segs.length + ' document segment(s) distinguished within the file'
+      ? segs.length + ' document segment(s) distinguished within the file: ' + segs.map(function (s) {
+        return (s.title || 'Document') + ' (' + (s.statedTotal === null ? 'heading-estimated, ' : '') +
+          'p. ' + s.start + (s.end && s.end !== s.start ? '-' + s.end : '') + ')';
+      }).join('; ')
       : 'no document structure could be distinguished'
   });
 
@@ -10593,7 +10629,7 @@ async function voVerifyRulePackage(manifest, opts) {
 }
 
 function voRulesTrimLower(s) {
-  return String(s === undefined || s === null ? '' : s).replace(/\s+/g, ' ').trim().toLowerCase();
+  return String(s === undefined || s === null ? '' : s).replace(/[-‐-―­]/g, ' ').replace(/\s+/g, ' ').trim().toLowerCase();
 }
 
 // Compile a VERIFIED package into what the engine applies. meta carries the
@@ -10782,10 +10818,13 @@ function voRunPackageRules(compiled, textBlocks, existing) {
   if (!Array.isArray(compiled.markers)) compiled.markers = [];
   if (!compiled.pairs.length && !compiled.groups.length && !compiled.markers.length) return out;
   var blocks = (textBlocks && textBlocks.length) ? textBlocks : [''];
-  // Lower-cased, with hyphen-like characters as spaces so "risk-free" meets
-  // "risk free"; one character for one, so positions still index the page.
+  // Keep the length unchanged so match positions still index the original page.
   var lower = [];
-  for (var b = 0; b < blocks.length; b++) lower.push(String(blocks[b] || '').toLowerCase().replace(/[-‐-―­]/g, ' '));
+  for (var b = 0; b < blocks.length; b++) {
+    var original = String(blocks[b] || ''), folded = original.toLowerCase();
+    if (folded.length !== original.length) folded = original.replace(/[A-Z]/g, function (ch) { return ch.toLowerCase(); });
+    lower.push(folded.replace(/[-‐-―­\s]/g, ' '));
+  }
   var reported = {};
   var ex = Array.isArray(existing) ? existing : [];
   for (var e = 0; e < ex.length; e++) {
@@ -10830,7 +10869,9 @@ function voRunPackageRules(compiled, textBlocks, existing) {
       out.findings.push({
         type: type,
         severity: severity,
-        evidence: 'Signed rule ' + rule.ruleId + ' (package v' + compiled.version + '): opposing phrases "' + rule.first + '" and "' + rule.second + '" in one passage: "' + passage + '"',
+        evidence: 'Signed rule ' + rule.ruleId + ' (package v' + compiled.version + '): opposing phrases "' +
+          String(blocks[pg] || '').slice(hit.a, hit.a + rule.first.length) + '" and "' +
+          String(blocks[pg] || '').slice(hit.b, hit.b + rule.second.length) + '" in one passage: "' + passage + '"',
         location: (lower.length <= 1) ? 'Full document' : ('Page ' + pageNo),
         packageRule: rule.ruleId,
         packageVersion: compiled.version,
@@ -10856,7 +10897,11 @@ function voRunPackageRules(compiled, textBlocks, existing) {
       for (var ph = 0; ph < grp.phrases.length; ph++) {
         var phrase = grp.phrases[ph];
         for (var wp = w; wp < Math.min(lower.length, w + VO_PACKAGE_GROUP_WINDOW_PAGES); wp++) {
-          if (lower[wp].indexOf(phrase) >= 0 && voRulePhrasePositions(lower[wp], phrase).length) { found.push({ phrase: phrase, page: wp + 1 }); break; }
+          var positions = lower[wp].indexOf(phrase) >= 0 ? voRulePhrasePositions(lower[wp], phrase) : [];
+          if (positions.length) {
+            found.push({ phrase: phrase, page: wp + 1, quote: String(blocks[wp] || '').slice(positions[0], positions[0] + phrase.length) });
+            break;
+          }
         }
       }
       if (!best || found.length > best.found.length) best = { found: found, start: w + 1, end: Math.min(lower.length, w + VO_PACKAGE_GROUP_WINDOW_PAGES) };
@@ -10870,7 +10915,7 @@ function voRunPackageRules(compiled, textBlocks, existing) {
     var gLoc = (lower.length <= 1) ? 'Full document' : (loPg === hiPg ? ('Page ' + loPg) : ('Pages ' + loPg + '-' + hiPg));
     if (reported[gType + '@' + anchorPage]) { out.withheld++; continue; }
     var hits = [];
-    for (var hx = 0; hx < best.found.length; hx++) hits.push('"' + best.found[hx].phrase + '" (p. ' + best.found[hx].page + ')');
+    for (var hx = 0; hx < best.found.length; hx++) hits.push('"' + best.found[hx].quote + '" (p. ' + best.found[hx].page + ')');
     out.findings.push({
       type: gType,
       severity: gSev,
@@ -10903,20 +10948,21 @@ function voRunPackageRules(compiled, textBlocks, existing) {
       if (!mtext) continue;
       var mHits = [];
       for (var mkw = 0; mkw < mk.keywords.length && mHits.length < 4; mkw++) {
-        if (voRulePhrasePositions(mtext, mk.keywords[mkw]).length) mHits.push(mk.keywords[mkw]);
+        var mPositions = voRulePhrasePositions(mtext, mk.keywords[mkw]);
+        if (mPositions.length) mHits.push({ position: mPositions[0], quote: String(blocks[mp] || '').slice(mPositions[0], mPositions[0] + mk.keywords[mkw].length) });
       }
       if (mHits.length < mMin) continue;
       var mPage = mp + 1;
       if (reported[mType + '@' + mPage]) { out.withheld++; continue; }
-      var mPos = voRulePhrasePositions(mtext, mHits[0])[0];
+      var mPos = mHits[0].position;
       var mStart = Math.max(0, mPos - 60);
-      var mEnd = Math.min(String(blocks[mp] || '').length, mPos + mHits[0].length + 140);
+      var mEnd = Math.min(String(blocks[mp] || '').length, mPos + mHits[0].quote.length + 140);
       var mPassage = String(blocks[mp] || '').slice(mStart, mEnd).replace(/\s+/g, ' ').trim();
       if (mPassage.length > 220) mPassage = mPassage.slice(0, 220).replace(/\s+\S*$/, '') + '...';
       out.findings.push({
         type: mType,
         severity: mSev,
-        evidence: 'Signed rule ' + mk.ruleId + ' (package v' + compiled.version + '): behavioural marker "' + (mk.name || mk.ruleId) + '" matched ' + mHits.length + ' keyword(s): ' + mHits.map(function (k) { return '"' + k + '"'; }).join(', ') + '. Passage: "' + mPassage + '". Behavioural indicators are for human review, not a determination.',
+        evidence: 'Signed rule ' + mk.ruleId + ' (package v' + compiled.version + '): behavioural marker "' + (mk.name || mk.ruleId) + '" matched ' + mHits.length + ' keyword(s): ' + mHits.map(function (k) { return '"' + k.quote + '"'; }).join(', ') + '. Passage: "' + mPassage + '". Behavioural indicators are for human review, not a determination.',
         location: (lower.length <= 1) ? 'Full document' : ('Page ' + mPage),
         packageRule: mk.ruleId,
         packageVersion: compiled.version,
