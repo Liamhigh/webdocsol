@@ -182,6 +182,12 @@ ok(!/VO_HUMAN_LIGHT_SECTIONS[\s\S]*critical_evidence: 1/.test(html), 'critical e
     logs[0][1].endpoint === '/api/v1/ai/human-report' && logs[0][1].reason === 'model_error' &&
     !JSON.stringify(logs).includes('private'),
     'a failed model response logs one metadata-only line with HTTP status and elapsed time');
+  context.fetch = async () => ({ ok: false, status: 503 });
+  const failed = {};
+  try { await context.write('chronology', { excerpt: 'private input text' }, failed); } catch (_) {}
+  ok(failed.reason === 'network' && failed.status === 503 && failed.elapsedMs >= 0 &&
+    logs.length === 2 && logs[1][1].status === 503 && !JSON.stringify(logs).includes('private'),
+    'a transport failure logs one metadata-only line with its actual status');
 }
 
 {

@@ -23064,7 +23064,7 @@ function voAiFailureReason(error) {
 
 function voNarrativeDiagnosticReason(reason) {
   var known = ['ai_unavailable', 'no_json', 'invalid_response', 'empty', 'model_error', 'seal_required',
-    'timeout', 'time_budget', 'no_api_at_this_address', 'network', 'gate_failed', 'not_generated'];
+    'timeout', 'time_budget', 'no_api_at_this_address', 'network', 'gate_failed', 'render_gate', 'not_generated'];
   return known.indexOf(reason) >= 0 ? reason : 'not_generated';
 }
 
@@ -23082,7 +23082,7 @@ async function voWriterSectionPost(section, payload, diagnostic) {
     var res = await aiApiPost(endpoint, payload, VO_HUMAN_CALL_TIMEOUT_MS, diagnostic);
     reason = !res || typeof res !== 'object' || res.contract !== 'human-v1' ? 'invalid_response'
       : (res.generated === true && res.machineGenerated === true && typeof res.text === 'string' && res.text.trim())
-        ? '' : voNarrativeDiagnosticReason(res.reason);
+        ? 'generated' : voNarrativeDiagnosticReason(res.reason);
     return res;
   } catch (error) {
     reason = voAiFailureReason(error);
