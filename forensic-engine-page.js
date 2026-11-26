@@ -9713,6 +9713,7 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     textBlocks = [allTexts.join(' ')];
   }
 
+  var _sweepOriginalPages = textBlocks.slice();
   // Capture footer signals before exclusions replace page text.
   var _voBrandFooterRe = /VERUM\s+OMNIS\s+SEALED\s+(?:ORIGINAL|DOCUMENT)|\bVO-[0-9A-F]{6,}\b/i;
   var _voBrandPages = [];
@@ -10422,6 +10423,8 @@ async function runForensicEngine(pdfBytes, pdfDoc, onProgress, opts) {
     // is deliberately NOT part of the findings JSON export (buildFindingsJson
     // whitelists fields) and is dropped after the narrate call.
     pageTexts: textBlocks,
+    sweepExcludedPages: _packageExcludedPages.filter(function (p, i, a) { return a.indexOf(p) === i; }).sort(function (a, b) { return a - b; }),
+    sweepPageTexts: textBlocks.map(function (text, i) { return _packageExcludedPages.indexOf(i + 1) !== -1 ? _sweepOriginalPages[i] : text; }),
     documentMap: voDetectDocuments(textBlocks),
     factIndex: _factIndex,
     crossDocConflicts: voCrossDocConflicts(_factIndex),

@@ -2375,7 +2375,7 @@ function brain9SweepLine(data) {
   return 'Brain 9 (R&D) sweep of the sealed text: read pages ' + (sw.pagesReadText || '—') + ' of ' + (sw.pagesTotal | 0) +
     ' (' + w + ' window' + (w === 1 ? '' : 's') + (sw.budgetHit ? ', time budget reached' : '') + '); ' +
     n + ' anchored recommendation' + (n === 1 ? '' : 's') + ' logged and ' + u + ' suggestion' + (u === 1 ? '' : 's') +
-    ' discarded as not found in the sealed text. Recommendations are not findings and are held outside this sealed report (Constitution v8 §2.10); they train the engine.';
+    ' discarded as not found in the sealed text. Recommendations are not findings and are held outside this sealed report (Constitution v8 §2.10); eligible recommendations train the engine.';
 }
 
 // ================= SECTION: CONSTITUTION & AI GOVERNANCE =================

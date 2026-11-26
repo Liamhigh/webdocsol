@@ -91,6 +91,11 @@ The next production slice must follow the detailed plan’s operator-state, rend
 
 ### Phase 4 — PDF graph and revision forensics · Active-graph prototype merged (#316); revision scanner not started
 
+Correction brief 1 (PR #335, open): the recommendation-only B9 sweep excludes engine-quarantined
+pages by default, rejects bare non-evidentiary anchors, and excludes quarantined and legacy
+ungated B9 feedback from auto-curation support. This does not enable revision forensics or
+change Findings JSON 1.11.0.
+
 The merged `pdfGraph` prototype is explicit and default-off. QPDF 12.2.0 runs in a disposable browser worker with an 8-MiB input cap, a 256-MiB Wasm memory maximum, a 2-MiB JSON-output cap, object/reference/traversal limits and a 15-second deadline. It returns bounded active-graph observations, not findings. Stream data, raw objects and metadata do not leave the worker.
 
 Over-limit input is rejected before hashing or worker creation; the required 128-hex `input_sha512` is then an all-zero sentinel and `failure.details` names `not_computed_input_over_limit` plus the exact `input_bytes`. In-bounds inputs retain their actual SHA-512 identity.

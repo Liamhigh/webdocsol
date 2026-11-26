@@ -1063,7 +1063,7 @@ contradictions, offences and criminals' tactics are not personal information; th
 box says so), to `POST /api/v1/feedback/patterns`. Engine findings travel as their type; a signed-package hit as
 `SIGNED_RULE_<id>`; an AI candidate as `AI_IDENTIFIED` (or `_UNANCHORED`) with its type — CT
 codes included, because "the engine missed a CT01 here" is the loop's most useful signal (the
-old CT01–CT46 exclusion is gone); a Brain 9 recommendation as `B9_RECOMMENDATION`. A clean scan
+old CT01–CT46 exclusion is gone); an eligible Brain 9 recommendation as `B9_EVIDENTIARY_RECOMMENDATION`. A clean scan
 sends one `CLEAN_SCAN` marker, a failed scan sends nothing, a SERIAL finding travels under its
 serial-pattern name, and one submission carries at most 200 patterns, engine findings first.
 `tests/worker.test.mjs` holds both ends of the contract to the four anonymous fields.
@@ -1285,7 +1285,9 @@ sealed reports". The website has no chat: this runs inside the seal pipeline.
 
 - **What is read.** The sealed page text — the text layer the engine analysed, OCR rescues
   included — never a raw evidence file. Pages under `VO_NEAR_EMPTY_CHARS` of content are not
-  read (there is nothing to read; they are already disclosed as unread pages).
+  read (there is nothing to read; they are already disclosed as unread pages). The engine's
+  package-rule quarantine pages are excluded by default. An explicit caller option can include
+  them, but recommendations from those pages are labelled and never sent to the trainer.
 - **How** (`seal-document.html`, `aiBrain9Sweep`): after the eight deterministic brains and the
   assess step, pages the engine flagged nothing on come first (a miss can only be there), then
   flagged pages; consecutive pages are grouped into windows under 11,000 characters and 8
@@ -1296,14 +1298,16 @@ sealed reports". The website has no chat: this runs inside the seal pipeline.
 - **The anti-hallucination gate, twice.** The Worker (`verifySweepItem`) accepts an item only if
   its quote (≥ 12 characters; case, whitespace, non-breaking spaces and curly quotes
   normalised, nothing else) is a substring of the page text it was given — the page is corrected to where
-  the quote actually is — and discards and counts the rest. The seal page repeats the check
-  against its own copy of the sealed text (`voAnchorAiQuote`), drops a recommendation that
+  the quote actually is — and discards and counts the rest. Bare locators, section references,
+  filenames and hashes are separately discarded as `non-evidentiary`; this bounded shape filter
+  does not establish that an accepted quote proves a contradiction. The seal page repeats the check
+  against the worker-identified page (`voAnchorSweepQuote`), drops a recommendation that
   duplicates an engine finding of the same type on the same page, and deduplicates.
 - **What happens to a recommendation.** It is stated on the results panel (type, severity,
   page, the verbatim quote, the rationale) and offered as a separate, unsealed
   `…-brain9-recommendations.json`; in "Seal document with forensic report" it goes to the loop
   automatically (§12.4) as
-  `B9_RECOMMENDATION` / its type (the four anonymous fields only), so a recurring miss can be
+  `B9_EVIDENTIARY_RECOMMENDATION` / its type (the four anonymous fields only), so a recurring miss can be
   curated into a signed rule the deterministic engine then applies (§12.7). It never enters a
   sealed report's findings, the findings JSON or the court-ready narrative. The sealed reports
   state only coverage and counts (`brain9SweepLine`: pages read of total, windows, budget,
@@ -1325,10 +1329,12 @@ checks") on a schedule (`wrangler.toml [triggers]`, weekly, Monday 03:00 UTC) or
 1. **Aggregate** the anonymous feedback of the last 7 days per `(detectorId, type)` with support
    and distinct days (`aggregateFeedback`; the four fields only, never content).
 2. **Select learning signals** (`selectLearningSignals`): types reported under the detector ids
-   `AI_IDENTIFIED` and `B9_RECOMMENDATION`, merged per type across both reporters
+   `AI_IDENTIFIED` and `B9_EVIDENTIARY_RECOMMENDATION`, merged per type across both reporters
    (`AI_IDENTIFIED_UNANCHORED` is not a signal) — "the AI review found this and the engine missed it" — with
    support ≥ 3 over ≥ 2 distinct days, not already covered by a curated rule
    (`curated_from.type`), never SERIAL / CLEAN_SCAN / verification outcomes; at most 6.
+   Old `B9_RECOMMENDATION` records lack gate provenance and do not count. This anonymous
+   feedback is not authenticated proof of provenance; the eligibility marker is client-reported.
 3. **Draft**: the model (Llama 3.3 70B, temperature 0) drafts ONE co-occurrence group per
    signal — 4–8 generic lowercase phrases, benign alone, plus `min_cooccur` — from the type
    and its support only; no document content exists to draw on.

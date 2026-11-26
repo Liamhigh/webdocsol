@@ -169,7 +169,7 @@ The website is the centre of gravity: **all document verification happens at the
   `ADMIN_TOKEN`). `POST /api/v1/ai/curate` drafts candidates for that human, as drafts only.
   (2) Since 2026-09-07 (#201, founder direction AGENTS.md item 13), **the trainer run**: the
   Worker itself, weekly (`wrangler.toml [triggers]`) or on `POST /api/v1/admin/curate-publish`.
-  The trainer turns recurring anonymous `AI_IDENTIFIED` / `B9_RECOMMENDATION` signals (support
+  The trainer turns recurring anonymous `AI_IDENTIFIED` / `B9_EVIDENTIARY_RECOMMENDATION` signals (support
   ≥ 3 over ≥ 2 days) into co-occurrence groups and validates them deterministically
   (`validateAutoRule`). It appends at most three to the current package, leaving existing rules
   byte-untouched, then signs and publishes with no human step, and logs every run at

@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const require = createRequire(import.meta.url);
+const worker = (await import(path.join(__dirname, '..', 'worker', 'verum-rules.js'))).default;
 const html = fs.readFileSync(path.join(__dirname, '..', 'seal-document.html'), 'utf8');
 let workerSource = fs.readFileSync(path.join(__dirname, '..', 'worker', 'verum-rules.js'), 'utf8');
 let pass = 0, fail = 0;
@@ -33,7 +34,7 @@ ok(!/VO_HUMAN_LIGHT_SECTIONS[\s\S]*critical_evidence: 1/.test(html), 'critical e
     VO_SWEEP_LANES: 3, window: {},
     voBuildSweepWindows: () => ({ eligiblePages: 5, windows: [0, 1, 2, 3, 4].map(i => [{ page: i + 1, text: 'page ' + (i + 1) }]) }),
     voSweepPagesOf: () => [], voB9PageRanges: pages => pages.join(','),
-    voAnchorAiQuote: quote => ({ found: true, quote, location: 'Page 1' })
+    voAnchorSweepQuote: (quote, page) => ({ found: true, quote, location: 'Page ' + page })
   };
   let active = 0, maxActive = 0;
   context.aiApiPost = async (endpoint, payload) => {
@@ -79,6 +80,70 @@ ok(!/VO_HUMAN_LIGHT_SECTIONS[\s\S]*critical_evidence: 1/.test(html), 'critical e
   ok(result.added.map(f => f.rationale).join('|') === 'candidate 0|candidate 1|candidate 2|candidate 3',
     'assessment candidates preserve original batch order');
   ok(result.findings.every(f => f.aiAssessed === true), 'every successful original batch is marked assessed at merge time');
+}
+
+// B9: replay a synthetic quarantined lead and two conflicting dated records.
+{
+  const pages = [
+    'Analysis artifact archive-example.json. This secondary analysis discusses the evidence in detail.',
+    'The agreement was signed on 12 March 2020 according to the first dated record.',
+    'The agreement was signed on 15 March 2020 according to the second dated record.'
+  ];
+  const sent = [];
+  const context = {
+    console, Promise, Date, setTimeout, clearTimeout, AbortController, window: {},
+    _pipelineTextBlocks: pages, voRulePagesOf: () => [],
+    aiApiPost: async (endpoint, payload) => {
+      sent.push(...payload.pages.map(p => p.page));
+      const request = new Request('https://example.test/api/v1/ai/sweep', { method: 'POST', body: JSON.stringify(payload) });
+      const response = await worker.fetch(request, { AI: { run: async () => ({ response: JSON.stringify({
+        recommendations: payload.pages.map(p => ({ type: 'DATE_CONFLICT', severity: 3, rationale: 'The dates differ.', quote: p.text, page: p.page }))
+      }) }) } }, {});
+      return response.json();
+    }
+  };
+  vm.createContext(context);
+  vm.runInContext(slice('var AI_SWEEP_WINDOW_CHARS', '// The results panel states what Brain 9 read') +
+    '\nthis.sweep = aiBrain9Sweep;', context);
+  const options = { quarantinedPages: [1] };
+  const normal = await context.sweep(pages, [], null, options);
+  ok(sent.join(',') === '2,3' && normal.recommendations.length === 2 &&
+    normal.recommendations.every(r => !r.fromQuarantinedPage && r.evidentiaryGatePassed),
+    'default sweep sends only evidence pages and preserves both dated statements');
+  sent.length = 0;
+  const included = await context.sweep(pages, [], null, { ...options, includeQuarantined: true });
+  ok(sent.join(',') === '1,2,3' && included.recommendations.some(r => r.page === 1 && r.fromQuarantinedPage),
+    'explicit inclusion labels recommendations from quarantined pages');
+  const sameText = ['The agreement states “delivery is due on Monday”.', 'The agreement states "delivery is due on Monday".'];
+  const exactPage = context.voAnchorSweepQuote('The agreement states "delivery is due on Monday".', 1, sameText);
+  ok(exactPage.found && exactPage.location === 'Page 1' &&
+    !context.voAnchorSweepQuote('The agreement states "delivery is due on Monday".', 3, sameText).found,
+    'local anchoring uses worker normalization and never moves a quote to a different page');
+  const root = { children: [], appendChild(child) { this.children.push(child); } };
+  const makeElement = () => ({ style: {}, children: [], appendChild(child) { this.children.push(child); } });
+  Object.assign(context, {
+    _pipelineB9Info: included.info, _pipelineB9Recs: included.recommendations,
+    document: { getElementById: id => id === 'results' ? root : null, createElement: makeElement },
+    URL: { createObjectURL: () => 'blob:test' }, Blob
+  });
+  vm.runInContext(slice('function voRenderBrain9Recommendations(', 'function aiAssessBatches(') + '\nthis.render = voRenderBrain9Recommendations;', context);
+  context.render();
+  ok(root.children[0].children[2].children.some(li => /from quarantined pages/.test(li.textContent)),
+    'the results panel labels quarantined recommendations');
+  const missingGate = { ...normal.recommendations[0], type: 'OLD_WORKER', evidentiaryGatePassed: false };
+  const quarantined = included.recommendations.find(r => r.fromQuarantinedPage);
+  let feedback;
+  Object.assign(context, {
+    sealMode: 'forensic', _pipelinePageCount: 3, _pipelineAiAddedFindings: [], _pipelineAiNotes: [],
+    _pipelineB9Recs: [normal.recommendations[0], missingGate, quarantined],
+    fetch: async (url, opts) => { feedback = JSON.parse(opts.body); return { ok: false }; }
+  });
+  vm.runInContext(slice('function shareAnonymousPatterns(', '// Static #results skeleton') + '\nthis.share = shareAnonymousPatterns;', context);
+  context.share({ findings: [] });
+  const signals = feedback.patterns.filter(p => p.detectorId === 'B9_EVIDENTIARY_RECOMMENDATION');
+  ok(signals.length === 1 && signals[0].type === 'DATE_CONFLICT' &&
+    Object.keys(signals[0]).sort().join(',') === 'detectorId,pageCount,severity,type',
+    'only gated non-quarantined recommendations enter anonymous curation feedback');
 }
 
 // N4: structured transport timeout, with no invented HTTP status.
