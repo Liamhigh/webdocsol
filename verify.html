@@ -439,8 +439,10 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       <div class="custody-row"><span class="custody-label">OpenTimestamps</span><span class="custody-value" id="custodyOts"></span></div>
       <div class="custody-row" id="custodyGpsRow" style="display:none"><span class="custody-label">Verified at</span><span class="custody-value" id="custodyGps"></span></div>
       <p class="custody-caption">This records the verification EVENT, not the document. The seal's own timestamp is the sealing device's clock; once Bitcoin confirms the seal's anchor, that block bounds the latest time the document existed.</p>
+      <h3>Your verification receipt</h3>
+      <p class="custody-caption">Your receipt records the verdict, including whether the fingerprint matches, the verification time (UTC), and the custody chain; a fingerprint of its custody record is submitted to OpenTimestamps for Bitcoin anchoring when available.</p>
       <div style="text-align:center;margin-top:14px">
-        <button class="btn btn-outline" id="custodyReceiptBtn" onclick="downloadCustodyReceipt()">Download Custody Receipt (JSON)</button>
+        <button class="btn btn-outline" id="custodyReceiptBtn" onclick="downloadCustodyReceipt()">Download your verification receipt (JSON)</button>
         <button class="btn" id="requestPwdBtn" style="display:none" onclick="requestPasswordFromSender()">Request password from sender</button>
       </div>
       <p class="custody-caption" id="requestPwdNote" style="display:none">Turns this timestamped (and, if enabled, location-stamped) verification into a read-receipt you send the sender to request the password — instead of a plain email.</p>

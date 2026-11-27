@@ -419,8 +419,10 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       <div class="custody-row"><span class="custody-label">OpenTimestamps</span><span class="custody-value" id="custodyOts"></span></div>
       <div class="custody-row" id="custodyGpsRow" style="display:none"><span class="custody-label">Verified at</span><span class="custody-value" id="custodyGps"></span></div>
       <p class="custody-caption">This anchors the verification EVENT, not the document. The original seal timestamp remains the authoritative proof of sealing time.</p>
+      <h3>Your verification receipt</h3>
+      <p class="custody-caption">Your receipt records the verdict, including whether the fingerprint matches, the verification time (UTC), and the custody chain; a fingerprint of its custody record is submitted to OpenTimestamps for Bitcoin anchoring when available.</p>
       <div style="text-align:center;margin-top:14px">
-        <button class="btn btn-outline" id="custodyReceiptBtn" onclick="downloadCustodyReceipt()">Download Custody Receipt (JSON)</button>
+        <button class="btn btn-outline" id="custodyReceiptBtn" onclick="downloadCustodyReceipt()">Download your verification receipt (JSON)</button>
       </div>
     </div>
 
