@@ -114,6 +114,7 @@
   .upload-zone .icon { font-size: 48px; margin-bottom: 16px; }
   .upload-zone p { font-size: 1rem; color: #D5D8DD; }
   .upload-zone .hint { font-size: 0.85rem; color: #4A7EC7; margin-top: 8px; }
+  .upload-zone .verify-steps { font-size: 0.9rem; line-height: 1.6; margin-bottom: 20px; color: #D4A843; }
 
   .share-meta {
     background: rgba(15, 52, 96, 0.08); border: 1px solid rgba(26, 46, 82, 0.4);
@@ -338,9 +339,11 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   </div>
 
   <div class="upload-zone" id="dropZone">
+    <p class="verify-steps">1. Get the sealed PDF from the sender &middot; 2. Drop it here (or paste the QR payload) &middot; 3. Read the verdict and download your verification receipt.</p>
     <div class="icon">&#128203;</div>
     <p>Drag &amp; drop a sealed PDF here, or click to browse</p>
     <p class="hint">Supports VO-DSS sealed documents (.pdf with embedded metadata)</p>
+    <p class="hint">The file is required for an integrity verdict and verification receipt.</p>
     <input type="file" id="fileInput" accept=".pdf,application/pdf" style="display:none">
   </div>
 
@@ -370,7 +373,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
        ({"scheme":"verum-omnis-seal",...}). Users can paste that text here.
        Parsing is fully client-side: nothing is uploaded and nothing is stored. -->
   <div class="share-meta" id="qrPasteBox">
-    <label class="share-meta-label" for="qrPasteInput" style="cursor:default">Have a QR payload? Paste it here</label>
+    <label class="share-meta-label" for="qrPasteInput" style="cursor:default">Scan a QR code with your device, then paste its payload here</label>
     <textarea id="qrPasteInput" class="qr-paste-input" rows="3" spellcheck="false" autocomplete="off"
       placeholder="verify.html?h=&hellip;&amp;m=&hellip; link, a bare m= payload, or legacy {&quot;scheme&quot;:&quot;verum-omnis-seal&quot;,&hellip;} JSON"></textarea>
     <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap">
