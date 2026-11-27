@@ -304,7 +304,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
      parses block attestations, and serves .ots downloads. Same module the seal
      page uses. Plain script, no build step; every use below is typeof-guarded
      so a missing module can never break verification. -->
-<script src="/ots-proof.js?v=1.5.0-20260721"></script>
+<script src="/ots-proof.js?v=1.5.0-20261127-chain"></script>
 </head>
 <body>
 
@@ -1849,15 +1849,48 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       }
       renderOtsAnchorBlock(view, sealId);
       if (view.state === 'calendar') {
-        var chain = null;
-        try {
-          if (typeof window.VoOts.fetchChainConfirmation === 'function' && view.otsBytes &&
-              typeof view.blockHeight === 'number') {
-            chain = await window.VoOts.fetchChainConfirmation(view.otsBytes, resolved.digestHex, view.blockHeight);
+        async function confirmProof(bytes, proofSummary) {
+          var heights = [], attestations = proofSummary && proofSummary.bitcoin || [];
+          for (var ai = 0; ai < attestations.length; ai++) {
+            if (generation !== otsCheckGeneration) return null;
+            var height = attestations[ai].height;
+            if (!Number.isSafeInteger(height) || height < 0 || heights.indexOf(height) !== -1) continue;
+            heights.push(height);
+            try {
+              var checked = await window.VoOts.fetchChainConfirmation(bytes, resolved.digestHex, height);
+              if (generation !== otsCheckGeneration) return null;
+              if (checked && checked.status === 'confirmed') return height;
+            } catch (ce) { console.warn('Bitcoin chain check failed:', ce); }
           }
-        } catch (ce) { console.warn('Bitcoin chain check failed:', ce); }
+          return null;
+        }
+        var confirmedHeight = null;
+        if (typeof window.VoOts.fetchChainConfirmation === 'function' && view.otsBytes) {
+          confirmedHeight = await confirmProof(view.otsBytes, summary);
+        }
         if (generation !== otsCheckGeneration) return;
-        view.state = chain && chain.status === 'confirmed' ? 'confirmed' : 'chain-unavailable';
+        if (confirmedHeight === null &&
+            typeof window.VoOts.fetchUpgradedCandidates === 'function' &&
+            typeof window.VoOts.fetchChainConfirmation === 'function') {
+          var candidates = [];
+          try {
+            candidates = await window.VoOts.fetchUpgradedCandidates(resolved.digestHex, OTS_ANCHOR_CALENDARS, view.calendar);
+          } catch (cfe) { console.warn('Calendar fallback failed:', cfe); }
+          if (generation !== otsCheckGeneration) return;
+          for (var ci = 0; ci < candidates.length; ci++) {
+            var candidate = candidates[ci];
+            if (!candidate.otsBytes) continue;
+            confirmedHeight = await confirmProof(candidate.otsBytes, candidate.summary);
+            if (generation !== otsCheckGeneration) return;
+            if (confirmedHeight !== null) {
+              view.otsBytes = candidate.otsBytes;
+              view.calendar = candidate.calendar;
+              break;
+            }
+          }
+        }
+        if (confirmedHeight !== null) view.blockHeight = confirmedHeight;
+        view.state = confirmedHeight !== null ? 'confirmed' : 'chain-unavailable';
         renderOtsAnchorBlock(view, sealId);
       }
       reportOtsAnchorOutcome(view.state, pageCount);

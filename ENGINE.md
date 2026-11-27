@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   68 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite + 1 verifier-adjudication suite); many exist solely to stop the regressions in §4 and §12.
+   69 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite + 1 verifier-adjudication suite + 1 OTS chain-confirmation suite); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -900,7 +900,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**68 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite + 1 verifier-adjudication suite; recount assertions after any test change).
+**69 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite + 1 verifier-adjudication suite + 1 OTS chain-confirmation suite; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -932,6 +932,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `crop-normalize.test.mjs` | 185 | CropBox normalisation, **seal band geometry** (pages extended, not overlaid), **share ordering**, ZIP validity/determinism, the **seal-certificate privacy boundary** (§12.6), and the **voice-note path** (§12.6a): as-is sealing, manifest parsing, report hard rules, transcription consent (follows the sealing mode since 2026-09-07), ordering and honesty |
 | `inline-scripts.test.mjs` | 25 | Inline copies byte-identical to source |
 | `seal-guard.test.mjs` / `ots-proof.test.js` | 16 each | "The only genuine Verum output is a sealed output" · OpenTimestamps proof handling |
+| `ots-chain-confirmation.test.mjs` | 206 | Synthetic receipt paths, two-explorer agreement, calendar fallback and verification status handling |
 | `digital-forensics.test.mjs` | 19 | PDF structure and digital-forensics measurements |
 | `pdf-graph.test.mjs` | 28 | QPDF-WASM active graph: pinned assets, 256-MiB Wasm cap, pre-hash input limit and sentinel, input/output/object limits, worker opt-in, observations-only envelope and findings parity |
 | `narrate-excerpt.test.mjs` | 16 | AI excerpt building |

@@ -459,6 +459,44 @@
     return { status: 'offline', error: lastError || 'all calendars unreachable' };
   }
 
+  async function fetchUpgradedCandidates(digestHex, calendarUrls, excludeCalendar) {
+    var excluded = normalizeCalendarUrl(excludeCalendar), seen = {}, urls = [];
+    var list = Array.isArray(calendarUrls) ? calendarUrls : [calendarUrls];
+    for (var i = 0; i < list.length; i++) {
+      var url = normalizeCalendarUrl(list[i]);
+      if (url && url !== excluded && !seen[url]) {
+        seen[url] = true;
+        urls.push(url);
+      }
+    }
+    var results = await Promise.all(urls.map(async function (url) {
+      var ctrl = new AbortController(), timer;
+      try {
+        return await Promise.race([
+          (async function () {
+            var hex = bytesToHex(hexToBytes(digestHex));
+            var response = await fetch(url + '/timestamp/' + hex, {
+              method: 'GET', headers: { 'Accept': 'application/vnd.opentimestamps.v1' },
+              signal: ctrl.signal
+            });
+            if (!response.ok) return null;
+            var body = new Uint8Array(await response.arrayBuffer());
+            if (!body.length) return null;
+            var file = buildFileFromFragment(hex, body);
+            var summary = parseSummary(file);
+            return summary.valid && summary.complete && summary.bitcoin.length
+              ? { status: 'confirmed', otsBytes: file, calendar: url, summary: summary } : null;
+          })(),
+          new Promise(function (resolve) {
+            timer = setTimeout(function () { ctrl.abort(); resolve(null); }, 15000);
+          })
+        ]);
+      } catch (e) { return null; }
+      finally { clearTimeout(timer); }
+    }));
+    return results.filter(function (result) { return result && result.status === 'confirmed'; });
+  }
+
   /**
    * Trigger a browser download of raw bytes.
    * @param {string} filename
@@ -586,6 +624,7 @@
     buildPendingReceipt: buildPendingReceipt,
     buildFileFromFragment: buildFileFromFragment,
     fetchUpgraded: fetchUpgraded,
+    fetchUpgradedCandidates: fetchUpgradedCandidates,
     parseSummary: parseSummary,
     fetchChainConfirmation: fetchChainConfirmation,
     download: download,
