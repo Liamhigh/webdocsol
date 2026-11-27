@@ -224,4 +224,82 @@ t.ok(!verify.includes('PENDING — submitted to calendars') &&
   verify.includes('DELIVERED_FILE_SHA256 (digest recomputed from delivered bytes; not embedded in the QR)'),
   'pending, protected-copy, legacy-encrypted and custody wording never invents a submission or embedded digest');
 
+const pdfLib = require('../vendor/pdf-lib.min.js');
+globalThis.PDFLib = pdfLib;
+const engine = require('../forensic-engine-page.js');
+for (const [name, source] of [
+  ['live', seal],
+  ['module', readFileSync('seal-module/web/seal-document.html', 'utf8')]
+]) {
+  let clock = '2026-12-31T23:59:59.123Z';
+  let calls = 0;
+  class Clock extends Date {
+    constructor(...args) { super(...(args.length ? args : [clock])); }
+  }
+  const submitStart = source.indexOf('async function submitToOTS(');
+  const submitEnd = source.indexOf('\nfunction updateStep(', submitStart);
+  const sandbox = {
+    Date: Clock, Uint8Array, AbortController, setTimeout, clearTimeout,
+    console, hexToBytes: () => new Uint8Array([1, 2, 3]),
+    fetch: async () => {
+      calls++;
+      if (calls === 1) return { ok: false };
+      if (calls === 2) return { ok: true, arrayBuffer: async () => new ArrayBuffer(0) };
+      clock = '2027-01-01T23:30:45.123Z';
+      return { ok: true, arrayBuffer: async () => {
+        clock = '2027-01-01T23:31:45.123Z';
+        return new Uint8Array([4, 5]).buffer;
+      } };
+    }
+  };
+  vm.runInNewContext(source.slice(submitStart, submitEnd), sandbox);
+  const result = await sandbox.submitToOTS('00');
+  t.ok(result.success && result.submittedAt === '2027-01-01T23:30:45.123Z' &&
+    result.calendar.includes('eternitywall') && Array.from(result.proof).join(',') === '4,5',
+    name + ': successful calendar response captures its own time before reading the proof, after failures');
+  sandbox.fetch = async () => ({ ok: false });
+  const failure = await sandbox.submitToOTS('00');
+  t.ok(!failure.success && !('submittedAt' in failure), name + ': failed submissions have no submission time');
+
+  const certStart = source.indexOf('async function buildAnchorCertificate(');
+  const certEnd = source.indexOf('// ==================== SEALING FLOW', certStart);
+  const draws = [];
+  const PDFDocument = {
+    create: async () => {
+      const doc = await pdfLib.PDFDocument.create();
+      const addPage = doc.addPage.bind(doc);
+      doc.addPage = (...args) => {
+        const page = addPage(...args.map(arg => Array.isArray(arg) ? Array.from(arg) : arg));
+        const drawText = page.drawText.bind(page);
+        page.drawText = (text, options) => { draws.push({ text, ...options }); return drawText(text, options); };
+        return page;
+      };
+      return doc;
+    }
+  };
+  const buildAnchorCertificate = new Function('PDFDocument', 'StandardFonts', 'rgb',
+    source.slice(certStart, certEnd) + '\nreturn buildAnchorCertificate;')(PDFDocument, pdfLib.StandardFonts, pdfLib.rgb);
+  const options = { timestampISO: result.submittedAt, sealId: 'VO-TEST', sha512: 'a'.repeat(128),
+    sealedSha512: 'b'.repeat(128), otsDigest: 'c'.repeat(64), calendars: ['https://calendar.example'] };
+  const certBytes = await buildAnchorCertificate(options);
+  const loaded = await pdfLib.PDFDocument.load(certBytes);
+  const text = (await engine.extractPageText(certBytes, 0, loaded)).join(' ').replace(/\s+/g, ' ');
+  t.ok(text.includes('BITCOIN CONFIRMATION PENDING') && text.includes('Submitted ' + result.submittedAt) &&
+    text.includes('confirmation expected by 2027-01-02T01:30:45.123Z') &&
+    text.includes('estimate; typically 1-2 hours; set by the Bitcoin network, not by this platform') &&
+    text.includes('Upgrade the receipt at verumglobal.foundation/verify.html after that time.'),
+    name + ': rendered certificate carries the submission, estimated UTC window and upgrade pointer');
+  t.ok(draws.filter(d => d.text === result.submittedAt).length === 1 &&
+    source.slice(source.indexOf('// Anchor Certificate (BOTH modes')).includes('timestampISO: otsResult.submittedAt'),
+    name + ': the submitted row and status use the calendar time passed to the anchor builder');
+  const body = draws.filter(d => d.text !== 'VERUM OMNIS FOUNDATION  |  PATENT PENDING' &&
+    !d.text.startsWith('Check the seal and its anchor') && !d.text.startsWith('Confirm and upgrade'));
+  t.ok(body.every(d => d.y > 60) &&
+    (name !== 'module' || draws.find(d => d.text === result.submittedAt).y > 250),
+    name + ': certificate body clears the footer and the module statement box');
+  let rejected = false;
+  try { await buildAnchorCertificate({}); } catch (e) { rejected = /submission time unavailable/.test(e.message); }
+  t.ok(rejected, name + ': missing submission time is not silently replaced by another clock');
+}
+
 t.done('batch7d-ots-delivered-bytes');
