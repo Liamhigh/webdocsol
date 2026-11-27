@@ -9,6 +9,7 @@ const path = require('path');
 const suites = [
   'forensic-engine.test.js',
   'ots-proof.test.js',
+  'ots-chain-confirmation.test.mjs',
   'worker.test.mjs',
   'page-boot.test.mjs',
   'engine-perf.test.mjs',

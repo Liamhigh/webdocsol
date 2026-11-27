@@ -527,6 +527,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   // {bytes, filename} backing the OTS proof download button; null whenever
   // the current block has no downloadable proof.
   var currentOtsProof = null;
+  var otsCheckGeneration = 0;
 
   dropZone.addEventListener('click', function() { fileInput.click(); });
   fileInput.addEventListener('change', function(e) { if (e.target.files[0]) handleFile(e.target.files[0]); });
@@ -567,6 +568,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     custodyBox.style.display = 'none';
     if (otsAnchorBox) { otsAnchorBox.style.display = 'none'; otsAnchorBox.innerHTML = ''; }
     currentOtsProof = null;
+    otsCheckGeneration++;
     metaSection.innerHTML = '';
     currentPdfBlob = null;
     currentVerifyUrl = null;
@@ -1795,6 +1797,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   // Poll the calendars and render every resulting state. Fire-and-forget from
   // verifyPdf; fully non-fatal by construction.
   async function runOtsAnchorCheck(meta, seal, pageCount) {
+    var generation = ++otsCheckGeneration;
     try {
       var sealId = (meta && meta.sealId) || (seal && seal.sealId) || null;
       if (!window.VoOts || typeof window.VoOts.fetchUpgraded !== 'function') {
@@ -1802,6 +1805,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         return;
       }
       var resolved = await resolveOtsDigest(meta, seal);
+      if (generation !== otsCheckGeneration) return;
       if (!resolved) {
         renderOtsAnchorBlock({ state: 'unavailable' }, sealId);
         return;
@@ -1813,14 +1817,15 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       } catch (fe) {
         result = { status: 'offline', error: fe && fe.message ? fe.message : String(fe) };
       }
+      if (generation !== otsCheckGeneration) return;
       var status = result && result.status;
       var view = {
-        state: status === 'confirmed' ? 'confirmed' : (status === 'pending' ? 'pending' : 'offline'),
+        state: status === 'confirmed' ? 'calendar' : (status === 'pending' ? 'pending' : 'offline'),
         digestHex: resolved.digestHex,
         source: resolved.source,
         calendar: result && result.calendar ? result.calendar : null
       };
-      if (view.state === 'confirmed') {
+      if (view.state === 'calendar') {
         view.otsBytes = result.otsBytes || null;
         // Block height is shown only when parsed from the proof — never invented.
         var summary = result.summary || null;
@@ -1831,7 +1836,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
             typeof summary.bitcoin[0].height === 'number' && isFinite(summary.bitcoin[0].height)) {
           view.blockHeight = summary.bitcoin[0].height;
         }
-        view.filename = (sealId || 'verum-omnis-seal') + '-confirmed.ots';
+        view.filename = (sealId || 'verum-omnis-seal') + '-calendar-attestation.ots';
       } else if (view.state === 'pending') {
         // Offer a spec-valid pending receipt for download when one can be
         // built locally (any OTS client can upgrade it later).
@@ -1843,8 +1848,21 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         } catch (be) { console.debug('Pending OTS receipt build failed:', be && be.message ? be.message : be); }
       }
       renderOtsAnchorBlock(view, sealId);
+      if (view.state === 'calendar') {
+        var chain = null;
+        try {
+          if (typeof window.VoOts.fetchChainConfirmation === 'function' && view.otsBytes &&
+              typeof view.blockHeight === 'number') {
+            chain = await window.VoOts.fetchChainConfirmation(view.otsBytes, resolved.digestHex, view.blockHeight);
+          }
+        } catch (ce) { console.warn('Bitcoin chain check failed:', ce); }
+        if (generation !== otsCheckGeneration) return;
+        view.state = chain && chain.status === 'confirmed' ? 'confirmed' : 'chain-unavailable';
+        renderOtsAnchorBlock(view, sealId);
+      }
       reportOtsAnchorOutcome(view.state, pageCount);
     } catch (e) {
+      if (generation !== otsCheckGeneration) return;
       console.warn('OTS anchor check failed (verification unaffected):', e && e.message ? e.message : e);
       try { renderOtsAnchorBlock({ state: 'unavailable' }, (meta && meta.sealId) || null); } catch (re) {}
     }
@@ -1869,10 +1887,16 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     currentOtsProof = null;
     var badge = '', caption = '';
     if (view.state === 'confirmed') {
-      badge = '<span class="custody-badge match">ANCHORED — Bitcoin blockchain</span>';
+      badge = '<span class="custody-badge match">BITCOIN CONFIRMED — receipt path recomputed against two independent Bitcoin explorers</span>';
       caption = 'The Bitcoin anchor proves the sealed hash existed at a point in time — it does not prove the truth of the document\'s contents. The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect.';
+    } else if (view.state === 'calendar') {
+      badge = '<span class="custody-badge seal_found">CALENDAR ATTESTATION — checking the Bitcoin chain…</span>';
+      caption = 'The calendar supplied a Bitcoin attestation; its receipt path has not yet been checked against the chain. The explorer services receive the block height and hash, not the document or digest.';
+    } else if (view.state === 'chain-unavailable') {
+      badge = '<span class="custody-badge seal_found">CHAIN CHECK UNAVAILABLE</span>';
+      caption = 'The independent chain check could not be completed. The calendar attestation remains unconfirmed; the integrity verdict is unaffected.';
     } else if (view.state === 'pending') {
-      badge = '<span class="custody-badge no_seal">PENDING — submitted to calendars, Bitcoin confirmation typically 1–2 hours</span>';
+      badge = '<span class="custody-badge no_seal">PENDING — no confirmed proof found, or this digest was not submitted</span>';
       caption = 'The digest is with the public OpenTimestamps calendars awaiting its Bitcoin block. Re-check this seal later to upgrade to a confirmed proof. No Bitcoin time proof is confirmed yet. The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect.';
     } else if (view.state === 'offline') {
       badge = '<span class="custody-badge seal_found">OFFLINE — could not reach calendars; the seal\'s hash integrity verdict is unaffected</span>';
@@ -1887,15 +1911,15 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     html += otsRow('Status', badge);
     if (view.digestHex) html += otsRow('OTS Digest (SHA-256)', otsEsc(view.digestHex));
     if (view.source) html += otsRow('Digest Source', otsEsc(view.source));
-    if (view.state === 'confirmed') {
+    if (view.state === 'confirmed' || view.state === 'calendar' || view.state === 'chain-unavailable') {
       if (typeof view.blockHeight === 'number' && isFinite(view.blockHeight)) html += otsRow('Bitcoin Block', String(view.blockHeight));
-      if (view.calendar) html += otsRow('Confirmed By', otsEsc(view.calendar));
+      if (view.calendar) html += otsRow('Calendar', otsEsc(view.calendar));
     }
     if (caption) html += '<p class="custody-caption">' + caption + '</p>';
-    if (view.otsBytes && (view.state === 'confirmed' || view.state === 'pending')) {
+    if (view.otsBytes && (view.state === 'confirmed' || view.state === 'calendar' || view.state === 'chain-unavailable' || view.state === 'pending')) {
       currentOtsProof = { bytes: view.otsBytes, filename: view.filename || ((sealId || 'verum-omnis-seal') + '.ots') };
       html += '<div style="text-align:center;margin-top:14px"><button class="btn btn-primary" onclick="downloadOtsProof()">' +
-              (view.state === 'confirmed' ? 'Download confirmed proof (.ots)' : 'Download pending receipt (.ots)') +
+              (view.state === 'pending' ? 'Download pending receipt (.ots)' : 'Download calendar receipt (.ots)') +
               '</button></div>';
     }
     otsAnchorBox.innerHTML = html;
