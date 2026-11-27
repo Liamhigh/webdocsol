@@ -203,6 +203,11 @@
     font-family: 'Courier New', monospace; max-width: 220px;
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
+  #stepFraud { flex-wrap: wrap; }
+  #stepFraud .label { flex: 1; min-width: 0; }
+  #stepFraud .detail { flex-basis: 100%; margin-left: 36px; max-width: none;
+    overflow: visible; white-space: normal;
+  }
 
   /* Results */
   .results { display: none; background: rgba(15, 52, 96, 0.08);
@@ -25850,17 +25855,18 @@ function applyBundleMode(result) {
 // arithmetic live HERE, in page UI code, and the rescue hook below reports
 // pure counts only. Reset per run via voOcrProgressReset().
 var _voOcrPaceT0 = null;
-function voOcrProgressReset() { _voOcrPaceT0 = null; }
+function voOcrProgressReset() { _voOcrPaceT0 = Date.now(); }
 function voOcrProgress(pageIdx, done, total, workerCount) {
   var eta = '';
-  if (_voOcrPaceT0 === null) _voOcrPaceT0 = Date.now();
-  if (done >= 2) {
-    var s = Math.round(((Date.now() - _voOcrPaceT0) / done) * (total - done) / 1000);
-    if (s >= 90) eta = ', ~' + Math.round(s / 60) + ' min left';
-    else if (s >= 5) eta = ', ~' + s + 's left';
+  if (_voOcrPaceT0 !== null && done >= 2 && done < total) {
+    var elapsed = Date.now() - _voOcrPaceT0;
+    if (elapsed > 0) {
+      var mins = Math.max(1, Math.round((elapsed / done) * (total - done) / 60000));
+      eta = ' — ≈' + mins + ' min left';
+    }
   }
-  updateStep('Fraud', 'processing', 'OCR page ' + (pageIdx + 1) + ' done (' + done + '/' + total +
-    ', on-device, ' + workerCount + ' worker' + (workerCount === 1 ? '' : 's') + eta + ')...');
+  updateStep('Fraud', 'processing', 'OCR ' + done + '/' + total + ' — page ' + (pageIdx + 1) +
+    ' done' + eta + ' (on-device, ' + workerCount + ' worker' + (workerCount === 1 ? '' : 's') + ')');
 }
 
 // ==================== OCR RESCUE (image-only pages) ====================
@@ -25932,7 +25938,9 @@ function voOcrAskToContinue(extra, base) {
     if (typeof window !== 'undefined' && typeof window.voOcrContinueAll === 'boolean') return window.voOcrContinueAll;
     if (typeof confirm !== 'function') return false;
     var mins = Math.max(1, Math.ceil(extra * VO_OCR_SECONDS_PER_PAGE / 60));
-    return confirm('This bundle has ' + extra + ' more scanned page' + (extra === 1 ? '' : 's') + ' beyond the standard on-device OCR limit of ' + VO_OCR_MAX_PAGES + ' (' + base + ' will be read either way).\n\nReading them all will take roughly ' + mins + ' more minute' + (mins === 1 ? '' : 's') + ' on this device, and the report will then cover every page.\n\nOK = read them all now.  Cancel = keep the limit (the unread pages are named in the report).');
+    var baseMins = Math.ceil(base * VO_OCR_SECONDS_PER_PAGE / 60);
+    var allMins = baseMins + mins;
+    return confirm('This bundle has ' + (base + extra) + ' scanned pages that need OCR (standard limit ' + VO_OCR_MAX_PAGES + ').\n\nOn this device, reading all ' + (base + extra) + ' takes roughly ' + allMins + ' minutes; keeping the limit reads ' + base + ' in roughly ' + baseMins + ' minutes. The extra ' + extra + ' add roughly ' + mins + ' minute' + (mins === 1 ? '' : 's') + ', and the report will then cover every page.\n\nOK = read them all now.  Cancel = keep the limit (the unread pages are named in the report).');
   } catch (e) { return false; }
 }
 
@@ -26132,7 +26140,7 @@ async function voOcrRescuePages(pdfBytes, textBlocks, onProgress) {
   // clock, and wall-clock time may not enter the analysis path (AGENTS.md).
   var _report = (typeof voOcrProgress === 'function') ? voOcrProgress
     : function (pageIdx, done, total, wc) {
-        updateStep('Fraud', 'processing', 'OCR page ' + (pageIdx + 1) + ' done (' + done + '/' + total + ', on-device)...');
+        updateStep('Fraud', 'processing', 'OCR ' + done + '/' + total + ' — page ' + (pageIdx + 1) + ' done (on-device)');
       };
   if (typeof voOcrProgressReset === 'function') voOcrProgressReset();
   function _ocrTick(pageIdx) {

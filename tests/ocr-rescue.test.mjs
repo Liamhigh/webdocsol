@@ -23,6 +23,62 @@ const end = html.indexOf('// ==================== ANONYMOUS PATTERN SHARING');
 ok(start !== -1 && end > start, 'OCR block located in seal-document.html');
 const src = html.slice(start, end);
 
+// Dialog estimates use the existing per-page figure and retain both choices.
+{
+  let message = '';
+  let choice = false;
+  const ask = new Function('window', 'confirm',
+    src + '\nreturn { ask: voOcrAskToContinue, seconds: VO_OCR_SECONDS_PER_PAGE };'
+  )({}, text => { message = text; return choice; });
+  for (const extra of [1, 4, 20, 21, 119]) {
+    ok(ask.ask(extra, 200) === false, 'cancel keeps the OCR limit for ' + extra + ' extra pages');
+    const times = message.match(/reading all \d+ takes roughly (\d+) minutes; keeping the limit reads 200 in roughly (\d+) minutes\. The extra \d+ add roughly (\d+) minute/);
+    ok(message.includes('This bundle has ' + (200 + extra) + ' scanned pages') && !!times,
+      'dialog names all scanned pages and both time estimates for ' + extra + ' extra pages');
+    if (times) {
+      ok(+times[1] - +times[2] === +times[3] &&
+        +times[2] === Math.ceil(200 * ask.seconds / 60) &&
+        +times[3] === Math.max(1, Math.ceil(extra * ask.seconds / 60)),
+      'dialog totals agree with the existing per-page and marginal estimates');
+    }
+    ok(message.includes('Cancel = keep the limit (the unread pages are named in the report)'),
+      'cancel disclosure remains unchanged');
+  }
+  choice = true;
+  ok(ask.ask(4, 200) === true, 'OK continues OCR beyond the limit');
+  ok(new Function('window', 'confirm', src + '\nreturn voOcrAskToContinue(4, 200);')(
+    { voOcrContinueAll: false }, () => { throw new Error('unexpected prompt'); }) === false,
+  'headless override retains cancel semantics');
+}
+
+// The UI clock measures the entire OCR pass and never feeds the analysis hook.
+{
+  const progressSrc = html.slice(html.indexOf('var _voOcrPaceT0'), start);
+  let now = 1000, status = '';
+  const progress = new Function('Date', 'updateStep', progressSrc +
+    '\nreturn { reset: voOcrProgressReset, tick: voOcrProgress };')(
+    { now: () => now }, (_name, _state, text) => { status = text; });
+  progress.reset();
+  now += 6000;
+  progress.tick(431, 1, 204, 2);
+  ok(status.startsWith('OCR 1/204 — page 432 done') && !status.includes('min left'),
+    'first completed page has a complete counter but no ETA');
+  now += 6000;
+  progress.tick(431, 2, 204, 2);
+  ok(status.includes('≈20 min left'), 'ETA includes elapsed time before the first completed page');
+  now = 1000 + 94 * 6000;
+  progress.tick(431, 94, 204, 2);
+  ok(status.startsWith('OCR 94/204 — page 432 done') && status.includes('≈11 min left'),
+    'full counter leads the status and measured ETA decreases at a steady rate');
+  progress.tick(431, 204, 204, 2);
+  ok(!status.includes('min left'), 'ETA is hidden when no pages remain');
+  progress.reset();
+  progress.tick(431, 2, 204, 2);
+  ok(!status.includes('min left'), 'zero elapsed time does not fabricate an ETA');
+  ok(/#stepFraud \.detail\s*\{[^}]*flex-basis:\s*100%[^}]*overflow:\s*visible;[^}]*white-space:\s*normal/s.test(html),
+    'forensic status has its own wrapping, non-truncated row');
+}
+
 // The block must no longer use the old un-verified loader.
 ok(!/voLoadScriptOnce/.test(src), 'old un-verified voLoadScriptOnce is gone');
 
@@ -255,6 +311,34 @@ function fakeDom(behaviours, state) {
 // the engine never read — a lease agreement among them — and the report said
 // nothing beyond a count). The OCR block must record WHICH pages stayed
 // unread and why, in a structured form the report builder receives.
+{
+  const pdfjsLib = {
+    GlobalWorkerOptions: {},
+    getDocument: () => ({ promise: Promise.resolve({
+      async getPage() {
+        return { getViewport: () => ({ width: 100, height: 100 }),
+          render: () => ({ promise: Promise.resolve() }) };
+      },
+      async destroy() {},
+    }) }),
+  };
+  let recognized = 0;
+  const Tesseract = { async createWorker() { return {
+    async recognize() { recognized++; return { data: { text: 'Recovered text long enough to pass the OCR empty threshold.' } }; },
+    async terminate() {},
+  }; } };
+  const document = { createElement: () => ({ getContext: () => ({}) }) };
+  for (const readAll of [false, true]) {
+    recognized = 0;
+    const api = build({ document, pdfjsLib, Tesseract, window: { voOcrContinueAll: readAll } });
+    const result = await api.voOcrRescuePages(new Uint8Array([1]), Array(204).fill(''), () => {});
+    ok(recognized === (readAll ? 204 : 200), 'OCR ' + (readAll ? 'reads all pages after OK' : 'retains the cap after cancel'));
+    ok(readAll ? !/exceeded the OCR cap/.test(result.note) :
+      /4 image-only page\(s\) exceeded the OCR cap \(200\) and remain unread: page\(s\) 201-204\./.test(result.note),
+    'OCR disclosure reflects the selected choice');
+  }
+}
+
 {
   const fn = new Function(
     'document', 'updateStep', 'pdfjsLib', 'Tesseract', 'window', 'navigator',
