@@ -21199,7 +21199,11 @@ async function submitToOTS(otsDigestHex) {
       const to = setTimeout(() => ctrl.abort(), 15000);
       const res = await fetch(url, { method: 'POST', headers: {'Content-Type':'application/x-www-form-urlencoded','Accept':'application/vnd.opentimestamps.v1'}, body: hashBytes, signal: ctrl.signal });
       clearTimeout(to);
-      if (res.ok) { const d = await res.arrayBuffer(); if (d.byteLength > 0) return {success: true, calendar: url, proof: new Uint8Array(d)}; }
+      if (res.ok) {
+        const submittedAt = new Date().toISOString();
+        const d = await res.arrayBuffer();
+        if (d.byteLength > 0) return {success: true, calendar: url, proof: new Uint8Array(d), submittedAt: submittedAt};
+      }
     } catch(e) { console.warn('Calendar failed:', url, e.message); }
   }
   return {success: false, error: 'All calendar servers failed — hash recorded for retry'};
@@ -22162,9 +22166,19 @@ async function buildAnchorCertificate(opts) {
   y -= 40;
   page.drawText('BLOCKCHAIN ANCHOR CERTIFICATE', { x: cx('BLOCKCHAIN ANCHOR CERTIFICATE', timesBold, 23), y: y, size: 23, font: timesBold, color: GOLD });
   y -= 20;
-  var sub = '— PENDING CONFIRMATION';
+  var sub = 'ANCHOR STATUS — BITCOIN CONFIRMATION PENDING';
   page.drawText(sub, { x: cx(sub, timesItalic, 11), y: y, size: 11, font: timesItalic, color: LIGHT });
-  y -= 42;
+  var submittedMs = Date.parse(opts.timestampISO);
+  if (!opts.timestampISO || !isFinite(submittedMs)) throw new Error('Anchor submission time unavailable');
+  var expectedISO = new Date(submittedMs + 2 * 60 * 60 * 1000).toISOString();
+  var pendLines = wrap('Submitted ' + opts.timestampISO + '; confirmation expected by ' + expectedISO +
+    ' (estimate; typically 1-2 hours; set by the Bitcoin network, not by this platform). Upgrade the receipt at verumglobal.foundation/verify.html after that time.', helv, 8.5, PW - 140);
+  y -= 17;
+  for (var pi = 0; pi < pendLines.length; pi++) {
+    page.drawText(pendLines[pi], { x: cx(pendLines[pi], helv, 8.5), y: y, size: 8.5, font: helv, color: LIGHT });
+    y -= 11;
+  }
+  y -= 25;
 
   // QR panel (right column) — same verify link as the Seal Certificate
   var qrSize = 118;
@@ -22188,7 +22202,7 @@ async function buildAnchorCertificate(opts) {
   page.drawText(vurl, { x: qrX - 8 + (qrSize + 16 - helv.widthOfTextAtSize(vurl, 6.5)) / 2, y: qrY - 33, size: 6.5, font: helv, color: MUTE });
 
   // Detail rows (left column)
-  var lx = 70, rowMaxW = qrX - 40 - lx;
+  var lx = 70;
   function row(label, valueLines, valueFont, valueSize, gap) {
     page.drawText(safe(label), { x: lx, y: y, size: 8, font: helvBold, color: GOLD });
     y -= 14;
@@ -22212,8 +22226,6 @@ async function buildAnchorCertificate(opts) {
     : ['n/a'];
   row('OPENTIMESTAMPS CALENDARS', calLines, helv, 9);
   row('SUBMITTED (ISO-8601)', [opts.timestampISO || 'n/a'], courier, 10);
-  var pendLines = wrap('Digest accepted by the calendar(s) above; Bitcoin confirmation was pending when this certificate was made (typically 1-2 hours). This certificate records the submission; the confirmed proof is fetched by uploading the sealed PDF to verify.html.', helv, 8.5, rowMaxW);
-  row('ANCHOR STATUS', pendLines, helv, 8.5);
 
   // Plain-language explanation for a non-technical recipient: what the seal
   // proves and how, in ordinary words. Fills the certificate body so the
@@ -26959,7 +26971,7 @@ async function runSealingPipeline() {
           otsDigest: otsDigestHex,
           otsDigestScheme: VO_OTS_DELIVERED_FILE_SCHEME,
           calendars: [window.VoOts ? VoOts.normalizeCalendarUrl(otsResult.calendar) : otsResult.calendar],
-          timestampISO: new Date(meta.t || Date.now()).toISOString(),
+          timestampISO: otsResult.submittedAt,
           qrDataURL: qrDataURL
         })
       };
