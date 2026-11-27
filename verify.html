@@ -346,14 +346,6 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     <input type="file" id="fileInput" accept=".pdf,.voice,application/pdf" style="display:none">
   </div>
 
-  <div class="share-meta" id="shareMetaBox">
-    <label class="share-meta-label" for="shareMetaOptIn">
-      <input type="checkbox" id="shareMetaOptIn" checked>
-      <span>Share anonymous verification metadata to improve the forensic engine</span>
-    </label>
-    <p class="share-meta-note">Only the verification outcome and the document's page/size class are sent &mdash; never document content, hashes, or URLs.</p>
-  </div>
-
   <!-- GPS-at-verification opt-in for the custody anchor. Lives here (not inside
        the custody box) because the custody anchor fires AT verification time --
        consent must be collected before upload. Default OFF, per-session only,
@@ -365,6 +357,14 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       <span>Include my device-reported location in the verification record (not independent proof of presence)</span>
     </label>
     <p class="share-meta-note">Your browser supplies the location. The record preserves what it reported; it does not independently prove presence. It is included in the anchored custody record only &mdash; it is not uploaded anywhere else.</p>
+  </div>
+
+  <div class="share-meta" id="shareMetaBox">
+    <label class="share-meta-label" for="shareMetaOptIn">
+      <input type="checkbox" id="shareMetaOptIn" checked>
+      <span>Share anonymous verification metadata to improve the forensic engine</span>
+    </label>
+    <p class="share-meta-note">Only the verification outcome and the document's page/size class are sent &mdash; never document content, hashes, or URLs.</p>
   </div>
 
   <!-- QR payload paste panel. Seal QR codes on phones decode to TEXT: either a
