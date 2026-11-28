@@ -98,6 +98,36 @@ t.ok(L.events.every(e => e.payer === null && e.payee === null),
   t.ok(n.summary.event_count === 0, 'no ledger events from an Act number, a clause number, or a bare date');
 }
 {
+  const jurat = E.voExtractConductLedger([
+    'Jurat: in accordance with the Regulations contained in Government Notice No R9999 dated 1 February 1970, as amended by Government Notice No R8888 dated 2 March 1971.',
+    'Government Gazette No R7777 dated 3 April 1972; Provincial Gazette No R6666 dated 4 May 1973; Proclamation No R5555 dated 5 June 1974.'
+  ]);
+  t.ok(jurat.summary.event_count === 0 && jurat.events.every(e => e.amount === null) && jurat.summary.total_value === null,
+    'statutory citation dates and their R-numbers are excluded from the conduct ledger');
+}
+{
+  const controls = [
+    ['Payment received R1 258,00 on 1 January 2020.', 1258],
+    ['Payment received R1,258.00 on 2 February 2020.', 1258],
+    ['Payment received R 125 000 on 3 March 2020.', 125000],
+    ['Payment received R125000 on 4 April 2020.', 125000],
+    ['The rental under the lease dated 12 March 2020.', null],
+    ['Payment of R125 000 dated 12 March 2020.', 125000]
+  ];
+  const admitted = controls.map(([text]) => E.voExtractConductLedger([text]));
+  t.ok(admitted.every((ledger, i) => ledger.summary.event_count === 1 &&
+      (controls[i][1] === null || ledger.events[0].amount === controls[i][1])),
+    'all corrected amount, lease-date and payment-date controls remain admitted');
+}
+{
+  const ledger = E.voExtractConductLedger([
+    'Government Notice No R9999 dated 1 February 1970. Payment received R125000 on 2 March 2020.'
+  ]);
+  t.ok(ledger.summary.event_count === 1 && ledger.events[0].date === '2020-03-02' &&
+    ledger.events[0].amount === 125000,
+    'a citation cue does not suppress conduct in a later sentence');
+}
+{
   // ZA amount forms are one number.
   const ok = E.voParseAmountSa('R173,396.20') === 173396.20 &&
     E.voParseAmountSa('R 173 396,20') === 173396.20 &&
