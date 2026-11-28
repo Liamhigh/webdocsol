@@ -116,6 +116,7 @@
   .upload-zone .icon { font-size: 48px; margin-bottom: 16px; }
   .upload-zone p { font-size: 1rem; color: #D5D8DD; }
   .upload-zone .hint { font-size: 0.85rem; color: #4A7EC7; margin-top: 8px; }
+  .upload-zone .verify-steps { font-size: 0.9rem; line-height: 1.6; margin-bottom: 20px; color: #D4A843; }
 
   .share-meta {
     background: rgba(15, 52, 96, 0.08); border: 1px solid rgba(26, 46, 82, 0.4);
@@ -305,7 +306,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
      parses block attestations, and serves .ots downloads. Same module the seal
      page uses. Plain script, no build step; every use below is typeof-guarded
      so a missing module can never break verification. -->
-<script src="/ots-proof.js?v=1.5.0-20260721"></script>
+<script src="/ots-proof.js?v=1.5.0-20261127-chain"></script>
 </head>
 <body>
 
@@ -340,18 +341,12 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   </div>
 
   <div class="upload-zone" id="dropZone">
+    <p class="verify-steps">1. Get the sealed PDF from the sender &middot; 2. Drop it here (or paste the QR payload) &middot; 3. Read the verdict and download your verification receipt.</p>
     <div class="icon">&#128203;</div>
     <p>Drag &amp; drop a sealed PDF (or encrypted .voice file) here, or click to browse</p>
     <p class="hint">Supports VO-DSS sealed documents (.pdf with embedded metadata)</p>
+    <p class="hint">The file is required for an integrity verdict and verification receipt.</p>
     <input type="file" id="fileInput" accept=".pdf,.voice,application/pdf" style="display:none">
-  </div>
-
-  <div class="share-meta" id="shareMetaBox">
-    <label class="share-meta-label" for="shareMetaOptIn">
-      <input type="checkbox" id="shareMetaOptIn" checked>
-      <span>Share anonymous verification metadata to improve the forensic engine</span>
-    </label>
-    <p class="share-meta-note">Only the verification outcome and the document's page/size class are sent &mdash; never document content, hashes, or URLs.</p>
   </div>
 
   <!-- GPS-at-verification opt-in for the custody anchor. Lives here (not inside
@@ -367,12 +362,20 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     <p class="share-meta-note">Your browser supplies the location. The record preserves what it reported; it does not independently prove presence. It is included in the anchored custody record only &mdash; it is not uploaded anywhere else.</p>
   </div>
 
+  <div class="share-meta" id="shareMetaBox">
+    <label class="share-meta-label" for="shareMetaOptIn">
+      <input type="checkbox" id="shareMetaOptIn" checked>
+      <span>Share anonymous verification metadata to improve the forensic engine</span>
+    </label>
+    <p class="share-meta-note">Only the verification outcome and the document's page/size class are sent &mdash; never document content, hashes, or URLs.</p>
+  </div>
+
   <!-- QR payload paste panel. Seal QR codes on phones decode to TEXT: either a
        verify.html?h=...&m=... link (or its bare m= blob), or raw legacy JSON
        ({"scheme":"verum-omnis-seal",...}). Users can paste that text here.
        Parsing is fully client-side: nothing is uploaded and nothing is stored. -->
   <div class="share-meta" id="qrPasteBox">
-    <label class="share-meta-label" for="qrPasteInput" style="cursor:default">Have a QR payload? Paste it here</label>
+    <label class="share-meta-label" for="qrPasteInput" style="cursor:default">Scan a QR code with your device, then paste its payload here</label>
     <textarea id="qrPasteInput" class="qr-paste-input" rows="3" spellcheck="false" autocomplete="off"
       placeholder="verify.html?h=&hellip;&amp;m=&hellip; link, a bare m= payload, or legacy {&quot;scheme&quot;:&quot;verum-omnis-seal&quot;,&hellip;} JSON"></textarea>
     <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap">
@@ -398,7 +401,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       placeholder="Seal ID or hash to find, e.g. VO-AF07AD93E861 or af07ad93 (leave blank to list every sealed file)">
     <div style="display:flex;align-items:center;gap:12px;margin-top:10px;flex-wrap:wrap">
       <label class="btn btn-outline" style="margin:0;padding:10px 22px;cursor:pointer">
-        Choose PDFs to scan
+        Choose PDFs to search on this device
         <input type="file" id="findSealFiles" accept=".pdf,application/pdf" multiple style="display:none">
       </label>
       <p class="share-meta-note" style="margin:0">Scanned on your device &mdash; never uploaded, never stored.</p>
@@ -439,8 +442,10 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       <div class="custody-row"><span class="custody-label">OpenTimestamps</span><span class="custody-value" id="custodyOts"></span></div>
       <div class="custody-row" id="custodyGpsRow" style="display:none"><span class="custody-label">Verified at</span><span class="custody-value" id="custodyGps"></span></div>
       <p class="custody-caption">This records the verification EVENT, not the document. The seal's own timestamp is the sealing device's clock; once Bitcoin confirms the seal's anchor, that block bounds the latest time the document existed.</p>
+      <h3>Your verification receipt</h3>
+      <p class="custody-caption">Your receipt records the verdict, including whether the fingerprint matches, the verification time (UTC), and the custody chain; a fingerprint of its custody record is submitted to OpenTimestamps for Bitcoin anchoring when available.</p>
       <div style="text-align:center;margin-top:14px">
-        <button class="btn btn-outline" id="custodyReceiptBtn" onclick="downloadCustodyReceipt()">Download Custody Receipt (JSON)</button>
+        <button class="btn btn-outline" id="custodyReceiptBtn" onclick="downloadCustodyReceipt()">Download your verification receipt (JSON)</button>
         <button class="btn" id="requestPwdBtn" style="display:none" onclick="requestPasswordFromSender()">Request password from sender</button>
       </div>
       <p class="custody-caption" id="requestPwdNote" style="display:none">Turns this timestamped (and, if enabled, location-stamped) verification into a read-receipt you send the sender to request the password — instead of a plain email.</p>
@@ -544,6 +549,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   // {bytes, filename} backing the OTS proof download button; null whenever
   // the current block has no downloadable proof.
   var currentOtsProof = null;
+  var otsCheckGeneration = 0;
 
   dropZone.addEventListener('click', function() { fileInput.click(); });
   fileInput.addEventListener('change', function(e) { if (e.target.files[0]) handleFile(e.target.files[0]); });
@@ -685,6 +691,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     custodyBox.style.display = 'none';
     if (otsAnchorBox) { otsAnchorBox.style.display = 'none'; otsAnchorBox.innerHTML = ''; }
     currentOtsProof = null;
+    otsCheckGeneration++;
     metaSection.innerHTML = '';
     currentPdfBlob = null;
     currentVerifyUrl = null;
@@ -2246,6 +2253,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   // Poll the calendars and render every resulting state. Fire-and-forget from
   // verifyPdf; fully non-fatal by construction.
   async function runOtsAnchorCheck(meta, seal, pageCount, deliveredBytes) {
+    var generation = ++otsCheckGeneration;
     try {
       var sealId = (meta && meta.sealId) || (seal && seal.sealId) || null;
       if (!window.VoOts || typeof window.VoOts.fetchUpgraded !== 'function') {
@@ -2253,6 +2261,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         return;
       }
       var resolved = await resolveOtsDigest(meta, seal, deliveredBytes);
+      if (generation !== otsCheckGeneration) return;
       if (!resolved) {
         renderOtsAnchorBlock({ state: 'unavailable' }, sealId);
         return;
@@ -2264,14 +2273,15 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
       } catch (fe) {
         result = { status: 'offline', error: fe && fe.message ? fe.message : String(fe) };
       }
+      if (generation !== otsCheckGeneration) return;
       var status = result && result.status;
       var view = {
-        state: status === 'confirmed' ? 'confirmed' : (status === 'pending' ? 'pending' : 'offline'),
+        state: status === 'confirmed' ? 'calendar' : (status === 'pending' ? 'pending' : 'offline'),
         digestHex: resolved.digestHex,
         source: resolved.source,
         calendar: result && result.calendar ? result.calendar : null
       };
-      if (view.state === 'confirmed') {
+      if (view.state === 'calendar') {
         view.otsBytes = result.otsBytes || null;
         // Block height is shown only when parsed from the proof — never invented.
         var summary = result.summary || null;
@@ -2282,7 +2292,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
             typeof summary.bitcoin[0].height === 'number' && isFinite(summary.bitcoin[0].height)) {
           view.blockHeight = summary.bitcoin[0].height;
         }
-        view.filename = (sealId || 'verum-omnis-seal') + '-confirmed.ots';
+        view.filename = (sealId || 'verum-omnis-seal') + '-calendar-attestation.ots';
       } else if (view.state === 'pending') {
         // Offer a spec-valid pending receipt for download when one can be
         // built locally (any OTS client can upgrade it later).
@@ -2294,8 +2304,54 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
         } catch (be) { console.debug('Pending OTS receipt build failed:', be && be.message ? be.message : be); }
       }
       renderOtsAnchorBlock(view, sealId);
+      if (view.state === 'calendar') {
+        async function confirmProof(bytes, proofSummary) {
+          var heights = [], attestations = proofSummary && proofSummary.bitcoin || [];
+          for (var ai = 0; ai < attestations.length; ai++) {
+            if (generation !== otsCheckGeneration) return null;
+            var height = attestations[ai].height;
+            if (!Number.isSafeInteger(height) || height < 0 || heights.indexOf(height) !== -1) continue;
+            heights.push(height);
+            try {
+              var checked = await window.VoOts.fetchChainConfirmation(bytes, resolved.digestHex, height);
+              if (generation !== otsCheckGeneration) return null;
+              if (checked && checked.status === 'confirmed') return height;
+            } catch (ce) { console.warn('Bitcoin chain check failed:', ce); }
+          }
+          return null;
+        }
+        var confirmedHeight = null;
+        if (typeof window.VoOts.fetchChainConfirmation === 'function' && view.otsBytes) {
+          confirmedHeight = await confirmProof(view.otsBytes, summary);
+        }
+        if (generation !== otsCheckGeneration) return;
+        if (confirmedHeight === null &&
+            typeof window.VoOts.fetchUpgradedCandidates === 'function' &&
+            typeof window.VoOts.fetchChainConfirmation === 'function') {
+          var candidates = [];
+          try {
+            candidates = await window.VoOts.fetchUpgradedCandidates(resolved.digestHex, OTS_ANCHOR_CALENDARS, view.calendar);
+          } catch (cfe) { console.warn('Calendar fallback failed:', cfe); }
+          if (generation !== otsCheckGeneration) return;
+          for (var ci = 0; ci < candidates.length; ci++) {
+            var candidate = candidates[ci];
+            if (!candidate.otsBytes) continue;
+            confirmedHeight = await confirmProof(candidate.otsBytes, candidate.summary);
+            if (generation !== otsCheckGeneration) return;
+            if (confirmedHeight !== null) {
+              view.otsBytes = candidate.otsBytes;
+              view.calendar = candidate.calendar;
+              break;
+            }
+          }
+        }
+        if (confirmedHeight !== null) view.blockHeight = confirmedHeight;
+        view.state = confirmedHeight !== null ? 'confirmed' : 'chain-unavailable';
+        renderOtsAnchorBlock(view, sealId);
+      }
       reportOtsAnchorOutcome(view.state, pageCount);
     } catch (e) {
+      if (generation !== otsCheckGeneration) return;
       console.warn('OTS anchor check failed (verification unaffected):', e && e.message ? e.message : e);
       try { renderOtsAnchorBlock({ state: 'unavailable' }, (meta && meta.sealId) || null); } catch (re) {}
     }
@@ -2320,12 +2376,16 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     currentOtsProof = null;
     var badge = '', caption = '';
     if (view.state === 'confirmed') {
-      // The calendar reports the Bitcoin attestation; this page does not
-      // check the block itself (an OpenTimestamps client against a node does).
-      badge = '<span class="custody-badge match">ANCHORED — Bitcoin attestation reported by the OpenTimestamps calendar</span>';
+      badge = '<span class="custody-badge match">BITCOIN CONFIRMED — receipt path recomputed against two independent Bitcoin explorers</span>';
       caption = 'The Bitcoin anchor proves the exact fingerprint shown above existed no later than the time of its Bitcoin block — it does not prove the truth of the document\'s contents. The seal verifies the exact state of the document as it existed at the sealed time. Any later alteration to the sealed document produces a different fingerprint and is detectable. It does not verify the truth of what the document says, its authorship, or its legal effect.';
+    } else if (view.state === 'calendar') {
+      badge = '<span class="custody-badge seal_found">CALENDAR ATTESTATION — checking the Bitcoin chain…</span>';
+      caption = 'The calendar supplied a Bitcoin attestation; its receipt path has not yet been checked against the chain. The explorer services receive the block height and hash, not the document or digest.';
+    } else if (view.state === 'chain-unavailable') {
+      badge = '<span class="custody-badge seal_found">CHAIN CHECK UNAVAILABLE</span>';
+      caption = 'The independent chain check could not be completed. The calendar attestation remains unconfirmed; the integrity verdict is unaffected.';
     } else if (view.state === 'pending') {
-      badge = '<span class="custody-badge no_seal">NO CONFIRMED PROOF FOUND — pending, or this digest was not submitted</span>';
+      badge = '<span class="custody-badge no_seal">PENDING — no confirmed proof found: pending, or this digest was not submitted</span>';
       caption = 'The calendars returned no confirmed Bitcoin attestation for this exact digest. A recent submission may still be pending, but a missing or different digest is not proof of submission. If this was a password-protected delivery, the new receipt covers the encrypted copy—not the unprotected sender copy. Older encrypted deliveries may use the legacy digest recorded on their anchor certificate. Re-check with the exact delivered file and certificate. A confirmed anchor proves only that the fingerprint existed no later than its Bitcoin block, not the truth of the contents.';
     } else if (view.state === 'offline') {
       badge = '<span class="custody-badge seal_found">OFFLINE — could not reach calendars' + (lastSeal && lastSeal.scheme === 'anchorcert' ? '' : '; the seal\'s hash integrity verdict is unaffected') + '</span>';
@@ -2340,15 +2400,15 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     html += otsRow('Status', badge);
     if (view.digestHex) html += otsRow('OTS Digest (SHA-256)', otsEsc(view.digestHex));
     if (view.source) html += otsRow('Digest Source', otsEsc(view.source));
-    if (view.state === 'confirmed') {
+    if (view.state === 'confirmed' || view.state === 'calendar' || view.state === 'chain-unavailable') {
       if (typeof view.blockHeight === 'number' && isFinite(view.blockHeight)) html += otsRow('Bitcoin Block', String(view.blockHeight));
-      if (view.calendar) html += otsRow('Confirmed By', otsEsc(view.calendar));
+      if (view.calendar) html += otsRow('Calendar', otsEsc(view.calendar));
     }
     if (caption) html += '<p class="custody-caption">' + caption + '</p>';
-    if (view.otsBytes && (view.state === 'confirmed' || view.state === 'pending')) {
+    if (view.otsBytes && (view.state === 'confirmed' || view.state === 'calendar' || view.state === 'chain-unavailable' || view.state === 'pending')) {
       currentOtsProof = { bytes: view.otsBytes, filename: view.filename || ((sealId || 'verum-omnis-seal') + '.ots') };
       html += '<div style="text-align:center;margin-top:14px"><button class="btn btn-primary" onclick="downloadOtsProof()">' +
-              (view.state === 'confirmed' ? 'Download confirmed proof (.ots)' : 'Download pending receipt (.ots)') +
+              (view.state === 'pending' ? 'Download pending receipt (.ots)' : 'Download calendar receipt (.ots)') +
               '</button></div>';
     }
     otsAnchorBox.innerHTML = html;

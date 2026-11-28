@@ -52,7 +52,7 @@ node tests/<file>       # one suite, e.g. node tests/worker.test.mjs
 
 ## What is covered
 
-**68 registered production/baseline suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, one Phase 4 active-graph suite, one PR #327 review suite, one detection-credibility suite and one verifier-adjudication suite. `run-all.js` is that registry — **a production/baseline test file that is not listed in it does not run**. Separately gated development contracts are registered in `run-development.js`; `npm test` runs both registries. What each production/baseline suite guards, and the real evidence bundle behind it, is in
+**69 registered production/baseline suites**: the 55-suite audited baseline of 15 November 2026, two Phase 0 suites, four Phase 1 evaluation suites, two Phase 2 citation suites, one Phase 3 redaction-fixture suite, one Phase 4 active-graph suite, one PR #327 review suite, one detection-credibility suite, one verifier-adjudication suite and one OTS chain-confirmation suite. `run-all.js` is that registry — **a production/baseline test file that is not listed in it does not run**. Separately gated development contracts are registered in `run-development.js`; `npm test` runs both registries. What each production/baseline suite guards, and the real evidence bundle behind it, is in
 [`../ENGINE.md`](../ENGINE.md) §10; the guards themselves are §4.
 
 The five development suites are:
@@ -117,6 +117,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 | 66 | `pr327-review` | `pr327-review.test.mjs` | 40 | Synthetic review regressions for report exclusion, signed-rule masking, WF7, CT52, D02C, admissions and overlapping scans |
 | 67 | `detection-credibility` | `detection-credibility.test.mjs` | 106 | Synthetic report exclusion, ledger furniture, contradiction, severity, coverage and narrative-privacy regressions |
 | 68 | `finding-verification` | `finding-verification.test.mjs` | 460 | Strict mocked verifier contract, exhaustive status mapping, page-bounded context, quota/retry safeguards, prompt injection, narrative isolation, Section 4 placement, report outcomes and retained G3 candidates |
+| 69 | `ots-chain-confirmation` | `ots-chain-confirmation.test.mjs` | 206 | Synthetic receipt paths, independent explorer agreement, calendar fallback and verification status handling |
 Rows 36–55 are the later detector, conduct, OTS, timeline, fact-index and cross-document suites;
 `run-all.js` is always the authoritative complete production/baseline registry.
 
