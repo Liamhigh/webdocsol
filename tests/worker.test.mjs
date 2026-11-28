@@ -1200,6 +1200,105 @@ ok(!/at \/|\.js:\d+/.test(body), 'error responses do not leak stack traces');
   ok(!/[a-z]{2,}[a-z]“/.test(ce), 'no sentence swallows the next finding\'s quote mid-word');
 }
 
+// --- narrator failure diagnostics (issue #361): each failed model call on the
+// narrate and human-report routes logs ONE metadata-only [VO-WRITER-ROUTE]
+// record (route, mapped error, exception name, model id, elapsedMs, message
+// truncated to 120 chars, response top-level key names). No request text,
+// prompt, excerpt or finding text may reach the log, and the 200-with-error
+// responses, their fields and the error taxonomy stay exactly as they were.
+{
+  const CANARY = 'CANARY-7Q9X';
+  const realWarn = console.warn;
+  let logs = [];
+  console.warn = (...a) => { logs.push(a.map(String).join(' ')); };
+  const writerLogs = () => logs.filter(l => l.startsWith('[VO-WRITER-ROUTE] '));
+  const parseLog = (l) => { try { return JSON.parse(l.slice('[VO-WRITER-ROUTE] '.length)); } catch { return null; } };
+  const LOG_KEYS = 'route,error,errorName,model,elapsedMs,message,responseKeys';
+  const aiEnv = (run) => ({ ...env, AI: { run } });
+  const narratePayload = {
+    documentName: CANARY + '-doc.pdf', pageCount: 3, score: 0, confidence: '', findingsPruned: 0, generatedUtc: '2026-11-28T00:00:00Z',
+    documentExcerpt: 'The ' + CANARY + '-excerpt states a fact.',
+    findingsKept: [{ id: 'F1', type: 'CT02', severity: 4, location: 'Page 2', evidence: CANARY + '-evidence text' }],
+    caseContext: { caseName: CANARY + '-case', parties: CANARY + '-party', jurisdiction: 'South Africa' }
+  };
+  const humanPayload = {
+    section: 'executive_summary', documentName: CANARY + '-doc.pdf', pageCount: 9,
+    findings: [{ id: 'F1', type: 'CT02', name: CANARY + '-name', page: 2, pages: [2], evidence: CANARY + '-evidence', quote: CANARY + '-quote', who: [CANARY + '-who'] }],
+    excerpt: '[Page 2] ' + CANARY + '-excerpt',
+    sealedRecord: '[Page 2] ' + CANARY + '-record',
+    findingsJson: '{"note":"' + CANARY + '-json"}',
+    priorSummary: CANARY + '-prior',
+    caseContext: { caseName: CANARY + '-case' }
+  };
+  const runCase = async (route, payload, run) => {
+    logs = [];
+    const res = await worker.fetch(mk(route, 'POST', JSON.stringify(payload)), aiEnv(run), {});
+    const text = await res.text();
+    return { status: res.status, text, body: JSON.parse(text), recs: writerLogs() };
+  };
+  const longMsg = 'provider said: ' + 'x'.repeat(300);
+  const NARRATE_FAIL_KEYS = 'ok,executiveSummary,criticalEvidence,format,model,error,detail';
+  const narrateCases = [
+    { name: 'model_error', run: async () => { throw new Error(longMsg); }, error: 'model_error' },
+    { name: 'timeout', run: async () => { throw new Error('Workers AI call timed out after 30000 ms'); }, error: 'timeout' },
+    { name: 'empty', run: async () => ({ response: '' }), error: 'empty' }
+  ];
+  try {
+    for (const c of narrateCases) {
+      const out = await runCase('/api/v1/ai/narrate', narratePayload, c.run);
+      ok(out.status === 200 && out.body.ok === true && out.body.error === c.error && out.body.format === 'template' && out.body.model === 'template-fallback',
+        'narrate ' + c.name + ': status 200, ok:true, error "' + c.error + '", template fallback (' + out.status + ' ' + out.body.error + ')');
+      ok(Object.keys(out.body).join(',') === NARRATE_FAIL_KEYS, 'narrate ' + c.name + ': response fields unchanged (' + Object.keys(out.body).join(',') + ')');
+      ok(/^AI narrator call failed: /.test(out.body.detail), 'narrate ' + c.name + ': detail keeps its existing prefix');
+      ok(out.recs.length === 1, 'narrate ' + c.name + ': exactly one [VO-WRITER-ROUTE] record (' + out.recs.length + ')');
+      const rec = parseLog(out.recs[0] || '');
+      ok(rec && Object.keys(rec).join(',') === LOG_KEYS, 'narrate ' + c.name + ': the record carries only the metadata fields (' + (rec && Object.keys(rec).join(',')) + ')');
+      ok(rec && rec.route === 'narrate' && rec.error === c.error && rec.errorName === 'Error' && rec.model === '@cf/meta/llama-3.1-8b-instruct-fp8' && typeof rec.elapsedMs === 'number',
+        'narrate ' + c.name + ': route, mapped error, exception name, model id and elapsedMs are logged');
+      ok(rec && rec.message.length <= 120, 'narrate ' + c.name + ': the exception message is truncated to 120 chars (' + (rec && rec.message.length) + ')');
+      ok(rec && rec.responseKeys.join(',') === NARRATE_FAIL_KEYS, 'narrate ' + c.name + ': the record names the response top-level keys');
+      ok(!out.recs.join('\n').includes(CANARY), 'narrate ' + c.name + ': no request text reaches the log');
+      ok(!/CONSTITUTION|Truth over probability|executiveSummary"\s*:|template narrative/i.test(out.recs.join('\n').replace(/"responseKeys":\[[^\]]*\]/, '')), 'narrate ' + c.name + ': no prompt or response value reaches the log');
+    }
+    // A successful narrate call logs nothing.
+    let out = await runCase('/api/v1/ai/narrate', narratePayload, async () => ({ response: JSON.stringify({ summary: 'S [F1].', findings: 'F [F1].' }) }));
+    ok(out.body.format === 'plain' && out.recs.length === 0, 'narrate success: no [VO-WRITER-ROUTE] record');
+
+    const HUMAN_FAIL_KEYS = 'ok,contract,section,generated,machineGenerated,reason,model';
+    const humanCases = [
+      { name: 'ai_unavailable', run: async () => { throw new Error(longMsg); }, reason: 'ai_unavailable' },
+      { name: 'timeout', run: async () => { const e = new Error('The operation was aborted'); e.name = 'AbortError'; throw e; }, reason: 'timeout' }
+    ];
+    for (const c of humanCases) {
+      out = await runCase('/api/v1/ai/human-report', humanPayload, c.run);
+      ok(out.status === 200 && out.text === JSON.stringify({ ok: true, contract: 'human-v1', section: 'executive_summary', generated: false, machineGenerated: false, reason: c.reason, model: 'none' }),
+        'human-report ' + c.name + ': the 200 response is byte-identical to the pre-diagnostics shape (' + out.text + ')');
+      ok(out.recs.length === 1, 'human-report ' + c.name + ': exactly one [VO-WRITER-ROUTE] record (' + out.recs.length + ')');
+      const rec = parseLog(out.recs[0] || '');
+      ok(rec && Object.keys(rec).join(',') === LOG_KEYS, 'human-report ' + c.name + ': the record carries only the metadata fields');
+      ok(rec && rec.route === 'human-report' && rec.error === c.reason && rec.errorName === (c.reason === 'timeout' ? 'AbortError' : 'Error') && typeof rec.elapsedMs === 'number',
+        'human-report ' + c.name + ': route, mapped reason and exception name are logged');
+      ok(rec && rec.model === '@cf/meta/llama-3.3-70b-instruct-fp8-fast -> @cf/meta/llama-3.1-8b-instruct-fp8',
+        'human-report ' + c.name + ': the model ids that failed (primary, then fallback) are named (' + (rec && rec.model) + ')');
+      ok(rec && rec.message.length <= 120, 'human-report ' + c.name + ': the exception message is truncated to 120 chars');
+      ok(rec && rec.responseKeys.join(',') === HUMAN_FAIL_KEYS, 'human-report ' + c.name + ': the record names the response top-level keys');
+      ok(!out.recs.join('\n').includes(CANARY), 'human-report ' + c.name + ': no request text, excerpt, record or finding text reaches the log');
+      ok(!/CONSTITUTION|SEALED BUNDLE|Truth over probability/.test(out.recs.join('\n')), 'human-report ' + c.name + ': no prompt text reaches the log');
+    }
+    // A configured HUMAN_REPORT_MODEL var is named when it is the model that failed.
+    logs = [];
+    const res = await worker.fetch(mk('/api/v1/ai/human-report', 'POST', JSON.stringify(humanPayload)), { ...aiEnv(async () => { throw new Error('5028'); }), HUMAN_REPORT_MODEL: '@cf/meta/llama-3.1-8b-instruct-fp8' }, {});
+    const hb = await res.json();
+    const rec = parseLog(writerLogs()[0] || '');
+    ok(hb.reason === 'ai_unavailable' && rec && rec.model === '@cf/meta/llama-3.1-8b-instruct-fp8', 'human-report: the configured model id is the one logged when it fails with no fallback');
+    // Non-exception outcomes (no findings) log nothing; the taxonomy strings are unchanged.
+    out = await runCase('/api/v1/ai/human-report', { ...humanPayload, findings: [] }, async () => ({ response: '' }));
+    ok(out.body.reason === 'no_findings' && out.recs.length === 0, 'human-report no_findings: no model call, no record');
+  } finally {
+    console.warn = realWarn;
+  }
+}
+
 console.log('\n[worker] PASS=' + pass + ' FAIL=' + fail);
 if (fail) process.exit(1);
 console.log('[worker] ALL GREEN');
