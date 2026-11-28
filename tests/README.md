@@ -71,7 +71,7 @@ The registry, in run order. The label is what the suite prints in its `PASS=` li
 |---|-------|------|--------|-----------|
 | 1 | `forensic-engine` | `forensic-engine.test.js` | 328 | `forensic-engine-page.js`: every detector on edge inputs without throwing; known contradictions detected; clean text silent; the serial-pattern engine; `runForensicEngine` via the raw-text fallback |
 | 2 | `ots-proof` | `ots-proof.test.js` | 16 | `ots-proof.js`: OpenTimestamps receipt format and round trips |
-| 3 | `worker` | `worker.test.mjs` | 408 | `worker/verum-rules.js` against a mocked `env` (no live KV or AI) |
+| 3 | `worker` | `worker.test.mjs` | 462 | `worker/verum-rules.js` against a mocked `env` (no live KV or AI) |
 | 4 | `page-boot` | `page-boot.test.mjs` | 101 | `seal-document.html` boots with pdf-lib missing; vendored libraries present; locks on the page's wiring |
 | 5 | `engine-perf` | `engine-perf.test.mjs` | 5 | Per-page extraction parses the PDF once (counts parses, not time) |
 | 6 | `voice-crypto` | `voice-crypto.test.mjs` | 7 | `.voice` encryption round trip between `seal-document.html` and `verify.html` |
