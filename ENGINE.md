@@ -37,7 +37,7 @@ Constitution v8.0 (governance charter, seal `VO-9A4F3C5E825C`)
    are dropped, not demoted (`voEnforceAnchorRule`).
 4. **No scores, no bands, no hedging** in anything a reader sees (Prime Directive 16, §6).
 5. **`node tests/run-all.js` must be green and `npm run check` clean before every push.**
-   69 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite + 1 verifier-adjudication suite + 1 OTS chain-confirmation suite); many exist solely to stop the regressions in §4 and §12.
+   72 registered suites (55 audited baseline + 2 Phase 0 suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite + 1 verifier-adjudication suite + 1 OTS chain-confirmation suite + 3 recipient-UX suites); many exist solely to stop the regressions in §4 and §12.
 6. **The report leads with the Constitution's §15.4 template** (§7): cover, contents, sections
    1–7, then the annexes with the plain-language pages first. That order is a founder ruling of
    5 October 2026, not a layout preference. No report calls a finding "verified" (§12.16).
@@ -900,7 +900,7 @@ Yesterday's extraction quality is the baseline. To protect it:
 
 ### What the tests guard
 
-**69 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite + 1 verifier-adjudication suite + 1 OTS chain-confirmation suite; recount assertions after any test change).
+**72 registered suites** (55 audited baseline suites + 2 Phase 0 contract suites + 4 Phase 1 evaluation suites + 2 Phase 2 citation suites + 1 Phase 3 redaction-fixture suite + 1 Phase 4 active-graph suite + 1 PR #327 review suite + 1 detection-credibility suite + 1 verifier-adjudication suite + 1 OTS chain-confirmation suite + 3 recipient-UX suites; recount assertions after any test change).
 `tests/run-all.js` is the registry — a new test file that is not registered there does not run.
 
 | Suite | Checks | Guards |
@@ -944,6 +944,9 @@ Yesterday's extraction quality is the baseline. To protect it:
 | `finding-verification.test.mjs` | 460 | DeepSeek/Mistral advisory verdicts, strict bounded packets, status mapping, stream and hourly quotas, connect-only retry, injection confinement, duplicate-lane normalization, narrative isolation, Section 4 placement, report provenance and G3-candidate retention |
 | `encrypt-detect.test.mjs` / `rule-classify.test.mjs` | 9 each | Encryption detection · deterministic classify fallback |
 | `find-seal.test.mjs` / `pdf-encrypt.test.mjs` | 8 each | Seal discovery · real password protection |
+| `verify-first-timer.test.mjs` | 8 | First-time recipient guidance and QR-payload entry points |
+| `verify-gps-visibility.test.mjs` | 6 | GPS opt-in placement, default checkbox markup and disclosure |
+| `verify-receipt-label.test.mjs` | 8 | Verification receipt naming and included receipt details |
 | `voice-crypto.test.mjs` | 7 | `.voice` cross-page encryption |
 | `forensic-narrative.test.mjs` | 39 | Deterministic and AI narrative routing, source-verified standalone fallback, per-part backfill, provenance and overclaim controls |
 | `event-date-conflict.test.mjs` | 16 | Event/date binding and cross-page conflict controls |

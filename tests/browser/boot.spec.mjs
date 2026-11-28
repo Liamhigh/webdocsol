@@ -3,6 +3,18 @@ import { installOfflineGuard, expectNoDocumentEgress, makeSyntheticPdf } from '.
 
 const SYNTHETIC_TEXT = 'Synthetic agreement total R100.00 dated 1 January 2026.';
 
+test('root verify page shows the GPS opt-in and recipient steps on load', async ({ page }) => {
+  await installOfflineGuard(page);
+  await page.goto('/verify.html');
+
+  for (const selector of ['#gpsOptInBox', '#dropZone .verify-steps']) {
+    const element = page.locator(selector);
+    await expect(element).toBeVisible();
+    const bounds = await element.boundingBox();
+    expect(bounds && bounds.width > 0 && bounds.height > 0, `${selector} has a visible size`).toBeTruthy();
+  }
+});
+
 test('root pages boot and preserve the locked responsive layout', async ({ page }) => {
   const external = await installOfflineGuard(page);
   const errors = [];

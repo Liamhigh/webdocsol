@@ -4,6 +4,59 @@ import { installOfflineGuard, expectNoDocumentEgress, makeSyntheticPdf } from '.
 
 const SYNTHETIC_TEXT = 'Synthetic sealing record total R250.00 dated 2 January 2026.';
 
+test('QR query and fragment payloads prefill and show document-free anchor guidance', async ({ page }) => {
+  await installOfflineGuard(page);
+  const digest = 'a'.repeat(64);
+  const originalHash = 'b'.repeat(128);
+  const newMeta = Buffer.from(JSON.stringify({
+    sealId: 'VO-AAAAAAAAAAAA',
+    otsDigestScheme: 'delivered-file-sha256'
+  })).toString('base64url');
+  const query = `?h=${originalHash.slice(0, 32)}&m=${newMeta}`;
+  await page.goto(`/verify.html${query}`);
+  await expect(page.locator('#qrPasteInput')).toHaveValue(query);
+  await expect(page.locator('#qrParamBox')).toBeVisible();
+  await expect(page.locator('#otsAnchorBox')).toBeVisible();
+  await expect(page.locator('#otsAnchorBox')).toContainText('drop the sealed PDF to check it');
+  await expect(page.locator('#otsAnchorBox')).not.toContainText(/CONFIRMED|PENDING|CALENDAR ATTESTATION/);
+  await expect(page.locator('#resultBox')).not.toBeVisible();
+
+  const linkMeta = Buffer.from(JSON.stringify({
+    sealId: 'VO-AAAAAAAAAAAA',
+    otsDigest: digest
+  })).toString('base64url');
+  const link = `https://verumglobal.foundation/verify.html?h=${originalHash.slice(0, 32)}&m=${linkMeta}`;
+  await page.goto(`/verify.html#${encodeURIComponent(link)}`);
+  await expect(page.locator('#qrPasteInput')).toHaveValue(link);
+  await expect(page.locator('#qrParamBox')).toBeVisible();
+  await expect(page.locator('#otsAnchorBox')).toBeVisible();
+  await expect(page.locator('#otsAnchorBox')).toContainText(digest);
+  await expect(page.locator('#resultBox')).not.toBeVisible();
+
+  const bareMeta = Buffer.from(JSON.stringify({
+    sealId: 'VO-AAAAAAAAAAAA',
+    otsDigestScheme: 'delivered-file-sha256'
+  })).toString('base64url');
+  await page.goto('/index.html');
+  await page.goto(`/verify.html#${encodeURIComponent(`m=${bareMeta}`)}`);
+  await expect(page.locator('#qrPasteInput')).toHaveValue(`m=${bareMeta}`);
+  await expect(page.locator('#otsAnchorBox')).toBeVisible();
+  await expect(page.locator('#otsAnchorBox')).toContainText('drop the sealed PDF to check it');
+  await expect(page.locator('#otsAnchorBox')).not.toContainText(/CONFIRMED|PENDING|CALENDAR ATTESTATION/);
+
+  const legacy = JSON.stringify({
+    scheme: 'verum-omnis-seal',
+    sha512: originalHash,
+    sealId: 'seal-synthetic',
+    otsDigest: digest
+  });
+  await page.goto('/index.html');
+  await page.goto(`/verify.html#${encodeURIComponent(legacy)}`);
+  await expect(page.locator('#qrPasteInput')).toHaveValue(legacy);
+  await expect(page.locator('#otsAnchorBox')).toContainText(digest);
+  await expect(page.locator('#resultBox')).not.toBeVisible();
+});
+
 test('synthetic PDF seals with QR and manifest metadata, then verifies at root verify.html', async ({ page, browserName }) => {
   const external = await installOfflineGuard(page);
   // Exercise one real, guarded delivered-file digest submission. Stop calendar

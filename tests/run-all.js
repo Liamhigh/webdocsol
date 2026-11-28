@@ -76,6 +76,9 @@ const suites = [
   'redaction-fixtures.test.mjs',
   'pdf-graph.test.mjs',
   'finding-verification.test.mjs',
+  'verify-first-timer.test.mjs',
+  'verify-gps-visibility.test.mjs',
+  'verify-receipt-label.test.mjs',
 ];
 
 // A suite PASSES only if its own process exits 0. The runner prints its OWN

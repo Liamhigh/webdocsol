@@ -341,7 +341,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   </div>
 
   <div class="upload-zone" id="dropZone">
-    <p class="verify-steps">1. Get the sealed PDF from the sender &middot; 2. Drop it here (or paste the QR payload) &middot; 3. Read the verdict and download your verification receipt.</p>
+    <p class="verify-steps">1. Get the sealed PDF (or .voice file) from the sender &middot; 2. Drop it here (or paste the QR payload) &middot; 3. Read the verdict and download your verification receipt.</p>
     <div class="icon">&#128203;</div>
     <p>Drag &amp; drop a sealed PDF (or encrypted .voice file) here, or click to browse</p>
     <p class="hint">Supports VO-DSS sealed documents (.pdf with embedded metadata)</p>
@@ -386,10 +386,11 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   </div>
 
   <!-- Scanned QR Seal card: rendered by JS when a payload arrives (page-load
-       ?h=...&m=... link, or a successful paste parse). Left empty on purpose;
+       query/fragment link, or a successful paste parse). Left empty on purpose;
        the card HTML is built by buildQrSealCardHtml() so every value from the
        payload is escaped before it reaches the DOM. -->
   <div id="qrParamBox" style="display:none;margin:-8px 0 24px"></div>
+  <div class="custody-anchor" id="otsAnchorBox" style="display:none"></div>
 
   <!-- Find a sealed document among many files. Paste a seal ID or hash, pick a
        batch of PDFs, and it flags which one carries that seal. Everything is
@@ -425,12 +426,6 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     <p class="timestamp" id="timestamp"></p>
 
     <div id="metaSection"></div>
-
-    <!-- OTS BLOCKCHAIN ANCHOR: upgrade status of the seal's OpenTimestamps
-         digest. Populated after ANY seal detection (any scheme); states are
-         honest — confirmed only on a real parsed block attestation, otherwise
-         pending / offline / unavailable, never faked. -->
-    <div class="custody-anchor" id="otsAnchorBox" style="display:none"></div>
 
     <!-- Verification Custody Anchor: anchors the verification EVENT, not the document -->
     <div class="custody-anchor" id="custodyBox" style="display:none">
@@ -2514,6 +2509,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   //       "intake":"UTC <iso> | Local <...> | TZ <...> | GPS <lat, lon>", ...}
   // Everything is parsed client-side; payloads are never uploaded or stored.
   var qrPayload = null;
+  var qrPayloadInputText = null;
 
   // __QR_PURE_START__
   // Pure helpers (no DOM access) — unit-tested outside the browser.
@@ -2624,6 +2620,7 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     var meta = {
       sealId: (typeof obj.sealId === 'string' && obj.sealId.trim()) ? obj.sealId.trim() : null,
       sha512: sha,
+      otsDigest: (typeof obj.otsDigest === 'string') ? obj.otsDigest : null,
       t: t,
       mode: (typeof obj.mode === 'string' && obj.mode.trim()) ? obj.mode.trim() :
             ((typeof obj.type === 'string' && obj.type.trim()) ? obj.type.trim() : null),
@@ -2817,12 +2814,37 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
   // __QR_PURE2_END__
 
   function parseQrParams() {
+    qrPayloadInputText = null;
     try {
-      var qs = new URLSearchParams(window.location.search);
-      if (!qs.get('h') && !qs.get('m')) return null;
-      var r = normalizeLinkPayload(qs.get('h'), qs.get('m'), 'link');
-      return r.ok ? r.payload : null;
+      var search = typeof window.location.search === 'string' ? window.location.search : '';
+      var qs = new URLSearchParams(search);
+      if (qs.get('h') || qs.get('m')) {
+        var r = normalizeLinkPayload(qs.get('h'), qs.get('m'), 'link');
+        if (r.ok) {
+          qrPayloadInputText = search;
+          return r.payload;
+        }
+      }
+      var hash = typeof window.location.hash === 'string' ? window.location.hash : '';
+      if (hash.length > 1 && typeof parseQrPayloadText === 'function') {
+        var fragment = hash.substring(1);
+        var parsed = parseQrPayloadText(fragment);
+        if (!parsed || !parsed.ok) {
+          try {
+            var decoded = decodeURIComponent(fragment);
+            if (decoded !== fragment) {
+              parsed = parseQrPayloadText(decoded);
+              if (parsed && parsed.ok) fragment = decoded;
+            }
+          } catch (de) {}
+        }
+        if (parsed && parsed.ok) {
+          qrPayloadInputText = fragment;
+          return parsed.payload;
+        }
+      }
     } catch (e) { return null; }
+    return null;
   }
 
   function renderQrPayloadCard() {
@@ -2839,6 +2861,24 @@ var qrcode=function(){var t=function(t,r){var e=t,n=g[r],o=null,i=0,a=null,u=[],
     qrPayload = parseQrParams();
     if (!qrPayload) return;
     renderQrPayloadCard();
+    if (typeof qrPasteInput !== 'undefined' && qrPasteInput && typeof qrPayloadInputText === 'string') {
+      qrPasteInput.value = qrPayloadInputText;
+    }
+    var meta = qrPayload.meta || {};
+    if (typeof meta.otsDigest === 'string' && /^[0-9a-fA-F]{64}$/.test(meta.otsDigest)) {
+      if (typeof runOtsAnchorCheck === 'function') {
+        try {
+          var anchorCheck = runOtsAnchorCheck(meta, null, 0);
+          if (anchorCheck && typeof anchorCheck.catch === 'function') anchorCheck.catch(function() {});
+        } catch (e) { console.debug('QR anchor check skipped:', e && e.message ? e.message : e); }
+      }
+    } else if (meta.otsDigestScheme === 'delivered-file-sha256' &&
+               typeof otsAnchorBox !== 'undefined' && otsAnchorBox) {
+      try {
+        otsAnchorBox.innerHTML = '<h3>OTS BLOCKCHAIN ANCHOR</h3><p class="custody-caption">The anchor status for this seal format is recomputed from the delivered file, so drop the sealed PDF to check it.</p>';
+        otsAnchorBox.style.display = 'block';
+      } catch (e) { console.debug('QR anchor guidance skipped:', e && e.message ? e.message : e); }
+    }
   }
 
   function crossCheckQrPayload(meta, seal, hashHex) {
