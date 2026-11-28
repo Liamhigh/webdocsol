@@ -2156,7 +2156,7 @@ function makeCtx(doc, fonts, images, sourceName, ctxOpts) {
 }
 
 // ================= COVER =================
-function drawCover(ctx, data, omitGps) {
+function drawCover(ctx, data, omitGps, deferProvenance) {
   var pg = ctx.doc.addPage([PW, PH]);
   // navy full bleed
   pg.drawRectangle({ x: 0, y: 0, width: PW, height: PH, color: NAVY });
@@ -2243,14 +2243,8 @@ function drawCover(ctx, data, omitGps) {
   var pv1 = 'The findings in this report are produced by forensic software: a fixed set of deterministic detection rules,';
   var pv2 = 'applied identically to every document, each finding anchored to quoted text on a cited page.';
   var pv3 = 'They are not the opinion of a generative AI. Any optional AI-review note is labelled as such, and is advisory only.';
-  // A companion document (the court-ready narrative) states the OPPOSITE
-  // provenance honestly — it IS machine-written — via data.coverProvenance.
-  var pvLines = data.coverProvenance || [pv1, pv2, pv3];
-  var pvY = [96, 85, 74];
-  for (var pvi = 0; pvi < pvLines.length && pvi < 3; pvi++) {
-    var pvt = san(pvLines[pvi]);
-    pg.drawText(pvt, { x: centerX(pvt, ctx.f.helv, 7.5), y: pvY[pvi], size: 7.5, font: ctx.f.helv, color: GOLD });
-  }
+  // The court-ready narrative supplies its provenance after rendering sections.
+  if (!deferProvenance) drawCoverProvenance(ctx, pg, [pv1, pv2, pv3], false);
 
   // bottom block
   // The GOVERNING charter leads. Printing the engine's operating-instrument
@@ -2262,6 +2256,18 @@ function drawCover(ctx, data, omitGps) {
     '  |  ENGINE INSTRUMENT V' + CONSTITUTION_VERSION;
   pg.drawText(_govLine, { x: centerX(_govLine, ctx.f.helvBold, 7), y: 58, size: 7, font: ctx.f.helvBold, color: LGRAY });
   pg.drawText('VERUM OMNIS  |  AI FORENSICS FOR TRUTH', { x: centerX('VERUM OMNIS  |  AI FORENSICS FOR TRUTH', ctx.f.helv, 7), y: 44, size: 7, font: ctx.f.helv, color: LGRAY });
+  return pg;
+}
+
+function drawCoverProvenance(ctx, pg, provenance, wrap) {
+  var lines = [];
+  for (var i = 0; i < provenance.length; i++) {
+    if (wrap) lines = lines.concat(wrapText(provenance[i], ctx.f.helv, 7.5, PW - 80));
+    else lines.push(san(provenance[i]));
+  }
+  for (var j = 0; j < lines.length; j++) {
+    pg.drawText(lines[j], { x: centerX(lines[j], ctx.f.helv, 7.5), y: 74 + (lines.length - 1 - j) * 11, size: 7.5, font: ctx.f.helv, color: GOLD });
+  }
 }
 
 // ================= TABLE OF CONTENTS (drawn last, placed page 2) =================
@@ -6423,9 +6429,6 @@ async function buildHumanReport(opts) {
   // not asked, and no verification is claimed anywhere in the report.
   var lawCheck = (opts.lawCheck && Array.isArray(opts.lawCheck.results)) ? opts.lawCheck : null;
   var prov = opts.humanProvenance || {};
-  // Whether any AI-written section can print (the same pass rule as the
-  // render below): the cover and the certification say "machine-written" only
-  // then; otherwise the document is the deterministic record.
   // The writer sections (worker HUMAN_SECTIONS writer:true): the nine the AI
   // narrator can write; the rest of the report is always the deterministic
   // record. The count feeds the honest-split certification (Greensky rerun
@@ -6433,7 +6436,6 @@ async function buildHumanReport(opts) {
   // nine is machine-written.
   var VO_WRITER_SECTIONS = ['executive_summary', 'chronology', 'four_pillars', 'critical_evidence', 'counter_narratives', 'sworn_statements', 'coercive_conduct', 'legal_framework', 'recommendations'];
   var aiCounts = voHumanNarratorSuppression(hs);
-  var aiPrintable = aiCounts.passing > 0 && !aiCounts.suppressed;
   var humanFindings = Array.isArray(opts.humanFindings) ? opts.humanFindings : [];
 
   var PDFDocument = PDFLibRef.PDFDocument, StandardFonts = PDFLibRef.StandardFonts;
@@ -6480,20 +6482,7 @@ async function buildHumanReport(opts) {
     ocrConfidence: opts.ocrConfidence || null,
     gps: opts.gps || null,
     coverTitle: 'COURT-READY NARRATIVE REPORT',
-    coverReportType: 'Court-ready narrative — advisory companion to the sealed technical report',
-    coverProvenance: aiPrintable ? (aiCounts.passing >= VO_WRITER_SECTIONS.length ? [
-      'This narrative was drafted by an AI narrator from the sealed technical forensic report, its findings JSON and the supplied sealed bundle text.',
-      'Every table is engine output; machine-written prose is gated, and an AI-identified contradiction prints only when both quoted sides verify against the cited source pages.',
-      'The sealed technical report is the audit record; the verdict on any named person is for the court.'
-    ] : [
-      aiCounts.passing + ' of ' + VO_WRITER_SECTIONS.length + ' narrative sections were drafted by an AI narrator and passed the §15.2 gates; the remaining sections print the deterministic record of the sealed technical report and its findings JSON.',
-      'Every table is engine output; machine-written prose is gated, and an AI-identified contradiction prints only when both quoted sides verify against the cited source pages.',
-      'The sealed technical report is the audit record; the verdict on any named person is for the court.'
-    ]) : [
-      'No AI-written section passed the gates, so this narrative is the deterministic record of the sealed technical report and its findings JSON.',
-      'Every table, page reference and quotation is engine output; nothing here is machine-written prose.',
-      'The sealed technical report is the audit record; the verdict on any named person is for the court.'
-    ]
+    coverReportType: 'Court-ready narrative — advisory companion to the sealed technical report'
   };
 
   // The substantive, engine-verified, anchored findings — the same filter the
@@ -6646,7 +6635,7 @@ async function buildHumanReport(opts) {
     try { fn(ctx, data, o); } finally { ctx.heading = origHeading; }
   }
 
-  drawCover(ctx, data, true);
+  var coverPage = drawCover(ctx, data, true, true);
   // Contents placeholder page (drawn last with real page numbers), as the
   // forensic report does: the reference document opens with a table of
   // contents and so does this one.
@@ -6933,6 +6922,13 @@ async function buildHumanReport(opts) {
   engineUnder(secUnreadPages);
   engineUnder(secOcrProvenance); // prints nothing when secUnreadPages already printed it
 
+  drawCoverProvenance(ctx, coverPage, [
+    sectionsAi + ' of ' + VO_WRITER_SECTIONS.length + ' narrative sections were drafted by an AI narrator and passed the §15.2 gates; the remaining sections print the deterministic record of the sealed technical report and its findings JSON.',
+    sectionsAi
+      ? 'Every table is engine output; machine-written prose is gated, and an AI-identified contradiction prints only when both quoted sides verify against the cited source pages.'
+      : 'Every table, page reference and quotation is engine output; nothing here is machine-written prose.',
+    'The sealed technical report is the audit record; the verdict on any named person is for the court.'
+  ], true);
   drawToc(ctx, tocPage);
   try { doc.setTitle('Verum Omnis Court-Ready Narrative Report — ' + (doc0.name || 'document')); } catch (e) {}
   try { doc.setAuthor('Verum Omnis Constitutional Forensic AI'); } catch (e) {}
