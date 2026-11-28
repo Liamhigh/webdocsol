@@ -38,14 +38,17 @@ ok(!runList.includes('D37_DETECT_INTERNAL_CONFLICT_CATCHALL') && detectorKeys.in
 ok(!runList.includes('D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT') && detectorKeys.includes('D10A_DETECT_S12B_LICENCE_PREDICATE_CONFLICT'), 'D10A is retained but inactive');
 ok(reportCounts && +reportCounts[1] === runList.length && +reportCounts[2] === ctKeys.length && +reportCounts[3] === 17, 'report fallback counts match main run-list, taxonomy and serial registry');
 ok(findingsVersion && findingsVersion[1] === '1.11.0', 'production Findings JSON version remains source-derived 1.11.0');
-ok(suiteCount === 69 && suiteRegistry.includes("'ots-chain-confirmation.test.mjs'") && suiteRegistry.includes("'finding-verification.test.mjs'") && suiteRegistry.includes("'detection-credibility.test.mjs'") && suiteRegistry.includes("'pr327-review.test.mjs'") && suiteRegistry.includes("'analysis-contracts.test.mjs'") && suiteRegistry.includes("'documentation-consistency.test.mjs'") && suiteRegistry.includes("'evaluation-metrics.test.mjs'") && suiteRegistry.includes("'evaluation-contractnli.test.mjs'") && suiteRegistry.includes("'evaluation-contradoc.test.mjs'") && suiteRegistry.includes("'evaluation-eyecite.test.mjs'") && suiteRegistry.includes("'legal-citations.test.mjs'") && suiteRegistry.includes("'legal-citations-za.test.mjs'") && suiteRegistry.includes("'redaction-fixtures.test.mjs'") && suiteRegistry.includes("'pdf-graph.test.mjs'"), 'all 69 Node suites are explicitly registered');
+ok(suiteCount === 72 && suiteRegistry.includes("'ots-chain-confirmation.test.mjs'") && suiteRegistry.includes("'finding-verification.test.mjs'") && suiteRegistry.includes("'verify-first-timer.test.mjs'") && suiteRegistry.includes("'verify-gps-visibility.test.mjs'") && suiteRegistry.includes("'verify-receipt-label.test.mjs'") && suiteRegistry.includes("'detection-credibility.test.mjs'") && suiteRegistry.includes("'pr327-review.test.mjs'") && suiteRegistry.includes("'analysis-contracts.test.mjs'") && suiteRegistry.includes("'documentation-consistency.test.mjs'") && suiteRegistry.includes("'evaluation-metrics.test.mjs'") && suiteRegistry.includes("'evaluation-contractnli.test.mjs'") && suiteRegistry.includes("'evaluation-contradoc.test.mjs'") && suiteRegistry.includes("'evaluation-eyecite.test.mjs'") && suiteRegistry.includes("'legal-citations.test.mjs'") && suiteRegistry.includes("'legal-citations-za.test.mjs'") && suiteRegistry.includes("'redaction-fixtures.test.mjs'") && suiteRegistry.includes("'pdf-graph.test.mjs'"), 'all 72 Node suites are explicitly registered');
 const testsGuide = read('tests/README.md');
 ok(testsGuide.includes('| 58 | `evaluation-metrics` | `evaluation-metrics.test.mjs` | 116 |') &&
    testsGuide.includes('| 60 | `evaluation-contradoc` | `evaluation-contradoc.test.mjs` | 101 |') &&
-   testsGuide.includes('**69 registered production/baseline suites**') &&
+ testsGuide.includes('**72 registered production/baseline suites**') &&
    testsGuide.includes('| 69 | `ots-chain-confirmation` | `ots-chain-confirmation.test.mjs` | 206 |') &&
-   testsGuide.includes('| 66 | `pr327-review` | `pr327-review.test.mjs` | 40 |'),
-'test guidance records the current 69-suite registry and exact review-suite assertions');
+ testsGuide.includes('| 70 | `verify-first-timer` | `verify-first-timer.test.mjs` | 8 |') &&
+ testsGuide.includes('| 71 | `verify-gps-visibility` | `verify-gps-visibility.test.mjs` | 6 |') &&
+ testsGuide.includes('| 72 | `verify-receipt-label` | `verify-receipt-label.test.mjs` | 8 |') &&
+ testsGuide.includes('| 66 | `pr327-review` | `pr327-review.test.mjs` | 40 |'),
+'test guidance records the current 72-suite registry and exact recipient-suite assertions');
 
 const readme = read('README.md');
 ok(readme.includes('VO_ENGINE_VERSION 5.7.4-web') && readme.includes('CT01–CT61') && readme.includes('Findings JSON 1.11.0'), 'README current engine/taxonomy/findings line agrees with source');
@@ -56,7 +59,7 @@ ok(readme.includes('`seal-module/web/` is NOT the live site') && readme.includes
 const agents = read('AGENTS.md');
 const normalizedAgents = agents.replace(/\s+/g, ' ');
 ok(agents.includes('46 numeric prefixes, 45 unsuffixed entries and 18 suffixed entries') && agents.includes('61 entries in the main run-list'), 'AGENTS Quick facts uses precise detector terminology');
-ok(agents.includes('**69 registered suites**'), 'AGENTS Quick facts names the current registered suite count');
+ok(agents.includes('**72 registered suites**'), 'AGENTS Quick facts names the current registered suite count');
 ok(normalizedAgents.includes('Secondary-report exclusion is classification, not authentication:') &&
    normalizedAgents.includes('platform output — report pages, seal footers, and manifest blocks — is never evidence') &&
    normalizedAgents.includes('metadata cues corroborate an independently established report but never establish it') &&
@@ -70,12 +73,16 @@ ok(architecture.includes('**63 entries**') && architecture.includes('**61 entrie
 
 const reference = read('REFERENCE.md');
 ok(reference.includes('**`analysis-contracts.js`**') && reference.includes('**`analysis-config.js`**'), 'REFERENCE documents both new shared scripts');
-ok(reference.includes('**69 registered suites**') && reference.includes('QPDF-WASM and Playwright are development-only'), 'REFERENCE has current tests and dependency posture');
+ok(reference.includes('**72 registered suites**') && reference.includes('QPDF-WASM and Playwright are development-only'), 'REFERENCE has current tests and dependency posture');
 
 const engineDoc = read('ENGINE.md');
 ok(engineDoc.includes('## 2. Contradiction types (CT01–CT61)') && engineDoc.includes('## 3. Detector inventory (63 registered entries)'), 'ENGINE current taxonomy and detector headings agree with source');
 ok(engineDoc.includes('**Findings JSON:** v1.11.0') && engineDoc.includes('report builder v1.3.1'), 'ENGINE header has current findings and report-builder versions');
-ok(engineDoc.includes('**69 registered suites**'), 'ENGINE test section names the current registry size');
+ok(engineDoc.includes('**72 registered suites**'), 'ENGINE test section names the current registry size');
+ok(engineDoc.includes('| `verify-first-timer.test.mjs` | 8 |') &&
+   engineDoc.includes('| `verify-gps-visibility.test.mjs` | 6 |') &&
+   engineDoc.includes('| `verify-receipt-label.test.mjs` | 8 |'),
+  'ENGINE records the measured recipient-suite assertion counts');
 const testReadme = read('tests/README.md');
 ok(engineDoc.includes('| `annexure-eb-regression.test.mjs` | 502 |') &&
    testReadme.includes('| 33 | `annexure-eb` | `annexure-eb-regression.test.mjs` | 502 |') &&
