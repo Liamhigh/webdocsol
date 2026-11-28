@@ -15,6 +15,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import vm from 'node:vm';
+import { createRequire } from 'node:module';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -259,6 +260,54 @@ ok(report.indexOf('.replace(/\\b(?:pp?|pgs?)\\.(?=\\s*\\d)/gi') >= 0, 'the share
   // Small bundles still go across whole.
   const small = sandbox.build(['page one text', 'page two text'], [], [], 196000);
   ok(small.coverage.fullTextSupplied === true && small.coverage.suppliedPageCount === 2, 'a small bundle goes across whole');
+}
+
+// Exercise the actual PDF cover, including the coordinates used to draw it.
+{
+  const require = createRequire(import.meta.url);
+  const g = globalThis;
+  g.window = g;
+  g.self = g;
+  new Function('window', 'self', 'globalThis', read('vendor/pdf-lib.min.js'))(g, g, g);
+  const R = require('../forensic-report.js');
+  const E = require('../forensic-engine-page.js');
+  const originalDrawText = g.PDFLib.PDFPage.prototype.drawText;
+  let drawn = [];
+  g.PDFLib.PDFPage.prototype.drawText = function (text, options) {
+    drawn.push({ page: this, text, options });
+    return originalDrawText.call(this, text, options);
+  };
+  const valid = 'The document records a payment on p. 1. The letter records a second payment on p. 2.';
+  const opts = {
+    documents: [{ name: 'record.pdf', pageCount: 2 }],
+    findings: { findings: [], totalFindings: 0 },
+    images: { logo: new Uint8Array([0]), watermark: new Uint8Array([0]) },
+    generatedAt: '2026-01-01T00:00:00Z'
+  };
+  try {
+    for (const [label, sections, count] of [
+      ['zero', {}, 0],
+      ['one', { executive_summary: { provenance: 'ai', text: valid } }, 1],
+      ['two', { executive_summary: { provenance: 'ai', text: valid }, chronology: { provenance: 'ai', text: valid } }, 2],
+      ['unprinted conditional section', { executive_summary: { provenance: 'ai', text: valid }, sworn_statements: { provenance: 'ai', text: valid } }, 1],
+      ['suppressed drafts', { executive_summary: { provenance: 'ai', text: valid }, chronology: { provenance: 'ai', text: 'This proves fraud.' }, recommendations: { provenance: 'ai', text: 'This proves fraud.' } }, 0]
+    ]) {
+      drawn = [];
+      const bytes = await R.buildHumanReport({ ...opts, humanSections: sections });
+      const pdf = await g.PDFLib.PDFDocument.load(bytes);
+      const cover = (await E.extractPageText(bytes, 0, pdf)).join(' ').replace(/\s+/g, ' ');
+      const sentence = count + ' of 9 narrative sections were drafted by an AI narrator and passed the §15.2 gates; the remaining sections print the deterministic record of the sealed technical report and its findings JSON.';
+      ok(cover.includes(sentence) && !/\b(?:undefined|NaN|null) of 9 narrative sections/.test(cover),
+        label + ': the built cover states the exact printed section count and deterministic remainder');
+      const coverPage = drawn[0].page;
+      const provenance = drawn.filter(x => x.page === coverPage && x.options.y >= 74 && x.options.y <= 150);
+      ok(provenance.some(x => x.text.startsWith(count + ' of 9 narrative sections')) &&
+        provenance.every(x => x.options.x >= 40 && x.options.x + x.options.font.widthOfTextAtSize(x.text, x.options.size) <= coverPage.getWidth() - 40),
+        label + ': the cover provenance including the count fits within the page');
+    }
+  } finally {
+    g.PDFLib.PDFPage.prototype.drawText = originalDrawText;
+  }
 }
 
 console.log(`\n[human-report] PASS=${pass} FAIL=${fail}`);

@@ -1384,7 +1384,7 @@ ok(!/\b(?:CRITICAL|HIGH|MODERATE|LOW)\b/.test(require('fs').readFileSync(require
     ok(/The seal check alone cannot show that a copy was not altered and re-sealed with its own hash; to rule that out, compare the delivered file's SHA-512/.test(tf) && !/verification would fail/.test(tf + N), 'Section 7 says what the seal check shows and how to rule out a re-seal, as verify.html does (the explainer page is gone, its one substantive line kept)');
     ok(/It concerns Sanarth Fuels/.test(tf) && !/Sanarth Fuels — the record states/.test(N), 'a declared party named in a finding is the party it concerns, but another person\'s statement about it is never quoted as its own words');
     const nf = N.replace(/\s+/g, ' ');
-    ok(/No AI-written section passed the gates, so this narrative is the deterministic record/.test(nf) && /No AI-written section passed the gates; it is the deterministic record built/.test(nf) && /No section of this document is machine-written prose/.test(nf) && !/the prose is machine-written, gated, and advisory/.test(nf), 'when no AI-written section passed the gates, the cover, the certification and the provenance paragraph say the narrative is the deterministic record');
+    ok(/0 of 9 narrative sections were drafted by an AI narrator and passed the §15\.2 gates; the remaining sections print the deterministic record/.test(nf) && /No AI-written section passed the gates; it is the deterministic record built/.test(nf) && /No section of this document is machine-written prose/.test(nf) && !/the prose is machine-written, gated, and advisory/.test(nf), 'when no AI-written section passed the gates, the cover, the certification and the provenance paragraph say the narrative is the deterministic record');
   };
   await run18j();
 }
