@@ -1564,6 +1564,24 @@ function narrateTemplate(input, kept) {
   return { executiveSummary, criticalEvidence };
 }
 __name(narrateTemplate, "narrateTemplate");
+// Narrator failure diagnostics (issue #361): one metadata-only record per
+// failed model call. Never pass request text, prompts, document content,
+// excerpts or finding text here — only the fields named below.
+var VO_WRITER_ROUTE_TAG = "[VO-WRITER-ROUTE]";
+function logWriterRouteFailure(route, error, e, model, elapsedMs) {
+  try {
+    console.warn(VO_WRITER_ROUTE_TAG + " " + JSON.stringify({
+      route,
+      error,
+      errorName: String(e && e.name || "unknown").slice(0, 60),
+      model: String(model || "none").slice(0, 120),
+      elapsedMs: Math.max(0, Math.round(Number(elapsedMs) || 0)),
+      message: String(e && e.message ? e.message : e || "").slice(0, 120)
+    }));
+  } catch {
+  }
+}
+__name(logWriterRouteFailure, "logWriterRouteFailure");
 async function handleAiNarrate(request, env2) {
   const body = await readBodyText(request, MAX_AI_NARRATE_BODY);
   if (body.tooBig) return err(413, "body_too_large", "Request body exceeds the narrate size limit.");
@@ -1612,6 +1630,7 @@ async function handleAiNarrate(request, env2) {
     return json({ ok: true, ...narrateTemplate(input, kept), model: "template-fallback" });
   }
   const userContent = "CONSTITUTION (binding \u2014 read before writing):\n" + VO_CONSTITUTION_V6 + "\n\nSEALED CASE FILE \u2014 the document under analysis" + (input.documentExcerpt ? ' (its own text follows; write the narrative from this):\n"""\n' + input.documentExcerpt + '\n"""\n\n' : " (document text was not available for this run \u2014 write from the findings only and mark unsupported points INSUFFICIENT):\n\n") + "CASE METADATA AND ENGINE FINDINGS:\n" + JSON.stringify({ ...input, documentExcerpt: void 0, findingsKept: kept });
+  const narrateStartedAt = Date.now();
   try {
     const text = await callAi(
       env2,
@@ -1668,6 +1687,7 @@ async function handleAiNarrate(request, env2) {
   } catch (e) {
     const message = String(e && e.message ? e.message : e || "model call failed").slice(0, 500);
     const error = /timed out after|timeout/i.test(message) ? "timeout" : (/empty response|returned no text|no narrative sections|missing narrative sections/i.test(message) ? "empty" : "model_error");
+    logWriterRouteFailure("narrate", error, e, AI_MODEL_FAST, Date.now() - narrateStartedAt);
     return json({
       ok: true,
       ...narrateTemplate(input, kept),
@@ -2463,15 +2483,30 @@ async function runHumanModel(env2, system, user, opts) {
   try {
     return { text: await callAi(env2, primary, system, user, { timeoutMs: primaryMs, maxTokens, temperature: 0 }), model: primary };
   } catch (e) {
+    tagWriterModel(e, primary);
     if (primary === AI_MODEL_FAST || o.allowFallback === false) throw e;
     const fallbackMs = boundedTimeout(o.fallbackTimeoutMs || HUMAN_FALLBACK_TIMEOUT_MS);
     // A late fallback would be aborted by the client before its JSON could be
     // read. Fail honestly inside the endpoint envelope instead.
     if (fallbackMs < 8e3) throw e;
-    return { text: await callAi(env2, AI_MODEL_FAST, system, o.fallbackUser || user, { timeoutMs: fallbackMs, maxTokens, temperature: 0 }), model: AI_MODEL_FAST };
+    try {
+      return { text: await callAi(env2, AI_MODEL_FAST, system, o.fallbackUser || user, { timeoutMs: fallbackMs, maxTokens, temperature: 0 }), model: AI_MODEL_FAST };
+    } catch (e2) {
+      throw tagWriterModel(e2, primary + " -> " + AI_MODEL_FAST);
+    }
   }
 }
 __name(runHumanModel, "runHumanModel");
+// Diagnostics only: remembers which model id(s) a narrator error came from so
+// the failure log can name them. The error itself is rethrown unchanged.
+function tagWriterModel(e, model) {
+  try {
+    if (e && typeof e === "object" && !e.voWriterModel) e.voWriterModel = model;
+  } catch {
+  }
+  return e;
+}
+__name(tagWriterModel, "tagWriterModel");
 function humanFail(section, reason, model) {
   return json({ ok: true, contract: HUMAN_CONTRACT, section, generated: false, machineGenerated: false, reason, model: model || "none" });
 }
@@ -2647,7 +2682,9 @@ async function handleAiHumanReport(request, env2) {
     modelName = r.model;
   } catch (e) {
     const msg = String(e && e.message || "") + " " + String(e && e.name || "");
-    return humanFail(section, /timed out|timeout|abort/i.test(msg) ? "timeout" : "ai_unavailable", modelName);
+    const reason = /timed out|timeout|abort/i.test(msg) ? "timeout" : "ai_unavailable";
+    logWriterRouteFailure("human-report", reason, e, e && e.voWriterModel || String(env2.HUMAN_REPORT_MODEL || AI_MODEL_HUMAN), Date.now() - startedAt);
+    return humanFail(section, reason, modelName);
   }
   const firstDraft = humanDraftFromModelText(modelText);
   if (!firstDraft) return humanFail(section, "no_json", modelName);
