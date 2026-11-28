@@ -1568,7 +1568,7 @@ __name(narrateTemplate, "narrateTemplate");
 // failed model call. Never pass request text, prompts, document content,
 // excerpts or finding text here — only the fields named below.
 var VO_WRITER_ROUTE_TAG = "[VO-WRITER-ROUTE]";
-function logWriterRouteFailure(route, error, e, model, elapsedMs) {
+function logWriterRouteFailure(route, error, e, model, elapsedMs, body) {
   try {
     console.warn(VO_WRITER_ROUTE_TAG + " " + JSON.stringify({
       route,
@@ -1576,7 +1576,9 @@ function logWriterRouteFailure(route, error, e, model, elapsedMs) {
       errorName: String(e && e.name || "unknown").slice(0, 60),
       model: String(model || "none").slice(0, 120),
       elapsedMs: Math.max(0, Math.round(Number(elapsedMs) || 0)),
-      message: String(e && e.message ? e.message : e || "").slice(0, 120)
+      message: String(e && e.message ? e.message : e || "").slice(0, 120),
+      // 200-with-error body shape: top-level key names only, never values.
+      responseKeys: body && typeof body === "object" ? Object.keys(body) : []
     }));
   } catch {
   }
@@ -1687,15 +1689,16 @@ async function handleAiNarrate(request, env2) {
   } catch (e) {
     const message = String(e && e.message ? e.message : e || "model call failed").slice(0, 500);
     const error = /timed out after|timeout/i.test(message) ? "timeout" : (/empty response|returned no text|no narrative sections|missing narrative sections/i.test(message) ? "empty" : "model_error");
-    logWriterRouteFailure("narrate", error, e, AI_MODEL_FAST, Date.now() - narrateStartedAt);
-    return json({
+    const failBody = {
       ok: true,
       ...narrateTemplate(input, kept),
       format: "template",
       model: "template-fallback",
       error,
       detail: "AI narrator call failed: " + message
-    });
+    };
+    logWriterRouteFailure("narrate", error, e, AI_MODEL_FAST, Date.now() - narrateStartedAt, failBody);
+    return json(failBody);
   }
 }
 __name(handleAiNarrate, "handleAiNarrate");
@@ -2507,8 +2510,12 @@ function tagWriterModel(e, model) {
   return e;
 }
 __name(tagWriterModel, "tagWriterModel");
+function humanFailBody(section, reason, model) {
+  return { ok: true, contract: HUMAN_CONTRACT, section, generated: false, machineGenerated: false, reason, model: model || "none" };
+}
+__name(humanFailBody, "humanFailBody");
 function humanFail(section, reason, model) {
-  return json({ ok: true, contract: HUMAN_CONTRACT, section, generated: false, machineGenerated: false, reason, model: model || "none" });
+  return json(humanFailBody(section, reason, model));
 }
 __name(humanFail, "humanFail");
 function humanDraftFromModelText(modelText) {
@@ -2683,8 +2690,9 @@ async function handleAiHumanReport(request, env2) {
   } catch (e) {
     const msg = String(e && e.message || "") + " " + String(e && e.name || "");
     const reason = /timed out|timeout|abort/i.test(msg) ? "timeout" : "ai_unavailable";
-    logWriterRouteFailure("human-report", reason, e, e && e.voWriterModel || String(env2.HUMAN_REPORT_MODEL || AI_MODEL_HUMAN), Date.now() - startedAt);
-    return humanFail(section, reason, modelName);
+    const failBody = humanFailBody(section, reason, modelName);
+    logWriterRouteFailure("human-report", reason, e, e && e.voWriterModel || String(env2.HUMAN_REPORT_MODEL || AI_MODEL_HUMAN), Date.now() - startedAt, failBody);
+    return json(failBody);
   }
   const firstDraft = humanDraftFromModelText(modelText);
   if (!firstDraft) return humanFail(section, "no_json", modelName);
