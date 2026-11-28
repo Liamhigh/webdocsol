@@ -16364,6 +16364,7 @@ function voConductSpanMonths(minKey, maxKey) {
 function voExtractConductLedger(textBlocks) {
   var blocks = textBlocks || [];
   var events = [], byEvent = {};
+  var citationCueRe = /(?:government\s+notice|government\s+gazette|provincial\s+gazette|proclamation)\s*(?:no\.?|number)?\s*r?\.?\s*\d+/ig;
   for (var i = 0; i < blocks.length; i++) {
     var s = String(blocks[i] || '').replace(VO_SEAL_BOILERPLATE_RE, ' ');
     VO_DATE_TOKEN_RE.lastIndex = 0;
@@ -16379,6 +16380,17 @@ function voExtractConductLedger(textBlocks) {
       if (VO_CLOCK_AFTER_RE.test(after.slice(0, 14)) && voIsStampContext(s, m.index, m[0].length)) continue;
       if (/^\d/.test(m[0]) && VO_CLAUSE_CUE_RE.test(s.slice(Math.max(0, m.index - 12), m.index))) continue;
       var from = Math.max(0, m.index - 160), to = Math.min(s.length, m.index + m[0].length + 160);
+      var dateLookback = s.slice(from, m.index), citationMatch, citationDate = false;
+      citationCueRe.lastIndex = 0;
+      while ((citationMatch = citationCueRe.exec(dateLookback)) !== null) {
+        var afterCitation = dateLookback.slice(citationMatch.index + citationMatch[0].length);
+        var hasConductAfterCitation = false;
+        for (var cI = 0; cI < VO_CONDUCT_KIND_RES.length; cI++) {
+          if (VO_CONDUCT_KIND_RES[cI].re.test(afterCitation)) { hasConductAfterCitation = true; break; }
+        }
+        if (!/[.!?;]/.test(afterCitation) && !hasConductAfterCitation) { citationDate = true; break; }
+      }
+      if (citationDate) continue;
       var win = s.slice(from, to);
       var kind = null;
       for (var kI = 0; kI < VO_CONDUCT_KIND_RES.length; kI++) {
@@ -16390,7 +16402,17 @@ function voExtractConductLedger(textBlocks) {
         kind = VO_CONDUCT_DEMAND_RE.test(win) || VO_CONDUCT_DOCUMENT_RECEIPT_RE.test(win) ? 'demand' : 'entry';
       }
       VO_CONDUCT_AMOUNT_RE.lastIndex = 0;
-      var am = VO_CONDUCT_AMOUNT_RE.exec(win);
+      var am = null, amountCandidate;
+      while ((amountCandidate = VO_CONDUCT_AMOUNT_RE.exec(win)) !== null) {
+        var amountEnd = from + amountCandidate.index + amountCandidate[0].length;
+        var amountContext = s.slice(Math.max(0, from + amountCandidate.index - 60), amountEnd);
+        citationCueRe.lastIndex = 0;
+        citationMatch = citationCueRe.exec(amountContext);
+        if (citationMatch && citationMatch.index + citationMatch[0].length === amountContext.length &&
+            amountContext.slice(-amountCandidate[0].length) === amountCandidate[0]) continue;
+        am = amountCandidate;
+        break;
+      }
       // A bare date is not conduct: the window must name a money instrument
       // (invoice/rental/payment/receipt/remittance/statement) or an amount.
       if (!kind && !am) continue;
